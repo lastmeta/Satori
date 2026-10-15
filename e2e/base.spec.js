@@ -139,12 +139,17 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   await expect(page.evaluate(() => window.satori.setBaseRpc('http://127.0.0.1:8545'))).rejects.toThrow(/https:\/\/ URL or a path/);
   await expect(page.evaluate(() => window.satori.setBaseMaxFee('-1'))).rejects.toThrow(/positive number of gwei/);
   await page.locator('summary', { hasText: 'Settings' }).click();
-  await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue('2');
+  await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue(''); // only what is stored: the default is the placeholder
+  await page.getByLabel('Base RPC').fill('https://rpc.example');
+  await page.getByLabel('Daily batch: max fee (gwei)').fill('0');
+  await page.getByRole('button', { name: 'Save Base settings' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'positive number of gwei' })).toBeVisible();
+  expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpcSetting: '', maxFeeSetting: null }); // neither saved
   await page.getByLabel('Base RPC').fill('/rpc');
   await page.getByLabel('Daily batch: max fee (gwei)').fill('0.5');
   await page.getByRole('button', { name: 'Save Base settings' }).click();
   await expect.poll(() => page.evaluate(async () => (await window.satori.base()).maxFeeGwei)).toBe(0.5); // saved
-  expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpc: ['/rpc'], rpcSetting: '/rpc', maxFeeGwei: 0.5 });
+  expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpc: ['/rpc'], rpcSetting: '/rpc', maxFeeSetting: 0.5, maxFeeGwei: 0.5 });
   await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue('0.5');
   expect(await page.evaluate(() => window.satori.setBaseRpc(''))).toMatchObject({ rpc: ['/rpc'], rpcSetting: '' }); // the dev server's default
 });

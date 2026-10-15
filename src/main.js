@@ -19,7 +19,6 @@ import { cycle, register, createPoller, centralStatus as statusOf, claimTab } fr
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
-import { checkRpcSetting } from './chain/config.js';
 import { isHttps } from './util.js';
 import { shortHash, claimLine } from './ui/format.js';
 
@@ -165,24 +164,6 @@ async function setCentral(raw) {
   await registerWith(c);
   await nostr.reconcile(); // this central's relays
   await base.refresh(); // this central's Base config
-}
-
-/** The Base RPC setting ('' = the default): https or a same-origin path. → base status */
-async function setBaseRpc(raw) {
-  const url = checkRpcSetting(raw);
-  await db.set('base_rpc_url', url);
-  await db.checkpoint();
-  return base.refresh();
-}
-
-/** The unattended batch's max fee per gas, in gwei ('' or null = the default). */
-async function setBaseMaxFee(raw) {
-  const text = String(raw ?? '').trim();
-  const gwei = text === '' ? null : Number(text);
-  if (gwei !== null && !(Number.isFinite(gwei) && gwei > 0)) throw new Error('The max fee must be a positive number of gwei.');
-  await db.set('base_max_fee_gwei', gwei);
-  await db.checkpoint();
-  await refreshBase();
 }
 
 async function saveKeys({ walletYaml, vaultYaml, nostrYaml }) {
@@ -414,13 +395,13 @@ const actions = {
     el.reset();
     return { text: `Sent ${f.amount} ${f.asset}.`, txs: [{ label: `${f.asset} to ${shortHash(String(f.to).trim())}`, hash: r.hash }] };
   }),
+  /** What is stored, not the defaults (those are the placeholders). */
   fillBase(el) {
     el.elements.rpc.value = state.base.rpcSetting;
-    el.elements.maxFee.value = state.base.maxFeeGwei ?? '';
+    el.elements.maxFee.value = state.base.maxFeeSetting ?? '';
   },
   saveBase: shownAt('baseRpcError', async (f, el) => {
-    await setBaseRpc(f.rpc);
-    await setBaseMaxFee(f.maxFee);
+    state.base = await base.setSettings({ rpc: f.rpc, maxFee: f.maxFee });
     actions.fillBase(el);
   }),
   saveCentral: shownAt('settingsError', async (f, el) => {
@@ -515,9 +496,9 @@ window.satori = {
   /** From the vault (needs Unlock): { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' } → { hash } */
   async send(o) { ready(); return baseAction('send', () => base.send(o)); },
   /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
-  async setBaseRpc(url) { ready(); await setBaseRpc(url); return base.status(); },
+  async setBaseRpc(url) { ready(); return base.setSettings({ rpc: url }); },
   /** The unattended batch's ceiling on the max fee per gas, in gwei (null or '' = the default, 2). → base() */
-  async setBaseMaxFee(gwei) { ready(); await setBaseMaxFee(gwei); return base.status(); },
+  async setBaseMaxFee(gwei) { ready(); return base.setSettings({ maxFee: gwei }); },
 };
 
 async function boot() {

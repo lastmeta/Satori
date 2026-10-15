@@ -238,6 +238,17 @@ describe('createBase', () => {
     expect((await base.refresh()).config).toBe('bundled');
   });
 
+  test('settings: the RPC and the max fee are both checked before either is saved; status shows what is stored', async () => {
+    expect(await base.status()).toMatchObject({ rpcSetting: '', maxFeeSetting: null, maxFeeGwei: MAX_FEE_GWEI });
+    await expect(base.setSettings({ rpc: 'https://rpc.example', maxFee: '-1' })).rejects.toThrow(/positive number of gwei/);
+    await expect(base.setSettings({ rpc: 'http://127.0.0.1:8545', maxFee: '0.5' })).rejects.toThrow(/https:\/\/ URL or a path/);
+    expect([db.m.get('base_rpc_url'), db.m.get('base_max_fee_gwei')]).toEqual([undefined, undefined]); // nothing half-saved
+    expect(await base.setSettings({ rpc: ' https://rpc.example ', maxFee: '0.5' })).toMatchObject({
+      rpcSetting: 'https://rpc.example', maxFeeSetting: 0.5, maxFeeGwei: 0.5 });
+    expect(await base.setSettings({ maxFee: '' })).toMatchObject({ rpcSetting: 'https://rpc.example', maxFeeSetting: null, maxFeeGwei: MAX_FEE_GWEI });
+    expect(await base.setSettings({ rpc: '' })).toMatchObject({ rpcSetting: '' });
+  });
+
   test('vault actions need Unlock', async () => {
     await expect(base.delegate()).rejects.toThrow('Unlock the vault first');
     await expect(base.claim()).rejects.toThrow('Unlock the vault first');

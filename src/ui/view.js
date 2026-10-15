@@ -41,7 +41,7 @@ export const state = reactive({
   relaysError: '',
   // Base (docs/design/base.md): the status (window.satori.base()'s shape), what runs, the last action's result
   base: {
-    rpc: [], rpcSetting: '', maxFeeGwei: null, localFork: false, explorer: null, config: null, error: '', round: null,
+    rpc: [], rpcSetting: '', maxFeeSetting: null, maxFeeGwei: null, localFork: false, explorer: null, config: null, error: '', round: null,
     identity: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false },
     vault: { address: '', eth: null, satori: null, delegate: null, delegated: null, lock: null },
     claimable: { rewards: null, airdrop: null }, lastBatch: null, lastCheck: null, nextCheck: null, checking: false,
@@ -342,9 +342,10 @@ function network(a) {
 
 function settings(a) {
   return html`
-  <details class="card" @toggle="${(e) => { if (e.target.open) { a.fillRelays(e.target.querySelector('form.relays-form')); a.fillBase(e.target.querySelector('form.base-rpc-form')); } }}">
+  <details class="card settings" @toggle="${(e) => { if (e.target.open) { a.fillRelays(e.target.querySelector('form.relays-form')); a.fillBase(e.target.querySelector('form.base-rpc-form')); } }}">
     <summary>Settings</summary>
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
+      <h3>Central</h3>
       <label>Central URL
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>
@@ -354,6 +355,7 @@ function settings(a) {
       <div class="actions"><button class="primary" type="submit">Save</button></div>
     </form>
     <form class="fields relays-form" @submit="${(e) => a.saveRelays(form(e), e.target)}">
+      <h3>Nostr</h3>
       <label>Nostr relays (one per line, ws:// or wss://)
         <textarea name="relays" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
@@ -364,11 +366,12 @@ function settings(a) {
       <div class="actions"><button class="primary" type="submit">Save relays</button></div>
     </form>
     <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
+      <h3>Base</h3>
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>
-      <p class="muted small">An https:// URL or a path on this site. Empty: the default (a build: central's, then publicnode;
-        the dev server: /rpc, a local fork of Base Sepolia on 127.0.0.1:8545, scripts/fork.mjs). A saved URL replaces it.</p>
+      <p class="muted small" title="The default: in a build, central's RPC (sepolia.base.org), then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
+        An https:// URL, or a path on this site. Empty: the default (on the dev server, the local test chain). A saved one replaces it.</p>
       <label>Daily batch: max fee (gwei)
         <input name="maxFee" inputmode="decimal" autocomplete="off" placeholder="2">
       </label>

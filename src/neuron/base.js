@@ -6,7 +6,7 @@
 // the next round's start (chain time) and at least hourly.
 import { fallback, formatEther, formatGwei, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
 import { createChain, errorText, lockText, same, DOWN, UP, ROUND_S } from '../chain/index.js';
-import { loadConfig, rpcUrls } from '../chain/config.js';
+import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
 
@@ -24,6 +24,14 @@ const LOW_BATCHES = 7; // warn below a week of batches
  */
 export const MAX_FEE_GWEI = 2;
 const PENDING_WAIT_MS = 30_000; // how long a check waits for a batch sent earlier
+
+/** The max fee setting as typed: '' or null for the default, else a positive number of gwei. */
+export function checkMaxFee(raw) {
+  const text = String(raw ?? '').trim();
+  const gwei = text === '' ? null : Number(text);
+  if (gwei !== null && !(Number.isFinite(gwei) && gwei > 0)) throw new Error('The max fee must be a positive number of gwei.');
+  return gwei;
+}
 
 /** The engine's step for a registry stream: 12 h, or its cadence when slower (docs/design/base.md, the daily batch). */
 export const stepFor = (cadenceMinutes) => Math.max(STEP_S, (Number(cadenceMinutes) || 0) * 60);
@@ -270,9 +278,28 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
 
   return {
     refresh,
+    /** The status, with the settings as stored ('' and null: the defaults) and the max fee in force. */
     async status() {
-      return { ...(await withLast(view())), rpcSetting: (await db.get('base_rpc_url')) || '',
-        maxFeeGwei: (await db.get('base_max_fee_gwei')) ?? MAX_FEE_GWEI };
+      const maxFeeSetting = (await db.get('base_max_fee_gwei')) ?? null;
+      return { ...(await withLast(view())), rpcSetting: (await db.get('base_rpc_url')) || '', maxFeeSetting,
+        maxFeeGwei: maxFeeSetting ?? MAX_FEE_GWEI };
+    },
+
+    /**
+     * Settings: the RPC (https, a path on this site, or '' for the default)
+     * and the batch's max fee (gwei, or '' / null for the default), either or
+     * both; each is checked before either is saved. A new RPC is read at once.
+     * → status()
+     */
+    async setSettings({ rpc, maxFee } = {}) {
+      const url = rpc === undefined ? undefined : checkRpcSetting(rpc);
+      const gwei = maxFee === undefined ? undefined : checkMaxFee(maxFee);
+      if (url !== undefined) await db.set('base_rpc_url', url);
+      if (gwei !== undefined) await db.set('base_max_fee_gwei', gwei);
+      await db.checkpoint();
+      if (url !== undefined) await refresh();
+      else changed();
+      return this.status();
     },
 
     start() {

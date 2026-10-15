@@ -160,6 +160,8 @@ select {
 label.check { display: flex; align-items: center; gap: 8px; color: var(--text); }
 label.check input { width: auto; margin: 0; }
 summary { cursor: pointer; color: var(--muted); }
+.settings form + form { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
+.settings h3 { margin-top: 14px; }
 details.card > summary { color: var(--text); font-weight: 500; }
 
 @media (max-width: 520px) {
