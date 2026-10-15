@@ -9,6 +9,7 @@ import { writeWallet } from './docker.js';
 vi.setConfig({ testTimeout: 180_000 });
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
+const edges = JSON.parse(readFileSync(new URL('../../test/fixtures/satorilib-edges.json', import.meta.url)));
 const hex = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
 const [a, b] = fx.vectors;
 const PASS = 'pass';
@@ -28,8 +29,13 @@ describe('writeKeys', () => {
     expect(load(one.walletYaml).evr.address).not.toBe(load(two.walletYaml).evr.address);
     expect(load(one.walletYaml).evr.address).not.toBe(b.address);
   });
-  test('passphrase rule as Docker: at least 4 characters', async () => {
+  test('passphrase rule as Docker: at least 4 characters, as Python counts them', async () => {
     await expect(writeKeys({ vault: hex(b.entropyHex) }, 'abc')).rejects.toThrow(/at least 4/);
+    await expect(writeKeys({ vault: hex(b.entropyHex) }, 'äöü')).rejects.toThrow(/at least 4/);
+  });
+  test('a passphrase outside Latin-1 is refused: Docker can only encrypt with Latin-1', async () => {
+    await expect(writeKeys({ vault: hex(b.entropyHex) }, '😀😀')).rejects.toThrow(/Latin-1/);
+    await expect(writeKeys({ vault: hex(b.entropyHex) }, 'p€ss')).rejects.toThrow(/Latin-1/);
   });
 });
 
@@ -89,6 +95,10 @@ describe('importDocker', () => {
     await expect(importDocker({ walletText: current, vaultText: fx.vaults.old.yaml, passphrase: password }))
       .rejects.toThrow(/wallet\.yaml: .*encrypted.*vault\.yaml/i);
     await expect(importDocker({ walletText: a.walletYaml, vaultText: b.walletYaml, passphrase: password }))
+      .rejects.toThrow(/vault\.yaml: .*not encrypted/i);
+  });
+  test('a vault Docker saved unencrypted (password outside Latin-1) is refused', async () => {
+    await expect(importDocker({ walletText: a.walletYaml, vaultText: edges.nonLatin1Password.savedYaml, passphrase: 'p€ss' }))
       .rejects.toThrow(/vault\.yaml: .*not encrypted/i);
   });
   test('a plain-text vault is never kept: Unlock refuses it whatever the passphrase', async () => {

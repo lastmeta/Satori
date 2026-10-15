@@ -14,8 +14,16 @@ import { readWallet, writeWallet, parse, secrecy } from './docker.js';
 
 export const MIN_PASSPHRASE = 4; // Docker vault-setup (neuron/web/routes.py:589)
 
+/**
+ * Docker's rule (Python len ≥ 4), plus Latin-1 only: satorilib can't encrypt
+ * with other characters and would save the vault unencrypted.
+ */
 function checkPassphrase(p) {
-  if (typeof p !== 'string' || p.length < MIN_PASSPHRASE) throw new Error(`Use a passphrase of at least ${MIN_PASSPHRASE} characters.`);
+  if (typeof p !== 'string') throw new Error('No passphrase given.');
+  if (/[^\x00-\xff]/.test(p)) {
+    throw new Error('Use only Latin-1 characters (no emoji, €, or non-Latin letters): Docker can’t encrypt a vault with others.');
+  }
+  if (p.length < MIN_PASSPHRASE) throw new Error(`Use a passphrase of at least ${MIN_PASSPHRASE} characters.`);
 }
 
 const sameKey = (x, y) => x.length === y.length && x.every((b, i) => b === y[i]);

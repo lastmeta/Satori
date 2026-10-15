@@ -9,6 +9,7 @@ vi.setConfig({ testTimeout: 180_000 });
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
 const jsfx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-js.json', import.meta.url)));
+const edges = JSON.parse(readFileSync(new URL('../../test/fixtures/satorilib-edges.json', import.meta.url)));
 const hex = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
 const vec = (i) => fx.vectors[i];
 const { password, wrongPassword } = fx.vaults;
@@ -77,6 +78,15 @@ describe('vault.yaml (AES-256-CBC, PBKDF2-SHA1 1e6)', () => {
     const r = await readWallet(fx.vaults.old.yaml, { password });
     expect(r.entropy).toEqual(hex(vec(fx.vaults.old.vector).entropyHex));
     expect(r.mismatches).toEqual([]);
+  });
+  test('a Latin-1 password is one byte per character, as satorilib (pycryptodome) takes it', async () => {
+    const r = await readWallet(edges.latin1Vault.yaml, { password: edges.latin1Vault.password });
+    expect(r.keys.address).toBe(edges.latin1Vault.address);
+    expect(r.mismatches).toEqual([]);
+  });
+  test('a password outside Latin-1 cannot encrypt or open a vault (satorilib cannot either)', async () => {
+    await expect(encryptField('x', 'p€ss')).rejects.toThrow(/Latin-1/);
+    await expect(readWallet(fx.vaults.current.yaml, { password: 'p€ss' })).rejects.toThrow(/wrong passphrase/i);
   });
   test('a wrong password fails on the entropy', async () => {
     await expect(readWallet(fx.vaults.current.yaml, { password: wrongPassword })).rejects.toThrow(/wrong passphrase/i);

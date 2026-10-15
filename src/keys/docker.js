@@ -1,6 +1,7 @@
 // Docker's wallet.yaml / vault.yaml, read and written as satorilib does.
 // A vault field is base64(salt16 ‖ iv16 ‖ AES-256-CBC(PKCS7(utf8))), key =
-// PBKDF2-HMAC-SHA1(password, salt, 1e6, 32) (satorilib utils/secret.py).
+// PBKDF2-HMAC-SHA1(latin1(password), salt, 1e6, 32) (satorilib utils/secret.py;
+// pycryptodome turns a str password into bytes as Latin-1).
 // Design and evidence: docs/design/keys.md#the-files
 import { load, dump } from 'js-yaml';
 import { base64 } from '@scure/base';
@@ -11,8 +12,14 @@ const ITERATIONS = 1_000_000;
 const ENCRYPTED = ['entropy', 'privateKey', 'words']; // what satorilib encrypts today (identity.py:682-692)
 const subtle = globalThis.crypto.subtle;
 
+/** The password's bytes as pycryptodome's PBKDF2 takes a str: Latin-1, one byte per character. */
+export function passwordBytes(password) {
+  if (/[^\x00-\xff]/.test(password)) throw new Error('A vault passphrase can only use Latin-1 characters.');
+  return Uint8Array.from(password, (c) => c.charCodeAt(0));
+}
+
 async function cbcKey(password, salt) {
-  const base = await subtle.importKey('raw', utf8ToBytes(password), 'PBKDF2', false, ['deriveKey']);
+  const base = await subtle.importKey('raw', passwordBytes(password), 'PBKDF2', false, ['deriveKey']);
   return subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-1', salt, iterations: ITERATIONS },
     base, { name: 'AES-CBC', length: 256 }, false, ['encrypt', 'decrypt']);
 }
