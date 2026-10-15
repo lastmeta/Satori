@@ -2,7 +2,10 @@
 // Every screen is built once and shown or hidden, so typing is never lost to a
 // re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, reactive } from '@arrow-js/core';
-import { fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle } from './format.js';
+import {
+  fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle,
+  fmtCadence, shortKey, relayText, obsText, catalogMatch,
+} from './format.js';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 
 export const state = reactive({
@@ -27,7 +30,17 @@ export const state = reactive({
   centralDefault: '',
   streams: [],
   settingsError: '',
+  // Nostr (docs/design/nostr.md): the flow's status, the last catalog
+  nostr: { pubkey: '', npub: '', maxStreams: 0, centralWrite: false, userRelays: [], relays: [], subscriptions: [] },
+  catalog: [],
+  catalogQuery: '',
+  discovering: false,
+  subscribing: '', // `${pubkey}:${stream}` in flight
+  networkError: '',
+  relaysError: '',
 });
+
+export const CATALOG_SHOWN = 50;
 
 const show = (screen) => () => state.screen !== screen;
 const showStep = (step) => () => state.step !== step;
@@ -99,6 +112,7 @@ function setup(a) {
       <p class="muted">The two files from a Docker neuron’s wallet folder (unzip “Download Wallet” first).</p>
       <label>wallet.yaml (identity) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
       <label>vault.yaml <input name="vault" type="file" accept=".yaml,.yml" required></label>
+      <label>nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
       <label>Vault password <input name="pass" type="password" autocomplete="current-password" required></label>
       ${errorLine()}
       <div class="actions">
@@ -188,9 +202,68 @@ function streams() {
   </section>`;
 }
 
+function relayRow(r) {
+  return html`<li class="relay" data-test="relay"><code>${r.url}</code><span class="${r.state === 'open' ? 'badge on' : 'badge'}" data-test="relay-state">${relayText(r)}</span></li>`;
+}
+
+function subRow(s, a) {
+  // One root node, no whitespace around it (see streamRow).
+  const p = s.prediction;
+  return html`<div class="nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model}` : ''}">${p?.value ?? '–'}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><button class="link" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></div>`;
+}
+
+function nostrCard(a) {
+  const n = () => state.nostr;
+  return html`
+  <section class="card nostr">
+    <header class="card-head">
+      <h2>Nostr</h2>
+      <span class="muted small">${() => `${n().subscriptions.length} of ${n().maxStreams} streams`}</span>
+    </header>
+    <div class="label">Nostr pubkey</div>
+    <code data-test="nostr-pubkey" title="${() => n().npub}">${() => n().pubkey}</code>
+    <ul class="relays">${() => n().relays.map((r) => relayRow(r).key(`${r.url} ${r.state} ${r.write}`))}</ul>
+    <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Network streams. Each new observation is forecast and published as <code>&lt;stream&gt;_pred</code>.</p>
+    <div class="srows" hidden="${() => !n().subscriptions.length}">
+      <div class="nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Sent to</span><span></span></div>
+      <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq}`))}</div>
+    </div>
+  </section>`;
+}
+
+function catRow(s, a) {
+  const key = `${s.pubkey}:${s.stream_name}`;
+  const paid = s.price_per_obs > 0 || s.encrypted || s.approval_required;
+  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · ${shortKey(s.pubkey)}${paid ? ' · paid or gated (later)' : ''}</span><div class="muted small desc">${s.description}</div></div><button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button></div>`;
+}
+
+const shownCatalog = () => state.catalog.filter((s) => !s.pred && catalogMatch(s, state.catalogQuery));
+
+function network(a) {
+  const total = () => state.catalog.filter((s) => !s.pred).length;
+  const summary = () => {
+    if (!state.catalog.length) return state.discovering ? 'Asking the relays…' : 'Discover the streams the relays announce.';
+    const hits = shownCatalog().length;
+    return `${total()} streams (${state.catalog.length - total()} prediction streams hidden) · ${hits} match`
+      + (hits > CATALOG_SHOWN ? `, the first ${CATALOG_SHOWN} shown` : '');
+  };
+  return html`
+  <details class="card" data-test="network" @toggle="${(e) => e.target.open && !state.catalog.length && !state.discovering && a.discover()}">
+    <summary>Network streams</summary>
+    <form class="search" @submit="${(e) => { e.preventDefault(); a.discover(); }}">
+      <input name="q" type="search" aria-label="Search streams" placeholder="Search: bitcoin, weather, …" autocomplete="off"
+        @input="${(e) => (state.catalogQuery = e.target.value)}">
+      <button type="submit" disabled="${() => state.discovering}">${() => (state.discovering ? 'Discovering…' : state.catalog.length ? 'Refresh' : 'Discover')}</button>
+    </form>
+    <p class="muted small" data-test="catalog-summary">${summary}</p>
+    <p class="error small" role="alert" hidden="${() => !state.networkError}">${() => state.networkError}</p>
+    <div class="crows">${() => shownCatalog().slice(0, CATALOG_SHOWN).map((s) => catRow(s, a).key(`${s.pubkey}:${s.stream_name}:${s.subscribed}`))}</div>
+  </details>`;
+}
+
 function settings(a) {
   return html`
-  <details class="card">
+  <details class="card" @toggle="${(e) => e.target.open && a.fillRelays(e.target.querySelector('form.relays-form'))}">
     <summary>Settings</summary>
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
       <label>Central URL
@@ -201,6 +274,16 @@ function settings(a) {
       <p class="error" role="alert" hidden="${() => !state.settingsError}">${() => state.settingsError}</p>
       <div class="actions"><button class="primary" type="submit">Save</button></div>
     </form>
+    <form class="fields relays-form" @submit="${(e) => a.saveRelays(form(e), e.target)}">
+      <label>Nostr relays (one per line, ws:// or wss://)
+        <textarea name="relays" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+      </label>
+      <label class="check"><input name="centralWrite" type="checkbox"> Publish to central's relays</label>
+      <p class="muted small">Central's relays are always read. Unticked, they are read only: the dev server's default,
+        so a checkout never writes to the production relay. The relays above are always written to.</p>
+      <p class="error" role="alert" hidden="${() => !state.relaysError}">${() => state.relaysError}</p>
+      <div class="actions"><button class="primary" type="submit">Save relays</button></div>
+    </form>
   </details>`;
 }
 
@@ -210,7 +293,7 @@ function backup(a) {
     <summary>Backup</summary>
     <p class="muted" hidden="${() => state.unlocked}">Unlock the vault to back up your keys.</p>
     <div hidden="${() => !state.unlocked}">
-      <p class="muted">Each key is 24 words (or its private key). The two files load in a Docker neuron.</p>
+      <p class="muted">Each key is 24 words (or its private key). The files load in a Docker neuron (nostr.yaml is the Nostr key).</p>
       <div class="backup-row">
         <span class="label">Show</span>
         <button class="small-btn" @click="${() => a.showBackup('identity')}">Identity words</button>
@@ -220,6 +303,7 @@ function backup(a) {
         <span class="label">Docker files</span>
         <button class="small-btn" @click="${() => a.download('wallet.yaml')}">Download wallet.yaml</button>
         <button class="small-btn" @click="${() => a.download('vault.yaml')}">Download vault.yaml</button>
+        <button class="small-btn" @click="${() => a.download('nostr.yaml')}">Download nostr.yaml</button>
       </div>
       <div class="backup" hidden="${() => !state.backupWords}">
         <h3>${() => (state.backup === 'vault' ? 'Vault' : 'Identity')} words</h3>
@@ -238,6 +322,8 @@ function home(a) {
     ${keys(a)}
     ${centralCard(a)}
     ${streams()}
+    ${nostrCard(a)}
+    ${network(a)}
     ${settings(a)}
     ${backup(a)}
   </section>`;

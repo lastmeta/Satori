@@ -130,6 +130,30 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .srow .model { color: var(--muted); font-size: 0.85rem; }
 .srow > .muted.small { white-space: nowrap; }
 .srow > :last-child { justify-self: end; }
+
+.relays { list-style: none; margin: 10px 0 4px; padding: 0; }
+.relay { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 3px 0; flex-wrap: wrap; }
+.relay .badge { margin: 0; }
+.nostr > code { display: block; margin-top: 2px; }
+.nrow {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr max-content 1fr 44px 60px 84px; gap: 10px; align-items: baseline;
+  padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.92rem;
+}
+.nrow.head { border-top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.nrow .sname { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nrow .num { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.nrow > .muted.small { white-space: nowrap; }
+.nrow > :last-child { justify-self: end; }
+.search { display: flex; gap: 10px; margin-top: 12px; }
+.search input { margin: 0; flex: 1; min-width: 0; }
+.crows { margin-top: 4px; }
+.crow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.cmain { min-width: 0; }
+.crow .sname { font-weight: 550; }
+.crow .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crow button { flex: none; }
+label.check { display: flex; align-items: center; gap: 8px; color: var(--text); }
+label.check input { width: auto; margin: 0; }
 summary { cursor: pointer; color: var(--muted); }
 details.card > summary { color: var(--text); font-weight: 500; }
 
@@ -144,4 +168,11 @@ details.card > summary { color: var(--text); font-weight: 500; }
   .srow > .muted.small { display: none; }
   .srow [data-label]::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.75rem; }
   .srow .num { text-align: left; }
+  .nrow.head { display: none; }
+  .nrow { grid-template-columns: 1fr 1fr 1fr; gap: 2px 10px; }
+  .nrow .sname { grid-column: 1 / 3; }
+  .nrow > :last-child { grid-column: 3; grid-row: 1; }
+  .nrow [data-label]::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.75rem; }
+  .nrow .num { text-align: left; }
+  .crow { flex-wrap: wrap; }
 }

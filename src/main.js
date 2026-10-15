@@ -1,24 +1,33 @@
 // App wiring: one tab → open the database → Setup, or Home with the neuron
 // running on the identity key from page load: register with central, then
-// poll on Satori Lite's schedule (docs/design/central.md). Unlock/Lock open
-// and wipe the vault; the neuron never needs it. window.satori is the same
-// surface for agents (public/llms.txt).
+// poll on Satori Lite's schedule (docs/design/central.md), and follow the
+// subscribed Nostr streams, publishing `<stream>_pred` (docs/design/nostr.md).
+// Unlock/Lock open and wipe the vault; the neuron never needs it.
+// window.satori is the same surface for agents (public/llms.txt).
 import { version } from '../package.json';
 import { state, render } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb } from './db/opfs.js';
 import {
   generateEntropy, entropyFromWords, deriveKeys, writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault,
+  loadNostr, newNostrYaml,
 } from './keys/index.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, claimTab } from './neuron/index.js';
+import { createNostr } from './neuron/nostr.js';
 
 // The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
 export const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet.io' : 'https://network.satorinet.io';
+// The same rule for Nostr: on the dev server central's relays (satorian, production)
+// are read only, and the user's relays default to the test relay (scripts/test-relay.mjs).
+export const DEV_RELAY = 'ws://localhost:7778';
+export const NOSTR_DEFAULTS = import.meta.env.DEV ? { relays: [DEV_RELAY], centralWrite: false } : { relays: [], centralWrite: true };
 
 let db;
-let files = null; // { walletYaml, vaultYaml } as stored
+let files = null; // { walletYaml, vaultYaml, nostrYaml } as stored
 let identity = null;
+let nostrKey = null; // { secret, pubkey, npub }: plaintext, as the identity
+let nostr = null; // the Nostr flow
 let vaultPublic = { address: null, pubkey: null }; // read from vault.yaml while locked
 let vault = null; // only while unlocked
 let lockCount = 0; // a Lock during an Unlock in flight wins
@@ -45,6 +54,16 @@ async function refresh() {
   state.streams = await db.streams();
 }
 
+/** The Nostr card, refreshed at most once per task however many changes come in. */
+let nostrRefresh = null;
+function refreshNostr() {
+  nostrRefresh ??= Promise.resolve().then(async () => {
+    nostrRefresh = null;
+    if (nostr) state.nostr = await nostr.status();
+  }).catch((err) => console.error('[satori] nostr status', err));
+  return nostrRefresh;
+}
+
 // ── core: used by the UI and by window.satori ───────────────────────────────
 
 /** The stored (or default) central; a new client means a new register result. */
@@ -57,7 +76,8 @@ async function connect() {
 
 /** Register, as Lite does on every start; the result is shown, never thrown. */
 async function registerWith(c) {
-  const r = await register({ central: c, vaultPubkey: vaultPublic.pubkey, vaultAddress: vaultPublic.address });
+  const r = await register({ central: c, vaultPubkey: vaultPublic.pubkey, vaultAddress: vaultPublic.address,
+    nostrPubkey: nostrKey.pubkey });
   if (c !== central) return; // the URL changed meanwhile
   registration = r;
   console[r.ok && !r.vaultMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
@@ -71,10 +91,22 @@ async function runCycle() {
   return r;
 }
 
+/** The stored Nostr key; an install from before step 5 gets one now (start.py:120-149). */
+async function nostrYamlOf() {
+  let text = await db.get('nostr_yaml');
+  if (!text) {
+    text = newNostrYaml();
+    await db.set('nostr_yaml', text);
+    await db.checkpoint();
+  }
+  return text;
+}
+
 async function startNeuron() {
-  files = { walletYaml: await db.get('wallet_yaml'), vaultYaml: await db.get('vault_yaml') };
+  files = { walletYaml: await db.get('wallet_yaml'), vaultYaml: await db.get('vault_yaml'), nostrYaml: await nostrYamlOf() };
   identity = await loadIdentity(files.walletYaml);
   vaultPublic = vaultInfo(files.vaultYaml);
+  nostrKey = loadNostr(files.nostrYaml);
   state.identity = identity.address;
   state.vault = vaultPublic.address ?? '';
   state.centralDefault = DEFAULT_CENTRAL;
@@ -84,8 +116,13 @@ async function startNeuron() {
   } });
   await poller.start();
   await refresh();
+  nostr?.stop();
+  nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: NOSTR_DEFAULTS,
+    onChange: refreshNostr });
+  await refreshNostr();
   state.screen = 'home';
   registerWith(c).catch((err) => console.error('[satori] register', err));
+  nostr.start().catch((err) => console.error('[satori] nostr start', err));
 }
 
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
@@ -109,9 +146,11 @@ async function setCentral(raw) {
   const c = await connect();
   await refresh();
   await registerWith(c);
+  await nostr.reconcile(); // this central's relays
 }
 
-async function saveKeys({ walletYaml, vaultYaml }) {
+async function saveKeys({ walletYaml, vaultYaml, nostrYaml }) {
+  await db.set('nostr_yaml', nostrYaml);
   await db.set('vault_yaml', vaultYaml); // vault first: boot needs both
   await db.set('wallet_yaml', walletYaml);
   await db.checkpoint();
@@ -140,10 +179,20 @@ function backupOf(which) {
   return (which === 'vault' ? vault : identity).backup();
 }
 
+const FILES = { 'wallet.yaml': 'walletYaml', 'vault.yaml': 'vaultYaml', 'nostr.yaml': 'nostrYaml' };
+
 function fileText(name) {
-  if (name !== 'wallet.yaml' && name !== 'vault.yaml') throw new Error("Name the file: 'wallet.yaml' or 'vault.yaml'.");
+  if (!Object.hasOwn(FILES, name)) throw new Error("Name the file: 'wallet.yaml', 'vault.yaml' or 'nostr.yaml'.");
   if (!vault) throw new Error('Unlock the vault first');
-  return name === 'vault.yaml' ? files.vaultYaml : files.walletYaml;
+  return files[FILES[name]];
+}
+
+/** Subscribe or unsubscribe, then the catalog's mark follows. */
+async function setSubscribed(pubkey, stream, on) {
+  const r = on ? await nostr.subscribe(pubkey, stream) : await nostr.unsubscribe(pubkey, stream);
+  state.catalog = state.catalog.map((s) => (s.pubkey === pubkey && s.stream_name === stream ? { ...s, subscribed: on } : s));
+  await refreshNostr();
+  return r;
 }
 
 /** One action at a time, for the UI and agents alike; state.busy says which. */
@@ -232,8 +281,10 @@ const actions = {
   importDocker: shown(async (el) => {
     const f = new FormData(el);
     await setup(async () => {
+      const n = f.get('nostr');
       const out = await importDocker({
         walletText: await f.get('wallet').text(), vaultText: await f.get('vault').text(), passphrase: f.get('pass'),
+        nostrText: n?.size ? await n.text() : undefined,
       });
       el.reset();
       return out;
@@ -270,6 +321,42 @@ const actions = {
     } catch { /* clipboard not allowed */ }
   },
   pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
+  async discover() {
+    state.networkError = '';
+    state.discovering = true;
+    try {
+      state.catalog = await nostr.discover();
+    } catch (err) {
+      state.networkError = err?.message ?? String(err);
+    } finally {
+      state.discovering = false;
+    }
+  },
+  async subscribe(pubkey, stream, on) {
+    state.networkError = '';
+    state.subscribing = `${pubkey}:${stream}`;
+    try {
+      await setSubscribed(pubkey, stream, on);
+    } catch (err) {
+      state.networkError = err?.message ?? String(err);
+    } finally {
+      state.subscribing = '';
+    }
+  },
+  fillRelays(el) {
+    el.elements.relays.value = state.nostr.userRelays.join('\n');
+    el.elements.centralWrite.checked = state.nostr.centralWrite;
+  },
+  async saveRelays(f, el) {
+    state.relaysError = '';
+    try {
+      await nostr.setRelays({ relays: String(f.relays ?? '').split(/\s+/).filter(Boolean), centralWrite: f.centralWrite === 'on' });
+      await refreshNostr();
+      actions.fillRelays(el);
+    } catch (err) {
+      state.relaysError = err?.message ?? String(err);
+    }
+  },
   async saveCentral(f, el) {
     state.settingsError = '';
     try {
@@ -292,6 +379,9 @@ const ready = () => {
   if (state.screen !== 'home') throw new Error(`Not running (screen: ${state.screen}). Set up first.`);
 };
 
+/** The Nostr flow's status, the same as the Nostr card. */
+const nostrStatus = () => nostr.status();
+
 window.satori = {
   help: 'Read /llms.txt',
   async status() {
@@ -302,6 +392,7 @@ window.satori = {
       vault: state.vault || null,
       unlocked: state.unlocked,
       central: home ? await centralStatus() : null,
+      nostr: home ? await nostrStatus() : null,
     };
   },
   /** Create a neuron (random keys unless words are given). The vault stays locked. */
@@ -331,8 +422,17 @@ window.satori = {
   lock() { lock(); return true; },
   /** { words, wif } of 'identity' or 'vault'; needs Unlock, as Docker's dashboard needs login. */
   backup(which) { ready(); return backupOf(which); },
-  /** wallet.yaml or vault.yaml text, as Docker reads it; needs Unlock. */
+  /** wallet.yaml, vault.yaml or nostr.yaml text, as Docker reads it; needs Unlock. */
   file(name) { ready(); return fileText(name); },
+  /** Nostr: the key, the relays and their state, the subscribed streams with the latest observation and our `_pred`. */
+  async nostr() { ready(); return nostrStatus(); },
+  /** The relays' stream catalog (newest per provider and stream, no tombstones); `pred` and `subscribed` marked. */
+  async discover() { ready(); const list = await nostr.discover(); state.catalog = list; return list; },
+  /** Subscribe to a free stream and predict it: `<stream>_pred` is published on each new observation. */
+  async subscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, true); },
+  async unsubscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, false); },
+  /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
+  async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
 };
 
 async function boot() {

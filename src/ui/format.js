@@ -55,3 +55,34 @@ export function pickIndexes(n, max, rand = Math.random) {
   while (s.size < n) s.add(Math.floor(rand() * max));
   return [...s].sort((a, b) => a - b);
 }
+
+/** A stream's cadence in a word or two. */
+export function fmtCadence(s) {
+  if (!(s > 0)) return 'irregular';
+  for (const [unit, n] of [['d', 86400], ['h', 3600], ['min', 60]]) if (s % n === 0) return `${s / n} ${unit}`;
+  return `${s} s`;
+}
+
+/** A Nostr pubkey, shortened: the first 8 and last 4 hex. */
+export const shortKey = (k) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : '');
+
+/** A relay's state (nostr status) in a few words. */
+export function relayText(r) {
+  const ro = r.write ? '' : ' · read only';
+  if (r.state === 'open') return `Connected${ro}`;
+  if (r.state === 'connecting') return `Connecting…${ro}`;
+  if (r.state === 'blocked') return `Blocked: ${r.error}`;
+  return `Disconnected${r.error ? ` (${r.error})` : ''}; retrying${ro}`;
+}
+
+/** A relay observation's value as the provider sent it. */
+export function obsText(o) {
+  if (!o) return '–';
+  return typeof o.raw === 'string' ? o.raw : JSON.stringify(o.raw);
+}
+
+/** Whether a catalog entry matches the search words (all of them, any case). */
+export function catalogMatch(s, q) {
+  const text = `${s.stream_name} ${s.name} ${s.description} ${s.tags.join(' ')}`.toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => text.includes(w));
+}

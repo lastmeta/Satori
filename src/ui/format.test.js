@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest';
-import { fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle } from './format.js';
+import {
+  fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
+  fmtCadence, shortKey, relayText, obsText, catalogMatch,
+} from './format.js';
 
 test('fmtNum', () => {
   expect(fmtNum(67123.456)).toBe('67,123.46');
@@ -58,4 +61,35 @@ test('modelTitle: the engine model in a few words (the Streams table hover)', ()
   expect(modelTitle({ model: 'naive' })).toBe('the last value (fewer than 8 × 12 h of history)');
   expect(modelTitle({ model: 'ols-20' })).toBe('ols-20');
   expect(modelTitle({ model: null })).toBe('');
+});
+
+test('fmtCadence', () => {
+  expect([900, 1800, 3600, 7200, 86400, 2592000, 45, 90, null].map(fmtCadence))
+    .toEqual(['15 min', '30 min', '1 h', '2 h', '1 d', '30 d', '45 s', '90 s', 'irregular']);
+});
+
+test('shortKey', () => {
+  expect(shortKey('e5e6ce948344b1e0178f9ccf49fcb499b4b4f00fc09c7637535ee82fc7bf503d')).toBe('e5e6ce94…503d');
+  expect(shortKey('')).toBe('');
+});
+
+test('relayText: the state in a word, and read only', () => {
+  expect(relayText({ state: 'open', write: true })).toBe('Connected');
+  expect(relayText({ state: 'open', write: false })).toBe('Connected · read only');
+  expect(relayText({ state: 'connecting', write: true })).toBe('Connecting…');
+  expect(relayText({ state: 'closed', write: true, error: 'closed (1006)' })).toBe('Disconnected (closed (1006)); retrying');
+  expect(relayText({ state: 'blocked', write: false, error: 'ws:// cannot be opened from an https page' }))
+    .toBe('Blocked: ws:// cannot be opened from an https page');
+});
+
+test('obsText: a relay value as sent (a dict as JSON)', () => {
+  expect(obsText({ raw: '82234', value: 82234 })).toBe('82234');
+  expect(obsText({ raw: { raw: '1', unit: 'tick' }, value: null })).toBe('{"raw":"1","unit":"tick"}');
+  expect(obsText(null)).toBe('–');
+});
+
+test('catalogMatch: name, stream, description or tags, any case', () => {
+  const s = { stream_name: 'btc-usd-price', name: 'Bitcoin USD Price', description: 'From CoinGecko', tags: ['crypto'] };
+  for (const q of ['', 'BTC', 'bitcoin usd', 'coingecko', 'CRYPTO']) expect(catalogMatch(s, q), q).toBe(true);
+  expect(catalogMatch(s, 'eth')).toBe(false);
 });
