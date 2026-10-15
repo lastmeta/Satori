@@ -149,7 +149,7 @@ details.streams > summary { color: var(--text); }
 .crow button { flex: none; }
 .base p.error, .base [data-test=base-result] { margin: 10px 0 0; }
 .txs { margin: 4px 0 0; font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 4px 14px; }
-.txs code, [data-test=base-last-batch] code { font-size: 0.85rem; }
+.txs code, [data-test=base-last-batch] code { font-size: 0.85rem; word-break: normal; } /* wrap at the spaces, not inside a hash */
 a { color: var(--accent); }
 .send { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .send input { margin: 0; flex: 1 1 140px; min-width: 0; }
