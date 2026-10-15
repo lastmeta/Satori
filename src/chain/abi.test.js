@@ -7,7 +7,7 @@ const OUT = '/code/Satori/contract/satori/out';
 const built = {
   engineAbi: 'SatoriEngine', gamesAbi: 'SatoriGames', registryAbi: 'SatoriRegistry', hubAbi: 'SatoriHub',
   rewardsAbi: 'SatoriRewards', lensAbi: 'SatoriRewardsLens', tokenAbi: 'SatoriToken', merkleAbi: 'SatoriMerkle',
-  airdropAbi: 'SatoriAirdrop',
+  airdropAbi: 'SatoriAirdrop', votingAbi: 'SatoriVoting',
 };
 // "function name(inputs) -> (outputs) mutability", types only
 const t = (p) => (p.components ? `(${p.components.map(t).join(',')})${p.type.slice(5)}` : p.type);

@@ -6,7 +6,8 @@ import { zeroAddress } from 'viem';
 import { publicKeys, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
 import { fakeSatori, E18, INDEFINITE } from './fake-satori.js';
-import { createChain, transferLock, payload, revertName, errorText, UP, DOWN } from './index.js';
+
+import { createChain, transferLock, payload, revertName, errorText, UP, DOWN, HOOK_GAS } from './index.js';
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
@@ -113,15 +114,20 @@ describe('the batch\'s pieces', () => {
   test('batchState: round, chain time, the identity\'s power and this round\'s count', async () => {
     expect(await chain.batchState(identity.evmAddress)).toEqual({ round: ROUND, chainTime: ROUND * 86400 + 9 * 3600, power: 0n, predicted: 0 });
   });
-  test('streams with a game; isNamedStream\'s revert reads as not named; the cadence', async () => {
+  test('streams with a game the engine pays (voting weight > 0, SatoriEngine.sol:828); named; the cadence', async () => {
     s.streams[2] = { game: 0, named: false, cadence: 60, history: [] }; // no game
     s.streams[3] = { game: 9, named: true, cadence: 60, history: [{ hour: ROUND * 24 + 8, value: 5n }] };
-    const real = s.streams;
-    s.streams = new Proxy(real, { get: (t, k) => t[k] }); // all known
+    s.streams[4] = { game: 10, named: false, cadence: 60, history: [{ hour: ROUND * 24 + 8, value: 5n }] }; // anyone's stream: weight 0
+    s.weights[9] = 5n * E18;
     expect(await chain.streams()).toEqual([
-      { streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440, latestHour: ROUND * 24, count: 2 },
-      { streamId: 3, gameId: 9, named: true, cadenceMinutes: 60, latestHour: ROUND * 24 + 8, count: 1 },
+      { streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440, latestHour: ROUND * 24, count: 2, weight: E18 },
+      { streamId: 3, gameId: 9, named: true, cadenceMinutes: 60, latestHour: ROUND * 24 + 8, count: 1, weight: 5n * E18 },
     ]);
+  });
+  test('a revert of isNamedStream (D6: unknown ids) reads as not named', async () => {
+    s.streams[3] = { game: 9, named: true, cadence: 60, history: [{ hour: 1, value: 5n }], namedReverts: true };
+    s.weights[9] = 1n;
+    expect((await chain.streams()).find((g) => g.streamId === 3).named).toBe(false);
   });
   test('history: the whole ring, oldest first', async () => {
     s.streams[1].history = Array.from({ length: 900 }, (_, i) => ({ hour: i, value: BigInt(i) }));
@@ -143,14 +149,43 @@ describe('the batch\'s pieces', () => {
     rpc.state.down = true; // the node's internal error (-32603), which viem reads as a revert with a message
     await expect(chain.simulateGame(identity, { gameId: 1, direction: DOWN })).rejects.toThrow();
   });
-  test('sendBatch: one tx from the identity; the receipt\'s block time', async () => {
+  test('sendBatch: one tx from the identity; the hash as soon as it is sent; the receipt\'s block time', async () => {
     s.streams[3] = { game: 9, named: false, cadence: 60, history: [{ hour: 1, value: 5n }] };
-    const r = await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }, { gameId: 9, direction: UP }]);
+    const seen = [];
+    const r = await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }, { gameId: 9, direction: UP }],
+      { onSent: (hash) => seen.push([hash, rpc.sent.length]) });
     expect(sentBy()).toEqual([['identity', 'predictMultipleWithPayloads', [[{ gameId: 1, payload: '0x02' }, { gameId: 9, payload: '0x01' }]]]]);
     expect(r).toEqual({ hash: rpc.sent[0].hash, at: ROUND * 86400 + 9 * 3600, blockNumber: 1 });
+    expect(seen).toEqual([[r.hash, 1]]);
     expect(s.predicted[`${I}:${ROUND}`]).toBe(2);
     await expect(chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }])).rejects.toThrow(/AlreadyPredicted/);
     expect(rpc.sent).toHaveLength(1); // the simulate stopped it: no gas
+  });
+});
+
+describe('fees, receipts, the chain id', () => {
+  test('the tip from eth_maxPriorityFeePerGas, max fee = 2 × the base fee + the tip; the limit the estimate + HOOK_GAS', async () => {
+    rpc.state.tip = 3n;
+    rpc.state.baseFee = 7n;
+    expect(await chain.fees()).toEqual({ maxFeePerGas: 17n, maxPriorityFeePerGas: 3n });
+    await chain.claimAirdrop(vault).catch(() => {});
+    s.airdrop[V] = 1n;
+    await chain.claimAirdrop(vault);
+    expect(rpc.sent[0]).toMatchObject({ maxFeePerGas: 17n, maxPriorityFeePerGas: 3n, gas: 0x30000n + HOOK_GAS });
+    await chain.sendEth(vault, '0x' + '55'.repeat(20), 1n);
+    expect(rpc.sent[1]).toMatchObject({ maxFeePerGas: 17n, maxPriorityFeePerGas: 3n, gas: 0x30000n }); // a plain transfer: no hook, no pad
+  });
+  test('given fees are used as they are (the batch checks them against its ceiling first)', async () => {
+    await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }], { fees: { maxFeePerGas: 99n, maxPriorityFeePerGas: 9n } });
+    expect(rpc.sent[0]).toMatchObject({ maxFeePerGas: 99n, maxPriorityFeePerGas: 9n });
+  });
+  test('receipt: the status and the block time of a sent tx; null while it is not mined', async () => {
+    const { hash } = await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }]);
+    expect(await chain.receipt(hash)).toEqual({ status: 'success', at: ROUND * 86400 + 9 * 3600, blockNumber: 1 });
+    expect(await chain.receipt('0x' + '12'.repeat(32), { timeout: 50 })).toBe(null);
+  });
+  test('chainId: what the RPC says', async () => {
+    expect(await chain.chainId()).toBe(84532);
   });
 });
 

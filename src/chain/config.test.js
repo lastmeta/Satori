@@ -19,7 +19,7 @@ describe('loadConfig', () => {
     if (existsSync(f)) {
       const { addresses, chainId } = JSON.parse(readFileSync(f, 'utf8'));
       expect(DEFAULTS.chainId).toBe(chainId);
-      for (const k of ['token', 'merkle', 'airdrop', 'rewards', 'engine', 'games', 'registry', 'hub', 'lens']) {
+      for (const k of ['token', 'merkle', 'airdrop', 'rewards', 'engine', 'games', 'registry', 'hub', 'lens', 'voting']) {
         expect(DEFAULTS[k], k).toBe(addresses[k]);
       }
     }

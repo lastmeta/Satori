@@ -56,8 +56,10 @@ export const tokenAbi = abi(
 export const merkleAbi = abi(
   'function claimMerkle(uint256 lifetimeEntitlement, bytes32[] proof)',
   'function alreadyMintedTo(address) view returns (uint256)',
-  'function merkleRoot() view returns (bytes32)',
 );
+
+/** The engine pays a game only while its voting weight is > 0 (SatoriEngine.sol:828). */
+export const votingAbi = abi('function weightOf(uint32 gameId) view returns (uint256)');
 
 export const airdropAbi = abi(
   'function claimAirdrop()',

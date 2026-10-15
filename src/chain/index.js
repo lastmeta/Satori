@@ -11,12 +11,12 @@
 //   await chain.claimRewards(vault) / claimMerkle(vault, proof) / claimAirdrop(vault) / sendEth / sendSatori
 import {
   BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, encodePacked, hexToBytes,
-  keccak256, serializeTransaction, zeroAddress,
+  keccak256, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import {
-  airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, tokenAbi,
+  airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, tokenAbi, votingAbi,
 } from './abi.js';
 
 export const ROUND_S = 86400; // a round is a UTC day (SatoriToken.sol:329-331)
@@ -110,6 +110,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const token = c('token', tokenAbi);
   const merkle = c('merkle', merkleAbi);
   const airdrop = c('airdrop', airdropAbi);
+  const voting = c('voting', votingAbi);
   const mc3 = c('multicall3', multicall3Abi);
   const read = (call) => client.readContract(call);
   const many = (contracts) => client.multicall({ contracts, allowFailure: false });
@@ -123,18 +124,28 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   };
 
   /**
+   * EIP-1559 fees: the tip the node suggests (eth_maxPriorityFeePerGas) and a
+   * max fee of 2 × the latest base fee + the tip (Lite's 2× margin,
+   * evm.py:74-75, on the base fee rather than the gas price).
+   */
+  async function fees() {
+    const [block, tip] = await Promise.all([client.getBlock(), client.estimateMaxPriorityFeePerGas()]);
+    return { maxFeePerGas: 2n * (block.baseFeePerGas ?? 0n) + tip, maxPriorityFeePerGas: tip };
+  }
+
+  /**
    * As satorilib's EvmClient.send (evm.py:60-93): simulate and estimate first
    * (a revert throws, naming the error, before any gas), the limit with
-   * HOOK_GAS over the estimate, maxFee = 2 × gasPrice and priority = gasPrice,
-   * wait for the receipt, throw unless it succeeded.
+   * HOOK_GAS over the estimate, send (onSent(hash) at once), wait for the
+   * receipt, throw unless it succeeded.
    */
-  const write = (key, call) => queued(async () => {
+  const write = (key, call, { fees: given, onSent } = {}) => queued(async () => {
     const account = toAccount(key);
     const { request } = await client.simulateContract({ ...call, account });
-    const [estimate, gasPrice] = await Promise.all([client.estimateContractGas({ ...call, account }), client.getGasPrice()]);
+    const [estimate, fee] = await Promise.all([client.estimateContractGas({ ...call, account }), given ?? fees()]);
     const wallet = createWalletClient({ account, chain, transport });
-    const hash = await wallet.writeContract({ ...request, gas: estimate + HOOK_GAS, maxFeePerGas: 2n * gasPrice,
-      maxPriorityFeePerGas: gasPrice });
+    const hash = await wallet.writeContract({ ...request, gas: estimate + HOOK_GAS, ...fee });
+    await onSent?.(hash);
     return receiptOf(hash, call.functionName);
   });
 
@@ -158,6 +169,22 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   return {
     config,
     client,
+    fees,
+    /** What the RPC says it is (the app refuses a chain other than the config's). */
+    chainId: () => client.getChainId(),
+
+    /** A sent tx's { status, at (its block's time), blockNumber }, or null if it is not mined within `timeout` ms. */
+    async receipt(hash, { timeout = 60_000 } = {}) {
+      let r;
+      try {
+        r = await client.waitForTransactionReceipt({ hash, pollingInterval, timeout });
+      } catch (err) {
+        if (err instanceof WaitForTransactionReceiptTimeoutError) return null;
+        throw err;
+      }
+      const block = await client.getBlock({ blockNumber: r.blockNumber });
+      return { status: r.status, at: Number(block.timestamp), blockNumber: Number(r.blockNumber) };
+    },
 
     /**
      * Everything the Base card shows, in one multicall (each read may fail on
@@ -246,9 +273,13 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     },
 
     /**
-     * The registry's streams that have a binary game: [{ streamId, gameId,
-     * named, cadenceMinutes, latestHour, count }]. isNamedStream reverts for
-     * an unknown id on D6: a failure reads as not named (base_predict.py:223-230).
+     * The registry's streams whose binary game the engine pays: [{ streamId,
+     * gameId, named, cadenceMinutes, latestHour, count, weight }]. Anyone can
+     * add a stream (and its game) for a small burn, so only games with voting
+     * weight > 0 are kept, the engine's own eligibility test
+     * (SatoriEngine.sol:828: an unweighted game earns no SATORI). isNamedStream
+     * reverts for an unknown id on D6: a failure reads as not named
+     * (base_predict.py:223-230). Two multicalls: the games, then their weights.
      */
     async streams() {
       const ids = await read(registry('getAllDataStreams'));
@@ -256,7 +287,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       const res = await client.multicall({ allowFailure: true, contracts: ids.flatMap((id) => [
         games('binaryGameByStream', [id]), registry('isNamedStream', [id]), registry('getLatestUpdateInfo', [id]),
       ]) });
-      return ids.map((streamId, i) => {
+      const list = ids.map((streamId, i) => {
         const [game, named, info] = res.slice(3 * i, 3 * i + 3);
         const [count, latestHour, , cadenceMinutes] = info.status === 'success' ? info.result : [0, 0n, 0n, 0];
         return {
@@ -264,6 +295,9 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
           cadenceMinutes, latestHour: Number(latestHour), count,
         };
       }).filter((g) => g.gameId !== 0);
+      if (!list.length) return [];
+      const weights = await many(list.map((g) => voting('weightOf', [g.gameId])));
+      return list.map((g, i) => ({ ...g, weight: weights[i] })).filter((g) => g.weight > 0n);
     },
 
     /** A stream's history, oldest first: [{ hour, value: bigint }] (the whole ring, SatoriRegistry.sol:1375-1393). */
@@ -285,10 +319,14 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       }
     },
 
-    /** The day's batch from the identity. → { hash, at (the block's time), blockNumber } */
-    async sendBatch(identity, list) {
+    /**
+     * The day's batch from the identity; onSent(hash) as soon as it is sent,
+     * `fees` as given (the batch checks them against its ceiling).
+     * → { hash, at (the block's time), blockNumber }
+     */
+    async sendBatch(identity, list, opts = {}) {
       const { hash, receipt } = await write(identity,
-        engine('predictMultipleWithPayloads', [list.map((g) => ({ gameId: g.gameId, payload: payload(g.direction) }))]));
+        engine('predictMultipleWithPayloads', [list.map((g) => ({ gameId: g.gameId, payload: payload(g.direction) }))]), opts);
       const block = await client.getBlock({ blockNumber: receipt.blockNumber });
       return { hash, at: Number(block.timestamp), blockNumber: Number(receipt.blockNumber) };
     },
@@ -302,13 +340,12 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
     /** SATORI from the vault (the token refuses while transfer-locked: the simulate says Locked). */
     sendSatori: (vault, to, amount) => write(vault, token('transfer', [to, amount])),
-    /** ETH from the vault: estimated first (a failure throws before sending), then as any write. */
+    /** ETH from the vault: estimated first (a failure throws before sending); a plain transfer runs no hook, so no pad. */
     sendEth: (vault, to, value) => queued(async () => {
       const account = toAccount(vault);
-      await client.estimateGas({ account, to, value });
-      const gasPrice = await client.getGasPrice();
+      const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }), fees()]);
       const wallet = createWalletClient({ account, chain, transport });
-      const hash = await wallet.sendTransaction({ to, value, maxFeePerGas: 2n * gasPrice, maxPriorityFeePerGas: gasPrice });
+      const hash = await wallet.sendTransaction({ to, value, gas, ...fee });
       return receiptOf(hash, 'transfer');
     }),
   };

@@ -9,7 +9,6 @@ export const CHAIN_ID = 84532; // Base Sepolia
 
 export const DEFAULTS = Object.freeze({
   chainId: CHAIN_ID,
-  chainName: 'Base Sepolia',
   rpcUrl: 'https://sepolia.base.org',
   explorerUrl: 'https://sepolia.basescan.org',
   token: '0x4dee947383d5C9c8E421F55Fe3518a29324aE469',
@@ -21,6 +20,7 @@ export const DEFAULTS = Object.freeze({
   registry: '0x1ED75AB0a66Ba7d23C3E5c84798e90205E76743a',
   hub: '0x1eec7E1443C1065ab78180A14326e5Ac8284f143',
   lens: '0x9BF5266F60092F1bFbd5F16d21d0bE9673c0F91F',
+  voting: '0x5A56279215684A8088234799FfD56f806AcFBb6e', // SatoriEngine.satoriVoting() on D6
   multicall3: '0xcA11bde05977b3631167028862bE2a173976CA11',
 });
 

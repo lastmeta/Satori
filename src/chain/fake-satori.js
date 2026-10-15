@@ -38,7 +38,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     balance: {}, // SATORI
     rewards: {}, // what the lens says the address can claim with hub.claim()
     airdrop: {}, // vested and unclaimed
-    merkle: { root: '0x' + '00'.repeat(32), drop: {}, minted: {} }, // drop: addr → { amount, proof }
+    merkle: { drop: {}, minted: {}, available: null }, // drop: addr → { amount, proof }; available: the lane's reserve (null: plenty)
+    weights: { 1: E18 }, // gameId → voting weight (the engine pays only games with weight, SatoriEngine.sol:828)
   };
   const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n);
   const fee = (a) => ({ 0: 1000, 1000: 0 })[s.feeStored[a] ?? 0] ?? s.feeStored[a];
@@ -119,7 +120,7 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         const page = h.slice(total - Number(offset) - take, total - Number(offset));
         return [page.map((e) => e.value), page.map((e) => e.hour), total];
       },
-      isNamedStream: ([id]) => (s.streams[id] ? s.streams[id].named : revert()), // D6 reverts for an unknown id
+      isNamedStream: ([id]) => (s.streams[id] && !s.streams[id].namedReverts ? s.streams[id].named : revert()), // D6 reverts for an unknown id
     }),
     [DEFAULTS.hub]: fns(abi.hubAbi, {
       delegatePredictionPower: delegate,
@@ -158,17 +159,20 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         return true;
       },
     }),
+    [DEFAULTS.voting]: fns(abi.votingAbi, { weightOf: ([g]) => s.weights[g] ?? 0n }),
     [DEFAULTS.merkle]: fns(abi.merkleAbi, {
-      merkleRoot: () => s.merkle.root,
       alreadyMintedTo: ([a]) => s.merkle.minted[lc(a)] ?? 0n,
       claimMerkle: ([amount, proof], ctx) => {
         const d = s.merkle.drop[ctx.from];
         if (!d || d.amount !== amount || JSON.stringify(d.proof) !== JSON.stringify(proof)) revert('InvalidProof');
         const already = s.merkle.minted[ctx.from] ?? 0n;
         if (amount <= already) revert('NothingToClaim');
+        const avail = s.merkle.available;
+        const paid = avail != null && avail > 0n && amount - already > avail ? avail : amount - already; // SatoriMerkle.sol:196-201
         if (ctx.write) {
-          s.merkle.minted[ctx.from] = amount;
-          s.balance[ctx.from] = (s.balance[ctx.from] ?? 0n) + amount - already;
+          s.merkle.minted[ctx.from] = already + paid;
+          s.balance[ctx.from] = (s.balance[ctx.from] ?? 0n) + paid;
+          if (avail != null) s.merkle.available -= paid;
         }
       },
     }),

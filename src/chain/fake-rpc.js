@@ -37,9 +37,10 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
   const balances = Object.fromEntries(Object.entries(eth).map(([a, v]) => [a.toLowerCase(), v]));
   const sent = []; // mined transactions: { from, to, functionName, args, value, hash, status }
   const receipts = {};
+  const held = {}; // receipts of txs sent while state.mine is false
   const blocks = [{ number: 0, timestamp }];
   const log = []; // every RPC method called
-  const state = { down: false };
+  const state = { down: false, tip: gasPrice, baseFee: 1n, mine: true }; // mine: false holds sent txs unmined (no receipt yet)
 
   const now = () => timestamp;
   const ctxOf = (from, write, value = 0n) => ({
@@ -97,7 +98,7 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
 
   const blockJson = (b) => ({
     number: toHex(b.number), hash: keccak256(toHex(b.number)), parentHash: '0x' + '00'.repeat(32),
-    timestamp: toHex(b.timestamp), baseFeePerGas: '0x1', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [],
+    timestamp: toHex(b.timestamp), baseFeePerGas: toHex(state.baseFee), gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [],
     logs: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), extraData: '0x', difficulty: '0x0',
     nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), size: '0x1', stateRoot: '0x' + '00'.repeat(32),
     receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), mixHash: '0x' + '00'.repeat(32),
@@ -118,7 +119,7 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
       case 'eth_getBalance': return toHex(balances[params[0].toLowerCase()] ?? 0n);
       case 'eth_getTransactionCount': return toHex(sent.filter((s) => s.from === params[0].toLowerCase()).length);
       case 'eth_gasPrice': return toHex(gasPrice);
-      case 'eth_maxPriorityFeePerGas': return toHex(gasPrice);
+      case 'eth_maxPriorityFeePerGas': return toHex(state.tip);
       case 'eth_call': return call(params[0], false);
       case 'eth_estimateGas': call(params[0], false); return '0x30000';
       case 'eth_sendRawTransaction': {
@@ -132,8 +133,9 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
         blocks.push(block);
         const c = byAddr[tx.to.toLowerCase()];
         const { functionName, args } = c ? decodeFunctionData({ abi: c.abi, data: tx.data ?? '0x' }) : {};
-        sent.push({ from, to: tx.to.toLowerCase(), functionName, args, value: tx.value ?? 0n, hash, status: status === '0x1' });
-        receipts[hash] = {
+        sent.push({ from, to: tx.to.toLowerCase(), functionName, args, value: tx.value ?? 0n, hash, status: status === '0x1',
+          gas: tx.gas, maxFeePerGas: tx.maxFeePerGas, maxPriorityFeePerGas: tx.maxPriorityFeePerGas });
+        (state.mine ? receipts : held)[hash] = {
           transactionHash: hash, transactionIndex: '0x0', blockHash: keccak256(toHex(block.number)), blockNumber: toHex(block.number),
           from, to: tx.to, cumulativeGasUsed: '0x1', gasUsed: '0x1', effectiveGasPrice: toHex(gasPrice),
           logs: [], logsBloom: '0x' + '00'.repeat(256), status, type: '0x2', contractAddress: null,
@@ -173,5 +175,7 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
     get now() { return timestamp; },
     setTime(t) { timestamp = t; },
     advance(seconds) { timestamp += seconds; },
+    /** Mine the held transactions (their receipts appear). */
+    release() { Object.assign(receipts, held); for (const k of Object.keys(held)) delete held[k]; },
   };
 }
