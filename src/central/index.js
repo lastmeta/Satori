@@ -117,6 +117,8 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
   }
 
   return {
+    url: base,
+
     /** POST /peer/register as satorilib's checkin (server.py:384-434): headers only, no token. */
     async register({ vaultPubkey }) {
       if (!vaultPubkey) return null;

@@ -1,124 +1,143 @@
-// The neuron's flow, once per stream interval:
-//   source ──fetch──▶ observation ──▶ engine ──▶ prediction ──sign──▶ store ──▶ publish
-import { predict } from '../engine/index.js';
+// The neuron's flow, as Satori Lite runs it (docs/design/central.md):
+//   page load → register with central; first poll 5–30 min later, then every 11 h:
+//   poll ─▶ store (insert or ignore) ─▶ forecast streams with a new row ─▶ send everything pending
+import { normalizeObservation, predictionItem, pyFloatStr } from '../central/index.js';
+import { forecast as engineForecast } from '../engine/index.js';
 
-export const WINDOW = 20;
-export const MODEL = `ols-${WINDOW}`;
-export const FETCH_TIMEOUT_MS = 15_000;
-export const MIN_INTERVAL_S = 10;
-export const MAX_INTERVAL_S = 86_400; // timers overflow past ~24.8 days
-export const DEFAULT_STREAM = {
-  name: 'BTC-USD',
-  url: 'https://api.coinbase.com/v2/prices/BTC-USD/spot',
-  path: 'data.amount',
-  interval_s: 60,
-};
+export const POLL_EVERY_S = 11 * 3600; // start.py:4785-4876
+export const FIRST_POLL_S = [5 * 60, 30 * 60]; // start.py:4777
+export const BATCH_LIMIT = 100;
 
-/** Read a dotted path ('data.amount', 'items.0.price'); '' is the whole document. */
-export function readPath(doc, path) {
-  return path.split('.').filter(Boolean).reduce((v, k) => (v == null ? undefined : v[k]), doc);
-}
-
-/** Why a stream can't be added, or null when it can. */
-export function streamError({ name, url, path, interval_s }) {
-  if (!name) return 'Give the stream a name.';
-  if (!/^https:\/\//.test(url)) return 'The source URL must start with https://';
-  if (!path) return 'Give the path to the number.';
-  if (!(interval_s >= MIN_INTERVAL_S)) return `Use an interval of at least ${MIN_INTERVAL_S} seconds.`;
-  if (!(interval_s <= MAX_INTERVAL_S)) return 'Use an interval of at most 1 day (86400 seconds).';
-  return null;
-}
-
-/** The exact text that is signed: fixed key order, no whitespace. */
-export function canonical({ stream, ts, target_ts, value, model, address }) {
-  return JSON.stringify({ stream, ts, target_ts, value, model, address });
-}
-
-/** Step 1 publisher: marks the prediction published. A central or Nostr
- *  publisher later has the same shape: (prediction with id) → Promise. */
-export const localPublisher = (db) => async (p) => db.markPublished(p.id);
-
-async function observe(stream, fetchFn, now, signal) {
-  const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS);
-  const res = await fetchFn(stream.url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout, cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from source`);
-  const raw = readPath(await res.json(), stream.path);
-  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`no number at "${stream.path}" (got ${JSON.stringify(raw)?.slice(0, 40)})`);
-  }
-  return { ts: now(), value };
-}
+const nowS = () => Date.now() / 1000;
+const errorText = (err) => String(err?.message ?? err);
 
 /**
- * One tick for one stream. Never throws: a failure is stored as the stream's
- * last error and returned. A success clears the last error. Once `signal` is
- * aborted (Remove), nothing more is stored. `identity` is the unencrypted
- * identity key: it signs without anyone present.
- * @returns {Promise<{ok: true, observation, prediction} | {ok: false, error: string}>}
+ * Register with central (on every start). Never throws: the result says what
+ * happened, and whether central's vault for this identity is ours.
  */
-export async function tick(stream, { db, identity, publish, signal, fetch: fetchFn = globalThis.fetch, now = Date.now }) {
+export async function register({ central, vaultPubkey, vaultAddress, now = nowS }) {
+  const at = now();
+  if (!vaultPubkey) return { at, ok: false, skipped: true, error: 'no vault public key in vault.yaml' };
   try {
-    const obs = await observe(stream, fetchFn, now, signal);
-    if (signal?.aborted) return { ok: false, error: 'stopped' };
-    await db.addObservation(stream.name, obs.ts, obs.value);
-    const target_ts = obs.ts + stream.interval_s * 1000;
-    const value = predict((await db.recent(stream.name, WINDOW)).map((o) => [o.ts, o.value]), target_ts);
-    if (value === null) throw new Error('engine produced no value');
-    if (signal?.aborted) return { ok: false, error: 'stopped' };
-    const p = { stream: stream.name, ts: obs.ts, target_ts, value, model: MODEL, address: identity.address };
-    p.message = canonical(p);
-    p.signature = identity.sign(p.message);
-    p.id = await db.addPrediction(p);
-    await publish(p);
-    await db.setError(stream.name, null);
-    await db.checkpoint();
-    return { ok: true, observation: obs, prediction: p };
+    const r = await central.register({ vaultPubkey });
+    const vault = r?.vault_address ?? null;
+    return { at, ok: true, peer_id: r?.peer_id ?? null, wallet_address: r?.wallet_address ?? null,
+      vault_address: vault, message: r?.message ?? '', vaultMismatch: vault !== vaultAddress };
   } catch (err) {
-    if (signal?.aborted) return { ok: false, error: 'stopped' };
-    const error = err?.name === 'TimeoutError' ? 'source timed out' : String(err?.message ?? err);
-    await db.setError(stream.name, error, now()).catch(() => {});
-    return { ok: false, error };
+    return { at, ok: false, error: errorText(err) };
   }
 }
 
-/**
- * Runs `run(stream, signal)` for each started stream right away, then once per
- * interval (measured from the start of the last run). A failing run never stops
- * the others or the schedule. stop(name) aborts `signal` and returns the run in
- * flight, so a caller can wait for it before deleting the stream's data.
- */
-export function createScheduler(run, { setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout } = {}) {
-  const jobs = new Map();
+/** Lite's batch item from a stored prediction (its observed_at and hash as made). */
+const toItem = (p) => ({ stream_uuid: p.stream_uuid, stream_name: p.name, value: pyFloatStr(p.t2),
+  t1_value: pyFloatStr(p.t1), observed_at: p.observed_at, hash: p.hash });
 
-  async function stop(name) {
-    const job = jobs.get(name);
-    if (!job) return;
-    job.ctl.abort();
-    ct(job.timer);
-    jobs.delete(name);
-    await job.running;
+/** Send every pending prediction. successful > 0 marks them all sent; anything else keeps them (engine.py:446-454). */
+async function submit(db, central, now) {
+  const pending = await db.pending();
+  if (!pending.length) return null;
+  let result;
+  try {
+    const r = await central.submitPredictions(pending.map(toItem));
+    result = { at: now(), total_submitted: r?.total_submitted ?? pending.length, successful: r?.successful ?? 0,
+      failed: r?.failed ?? 0, errors: r?.errors ?? null };
+    if (result.successful > 0) await db.markSent(pending.map((p) => p.id), result.at);
+  } catch (err) {
+    result = { at: now(), error: errorText(err) };
+  }
+  await db.set('central_last_submit', result);
+  return result;
+}
+
+/**
+ * One cycle. Never throws for central's errors: a failed poll is recorded and
+ * ends the cycle; a failed submission keeps the queue.
+ * @returns {Promise<{poll: object, submit: object | null}>}
+ */
+export async function cycle({ db, central, forecast = engineForecast, now = nowS }) {
+  const at = now();
+  let batch;
+  try {
+    batch = await central.observations(BATCH_LIMIT);
+    if (!Array.isArray(batch)) throw new Error('central sent no list of observations');
+  } catch (err) {
+    const poll = { at, error: errorText(err) };
+    await db.set('central_last_poll', poll);
+    return { poll, submit: null };
+  }
+  const rows = batch.map(normalizeObservation).filter(Boolean);
+  const fresh = await db.addObservations(rows);
+  let predicted = 0;
+  for (const uuid of fresh) {
+    const f = forecast(await db.history(uuid));
+    if (!f) continue;
+    const made_at = now();
+    const { observed_at, hash } = predictionItem({ t1: f.t1, t2: f.t2, now: made_at });
+    await db.addPrediction({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, observed_at, hash });
+    predicted++;
+  }
+  const poll = { at, streams: rows.length, new: fresh.length, predicted };
+  await db.set('central_last_poll', poll);
+  const sent = await submit(db, central, now);
+  await db.checkpoint();
+  return { poll, submit: sent };
+}
+
+/** Lite's start delay: uniform whole seconds in 5–30 min. */
+export const startJitter = (rand = Math.random) =>
+  FIRST_POLL_S[0] + Math.floor(rand() * (FIRST_POLL_S[1] - FIRST_POLL_S[0] + 1));
+
+/**
+ * When the first poll after a (re)load is due: a stored time still ahead (by
+ * at most 11 h) is kept, so a reload doesn't reset the schedule; otherwise now
+ * plus Lite's start jitter.
+ */
+export function firstPollAt(stored, now, rand) {
+  return typeof stored === 'number' && stored > now && stored <= now + POLL_EVERY_S ? stored : now + startJitter(rand);
+}
+
+/**
+ * The schedule: start() arms the first poll (meta.next_poll_at); each poll,
+ * from the timer or poll(), runs `run` and arms the next one 11 h after it
+ * ends, whatever the result. One run at a time: poll() during a run returns it.
+ */
+export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeout: st = setTimeout,
+  clearTimeout: ct = clearTimeout, onNext = () => {} }) {
+  let timer = null;
+  let next = null;
+  let running = null;
+  let stopped = false;
+
+  async function arm(at) {
+    next = at;
+    onNext(at);
+    await db.set('next_poll_at', at);
+    await db.checkpoint(); // OPFS keeps what is checkpointed; a tab may close at any time
+    ct(timer);
+    if (!stopped) timer = st(() => void poll().catch(() => {}), Math.max(0, (at - now()) * 1000));
   }
 
-  function start(stream) {
-    stop(stream.name);
-    const job = { ctl: new AbortController(), timer: null, running: null };
-    jobs.set(stream.name, job);
-    const loop = async () => {
-      const started = Date.now();
-      job.running = Promise.resolve().then(() => run(stream, job.ctl.signal)).catch(() => {}); // run reports its own errors
-      await job.running;
-      if (job.ctl.signal.aborted) return;
-      job.timer = st(loop, Math.max(0, stream.interval_s * 1000 - (Date.now() - started)));
-    };
-    loop();
+  function poll() {
+    if (!running) {
+      ct(timer);
+      running = Promise.resolve().then(run).finally(async () => {
+        running = null;
+        await arm(now() + POLL_EVERY_S);
+      });
+    }
+    return running;
   }
 
   return {
-    start,
-    stop,
-    stopAll: () => Promise.all([...jobs.keys()].map(stop)),
-    get running() { return [...jobs.keys()]; },
+    start: async () => arm(firstPollAt(await db.get('next_poll_at'), now(), rand)),
+    poll,
+    async stop() {
+      stopped = true;
+      ct(timer);
+      await running?.catch(() => {});
+    },
+    get next() { return next; },
+    get running() { return !!running; },
   };
 }
 

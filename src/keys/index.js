@@ -5,7 +5,7 @@
 //   const { walletYaml, vaultYaml } = await writeKeys({ identity?, vault }, passphrase)  // to store
 //   const { walletYaml, vaultYaml } = await importDocker({ walletText, vaultText, passphrase })
 //   const id = await loadIdentity(walletYaml)       // id.address, id.pubkey, id.sign(msg), id.backup()
-//   vaultInfo(vaultYaml)                            // { address } while locked
+//   vaultInfo(vaultYaml)                            // { address, pubkey } while locked
 //   const v = await unlockVault(vaultYaml, pass)    // Unlock; throws 'Wrong passphrase'
 //   v.sign(msg), v.backup(), v.lock()               // Lock wipes the key; then both throw 'Locked'
 export { generateEntropy, entropyFromWords, entropyFromWif, deriveKeys, signMessage, verifyMessage } from './keys.js';
@@ -105,10 +105,18 @@ export async function loadIdentity(walletYaml) {
   return signer((await readWallet(walletYaml)).entropy);
 }
 
-/** The vault's address, read without the passphrase (start.py getVaultInfoFromFile); null if encrypted. */
+/**
+ * The vault's address and public key, read without the passphrase, as Lite
+ * does for central's register (start.py:4637-4667); each null if encrypted (an old vault).
+ */
 export function vaultInfo(vaultYaml) {
-  const address = parse(vaultYaml).evr?.address;
-  return { address: typeof address === 'string' && address.length <= 34 ? address : null };
+  const doc = parse(vaultYaml);
+  const address = doc.evr?.address;
+  const pubkey = doc.publicKey;
+  return {
+    address: typeof address === 'string' && address.length <= 34 ? address : null,
+    pubkey: typeof pubkey === 'string' && /^0[23][0-9a-f]{64}$/.test(pubkey) ? pubkey : null,
+  };
 }
 
 /** Unlock: decrypt the vault into memory. A key that doesn't match the stored address is a wrong passphrase. */

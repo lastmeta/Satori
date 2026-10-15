@@ -1,200 +1,256 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { memoryDb } from '../db/node.js';
-import { loadIdentity, verifyMessage } from '../keys/index.js';
+import { CentralError, predictionItem } from '../central/index.js';
+import { MODEL } from '../engine/index.js';
 import {
-  tick, createScheduler, readPath, canonical, localPublisher, claimTab, streamError, DEFAULT_STREAM, MODEL, WINDOW,
+  cycle, register, firstPollAt, startJitter, createPoller, claimTab, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
 } from './index.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
-const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
-const v = fx.vectors[0];
-const json = (body, status = 200) => async () => new Response(JSON.stringify(body), { status });
-const coinbase = (amount) => json({ data: { amount: String(amount), base: 'BTC', currency: 'USD' } });
+const T = 1_792_000_000; // seconds
+const entry = (uuid, name, observedAt, value) => ({
+  id: 1, observed_at: String(observedAt), value: String(value), hash: '', stream_id: 1,
+  stream: { id: 1, uuid, name, meta: null }, ts: '2026-10-14T23:00:12.756973', stream_uuid: uuid,
+});
+
+/** A fake central: `batch` is what the next poll returns; `results` what each submission returns (or throws). */
+function fakeCentral() {
+  const c = {
+    batch: [],
+    results: [],
+    sent: [],
+    observations: vi.fn(async (limit) => {
+      if (c.batch instanceof Error) throw c.batch;
+      expect(limit).toBe(BATCH_LIMIT);
+      return c.batch;
+    }),
+    submitPredictions: vi.fn(async (items) => {
+      c.sent.push(items);
+      const r = c.results.length ? c.results.shift() : { total_submitted: items.length, successful: items.length, failed: 0, prediction_ids: [], errors: null };
+      if (r instanceof Error) throw r;
+      return r;
+    }),
+  };
+  return c;
+}
 
 let db;
-let identity;
+let central;
+let clock;
+const now = () => clock;
 beforeEach(async () => {
   db = await memoryDb();
-  identity = await loadIdentity(v.walletYaml);
-  await db.addStream(DEFAULT_STREAM);
+  central = fakeCentral();
+  clock = T + 0.25;
+});
+const run = (o) => cycle({ db, central, now, ...o });
+
+describe('cycle: poll → store → forecast new rows → submit', () => {
+  test('stores the batch, forecasts each stream, and sends Lite\'s payload items', async () => {
+    central.batch = [entry('u-btc', 'bitcoin', T - 100.7, '100.0'), entry('u-eth', 'eth', T - 50, '5')];
+    const r = await run();
+    expect(r.poll).toEqual({ at: T + 0.25, streams: 2, new: 2, predicted: 2 });
+    expect(r.submit).toMatchObject({ at: T + 0.25, total_submitted: 2, successful: 2, failed: 0 });
+    expect(await db.history('u-btc')).toEqual([{ ts: T - 101, value: 100 }]);
+    const [items] = central.sent;
+    expect(items).toEqual([
+      predictionItem({ streamUuid: 'u-btc', streamName: 'bitcoin', t1: 100, t2: 100, now: T + 0.25 }),
+      predictionItem({ streamUuid: 'u-eth', streamName: 'eth', t1: 5, t2: 5, now: T + 0.25 }),
+    ]);
+    expect(items[0]).toMatchObject({ value: '100.0', t1_value: '100.0', observed_at: '1792000000.25' });
+    expect(await db.pendingCount()).toBe(0);
+    expect(await db.predictions('bitcoin')).toMatchObject([{ status: 'sent', sent_at: T + 0.25, model: MODEL }]);
+    expect(await db.get('central_last_poll')).toEqual(r.poll);
+    expect(await db.get('central_last_submit')).toEqual(r.submit);
+  });
+
+  test('dedupe: a repeated batch adds nothing, forecasts nothing, sends nothing', async () => {
+    central.batch = [entry('u-btc', 'bitcoin', T, 1)];
+    await run();
+    const r = await run();
+    expect(r).toEqual({ poll: { at: clock, streams: 1, new: 0, predicted: 0 }, submit: null });
+    expect(central.submitPredictions).toHaveBeenCalledTimes(1);
+    expect(await db.history('u-btc')).toHaveLength(1);
+  });
+
+  test('only streams that got a new row are forecast, on their whole history', async () => {
+    const forecast = vi.fn((points) => ({ model: 'm', t1: points.length, t2: points.length + 0.5 }));
+    central.batch = [entry('u-a', 'a', T, 1), entry('u-b', 'b', T, 2)];
+    await run({ forecast });
+    central.batch = [entry('u-a', 'a', T + 3600, 3), entry('u-b', 'b', T, 2)];
+    clock += 3600;
+    const r = await run({ forecast });
+    expect(r.poll).toMatchObject({ new: 1, predicted: 1 });
+    expect(forecast).toHaveBeenLastCalledWith([{ ts: T, value: 1 }, { ts: T + 3600, value: 3 }]);
+    expect(central.sent[1]).toEqual([expect.objectContaining({ stream_uuid: 'u-a', value: '2.5', t1_value: '2.0' })]);
+  });
+
+  test('no forecast (null) → no prediction; unusable rows are dropped', async () => {
+    central.batch = [entry('u-a', 'a', T, 'abc'), { ...entry('u-b', 'b', T, 1), stream: null, stream_uuid: null }, entry('u-c', 'c', T, 1)];
+    const r = await run({ forecast: () => null });
+    expect(r).toEqual({ poll: { at: clock, streams: 1, new: 1, predicted: 0 }, submit: null });
+  });
+
+  test('kept queue: successful == 0 or an error keeps every prediction; the next poll resends them with its own', async () => {
+    central.batch = [entry('u-a', 'a', T, 1)];
+    central.results = [{ total_submitted: 1, successful: 0, failed: 1, prediction_ids: [], errors: ['nope'] }];
+    expect((await run()).submit).toMatchObject({ successful: 0, errors: ['nope'] });
+    expect(await db.pendingCount()).toBe(1);
+
+    central.batch = [entry('u-a', 'a', T + 1, 2)];
+    central.results = [new CentralError(0, 'network', 'central unreachable: Failed to fetch')];
+    expect((await run()).submit).toEqual({ at: clock, error: 'central unreachable: Failed to fetch' });
+    expect(await db.pendingCount()).toBe(2);
+
+    central.batch = [entry('u-a', 'a', T + 2, 3)];
+    clock += 10;
+    const r = await run(); // the default result accepts all
+    expect(central.sent.map((s) => s.length)).toEqual([1, 2, 3]);
+    expect(central.sent[2].map((i) => i.t1_value)).toEqual(['1.0', '3.0', '4.0']);
+    expect(r.submit.successful).toBe(3);
+    expect(await db.pendingCount()).toBe(0);
+  });
+
+  test('a poll with nothing new still resends what is pending', async () => {
+    central.batch = [entry('u-a', 'a', T, 1)];
+    central.results = [new CentralError(500, 'boom')];
+    await run();
+    const r = await run();
+    expect(r.poll.new).toBe(0);
+    expect(r.submit.successful).toBe(1);
+    expect(await db.pendingCount()).toBe(0);
+  });
+
+  test('a failed poll is recorded; nothing is stored or sent', async () => {
+    central.batch = [entry('u-a', 'a', T, 1)];
+    central.results = [new CentralError(500, 'boom')];
+    await run();
+    central.batch = new CentralError(0, 'timeout', 'central timed out (15 s)');
+    const r = await run();
+    expect(r).toEqual({ poll: { at: clock, error: 'central timed out (15 s)' }, submit: null });
+    expect(central.submitPredictions).toHaveBeenCalledTimes(1);
+    expect(await db.get('central_last_poll')).toEqual(r.poll);
+    expect(await db.pendingCount()).toBe(1);
+  });
+
+  test('a batch that is not a list is a failed poll', async () => {
+    central.batch = { detail: 'odd' };
+    expect((await run()).poll).toEqual({ at: clock, error: 'central sent no list of observations' });
+  });
 });
 
-test('readPath and canonical', () => {
-  expect(readPath({ data: { amount: '1' } }, 'data.amount')).toBe('1');
-  expect(readPath({ a: [{ b: 2 }] }, 'a.0.b')).toBe(2);
-  expect(readPath({ a: 1 }, 'x.y')).toBeUndefined();
-  expect(readPath(5, '')).toBe(5);
-  expect(canonical({ address: 'E', value: 1, stream: 's', ts: 2, target_ts: 3, model: 'm', extra: 9 }))
-    .toBe('{"stream":"s","ts":2,"target_ts":3,"value":1,"model":"m","address":"E"}');
+describe('register', () => {
+  const res = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer already registered' };
+  const fake = (r) => ({ register: vi.fn(async () => { if (r instanceof Error) throw r; return r; }) });
+  test('sends the vault pubkey; the result says whether central has our vault', async () => {
+    const c = fake(res);
+    expect(await register({ central: c, vaultPubkey: '03cd', vaultAddress: 'Evault', now })).toEqual({
+      at: clock, ok: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer already registered', vaultMismatch: false,
+    });
+    expect(c.register).toHaveBeenCalledWith({ vaultPubkey: '03cd' });
+  });
+  test('another vault, or none kept: a mismatch', async () => {
+    expect((await register({ central: fake({ ...res, vault_address: 'Eother' }), vaultPubkey: '03cd', vaultAddress: 'Evault', now })).vaultMismatch).toBe(true);
+    expect((await register({ central: fake({ ...res, vault_address: null }), vaultPubkey: '03cd', vaultAddress: 'Evault', now })).vaultMismatch).toBe(true);
+  });
+  test('no vault pubkey: skipped; a failure is returned, never thrown', async () => {
+    const c = fake(res);
+    expect(await register({ central: c, vaultPubkey: null, vaultAddress: null, now })).toEqual({ at: clock, ok: false, skipped: true, error: 'no vault public key in vault.yaml' });
+    expect(c.register).not.toHaveBeenCalled();
+    expect(await register({ central: fake(new CentralError(409, 'taken')), vaultPubkey: '03cd', vaultAddress: 'E', now }))
+      .toEqual({ at: clock, ok: false, error: 'central 409: taken' });
+  });
 });
 
-describe('tick', () => {
-  const deps = (o) => ({ db, identity, publish: localPublisher(db), now: () => 1_000_000, ...o });
-
-  test('fetch → observation → OLS → signed prediction → stored → published', async () => {
-    let t = 0;
-    for (const price of [100, 101, 102]) {
-      t += 60_000;
-      const r = await tick(DEFAULT_STREAM, deps({ fetch: coinbase(price), now: () => t }));
-      expect(r.ok).toBe(true);
+describe('schedule', () => {
+  test("the start jitter is Lite's uniform 5–30 min", () => {
+    expect(FIRST_POLL_S).toEqual([300, 1800]);
+    expect(POLL_EVERY_S).toBe(11 * 3600);
+    expect(startJitter(() => 0)).toBe(300);
+    expect(startJitter(() => 0.999999)).toBe(1800);
+    for (let i = 0; i < 200; i++) {
+      const j = startJitter();
+      expect(Number.isInteger(j) && j >= 300 && j <= 1800).toBe(true);
     }
-    const [s] = await db.summary();
-    expect(s).toMatchObject({ observations: 3, predictions: 3, obs_value: 102, obs_ts: 180_000,
-      pred_value: 103, pred_ts: 180_000, pred_target_ts: 240_000, pred_model: MODEL, last_error: null });
-    expect(s.pred_published_at).not.toBeNull();
-    expect(JSON.parse(s.pred_message)).toEqual({ stream: 'BTC-USD', ts: 180_000, target_ts: 240_000,
-      value: 103, model: MODEL, address: v.address });
-    expect(verifyMessage(s.pred_message, s.pred_signature, { address: v.address })).toBe(true);
   });
-
-  test(`uses only the last ${WINDOW} observations`, async () => {
-    const min = 60_000;
-    for (let i = 0; i < 30; i++) await db.addObservation('BTC-USD', i * min, i < 10 ? 1000 : i);
-    const r = await tick(DEFAULT_STREAM, deps({ fetch: coinbase(30), now: () => 30 * min }));
-    expect(r.prediction.value).toBeCloseTo(31);
-  });
-
-  test('fits on observation times: a gap (closed tab, failed fetches) is not one step', async () => {
-    const min = 60_000;
-    for (let i = 0; i < 19; i++) await db.addObservation('BTC-USD', i * min, 80_000);
-    const later = 18 * min + 12 * 60 * min;
-    const r = await tick(DEFAULT_STREAM, deps({ fetch: coinbase(82_000), now: () => later }));
-    expect(r.prediction.target_ts).toBe(later + min);
-    expect(Math.abs(r.prediction.value - 82_000)).toBeLessThan(10);
-  });
-
-  test('an engine result that is not a number is an error, never signed', async () => {
-    await db.addObservation('BTC-USD', 0, 1e308);
-    await db.addObservation('BTC-USD', 1, -1e308);
-    const r = await tick(DEFAULT_STREAM, deps({ fetch: coinbase(1e308), now: () => 2 }));
-    expect(r).toEqual({ ok: false, error: 'engine produced no value' });
-    expect((await db.summary())[0]).toMatchObject({ predictions: 0, last_error: 'engine produced no value' });
-  });
-
-  test('a stopped run (Remove) stores nothing and reports no error', async () => {
-    const ctl = new AbortController();
-    const fetch = (url, { signal }) => new Promise((_, reject) =>
-      signal.addEventListener('abort', () => reject(signal.reason)));
-    const run = tick(DEFAULT_STREAM, deps({ fetch, signal: ctl.signal }));
-    ctl.abort();
-    expect(await run).toEqual({ ok: false, error: 'stopped' });
-    // stopped after the fetch resolved: still nothing stored
-    const ctl2 = new AbortController();
-    const r2 = await tick(DEFAULT_STREAM, deps({ fetch: async (...a) => { ctl2.abort(); return coinbase(1)(...a); }, signal: ctl2.signal }));
-    expect(r2).toEqual({ ok: false, error: 'stopped' });
-    expect((await db.summary())[0]).toMatchObject({ observations: 0, predictions: 0, last_error: null });
-  });
-
-  test('failures are stored as the last error and cleared by the next success', async () => {
-    const cases = [
-      [json({}, 503), /HTTP 503/],
-      [json({ data: { amount: 'abc' } }), /no number at "data.amount"/],
-      [json({ nope: 1 }), /no number/],
-      [async () => { throw new TypeError('Failed to fetch'); }, /Failed to fetch/],
-      [async () => { throw Object.assign(new Error('x'), { name: 'TimeoutError' }); }, /timed out/],
-    ];
-    for (const [fetch, msg] of cases) {
-      const r = await tick(DEFAULT_STREAM, deps({ fetch }));
-      expect(r).toMatchObject({ ok: false });
-      expect(r.error).toMatch(msg);
-      expect((await db.streams())[0].last_error).toMatch(msg);
+  test('a stored time still ahead is kept; due, missing or too far ahead → now + jitter', () => {
+    const half = () => 0.5;
+    expect(firstPollAt(T + 100, T, half)).toBe(T + 100);
+    expect(firstPollAt(T + POLL_EVERY_S, T, half)).toBe(T + POLL_EVERY_S);
+    for (const stored of [undefined, null, T, T - 5000, T + POLL_EVERY_S + 1, 'x']) {
+      expect(firstPollAt(stored, T, half)).toBe(T + 1050);
     }
-    expect((await db.summary())[0]).toMatchObject({ observations: 0, predictions: 0 });
-    expect((await tick(DEFAULT_STREAM, deps({ fetch: coinbase(5) }))).ok).toBe(true);
-    expect((await db.streams())[0].last_error).toBeNull();
-  });
-
-  test('a publish failure is reported; the signed prediction stays stored', async () => {
-    const r = await tick(DEFAULT_STREAM, deps({ fetch: coinbase(1), publish: async () => { throw new Error('relay down'); } }));
-    expect(r).toEqual({ ok: false, error: 'relay down' });
-    expect((await db.summary())[0]).toMatchObject({ predictions: 1, pred_published_at: null, last_error: 'relay down' });
   });
 });
 
-describe('scheduler', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
-
-  test('runs each stream now, then once per interval; a failing stream does not stop others', async () => {
-    const calls = [];
-    const s = createScheduler(async (stream) => {
-      calls.push(stream.name);
-      if (stream.name === 'bad') throw new Error('boom');
+describe('createPoller', () => {
+  function harness(runImpl) {
+    const timers = [];
+    const ran = [];
+    const nexts = [];
+    const poller = createPoller(async () => { ran.push(clock); return runImpl?.(); }, {
+      db, now, rand: () => 0,
+      setTimeout: (fn, ms) => timers.push({ fn, ms, live: true }) - 1,
+      clearTimeout: (id) => { if (timers[id]) timers[id].live = false; },
+      onNext: (at) => nexts.push(at),
     });
-    s.start({ name: 'a', interval_s: 60 });
-    s.start({ name: 'bad', interval_s: 30 });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(calls).toEqual(['a', 'bad']);
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(calls.filter((c) => c === 'a')).toHaveLength(2);
-    expect(calls.filter((c) => c === 'bad')).toHaveLength(3);
-    expect(s.running).toEqual(['a', 'bad']);
+    const live = () => timers.filter((t) => t.live);
+    return { poller, timers, live, ran, nexts };
+  }
+
+  test('start: due → 5–30 min, persisted; the timer runs a cycle, then every 11 h', async () => {
+    const h = harness();
+    const t0 = clock;
+    await h.poller.start();
+    expect(await db.get('next_poll_at')).toBe(clock + 300);
+    expect(h.poller.next).toBe(clock + 300);
+    expect(h.live()).toHaveLength(1);
+    expect(h.live()[0].ms).toBe(300_000);
+    clock += 300;
+    h.live()[0].fn();
+    await vi.waitFor(() => expect(h.timers.length).toBe(2));
+    expect(h.ran).toEqual([clock]);
+    expect(await db.get('next_poll_at')).toBe(clock + POLL_EVERY_S);
+    expect(h.live().map((t) => t.ms)).toEqual([POLL_EVERY_S * 1000]);
+    expect(h.nexts).toEqual([t0 + 300, clock + POLL_EVERY_S]);
   });
 
-  test('stop and stopAll end the schedule; restart replaces the old job', async () => {
-    let n = 0;
-    const s = createScheduler(async () => { n++; });
-    s.start({ name: 'a', interval_s: 1 });
-    s.start({ name: 'a', interval_s: 1 });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(n).toBe(2);
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(n).toBe(3);
-    s.stopAll();
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(n).toBe(3);
-    expect(s.running).toEqual([]);
+  test('a reload keeps a stored time that is still ahead', async () => {
+    await db.set('next_poll_at', clock + 7200);
+    const h = harness();
+    await h.poller.start();
+    expect(h.poller.next).toBe(clock + 7200);
+    expect(h.live()[0].ms).toBe(7_200_000);
   });
 
-  test('stop aborts the run in flight and returns it, so the caller can wait for it', async () => {
-    let seen;
-    let finished = false;
-    const s = createScheduler(async (stream, signal) => {
-      seen = signal;
-      await new Promise((r) => signal.addEventListener('abort', r));
-      await new Promise((r) => setTimeout(r, 100));
-      finished = true;
-    });
-    s.start({ name: 'a', interval_s: 60 });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(seen.aborted).toBe(false);
-    const done = s.stop('a');
-    expect(seen.aborted).toBe(true);
-    expect(finished).toBe(false);
-    await vi.advanceTimersByTimeAsync(100);
-    await done;
-    expect(finished).toBe(true);
-    await expect(s.stop('a')).resolves.toBeUndefined();
+  test('poll now: runs at once, one run at a time, then 11 h on', async () => {
+    let release;
+    const h = harness(() => new Promise((r) => { release = r; }));
+    await h.poller.start();
+    const a = h.poller.poll();
+    const b = h.poller.poll();
+    expect(a).toBe(b);
+    expect(h.poller.running).toBe(true);
+    expect(h.live()).toHaveLength(0); // the start timer is cleared
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    release({ poll: 'done' });
+    expect(await a).toEqual({ poll: 'done' });
+    expect(h.poller.running).toBe(false);
+    expect(h.ran).toHaveLength(1);
+    expect(h.poller.next).toBe(clock + POLL_EVERY_S);
+    expect(h.live().map((t) => t.ms)).toEqual([POLL_EVERY_S * 1000]);
   });
 
-  test('a slow run delays the next one instead of overlapping', async () => {
-    let active = 0;
-    let max = 0;
-    const s = createScheduler(async () => {
-      max = Math.max(max, ++active);
-      await new Promise((r) => setTimeout(r, 1500));
-      active--;
-    });
-    s.start({ name: 'a', interval_s: 1 });
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(max).toBe(1);
-    s.stopAll();
+  test('a run that throws still schedules the next one; stop ends the schedule', async () => {
+    const h = harness(() => { throw new Error('db gone'); });
+    await h.poller.start();
+    await expect(h.poller.poll()).rejects.toThrow('db gone');
+    expect(h.poller.next).toBe(clock + POLL_EVERY_S);
+    expect(h.live()).toHaveLength(1);
+    await h.poller.stop();
+    expect(h.live()).toHaveLength(0);
   });
-});
-
-test('streamError: a name, an https URL, a path, and 10 s to 1 day', () => {
-  const ok = { name: 'ETH-USD', url: 'https://x', path: 'data.amount', interval_s: 60 };
-  expect(streamError(ok)).toBeNull();
-  expect(streamError(DEFAULT_STREAM)).toBeNull();
-  expect(streamError({ ...ok, name: '' })).toMatch(/name/);
-  expect(streamError({ ...ok, url: 'http://x' })).toMatch(/https/);
-  expect(streamError({ ...ok, path: '' })).toMatch(/path/i);
-  expect(streamError({ ...ok, interval_s: 9 })).toMatch(/10 seconds/);
-  expect(streamError({ ...ok, interval_s: NaN })).toMatch(/10 seconds/);
-  expect(streamError({ ...ok, interval_s: 86_400 })).toBeNull();
-  expect(streamError({ ...ok, interval_s: 2_200_000 })).toMatch(/1 day/);
 });
 
 test('claimTab: the first claim wins, a second gets false', async () => {

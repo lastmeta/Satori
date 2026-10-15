@@ -1,11 +1,11 @@
 // The database: DuckDB-WASM, one connection, calls run one at a time in order.
+// Times are unix seconds (docs/design/central.md).
 //
 //   const db = await openDb(conn, close?)    // runs migrations
 //   await db.get(key) / db.set(key, value)   // meta, JSON values
-//   await db.streams() / db.addStream(s) / db.removeStream(name) / db.setError(name, msg, at)
-//   await db.addObservation(stream, ts, value) / db.recent(stream, n) → [{ts, value}]
-//   await db.addPrediction(p) → id / db.markPublished(id, at)
-//   await db.summary()                        // one row per stream for the UI
+//   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
+//   await db.addPrediction(p) → id / db.pending() / db.pendingCount() / db.markSent(ids, at)
+//   await db.streams() / db.predictions(uuidOrName, limit)   // for the UI and agents
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
 import { MIGRATIONS } from './schema.js';
@@ -70,46 +70,56 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     }),
     set: serial((key, value) => run('INSERT OR REPLACE INTO meta VALUES (?, ?)', key, JSON.stringify(value))),
 
-    streams: serial(() => rows('SELECT * FROM streams ORDER BY created_at, name')),
-    addStream: serial(({ name, url, path, interval_s = 60, created_at = Date.now() }) =>
-      run('INSERT INTO streams (name, url, path, interval_s, created_at) VALUES (?, ?, ?, ?, ?)',
-        name, url, path, interval_s, created_at)),
-    removeStream: serial(async (name) => {
-      await run('DELETE FROM observations WHERE stream = ?', name);
-      await run('DELETE FROM predictions WHERE stream = ?', name);
-      await run('DELETE FROM streams WHERE name = ?', name);
-    }),
-    setError: serial((name, error, at = Date.now()) =>
-      run('UPDATE streams SET last_error = ?, last_error_at = ? WHERE name = ?',
-        error ?? null, error ? at : null, name)),
+    /** One row per stream: its latest observation and our latest prediction. */
+    streams: serial(() => rows(`
+      SELECT s.uuid, s.name, s.meta,
+        (SELECT count(*) FROM observations x WHERE x.stream_uuid = s.uuid) AS observations,
+        o.ts AS obs_ts, o.value AS obs_value,
+        p.model, p.t1, p.t2, p.made_at, p.status, p.sent_at
+      FROM streams s
+      LEFT JOIN (SELECT * FROM observations QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC) = 1) o
+        ON o.stream_uuid = s.uuid
+      LEFT JOIN (SELECT * FROM predictions QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY id DESC) = 1) p
+        ON p.stream_uuid = s.uuid
+      ORDER BY s.name, s.uuid`)),
 
-    addObservation: serial((stream, ts, value) =>
-      run('INSERT INTO observations VALUES (?, ?, ?)', stream, ts, value)),
-    recent: serial((stream, n) => rows(
-      `SELECT ts, value FROM (SELECT ts, value FROM observations WHERE stream = ?
-         ORDER BY ts DESC LIMIT ?) ORDER BY ts`, stream, n)),
+    /** Upsert each row's stream; insert or ignore the observation. The uuids that got a new row. */
+    addObservations: serial(async (list) => {
+      const fresh = new Set();
+      await run('BEGIN TRANSACTION');
+      try {
+        for (const o of list) {
+          await run(`INSERT INTO streams VALUES (?, ?, ?)
+            ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, meta = excluded.meta`, o.stream_uuid, o.name, o.meta);
+          const added = await rows('INSERT OR IGNORE INTO observations VALUES (?, ?, ?) RETURNING stream_uuid',
+            o.stream_uuid, o.ts, o.value);
+          if (added.length) fresh.add(o.stream_uuid);
+        }
+        await run('COMMIT');
+      } catch (err) {
+        await run('ROLLBACK');
+        throw err;
+      }
+      return [...fresh];
+    }),
+    /** A stream's observations, oldest first: [{ts, value}]. */
+    history: serial((uuid) => rows('SELECT ts, value FROM observations WHERE stream_uuid = ? ORDER BY ts', uuid)),
 
     addPrediction: serial(async (p) => (await rows(
-      `INSERT INTO predictions (stream, ts, target_ts, value, model, address, message, signature)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-      p.stream, p.ts, p.target_ts, p.value, p.model, p.address, p.message, p.signature))[0].id),
-    markPublished: serial((id, at = Date.now()) =>
-      run('UPDATE predictions SET published_at = ? WHERE id = ?', at, id)),
-
-    summary: serial(() => rows(`
-      SELECT s.name, s.url, s.path, s.interval_s, s.last_error, s.last_error_at,
-        (SELECT count(*) FROM observations o WHERE o.stream = s.name) AS observations,
-        (SELECT count(*) FROM predictions p WHERE p.stream = s.name) AS predictions,
-        o.ts AS obs_ts, o.value AS obs_value,
-        p.id AS pred_id, p.ts AS pred_ts, p.target_ts AS pred_target_ts, p.value AS pred_value,
-        p.model AS pred_model, p.message AS pred_message, p.signature AS pred_signature,
-        p.published_at AS pred_published_at
-      FROM streams s
-      LEFT JOIN (SELECT * FROM observations QUALIFY row_number() OVER (PARTITION BY stream ORDER BY ts DESC) = 1) o
-        ON o.stream = s.name
-      LEFT JOIN (SELECT * FROM predictions QUALIFY row_number() OVER (PARTITION BY stream ORDER BY id DESC) = 1) p
-        ON p.stream = s.name
-      ORDER BY s.created_at, s.name`)),
+      `INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, observed_at, hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      p.stream_uuid, p.made_at, p.model, p.t1, p.t2, p.observed_at, p.hash))[0].id),
+    /** The kept queue: every pending prediction, oldest first, with its stream's name. */
+    pending: serial(() => rows(`SELECT p.*, s.name FROM predictions p JOIN streams s ON s.uuid = p.stream_uuid
+      WHERE p.status = 'pending' ORDER BY p.id`)),
+    pendingCount: serial(async () => (await rows("SELECT count(*) AS n FROM predictions WHERE status = 'pending'"))[0].n),
+    markSent: serial(async (ids, at) => {
+      if (ids.length) await run(`UPDATE predictions SET status = 'sent', sent_at = ? WHERE id IN (${ids.map(() => '?').join(', ')})`, at, ...ids);
+    }),
+    /** A stream's predictions (by uuid or name), newest first. */
+    predictions: serial((stream, limit = 20) => rows(`SELECT p.*, s.name FROM predictions p
+      JOIN streams s ON s.uuid = p.stream_uuid WHERE p.stream_uuid = ? OR s.name = ? ORDER BY p.id DESC LIMIT ?`,
+      stream, stream, limit)),
 
     checkpoint: serial(() => run('CHECKPOINT')),
     close: serial(async () => {

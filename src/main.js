@@ -1,53 +1,117 @@
 // App wiring: one tab → open the database → Setup, or Home with the neuron
-// running on the identity key from page load. Unlock/Lock open and wipe the
-// vault; ticks never need it. window.satori is the same surface for agents
-// (public/llms.txt).
+// running on the identity key from page load: register with central, then
+// poll on Satori Lite's schedule (docs/design/central.md). Unlock/Lock open
+// and wipe the vault; the neuron never needs it. window.satori is the same
+// surface for agents (public/llms.txt).
+import { version } from '../package.json';
 import { state, render } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb } from './db/opfs.js';
 import {
-  generateEntropy, entropyFromWords, deriveKeys, verifyMessage,
-  writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault,
+  generateEntropy, entropyFromWords, deriveKeys, writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault,
 } from './keys/index.js';
-import { tick, createScheduler, localPublisher, claimTab, streamError, DEFAULT_STREAM } from './neuron/index.js';
+import { createCentral } from './central/index.js';
+import { cycle, register, createPoller, claimTab } from './neuron/index.js';
 
-const SPARK = 40;
+// The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
+export const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet.io' : 'https://network.satorinet.io';
+
 let db;
 let files = null; // { walletYaml, vaultYaml } as stored
 let identity = null;
+let vaultPublic = { address: null, pubkey: null }; // read from vault.yaml while locked
 let vault = null; // only while unlocked
 let lockCount = 0; // a Lock during an Unlock in flight wins
 let pending = null; // setup only: { vault, identity? } entropy
+let central = null;
+let registration = null; // this page load's register result
+let poller = null;
 
-async function refresh() {
-  const rows = await db.summary();
-  const spark = {};
-  for (const r of rows) spark[r.name] = (await db.recent(r.name, SPARK)).map((o) => o.value);
-  state.spark = spark;
-  state.rows = rows;
+/** Central's state for the UI and agents: plain values. */
+async function centralStatus() {
+  return {
+    url: central?.url ?? null,
+    registration,
+    lastPoll: (await db.get('central_last_poll')) ?? null,
+    nextPoll: poller?.next ?? null,
+    polling: !!poller?.running,
+    lastSubmit: (await db.get('central_last_submit')) ?? null,
+    pending: await db.pendingCount(),
+  };
 }
 
-const scheduler = createScheduler(async (stream, signal) => {
-  await tick(stream, { db, identity, publish: localPublisher(db), signal });
-  if (!signal.aborted) await refresh();
-});
+async function refresh() {
+  state.central = await centralStatus();
+  state.streams = await db.streams();
+}
 
 // ── core: used by the UI and by window.satori ───────────────────────────────
+
+/** The stored (or default) central; a new client means a new register result. */
+async function connect() {
+  const url = (await db.get('central_url')) || DEFAULT_CENTRAL;
+  central = createCentral({ url, identity, version });
+  registration = null;
+  return central;
+}
+
+/** Register, as Lite does on every start; the result is shown, never thrown. */
+async function registerWith(c) {
+  const r = await register({ central: c, vaultPubkey: vaultPublic.pubkey, vaultAddress: vaultPublic.address });
+  if (c !== central) return; // the URL changed meanwhile
+  registration = r;
+  console[r.ok && !r.vaultMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
+  await refresh();
+}
+
+async function runCycle() {
+  state.polling = true;
+  try {
+    const r = await cycle({ db, central });
+    console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
+    return r;
+  } finally {
+    state.polling = false;
+    await refresh();
+  }
+}
 
 async function startNeuron() {
   files = { walletYaml: await db.get('wallet_yaml'), vaultYaml: await db.get('vault_yaml') };
   identity = await loadIdentity(files.walletYaml);
+  vaultPublic = vaultInfo(files.vaultYaml);
   state.identity = identity.address;
-  state.vault = vaultInfo(files.vaultYaml).address ?? '';
-  state.screen = 'home';
+  state.vault = vaultPublic.address ?? '';
+  state.centralDefault = DEFAULT_CENTRAL;
+  const c = await connect();
+  poller = createPoller(runCycle, { db, onNext: (at) => { state.central = { ...state.central, nextPoll: at }; } });
+  await poller.start();
   await refresh();
-  for (const s of await db.streams()) scheduler.start(s);
+  state.screen = 'home';
+  registerWith(c).catch((err) => console.error('[satori] register', err));
+}
+
+/** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
+const pollNow = () => poller.poll();
+
+/** Save the central URL ('' = the default) and register there at once. */
+async function setCentral(raw) {
+  const url = String(raw ?? '').trim().replace(/\/+$/, '');
+  if (url) {
+    let ok = false;
+    try { ok = new URL(url).protocol === 'https:'; } catch { /* not a URL */ }
+    if (!ok) throw new Error('The central URL must be an https:// address.');
+  }
+  await db.set('central_url', url);
+  await db.checkpoint();
+  const c = await connect();
+  await refresh();
+  await registerWith(c);
 }
 
 async function saveKeys({ walletYaml, vaultYaml }) {
   await db.set('vault_yaml', vaultYaml); // vault first: boot needs both
   await db.set('wallet_yaml', walletYaml);
-  if (!(await db.streams()).length) await db.addStream(DEFAULT_STREAM);
   await db.checkpoint();
   await startNeuron();
 }
@@ -96,21 +160,6 @@ const setup = (makeFiles) => exclusive('setup', async () => {
   if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
   await saveKeys(await makeFiles());
 });
-
-async function addStream(s) {
-  const bad = streamError(s);
-  if (bad) throw new Error(bad);
-  if ((await db.streams()).some((x) => x.name === s.name)) throw new Error(`A stream named ${s.name} exists.`);
-  await db.addStream(s);
-  await refresh();
-  scheduler.start(s);
-}
-
-async function removeStream(name) {
-  await scheduler.stop(name); // waits for a tick in flight, so it can't write after the delete
-  await db.removeStream(name);
-  await refresh();
-}
 
 // ── UI actions ──────────────────────────────────────────────────────────────
 
@@ -218,17 +267,16 @@ const actions = {
       setTimeout(() => (state.copied = ''), 1500);
     } catch { /* clipboard not allowed */ }
   },
-  async addStream(f, el) {
-    state.formError = '';
-    try {
-      await addStream({ name: f.name.trim(), url: f.url.trim(), path: f.path.trim(), interval_s: Math.round(Number(f.interval)) });
-      el.reset();
-    } catch (err) {
-      state.formError = err?.message ?? String(err);
-    }
+  async pollNow() {
+    try { await pollNow(); } catch { /* shown in the status */ }
   },
-  async removeStream(name) {
-    if (confirm(`Remove ${name} and its data?`)) await removeStream(name);
+  async saveCentral(f) {
+    state.settingsError = '';
+    try {
+      await setCentral(f.url);
+    } catch (err) {
+      state.settingsError = err?.message ?? String(err);
+    }
   },
 };
 
@@ -241,12 +289,13 @@ const ready = () => {
 window.satori = {
   help: 'Read /llms.txt',
   async status() {
+    const home = state.screen === 'home';
     return {
       screen: state.screen,
       identity: state.identity || null,
       vault: state.vault || null,
       unlocked: state.unlocked,
-      streams: state.screen === 'home' ? await db.summary() : [],
+      central: home ? await centralStatus() : null,
     };
   },
   /** Create a neuron (random keys unless words are given). The vault stays locked. */
@@ -264,19 +313,20 @@ window.satori = {
     });
     return this.status();
   },
-  async predictions(stream, limit = 20) {
-    ready();
-    return db.rows('SELECT * FROM predictions WHERE stream = ? ORDER BY id DESC LIMIT ?', stream, limit);
-  },
-  async addStream({ name, url, path, interval_s = 60 }) { ready(); await addStream({ name, url, path, interval_s }); },
-  async removeStream(name) { ready(); await removeStream(name); },
+  /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit } */
+  async poll() { ready(); return pollNow(); },
+  /** Central's streams with the latest observation and our latest prediction. */
+  async streams() { ready(); return db.streams(); },
+  /** One stream's predictions (uuid or name), newest first. */
+  async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
+  /** Set the central URL ('' = the default) and register there. → status().central */
+  async setCentral(url) { ready(); await setCentral(url); return centralStatus(); },
   async unlock(passphrase) { ready(); await unlock(passphrase); return true; },
   lock() { lock(); return true; },
   /** { words, wif } of 'identity' or 'vault'; needs Unlock, as Docker's dashboard needs login. */
   backup(which) { ready(); return backupOf(which); },
   /** wallet.yaml or vault.yaml text, as Docker reads it; needs Unlock. */
   file(name) { ready(); return fileText(name); },
-  verify: (message, signature, address) => verifyMessage(message, signature, { address }),
 };
 
 async function boot() {

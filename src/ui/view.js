@@ -2,7 +2,7 @@
 // Every screen is built once and shown or hidden, so typing is never lost to a
 // re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, reactive } from '@arrow-js/core';
-import { fmtNum, fmtTime, sparkPoints } from './format.js';
+import { fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText } from './format.js';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 
 export const state = reactive({
@@ -22,10 +22,12 @@ export const state = reactive({
   backup: '', // '' | 'identity' | 'vault': which key's words are shown
   backupWords: '',
   backupWif: '',
-  rows: [],
-  spark: {},
-  formError: '',
   copied: '',
+  central: { url: '', registration: null, lastPoll: null, nextPoll: null, lastSubmit: null, pending: 0 },
+  centralDefault: '',
+  polling: false,
+  streams: [],
+  settingsError: '',
 });
 
 const show = (screen) => () => state.screen !== screen;
@@ -42,7 +44,7 @@ function setup(a) {
   <section class="card" hidden="${show('setup')}">
     <div hidden="${showStep('choose')}">
       <h2>Set up this neuron</h2>
-      <p class="muted">A neuron has two keys. The <strong>identity</strong> signs predictions on its own,
+      <p class="muted">A neuron has two keys. The <strong>identity</strong> runs the neuron on its own,
         so it stays unencrypted in this browser. The <strong>vault</strong> holds your funds and is
         encrypted with your passphrase.</p>
       <div class="actions">
@@ -134,7 +136,7 @@ function keyRow(label, note, which, a) {
 function keys(a) {
   return html`
   <div class="card keys">
-    ${keyRow('Identity', 'Signs predictions on its own. Unencrypted.', 'identity', a)}
+    ${keyRow('Identity', 'Runs the neuron: signs in to central on its own. Unencrypted.', 'identity', a)}
     ${keyRow('Vault', html`<span class="${() => (state.unlocked ? 'badge on' : 'badge')}" data-test="vault-state">${() => (state.unlocked ? 'Unlocked' : 'Locked')}</span> Holds your funds. Encrypted with your passphrase.`, 'vault', a)}
     <form class="unlock" hidden="${() => state.unlocked}" @submit="${(e) => a.unlock(form(e), e.target)}">
       <input name="pass" type="password" aria-label="Vault passphrase" placeholder="Vault passphrase" autocomplete="current-password" required>
@@ -144,36 +146,62 @@ function keys(a) {
   </div>`;
 }
 
-function streamCard(r, a) {
-  const spark = sparkPoints(state.spark[r.name] ?? []);
+function centralCard(a) {
+  const c = () => state.central;
+  const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
+  return html`
+  <section class="card central">
+    <header class="card-head">
+      <h2>Central</h2>
+      <button class="small-btn" @click="${a.pollNow}" disabled="${() => state.polling}">${() => (state.polling ? 'Polling…' : 'Poll now')}</button>
+    </header>
+    <code data-test="central-url">${() => c().url}</code>
+    <dl class="facts">
+      ${fact('Registered', 'registered', () => registrationText(c().registration))}
+      ${fact('Last poll', 'last-poll', () => pollText(c().lastPoll))}
+      ${fact('Next poll', 'next-poll', () => fmtWhen(c().nextPoll))}
+      ${fact('Last submission', 'last-submit', () => submitText(c().lastSubmit))}
+      ${fact('Pending', 'pending', () => String(c().pending))}
+    </dl>
+    <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration, state.vault)}">${() => mismatchText(c().registration, state.vault)}</p>
+  </section>`;
+}
+
+function streamRow(r) {
   // One root node, no whitespace around it: ArrowJS 1.0.6 breaks a keyed list
   // of multi-node items once it goes empty and back.
-  return html`<article class="stream">
-    <header>
-      <h3>${r.name}</h3>
-      <span class="muted small">every ${r.interval_s}s · ${r.observations} obs · ${r.predictions} predictions</span>
+  const sent = r.status === 'sent';
+  return html`<div class="srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
+}
+
+function streams() {
+  return html`
+  <section class="card">
+    <header class="card-head">
+      <h2>Streams</h2>
+      <span class="muted small">${() => `${state.streams.length} from central`}</span>
     </header>
-    <div class="figures">
-      <div>
-        <div class="label">Latest</div>
-        <div class="value" data-test="obs">${fmtNum(r.obs_value)}</div>
-        <div class="muted small">${fmtTime(r.obs_ts)}</div>
-      </div>
-      <div>
-        <div class="label">Predicted</div>
-        <div class="value accent" data-test="pred">${fmtNum(r.pred_value)}</div>
-        <div class="muted small">for ${fmtTime(r.pred_target_ts)}${r.pred_published_at ? ' · published' : ''}</div>
-      </div>
-      <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="${spark}"></polyline></svg>
+    <p class="muted" hidden="${() => state.streams.length > 0}">None yet: they arrive with the first poll.</p>
+    <div class="srows" hidden="${() => !state.streams.length}">
+      <div class="srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span></span></div>
+      <div>${() => state.streams.map((r) => streamRow(r).key(r.uuid))}</div>
     </div>
-    <p class="error small" role="status" hidden="${!r.last_error}">Last error (${fmtTime(r.last_error_at)}): ${r.last_error ?? ''}</p>
-    <details hidden="${!r.pred_signature}">
-      <summary>Signed prediction</summary>
-      <code class="block" data-test="message">${r.pred_message ?? ''}</code>
-      <code class="block" data-test="signature">${r.pred_signature ?? ''}</code>
-    </details>
-    <div class="row-actions"><button class="link" @click="${() => a.removeStream(r.name)}">Remove</button></div>
-  </article>`;
+  </section>`;
+}
+
+function settings(a) {
+  return html`
+  <details class="card">
+    <summary>Settings</summary>
+    <form class="fields" @submit="${(e) => a.saveCentral(form(e))}">
+      <label>Central URL
+        <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}" value="${() => (state.central.url === state.centralDefault ? '' : state.central.url)}">
+      </label>
+      <p class="muted small">Empty: the default, ${() => state.centralDefault}. Saving registers there at once.</p>
+      <p class="error" role="alert" hidden="${() => !state.settingsError}">${() => state.settingsError}</p>
+      <div class="actions"><button class="primary" type="submit">Save</button></div>
+    </form>
+  </details>`;
 }
 
 function backup(a) {
@@ -208,21 +236,9 @@ function home(a) {
   return html`
   <section hidden="${show('home')}">
     ${keys(a)}
-    <div class="streams">${() => state.rows.map((r) => streamCard(r, a).key(r.name))}</div>
-    <p class="muted" hidden="${() => state.rows.length > 0}">No streams yet. Add one below.</p>
-
-    <details class="card">
-      <summary>Add a stream</summary>
-      <form class="fields" @submit="${(e) => a.addStream(form(e), e.target)}">
-        <label>Name <input name="name" placeholder="ETH-USD" required maxlength="64"></label>
-        <label>Source URL (https, returns JSON)
-          <input name="url" type="url" placeholder="https://api.coinbase.com/v2/prices/ETH-USD/spot" required></label>
-        <label>Path to the number <input name="path" placeholder="data.amount" required></label>
-        <label>Every (seconds) <input name="interval" type="number" min="10" max="86400" step="1" value="60" required></label>
-        <p class="error" role="alert" hidden="${() => !state.formError}">${() => state.formError}</p>
-        <div class="actions"><button class="primary" type="submit">Add stream</button></div>
-      </form>
-    </details>
+    ${centralCard(a)}
+    ${streams()}
+    ${settings(a)}
     ${backup(a)}
   </section>`;
 }
