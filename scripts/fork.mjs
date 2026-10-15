@@ -2,19 +2,9 @@
 // A local fork of Base Sepolia for the Base card (docs/design/base.md#the-local-fork-dev).
 // The dev server proxies /rpc to 127.0.0.1:8545, its default Base RPC, so by
 // default a dev checkout does not send to a public chain (a saved RPC replaces
-// the default). anvil: ~/.foundry/bin/anvil (or $ANVIL).
-//
-//   node scripts/fork.mjs start [--port 8545]                 anvil --fork-url https://sepolia.base.org, 2 s blocks (as Base)
-//   node scripts/fork.mjs stop [--port 8545]
-//   node scripts/fork.mjs fund <0x…> [<0x…>] [--eth 0.1] [--satori 100]
-//   node scripts/fork.mjs airdrop <0x…> <SATORI>             loads an airdrop allocation (the deployer is its authority)
-//   node scripts/fork.mjs merkle <0x…> <SATORI>              sets a merkle root with that address; prints central's proof JSON
-//   node scripts/fork.mjs advance [days]                     moves chain time forward and mines
-//   node scripts/fork.mjs predict [up|down]                  the deployer predicts the default game (moves its next value)
-//   node scripts/fork.mjs stream <name>                      anyone's new stream (a 0.001 SATORI burn) with one value: its game has no voting weight
-//
-// Every command but start takes --port. The deployer (0x9d31…8817, D6's admin,
-// root publisher and airdrop authority, ~519 SATORI) is impersonated.
+// the default). anvil: ~/.foundry/bin/anvil (or $ANVIL). The deployer
+// (0x9d31…8817, D6's admin, root publisher and airdrop authority, ~519 SATORI)
+// is impersonated. Commands: USAGE below (node scripts/fork.mjs --help).
 import { spawn } from 'node:child_process';
 import { openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -28,6 +18,26 @@ import { DEFAULTS } from '../src/chain/config.js';
 import { HOOK_GAS } from '../src/chain/index.js';
 
 export const DEPLOYER = '0x9d3109b8A045D63056Aa5C1d2c883F3F9fA18817';
+
+const USAGE = `Usage: node scripts/fork.mjs <command> [args] [--port 8545]
+A local anvil fork of Base Sepolia; the dev server's /rpc goes to 127.0.0.1:8545.
+
+  start                          start anvil in the background (--fork-url https://sepolia.base.org, 2 s blocks)
+  stop                           stop it
+  fund <0x…> [<0x…> …] [--eth 0.1] [--satori N]
+                                 set each address's ETH (0.1 by default); with --satori, also send each N SATORI
+                                 from the deployer (none without it; the deployer holds ~519)
+  airdrop <0x…> <SATORI>         load an airdrop allocation for the address
+  merkle <0x…> <SATORI>          set a merkle root with the address; prints the proof JSON a (stub) central serves
+  advance [days]                 move chain time forward (1 day by default) and mine a block
+  predict [up|down]              the deployer predicts the default game (moves its next value)
+  stream [name]                  anyone's new stream (a 0.001 SATORI burn) with one value: its game has no voting weight
+
+Fund a neuron to predict on Base (its prediction power is the vault's SATORI, delegated to the identity):
+  node scripts/fork.mjs fund <identity 0x…>               gas for the daily batch
+  node scripts/fork.mjs fund <vault 0x…> --satori 100     gas for Delegate, and SATORI to delegate
+  then in the page: await satori.unlock(passphrase); await satori.delegate(); await satori.predictBase()
+(both 0x addresses: satori.status().base.identity.address and .vault.address)`;
 const FORK_URL = 'https://sepolia.base.org';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -156,6 +166,7 @@ async function main() {
     if (i < 0) return dflt;
     return argv.splice(i, 2)[1];
   };
+  if (argv.includes('--help') || argv.includes('-h')) return void console.log(USAGE);
   const port = opt('port', '8545');
   const rpc = `http://127.0.0.1:${port}`;
   const [cmd, ...args] = argv;
@@ -179,7 +190,7 @@ async function main() {
     case 'predict': console.log(await predict(rpc, args[0])); break;
     case 'stream': console.log(JSON.stringify(await stream(rpc, args[0] ?? `junk-${Date.now()}`))); break;
     default:
-      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 20).join('\n'));
+      console.log(USAGE);
       process.exitCode = cmd ? 1 : 0;
   }
 }
