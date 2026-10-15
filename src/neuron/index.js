@@ -53,19 +53,19 @@ async function observe(stream, fetchFn, now, signal) {
 /**
  * One tick for one stream. Never throws: a failure is stored as the stream's
  * last error and returned. A success clears the last error. Once `signal` is
- * aborted (Lock, Remove) or the identity is locked, nothing more is stored.
+ * aborted (Remove), nothing more is stored. `identity` is the unencrypted
+ * identity key: it signs without anyone present.
  * @returns {Promise<{ok: true, observation, prediction} | {ok: false, error: string}>}
  */
 export async function tick(stream, { db, identity, publish, signal, fetch: fetchFn = globalThis.fetch, now = Date.now }) {
   try {
     const obs = await observe(stream, fetchFn, now, signal);
     if (signal?.aborted) return { ok: false, error: 'stopped' };
-    if (identity.locked) return { ok: false, error: 'Locked' };
     await db.addObservation(stream.name, obs.ts, obs.value);
     const target_ts = obs.ts + stream.interval_s * 1000;
     const value = predict((await db.recent(stream.name, WINDOW)).map((o) => [o.ts, o.value]), target_ts);
     if (value === null) throw new Error('engine produced no value');
-    if (identity.locked) return { ok: false, error: 'Locked' };
+    if (signal?.aborted) return { ok: false, error: 'stopped' };
     const p = { stream: stream.name, ts: obs.ts, target_ts, value, model: MODEL, address: identity.address };
     p.message = canonical(p);
     p.signature = identity.sign(p.message);

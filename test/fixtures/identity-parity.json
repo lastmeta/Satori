@@ -5,7 +5,11 @@
     "python": "3.10.20",
     "packages": {
       "python-evrmorelib": "0.3.0",
-      "mnemonic": "0.21"
+      "mnemonic": "0.21",
+      "pycryptodome": "3.23.0",
+      "eth-account": "0.13.7",
+      "nostr-sdk": "0.44.2",
+      "PyYAML": "6.0.3"
     }
   },
   "vectors": [
@@ -14,8 +18,12 @@
       "entropyHex": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
       "entropy": "kxc6jBSFwXrdEU1T7xlJoIqvxfwtLAM4rfoZp/SjKSw=",
       "words": "narrow right perfect cinnamon foster runway inmate claim fault juice fame donate priority title vague pitch add shell leader crew leg face pigeon moment",
+      "wif": "L29dqwGwrMRLHgnXS5DhBbRzWxYfEMbgBytC3EVMsEQUx3cxZS9R",
       "pubkey": "02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8",
       "address": "EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW",
+      "scripthash": "c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696",
+      "ethAddress": "0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7",
+      "walletYaml": "entropy: kxc6jBSFwXrdEU1T7xlJoIqvxfwtLAM4rfoZp/SjKSw=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: L29dqwGwrMRLHgnXS5DhBbRzWxYfEMbgBytC3EVMsEQUx3cxZS9R\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: narrow right perfect cinnamon foster runway inmate claim fault juice fame donate\n  priority title vague pitch add shell leader crew leg face pigeon moment\n",
       "signatures": [
         {
           "message": "",
@@ -44,8 +52,12 @@
       "entropyHex": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
       "entropy": "7+EkKs4RRSlfWL/NhThICTN/ZEtIeiJSy/vpv6gTvFg=",
       "words": "useful ankle apple order begin net latin blood snow clap bamboo bar dawn rate coffee aunt car north year square whisper antenna vapor anchor",
+      "wif": "L5G1FkavGmFEft8wjqu56w7qrohrZSS8uwUm6UcSVUU5xV9Yhk3N",
       "pubkey": "02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b",
       "address": "EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU",
+      "scripthash": "888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7",
+      "ethAddress": "0x3749127550991890357bbB38C7CB4DD6eB824354",
+      "walletYaml": "entropy: 7+EkKs4RRSlfWL/NhThICTN/ZEtIeiJSy/vpv6gTvFg=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: L5G1FkavGmFEft8wjqu56w7qrohrZSS8uwUm6UcSVUU5xV9Yhk3N\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: useful ankle apple order begin net latin blood snow clap bamboo bar dawn rate\n  coffee aunt car north year square whisper antenna vapor anchor\n",
       "signatures": [
         {
           "message": "",
@@ -74,8 +86,12 @@
       "entropyHex": "ea16cbf67fd735b40a0309aa6794b04dc3d0751174ddfa8d68a601971a40ab91",
       "entropy": "6hbL9n/XNbQKAwmqZ5SwTcPQdRF03fqNaKYBlxpAq5E=",
       "words": "tube rent work zero infant sure chimney gentle price device clown oppose dial dentist easy option whisper hero civil add immune cake purity chef",
+      "wif": "L54kRFUJtp7DjhM6LiqRZrFYTaCpARKCbgPFQmBf3eBmCBzk2YMp",
       "pubkey": "033e45c2e1b8f12281ce430e390182a98adabd8edad8e689bd5e14abf8f0a907c5",
       "address": "EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF",
+      "scripthash": "1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac",
+      "ethAddress": "0x0f2c8CD820Bc989585b8643561Dd58DE8FC5BFd8",
+      "walletYaml": "entropy: 6hbL9n/XNbQKAwmqZ5SwTcPQdRF03fqNaKYBlxpAq5E=\nevr:\n  address: EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF\nprivateKey: L54kRFUJtp7DjhM6LiqRZrFYTaCpARKCbgPFQmBf3eBmCBzk2YMp\npublicKey: 033e45c2e1b8f12281ce430e390182a98adabd8edad8e689bd5e14abf8f0a907c5\nscripthash: 1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac\nwords: tube rent work zero infant sure chimney gentle price device clown oppose dial\n  dentist easy option whisper hero civil add immune cake purity chef\n",
       "signatures": [
         {
           "message": "",
@@ -104,8 +120,12 @@
       "entropyHex": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
       "entropy": "ANI0vGXY0JPM/OsLUlzByfBenZMYnyaKCiaqEVLd6+o=",
       "words": "absorb museum congress slight minimum enemy crop output area napkin corn negative album excite erase become charge expect meadow feature benefit humble quick earth",
+      "wif": "KwFJm658E95uj1m4cSVgQhTBhFwjYjHvECC9MrzmqSUVk5nBxSQE",
       "pubkey": "0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9",
       "address": "ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE",
+      "scripthash": "0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727",
+      "ethAddress": "0xfa56968c2c3d859f8b9B27DF157e95212E05B11B",
+      "walletYaml": "entropy: ANI0vGXY0JPM/OsLUlzByfBenZMYnyaKCiaqEVLd6+o=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: KwFJm658E95uj1m4cSVgQhTBhFwjYjHvECC9MrzmqSUVk5nBxSQE\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: absorb museum congress slight minimum enemy crop output area napkin corn negative\n  album excite erase become charge expect meadow feature benefit humble quick earth\n",
       "signatures": [
         {
           "message": "",
@@ -129,5 +149,34 @@
         }
       ]
     }
-  ]
+  ],
+  "vaults": {
+    "password": "fixture-pass-1",
+    "wrongPassword": "fixture-wrong-pass",
+    "current": {
+      "vector": 1,
+      "yaml": "entropy: QPoDNgEsUQ2sMlpSOjXB+qjNaHeArgPszWpRNNUdNt0qCYVS1sINvN+8hUs6pjkhdRywxJuzscEEMvbMwnCW0GdSNGvv9nyEXg1KOEZLh6o=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: TsxinK++aaZW+XyNptPqHqW87t0y9XTo4oc4/3TcSDNV4LRdpV4RCGm+bBa/eRH/xRrEqUWp+KFT8IhRhCGRb1zHFC36GOlaV9puopN7aP+g0stOiOQCCAexbQdbhpBx\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: XzCRH2nphaZMnuGGJn2bwWHCHXMwU0vQMXsacNwvD5qRAxOW3pvCMYx/drdOGJv9pzUZlnUk4M+aelz+9HYQ/eia42qvXpjuLAwhpuIo0G+S6uilXFdu1PwXvUIPlHUlZTBgWe91F2Iz0Ei/RrxkVC7hSqy/TXHwdJ5bfDt9QSnvhGnNAbAUpnGwl7TFU+WvHD7grKyJVFLDuv2U3GcOGkvTnNPwmedXHmEzcJtBhKk=\n"
+    },
+    "old": {
+      "vector": 2,
+      "yaml": "entropy: 4TfBGazvSQ0L0OMdFopyJYcYhWgFverQUr4WQAM0Ajrz8UjFhtOJfKZmBSE5o0y0Ifukj87BEJwTEVMoaUq/Hv/JM8YqkCOtV3Ysr1Cy1yM=\nevr:\n  address: XSkST3tJh7zYWvV3z5ZwfXKI0COYY/mZLmyVzhhMFSxGWimSNBDCVGiLykmWcrL6QBjQzdCGx0w15x15GzBrWG2kXyu1bGnxiTqWB6VkWhY=\nprivateKey: 4dSSrr5MbSMikOn3SVaAK+lbFU5G70UXH3xUrsnbKZ02dCqD5kK3MwtcIKzKR89sMAX3hXKxc3mse6Qp09sHaoBHmp8xYAwn6Xu013o6lC94hJF/vNFWPcQdfbS4MOHF\npublicKey: 6Dk8qie24UNg6JgTb7tjbZaq3lLmMq3HM8+uFBbwQiCnpzXI2iZGf5MZv/lSbnhSm1WsKux9+f09p8r8s21CvCi9aOfW5+bFreL0KjEp7Q1RVUdXCOYunSaIMzFw/mA3NPfZ5LofDCgXMhORFaiteg==\nscripthash: 9lsg/gpIJY0qfrZJpM+iYU8APaXhdJ+czjOvHb8znJVTXcKySpZawX6B30EnNND0EUPXk2K7iKeCgVCQtyT2Zk/E7ok54XiZW2G5MowPsL/x9qq20TxKyypsf0NCoLNNHMC0AvEDNwoISgLWycbYHA==\nwords: Sx+n8YSvW/1VMhSInXuGSJL2K8TYAYTibiIO8F4tz8DvgTjD60HurZWupLJYHYM3qRMuhs0HZob/z5EQj3lxtU7ZjPv2AAAD84wTEIkW406ERkgb/LQ27V7bdwvbUDdimXOvE+2ui1nWvbFJJ7JxbR+5oKXAmctxp9VKuXBd7BggYZDQ/hFswY7M/GN7FJlH987+8lHLfG60rk38ibTC7T/+RMUWwqLVbkwguUMo4Ps7E+aKO54WB72CxmLeWZr4\n"
+    }
+  },
+  "wifOnly": {
+    "vector": 3,
+    "yaml": "evr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: KwFJm658E95uj1m4cSVgQhTBhFwjYjHvECC9MrzmqSUVk5nBxSQE\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\n",
+    "python": "raises TypeError: unsupported operand type(s) for +: 'NoneType' and 'bytes'"
+  },
+  "mismatch": {
+    "vector": 2,
+    "yaml": "entropy: 6hbL9n/XNbQKAwmqZ5SwTcPQdRF03fqNaKYBlxpAq5E=\nevr:\n  address: EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF\nprivateKey: L54kRFUJtp7DjhM6LiqRZrFYTaCpARKCbgPFQmBf3eBmCBzk2YMp\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac\nwords: tube rent work zero infant sure chimney gentle price device clown oppose dial\n  dentist easy option whisper hero civil add immune cake purity chef\n",
+    "fields": [
+      "publicKey"
+    ]
+  },
+  "nostr": {
+    "secretHex": "dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4",
+    "pubkeyHex": "62756113cd917a659263ead50da0f538d97a5d4cbf0c573464140364f9a98cc8",
+    "yaml": "pubkey_hex: 62756113cd917a659263ead50da0f538d97a5d4cbf0c573464140364f9a98cc8\nsecret_hex: dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4\n"
+  }
 }

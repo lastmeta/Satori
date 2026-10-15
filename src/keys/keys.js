@@ -1,6 +1,7 @@
 // Key derivations, exactly as the Docker neuron (satorilib) does them.
 // One 32-byte secp256k1 secret ("entropy") is at once the private key and the
 // BIP39 entropy of the 24 words. No HD path, no mnemonicToSeed.
+// Design and evidence: docs/design/keys.md
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { ripemd160 } from '@noble/hashes/legacy';
@@ -12,6 +13,7 @@ import { wordlist } from '@scure/bip39/wordlists/english';
 const b58c = createBase58check(sha256);
 const N = secp256k1.CURVE.n;
 const ADDRESS_VERSION = 0x21; // Evrmore P2PKH, 'E…'
+const WIF_VERSION = 0x80;
 const MAGIC = utf8ToBytes('Evrmore Signed Message:\n');
 
 const toBig = (b) => BigInt('0x' + (bytesToHex(b) || '0'));
@@ -43,9 +45,30 @@ export function publicKeys(entropy) {
   return { pubkey: bytesToHex(pub), address: addressFromPubkey(pub) };
 }
 
-/** publicKeys plus the 24 words. The words are the whole secret: build them only to show them. */
+/** sha256 of the P2PKH script, reversed (the Electrumx scripthash). */
+function scripthash(pub) {
+  const script = concatBytes(Uint8Array.of(0x76, 0xa9, 0x14), ripemd160(sha256(pub)), Uint8Array.of(0x88, 0xac));
+  return bytesToHex(sha256(script).reverse());
+}
+
+/** Every field Docker writes to wallet.yaml. Secrets included: build it only to save or show it. */
 export function deriveKeys(entropy) {
-  return { words: entropyToMnemonic(entropy, wordlist), ...publicKeys(entropy) };
+  const pub = secp256k1.getPublicKey(checkKey(entropy), true);
+  return {
+    entropy: base64.encode(entropy),
+    words: entropyToMnemonic(entropy, wordlist),
+    wif: b58c.encode(concatBytes(Uint8Array.of(WIF_VERSION), entropy, Uint8Array.of(1))),
+    pubkey: bytesToHex(pub),
+    address: addressFromPubkey(pub),
+    scripthash: scripthash(pub),
+  };
+}
+
+/** Compressed mainnet WIF (52 chars) → entropy. */
+export function entropyFromWif(wif) {
+  const b = b58c.decode(wif.trim());
+  if (b.length !== 34 || b[0] !== WIF_VERSION || b[33] !== 1) throw new Error('not a compressed WIF key');
+  return checkKey(b.slice(1, 33));
 }
 
 /** 24 backup words → entropy. Tolerates case and extra whitespace. */

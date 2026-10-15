@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { memoryDb } from '../db/node.js';
-import { createVault, unlock, verifyMessage } from '../keys/index.js';
+import { loadIdentity, verifyMessage } from '../keys/index.js';
 import {
   tick, createScheduler, readPath, canonical, localPublisher, claimTab, streamError, DEFAULT_STREAM, MODEL, WINDOW,
 } from './index.js';
@@ -10,7 +10,6 @@ vi.setConfig({ testTimeout: 60_000 });
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
 const v = fx.vectors[0];
-const hex = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
 const json = (body, status = 200) => async () => new Response(JSON.stringify(body), { status });
 const coinbase = (amount) => json({ data: { amount: String(amount), base: 'BTC', currency: 'USD' } });
 
@@ -18,7 +17,7 @@ let db;
 let identity;
 beforeEach(async () => {
   db = await memoryDb();
-  identity = await unlock(await createVault(hex(v.entropyHex), 'pw', { iterations: 1000 }), 'pw');
+  identity = await loadIdentity(v.walletYaml);
   await db.addStream(DEFAULT_STREAM);
 });
 
@@ -57,7 +56,7 @@ describe('tick', () => {
     expect(r.prediction.value).toBeCloseTo(31);
   });
 
-  test('fits on observation times: a gap (Lock, closed tab) is not one step', async () => {
+  test('fits on observation times: a gap (closed tab, failed fetches) is not one step', async () => {
     const min = 60_000;
     for (let i = 0; i < 19; i++) await db.addObservation('BTC-USD', i * min, 80_000);
     const later = 18 * min + 12 * 60 * min;
@@ -74,7 +73,7 @@ describe('tick', () => {
     expect((await db.summary())[0]).toMatchObject({ predictions: 0, last_error: 'engine produced no value' });
   });
 
-  test('a stopped run (Lock, Remove) stores nothing and reports no error', async () => {
+  test('a stopped run (Remove) stores nothing and reports no error', async () => {
     const ctl = new AbortController();
     const fetch = (url, { signal }) => new Promise((_, reject) =>
       signal.addEventListener('abort', () => reject(signal.reason)));
@@ -111,13 +110,6 @@ describe('tick', () => {
     const r = await tick(DEFAULT_STREAM, deps({ fetch: coinbase(1), publish: async () => { throw new Error('relay down'); } }));
     expect(r).toEqual({ ok: false, error: 'relay down' });
     expect((await db.summary())[0]).toMatchObject({ predictions: 1, pred_published_at: null, last_error: 'relay down' });
-  });
-
-  test('after Lock, a tick stores and signs nothing', async () => {
-    identity.lock();
-    const r = await tick(DEFAULT_STREAM, deps({ fetch: coinbase(1) }));
-    expect(r).toEqual({ ok: false, error: 'Locked' });
-    expect((await db.summary())[0]).toMatchObject({ observations: 0, predictions: 0 });
   });
 });
 
