@@ -4,7 +4,7 @@
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import duckdb from '@duckdb/duckdb-wasm/blocking';
-import { openDb } from './index.js';
+import { openDb } from '../src/db/index.js';
 
 let duck;
 

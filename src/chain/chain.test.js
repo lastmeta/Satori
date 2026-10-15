@@ -1,11 +1,11 @@
-// The chain module (docs/design/base.md) against fake-satori.js: viem over a
+// The chain module (docs/design/base.md) against test/fake-satori.js: viem over a
 // custom transport to a small stateful D6. Keys are our signers (src/keys),
 // so every transaction here is signed the way the app signs it.
 import { beforeEach, describe, expect, test } from 'vitest';
 import { zeroAddress } from 'viem';
 import { publicKeys, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
-import { fakeSatori, E18 } from './fake-satori.js';
+import { fakeSatori, E18 } from '../../test/fake-satori.js';
 
 import { createChain, transferLock, payload, revertName, errorText, UP, DOWN, HOOK_GAS, INDEFINITE } from './index.js';
 

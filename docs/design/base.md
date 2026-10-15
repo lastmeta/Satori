@@ -335,7 +335,7 @@ round, hash, games) and `base_last_batch` (the last batch mined, above).
 
 ## Testing
 
-- `npm test`: `src/chain/chain.test.js` (viem against `fake-rpc.js`, a small
+- `npm test`: `src/chain/chain.test.js` (viem against `test/fake-rpc.js`, a small
   in-memory Satori behind a custom transport: the status multicall, the lock
   rule, delegate and stop, streams kept by voting weight, per-game
   simulation, payload bytes, fees from `eth_maxPriorityFeePerGas` and the

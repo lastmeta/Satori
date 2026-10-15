@@ -1,10 +1,10 @@
 // The Base flow (docs/design/base.md): the daily batch's rules, the schedule,
-// delegate, claims and sends, against fake-satori.js (viem over a custom
+// delegate, claims and sends, against test/fake-satori.js (viem over a custom
 // transport) and a Map for the database.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { zeroAddress } from 'viem';
 import { publicKeys, evmAddress, signDigest } from '../keys/keys.js';
-import { fakeSatori, E18 } from '../chain/fake-satori.js';
+import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
 import {

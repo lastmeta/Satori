@@ -8,8 +8,8 @@ import {
   custom, decodeFunctionData, encodeErrorResult, encodeFunctionResult, keccak256, parseAbi, parseTransaction,
   recoverTransactionAddress, toHex,
 } from 'viem';
-import { multicall3Abi } from './abi.js';
-import { DEFAULTS } from './config.js';
+import { multicall3Abi } from '../src/chain/abi.js';
+import { DEFAULTS } from '../src/chain/config.js';
 
 const MULTICALL3 = DEFAULTS.multicall3.toLowerCase();
 const mc3 = [...multicall3Abi, ...parseAbi([ // the app's reads, and aggregate3, which viem's multicall sends

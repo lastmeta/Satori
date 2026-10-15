@@ -7,9 +7,9 @@
 // (C/SatoriRegistry.sol:1375-1393), claims (hub, merkle, airdrop).
 // Unit tests (src/chain, src/neuron) and the e2e (/rpc) share it.
 import { zeroAddress } from 'viem';
-import * as abi from './abi.js';
-import { DEFAULTS } from './config.js';
-import { INDEFINITE, HISTORY } from './index.js';
+import * as abi from '../src/chain/abi.js';
+import { DEFAULTS } from '../src/chain/config.js';
+import { INDEFINITE, HISTORY } from '../src/chain/index.js';
 import { fakeRpc, revert } from './fake-rpc.js';
 
 export const E18 = 10n ** 18n;

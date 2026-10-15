@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { memoryDb } from '../db/node.js';
+import { memoryDb } from '../../test/memory-db.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
   cycle, register, firstPollAt, startJitter, createPoller, centralStatus, claimTab, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,

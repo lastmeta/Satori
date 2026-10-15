@@ -323,7 +323,7 @@ build step beyond Vite, MIT licensed.
   delegate, claims, sends.
 - `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
   `index.js` (`createChain`: status multicall, delegate, the batch's pieces,
-  claims, sends); `fake-rpc.js` and `fake-satori.js` are test doubles.
+  claims, sends).
 - `src/ui/`: ArrowJS screens.
 - `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`,
   `central.md` with Satori Lite's file:line references, `engine.md` with

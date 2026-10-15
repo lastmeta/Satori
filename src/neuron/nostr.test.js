@@ -2,7 +2,7 @@
 // relays and the read-only flag, discover, subscribe, intake → forecast → `_pred`,
 // announce on open, reconcile, NIP-65, unsubscribe.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { memoryDb } from '../db/node.js';
+import { memoryDb } from '../../test/memory-db.js';
 import { signEvent, verifyEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../nostr/satori.js';
 import { forecast } from '../engine/index.js';

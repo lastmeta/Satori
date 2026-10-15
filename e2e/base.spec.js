@@ -1,10 +1,10 @@
 // Base in the app (docs/design/base.md), against a fake D6 behind /rpc
-// (src/chain/fake-satori.js, run in this test process) and a stub central2
+// (test/fake-satori.js, run in this test process) and a stub central2
 // that serves a merkle proof: the status while locked, Unlock → Delegate
 // prediction power, the identity's batch on its own, a round later the claims
 // and the next batch, Stop delegating, the transfer lock, sends; the agent API.
 import { expect, test } from '@playwright/test';
-import { fakeSatori, E18 } from '../src/chain/fake-satori.js';
+import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 

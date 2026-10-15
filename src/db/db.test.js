@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { memoryDb, memoryConn } from './node.js';
+import { memoryDb, memoryConn } from '../../test/memory-db.js';
 import { MIGRATIONS } from './schema.js';
 import { openDb } from './index.js';
 
