@@ -167,6 +167,7 @@ details.card > summary { color: var(--text); font-weight: 500; }
 @media (max-width: 520px) {
   .id { grid-template-columns: minmax(0, 1fr) max-content; gap: 0 10px; padding: 4px 0; }
   .id .label { grid-column: 1 / -1; }
+  .relay { flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 0; } /* each badge under its URL, not only the long ones */
   .backup-row .label { width: 100%; }
   .facts { grid-template-columns: 1fr; gap: 0; }
   .facts dd { margin-bottom: 6px; }
