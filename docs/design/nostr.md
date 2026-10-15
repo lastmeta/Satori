@@ -113,6 +113,11 @@ one that never answers (10 s timeout), delays nothing else.
   `raw` the value as JSON.
 - `relay_predictions` (stream_uuid, seq, value, model, obs_seq, made_at,
   event_id, relays): NDB's `predictions`, plus how many relays took it.
+- Migration 5: each `relay_streams` row also keeps its latest observation
+  (`obs_*`, the highest seq), our latest `_pred` (`p_*`) and its observation
+  count, set at insert time, so the status read on every change is one row
+  per stream (a scan of every observation took 0.6 s at 86k rows and 5 s at
+  1.3M).
 
 ## The engine's step
 
@@ -183,7 +188,7 @@ probably not what was meant.
   relays". **Backup**: Download `nostr.yaml`. **Import Docker files**: an
   optional `nostr.yaml`.
 - `window.satori`: `nostr()`, `discover()`, `subscribe(pubkey, stream)`,
-  `unsubscribe(pubkey, stream)`, `setRelays({ relays, centralWrite })`,
+  `unsubscribe(pubkey, stream)`, `relayPredictions(pubkey, stream)`, `setRelays({ relays, centralWrite })`,
   `file('nostr.yaml')`; `status().nostr` ([/llms.txt](../../public/llms.txt)).
 
 ## Later

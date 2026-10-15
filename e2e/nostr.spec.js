@@ -113,10 +113,14 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await provider.observe({ stream, value: '101.5', seq: 2, timestamp: t0 + 60 });
   await expect(sub.locator('[data-test=sub-seq]')).toHaveText('2');
   await expect(sub.locator('[data-test=sub-obs]')).toHaveText('101.5');
-  const s2 = await nostr(page);
-  expect(s2.subscriptions).toMatchObject([{ uuid: relayUuid(provider.pubkey, stream), stream, provider: provider.pubkey,
+  // (how many relays took it is known when they answer, just after)
+  await expect.poll(async () => (await nostr(page)).subscriptions).toMatchObject([{ uuid: relayUuid(provider.pubkey, stream), stream, provider: provider.pubkey,
     cadence_seconds: 60, observations: 2, observation: { seq: 2, value: 101.5, raw: '101.5', ts: t0 + 60 },
     prediction: { stream: `${stream}_pred`, seq: 2, value: '101.5', model: 'naive', relays: 1 } }]);
+
+  const history = await page.evaluate(([p, s]) => window.satori.relayPredictions(p, s), [provider.pubkey, stream]);
+  expect(history.map((h) => [h.seq, h.value, h.obs_seq, h.relays])).toEqual([[2, '101.5', 2, 1], [1, '100.0', 1, 1]]);
+  expect(history[0].event_id).toMatch(/^[0-9a-f]{64}$/);
 
   // What the user's relay holds from us, read back and checked.
   const user = await reader(USER_RELAY);

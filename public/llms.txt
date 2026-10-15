@@ -160,6 +160,10 @@ script runs; then call `await satori.status()` until `screen` is no longer
   relay announces, a paid/encrypted/gated one, or over `maxStreams`. Again on
   a subscribed stream: returns it.
 - `await satori.unsubscribe(pubkey, stream_name)` → true.
+- `await satori.relayPredictions(pubkey, stream_name, limit = 20)` → our
+  `<stream>_pred` history for that stream, newest first: `[{ seq, value,
+  model, obs_seq, made_at, event_id, relays }]` (`relays`: how many relays
+  took it; 0 until they answer).
 - `await satori.setRelays({ relays?: ['wss://…'], centralWrite?: boolean })`
   → `nostr()`: the user's relays (ws:// or wss://; they replace the list) and
   whether central's relays are written to.

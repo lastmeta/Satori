@@ -8,11 +8,11 @@
 //   vaultInfo(vaultYaml)                            // { address, pubkey } while locked
 //   const v = await unlockVault(vaultYaml, pass)    // Unlock; throws 'Wrong passphrase'
 //   v.sign(msg), v.backup(), v.lock()               // Lock wipes the key; then both throw 'Locked'
-//   loadNostr(nostrYaml)                            // { secret, pubkey, npub }: the Nostr key (nostr.yaml)
+//   loadNostr(nostrYaml)                            // { secret, pubkey }: the Nostr key (nostr.yaml)
 export { generateEntropy, entropyFromWords, entropyFromWif, deriveKeys, signMessage, verifyMessage } from './keys.js';
 import { generateEntropy, deriveKeys, publicKeys, signMessage } from './keys.js';
 import { readWallet, writeWallet, parse, secrecy, readNostrYaml, writeNostrYaml } from './docker.js';
-import { generateNostrSecret, npub } from '../nostr/event.js';
+import { generateNostrSecret } from '../nostr/event.js';
 
 export const MIN_PASSPHRASE = 4; // Docker vault-setup (neuron/web/routes.py:589)
 
@@ -71,7 +71,7 @@ export const newNostrYaml = () => writeNostrYaml(generateNostrSecret());
 /** The Nostr key from nostr.yaml: plaintext, as the identity, so the neuron signs on its own. */
 export function loadNostr(nostrYaml) {
   const { secretHex, pubkeyHex } = readNostrYaml(nostrYaml);
-  return { secret: secretHex, pubkey: pubkeyHex, npub: npub(pubkeyHex) };
+  return { secret: secretHex, pubkey: pubkeyHex };
 }
 
 /**

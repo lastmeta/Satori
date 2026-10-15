@@ -15,6 +15,7 @@ import {
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, claimTab } from './neuron/index.js';
 import { createNostr } from './neuron/nostr.js';
+import { relayUuid } from './nostr/satori.js';
 
 // The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
 export const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet.io' : 'https://network.satorinet.io';
@@ -26,7 +27,7 @@ export const NOSTR_DEFAULTS = import.meta.env.DEV ? { relays: [DEV_RELAY], centr
 let db;
 let files = null; // { walletYaml, vaultYaml, nostrYaml } as stored
 let identity = null;
-let nostrKey = null; // { secret, pubkey, npub }: plaintext, as the identity
+let nostrKey = null; // { secret, pubkey }: plaintext, as the identity
 let nostr = null; // the Nostr flow
 let vaultPublic = { address: null, pubkey: null }; // read from vault.yaml while locked
 let vault = null; // only while unlocked
@@ -438,6 +439,12 @@ window.satori = {
   /** Subscribe to a free stream and predict it: `<stream>_pred` is published on each new observation. */
   async subscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, true); },
   async unsubscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, false); },
+  /** Our `<stream>_pred` history for a relay stream, newest first: { seq, value, model, obs_seq, made_at, event_id, relays }. */
+  async relayPredictions(pubkey, stream, limit = 20) {
+    ready();
+    return (await db.relayPredictions(relayUuid(String(pubkey ?? '').trim().toLowerCase(), String(stream ?? '')), limit))
+      .map(({ stream_uuid, ...p }) => p);
+  },
   /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
 };

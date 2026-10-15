@@ -125,8 +125,7 @@ describe('the Nostr key (a third, random key, plaintext as in Docker)', () => {
     const made = await importDocker(files);
     expect(readNostrYaml(made.nostrYaml).pubkeyHex).not.toBe(fx.nostr.pubkeyHex);
   });
-  test('loadNostr: the key to sign with and its public forms', () => {
-    expect(loadNostr(fx.nostr.yaml)).toEqual({ secret: fx.nostr.secretHex, pubkey: fx.nostr.pubkeyHex,
-      npub: 'npub1vf6kzy7dj9axtynrat2smg848rvh5h2vhux9wdryzspkf7df3nyqk599tm' });
+  test('loadNostr: the key to sign with and its pubkey', () => {
+    expect(loadNostr(fx.nostr.yaml)).toEqual({ secret: fx.nostr.secretHex, pubkey: fx.nostr.pubkeyHex });
   });
 });
