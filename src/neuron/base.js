@@ -166,7 +166,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
   }
 
   /** The batch's ceiling on the max fee per gas, in wei (Settings; MAX_FEE_GWEI by default). */
-  const maxFeeWei = async () => parseGwei(String((await db.get('base_max_fee_gwei')) ?? MAX_FEE_GWEI));
+  const maxFeeWei = async () => parseGwei(Number((await db.get('base_max_fee_gwei')) ?? MAX_FEE_GWEI).toFixed(9)); // 1e-7 → '0.000000100'
 
   function needVault() {
     const v = vault();
@@ -283,7 +283,10 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
 
   return {
     refresh,
-    async status() { return withLast(view()); },
+    async status() {
+      return { ...(await withLast(view())), rpcSetting: (await db.get('base_rpc_url')) || '',
+        maxFeeGwei: (await db.get('base_max_fee_gwei')) ?? MAX_FEE_GWEI };
+    },
 
     start() {
       stopped = false;

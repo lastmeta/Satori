@@ -44,6 +44,7 @@ export const state = reactive({
   baseBusy: '', // '' | 'refresh' | 'delegate' | 'undelegate' | 'claim' | 'send'
   baseError: '',
   baseResult: '',
+  baseTxs: [], // the last action's transactions: [{ label, hash }]
   baseRpcError: '',
 });
 
@@ -240,6 +241,16 @@ function nostrCard(a) {
 
 const BUSY = { delegate: 'Delegating…', undelegate: 'Stopping…', claim: 'Claiming…', send: 'Sending…' };
 
+/** A tx hash, linked to the explorer unless the RPC is a local fork. One root node (see streamRow). */
+const txLink = (hash, label = '') => {
+  const ex = state.base?.explorer;
+  const text = `${label ? `${label} ` : ''}${shortHash(hash)}`;
+  return ex ? html`<a href="${`${ex}/tx/${hash}`}" target="_blank" rel="noopener" title="${hash}">${text}</a>`
+    : html`<code title="${hash}">${text}</code>`;
+};
+const rpcText = (b) => (b.localFork ? `${b.rpc.join(', ')}: the local fork of Base Sepolia (127.0.0.1:8545, scripts/fork.mjs)`
+  : `${b.rpc.join(', ')}${b.rpcSetting ? '' : ' (the default)'}`);
+
 function baseCard(a) {
   const b = () => state.base;
   const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
@@ -251,15 +262,16 @@ function baseCard(a) {
       <h2>Base</h2>
       <button class="small-btn" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
-    <div class="muted small" data-test="base-rpc">${() => (b() ? `Base Sepolia via ${b().rpc.join(', ') || '–'} · ${b().config ?? '–'} addresses · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+    <div class="muted small">${() => (b() ? `Base Sepolia · ${b().config ?? '–'} addresses · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b()?.error}">${() => `The chain did not answer: ${b()?.error}`}</p>
     <dl class="facts">
+      ${fact('RPC', 'base-rpc', () => (b() ? rpcText(b()) : '–'))}
       ${fact('Identity', 'base-identity', html`<code>${() => b()?.identity.address ?? ''}</code><div class="${() => (b()?.identity.lowEth ? 'error small' : 'muted small')}">${() => gasText(b()?.identity) + (b()?.identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</div>`)}
       ${fact('Vault', 'base-vault', html`<code>${() => b()?.vault.address ?? 'Unlock once to read it'}</code><div class="muted small">${() => `${amountText(b()?.vault.satori, 'SATORI')} · ${amountText(b()?.vault.eth, 'ETH')}`}</div>`)}
       ${fact('Delegation', 'base-delegation', () => delegationText(b()))}
       ${fact('Transfers', 'base-lock', () => lockText(b()?.vault.lock))}
       ${fact('Claimable', 'base-claimable', () => `${amountText(b()?.claimable.rewards, 'SATORI')} rewards · ${amountText(b()?.claimable.airdrop, 'SATORI')} airdrop`)}
-      ${fact('Last batch', 'base-last-batch', html`<span title="${() => b()?.lastBatch?.hash ?? ''}">${() => batchText(b()?.lastBatch) + (b()?.lastBatch ? ` · ${shortHash(b().lastBatch.hash)}` : '')}</span>`)}
+      ${fact('Last batch', 'base-last-batch', html`<span>${() => batchText(b()?.lastBatch)}</span> <span>${() => (b()?.lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
       ${fact('Batch check', 'base-check', () => (b()?.checking ? 'Checking…' : checkText(b()?.lastCheck, b()?.nextCheck)))}
     </dl>
     <p class="muted small" hidden="${() => state.unlocked}">Unlock the vault to delegate, claim or send. The identity sends the daily batch on its own.</p>
@@ -278,6 +290,7 @@ function baseCard(a) {
       </form>
     </div>
     <p class="small" role="status" data-test="base-result" hidden="${() => !state.baseResult}">${() => state.baseResult}</p>
+    <ul class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => html`<li>${txLink(t.hash, t.label)}</li>`.key(t.hash))}</ul>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>
   </section>`;
 }
@@ -314,7 +327,7 @@ function network(a) {
 
 function settings(a) {
   return html`
-  <details class="card" @toggle="${(e) => e.target.open && a.fillRelays(e.target.querySelector('form.relays-form'))}">
+  <details class="card" @toggle="${(e) => { if (e.target.open) { a.fillRelays(e.target.querySelector('form.relays-form')); a.fillBase(e.target.querySelector('form.base-rpc-form')); } }}">
     <summary>Settings</summary>
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
       <label>Central URL
@@ -335,14 +348,19 @@ function settings(a) {
       <p class="error" role="alert" hidden="${() => !state.relaysError}">${() => state.relaysError}</p>
       <div class="actions"><button class="primary" type="submit">Save relays</button></div>
     </form>
-    <form class="fields base-rpc-form" @submit="${(e) => a.saveBaseRpc(form(e), e.target)}">
+    <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
       <label>Base RPC
-        <input name="rpc" autocomplete="off" spellcheck="false" placeholder="${() => (state.base?.rpc ?? []).join(', ')}">
+        <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>
       <p class="muted small">An https:// URL or a path on this site. Empty: the default (a build: central's, then publicnode;
-        the dev server: /rpc, a local fork of Base Sepolia on 127.0.0.1:8545, scripts/fork.mjs).</p>
+        the dev server: /rpc, a local fork of Base Sepolia on 127.0.0.1:8545, scripts/fork.mjs). A saved URL replaces it.</p>
+      <label>Daily batch: max fee (gwei)
+        <input name="maxFee" inputmode="decimal" autocomplete="off" placeholder="2">
+      </label>
+      <p class="muted small">The identity sends the batch on its own; above this max fee per gas it waits for the next check.
+        Base's fees are about 0.01 gwei. Empty: 2 gwei.</p>
       <p class="error" role="alert" hidden="${() => !state.baseRpcError}">${() => state.baseRpcError}</p>
-      <div class="actions"><button class="primary" type="submit">Save RPC</button></div>
+      <div class="actions"><button class="primary" type="submit">Save Base settings</button></div>
     </form>
   </details>`;
 }

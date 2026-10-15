@@ -28,8 +28,9 @@ export const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet
 // are read only, and the user's relays default to the test relay (scripts/test-relay.mjs).
 export const DEV_RELAY = 'ws://localhost:7778';
 export const NOSTR_DEFAULTS = import.meta.env.DEV ? { relays: [DEV_RELAY], centralWrite: false } : { relays: [], centralWrite: true };
-// And for Base: the dev server's RPC is /rpc, which Vite proxies to a local fork on 127.0.0.1:8545
-// (scripts/fork.mjs), so a dev checkout never sends to a public chain. A build: central's, then publicnode.
+// And for Base: the dev server's RPC is /rpc by default, which Vite proxies to a local fork on
+// 127.0.0.1:8545 (scripts/fork.mjs), so by default a dev checkout does not send to a public chain
+// (a saved RPC overrides it). A build: central's, then publicnode.
 export const DEV_RPC = import.meta.env.DEV ? '/rpc' : undefined;
 
 let db;
@@ -196,6 +197,16 @@ async function setBaseRpc(raw) {
   return base.refresh();
 }
 
+/** The unattended batch's max fee per gas, in gwei ('' or null = the default). */
+async function setBaseMaxFee(raw) {
+  const text = String(raw ?? '').trim();
+  const gwei = text === '' ? null : Number(text);
+  if (gwei !== null && !(Number.isFinite(gwei) && gwei > 0)) throw new Error('The max fee must be a positive number of gwei.');
+  await db.set('base_max_fee_gwei', gwei);
+  await db.checkpoint();
+  await refreshBase();
+}
+
 /** A Base action from the UI or an agent, one at a time; the card shows which. */
 async function baseAction(what, fn) {
   if (state.baseBusy) throw new Error(`Busy (${state.baseBusy}). Try again when it is done.`);
@@ -296,15 +307,19 @@ const shown = (fn) => async (...args) => {
   }
 };
 
-/** A Base action from the card: its result or error is shown there. */
+/** A Base action from the card: its result (text, and its txs, linked) or error is shown there. */
 async function baseUi(what, fn) {
-  Object.assign(state, { baseError: '', baseResult: '' });
+  Object.assign(state, { baseError: '', baseResult: '', baseTxs: [] });
   try {
-    state.baseResult = await baseAction(what, fn);
+    const { text, txs = [] } = await baseAction(what, fn);
+    Object.assign(state, { baseResult: text, baseTxs: txs });
   } catch (err) {
     state.baseError = err?.message ?? String(err);
   }
 }
+
+const claimTxs = (r) => [['Rewards', r.rewards], ['Merkle', r.merkle], ['Airdrop', r.airdrop]]
+  .filter(([, x]) => x?.hash).map(([label, x]) => ({ label, hash: x.hash }));
 
 const actions = {
   goStep,
@@ -430,27 +445,34 @@ const actions = {
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
   baseDelegate: () => baseUi('delegate', async () => {
     const r = await base.delegate();
-    return r.steps.length ? `Delegated: ${r.steps.map((x) => `${x.step} by the ${x.by} (${shortHash(x.hash)})`).join(', ')}.`
-      : 'Already delegated to the identity.';
+    const txs = r.steps.map((x) => ({ label: `${x.step} (${x.by})`, hash: x.hash }));
+    return { text: r.steps.length ? `Delegated: ${r.steps.map((x) => `${x.step} by the ${x.by}`).join(', ')}.`
+      : 'Already delegated to the identity.', txs };
   }),
   baseUndelegate: () => baseUi('undelegate', async () => {
     const r = await base.undelegate();
-    return r.steps.length ? `Stopped delegating (${shortHash(r.steps[0].hash)}).` : 'Not delegated.';
+    return { text: r.steps.length ? 'Stopped delegating.' : 'Not delegated.', txs: r.steps.map((x) => ({ label: x.step, hash: x.hash })) };
   }),
   baseClaim: () => baseUi('claim', async () => {
     const r = await base.claim();
-    return [claimLine('Rewards', r.rewards), claimLine('Merkle', r.merkle), claimLine('Airdrop', r.airdrop)].join(' · ');
+    return { text: [claimLine('Rewards', r.rewards), claimLine('Merkle', r.merkle), claimLine('Airdrop', r.airdrop)].join(' · '),
+      txs: claimTxs(r) };
   }),
   baseSend: (f, el) => baseUi('send', async () => {
     const r = await base.send({ asset: f.asset, to: String(f.to ?? '').trim(), amount: f.amount });
     el.reset();
-    return `Sent ${f.amount} ${f.asset} (${shortHash(r.hash)}).`;
+    return { text: `Sent ${f.amount} ${f.asset}.`, txs: [{ label: `${f.asset} to ${shortHash(String(f.to).trim())}`, hash: r.hash }] };
   }),
-  async saveBaseRpc(f, el) {
+  fillBase(el) {
+    el.elements.rpc.value = state.base?.rpcSetting ?? '';
+    el.elements.maxFee.value = state.base?.maxFeeGwei ?? '';
+  },
+  async saveBase(f, el) {
     state.baseRpcError = '';
     try {
       await setBaseRpc(f.rpc);
-      el.reset();
+      await setBaseMaxFee(f.maxFee);
+      actions.fillBase(el);
     } catch (err) {
       state.baseRpcError = err?.message ?? String(err);
     }
@@ -552,6 +574,8 @@ window.satori = {
   async send(o) { ready(); return baseAction('send', () => base.send(o)); },
   /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
   async setBaseRpc(url) { ready(); await setBaseRpc(url); return base.status(); },
+  /** The unattended batch's ceiling on the max fee per gas, in gwei (null or '' = the default, 2). → base() */
+  async setBaseMaxFee(gwei) { ready(); await setBaseMaxFee(gwei); return base.status(); },
 };
 
 async function boot() {

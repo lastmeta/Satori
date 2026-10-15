@@ -25,8 +25,8 @@ async function setup(context) {
     const reply = (status, json) => route.fulfill({ status, json, headers: cors });
     if (path.startsWith('/api/v1/merkle/')) central.merkleCalls.push(path);
     if (path === '/api/v1/peer/register') return reply(200, { success: true, peer_id: 1 });
-    if (path === '/api/v1/merkle/root') return central.root ? reply(200, { root: central.root }) : reply(404, { detail: 'no reward drop has been published yet' });
     if (path.startsWith('/api/v1/merkle/proof/')) {
+      if (!central.root) return reply(404, { detail: 'no reward drop has been published yet' });
       const p = central.proofs[path.split('/').pop().toLowerCase()];
       return p ? reply(200, p) : reply(404, { detail: 'not in the current drop' });
     }
@@ -77,7 +77,12 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'lock')).toHaveText('SATORI transfer-locked while delegated');
   await expect(page.getByRole('button', { name: 'Stop delegating' })).toBeVisible();
 
+  await expect(page.locator('[data-test=base-txs] li')).toHaveCount(3);
+  await expect(page.locator('[data-test=base-txs] code').first()).toContainText('setPredictorFee(0) (identity) 0x'); // a local fork: no explorer link
+
   // The identity's batch, on its own, 10 s after delegating: the default game, DOWN (naive on two values).
+  // Anyone's new stream has a game but no voting weight: the engine pays it nothing, and it is left out.
+  s.streams[7] = { game: 70, named: false, cadence: 60, history: [{ hour: ROUND * 24, value: 1000n }] };
   await expect(fact(page, 'last-batch')).toContainText(`Round ${ROUND}`, { timeout: 30_000 });
   await expect(fact(page, 'last-batch')).toContainText('game 1 ↓');
   const batch = rpc.sent.find((t) => t.functionName === 'predictMultipleWithPayloads');
@@ -96,9 +101,14 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'result')).toContainText('Rewards: claimed 3 SATORI', { timeout: 30_000 });
   await expect(fact(page, 'result')).toContainText('Merkle: claimed 5 SATORI');
   await expect(fact(page, 'result')).toContainText('Airdrop: claimed 7 SATORI');
-  expect(central.merkleCalls).toEqual(['/api/v1/merkle/root', `/api/v1/merkle/proof/${base.vault.address}`]);
+  expect(central.merkleCalls).toEqual([`/api/v1/merkle/proof/${base.vault.address}`]); // the proof alone, as Lite
   await expect(fact(page, 'vault')).toContainText('115 SATORI');
 
+  // Above the batch's max-fee ceiling it waits for the next check, and says why.
+  await page.evaluate(() => window.satori.setBaseMaxFee(0.0000001));
+  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ round: ROUND + 1, skipped: expect.stringMatching(/^gas above the ceiling/) });
+  await expect(fact(page, 'check')).toContainText('gas above the ceiling');
+  await page.evaluate(() => window.satori.setBaseMaxFee(''));
   const next = await page.evaluate(() => window.satori.predictBase());
   expect(next).toMatchObject({ round: ROUND + 1, sent: { games: [{ gameId: 1 }] } });
   await expect(fact(page, 'last-batch')).toContainText(`Round ${ROUND + 1}`);
@@ -134,15 +144,20 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   expect(sent(rpc).filter((f) => f === 'predictMultipleWithPayloads')).toHaveLength(2);
 });
 
-test('the Base RPC setting: https or a path on this site; empty is the default', async ({ context, page }) => {
+test('the Base settings: the RPC (https or a path on this site; empty is the default) and the batch\'s max fee', async ({ context, page }) => {
   await setup(context);
   await openApp(page);
   await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
   await expect(page.locator('[data-test=identity]')).toHaveText(/^E/, { timeout: LOAD_TIMEOUT });
+  await expect(fact(page, 'rpc')).toContainText('/rpc: the local fork of Base Sepolia');
   await expect(page.evaluate(() => window.satori.setBaseRpc('http://127.0.0.1:8545'))).rejects.toThrow(/https:\/\/ URL or a path/);
+  await expect(page.evaluate(() => window.satori.setBaseMaxFee('-1'))).rejects.toThrow(/positive number of gwei/);
   await page.locator('summary', { hasText: 'Settings' }).click();
+  await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue('2');
   await page.getByLabel('Base RPC').fill('/rpc');
-  await page.getByRole('button', { name: 'Save RPC' }).click();
-  await expect(fact(page, 'rpc')).toContainText('via /rpc');
-  expect((await page.evaluate(() => window.satori.setBaseRpc(''))).rpc).toEqual(['/rpc']); // the dev server's default
+  await page.getByLabel('Daily batch: max fee (gwei)').fill('0.5');
+  await page.getByRole('button', { name: 'Save Base settings' }).click();
+  await expect(page.getByLabel('Base RPC')).toHaveValue('/rpc');
+  expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpc: ['/rpc'], rpcSetting: '/rpc', maxFeeGwei: 0.5 });
+  expect(await page.evaluate(() => window.satori.setBaseRpc(''))).toMatchObject({ rpc: ['/rpc'], rpcSetting: '' }); // the dev server's default
 });
