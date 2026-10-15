@@ -1,5 +1,5 @@
-import { expect, test } from 'vitest';
-import { predict } from './index.js';
+import { describe, expect, test } from 'vitest';
+import { predict, forecast, MODEL, WINDOW } from './index.js';
 
 const pts = (ys, xs = ys.map((_, i) => i)) => ys.map((y, i) => [xs[i], y]);
 
@@ -45,4 +45,30 @@ test('large prices and epoch-ms times keep precision (centred fit)', () => {
 test('a result that overflows is null, not NaN', () => {
   expect(predict(pts([1e308, 1e308, -1e308]), 5)).toBeNull();
   expect(predict(pts([1e308, 1e308]), 2)).toBe(1e308);
+});
+
+describe('forecast: the engine interface (step 4 swaps the model)', () => {
+  const at = (values) => values.map((value, i) => ({ ts: 1_792_000_000 + i * 3600, value }));
+  test('t1 one step on, t2 one step after appending t1 (Lite engine.py:1153-1186)', () => {
+    expect(forecast(at([1, 2, 3, 4]))).toEqual({ model: MODEL, t1: 5, t2: 6 });
+    expect(forecast(at([10, 8, 6]))).toEqual({ model: MODEL, t1: 4, t2: 2 });
+  });
+  test('by step, not by time: irregular polls are one step each', () => {
+    const pts = [{ ts: 0, value: 1 }, { ts: 10, value: 2 }, { ts: 5000, value: 3 }];
+    expect(forecast(pts)).toMatchObject({ t1: 4, t2: 5 });
+  });
+  test(`the last ${WINDOW} observations only`, () => {
+    const values = [...Array(30).keys()].map((i) => (i < 10 ? 1000 : i));
+    expect(forecast(at(values)).t1).toBeCloseTo(30);
+  });
+  test('one observation: that value; none or none finite: null', () => {
+    expect(forecast(at([42]))).toEqual({ model: MODEL, t1: 42, t2: 42 });
+    expect(forecast([])).toBeNull();
+    expect(forecast(at([NaN, Infinity]))).toBeNull();
+  });
+  test('an overflowing t2 falls back to t1', () => {
+    const r = forecast(at([0, 0.8e308])); // t1 = 1.6e308; t2 would be 2.4e308, past the largest double
+    expect(r.t1).toBeCloseTo(1.6e308, -300);
+    expect(r.t2).toBe(r.t1);
+  });
 });
