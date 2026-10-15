@@ -2,6 +2,8 @@
 // Bayesian VAR (../namaste_club), in Satori Lite's interface:
 //   forecast(points) → { model, t1, t2, phi?, weight? } | null
 // points: [{ ts, value }] (ts in unix seconds), all of a stream's history.
+// options.step: the bucket and horizon in seconds: 12 h for central's streams,
+// a relay stream's cadence (docs/design/nostr.md#the-engines-step).
 // `bar1`: a Bayesian AR(1) on 12 h returns, shrunk toward the random walk,
 // iterated two 12 h steps (t1, t2), each clamped, then faded toward persistence
 // by a weight from a rolling backtest. `naive`: t1 = t2 = the last value.
@@ -13,7 +15,7 @@ export const SIGMA2_FLOOR = 1e-6; // bvar.py:180
 export const MIN_EXTRA_ROWS = 5; // rows ≥ features + 5 (bvar.py:158)
 export const HORIZON_STEPS = 2; // 2 × 12 h = central's 24 h (bvar.py:285)
 export const MAX_STEP_RETURN = 0.5; // bvar.py:286
-export const MIN_SPACING_S = 6 * 3600; // the first lag's span (pool.py:872)
+export const MIN_SPACING_S = 6 * 3600; // the first lag's span at 12 h, half a step (pool.py:872)
 export const HOLDOUT = 28; // backtest origins (models.py:552)
 export const MIN_SAMPLES = 5; // calibration.py:34
 export const DEFAULT_WEIGHT = 1; // calibration.py:33
@@ -23,9 +25,10 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 /**
  * @param {Iterable<{ts: number, value: number}>} points
- * @param {{lambda1?: number, weight?: number}} [options] weight forces the fade (namaste_club's MODEL_WEIGHT)
+ * @param {{lambda1?: number, weight?: number, step?: number}} [options] weight forces the fade (namaste_club's
+ *   MODEL_WEIGHT); step is the bucket in seconds (t1 is one step ahead, t2 two)
  */
-export function forecast(points, { lambda1 = LAMBDA1, weight } = {}) {
+export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S } = {}) {
   const p = Array.from(points).filter((o) => Number.isFinite(o?.ts) && Number.isFinite(o?.value))
     .sort((a, b) => a.ts - b.ts);
   if (!p.length) return null;
@@ -34,7 +37,7 @@ export function forecast(points, { lambda1 = LAMBDA1, weight } = {}) {
   if (!(last > 0)) return naive;
 
   const buckets = new Map(); // bucket → its last value (models.py:262-264)
-  for (const { ts, value } of p) buckets.set(Math.floor(ts / STEP_S), value);
+  for (const { ts, value } of p) buckets.set(Math.floor(ts / step), value);
   const b = [...buckets.keys()];
   const v = [...buckets.values()];
   if (v.some((x) => !(x > 0))) return naive;
@@ -44,7 +47,7 @@ export function forecast(points, { lambda1 = LAMBDA1, weight } = {}) {
   if (pairs.length < 1 + MIN_EXTRA_ROWS) return naive;
   const phi = fitPhi(pairs, lambda1);
   const w = weight ?? backtestWeight(b, v, r, lambda1);
-  const [g1, g2] = iterate(phi, firstLag(p));
+  const [g1, g2] = iterate(phi, firstLag(p, step));
   return { model: 'bar1', t1: blend(last, g1, w), t2: blend(last, g2, w), phi, weight: w };
 }
 
@@ -74,14 +77,14 @@ function fitPhi(pairs, lambda1) {
 }
 
 /**
- * The newest return: last / (the newest value ≥ 6 h older) − 1 (pool.py:889-900).
- * 0 when there is none, or when it is more than two steps old (a closed tab).
+ * The newest return: last / (the newest value ≥ half a step older, 6 h at 12 h) − 1
+ * (pool.py:889-900). 0 when there is none, or when it is more than two steps old (a closed tab).
  */
-function firstLag(p) {
+function firstLag(p, step) {
   const { ts, value } = p.at(-1);
   let j = p.length - 2;
-  while (j >= 0 && ts - p[j].ts < MIN_SPACING_S) j--;
-  if (j < 0 || ts - p[j].ts > HORIZON_STEPS * STEP_S) return 0;
+  while (j >= 0 && ts - p[j].ts < MIN_SPACING_S * (step / STEP_S)) j--;
+  if (j < 0 || ts - p[j].ts > HORIZON_STEPS * step) return 0;
   return finiteOr0(value / p[j].value - 1);
 }
 

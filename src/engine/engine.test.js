@@ -196,3 +196,22 @@ describe('minimum data and guards', () => {
     expect(forecast([...grid(ZIG)].reverse())).toEqual(forecast(grid(ZIG)));
   });
 });
+
+describe('the step (a relay stream forecasts one cadence ahead)', () => {
+  const at = (step) => (values) => values.map((value, k) => ({ ts: T0 + (k + 1) * step - 1, value }));
+  test('the same series on a 15 min grid with step 900 gives the same model as on 12 h', () => {
+    for (const seed of [1, 2, 3]) {
+      const values = arPrices(60, -0.3, 0.02, seed);
+      const half = forecast(at(STEP_S)(values));
+      expect(half.model).toBe('bar1');
+      expect(forecast(at(900)(values), { step: 900 })).toEqual(half);
+    }
+  });
+  test('the first lag needs half a step of spacing; a step-old gap is not a lag at 12 h', () => {
+    const values = arPrices(30, -0.3, 0.02, 9);
+    const pts = at(900)(values);
+    // At the default 12 h step, 15 min points fall in a handful of buckets: naive.
+    expect(forecast(pts).model).toBe('naive');
+    expect(forecast(pts, { step: 900 }).model).toBe('bar1');
+  });
+});
