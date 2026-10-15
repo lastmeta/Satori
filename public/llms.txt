@@ -39,22 +39,31 @@ Nostr, Base.
   identity) as `{stream_uuid, stream_name, value: t2, t1_value: t1,
   observed_at, hash}`, with Python's float formatting. Status `pending` until
   central accepts the batch; a rejected or failed batch is resent with the
-  next poll.
+  next poll. Pending predictions older than 22 h (2 × 11 h) are dropped.
+  Every call to central is resent once on a network error, a timeout or a 5xx.
+- Changing the central URL drops the pending predictions, the stream list and
+  the last poll/submission (another central has other stream uuids); the list
+  refills with the next poll.
 
 Times are unix seconds.
 
 ## Drive it from the page (window.satori)
 
-Open the app, wait for it to load, then in the page's JS context:
+Open the app and wait for it to load: `window.satori` exists once the page's
+script runs; then call `await satori.status()` until `screen` is no longer
+`loading` (DuckDB and the keys take a moment). Then, in the page's JS context:
 
 - `await satori.status()` → `{ screen, identity, vault, unlocked, central }`.
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
   tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
   pending }`:
-  - `registration`: null while registering; `{ ok: true, peer_id,
-    wallet_address, vault_address, vaultMismatch }`; or `{ ok: false, error }`.
-  - `lastPoll`: `{ at, streams, new, predicted }` or `{ at, error }`.
+  - `registration`: null while registering; then one of
+    `{ at, ok: true, peer_id, wallet_address, vault_address, message, vaultMismatch }`,
+    `{ at, ok: false, error }` (central refused or is unreachable), or
+    `{ at, ok: false, skipped: true, error }` (no vault public key to send).
+  - `lastPoll`: `{ at, streams, new, predicted }` or `{ at, error }` (central's
+    error, or a local one such as a database write).
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
     `{ at, error }`; `pending`: how many predictions wait to be sent.
 - `await satori.setup({ passphrase, vaultWords?, identityWords? })` → status.
@@ -64,16 +73,19 @@ Open the app, wait for it to load, then in the page's JS context:
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
   and a call once set up throws `Already set up`.
 - `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
-  the streams with a new row, and send everything pending (`submit` is null
-  when nothing was pending). One poll runs at a time; a call during one
+  the streams with a new row, and send everything pending. `submit` is null
+  when nothing was pending or when the poll failed (`poll.error`). It never
+  throws for central's errors. One poll runs at a time; a call during one
   returns it. The next poll is then 11 h later.
-- `await satori.streams()` → one row per stream: `uuid`, `name`, `meta`,
-  `observations`, `obs_ts`, `obs_value`, and our latest `t1`, `t2`, `model`,
-  `made_at`, `status` (`pending`/`sent`), `sent_at`.
+- `await satori.streams()` → one row per stream: `uuid`, `name`, `meta`
+  (central's stream meta: the parsed object when it is JSON, else its text,
+  or null), `observations`, `obs_ts`, `obs_value`, and our latest `t1`, `t2`,
+  `model`, `made_at`, `status` (`pending`/`sent`), `sent_at`.
 - `await satori.predictions(stream, limit = 20)` → one stream's predictions
   (by uuid or name), newest first, with `observed_at` and `hash` as sent.
 - `await satori.setCentral(url)` → `status().central`: an https URL, or `''`
-  for the default; registers there at once.
+  for the default; registers there at once. A different URL drops the pending
+  predictions and the stream list (see Concepts).
 - `await satori.unlock(passphrase)`; `satori.lock()`.
 - While unlocked: `satori.backup('identity' | 'vault')` → `{ words, wif }`;
   `satori.file('wallet.yaml' | 'vault.yaml')` → the Docker file's text.

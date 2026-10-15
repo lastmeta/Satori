@@ -33,10 +33,6 @@ steps start from evidence, not from scratch.
   vault" button on Home yet (setup is the only path).
 - The unlocked vault and the identity live on the main thread; moving them
   into a worker is part of step 7.
-- The kept queue (pending predictions) has no cap, as Lite's in-memory queue
-  has none. Here it survives reloads, so if central rejected every batch for
-  days the queue would grow by one prediction per stream per poll until
-  central takes it. Fixable: cap it, or drop predictions older than a day.
 - Central's batch holds only each stream's latest observation and the neuron
   polls every 11 h, so local history grows by about two points per stream a
   day (Lite has the same limit). The step-4 engine starts from little data.

@@ -29,7 +29,8 @@ first poll 5–30 min later, then every 11 h (or Poll now):
 5. **Submit** everything pending right after the poll, as Lite's payload
    (`value` = t2, `t1_value`, `observed_at`, `hash`, byte-identical strings).
    A batch central rejects (`successful == 0`) or a failed call keeps the
-   predictions for the next poll.
+   predictions for the next poll; ones older than 2 × 11 h are dropped.
+   A network error, a timeout or a 5xx is resent once.
 
 No passphrase is needed: the identity key is unencrypted, as in Docker.
 
@@ -56,9 +57,13 @@ No passphrase is needed: the identity key is unencrypted, as in Docker.
 - **Central URL** (Settings, `meta.central_url`): https only. Empty means the
   default: `https://central2.satorinet.io` on the dev server (so nobody writes
   to prod from a dev checkout), `https://network.satorinet.io` in a build.
-  Saving registers there at once.
+  Saving registers there at once; a different URL drops the pending
+  predictions and the stream list (another central has other uuids), which
+  refill with the next poll.
 - **Poll now** (and `window.satori.poll()`) runs a cycle at once; the next
-  poll is then 11 h later. One cycle runs at a time.
+  poll is then 11 h later. One cycle runs at a time. A cycle never throws:
+  central's errors and local ones (the database) are logged and shown as the
+  last poll or submission.
 - Predictions are not signed one by one: as in Lite, the login signature
   authenticates the batch.
 - A database from a newer app version is refused, not migrated. Setup writes
@@ -92,10 +97,11 @@ output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
   wrong-password files, Latin-1 passwords, uncompressed-flag signatures; files
   in the wrong slots and plain-text vaults refused; the two-key model);
   central (Python float strings and payload hashes against the Docker-image
-  fixture, register, login, the 401 retry, timeouts and network errors, with a
-  mocked fetch); neuron (storage and dedupe, forecasting only new rows, the
-  kept queue, a failed poll, register and mismatch, the schedule and its
-  jitter); engine; db (migration from step 2); ui.
+  fixture, register, login, the 401 retry, the one resend, timeouts and
+  network errors, with a mocked fetch); neuron (storage and dedupe,
+  forecasting only new rows, the kept queue and its cap, a failed poll, a
+  local failure, register and mismatch, the schedule, its jitter and a failed
+  save); engine; db (migration from step 2, a change of central); ui.
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
   stub and prod blocked: create → register (headers checked) → first poll
   5–30 min out → Poll now: two streams stored, forecast and sent after an
@@ -103,7 +109,8 @@ output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
   refused → reload keeps the schedule and registers again → Unlock (wrong
   passphrase refused) → backup words and both files → Lock, polls go on; the
   agent API (dedupe, a failed batch kept and resent, a 401 retried, the
-  central URL setting); Docker import with a vault mismatch and Settings
+  central URL setting: another central drops the queue and the list, which
+  refills from it); Docker import with a vault mismatch and Settings
   (https only, an unreachable central shown); restore from words; two setups
   at once (one wins) leaving other `meta` rows alone. Also an OPFS persistence
   smoke under the CSP.

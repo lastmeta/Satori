@@ -33,8 +33,8 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 | Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Same: `addObservations` returns the streams that got a new row; only those are forecast. |
 | Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `forecast(points) → {model, t1, t2} \| null` (`src/engine/`). Step 3's model is a least-squares line over the last 20 observations by step (`ols-20`); step 4 replaces it. |
 | Payload | `{stream_uuid, stream_name, value: str(t2), t1_value: str(t1), observed_at: str(time.time() at prediction), hash: sha256(value + observed_at)[:16]}` (`engine.py:1044-1106,1188-1206`). | Byte-identical: `pyFloatStr` mimics Python's `str(float)`; checked against a fixture made in the Docker image (below). |
-| Queue | `collectAndSubmitPredictions` right after the poll (`start.py:4693-4736`, called at `:4870`); `flushPredictionQueue` keeps the whole queue when `successful == 0` or the call failed, and clears it otherwise (`engine.py:432-454`). | Predictions are stored with `status = 'pending'`; after every successful poll all pending ones are sent; on `successful > 0` all are marked `sent`, otherwise they stay pending for the next cycle. |
-| Submit | Log in (`POST /api/v1/auth/login`, headers `wallet-pubkey`, `message`, `signature` by the **identity**; `server.py:87-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. |
+| Queue | `collectAndSubmitPredictions` right after the poll (`start.py:4693-4736`, called at `:4870`); `flushPredictionQueue` keeps the whole queue when `successful == 0` or the call failed, and clears it otherwise (`engine.py:432-454`). | Predictions are stored with `status = 'pending'`; after every successful poll the pending ones made in the last 2 × 11 h are sent (older ones are dropped); on `successful > 0` all are marked `sent`, otherwise they stay pending for the next cycle. |
+| Submit | Log in (`POST /api/v1/auth/login`, headers `wallet-pubkey`, `message`, `signature` by the **identity**; `server.py:87-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
 
 Not used (dropped from Lite): the `checkinCheck` watchdog and restarts
 (`start.py:4883-4892`), `/auth/refresh` and its timer (`server.py:120-140`), the
@@ -78,18 +78,27 @@ only https). Empty means the default:
 - the dev server (`import.meta.env.DEV`): `https://central2.satorinet.io`, the
   dev central, so nobody writes to prod from a dev checkout.
 
-Changing it registers with the new central at once; the poll schedule stays.
+Changing it registers with the new central at once and drops what belonged to
+the old one: the pending predictions, the stream list, and the last poll and
+submission. Another central has other stream uuids (central2's
+`safetrade_soq` is not prod's), and central files an unknown uuid under its
+`bitcoin` stream (`c/main.py:536-551`), so a queue from one central must not
+go to another. The list refills with the next poll; each uuid's observation
+history stays. The poll schedule stays.
 
 ## Errors
 
-- Every call has a 15 s timeout (`AbortSignal.timeout`).
+- Every call has a 15 s timeout (`AbortSignal.timeout`), body included.
+- A network error, a timeout or a 5xx is resent once, at once.
 - A network failure is a `TypeError` in the browser. nginx's 429 and 502 pages
   carry no CORS header, so they look the same. Both are reported as "central
   unreachable" with the browser's message.
 - Central's own errors carry `{detail}` and are shown as `central <status>: <detail>`.
 - Register, poll and submit failures are logged to the console, stored in the
-  status (last poll, last submission) and shown on Home. Nothing throws out of
-  the schedule.
+  status (last poll, last submission) and shown on Home. A local failure in a
+  cycle (a database write) is logged with `console.error` and shown as the last
+  poll's error. Nothing throws out of the schedule: the next timer is set
+  before `next_poll_at` is saved, and a failed save is only logged.
 
 ## Deviations from Satori Lite, and why
 
@@ -98,11 +107,14 @@ Changing it registers with the new central at once; the poll schedule stays.
 | `meta.next_poll_at` is stored; on load a future time is kept, and a due (or missing, or more than 11 h ahead) one gets Lite's 5–30 min start jitter. | A tab reloads far more often than a Docker container restarts. Lite's "jitter after every start" would make each reload push the poll back (never polling if reloaded every few minutes); storing the time keeps the 11 h cadence. |
 | **Poll now** (Home) and `window.satori.poll()` run a cycle at once; the next poll is then 11 h later. A second call while one runs returns the same run. | The owner reviews in the running app and agents drive it: neither should wait up to 30 min, or 11 h, to see a cycle. |
 | Pending predictions live in the `predictions` table, so they survive a reload; Lite's queue is in memory. | The browser has no long-lived process; a queue lost on every reload would rarely be resent. |
+| Pending predictions older than 2 × 11 h are dropped before a submission; Lite's queue has no cap. | Lite's queue is emptied by every restart; ours is not, so a central that refused every batch would grow it without end. Two polls' worth is enough to ride out one failed cycle. |
+| Changing the central URL drops the pending queue and the stream list (see Settings). | Lite has one central per install; uuids differ between centrals. |
+| Every call (register, challenge and login too) is resent once on a network error, a timeout or a 5xx. satorilib resends only through `_makeAuthenticatedCall`, when it raises (`server.py:231-268`): the observations GET and the predictions POST pass `raiseForStatus=False` (`server.py:1282,1325`), so there a 5xx answer is not resent, only a network error or a timeout. | One rule in one place (`call`). A 5xx that carries CORS headers comes from central itself and a second try is cheap; nginx's 502/429 have no CORS header and arrive as network errors anyway. |
 | After a successful poll, anything pending is sent even if this cycle made no new prediction; Lite flushes only when it collected a new one (`start.py:4724`). | One rule ("send what is pending after each poll") is simpler, and a kept queue does not wait for the next new observation. |
 | Login signs central's challenge UUID (`GET /auth/challenge`), not `str(time.time())` (`server.py:91`). | Central accepts any signed message today (`c/auth.py:45`); the challenge keeps working when central makes challenges single-use ([issue](../future/issues/central-login-replayable.md)). |
 | A fresh login for each submission; no stored token, no refresh. | The token lives 1 h and the neuron submits every 11 h. |
 | The observations GET sends no token; satorilib sends one through `_makeAuthenticatedCall` (`server.py:1322`). | Central does not ask for one (`c/main.py:292-293`), and the poll then never needs a login. |
-| Register is not retried in a loop (Lite's `authWithCentral` backs off from 30 s up to 6 h, `start.py:4976-5006`). It runs again on the next load or a central URL change. | The register call itself is only logged in Lite too (`server.py:405-414`); the backoff guards the challenge GET, which the browser does not need for register. |
+| Register is not retried in a loop (Lite's `authWithCentral` backs off from 30 s up to 6 h, `start.py:4976-5006`). It runs again on the next load or a central URL change. | In practice Lite does not retry either: `checkin` swallows register errors (`server.py:405-414`) and `_getChallenge` falls back to a timestamp when central is down (`server.py:65-85`), so `checkin` almost never raises and the backoff almost never fires. |
 | No `nostr-pubkey` header yet. | Nostr is step 5. |
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
 | The model is `ols-20` (a least-squares line by step), not Lite's adapters. | Step 4 brings the engine. |
