@@ -160,9 +160,11 @@ describe('discover', () => {
     const later = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
       makeRelay: relays.make, now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0, openWaitMs: 5000 });
     await later.start();
+    relays.get(CENTRAL_RELAY).stored.push(announce('late'));
     const found = later.discover();
-    setTimeout(() => relays.get(USER_RELAY).open(), 300);
-    expect(await found).toEqual([]);
+    setTimeout(() => relays.get(USER_RELAY).open(), 300); // one relay open is not enough while another connects
+    setTimeout(() => relays.get(CENTRAL_RELAY).open(), 600);
+    expect((await found).map((s) => s.stream_name)).toEqual(['late']);
   });
 });
 

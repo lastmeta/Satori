@@ -217,9 +217,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     return out;
   }
 
-  /** The open relays; right after a load, waits up to 10 s for the first one. */
+  /** The open relays; right after a load, waits up to 10 s for the ones still connecting. */
   async function readable() {
-    for (const end = Date.now() + openWaitMs; !open().length && Date.now() < end;) {
+    const connecting = () => [...relays.values()].some((e) => e.relay?.state === 'connecting');
+    for (const end = Date.now() + openWaitMs; (connecting() || !open().length) && Date.now() < end;) {
       await new Promise((r) => setTimeout(r, 200));
     }
     if (!open().length) throw new Error('No relay is connected. Check the relays under Settings.');
