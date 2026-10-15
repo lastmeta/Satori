@@ -111,7 +111,7 @@ describe('relay', () => {
     expect(await f).toEqual([]);
   });
 
-  test('reconnect with backoff (1 s doubling to 5 min, ±20 %); open resets it; subscriptions re-sent', () => {
+  test('reconnect with backoff (1 s doubling to 5 min, ±20 %); a first EOSE or 30 s open resets it; subscriptions re-sent', () => {
     expect([0, 1, 2, 3, 8, 9, 20].map((n) => backoffMs(n, () => 0.5))).toEqual([1000, 2000, 4000, 8000, 256000, 300000, 300000]);
     expect(backoffMs(0, () => 0)).toBe(800);
     expect(backoffMs(0, () => 1)).toBe(1200);
@@ -133,10 +133,41 @@ describe('relay', () => {
     last().open();
     expect(opened).toBe(2);
     expect(last().sent).toEqual([['REQ', 'follow', { kinds: [34601] }]]);
-    last().drop(); // back to 1 s after an open
-    vi.advanceTimersByTime(1000);
+    last().drop(); // an open that does not last does not reset the backoff: 4 s
+    vi.advanceTimersByTime(3999);
+    expect(FakeSocket.all).toHaveLength(3);
+    vi.advanceTimersByTime(1);
     expect(FakeSocket.all).toHaveLength(4);
-    expect(states).toEqual(['connecting', 'open', 'closed', 'connecting', 'closed', 'connecting', 'open', 'closed', 'connecting']);
+    last().open();
+    last().msg(['EOSE', 'follow']); // the relay answered: a working connection, the backoff starts over
+    last().drop();
+    vi.advanceTimersByTime(1000);
+    expect(FakeSocket.all).toHaveLength(5);
+    last().open();
+    vi.advanceTimersByTime(30_000); // or 30 s open
+    last().drop();
+    vi.advanceTimersByTime(1000);
+    expect(FakeSocket.all).toHaveLength(6);
+    expect(states.slice(0, 9)).toEqual(['connecting', 'open', 'closed', 'connecting', 'closed', 'connecting', 'open', 'closed', 'connecting']);
+  });
+
+  test('a relay that accepts and drops every connection is not hammered (1, 2, 4, 8 s …)', () => {
+    const r = make();
+    r.connect();
+    let t = 0;
+    for (const wait of [1000, 2000, 4000, 8000, 16000]) {
+      last().open();
+      vi.advanceTimersByTime(50);
+      last().drop();
+      const n = FakeSocket.all.length;
+      vi.advanceTimersByTime(wait - 1);
+      expect(FakeSocket.all).toHaveLength(n);
+      vi.advanceTimersByTime(1);
+      expect(FakeSocket.all).toHaveLength(n + 1);
+      t += wait + 50;
+    }
+    expect(t).toBe(31_250);
+    expect(FakeSocket.all).toHaveLength(6);
   });
 
   test('close() stops for good; a socket that cannot be made is retried', () => {

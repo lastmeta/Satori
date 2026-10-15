@@ -6,9 +6,11 @@
 //   await r.fetch(filters)         // one REQ until EOSE (10 s at most) → events
 //   await r.publish(event)         // → { ok, message } from the relay's OK
 // state: 'connecting' | 'open' | 'closed'. Events are passed on unchecked.
+// The backoff starts over only once a connection has worked (an EOSE, or 30 s open).
 export const TIMEOUT_MS = 10_000; // satorilib's fetch_events (client.py:847)
 const BACKOFF_MIN_MS = 1000;
 const BACKOFF_MAX_MS = 300_000;
+const STABLE_MS = 30_000; // an open socket counts as working after this, or after the relay's first EOSE
 
 /** The wait before reconnect attempt n (0-based): 1 s doubling to 5 min, ±20 %. */
 export const backoffMs = (n, random = Math.random) =>
@@ -22,6 +24,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
   let stopped = true;
   let attempt = 0;
   let timer = null;
+  let stable = null; // resets the backoff once the connection has proved itself
   let n = 0;
   const kept = new Map(); // id → filters
   const fetches = new Map(); // id → { events, done }
@@ -52,7 +55,13 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
     timer = setTimeout(open, backoffMs(attempt++, random));
   }
 
+  const proven = () => {
+    clearTimeout(stable);
+    attempt = 0;
+  };
+
   function lost(why) {
+    clearTimeout(stable);
     ws = null;
     for (const f of [...fetches.values()]) f.done();
     for (const id of [...publishes.keys()]) settle(id, { ok: false, message: 'disconnected' });
@@ -70,6 +79,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
       if (fetches.has(a)) fetches.get(a).events.push(b);
       else if (kept.has(a)) onEvent(a, b);
     } else if (type === 'EOSE' || type === 'CLOSED') {
+      if (type === 'EOSE') proven();
       fetches.get(a)?.done();
     } else if (type === 'OK') {
       settle(a, { ok: b === true, message: String(c ?? '') });
@@ -88,7 +98,9 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
     ws = sock;
     sock.onopen = () => {
       if (ws !== sock) return;
-      attempt = 0;
+      // Not attempt = 0 here: a relay (or proxy) that accepts and drops every
+      // connection would be reconnected to every second.
+      stable = setTimeout(proven, STABLE_MS);
       error = '';
       setState('open');
       for (const [id, filters] of kept) send(['REQ', id, ...filters]);

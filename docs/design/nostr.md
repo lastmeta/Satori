@@ -88,7 +88,9 @@ with compact JSON content; satorilib's `json.dumps` puts a space after `,` and
   `EOSE`/`CLOSE`; `fetch` (one REQ until EOSE, 10 s timeout as satorilib's
   `fetch_events`); `publish` resolves on the relay's `OK` (10 s timeout); kept
   subscriptions are re-sent after a reconnect. Reconnect backoff: 1 s, doubling
-  to 5 min, ±20 % jitter, reset on open.
+  to 5 min, ±20 % jitter, reset only once a connection has worked (its first
+  EOSE, or 30 s open), so a relay that accepts and drops connections is not
+  hammered.
 
 ## Storage (migration 4)
 
