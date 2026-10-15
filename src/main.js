@@ -15,7 +15,7 @@ import {
   loadNostr, newNostrYaml, evmAddress,
 } from './keys/index.js';
 import { createCentral } from './central/index.js';
-import { cycle, register, createPoller, claimTab } from './neuron/index.js';
+import { cycle, register, createPoller, centralStatus as statusOf, claimTab } from './neuron/index.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
@@ -47,18 +47,7 @@ let registration = null; // this page load's register result
 let poller = null;
 let base = null; // the Base flow
 
-/** Central's state for the UI and agents: plain values. */
-async function centralStatus() {
-  return {
-    url: central?.url ?? null,
-    registration,
-    lastPoll: (await db.get('central_last_poll')) ?? null,
-    nextPoll: poller?.next ?? null,
-    polling: !!poller?.running,
-    lastSubmit: (await db.get('central_last_submit')) ?? null,
-    pending: await db.pendingCount(),
-  };
-}
+const centralStatus = () => statusOf({ db, central, registration, poller });
 
 async function refresh() {
   state.central = await centralStatus();

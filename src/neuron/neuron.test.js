@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { memoryDb } from '../db/node.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
-  cycle, register, firstPollAt, startJitter, createPoller, claimTab, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
+  cycle, register, firstPollAt, startJitter, createPoller, centralStatus, claimTab, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
 } from './index.js';
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -316,6 +316,18 @@ describe('createPoller', () => {
     expect(error).toHaveBeenCalledWith('[satori] saving the next poll time', expect.any(Error));
     error.mockRestore();
   });
+});
+
+test('centralStatus: the URL, the register result, the last poll and submission, the schedule, the queue', async () => {
+  central.url = 'https://central2.example';
+  central.results.push({ total_submitted: 1, successful: 0, failed: 1, errors: ['no'] });
+  central.batch = [entry('u-btc', 'btc', T, 1)];
+  const r = await run();
+  const registration = { at: T, ok: true, peer_id: 7 };
+  expect(await centralStatus({ db, central, registration, poller: { next: T + 60, running: false } })).toEqual({
+    url: 'https://central2.example', registration, lastPoll: r.poll, nextPoll: T + 60, polling: false, lastSubmit: r.submit, pending: 1,
+  });
+  expect(await centralStatus({ db })).toMatchObject({ url: null, nextPoll: null, polling: false });
 });
 
 test('claimTab: the first claim wins, a second gets false', async () => {

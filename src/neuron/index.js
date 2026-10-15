@@ -162,6 +162,19 @@ export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeo
   };
 }
 
+/** Central's state for the UI and agents (window.satori.status().central): plain values. */
+export async function centralStatus({ db, central, registration, poller }) {
+  return {
+    url: central?.url ?? null,
+    registration,
+    lastPoll: (await db.get('central_last_poll')) ?? null,
+    nextPoll: poller?.next ?? null,
+    polling: !!poller?.running,
+    lastSubmit: (await db.get('central_last_submit')) ?? null,
+    pending: await db.pendingCount(),
+  };
+}
+
 /**
  * Holds a Web Lock for the life of the tab so only one tab opens the database.
  * @returns {Promise<boolean>} false when another tab holds it
