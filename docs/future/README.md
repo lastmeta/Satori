@@ -17,27 +17,26 @@ steps start from evidence, not from scratch.
 
 ## Suggested stair steps
 
-1. **MVP** (now): keys, db, linear engine, local publish, basic UI.
-2. **Docker key import/export**: wallet.yaml and vault.yaml, from the draft branch.
+1. ✅ **MVP**: keys, db, linear engine, local publish, basic UI.
+2. ✅ **Two keys + Docker import/export**: identity (unencrypted) and vault
+   (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
 3. **Publish to central**: login, register, predictions batch ([design/central.md](design/central.md)).
 4. **Base**: delegate, daily batch, claims ([design/chain.md](design/chain.md)).
 5. **Nostr**: subscribe to streams, publish `_pred` ([design/transport.md](design/transport.md)). This needs a wss relay.
 6. **Better engine**: SES and backtest-driven selection ([design/engine.md](design/engine.md)).
 7. **Runtime hardening**: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
 
-## Noticed while building the MVP
+## Noticed while building
 
-- A forgotten passphrase leaves only one way back: import the 24 words. The
-  MVP has no "use different words" button on Unlock; add one (it replaces the
-  sealed key, keeps the data).
-- The key lives on the main thread while unlocked; moving signing into a
-  worker is part of step 7.
+- A forgotten vault passphrase: the neuron keeps running on the identity, and
+  the vault comes back only by restoring its 24 words. There is no "replace the
+  vault" button on Home yet (setup is the only path).
+- The unlocked vault and the identity live on the main thread; moving them
+  into a worker is part of step 7.
 - Ticks are spaced from the start of the last run; there is no catch-up for
   missed intervals while the tab was closed (step 7).
 - Ticks fit on observation times, so a gap is honest, but a window that spans
   a long gap mixes old and new regimes. A better engine (step 6) may want to
   drop observations older than some multiple of the interval.
-- **Open decision (owner):** commit 2b6f30e pushed `node_modules` (~50 MB pack)
-  into `main`'s history; e9cc109 untracked it. Removing it needs
-  `git filter-repo --path node_modules --invert-paths` and a force-push of
-  `main`, which is easiest while the repo is new.
+- ✅ `node_modules` was removed from `main`'s history (owner approved the
+  force-push).
