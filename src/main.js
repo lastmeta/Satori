@@ -543,6 +543,7 @@ window.satori = {
   async discover() { ready(); const list = await nostr.discover(); state.catalog = list; return list; },
   /** Subscribe to a free stream and predict it: `<stream>_pred` is published on each new observation. */
   async subscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, true); },
+  /** → nostr(), as setRelays. */
   async unsubscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, false); },
   /** Our `<stream>_pred` history for a relay stream, newest first: { seq, value, model, obs_seq, made_at, event_id, relays }. */
   async relayPredictions(pubkey, stream, limit = 20) {

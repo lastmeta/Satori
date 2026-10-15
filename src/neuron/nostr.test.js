@@ -340,7 +340,8 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await c.deliver(observe('btc', '100', 1));
     await settle();
     u.published = [];
-    await nostr.unsubscribe(PROV_PUB, 'btc');
+    const after = await nostr.unsubscribe(PROV_PUB, 'btc'); // → the status, as setRelays
+    expect(after).toMatchObject({ pubkey: ME_PUB, subscriptions: [] });
     await settle();
     expect(kinds(u)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
     expect(await db.get('nostr_outbox')).toEqual([]); // answered: nothing waits

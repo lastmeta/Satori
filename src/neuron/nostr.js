@@ -378,7 +378,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       return viewOf(uuid);
     },
 
-    /** Unsubscribe (routes.py:2673-2688): the 34602 unsubscribe, the `_pred` tombstone, unfollow. */
+    /** Unsubscribe (routes.py:2673-2688): the 34602 unsubscribe, the `_pred` tombstone, unfollow. → status() */
     async unsubscribe(pubkey, stream) {
       const [p, s] = checkStream(pubkey, stream);
       const uuid = relayUuid(p, s);
@@ -390,7 +390,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       await sendKept([sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at, unsubscribe: true })),
         sign(tombstoneEvent(s + PRED, key.pubkey, at))]);
       onChange();
-      return true;
+      return this.status();
     },
 
     /** Settings: the user's relays (ws:// or wss://) and whether central's relays are written to. */
