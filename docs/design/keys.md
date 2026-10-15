@@ -8,8 +8,8 @@ so a neuron moves between the two by moving two files (three with `nostr.yaml`).
 
 | Key | Stored as | Encrypted? | Used for |
 |---|---|---|---|
-| **identity** | `wallet.yaml` text in the db (`meta.wallet_yaml`) | no | everything the neuron does on its own: central register and login ([central.md](central.md)); its pubkey is the `wallet_pubkey` of our Nostr announcements; later the daily Base batch |
-| **vault** | `vault.yaml` text in the db (`meta.vault_yaml`) | yes, with the passphrase | holds funds; later delegate, claims, sends. Only while unlocked. |
+| **identity** | `wallet.yaml` text in the db (`meta.wallet_yaml`) | no | everything the neuron does on its own: central register and login ([central.md](central.md)); its pubkey is the `wallet_pubkey` of our Nostr announcements; the daily Base batch ([base.md](base.md)) |
+| **vault** | `vault.yaml` text in the db (`meta.vault_yaml`) | yes, with the passphrase | holds funds; delegate, claims, sends on Base. Only while unlocked. |
 | Nostr key | `nostr.yaml` text in the db (`meta.nostr_yaml`) | no | signs the neuron's Nostr events ([nostr.md](nostr.md)); random, not one of the two keys above, as in Docker |
 
 The identity is unencrypted on purpose: the neuron must run after a page load
@@ -102,24 +102,28 @@ something that is not the entropy of the stored address.
   vault's 24 words shown and three of them checked (it holds the funds), one
   passphrase (≥ 4 characters as Docker counts them, Latin-1 only) for the
   vault. The identity is stored as `wallet.yaml`, the vault as `vault.yaml`
-  encrypted with the passphrase.
+  encrypted with the passphrase, and a new random Nostr key as `nostr.yaml`.
 - **Setup → Import Docker files**: `wallet.yaml` + `vault.yaml` + the vault
-  password. Both are read and checked as above: `wallet.yaml` must be plain
-  text and `vault.yaml` encrypted, so the funds' key is never stored in plain
-  text. The identity is stored re-written from its entropy (plaintext, current
-  format). The vault is stored as given, unless it is an old one whose address
-  is encrypted; then it is re-written in the current format with the same
-  password, so its address can be shown while locked.
+  password, and `nostr.yaml` (optional: a new Nostr key otherwise). Both are
+  read and checked as above: `wallet.yaml` must be plain text and `vault.yaml`
+  encrypted, so the funds' key is never stored in plain text. The identity is
+  stored re-written from its entropy (plaintext, current format). The vault is
+  stored as given, unless its address or public key is not in plain text (an
+  old vault); then it is re-written in the current format with the same
+  password, so every stored vault has both, read while locked (central's
+  register, the Base address).
 - **Setup → Restore from words**: the vault's 24 words (required) and the
   identity's (optional; a new identity if left empty), then the passphrase.
 - One setup runs at a time, from the UI or an agent; a second one is refused.
-- **Home** shows both addresses at all times. The neuron runs from page load
-  on the identity: it registers both public keys with central and signs
-  central's login challenge ([central.md](central.md)). The vault card has **Unlock** (passphrase) or,
-  while unlocked, **Lock**.
+- **Home**'s Keys card shows each key's identifiers at all times: the
+  identity's and the vault's Evrmore and Base addresses, and the Nostr pubkey.
+  The neuron runs from page load on the identity: it registers both public
+  keys with central and signs central's login challenge
+  ([central.md](central.md)). The vault has **Unlock** (the passphrase) in the
+  Keys card; while unlocked, **Lock** is in the header.
 - **Backup** (Docker shows it behind login, so here it needs Unlock): the
   identity's and the vault's 24 words and private keys (WIF), and downloads of
-  `wallet.yaml` and `vault.yaml`, which load in Docker.
+  `wallet.yaml`, `vault.yaml` and `nostr.yaml`, which load in Docker.
 
 ## Code
 
@@ -127,14 +131,16 @@ something that is not the entropy of the stored address.
 
 - `keys.js`: derivations above, `signMessage`/`verifyMessage`.
 - `docker.js`: `readWallet(text, {password})`, `writeWallet(entropy, {password})`,
-  `secrecy(text)` (plain, encrypted or mixed), `encryptField`/`decryptField`.
-  Reused from `draft/v1-full` without Nostr and Base.
+  `secrecy(text)` (plain, encrypted or mixed), `encryptField`/`decryptField`;
+  `readNostrYaml`/`writeNostrYaml` for `nostr.yaml`.
 - `index.js`: the two-key model. `writeKeys({identity?, vault}, passphrase)`
-  (create and restore) and `importDocker({walletText, vaultText, passphrase})`
-  return `{walletYaml, vaultYaml}` to store; `loadIdentity(walletYaml)`,
-  `vaultInfo(vaultYaml)` (the address and public key while locked, as Lite
-  reads them for central's register, `start.py:4637-4667`),
-  `unlockVault(vaultYaml, passphrase)`.
+  (create and restore) and `importDocker({walletText, vaultText, passphrase,
+  nostrText?})` return `{walletYaml, vaultYaml, nostrYaml}` to store;
+  `loadIdentity(walletYaml)`, `vaultInfo(vaultYaml)` (the address and public
+  key while locked, as Lite reads them for central's register,
+  `start.py:4637-4667`), `unlockVault(vaultYaml, passphrase)`,
+  `loadNostr(nostrYaml)`. Each signer also gives its Base address and
+  transaction signatures (`evmAddress`, `signDigest`; [base.md](base.md#keys-on-base)).
 
 ## Tests
 
@@ -175,4 +181,5 @@ against.
   random key, plaintext as Docker keeps it (`start.py:120-149`): made at setup,
   imported with the Docker files (optional), downloaded under Backup; an
   install from before step 5 gets one on its next load ([nostr.md](nostr.md)).
-- **Not yet:** the Base address (Base step).
+- **Base (step 6):** each key's 32-byte secret is also its EVM key, as
+  satorilib's `ethAddress` ([base.md](base.md#keys-on-base)).
