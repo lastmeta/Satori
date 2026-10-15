@@ -16,8 +16,10 @@ page load ─▶ config (bundled D6 addresses, central's /api/v1/base/config ove
           └─▶ status: one multicall (ETH ×2, SATORI, delegation ×2, fee, allowedDelegator, lock, round, claimable ×2)
 Unlock ─▶ Delegate prediction power: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
        └─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH, or SATORI when not transfer-locked
-each round (the identity, no unlock): power > 0 and no batch yet ─▶ registry streams with a game ─▶ history ─▶ engine
-          ─▶ UP/DOWN per game ─▶ simulate each game alone ─▶ predictMultipleWithPayloads(the ones that pass) ─▶ receipt ─▶ persist
+each round (the identity, no unlock): a batch already sent? wait for it ─▶ power > 0 and no batch yet
+          ─▶ registry streams whose game has voting weight ─▶ history ─▶ engine ─▶ UP/DOWN per game
+          ─▶ simulate each game alone ─▶ fees under the ceiling? ─▶ predictMultipleWithPayloads(the ones that pass)
+          ─▶ keep the hash ─▶ receipt ─▶ persist (its round from its block)
 ```
 
 Short names: `BP` = `neuron/neuron-lite/satorineuron/base_predict.py`, `BC` =
@@ -43,21 +45,27 @@ account).
 ## Config
 
 - **Addresses** (`src/chain/config.js`): BCFG's DEFAULTS (`:20-36`), plus
-  `lens` and Multicall3 from the dapp (`UI/contracts/addresses.ts:199-221`);
-  they mirror `contract/satori/deployments/baseSepolia.json`. Central's
+  `lens`, `voting` and Multicall3 from the dapp (`UI/contracts/addresses.ts:199-221`);
+  they mirror `contract/satori/deployments/baseSepolia.json` (`voting` =
+  `SatoriEngine.satoriVoting()` on D6). `explorerUrl` links tx hashes on the
+  card (not on a local fork). Central's
   `GET /api/v1/base/config` overlays them (non-empty values only, and only for
   chain 84532), cached 1 h in memory as BCFG does (`:16,66-88`). central2
   answers it; prod returns 404, so the bundled addresses are used there.
-  Central's payload has no `lens`: it always comes from the bundle.
+  Central's payload has no `lens` or `voting`: they always come from the bundle.
 - **RPC** (Settings, `meta.base_rpc_url`): empty means the default. In a
   build: central's `rpcUrl` (else `https://sepolia.base.org`), then
   `https://base-sepolia-rpc.publicnode.com` as a fallback, as the dapp lists
   them (`UI/contracts/addresses.ts:218-221`; viem's `fallback` transport). On
   the dev server the default is `/rpc`, which Vite proxies to a local anvil
-  fork of Base Sepolia on `127.0.0.1:8545` (`scripts/fork.mjs`), so a dev
-  checkout never sends to a public chain, the same rule as the dev central
-  and the test relay. A setting is an `https://` URL or a same-origin path;
-  the page's CSP (`connect-src 'self' https:`) allows both.
+  fork of Base Sepolia on `127.0.0.1:8545` (`scripts/fork.mjs`), so by
+  default a dev checkout does not send to a public chain, the same rule as the
+  dev central and the test relay; a saved RPC replaces the default. The card
+  shows the active RPC as its first fact. A setting is an `https://` URL or a
+  same-origin path; the page's CSP (`connect-src 'self' https:`) allows both.
+- **Chain id**: a new RPC is asked `eth_chainId` once. Another chain than
+  84532 is refused: the card says so, and nothing is read, sent or batched
+  until the RPC changes.
 
 ## Status (no Unlock)
 
@@ -116,15 +124,20 @@ transfer-locked …". Lite calls the same thing "Staking" ("Stake your vault
 
 **Sending a transaction** (`src/chain/index.js`, `write()`), as EVM:60-93:
 simulate the call first (a revert throws with the contract's error name and
-costs no gas), estimate, fees `maxFeePerGas = 2 × gasPrice`,
-`maxPriorityFeePerGas = gasPrice` (EVM:74-75), send, wait for the receipt, and
-throw unless its status is success. The gas limit is the estimate + 500,000
-(`HOOK_GAS`; unused gas is not charged): the token runs its transfer hook in a
-try/catch, so the bare estimate starves the hook, and SATORI that reaches a
-delegated vault that way (any claim) leaves it unable to ever undelegate. Found
-on the fork while building this step
-([issue](../future/issues/token-hook-gas-estimate.md)); Lite and the dapp send
-with the bare estimate. After a write the app re-reads until the change shows, 5 × 1 s
+costs no gas), estimate, send, wait for the receipt, and throw unless its
+status is success. Fees: the tip is the node's `eth_maxPriorityFeePerGas`,
+and `maxFeePerGas = 2 × the latest base fee + the tip` (Lite's 2× margin,
+EVM:74-75, on the base fee instead of the gas price). The gas limit of a
+contract call is the estimate + 500,000 (`HOOK_GAS`; unused gas is not
+charged): the token runs its transfer hook in a try/catch, so the bare
+estimate starves the hook, and SATORI that reaches a delegated vault that way
+(any claim) leaves it unable to ever undelegate. Found on the fork while
+building this step ([issue](../future/issues/token-hook-gas-estimate.md));
+Lite and the dapp send with the bare estimate. **The pad protects only our
+own writes**: a transfer or a `claimAirdropFor(vault)` someone else sends
+to our delegated vault with a bare estimate (1 wei is enough) still bricks
+it; that needs the contract fix. A plain ETH transfer runs no hook and is
+sent with its estimate. After a write the app re-reads until the change shows, 5 × 1 s
 as Lite (`_stake_status_after`, ROUTES:1449-1463), then trusts the receipt:
 the public RPC is load-balanced and lags a block or two. Writes run one at a
 time (one queue for both keys), so the identity's batch and its setup never
@@ -136,15 +149,27 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 (BP:157-174), with the dapp's predict gate done by simulation
 (`UI/lib/predictGate.ts:14-50`).
 
+0. **A batch already sent**: its hash is kept (`meta.base_pending_batch`)
+   the moment the send returns. A check that finds one waits for its
+   receipt (up to 30 s) instead of simulating and sending again: mined, it
+   becomes the last batch; reverted, or from an earlier round and never
+   mined, it is let go; still pending in this round, the check says so and
+   the next one looks again.
 1. **Due** once per UTC round: skip when the identity's incoming power is 0
    (START:1171) or `engine.predictedStreamsCount(identity, round) != 0`
    (START:1174, BP:213-217).
 2. **Streams**: `registry.getAllDataStreams()`, then in one multicall
    `games.binaryGameByStream(id)` (keep `!= 0`), `registry.isNamedStream(id)`
    (a revert reads as not named, as BP:223-230; on D6 it reverts for unknown
-   ids) and `registry.getLatestUpdateInfo(id)` (the cadence). Lite finds the
-   same streams as Nostr bridge streams `satori-84532-<id>` (START:457-517);
-   the browser reads the registry, as the dapp does, so it needs no relay.
+   ids) and `registry.getLatestUpdateInfo(id)` (the cadence), then in a
+   second multicall `voting.weightOf(gameId)`, keeping games with weight > 0:
+   the engine's own eligibility test (`C/next/SatoriEngine.sol:828`, an
+   unweighted game earns no SATORI). Anyone can add a stream, and its game,
+   for a 0.001 SATORI burn: on the fork 10 such streams took a batch from 1
+   game and 408k gas to 11 games and 1.83M gas. Lite instead predicts the
+   bridge's Nostr streams `satori-84532-1…32` (START:457-517), a list the
+   bridge chooses; the browser reads the registry, as the dapp does, so it
+   needs no relay.
 3. **History**: `registry.getHistoryPage(id, 0, 768)` (the whole ring,
    oldest first; `C/SatoriRegistry.sol:1375-1393`). Values are `int232`;
    only their ratios matter here.
@@ -166,28 +191,40 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    values) always votes DOWN, and so does every browser neuron. Fixable, not
    inherent: the parked alternative (a seeded slope rule,
    [../future/design/engine.md](../future/design/engine.md)) was set aside
-   for Lite's rule (owner, 2026-10-15).
-6. **Named games** wait 24 clock hours after our last submit (BP:146-149,
-   `NAMED_WAIT_HOURS`, Lite 639e3ce; the engine's rule at
-   `C/next/SatoriEngine.sol:800-809`): left out until then.
-7. **Simulate each game alone** as a one-game `predictMultipleWithPayloads`
+   for Lite's rule (owner, 2026-10-15). A **named** stream's value is a
+   signed counter that starts at 0; the engine models any series with a
+   value ≤ 0 on changes (`bar1d`, [engine.md](engine.md#bar1d-a-series-with-values--0-step-6)),
+   where before it fell back to `naive` and so voted DOWN forever.
+6. **Simulate each game alone** as a one-game `predictMultipleWithPayloads`
    from the identity, and keep the ones that pass. A revert names the reason
    (`StaleValue`, `EmptyStream`, `DuplicatePrediction`, …); an RPC failure is
    not a revert and stops the batch until the next check. This fixes Lite's
    "one stale game sinks the batch"
    ([issue](../future/issues/base-batch-one-bad-game-reverts-all.md)): the
    simulate runs the contract's own pull and checks
-   (`C/next/SatoriEngine.sol:777-810`), which no off-chain read reproduces.
-8. **Send** `predictMultipleWithPayloads` with the games that passed. If the
-   chain still answers `DuplicatePrediction` (`0xe372c20e`) and named games
-   are in it, resend once without them (BP:157-174).
+   (`C/next/SatoriEngine.sol:777-810`), which no off-chain read reproduces,
+   named games' 24 clock hours included (`:807`). Lite's own named-game rule
+   (BP:146-149, 24 h since its last submit) and its resend without named
+   games on `DuplicatePrediction` (BP:157-174) exist because Lite does not
+   simulate; here the simulate already drops such a game, so neither is
+   kept.
+7. **The spending ceiling**: the batch runs unattended, so its max fee per
+   gas must be at most the setting (Settings, `meta.base_max_fee_gwei`,
+   default 2 gwei); above it the check skips, says why, and the next one
+   tries again. Base's fees are about 0.01 gwei (Base Sepolia, 2026-10-15:
+   base fee 0.005 gwei, tip 0.001 gwei, so a max fee of 0.011 gwei): 2 gwei
+   stops only a spike of ~200× or an RPC quoting nonsense, and caps a batch
+   at about 0.003 ETH (its 1.5M gas limit). It sits above the 1 gwei tip
+   anvil quotes, so the local fork works. The vault's actions are attended
+   and have no ceiling.
+8. **Send** `predictMultipleWithPayloads` with the games that passed, and
+   keep its hash at once (step 0).
 9. **Persist after the receipt**: `meta.base_last_batch` = `{round, at, hash,
    games: [{streamId, gameId, named, direction, model, latest, t2}], dropped:
-   [{streamId, gameId, error}]}`, and `at` (the block's time) is the last
-   submit time for the named-game rule. Lite writes the time before sending
-   (START:1228-1232), so a revert loses the day; here a failed send is shown,
-   and the next check tries again. A tab closed between the send and the
-   receipt: the next load reads `predictedStreamsCount` and skips the round.
+   [{streamId, gameId, error}]}`. `at` is the block's time and `round` is
+   `floor(at / 86400)`: a batch sent at 23:59:59 can land in the next round.
+   Lite writes its time before sending (START:1228-1232), so a revert loses
+   the day; here a failed send is shown, and the next check tries again.
 
 ### When in the round
 
@@ -200,18 +237,23 @@ at once. Why:
   (`AlreadyPredicted`, `C/next/SatoriEngine.sol:716`) means a held batch that
   never goes loses every game of the round; a game dropped at send time loses
   only itself, for one round.
-- The streams update during the day. A game fails `StaleValue` only when its
-  stream has no value newer than our last prediction on it
-  (`C/next/SatoriEngine.sol:810`), and a named game fails only when our last
-  prediction on it is under 24 clock hours old. Both happen only when the
-  batch moves to an earlier hour than the round before. A tab left open sends
-  at 00:01 every round, the same hour each day, so every game passes; the
-  default stream (id 1) is written by the batch's own first predict of the
-  round (`flushDefaultStream`, `C/next/SatoriEngine.sol:619-638`).
-- When a game does fail (an earlier hour than yesterday, a dead stream), it
-  is listed with its reason under the last batch, and the next round takes it
-  again: 24 clock hours after a dropped named game's last prediction is always
-  inside the next round.
+- The trade-off: the streams update during the day, and the contract
+  compares **clock hours**. A game fails `StaleValue` when its stream's
+  newest value is in the same clock hour as our last prediction on it, or
+  earlier (`streamLastHour <= lastPredHour`, `C/next/SatoriEngine.sol:810`).
+  So a provider that writes once a day later in hour 0 than our 00:01 batch
+  (at 00:30, say) is stale at 00:01 every other round: its 00:30 value has
+  the hour of yesterday's 00:01 prediction; the game is dropped that round,
+  passes the next (its last prediction is then two days old), and so on. A
+  named game fails when our last prediction on it is under 24 clock hours
+  old (`:807`), which happens when the batch moves to an earlier hour than
+  the round before. Sending later in the round would catch more games when
+  the tab stays open, and lose the whole round when it doesn't; we keep the
+  first check. The default stream (id 1) is written by the batch's own
+  predict (`flushDefaultStream`, `C/next/SatoriEngine.sol:619-638`), so it
+  always passes.
+- A game that fails is listed with its reason under the last batch, and the
+  next round takes it again.
 
 Lite instead sends every 24 h from its last submit (START:1256-1274), which
 suits an always-on process; a tab open only part of the day would lose
@@ -227,21 +269,22 @@ did, why it skipped, or its error.
    (`UI/hooks/useDashboard.ts:128,288-311`). The vault earns as a delegator:
    its share of the identity's correct calls (fee 0), folded in at claim time
    (`C/SatoriRewards.sol:1285-1320`). Lite never claims these.
-2. **Merkle**: `GET {central}/api/v1/merkle/root`; a 404 there is "no drop
-   published" (central's `DropNotAvailable`, or prod, which lacks the route:
-   [issue](../future/issues/central-prod-missing-base-routes.md)). Then
-   `GET /api/v1/merkle/proof/{vault}`; a 404 is "this vault is not in the
-   drop" (`central/src/api/v1/endpoints/merkle.py:26-58`). Then
-   `merkle.claimMerkle(amountWei, proof)` when `amountWei >
-   alreadyMintedTo(vault)` (ROUTES:1321-1388, BC:94-104). The contract pays
-   what its reserve allows and keeps the rest for a later claim
-   (`C/SatoriMerkle.sol:185-210`).
+2. **Merkle**: `GET {central}/api/v1/merkle/proof/{vault}` alone, as Lite
+   (ROUTES:1321-1331). Its 404 says which case
+   (`central/src/api/v1/endpoints/merkle.py:45-58`): "no reward drop has been
+   published yet", or "… is not in the current drop"; prod, which lacks the
+   route ([issue](../future/issues/central-prod-missing-base-routes.md)),
+   answers a plain "Not Found". Then `merkle.claimMerkle(amountWei, proof)`
+   when `amountWei > alreadyMintedTo(vault)` (ROUTES:1360-1388, BC:94-104).
+   The contract pays what its reserve allows and keeps the rest for a later
+   claim (`C/SatoriMerkle.sol:196-201`), so the amount reported is
+   `alreadyMintedTo` at the claim's block minus before.
 3. **Airdrop**: `airdrop.claimAirdrop()` when `claimableAirdrop(vault)` > 0
    (ROUTES:1394-1440, BC:107-121).
 
 ## Send (Unlock)
 
-From the vault: ETH (a plain transfer, estimated first), or SATORI
+From the vault: ETH (a plain transfer, estimated first, no pad), or SATORI
 (`token.transfer`) when it is not transfer-locked by the rule above (the app
 says until when before it simulates). The card shows the identity's ETH as
 daily batches of gas and warns below 7: a batch is counted at 1,500,000 gas
@@ -253,49 +296,56 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 
 | Deviation | Why |
 |---|---|
-| Base streams come from the registry (`getAllDataStreams`, `binaryGameByStream`, `getHistoryPage`), not from Nostr bridge streams `satori-84532-1…32` (START:457-517). | No relay needed, all streams, and the same values the engine anchors on; the dapp reads the registry too. |
+| Base streams come from the registry (`getAllDataStreams`, `binaryGameByStream`, `getHistoryPage`), not from the bridge's Nostr streams `satori-84532-1…32` (START:457-517); only games with voting weight > 0 are kept. | No relay needed, and the same values the engine anchors on; the dapp reads the registry too. The weight test replaces the bridge's choice: anyone can add streams for a tiny burn, and an unweighted game earns nothing (SatoriEngine.sol:828). |
 | The forecast is made at batch time from the registry's history, step max(12 h, cadence); Lite reads its latest relay `_pred` (t2 at the stream's cadence). | Lite's step = cadence gives a 2 h horizon on an hourly stream for a 24 h game. |
 | Due once per UTC round at the first check, not every 24 h from the last submit (START:1256-1274). | A tab is open part of the day ([when in the round](#when-in-the-round)). |
-| Each game is simulated alone and only passing games are sent; Lite sends all and retries once without named games. | One stale game no longer sinks the batch (Lite's resend is kept as a fallback). |
-| The submit time is stored after the receipt; Lite stores it before sending. | A reverted send no longer loses the day; `predictedStreamsCount` guards against a double send. |
+| Each game is simulated alone and only passing games are sent; Lite sends all. Lite's named-game wait (24 h since its last submit) and its resend without named games are not kept. | One stale game no longer sinks the batch. Lite needs the wait and the resend because it does not simulate; the simulate applies the contract's own named rule. |
+| The hash is kept when the batch is sent and the batch stored after its receipt; Lite stores its time before sending. | A reverted send no longer loses the day, and a tab closed before the receipt never sends twice. |
+| A max-fee ceiling for the unattended batch (2 gwei by default); the tip from `eth_maxPriorityFeePerGas`. | Nobody watches the batch; Lite pays whatever the gas price is. |
+| An RPC on another chain is refused. | A wrong RPC must not take writes. |
 | `setAllowedDelegator(vault)` is sent by the identity (the dapp); Lite does not. | Only our vault can delegate to the identity. |
 | `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's delegator earnings. |
 | The transfer lock is shown with `>=` (the token's rule); Lite's display uses `>`. | Lite shows the tokens free one round early. |
 | Words: "Delegate prediction power" / "Stop delegating" (the dapp), not Lite's "Staking". | The app's Lock/Unlock is the passphrase. |
 | The vault's Base address is computed from `vault.yaml`'s public key. | Status without Unlock; Lite needs the decrypted vault. |
-| Named games wait on the chain's clock (block time), not the local clock. | The same rule as the contract, also on a fork moved forward in time. |
-| The dev server's default RPC is a local fork (`/rpc`). | A dev checkout never sends to a public chain. |
-| Every write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../future/issues/token-hook-gas-estimate.md)). |
+| The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
+| Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../future/issues/token-hook-gas-estimate.md)). |
+| A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
 
 ## UI and agents
 
-- Home's **Base** card: the RPC and round; the identity's Base address and its
-  ETH as daily batches of gas (red below 7); the vault's Base address, SATORI
-  and ETH; the delegation; the transfer lock; what is claimable; the last batch
-  (round, time, each game's direction, what was left out, the tx); the last
-  check and the next. After Unlock: Delegate prediction power or Stop
-  delegating, Claim, and Send from the vault (SATORI or ETH). **Settings**:
-  Base RPC.
+- Home's **Base** card: the active RPC first (the local fork named as such),
+  the round; the identity's Base address and its ETH as daily batches of gas
+  (red below 7); the vault's Base address, SATORI and ETH; the delegation;
+  the transfer lock; what is claimable; the last batch (round, time, each
+  game's direction, what was left out, the tx); the last check and the next.
+  After Unlock: Delegate prediction power or Stop delegating, Claim, and Send
+  from the vault (SATORI or ETH); each action lists its transactions. Tx
+  hashes link to the explorer, except on a local fork. **Settings**: Base
+  RPC and the batch's max fee (gwei).
 - `window.satori`: `base()`, `delegate()`, `undelegate()`, `claim()`,
-  `predictBase()`, `send({ asset, to, amount })`, `setBaseRpc(url)`;
-  `status().base` ([/llms.txt](../../public/llms.txt)).
+  `predictBase()`, `send({ asset, to, amount })`, `setBaseRpc(url)`,
+  `setBaseMaxFee(gwei)`; `status().base` ([/llms.txt](../../public/llms.txt)).
 
 ## Storage
 
-`meta` keys only, no migration: `base_rpc_url` (the setting),
-`base_last_batch` (the last batch sent, above) and `base_last_submit_ts`
-(chain time of that batch, for the named-game rule).
+`meta` keys only, no migration: `base_rpc_url` and `base_max_fee_gwei` (the
+settings), `base_pending_batch` (a batch sent and not yet confirmed: its
+round, hash, games) and `base_last_batch` (the last batch mined, above).
 
 ## Testing
 
 - `npm test`: `src/chain/chain.test.js` (viem against `fake-rpc.js`, a small
   in-memory Satori behind a custom transport: the status multicall, the lock
-  rule, delegate and stop, the batch's due rules, per-game simulation, the
-  named-game wait and the DuplicatePrediction resend, payload bytes, claims'
-  branches, sends), `src/neuron/base.test.js` (the batch flow: forecast,
-  direction, persist only after success, the schedule), `abi.test.js` (every
-  ABI entry against the contracts' build output), `config.test.js`, and the
-  keys' Base addresses against viem.
+  rule, delegate and stop, streams kept by voting weight, per-game
+  simulation, payload bytes, fees from `eth_maxPriorityFeePerGas` and the
+  pad, receipts, claims' branches, sends), `src/neuron/base.test.js` (the
+  batch flow: forecast, direction, a named game dropped by its simulate,
+  unweighted games left out, the hash kept at send and waited for, the round
+  from the block, the fee ceiling, persist only after success, the schedule;
+  the merkle claim's 404s and a partial payment; an RPC on another chain),
+  `abi.test.js` (every ABI entry against the contracts' build output),
+  `config.test.js`, and the keys' Base addresses against viem.
 - `npm run e2e`: `e2e/base.spec.js`, the app with the same fake chain behind
   `/rpc` and a stub central serving a merkle proof: status, Unlock, Delegate,
   the batch, claims, Stop delegating, the lock, a send.
@@ -351,3 +401,7 @@ the last batch shown.
   stub central serves it). The merkle lane's reserve is 0 in the round D6
   was deployed and accrues each round, so claim a round later.
 - `advance [days]`: moves chain time and mines.
+- `predict [up|down]`: the deployer predicts the default game, so the default
+  stream's next value moves (and delegators' rewards can show).
+- `stop [--port 8545]`: stops the fork `start` began (its pid is in
+  `.fork.<port>.pid`, its log in `.fork.<port>.log`).

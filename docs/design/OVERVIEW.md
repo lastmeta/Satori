@@ -77,7 +77,7 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
 |---|---|---|
 | keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Docker files, Unlock/Lock the vault, sign and verify Evrmore messages. Each key's Base (EVM) address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)). Also the **Nostr key** (`nostr.yaml`, random, plaintext as in Docker; [nostr.md](nostr.md)). |
 | central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `pyFloatStr`/`predictionItem` (Python's float strings and the payload hash); `normalizeObservation`; for Base `baseConfig`, `merkleRoot`, `merkleProof`. 15 s timeouts; network errors wrapped. |
-| chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, claims, sends; every write simulated first, one at a time, with gas over the estimate. Test doubles: `fake-rpc.js`, `fake-satori.js`. |
+| chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Test doubles: `fake-rpc.js`, `fake-satori.js`. |
 | db | `src/db/` | DuckDB-WASM 1.32.0 stored in OPFS (`opfs://satori-mvp.duckdb`; `satori.duckdb` on this origin holds the old draft's schema), with tables `meta`, `streams` (uuid, name, meta), `observations` (stream_uuid, ts, value), `predictions` (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash, status, sent_at), and for Nostr `relay_streams`, `relay_observations`, `relay_predictions` ([nostr.md](nostr.md#storage-migration-4)). Times are unix seconds. |
 | engine | `src/engine/` | `forecast(points, { step }) → {model, t1, t2, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1` or `naive`; step 12 h for central, a relay stream's cadence. Pure, no dependency. |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
@@ -127,8 +127,9 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
 - Base: the identity signs the daily batch on its own; the vault signs only
   after Unlock (delegate, stop, claims, sends). Transactions go only to the
   configured RPC (Settings, `meta.base_rpc_url`: https or a same-origin path);
-  the dev server's default is the local fork, so a checkout never sends to a
-  public chain ([base.md](base.md#config)).
+  the dev server's default is the local fork, so by default a checkout does
+  not send to a public chain; an RPC on another chain is refused
+  ([base.md](base.md#config)). The unattended batch has a max-fee ceiling.
 
 ## Tech (pinned)
 

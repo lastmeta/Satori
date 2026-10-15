@@ -62,13 +62,18 @@ steps start from evidence, not from scratch.
 - Step 6, on the fork: on D6 a delegated vault that receives SATORI (any
   claim) in a transaction sent with `eth_estimateGas`'s limit can never
   undelegate: the token's try/catch hook starves and rewards' undelegate
-  underflows (Panic 0x11). The app adds 500,000 gas to every write; the fix
-  belongs in the contracts ([issue](issues/token-hook-gas-estimate.md)).
+  underflows (Panic 0x11). Anyone can do it to any delegated vault (1 wei).
+  The app adds 500,000 gas to its own contract calls, which protects only its
+  own writes; the fix belongs in the contracts
+  ([issue](issues/token-hook-gas-estimate.md)).
 - Step 6 follows Lite's direction rule (UP if t2 > the latest value, else
   DOWN): a `naive` forecast always votes DOWN, and on D6 the one stream (the
   daily default stream) has two values, so every browser neuron votes DOWN
   for now. A seeded slope rule is parked as an option
   ([design/engine.md](design/engine.md)).
+- A daily stream written later in hour 0 than the 00:01 batch fails
+  `StaleValue` every other round (the contract compares clock hours); the
+  batch still goes at the first check of the round ([../design/base.md](../design/base.md#when-in-the-round)).
 - A vault's delegator share of the identity's wins shows on the lens only
   after its loyalty builds (on the fork: 9 rounds after delegating, with the
   default stream moving), so the first rounds' Claim finds 0 on-chain rewards.

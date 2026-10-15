@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // A local fork of Base Sepolia for the Base card (docs/design/base.md#the-local-fork-dev).
-// The dev server proxies /rpc to 127.0.0.1:8545, its default Base RPC, so a
-// dev checkout never sends to a public chain. anvil: ~/.foundry/bin/anvil (or $ANVIL).
+// The dev server proxies /rpc to 127.0.0.1:8545, its default Base RPC, so by
+// default a dev checkout does not send to a public chain (a saved RPC replaces
+// the default). anvil: ~/.foundry/bin/anvil (or $ANVIL).
 //
 //   node scripts/fork.mjs start [--port 8545]                 anvil --fork-url https://sepolia.base.org, 2 s blocks (as Base)
 //   node scripts/fork.mjs stop [--port 8545]

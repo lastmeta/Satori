@@ -105,7 +105,8 @@ Status: step 6 of the roadmap (Base). Next: a finishing pass.
   `/api/v1/base/config` over them (cached 1 h; prod answers 404, central2
   serves it). RPC: Settings or `setBaseRpc`; empty = the default: on the dev
   server `/rpc`, a local anvil fork (`node scripts/fork.mjs start`); in a
-  build central's (`https://sepolia.base.org`), then publicnode.
+  build central's (`https://sepolia.base.org`), then publicnode. An RPC on
+  another chain than 84532 is refused (nothing is read or sent).
 - Delegate prediction power (needs Unlock): the identity sets its predictor
   fee to 0 (`rewards.setPredictorFee(0)`, set-once) and accepts only this
   vault (`hub.setAllowedDelegator(vault)`), then the vault calls
@@ -119,20 +120,27 @@ Status: step 6 of the roadmap (Base). Next: a finishing pass.
   (`block.timestamp / 86400`), at the first check of the round (10 s after
   load, after Delegate, at the round's start on the chain's clock, at least
   hourly), when the identity has delegated power and no batch this round.
-  Every registry stream with a binary game is forecast by the engine (step
-  = max(12 h, the stream's cadence)); direction UP (payload `0x01`) if t2 >
-  the latest value, else DOWN (`0x02`), as the Docker neuron. Named games wait
-  24 clock hours after the last batch. Each game is simulated alone first and
-  only the ones that pass are sent, in one `engine.predictMultipleWithPayloads`.
-  The batch is stored after its receipt.
+  Every registry stream whose binary game has voting weight (the engine pays
+  only those) is forecast by the engine (step = max(12 h, the stream's
+  cadence); a named stream, a signed counter, as `bar1d`); direction UP
+  (payload `0x01`) if t2 > the latest value, else DOWN (`0x02`), as the
+  Docker neuron. Each game is simulated alone first (the contract's own
+  checks, named games' 24 clock hours included) and only the ones that pass
+  are sent, in one `engine.predictMultipleWithPayloads`, if the max fee per
+  gas is within the ceiling (`setBaseMaxFee`, 2 gwei by default; above it the
+  next check tries again). Its hash is kept at once, so a check never sends
+  twice; the batch is stored after its receipt, its round from its block.
 - Claims (needs Unlock), each on its own: `hub.claim()` when the rewards lens
   says > 0 (the vault's share of the identity's wins); the merkle drop
-  (`GET /api/v1/merkle/root`, `/proof/{vault}` on central, then `claimMerkle`
-  when owed); the vested airdrop (`claimAirdrop`).
+  (`GET /api/v1/merkle/proof/{vault}` on central, then `claimMerkle` when
+  owed; the amount is what the reserve paid); the vested airdrop
+  (`claimAirdrop`).
 - Gas: both addresses need a little Base ETH (the identity for the batch,
-  the vault for its actions). Every transaction is simulated first (a revert
-  costs nothing and names the contract's error) and sent with 500,000 gas
-  over the estimate (unused gas is not charged).
+  the vault for its actions). Every contract call is simulated first (a
+  revert costs nothing and names the contract's error) and sent with 500,000
+  gas over the estimate (unused gas is not charged); an ETH send uses its
+  estimate. The tip is the node's `eth_maxPriorityFeePerGas`, the max fee
+  2 × the base fee + the tip.
 
 Times are unix seconds.
 
@@ -208,7 +216,7 @@ script runs; then call `await satori.status()` until `screen` is no longer
   → `nostr()`: the user's relays (ws:// or wss://; they replace the list) and
   whether central's relays are written to.
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
-  config: 'central' | 'bundled', error, errors, round, chainTime,
+  rpcSetting, localFork, explorer, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
   identity: { address, eth, power, fee, allowedDelegator, batchesLeft, lowEth },
   vault: { address, eth, satori, delegate, delegated: 'identity' | 'none' | 'other',
   lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
@@ -220,16 +228,19 @@ script runs; then call `await satori.status()` until `screen` is no longer
 - `await satori.delegate()` (needs Unlock) → `{ steps: [{ step, by: 'identity' | 'vault', hash }], settled }`.
   `steps` is empty when everything was in place.
 - `await satori.undelegate()` (needs Unlock) → the same shape.
-- `await satori.predictBase()` → the batch now, if due: `{ at, round, sent: { hash, games, dropped } }`
-  or `{ …, skipped: 'already predicted this round' | 'no prediction power delegated to the identity' | … }`
-  or `{ at, error }`.
+- `await satori.predictBase()` → the batch now, if due: `{ at, round, sent: { round, at, hash, games, dropped } }`
+  or `{ …, skipped: 'already predicted this round' | 'no prediction power delegated to the identity' |
+  'gas above the ceiling: …' | 'waiting for the batch already sent (0x…)' | … }` or `{ at, error }`.
 - `await satori.claim()` (needs Unlock) → `{ rewards, merkle, airdrop }`, each
   `{ hash, amount }`, `{ skipped: why }` or `{ error }`.
 - `await satori.send({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`
   (needs Unlock) → `{ hash }`, from the vault. SATORI while transfer-locked
   throws, saying until which round.
 - `await satori.setBaseRpc(url)` → `base()`: an https URL, a path on this
-  site (such as `/rpc`), or `''` for the default.
+  site (such as `/rpc`), or `''` for the default. A saved URL replaces the
+  default.
+- `await satori.setBaseMaxFee(gwei)` → `base()`: the batch's ceiling on the
+  max fee per gas (a positive number; `''` or null = 2 gwei).
 
 Errors are thrown as `Error` with a readable message (for example
 `Wrong passphrase`, `Unlock the vault first`). Central's errors are not
@@ -260,7 +271,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   (opening it discovers): a search box and the first 50 matching streams with
   Subscribe/Unsubscribe. "Settings": Central URL (empty = default), Save;
   Nostr relays (one per line) and "Publish to central's relays", Save relays;
-  Base RPC, Save RPC. "Backup" (needs Unlock):
+  Base RPC and "Daily batch: max fee (gwei)", Save Base settings. "Backup" (needs Unlock):
   Identity words, Vault words, Download wallet.yaml, Download vault.yaml,
   Download nostr.yaml.
 - Form fields have labels; elements carrying data have `data-test`
@@ -273,7 +284,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   Base card `base-rpc`, `base-error`, `base-identity`, `base-vault`,
   `base-delegation`, `base-lock`, `base-claimable`, `base-last-batch`,
   `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
-  `base-result`, `base-action-error`.
+  `base-result`, `base-txs` (the last action's transactions),
+  `base-action-error`.
 
 ## Docker neuron interop
 

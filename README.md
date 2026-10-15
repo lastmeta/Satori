@@ -75,10 +75,11 @@ To use satorian normally from the dev server, tick **Publish to central's
 relays** under Settings (a build does by default). An https deployment
 needs a `wss://` relay ([issue](docs/future/issues/relays-not-wss.md)).
 
-Base on the dev server: its RPC is `/rpc`, which Vite proxies to a local
-anvil fork of Base Sepolia (the real addresses; a dev checkout never sends to
-a public chain). Start it and fund your neuron's Base addresses (shown on the
-Base card):
+Base on the dev server: its RPC is `/rpc` by default, which Vite proxies to
+a local anvil fork of Base Sepolia (the real addresses; by default a dev
+checkout does not send to a public chain, and the Base card shows the active
+RPC first). Start it and fund your neuron's Base addresses (shown on the Base
+card):
 
 ```sh
 node scripts/fork.mjs start                            # anvil --fork-url https://sepolia.base.org on 127.0.0.1:8545, 2 s blocks
@@ -94,7 +95,8 @@ node scripts/fork.mjs stop
 anvil comes with Foundry (`~/.foundry/bin/anvil`, or set `ANVIL`). The
 deployer it impersonates holds ~519 SATORI. A build uses central's RPC
 (`https://sepolia.base.org`) with publicnode as a fallback; any https RPC can
-be set under **Settings**.
+be set under **Settings**, which replaces the default, and so can the daily
+batch's max fee (2 gwei by default).
 
 Setup makes two keys, as the Docker neuron does: the **identity** (stored
 unencrypted, so the neuron runs and signs in to central from page load) and
