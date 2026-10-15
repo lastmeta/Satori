@@ -69,12 +69,12 @@ const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd 
 const errorLine = () => html`<p class="error" role="alert" hidden="${() => !state.error}">${() => state.error}</p>`;
 const wordList = (words) => html`<ol class="words">${() => words().map((w) => html`<li>${w}</li>`)}</ol>`;
 const SAFARI_ADD = 'To keep your keys, add Satori to the Dock (File › Add to Dock) or Home Screen (Share › Add to Home Screen). '
-  + 'The added app starts empty: set it up there, or import Backup’s files.';
+  + 'The added app starts empty: set it up there, or import your downloaded Docker files.';
 
 /** Install Satori (Chromium's prompt), or Safari's way to add it; hidden once installed (docs/design/pwa.md). */
 const install = (a) => html`<div class="install" hidden="${() => state.app.installed || !(state.app.canInstall || state.safari)}">
   <button class="small-btn primary" data-test="install" hidden="${() => !state.app.canInstall}" @click="${a.install}">Install Satori</button>
-  <span class="muted small" data-test="install-hint">${() => (state.app.canInstall ? 'Keeps your keys, and runs in its own window.' : SAFARI_ADD)}</span>
+  <span class="muted small" data-test="install-hint">${() => (state.app.canInstall ? 'Keeps your keys, and runs in its own window.' : state.safari ? SAFARI_ADD : '')}</span>
 </div>`;
 
 function setup(a) {
