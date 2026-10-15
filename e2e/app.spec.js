@@ -91,6 +91,21 @@ test('create, tick, persist, unlock, lock, one tab', async ({ context, page }) =
   await page.waitForTimeout(1500);
   expect(calls).toBe(after);
 
+  // Unlock again: the stream card comes back. Lock pressed during the
+  // Show-words unseal leaves no words behind.
+  await passphrase().fill(PASS);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.locator('article.stream')).toHaveCount(1);
+  await passphrase().fill(PASS);
+  await page.getByRole('button', { name: 'Show words' }).click();
+  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.waitForTimeout(1500); // longer than the unseal
+  await expect(page.locator('ol.words li')).toHaveCount(0);
+  await passphrase().fill(PASS);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.locator('article.stream')).toHaveCount(1);
+  await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
+
   expect(await page.evaluate(() => window.violations)).toEqual([]);
 });
 

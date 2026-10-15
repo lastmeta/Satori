@@ -108,8 +108,9 @@ function unlockScreen(a) {
 
 function streamCard(r, a) {
   const spark = sparkPoints(state.spark[r.name] ?? []);
-  return html`
-  <article class="stream">
+  // One root node, no whitespace around it: ArrowJS 1.0.6 breaks a keyed list
+  // of multi-node items once it goes empty and back (Lock → Unlock).
+  return html`<article class="stream">
     <header>
       <h3>${r.name}</h3>
       <span class="muted small">every ${r.interval_s}s · ${r.observations} obs · ${r.predictions} predictions</span>
