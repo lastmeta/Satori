@@ -8,6 +8,7 @@ vi.setConfig({ testTimeout: 60_000 }); // shared box; noble builds tables on fir
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
 const jsfx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-js.json', import.meta.url)));
+const edges = JSON.parse(readFileSync(new URL('../../test/fixtures/satorilib-edges.json', import.meta.url)));
 const hex = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
 const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 
@@ -72,6 +73,13 @@ describe('Evrmore message signing', () => {
     for (const s of jsfx.signatures) {
       const v = fx.vectors.find((x) => x.address === s.address);
       expect(signMessage(hex(v.entropyHex), s.message)).toBe(s.signature);
+    }
+  });
+  test('a signature flagged uncompressed matches only the uncompressed key, as python-evrmorelib', () => {
+    const u = edges.uncompressedSignature;
+    for (const [field, expected] of Object.entries(u.verifies)) {
+      const by = field.startsWith('pubkey') ? 'pubkey' : 'address';
+      expect(verifyMessage(u.message, u.signature, { [by]: u[field] }), field).toBe(expected);
     }
   });
   test('wrong key, wrong address and garbage fail', () => {

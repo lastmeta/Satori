@@ -96,16 +96,21 @@ export function signMessage(entropy, msg) {
   return base64.encode(concatBytes(Uint8Array.of(27 + sig.recovery + 4), sig.toCompactRawBytes()));
 }
 
-/** True when `signature` signs `msg` for the given pubkey (hex) or address. */
+/**
+ * True when `signature` signs `msg` for the given pubkey (hex) or address. The
+ * key is recovered in the form the header names (31-34 compressed, 27-30 not),
+ * as python-evrmorelib's verifyMessage does.
+ */
 export function verifyMessage(msg, signature, { pubkey, address } = {}) {
   try {
     const raw = base64.decode(signature);
     if (raw.length !== 65 || raw[0] < 27 || raw[0] > 34) return false;
     const pub = secp256k1.Signature.fromCompact(raw.slice(1))
       .addRecoveryBit((raw[0] - 27) & 3)
-      .recoverPublicKey(messageHash(msg));
-    if (pubkey && pub.toHex(true) === pubkey.toLowerCase()) return true;
-    return !!address && addressFromPubkey(pub.toRawBytes(raw[0] >= 31)) === address;
+      .recoverPublicKey(messageHash(msg))
+      .toRawBytes(raw[0] >= 31);
+    if (pubkey && bytesToHex(pub) === pubkey.toLowerCase()) return true;
+    return !!address && addressFromPubkey(pub) === address;
   } catch {
     return false;
   }
