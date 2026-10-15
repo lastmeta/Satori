@@ -12,6 +12,7 @@ import {
   catalog, parseObservation, numericValue, predValue, relayUuid,
 } from '../nostr/satori.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
+import { serial } from '../util.js';
 
 export const MAX_STREAMS = 100; // network_db.py:14-36, until central says (relay-config)
 export const RECONCILE_S = 3600; // start.py:292
@@ -50,12 +51,12 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let centralUrls = [];
   let relays = new Map(); // url → { url, from: Set, relay, blocked, chunks }
   let timer = null;
-  let tail = Promise.resolve();
+  const intakeLine = serial();
   const sending = new Set();
   const log = (err) => console.error('[satori] nostr', err);
 
   /** Intake runs one event at a time, in order. */
-  const work = (fn) => (tail = tail.then(fn).catch(log));
+  const work = (fn) => intakeLine(fn).catch(log);
   /** Sends run beside the intake queue: a relay that is slow to say OK (or never does) holds nothing up. */
   function background(p) {
     const q = Promise.resolve(p).catch(log).finally(() => sending.delete(q));
@@ -65,10 +66,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   /** Resolves when the queued intake and every send so far are done. */
   async function idle() {
     for (;;) {
-      const t0 = tail;
+      const t0 = intakeLine.idle();
       await t0;
       if (sending.size) await Promise.all([...sending]);
-      else if (t0 === tail) return;
+      else if (t0 === intakeLine.idle()) return;
     }
   }
   const sign = (template) => signEvent(template, key.secret);
@@ -127,15 +128,15 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
 
   // The outbox (meta.nostr_outbox): unsubscribes and tombstones for relays we
   // write to that were not open or did not answer; sent when they open.
-  let boxTail = Promise.resolve();
-  const editOutbox = (fn) => (boxTail = boxTail.then(async () => {
+  const outbox = serial();
+  const editOutbox = (fn) => outbox(async () => {
     await db.set('nostr_outbox', fn((await db.get('nostr_outbox')) ?? []).slice(-OUTBOX_MAX));
     await db.checkpoint();
-  }));
+  });
   /** An answer, OK or not, means the relay has seen it; nothing to resend. */
   const answered = (r) => !['not connected', 'timeout', 'disconnected'].includes(r.message) || r.ok;
   async function flushOutbox(e) {
-    await boxTail;
+    await outbox.idle();
     const mine = ((await db.get('nostr_outbox')) ?? []).filter((x) => x.url === e.url);
     if (!mine.length || e.relay?.state !== 'open' || !writes(e)) return;
     const results = await Promise.all(mine.map((x) => e.relay.publish(x.event)));

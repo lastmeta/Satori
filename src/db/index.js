@@ -13,6 +13,7 @@
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
 import { MIGRATIONS } from './schema.js';
+import { serial } from '../util.js';
 
 const plain = (v) => (typeof v === 'bigint' ? Number(v) : v);
 const toRows = (table) => table.toArray().map((r) => {
@@ -56,26 +57,22 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
   await conn.query('SET autoload_known_extensions = false');
   const version = await migrate(conn);
 
-  let tail = Promise.resolve();
-  const serial = (fn) => (...args) => {
-    const p = tail.then(() => fn(...args));
-    tail = p.catch(() => {});
-    return p;
-  };
+  const line = serial();
+  const inOrder = (fn) => (...args) => line(() => fn(...args));
   const rows = async (sql, ...params) => toRows(await query(conn, sql, params));
   const run = async (sql, ...params) => void (await query(conn, sql, params));
 
   return {
     version,
-    rows: serial(rows),
-    get: serial(async (key) => {
+    rows: inOrder(rows),
+    get: inOrder(async (key) => {
       const [row] = await rows('SELECT value FROM meta WHERE key = ?', key);
       return row ? JSON.parse(row.value) : undefined;
     }),
-    set: serial((key, value) => run('INSERT OR REPLACE INTO meta VALUES (?, ?)', key, JSON.stringify(value))),
+    set: inOrder((key, value) => run('INSERT OR REPLACE INTO meta VALUES (?, ?)', key, JSON.stringify(value))),
 
     /** One row per stream: its latest observation and our latest prediction. */
-    streams: serial(() => rows(`
+    streams: inOrder(() => rows(`
       SELECT s.uuid, s.name, s.meta,
         (SELECT count(*) FROM observations x WHERE x.stream_uuid = s.uuid) AS observations,
         o.ts AS obs_ts, o.value AS obs_value,
@@ -88,7 +85,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       ORDER BY s.name, s.uuid`)),
 
     /** Upsert each row's stream; insert or ignore the observation. The uuids that got a new row. */
-    addObservations: serial(async (list) => {
+    addObservations: inOrder(async (list) => {
       const fresh = new Set();
       await run('BEGIN TRANSACTION');
       try {
@@ -107,29 +104,29 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       return [...fresh];
     }),
     /** A stream's observations, oldest first: [{ts, value}]. */
-    history: serial((uuid) => rows('SELECT ts, value FROM observations WHERE stream_uuid = ? ORDER BY ts', uuid)),
+    history: inOrder((uuid) => rows('SELECT ts, value FROM observations WHERE stream_uuid = ? ORDER BY ts', uuid)),
 
-    addPrediction: serial(async (p) => (await rows(
+    addPrediction: inOrder(async (p) => (await rows(
       `INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       p.stream_uuid, p.made_at, p.model, p.t1, p.t2, p.phi ?? null, p.weight ?? null, p.observed_at, p.hash))[0].id),
     /** The kept queue: every pending prediction, oldest first, with its stream's name. */
-    pending: serial(() => rows(`SELECT p.*, s.name FROM predictions p JOIN streams s ON s.uuid = p.stream_uuid
+    pending: inOrder(() => rows(`SELECT p.*, s.name FROM predictions p JOIN streams s ON s.uuid = p.stream_uuid
       WHERE p.status = 'pending' ORDER BY p.id`)),
-    pendingCount: serial(async () => (await rows("SELECT count(*) AS n FROM predictions WHERE status = 'pending'"))[0].n),
-    markSent: serial(async (ids, at) => {
+    pendingCount: inOrder(async () => (await rows("SELECT count(*) AS n FROM predictions WHERE status = 'pending'"))[0].n),
+    markSent: inOrder(async (ids, at) => {
       if (ids.length) await run(`UPDATE predictions SET status = 'sent', sent_at = ? WHERE id IN (${ids.map(() => '?').join(', ')})`, at, ...ids);
     }),
     /** The cap on the kept queue: pending predictions made before `before` are deleted. */
-    dropPending: serial((before) => run("DELETE FROM predictions WHERE status = 'pending' AND made_at < ?", before)),
+    dropPending: inOrder((before) => run("DELETE FROM predictions WHERE status = 'pending' AND made_at < ?", before)),
     /** Another central: its uuids differ, so the pending queue, the stream list and the last poll/submission go. */
-    resetCentral: serial(async () => {
+    resetCentral: inOrder(async () => {
       await run("DELETE FROM predictions WHERE status = 'pending'");
       await run('DELETE FROM streams');
       await run("DELETE FROM meta WHERE key IN ('central_last_poll', 'central_last_submit')");
     }),
     /** A stream's predictions (by uuid or name), newest first. */
-    predictions: serial((stream, limit = 20) => rows(`SELECT p.*, s.name FROM predictions p
+    predictions: inOrder((stream, limit = 20) => rows(`SELECT p.*, s.name FROM predictions p
       JOIN streams s ON s.uuid = p.stream_uuid WHERE p.stream_uuid = ? OR s.name = ? ORDER BY p.id DESC LIMIT ?`,
       stream, stream, limit)),
 
@@ -139,7 +136,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
      * pred_created_at and pred_seq. (meta and unsubscribed_at, from migration
      * 4, are no longer written: nothing read them.)
      */
-    subscribeRelay: serial(async ({ uuid, stream_name, provider_pubkey, name, cadence_seconds, now }) => {
+    subscribeRelay: inOrder(async ({ uuid, stream_name, provider_pubkey, name, cadence_seconds, now }) => {
       await run(`INSERT INTO relay_streams (uuid, stream_name, provider_pubkey, name, cadence_seconds, active,
           subscribed_at, pred_created_at, pred_seq) VALUES (?, ?, ?, ?, ?, true, ?, ?, 0)
         ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, cadence_seconds = excluded.cadence_seconds,
@@ -147,18 +144,18 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       uuid, stream_name, provider_pubkey, name ?? '', cadence_seconds ?? null, now, now);
       return (await rows('SELECT * FROM relay_streams WHERE uuid = ?', uuid))[0];
     }),
-    unsubscribeRelay: serial((uuid) => run('UPDATE relay_streams SET active = false WHERE uuid = ?', uuid)),
-    relayStream: serial(async (uuid) => (await rows('SELECT * FROM relay_streams WHERE uuid = ?', uuid))[0] ?? null),
-    countActiveRelay: serial(async () => (await rows('SELECT count(*) AS n FROM relay_streams WHERE active'))[0].n),
+    unsubscribeRelay: inOrder((uuid) => run('UPDATE relay_streams SET active = false WHERE uuid = ?', uuid)),
+    relayStream: inOrder(async (uuid) => (await rows('SELECT * FROM relay_streams WHERE uuid = ?', uuid))[0] ?? null),
+    countActiveRelay: inOrder(async () => (await rows('SELECT count(*) AS n FROM relay_streams WHERE active'))[0].n),
     /**
      * Each relay stream, newest subscription first, with its latest observation
      * (obs_*, the highest seq), our latest `_pred` (p_*) and its observation
      * count: all kept on the stream's row at insert time (migration 5).
      */
-    relayStreams: serial(({ active } = {}) =>
+    relayStreams: inOrder(({ active } = {}) =>
       rows(`SELECT * FROM relay_streams ${active ? 'WHERE active' : ''} ORDER BY subscribed_at DESC, uuid`)),
     /** Insert or ignore (the event id, or the stream's seq, seen before): true when new (network_db.py:597-636). */
-    addRelayObservation: serial(async (o) => {
+    addRelayObservation: inOrder(async (o) => {
       await run('BEGIN TRANSACTION');
       try {
         const fresh = (await rows('INSERT OR IGNORE INTO relay_observations VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING seq',
@@ -177,12 +174,12 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       }
     }),
     /** The engine's input for a relay stream: [{ts, value}] with a number and a time, oldest first. */
-    relayHistory: serial((uuid) => rows(`SELECT ts, value FROM relay_observations
+    relayHistory: inOrder((uuid) => rows(`SELECT ts, value FROM relay_observations
       WHERE stream_uuid = ? AND value IS NOT NULL AND ts IS NOT NULL ORDER BY ts, seq`, uuid)),
     /** The `_pred` seq for the next publish: last + 1, kept (network_db.py:835-848). */
-    nextPredSeq: serial(async (uuid) =>
+    nextPredSeq: inOrder(async (uuid) =>
       (await rows('UPDATE relay_streams SET pred_seq = pred_seq + 1 WHERE uuid = ? RETURNING pred_seq', uuid))[0].pred_seq),
-    addRelayPrediction: serial(async (p) => {
+    addRelayPrediction: inOrder(async (p) => {
       await run('INSERT INTO relay_predictions VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         p.stream_uuid, p.seq, p.value, p.model ?? null, p.obs_seq ?? null, p.made_at, p.event_id, p.relays);
       await run(`UPDATE relay_streams SET p_seq = ?, p_value = ?, p_model = ?, p_made_at = ?, p_relays = ?
@@ -190,15 +187,15 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       p.seq, p.value, p.model ?? null, p.made_at, p.relays, p.stream_uuid, p.seq);
     }),
     /** How many relays took a published `_pred` (known after it is kept). */
-    setPredictionRelays: serial(async (uuid, seq, n) => {
+    setPredictionRelays: inOrder(async (uuid, seq, n) => {
       await run('UPDATE relay_predictions SET relays = ? WHERE stream_uuid = ? AND seq = ?', n, uuid, seq);
       await run('UPDATE relay_streams SET p_relays = ? WHERE uuid = ? AND p_seq = ?', n, uuid, seq);
     }),
-    relayPredictions: serial((uuid, limit = 20) =>
+    relayPredictions: inOrder((uuid, limit = 20) =>
       rows('SELECT * FROM relay_predictions WHERE stream_uuid = ? ORDER BY seq DESC LIMIT ?', uuid, limit)),
 
-    checkpoint: serial(() => run('CHECKPOINT')),
-    close: serial(async () => {
+    checkpoint: inOrder(() => run('CHECKPOINT')),
+    close: inOrder(async () => {
       await run('CHECKPOINT');
       await closeDb();
     }),

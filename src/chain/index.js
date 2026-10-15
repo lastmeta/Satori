@@ -18,6 +18,7 @@ import { baseSepolia } from 'viem/chains';
 import {
   airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, tokenAbi, votingAbi,
 } from './abi.js';
+import { serial } from '../util.js';
 
 export const ROUND_S = 86400; // a round is a UTC day (SatoriToken.sol:329-331)
 export const UP = 1; // base_predict.py:23-24
@@ -116,12 +117,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const many = (contracts) => client.multicall({ contracts, allowFailure: false });
 
   // One write at a time, for both keys: the batch and a setup step never race for the identity's nonce.
-  let tail = Promise.resolve();
-  const queued = (fn) => {
-    const p = tail.then(fn);
-    tail = p.catch(() => {});
-    return p;
-  };
+  const queued = serial();
 
   /**
    * EIP-1559 fees: the tip the node suggests (eth_maxPriorityFeePerGas) and a
