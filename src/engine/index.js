@@ -9,7 +9,7 @@ export const DOWN = 2;
 export const MIN_SES_POINTS = 10;
 export const MIN_DIRECTION_POINTS = 5;
 const WINDOW = 20; // rolling one-step MAE window
-const BAND = 1.01; // candidates within 1% of the best MAE may be picked
+const BAND = 1.01; // both candidates within 1% of the best MAE → seeded pick
 const ALPHAS = Array.from({ length: 49 }, (_, i) => (i + 1) / 50); // 0.02 … 0.98
 
 /**
@@ -65,6 +65,20 @@ function rollingMae(ys, alpha, w) {
   return sum / w;
 }
 
+/** Grid alpha with the lowest one-step squared error over the whole series. */
+function fitAlpha(ys) {
+  let best = ALPHAS[0], bestErr = Infinity;
+  for (const a of ALPHAS) {
+    let l = ys[0], err = 0;
+    for (let i = 1; i < ys.length; i++) {
+      err += (ys[i] - l) ** 2;
+      l += a * (ys[i] - l);
+    }
+    if (err < bestErr) [best, bestErr] = [a, err];
+  }
+  return best;
+}
+
 /** Divide by max |x| so huge values cannot overflow; returns [scaled, scale]. */
 function scaled(xs) {
   const s = xs.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
@@ -72,9 +86,10 @@ function scaled(xs) {
 }
 
 /**
- * Point forecast for one stream. Fewer than 10 points: naive. Otherwise naive and
- * SES at each grid alpha are scored by rolling one-step MAE over the last 20 points;
- * among candidates within 1% of the best, one is picked with the node's seed.
+ * Point forecast for one stream. Fewer than 10 points: naive. Otherwise SES alpha is
+ * fitted by grid (0.02 step) on the whole series, then naive and SES are scored by
+ * rolling one-step MAE over the last 20 points; if both are within 1% of the best,
+ * one is picked with the node's seed.
  * t1 = t2 (closed form). Returns null when there is no usable value.
  * @param {ArrayLike<unknown>} values oldest first
  * @param {{key?: Uint8Array|string, stream?: string}} [opts]
@@ -87,7 +102,8 @@ export function forecast(values, { key, stream } = {}) {
   if (xs.length < MIN_SES_POINTS) return { model: 'naive', t1: last, t2: last };
   const [ys, s] = scaled(xs);
   const w = Math.min(WINDOW, ys.length - 1);
-  const cands = [{ alpha: 1, mae: rollingMae(ys, 1, w) }, ...ALPHAS.map((alpha) => ({ alpha, mae: rollingMae(ys, alpha, w) }))];
+  const alpha = fitAlpha(ys);
+  const cands = [{ alpha: 1, mae: rollingMae(ys, 1, w) }, { alpha, mae: rollingMae(ys, alpha, w) }];
   const bestMae = Math.min(...cands.map((c) => c.mae));
   const band = cands.filter((c) => c.mae <= bestMae * BAND);
   const pick = band[Math.floor(rng(seedFor(key, stream, 'model'))() * band.length)];
