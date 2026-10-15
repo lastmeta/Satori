@@ -55,35 +55,27 @@ async function refresh() {
 }
 
 /**
- * The Nostr card. One status read at a time: changes during a read ask for
- * one more read after it, however many there were.
+ * `fn` one run at a time: calls during a run ask for one more run after it,
+ * however many there were. Never rejects (an error is logged).
  */
-let nostrRefresh = null;
-let nostrStale = false;
-function refreshNostr() {
-  nostrStale = true;
-  nostrRefresh ??= (async () => {
-    while (nostrStale) {
-      nostrStale = false;
-      if (nostr) state.nostr = await nostr.status();
-    }
-  })().catch((err) => console.error('[satori] nostr status', err)).finally(() => { nostrRefresh = null; });
-  return nostrRefresh;
+function coalesce(name, fn) {
+  let running = null;
+  let stale = false;
+  return () => {
+    stale = true;
+    running ??= (async () => {
+      while (stale) {
+        stale = false;
+        await fn();
+      }
+    })().catch((err) => console.error(`[satori] ${name}`, err)).finally(() => { running = null; });
+    return running;
+  };
 }
 
-/** The Base card: one status read at a time, as the Nostr card. */
-let baseRefresh = null;
-let baseStale = false;
-function refreshBase() {
-  baseStale = true;
-  baseRefresh ??= (async () => {
-    while (baseStale) {
-      baseStale = false;
-      if (base) state.base = await base.status();
-    }
-  })().catch((err) => console.error('[satori] base status', err)).finally(() => { baseRefresh = null; });
-  return baseRefresh;
-}
+/** The Nostr and Base cards: their status, read again on each change. */
+const refreshNostr = coalesce('nostr status', async () => { state.nostr = await nostr.status(); });
+const refreshBase = coalesce('base status', async () => { state.base = await base.status(); });
 
 /** The vault's Base address: from vault.yaml's public key while locked, else from the unlocked vault. */
 const vaultEvm = () => (vaultPublic.pubkey ? evmAddress(vaultPublic.pubkey) : vault?.evmAddress ?? null);
