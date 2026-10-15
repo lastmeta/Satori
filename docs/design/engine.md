@@ -185,6 +185,12 @@ From Satori Lite:
 - `npm run e2e`: the app in Chrome makes `naive` until the stream has 8
   buckets, then `bar1` with the same t1, t2, φ and weight as node, and sends
   them as Lite's payload.
+- Live, on the dev server against central2, in a fresh profile with throwaway
+  keys: Poll now stored 83 streams and central accepted 83 of 83 predictions.
+  Every stream was `naive`, with t1 = t2 = its latest value: a new neuron has
+  one observation per stream, and `bar1` starts after about 4 days of polls.
+
+![Home after Poll now: the Model column](../screenshots/engine.png)
 
 ## Measured
 

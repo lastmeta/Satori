@@ -19,7 +19,7 @@ it sends the last value (`naive`). Predictions central does not take are kept an
 poll. **Poll now** runs a cycle at once. No server of our own: the browser
 talks to central directly.
 
-![Home](docs/screenshots/central.png)
+![Home](docs/screenshots/engine.png)
 
 ## Run
 
