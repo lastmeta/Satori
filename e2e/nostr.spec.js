@@ -14,12 +14,15 @@ import { verifyEvent } from '../src/nostr/event.js';
 import { relayUuid } from '../src/nostr/satori.js';
 import { readNostrYaml } from '../src/keys/docker.js';
 import { openApp, reloadApp } from './load.js';
+import { stubCentral as stubAt } from './stub.js';
 
-const CENTRAL = 'https://central2.satorinet.io';
 const CENTRAL_RELAY = 'ws://localhost:7782';
 const USER_RELAY = 'ws://localhost:7781';
 const PASS = 'correct horse battery';
 const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
+
+/** The stub central (e2e/stub.js), listing 7782 as its relay. */
+const stubCentral = (context) => stubAt(context, { relays: [CENTRAL_RELAY] });
 
 /** A node-side reader of a test relay. */
 async function reader(url) {
@@ -27,37 +30,6 @@ async function reader(url) {
   r.connect();
   await expect.poll(() => r.state).toBe('open');
   return r;
-}
-
-async function stubCentral(context) {
-  const stub = { registered: [], prod: [], blocked: [] };
-  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'wallet-pubkey, vault-pubkey, nostr-pubkey, neuron-version' };
-  await context.route('**/rpc', (route) => route.abort()); // no chain here (e2e/base.spec.js has a fake one)
-  await context.route('https://network.satorinet.io/**', (route) => {
-    stub.prod.push(route.request().url());
-    return route.abort();
-  });
-  await context.route(`${CENTRAL}/**`, (route) => {
-    const req = route.request();
-    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
-    const reply = (json) => route.fulfill({ status: 200, json, headers: cors });
-    switch (`${req.method()} ${new URL(req.url()).pathname}`) {
-      case 'POST /api/v1/peer/register':
-        stub.registered.push(req.headers());
-        return reply({ success: true, peer_id: 9, wallet_address: 'E', vault_address: null, message: 'ok' });
-      case 'GET /api/v1/peer/relays': return reply([{ relay_url: CENTRAL_RELAY, nostr_pubkey: 'x', evr_address: 'E' }]);
-      case 'GET /api/v1/peer/relay-config': return reply({ max_streams: 60 });
-      case 'GET /api/v1/observations/batch': return reply([]);
-      default: return route.fulfill({ status: 404, json: { detail: 'Not Found' }, headers: cors });
-    }
-  });
-  // Production's relay and the owner's dev relay: never reached from a test.
-  await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
-    stub.blocked.push(ws.url());
-    ws.close();
-  });
-  return stub;
 }
 
 const nostr = (page) => page.evaluate(() => window.satori.nostr());

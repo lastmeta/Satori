@@ -6,37 +6,15 @@
 import { expect, test } from '@playwright/test';
 import { fakeSatori, E18 } from '../src/chain/fake-satori.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
+import { stubCentral } from './stub.js';
 
-const CENTRAL = 'https://central2.satorinet.io';
 const PASS = 'correct horse battery';
 const ROUND = 20741;
 const DAY = 86400;
 
 async function setup(context) {
   const chain = fakeSatori({ round: ROUND, hour: 9 });
-  const central = { proofs: {}, root: null, merkleCalls: [] };
-  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
-  await context.routeWebSocket((u) => u.port !== '5180', (ws) => ws.close());
-  await context.route('https://network.satorinet.io/**', (route) => route.abort());
-  await context.route(`${CENTRAL}/**`, (route) => {
-    const req = route.request();
-    const path = new URL(req.url()).pathname;
-    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
-    const reply = (status, json) => route.fulfill({ status, json, headers: cors });
-    if (path.startsWith('/api/v1/merkle/')) central.merkleCalls.push(path);
-    if (path === '/api/v1/peer/register') return reply(200, { success: true, peer_id: 1 });
-    if (path.startsWith('/api/v1/merkle/proof/')) {
-      if (!central.root) return reply(404, { detail: 'no reward drop has been published yet' });
-      const p = central.proofs[path.split('/').pop().toLowerCase()];
-      return p ? reply(200, p) : reply(404, { detail: 'not in the current drop' });
-    }
-    return reply(404, { detail: 'Not Found' }); // /base/config as prod: the bundled addresses
-  });
-  await context.route('**/rpc', async (route) => {
-    const body = JSON.parse(route.request().postData());
-    return route.fulfill({ json: await chain.rpc.http(body) });
-  });
-  return { ...chain, central };
+  return { ...chain, central: await stubCentral(context, { rpc: chain.rpc }) };
 }
 
 const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
