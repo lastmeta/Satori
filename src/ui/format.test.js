@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
-  shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine,
+  shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -139,4 +139,17 @@ test('Base: gas, the last batch, the check, a claim', () => {
 
 test('modelTitle: bar1d, the AR(1) on changes', () => {
   expect(modelTitle({ model: 'bar1d', phi: 0.51234, weight: 0.75 })).toBe('Bayesian AR(1) on 12 h changes (a series with values ≤ 0) · φ 0.512 · weight 0.75');
+});
+
+test('rpcText, rpcTitle, stepText: plain words on the card, the detail in the hover', () => {
+  const fork = { rpc: ['/rpc'], rpcSetting: '', localFork: true };
+  expect(rpcText(fork)).toBe('Local test chain (a fork of Base Sepolia)');
+  expect(rpcTitle(fork)).toBe('/rpc → 127.0.0.1:8545 (node scripts/fork.mjs start)');
+  const build = { rpc: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com'], rpcSetting: '', localFork: false };
+  expect(rpcText(build)).toBe('sepolia.base.org, then base-sepolia-rpc.publicnode.com (the default)');
+  expect(rpcText({ rpc: ['https://mine.example/rpc'], rpcSetting: 'https://mine.example/rpc', localFork: false })).toBe('mine.example');
+  expect(rpcText({ rpc: [], rpcSetting: '', localFork: false })).toBe('–');
+  expect(stepText('setPredictorFee(0)')).toBe('Identity: fee to 0');
+  expect(stepText('delegatePredictionPower(0x0)')).toBe('Vault: stops delegating');
+  expect(stepText('somethingNew()')).toBe('somethingNew()');
 });

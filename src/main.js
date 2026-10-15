@@ -20,7 +20,7 @@ import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { isHttps } from './util.js';
-import { shortHash, claimLine } from './ui/format.js';
+import { shortHash, claimLine, stepText } from './ui/format.js';
 
 // The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
 const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet.io' : 'https://network.satorinet.io';
@@ -266,6 +266,7 @@ const baseUi = (what, fn) => shownAt('baseError', async () => {
   Object.assign(state, { baseResult: text, baseTxs: txs });
 })();
 
+const stepTxs = (steps) => steps.map((x) => ({ label: stepText(x.step), title: `${x.step} by the ${x.by}`, hash: x.hash }));
 const claimTxs = (r) => [['Rewards', r.rewards], ['Merkle', r.merkle], ['Airdrop', r.airdrop]]
   .filter(([, x]) => x?.hash).map(([label, x]) => ({ label, hash: x.hash }));
 
@@ -377,13 +378,12 @@ const actions = {
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
   baseDelegate: () => baseUi('delegate', async () => {
     const r = await base.delegate();
-    const txs = r.steps.map((x) => ({ label: `${x.step} (${x.by})`, hash: x.hash }));
-    return { text: r.steps.length ? `Delegated: ${r.steps.map((x) => `${x.step} by the ${x.by}`).join(', ')}.`
-      : 'Already delegated to the identity.', txs };
+    return { text: r.steps.length ? 'Delegated prediction power to the identity.' : 'Already delegated to the identity.',
+      txs: stepTxs(r.steps) };
   }),
   baseUndelegate: () => baseUi('undelegate', async () => {
     const r = await base.undelegate();
-    return { text: r.steps.length ? 'Stopped delegating.' : 'Not delegated.', txs: r.steps.map((x) => ({ label: x.step, hash: x.hash })) };
+    return { text: r.steps.length ? 'Stopped delegating.' : 'Not delegated.', txs: stepTxs(r.steps) };
   }),
   baseClaim: () => baseUi('claim', async () => {
     const r = await base.claim();

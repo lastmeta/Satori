@@ -99,6 +99,26 @@ export function catalogMatch(s, q) {
 
 export { fmtUtc, lockText } from '../chain/index.js'; // the transfer lock's text lives with its rule
 
+/** The Base RPC in plain words: the local test chain, or the hosts in failover order. */
+export function rpcText(b) {
+  if (!b.rpc.length) return '–';
+  if (b.localFork) return 'Local test chain (a fork of Base Sepolia)';
+  const hosts = b.rpc.map((u) => { try { return new URL(u).host; } catch { return u; } });
+  return `${hosts.join(', then ')}${b.rpcSetting ? '' : ' (the default)'}`;
+}
+
+/** …and in full, for its hover title. */
+export const rpcTitle = (b) => `${b.rpc.join(', ')}${b.localFork ? ' → 127.0.0.1:8545 (node scripts/fork.mjs start)' : ''}`;
+
+const STEPS = {
+  'setPredictorFee(0)': 'Identity: fee to 0',
+  'setAllowedDelegator(vault)': 'Identity: accepts this vault',
+  'delegatePredictionPower(identity)': 'Vault: delegates to the identity',
+  'delegatePredictionPower(0x0)': 'Vault: stops delegating',
+};
+/** A delegation step (base.delegate() / undelegate()) in plain words. */
+export const stepText = (step) => STEPS[step] ?? step;
+
 /** 0x1234…abcd */
 export const shortHash = (h) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : '');
 

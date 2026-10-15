@@ -5,7 +5,7 @@ import { html, reactive } from '@arrow-js/core';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
-  amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash,
+  amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash, rpcText, rpcTitle,
 } from './format.js';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 
@@ -253,15 +253,14 @@ function nostrCard(a) {
 
 const BUSY = { delegate: 'Delegating…', undelegate: 'Stopping…', claim: 'Claiming…', send: 'Sending…' };
 
-/** A tx hash, linked to the explorer unless the RPC is a local fork. One root node (see streamRow). */
-const txLink = (hash, label = '') => {
+/** A tx hash, linked to the explorer unless the RPC is a local fork; `title` (the call) in its hover. One root node (see streamRow). */
+const txLink = (hash, label = '', title = '') => {
   const ex = state.base.explorer;
   const text = `${label ? `${label} ` : ''}${shortHash(hash)}`;
-  return ex ? html`<a href="${`${ex}/tx/${hash}`}" target="_blank" rel="noopener" title="${hash}">${text}</a>`
-    : html`<code title="${hash}">${text}</code>`;
+  const hover = `${title ? `${title} · ` : ''}${hash}`;
+  return ex ? html`<a href="${`${ex}/tx/${hash}`}" target="_blank" rel="noopener" title="${hover}">${text}</a>`
+    : html`<code title="${hover}">${text}</code>`;
 };
-const rpcText = (b) => (b.localFork ? `${b.rpc.join(', ')}: the local fork of Base Sepolia (127.0.0.1:8545, scripts/fork.mjs)`
-  : `${b.rpc.join(', ')}${b.rpcSetting ? '' : ' (the default)'}`);
 
 function baseCard(a) {
   const b = () => state.base;
@@ -275,10 +274,10 @@ function baseCard(a) {
       <h2>Base</h2>
       <button class="small-btn" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
-    <div class="muted small">${() => (b().config ? `Base Sepolia · ${b().config} addresses · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+    <div class="muted small" title="${() => (b().config === 'central' ? 'Contract addresses from central' : 'Built-in contract addresses (central serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => `The chain did not answer: ${b().error}`}</p>
     <dl class="facts">
-      ${fact('RPC', 'base-rpc', () => (b().rpc.length ? rpcText(b()) : '–'))}
+      ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
       ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
       ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
       ${fact('Delegation', 'base-delegation', () => (notDelegated()
@@ -305,7 +304,7 @@ function baseCard(a) {
       </form>
     </div>
     <p class="small" role="status" data-test="base-result" hidden="${() => !state.baseResult}">${() => state.baseResult}</p>
-    <ul class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => html`<li>${txLink(t.hash, t.label)}</li>`.key(t.hash))}</ul>
+    <ul class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => html`<li>${txLink(t.hash, t.label, t.title)}</li>`.key(t.hash))}</ul>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>
   </section>`;
 }

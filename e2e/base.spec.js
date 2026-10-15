@@ -49,7 +49,7 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await page.getByLabel('Vault passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
   await page.getByRole('button', { name: 'Delegate prediction power' }).click();
-  await expect(fact(page, 'result')).toContainText('Delegated: setPredictorFee(0) by the identity', { timeout: 30_000 });
+  await expect(fact(page, 'result')).toHaveText('Delegated prediction power to the identity.', { timeout: 30_000 });
   expect(rpc.sent.map((t) => [t.from, t.functionName])).toEqual([
     [I, 'setPredictorFee'], [I, 'setAllowedDelegator'], [V, 'delegatePredictionPower'],
   ]);
@@ -58,7 +58,9 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(page.getByRole('button', { name: 'Stop delegating' })).toBeVisible();
 
   await expect(page.locator('[data-test=base-txs] li')).toHaveCount(3);
-  await expect(page.locator('[data-test=base-txs] code').first()).toContainText('setPredictorFee(0) (identity) 0x'); // a local fork: no explorer link
+  await expect(page.locator('[data-test=base-txs] code')).toHaveText([/^Identity: fee to 0 0x/, /^Identity: accepts this vault 0x/,
+    /^Vault: delegates to the identity 0x/]); // plain words; a local fork: no explorer link
+  await expect(page.locator('[data-test=base-txs] code').first()).toHaveAttribute('title', /^setPredictorFee\(0\) by the identity · 0x/);
 
   // The identity's batch, on its own, 10 s after delegating: the default game, DOWN (naive on two values).
   // Anyone's new stream has a game but no voting weight: the engine pays it nothing, and it is left out.
@@ -135,7 +137,7 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   await openApp(page);
   await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
   await expect(page.locator('[data-test=identity]')).toHaveText(/^E/, { timeout: LOAD_TIMEOUT });
-  await expect(fact(page, 'rpc')).toContainText('/rpc: the local fork of Base Sepolia');
+  await expect(fact(page, 'rpc')).toHaveText('Local test chain (a fork of Base Sepolia)');
   await expect(page.evaluate(() => window.satori.setBaseRpc('http://127.0.0.1:8545'))).rejects.toThrow(/https:\/\/ URL or a path/);
   await expect(page.evaluate(() => window.satori.setBaseMaxFee('-1'))).rejects.toThrow(/positive number of gwei/);
   await page.locator('summary', { hasText: 'Settings' }).click();
