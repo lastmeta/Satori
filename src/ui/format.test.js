@@ -3,7 +3,7 @@ import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
-  storageText,
+  storageText, playNote,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -163,4 +163,13 @@ test('storageText: kept or not (docs/design/pwa.md), and the usage of the quota 
   expect(storageText({ persisted: false, usage: 512_000, quota: 1_200_000_000 }))
     .toBe('Storage: the browser may clear it; install Satori or back up your words · 0.5 MB of 1.2 GB used');
   expect(storageText({ persisted: true, usage: null, quota: null })).toBe('Storage: kept');
+});
+
+test('playNote: the neuron plays on-chain automatically, Satori Daily by hand, never both with one vault (docs/design/base.md)', () => {
+  const text = (d) => playNote(d)?.join('Satori Daily');
+  expect(text('identity')).toBe("Your vault's prediction power is with this neuron, so the vault can't also play Satori Daily by hand. "
+    + 'Stop delegating to play manually.');
+  expect(text('none')).toBe('Delegate to let the neuron predict every round, or play Satori Daily by hand.');
+  expect(playNote('other')).toBe(null); // delegated elsewhere: the Delegation line says to whom
+  expect(playNote(null)).toBe(null); // before the first chain read
 });

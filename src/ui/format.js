@@ -178,3 +178,15 @@ export function storageText(s) {
   const kept = s.persisted ? 'Storage: kept' : 'Storage: the browser may clear it; install Satori or back up your words';
   return s.usage == null ? kept : `${kept} · ${bytes(s.usage)} of ${bytes(s.quota)} used`;
 }
+
+/**
+ * The Base card's note on who plays (docs/design/base.md): the neuron automatically, or the vault by hand in
+ * Satori Daily, never both (the engine refuses a delegated vault's own predictions). [before, after] the
+ * "Satori Daily" link, or null (delegated elsewhere, or not read yet).
+ */
+export function playNote(delegated) {
+  if (delegated === 'identity') {
+    return ["Your vault's prediction power is with this neuron, so the vault can't also play ", ' by hand. Stop delegating to play manually.'];
+  }
+  return delegated === 'none' ? ['Delegate to let the neuron predict every round, or play ', ' by hand.'] : null;
+}

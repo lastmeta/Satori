@@ -143,6 +143,10 @@ Every method is below; `await satori.status()` shows everything at once.
   the token refuses transfers while `transferLockedUntil >= round`, so
   "until round N" means free from round N + 1 at 00:00 UTC. ("Staking" in the
   Docker neuron.)
+- Automatic only: on-chain the neuron plays only through the identity's
+  daily batch; manual play is Satori Daily (https://app.satorinet.io, the
+  dapp). Per vault per round it is one or the other: the engine refuses a
+  delegated vault's own predictions (`Delegated`).
 - Prediction power: the vault's SATORI, delegated to the identity. A vault
   with no SATORI, or one that has not delegated, gives the identity none, and
   the batch skips (`no prediction power delegated to the identity`).
@@ -368,7 +372,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `sub-seq`, `sub-relays`, `unsubscribe`), `network`, `catalog-summary` and
   `catalog-row` (with `catalog-action`: Subscribe or Unsubscribe), on the Base
   card `base-refresh`, `base-rpc`, `base-error`, `base-identity`, `base-vault`,
-  `base-delegation`, `base-lock`, `base-claimable`, `base-last-batch`,
+  `base-delegation`, `base-play` (who plays: this neuron or Satori Daily),
+  `base-lock`, `base-claimable`, `base-last-batch`,
   `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
   `base-result`, `base-txs` (the last action's transactions),
   `base-action-error`, under Backup `wif`, `download-wallet`,

@@ -5,9 +5,10 @@ import { html, reactive, watch } from '@arrow-js/core';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, rawText, catalogMatch, predText,
-  amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash, rpcText, rpcTitle, storageText,
+  amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash, rpcText, rpcTitle, storageText, playNote,
 } from './format.js';
 import { MIN_PASSPHRASE } from '../keys/index.js';
+import { SATORI_DAILY_URL } from '../chain/config.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | setup | home
@@ -289,6 +290,7 @@ function baseCard(a) {
   const notDelegated = () => b().vault.delegated === 'none';
   const lowEth = () => b().identity.lowEth && delegated(); // gas matters once the identity has a batch to send
   const busy = () => !!state.baseBusy;
+  const play = () => playNote(b().vault.delegated);
   return html`
   <section class="card base">
     <header class="card-head">
@@ -309,6 +311,7 @@ function baseCard(a) {
       ${fact('Batch check', 'base-check', () => (b().checking ? 'Checking…'
     : notDelegated() ? `Waits for delegation · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
     </dl>
+    <p class="muted small" data-test="base-play" hidden="${() => !play()}">${() => play()?.[0] ?? ''}<a href="${SATORI_DAILY_URL}" target="_blank" rel="noopener">Satori Daily</a>${() => play()?.[1] ?? ''}</p>
     <p class="muted small" hidden="${() => state.unlocked}">Unlock the vault to delegate, claim or send. The identity sends the daily batch on its own.</p>
     <div hidden="${() => !state.unlocked}">
       <div class="actions">

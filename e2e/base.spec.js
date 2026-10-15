@@ -34,6 +34,9 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   expect(base).toMatchObject({ rpc: ['/rpc'], config: 'bundled', round: ROUND, vault: { delegated: 'none', satori: '0' } });
   await expect(fact(page, 'identity')).toHaveText('0 ETH · about 0 daily batches'); // no warning before delegating
   await expect(fact(page, 'delegation')).toHaveText('Not delegated: Unlock, then Delegate prediction power');
+  const CHOICE = 'Delegate to let the neuron predict every round, or play Satori Daily by hand.';
+  await expect(fact(page, 'play')).toHaveText(CHOICE);
+  await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://app.satorinet.io');
   await expect(fact(page, 'check')).toContainText('Waits for delegation');
   await expect(page.getByText('Unlock the vault to delegate, claim or send.')).toBeVisible();
 
@@ -58,6 +61,8 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
     [I, 'setPredictorFee'], [I, 'setAllowedDelegator'], [V, 'delegatePredictionPower'],
   ]);
   await expect(fact(page, 'delegation')).toHaveText('Delegated to the identity · 100 SATORI of prediction power');
+  await expect(fact(page, 'play')).toHaveText("Your vault's prediction power is with this neuron, so the vault can't also play Satori Daily by hand. "
+    + 'Stop delegating to play manually.');
   await expect(fact(page, 'lock')).toHaveText('SATORI transfer-locked while delegated');
   await expect(page.getByRole('button', { name: 'Stop delegating' })).toBeVisible();
 
@@ -110,6 +115,7 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   // Stop delegating: transfer-locked through the next round, then free.
   await page.getByRole('button', { name: 'Stop delegating' }).click();
   await expect(fact(page, 'result')).toContainText('Stopped delegating', { timeout: 30_000 });
+  await expect(fact(page, 'play')).toHaveText(CHOICE);
   await expect(fact(page, 'lock')).toContainText(`SATORI transfer-locked until round ${ROUND + 2} (free from Oct 18, 00:00 UTC)`);
   const to = '0x' + '44'.repeat(20);
   await page.getByLabel('Amount').fill('1');

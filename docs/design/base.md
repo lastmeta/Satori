@@ -11,6 +11,14 @@ the dapp (`../contract/satori-ui`) goes further than Lite (it claims on-chain
 rewards, restricts who may delegate to the key, mirrors the engine's predict
 gate), the browser follows the dapp.
 
+**Automatic only (the owner's split, 2026-10-15).** On-chain the neuron plays
+only automatically, through the identity's daily batch; manual play is
+**Satori Daily**, the dapp at https://app.satorinet.io (`SATORI_DAILY_URL`,
+`src/chain/config.js`). The two are mutually exclusive per vault per round:
+the engine refuses a delegated vault's own predictions
+(`if (delegate != address(0)) revert Delegated();`,
+`C/next/SatoriEngine.sol:711`). The Base card says which one is in force.
+
 ```
 page load ─▶ config (bundled D6 addresses, central's /api/v1/base/config over them, 1 h)
           └─▶ status: one multicall (ETH ×2, SATORI, delegation ×2, fee, allowedDelegator, lock, round, claimable ×2)
@@ -322,7 +330,12 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
   delegated: "Unlock, then Delegate prediction power"); the transfer lock;
   what is claimable; the last batch (round, time, each game's direction, what
   was left out, the tx); the last check and the next ("Waits for delegation"
-  until then). After Unlock: Delegate prediction power or Stop delegating,
+  until then); under them, who plays (`base-play`): while delegated "Your
+  vault's prediction power is with this neuron, so the vault can't also play
+  Satori Daily by hand. Stop delegating to play manually.", while not
+  "Delegate to let the neuron predict every round, or play Satori Daily by
+  hand.", with Satori Daily linked. After Unlock: Delegate prediction
+  power or Stop delegating,
   Claim, and Send from the vault (SATORI or ETH); each action lists its
   transactions in plain words ("Identity: fee to 0"; the call on hover). Tx
   hashes link to the explorer, except on a local fork. **Settings**: Base
