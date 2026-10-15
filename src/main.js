@@ -450,7 +450,9 @@ window.satori = {
 };
 
 async function boot() {
-  render(document.getElementById('app'), actions);
+  const root = document.getElementById('app');
+  root.replaceChildren(); // index.html's "Opening…", painted before any module loads
+  render(root, actions);
   if (!(await claimTab())) return void (state.screen = 'elsewhere');
   try {
     db = await openOpfsDb();
