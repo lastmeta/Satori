@@ -76,11 +76,11 @@ export function relayText(r) {
   return `Disconnected${r.error ? ` (${r.error})` : ''}; retrying${ro}`;
 }
 
-/** A relay observation's value as the provider sent it. */
-export function obsText(o) {
-  if (!o) return '–';
-  return typeof o.raw === 'string' ? o.raw : JSON.stringify(o.raw);
-}
+/** A relay observation's value as sent (a dict as JSON): the hover title of obsText. */
+export const rawText = (o) => (!o ? '' : typeof o.raw === 'string' ? o.raw : JSON.stringify(o.raw));
+
+/** A relay observation's value: as a number when it has one, the same as our `_pred` (predText); else as sent. */
+export const obsText = (o) => (!o ? '–' : o.value != null ? fmtNum(o.value) : rawText(o));
 
 /** A published `_pred` value: as a number when it is one (Python's float text), else as sent. */
 export function predText(v) {

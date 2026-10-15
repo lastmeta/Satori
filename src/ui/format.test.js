@@ -82,8 +82,10 @@ test('relayText: the state in a word, and read only', () => {
     .toBe('Blocked: ws:// cannot be opened from an https page');
 });
 
-test('obsText: a relay value as sent (a dict as JSON)', () => {
-  expect(obsText({ raw: '82234', value: 82234 })).toBe('82234');
+test('obsText: a relay value as a number when it has one, as predText; else as sent (a dict as JSON)', () => {
+  expect(obsText({ raw: '82234', value: 82234 })).toBe('82,234.00');
+  expect(obsText({ raw: '97.16251735526325', value: 97.16251735526325 })).toBe(predText('97.16251735526325'));
+  expect(obsText({ raw: { value: 5, unit: 'C' }, value: 5 })).toBe('5');
   expect(obsText({ raw: { raw: '1', unit: 'tick' }, value: null })).toBe('{"raw":"1","unit":"tick"}');
   expect(obsText(null)).toBe('–');
 });
