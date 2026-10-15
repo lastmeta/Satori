@@ -61,6 +61,7 @@ const form = (e) => {
   e.preventDefault();
   return Object.fromEntries(new FormData(e.target));
 };
+const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
 const errorLine = () => html`<p class="error" role="alert" hidden="${() => !state.error}">${() => state.error}</p>`;
 const wordList = (words) => html`<ol class="words">${() => words().map((w) => html`<li>${w}</li>`)}</ol>`;
 
@@ -174,7 +175,6 @@ function keys(a) {
 
 function centralCard(a) {
   const c = () => state.central;
-  const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
   return html`
   <section class="card central">
     <header class="card-head">
@@ -197,7 +197,7 @@ function streamRow(r) {
   // One root node, no whitespace around it: ArrowJS 1.0.6 breaks a keyed list
   // of multi-node items once it goes empty and back.
   const sent = r.status === 'sent';
-  return html`<div class="srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="model" data-label="Model" data-test="model" title="${modelTitle(r)}">${r.model ?? '–'}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
+  return html`<div class="row srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="model" data-label="Model" data-test="model" title="${modelTitle(r)}">${r.model ?? '–'}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
 }
 
 function streams() {
@@ -209,7 +209,7 @@ function streams() {
     </header>
     <p class="muted" hidden="${() => state.streams.length > 0}">None yet: they arrive with the first poll.</p>
     <div class="srows" hidden="${() => !state.streams.length}">
-      <div class="srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
+      <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
       <div>${() => state.streams.map((r) => streamRow(r).key(r.uuid))}</div>
     </div>
   </section>`;
@@ -222,7 +222,7 @@ function relayRow(r) {
 function subRow(s, a) {
   // One root node, no whitespace around it (see streamRow).
   const p = s.prediction;
-  return html`<div class="nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><button class="link" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></div>`;
+  return html`<div class="row nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><button class="link" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></div>`;
 }
 
 function nostrCard(a) {
@@ -238,7 +238,7 @@ function nostrCard(a) {
     <ul class="relays">${() => n().relays.map((r) => relayRow(r).key(`${r.url} ${r.state} ${r.write}`))}</ul>
     <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Network streams. Each new observation is forecast and published as <code>&lt;stream&gt;_pred</code>.</p>
     <div class="srows" hidden="${() => !n().subscriptions.length}">
-      <div class="nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
+      <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
       <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq}`))}</div>
     </div>
   </section>`;
@@ -258,7 +258,6 @@ const rpcText = (b) => (b.localFork ? `${b.rpc.join(', ')}: the local fork of Ba
 
 function baseCard(a) {
   const b = () => state.base;
-  const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
   const delegated = () => b().vault.delegated === 'identity';
   const busy = () => !!state.baseBusy;
   return html`
