@@ -1,7 +1,7 @@
 // The screens: Setup, Home, "open in another tab". ArrowJS.
 // Every screen is built once and shown or hidden, so typing is never lost to a
 // re-render. Secrets typed into forms are read on submit, not kept in state.
-import { html, reactive } from '@arrow-js/core';
+import { html, reactive, watch } from '@arrow-js/core';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, rawText, catalogMatch, predText,
@@ -171,7 +171,7 @@ function keys(a) {
       <p class="muted small">Holds your funds. Encrypted with your passphrase.</p>
       <form class="unlock" hidden="${() => state.unlocked}" @submit="${(e) => a.unlock(form(e), e.target)}">
         <input name="pass" type="password" aria-label="Vault passphrase" placeholder="Vault passphrase" autocomplete="current-password" required>
-        <button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>
+        <button class="primary" type="submit" data-test="unlock" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>
       </form>
       <p class="error small" role="alert" hidden="${() => !state.vaultError}">${() => state.vaultError}</p>
     </div>
@@ -189,7 +189,7 @@ function centralCard(a) {
   <section class="card central">
     <header class="card-head">
       <h2>Central</h2>
-      <button class="small-btn" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>
+      <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>
     </header>
     <code data-test="central-url">${() => c().url}</code>
     <dl class="facts">
@@ -231,7 +231,7 @@ function relayRow(r) {
 function subRow(s, a) {
   // One root node, no whitespace around it (see streamRow).
   const p = s.prediction;
-  return html`<div class="row nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs" title="${s.observation ? `sent as ${rawText(s.observation)}` : ''}">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><button class="link" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></div>`;
+  return html`<div class="row nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs" title="${s.observation ? `sent as ${rawText(s.observation)}` : ''}">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><button class="link" data-test="unsubscribe" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></div>`;
 }
 
 function nostrCard(a) {
@@ -275,7 +275,7 @@ function baseCard(a) {
       <button class="small-btn" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
     <div class="muted small" title="${() => (b().config === 'central' ? 'Contract addresses from central' : 'Built-in contract addresses (central serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
-    <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => `The chain did not answer: ${b().error}`}</p>
+    <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>
     <dl class="facts">
       ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
       ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
@@ -396,9 +396,9 @@ function backup(a) {
       </div>
       <div class="backup-row">
         <span class="label">Docker files</span>
-        <button class="small-btn" @click="${() => a.download('wallet.yaml')}">Download wallet.yaml</button>
-        <button class="small-btn" @click="${() => a.download('vault.yaml')}">Download vault.yaml</button>
-        <button class="small-btn" @click="${() => a.download('nostr.yaml')}">Download nostr.yaml</button>
+        <button class="small-btn" data-test="download-wallet" @click="${() => a.download('wallet.yaml')}">Download wallet.yaml</button>
+        <button class="small-btn" data-test="download-vault" @click="${() => a.download('vault.yaml')}">Download vault.yaml</button>
+        <button class="small-btn" data-test="download-nostr" @click="${() => a.download('nostr.yaml')}">Download nostr.yaml</button>
       </div>
       <div class="backup" hidden="${() => !state.backupWords}">
         <h3>${() => (state.backup === 'vault' ? 'Vault' : 'Identity')} words</h3>
@@ -425,10 +425,11 @@ function home(a) {
 }
 
 export function render(root, a) {
+  watch(() => { document.body.dataset.screen = state.screen; }); // agents: a synchronous readiness signal
   html`
   <header class="top">
     <h1>Satori <span class="muted">neuron</span></h1>
-    <button class="small-btn" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
+    <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
   </header>
   <main>
     <p class="muted center" hidden="${show('loading')}">Opening…</p>

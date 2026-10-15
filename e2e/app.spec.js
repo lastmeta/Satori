@@ -69,6 +69,7 @@ test('create, register, Poll now (observations in, predictions out), reload keep
   const idAddr = page.locator('[data-test=identity]');
   const vaultAddr = page.locator('[data-test=vault]');
   await expect(idAddr).toHaveText(ADDRESS, { timeout: LOAD_TIMEOUT }); // the vault's encryption, then the neuron starts
+  await expect.poll(() => page.evaluate(() => document.body.dataset.screen)).toBe('home'); // was 'setup': kept current
   await expect(vaultAddr).toHaveText(vaultKeys.address);
   const identity = await idAddr.textContent();
   expect(identity).not.toBe(vaultKeys.address);
