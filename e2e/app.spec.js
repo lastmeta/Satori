@@ -32,7 +32,7 @@ const BATCH = [entry('u-btc', 'bitcoin', T0, '67000.5'), entry('u-eth', 'eth', T
  * statuses for the next predictions batches. Prod central is aborted and recorded.
  */
 async function stubCentral(context, url = CENTRAL) {
-  const stub = { batch: BATCH, vaults: {}, otherVault: null, fail: [], registered: [], logins: [], batches: [], prod: [] };
+  const stub = { batch: BATCH, vaults: {}, otherVault: null, fail: [], registered: [], logins: [], batches: [], prod: [], delayMs: 0 };
   const cors = {
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET, POST, OPTIONS',
@@ -46,7 +46,7 @@ async function stubCentral(context, url = CENTRAL) {
     stub.prod.push(route.request().url());
     return route.abort();
   });
-  await context.route(`${url}/**`, (route) => {
+  await context.route(`${url}/**`, async (route) => {
     const req = route.request();
     const h = req.headers();
     const path = new URL(req.url()).pathname + new URL(req.url()).search;
@@ -56,8 +56,11 @@ async function stubCentral(context, url = CENTRAL) {
         stub.registered.push(h);
         return reply(route, 200, { success: true, peer_id: 7, wallet_address: 'Eid', message: 'Peer registered successfully',
           vault_address: stub.otherVault ?? stub.vaults[h['vault-pubkey']] ?? null });
-      case 'GET /api/v1/observations/batch?limit=100':
-        return reply(route, 200, stub.batch);
+      case 'GET /api/v1/observations/batch?limit=100': {
+        const batch = stub.batch;
+        if (stub.delayMs) await new Promise((r) => setTimeout(r, stub.delayMs));
+        return reply(route, 200, batch);
+      }
       case 'GET /api/v1/auth/challenge':
         return reply(route, 200, { challenge: `c-${stub.logins.length}` });
       case 'POST /api/v1/auth/login': {
@@ -313,6 +316,18 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(await page.evaluate(() => window.satori.streams())).toMatchObject([{ uuid: 'u-btc-2', meta: { unit: 'USD' } }]);
   expect((await page.evaluate(() => window.satori.setCentral(''))).url).toBe(CENTRAL);
   expect(await page.evaluate(() => window.satori.streams())).toEqual([]);
+
+  // A poll still running when the URL changes: its rows land before the reset, never after it.
+  stub.batch = [entry('u-late', 'late', T0 + 180, '1.5')];
+  stub.delayMs = 1500;
+  await page.evaluate(() => void window.satori.poll());
+  await expect.poll(async () => (await status(page)).central.polling).toBe(true);
+  await page.evaluate(() => window.satori.setCentral('https://central.test'));
+  await expect.poll(async () => (await status(page)).central.polling).toBe(false);
+  stub.delayMs = 0;
+  expect(await page.evaluate(() => window.satori.streams())).toEqual([]);
+  expect((await status(page)).central).toMatchObject({ url: 'https://central.test', pending: 0, lastPoll: null });
+  await page.evaluate(() => window.satori.setCentral(''));
 
   // The keys, as in step 2.
   await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow(/Unlock the vault first/);

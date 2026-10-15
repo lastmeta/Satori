@@ -171,8 +171,8 @@ const pollNow = () => poller.poll();
 /**
  * Save the central URL ('' = the default) and register there at once. Another
  * central has other stream uuids, so its pending predictions and stream list
- * are dropped; the list refills with the next poll. Its relays and its Base
- * config follow.
+ * are dropped (after a poll still running with the old one); the list refills
+ * with the next poll. Its relays and its Base config follow.
  */
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
@@ -181,7 +181,10 @@ async function setCentral(raw) {
     try { ok = new URL(url).protocol === 'https:'; } catch { /* not a URL */ }
     if (!ok) throw new Error('The central URL must be an https:// address.');
   }
-  if ((url || DEFAULT_CENTRAL) !== central.url) await db.resetCentral();
+  if ((url || DEFAULT_CENTRAL) !== central.url) {
+    await poller.idle(); // its rows are the old central's
+    await db.resetCentral();
+  }
   await db.set('central_url', url);
   await db.checkpoint();
   const c = await connect();

@@ -278,6 +278,23 @@ describe('createPoller', () => {
     expect(h.live().map((t) => t.ms)).toEqual([POLL_EVERY_S * 1000]);
   });
 
+  test('idle: resolves once the running poll is done (at once when none runs), and starts none', async () => {
+    let release;
+    const h = harness(() => new Promise((r) => { release = r; }));
+    await h.poller.start();
+    await h.poller.idle();
+    expect(h.ran).toHaveLength(0);
+    h.poller.poll();
+    let done = false;
+    const idle = h.poller.idle().then(() => { done = true; });
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    expect(done).toBe(false);
+    release({ poll: 'done' });
+    await idle;
+    expect(h.poller.running).toBe(false);
+    expect(h.ran).toHaveLength(1);
+  });
+
   test('a run that throws still schedules the next one', async () => {
     const h = harness(() => { throw new Error('db gone'); });
     await h.poller.start();

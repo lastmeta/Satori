@@ -118,7 +118,8 @@ export function firstPollAt(stored, now, rand) {
  * The schedule: start() arms the first poll (meta.next_poll_at); each poll,
  * from the timer or poll(), runs `run` and arms the next one 11 h after it
  * ends, whatever the result. One run at a time: poll() during a run returns
- * it. onChange({ next, running }) follows both.
+ * it; idle() waits for it without starting one. onChange({ next, running })
+ * follows both.
  */
 export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeout: st = setTimeout,
   clearTimeout: ct = clearTimeout, onChange = () => {} }) {
@@ -155,6 +156,7 @@ export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeo
   return {
     start: async () => arm(firstPollAt(await db.get('next_poll_at'), now(), rand)),
     poll,
+    idle: () => Promise.resolve(running).catch(() => {}),
     get next() { return next; },
     get running() { return !!running; },
   };
