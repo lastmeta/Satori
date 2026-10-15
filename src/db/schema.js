@@ -24,4 +24,8 @@ export const MIGRATIONS = [
      stream_uuid VARCHAR NOT NULL, made_at DOUBLE NOT NULL, model VARCHAR NOT NULL,
      t1 DOUBLE NOT NULL, t2 DOUBLE NOT NULL, observed_at VARCHAR NOT NULL, hash VARCHAR NOT NULL,
      status VARCHAR NOT NULL DEFAULT 'pending', sent_at DOUBLE);`,
+  // 3 (step 4): the engine's AR coefficient and fade weight (docs/design/engine.md);
+  // null for `naive` and for older rows.
+  `ALTER TABLE predictions ADD COLUMN phi DOUBLE;
+   ALTER TABLE predictions ADD COLUMN weight DOUBLE;`,
 ];

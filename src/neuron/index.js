@@ -72,7 +72,8 @@ async function pollAndSubmit(db, central, forecast, now, at) {
     if (!f) continue;
     const made_at = now();
     const { observed_at, hash } = predictionItem({ t1: f.t1, t2: f.t2, now: made_at });
-    await db.addPrediction({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, observed_at, hash });
+    await db.addPrediction({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight,
+      observed_at, hash });
     predicted++;
   }
   const poll = { at, streams: rows.length, new: fresh.length, predicted };

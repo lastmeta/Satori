@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { memoryDb } from '../db/node.js';
 import { CentralError, predictionItem } from '../central/index.js';
-import { MODEL } from '../engine/index.js';
 import {
   cycle, register, firstPollAt, startJitter, createPoller, claimTab, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
 } from './index.js';
@@ -60,7 +59,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     ]);
     expect(items[0]).toMatchObject({ value: '100.0', t1_value: '100.0', observed_at: '1792000000.25' });
     expect(await db.pendingCount()).toBe(0);
-    expect(await db.predictions('bitcoin')).toMatchObject([{ status: 'sent', sent_at: T + 0.25, model: MODEL }]);
+    expect(await db.predictions('bitcoin')).toMatchObject([{ status: 'sent', sent_at: T + 0.25, model: 'naive', phi: null, weight: null }]);
     expect(await db.get('central_last_poll')).toEqual(r.poll);
     expect(await db.get('central_last_submit')).toEqual(r.submit);
   });
@@ -86,6 +85,15 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect(central.sent[1]).toEqual([expect.objectContaining({ stream_uuid: 'u-a', value: '2.5', t1_value: '2.0' })]);
   });
 
+  test("the engine's phi and weight are stored with the prediction; the payload stays Lite's (value = t2, t1_value = t1)", async () => {
+    const forecast = () => ({ model: 'bar1', t1: 101, t2: 102.5, phi: -0.2, weight: 0.6 });
+    central.batch = [entry('u-a', 'a', T, 100)];
+    await run({ forecast });
+    expect(await db.predictions('a')).toMatchObject([{ model: 'bar1', t1: 101, t2: 102.5, phi: -0.2, weight: 0.6 }]);
+    expect(central.sent[0]).toEqual([predictionItem({ streamUuid: 'u-a', streamName: 'a', t1: 101, t2: 102.5, now: T + 0.25 })]);
+    expect(central.sent[0][0]).toMatchObject({ value: '102.5', t1_value: '101.0' });
+  });
+
   test('no forecast (null) → no prediction; unusable rows are dropped', async () => {
     central.batch = [entry('u-a', 'a', T, 'abc'), { ...entry('u-b', 'b', T, 1), stream: null, stream_uuid: null }, entry('u-c', 'c', T, 1)];
     const r = await run({ forecast: () => null });
@@ -107,7 +115,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     clock += 10;
     const r = await run(); // the default result accepts all
     expect(central.sent.map((s) => s.length)).toEqual([1, 2, 3]);
-    expect(central.sent[2].map((i) => i.t1_value)).toEqual(['1.0', '3.0', '4.0']);
+    expect(central.sent[2].map((i) => i.t1_value)).toEqual(['1.0', '2.0', '3.0']); // naive: the last value
     expect(r.submit.successful).toBe(3);
     expect(await db.pendingCount()).toBe(0);
   });

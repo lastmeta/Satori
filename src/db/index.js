@@ -76,7 +76,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       SELECT s.uuid, s.name, s.meta,
         (SELECT count(*) FROM observations x WHERE x.stream_uuid = s.uuid) AS observations,
         o.ts AS obs_ts, o.value AS obs_value,
-        p.model, p.t1, p.t2, p.made_at, p.status, p.sent_at
+        p.model, p.t1, p.t2, p.phi, p.weight, p.made_at, p.status, p.sent_at
       FROM streams s
       LEFT JOIN (SELECT * FROM observations QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC) = 1) o
         ON o.stream_uuid = s.uuid
@@ -107,9 +107,9 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     history: serial((uuid) => rows('SELECT ts, value FROM observations WHERE stream_uuid = ? ORDER BY ts', uuid)),
 
     addPrediction: serial(async (p) => (await rows(
-      `INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, observed_at, hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-      p.stream_uuid, p.made_at, p.model, p.t1, p.t2, p.observed_at, p.hash))[0].id),
+      `INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      p.stream_uuid, p.made_at, p.model, p.t1, p.t2, p.phi ?? null, p.weight ?? null, p.observed_at, p.hash))[0].id),
     /** The kept queue: every pending prediction, oldest first, with its stream's name. */
     pending: serial(() => rows(`SELECT p.*, s.name FROM predictions p JOIN streams s ON s.uuid = p.stream_uuid
       WHERE p.status = 'pending' ORDER BY p.id`)),

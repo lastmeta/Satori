@@ -9,7 +9,7 @@ let db;
 beforeEach(async () => { db = await memoryDb(); });
 
 const obs = (o) => ({ stream_uuid: 'u-btc', name: 'bitcoin', meta: null, ts: 1000, value: 1, ...o });
-const pred = (o) => ({ stream_uuid: 'u-btc', made_at: 2000.5, model: 'ols-20', t1: 2, t2: 3,
+const pred = (o) => ({ stream_uuid: 'u-btc', made_at: 2000.5, model: 'bar1', t1: 2, t2: 3, phi: -0.25, weight: 0.75,
   observed_at: '2000.5', hash: 'abcd', ...o });
 
 test('migrations run and the version is stored', async () => {
@@ -33,6 +33,23 @@ test('a step-2 database: the URL streams go, meta (the keys) stays', async () =>
   expect(up.version).toBe(MIGRATIONS.length);
   expect(await up.get('wallet_yaml')).toBe('w');
   expect(await up.streams()).toEqual([]);
+});
+
+test('a step-3 database: predictions gain the engine\'s phi and weight (null on old rows)', async () => {
+  const conn = await memoryConn();
+  await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+  await conn.query(MIGRATIONS[0]);
+  await conn.query(MIGRATIONS[1]);
+  await conn.query(`INSERT INTO meta VALUES ('schema_version', '2')`);
+  await conn.query(`INSERT INTO streams VALUES ('u-btc', 'bitcoin', NULL)`);
+  await conn.query(`INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, observed_at, hash)
+    VALUES ('u-btc', 1, 'ols-20', 2, 3, '1.0', 'h')`);
+  const up = await openDb(conn);
+  expect(up.version).toBe(MIGRATIONS.length);
+  await up.addPrediction(pred({ made_at: 5 }));
+  await up.addPrediction(pred({ made_at: 6, model: 'naive', phi: undefined, weight: undefined }));
+  expect((await up.predictions('u-btc')).map((p) => [p.model, p.phi, p.weight]))
+    .toEqual([['naive', null, null], ['bar1', -0.25, 0.75], ['ols-20', null, null]]);
 });
 
 test('meta holds JSON values', async () => {
@@ -126,7 +143,7 @@ test('streams: one row per stream with its latest observation and prediction', a
   await db.markSent([id], 2200);
   const [btc, eth] = await db.streams();
   expect(btc).toMatchObject({ uuid: 'u-btc', name: 'bitcoin', observations: 2, obs_ts: 2000, obs_value: 2,
-    t1: 6, t2: 7, model: 'ols-20', made_at: 2100, status: 'sent', sent_at: 2200 });
+    t1: 6, t2: 7, model: 'bar1', phi: -0.25, weight: 0.75, made_at: 2100, status: 'sent', sent_at: 2200 });
   expect(eth).toMatchObject({ uuid: 'u-eth', name: 'eth', observations: 1, t1: null, t2: null, status: null });
 });
 
