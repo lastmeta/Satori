@@ -36,7 +36,7 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 
 | Step | Satori Lite | Browser (`src/central/`, `src/neuron/`) |
 |---|---|---|
-| Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>`. Skipped when `vault.yaml` has no plain `publicKey`. The result is shown, never retried in a loop. |
+| Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>`. Every stored `vault.yaml` has a plain `publicKey` (import re-writes an old one), so it is always sent. The result is shown, never retried in a loop. |
 | Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_address: null`); an identity conflict is a 409 (`c/main.py:705-838`). | Compares the returned `vault_address` with ours and shows a **vault mismatch** (central has another vault, or none). |
 | Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | Same numbers. `meta.next_poll_at` is stored, so a reload keeps the schedule (see Deviations). **Poll now** runs a cycle at once. |
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
@@ -95,8 +95,10 @@ the old one: the pending predictions, the stream list, and the last poll and
 submission. Another central has other stream uuids (central2's
 `safetrade_soq` is not prod's), and central files an unknown uuid under its
 `bitcoin` stream (`c/main.py:536-551`), so a queue from one central must not
-go to another. The list refills with the next poll; each uuid's observation
-history stays. The poll schedule stays.
+go to another. A poll still running with the old central finishes first, so
+its rows never land after the reset. The list refills with the next poll;
+each uuid's observation history stays. The poll schedule stays. Nostr's
+relay list and Base's config are read from the new central at once.
 
 ## Errors
 
