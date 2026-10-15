@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // An in-memory Nostr relay (NIP-01) for development and tests; nothing is kept
-// on disk. Usage: node scripts/test-relay.mjs [port…]   (default 7778)
+// on disk. Usage: node scripts/test-relay.mjs [port…]   (default 7778; listens on 127.0.0.1,
+// or HOST=0.0.0.0 to open it to the network)
 //   EVENT: id and signature checked (OK true/false), created_at at most 900 s
 //          ahead (as strfry); kinds 0, 3 and 10000-19999 replaced per (pubkey,
 //          kind), 30000-39999 per (pubkey, kind, d); 20000-29999 not stored.
@@ -19,6 +20,22 @@ const replaceKey = (e) => {
   return null;
 };
 
+const strings = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+const ints = (v) => Array.isArray(v) && v.every(Number.isSafeInteger);
+
+/** A NIP-01 filter of the right types, or null. */
+export function validFilter(f) {
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return null;
+  for (const [k, v] of Object.entries(f)) {
+    const ok = k === 'ids' || k === 'authors' || (k[0] === '#' && k.length === 2) ? strings(v)
+      : k === 'kinds' ? ints(v)
+        : k === 'since' || k === 'until' || k === 'limit' ? Number.isSafeInteger(v) && v >= 0
+          : true; // unknown keys are ignored, as relays do
+    if (!ok) return null;
+  }
+  return f;
+}
+
 export function matches(f, e) {
   if (f.ids && !f.ids.includes(e.id)) return false;
   if (f.authors && !f.authors.includes(e.pubkey)) return false;
@@ -33,7 +50,7 @@ export function matches(f, e) {
 }
 
 /** Start one relay on `port` (0 = any free port). → { port, close(), events() } */
-export function startRelay({ port = 7778, host = '0.0.0.0', log = () => {} } = {}) {
+export function startRelay({ port = 7778, host = '127.0.0.1', log = () => {} } = {}) {
   const byId = new Map();
   const latest = new Map(); // replace key → id
   const subs = new Map(); // ws → Map(subId → filters)
@@ -55,7 +72,7 @@ export function startRelay({ port = 7778, host = '0.0.0.0', log = () => {} } = {
   }
 
   function onEvent(ws, e) {
-    if (!verifyEvent(e)) return out(ws, ['OK', e?.id ?? '', false, 'invalid: bad id or signature']);
+    if (!verifyEvent(e)) return out(ws, ['OK', typeof e?.id === 'string' ? e.id : '', false, 'invalid: bad id or signature']);
     if (e.created_at > Date.now() / 1000 + FUTURE_S) return out(ws, ['OK', e.id, false, 'invalid: created_at too far in the future']);
     if (byId.has(e.id)) return out(ws, ['OK', e.id, true, 'duplicate: have this event']);
     if (!(e.kind >= 20000 && e.kind < 30000)) {
@@ -69,7 +86,9 @@ export function startRelay({ port = 7778, host = '0.0.0.0', log = () => {} } = {
     }
   }
 
-  function onReq(ws, id, filters) {
+  function onReq(ws, id, raw) {
+    const filters = raw.map(validFilter);
+    if (!filters.length || filters.includes(null)) return out(ws, ['CLOSED', id, 'invalid: a filter of the wrong shape']);
     const mine = subs.get(ws);
     if (!mine.has(id) && mine.size >= MAX_SUBS) return out(ws, ['CLOSED', id, 'error: too many subscriptions']);
     mine.set(id, filters);
@@ -95,14 +114,18 @@ export function startRelay({ port = 7778, host = '0.0.0.0', log = () => {} } = {
     subs.set(ws, new Map());
     ws.on('close', () => subs.delete(ws));
     ws.on('message', (data) => {
-      let m;
-      try { m = JSON.parse(data); } catch { return out(ws, ['NOTICE', 'error: not JSON']); }
-      if (!Array.isArray(m)) return out(ws, ['NOTICE', 'error: not an array']);
-      const [type, a, ...rest] = m;
-      if (type === 'EVENT') onEvent(ws, a);
-      else if (type === 'REQ' && typeof a === 'string') onReq(ws, a, rest.filter((f) => f && typeof f === 'object'));
-      else if (type === 'CLOSE') subs.get(ws)?.delete(a);
-      else out(ws, ['NOTICE', `error: unknown message ${type}`]);
+      try {
+        let m;
+        try { m = JSON.parse(data); } catch { return out(ws, ['NOTICE', 'error: not JSON']); }
+        if (!Array.isArray(m)) return out(ws, ['NOTICE', 'error: not an array']);
+        const [type, a, ...rest] = m;
+        if (type === 'EVENT') onEvent(ws, a);
+        else if (type === 'REQ' && typeof a === 'string') onReq(ws, a, rest);
+        else if (type === 'CLOSE' && typeof a === 'string') subs.get(ws)?.delete(a);
+        else out(ws, ['NOTICE', `error: bad message ${String(type)}`]);
+      } catch (err) { // one bad message never takes the relay down
+        out(ws, ['NOTICE', `error: ${err?.message ?? err}`]);
+      }
     });
   });
 
@@ -122,7 +145,8 @@ export function startRelay({ port = 7778, host = '0.0.0.0', log = () => {} } = {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const ports = process.argv.slice(2).map(Number);
   for (const port of ports.length ? ports : [7778]) {
-    const r = await startRelay({ port, log: (s) => console.log(`[${port}] ${s}`) });
-    console.log(`test relay on ws://localhost:${r.port} (in memory)`);
+    const host = process.env.HOST ?? '127.0.0.1';
+    const r = await startRelay({ port, host, log: (s) => console.log(`[${port}] ${s}`) });
+    console.log(`test relay on ws://${host}:${r.port} (in memory)`);
   }
 }

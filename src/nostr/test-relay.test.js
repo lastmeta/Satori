@@ -67,3 +67,18 @@ test('REQ filters, limit and until; kept subscriptions get live events', async (
   await new Promise((r) => setTimeout(r, 50));
   expect(live).toEqual([['follow', e.id]]);
 });
+
+test('a malformed REQ or EVENT is refused, and the relay lives on', async () => {
+  const raw = new WebSocket(`ws://127.0.0.1:${server.port}`);
+  const got = [];
+  raw.on('message', (m) => got.push(JSON.parse(m)));
+  await new Promise((r) => raw.once('open', r));
+  for (const bad of [['REQ', 'x', { ids: 5 }], ['REQ', 'y', { kinds: 'a' }], ['REQ', 'z', { '#d': 'x' }], ['REQ', 'w', { since: 'x' }],
+    ['EVENT', { id: 5 }], ['EVENT', null], ['CLOSE', 5]]) raw.send(JSON.stringify(bad));
+  await new Promise((r) => setTimeout(r, 100));
+  expect(got.filter((m) => m[0] === 'CLOSED').map((m) => m[1])).toEqual(['x', 'y', 'z', 'w']);
+  expect(got.filter((m) => m[0] === 'OK').every((m) => m[2] === false)).toBe(true);
+  expect(raw.readyState).toBe(1);
+  expect((await relay.fetch([{ kinds: [34600], limit: 1 }])).length).toBe(1);
+  raw.close();
+});

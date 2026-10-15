@@ -147,11 +147,13 @@ probably not what was meant.
 
 ## Test relay and demo provider (dev)
 
-- `node scripts/test-relay.mjs [port…]` (default 7778): an in-memory NIP-01
+- `node scripts/test-relay.mjs [port…]` (default 7778, on 127.0.0.1; `HOST=0.0.0.0`
+  opens it to the network): an in-memory NIP-01
   relay (`ws`, a dev dependency): EVENT (id and signature checked, `OK`),
   REQ/EOSE/CLOSE with `ids, authors, kinds, #x, since, until, limit` (500 at
   most per filter, as strfry), replaceable kinds by (pubkey, kind) for 0, 3 and
-  10000–19999, and by (pubkey, kind, d) for 30000–39999.
+  10000–19999, and by (pubkey, kind, d) for 30000–39999. A filter of the wrong
+  shape is answered with CLOSED; no message takes it down.
 - `node scripts/provider.mjs [relay] [stream] [seconds]`: a throwaway provider
   that announces a stream (34600) and publishes a random walk (34601) on it.
 - The e2e runs two of these relays (7781 as the user's, 7782 as central's) and
