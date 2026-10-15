@@ -89,7 +89,7 @@ test('create, register, Poll now (observations in, predictions out), reload keep
   expect(before.central.nextPoll).toBeGreaterThan(now + 290);
   expect(before.central.nextPoll).toBeLessThan(now + 1810);
   await expect(page.locator('[data-test=last-poll]')).toHaveText('Not yet');
-  await expect(page.getByText('None yet: they arrive with the first poll.')).toBeVisible();
+  await expect(page.getByText('Streams: none yet. They arrive with the first poll.')).toBeVisible();
 
   // Poll now: two streams stored, forecast, sent after an identity-signed login.
   await page.getByRole('button', { name: 'Poll now' }).click();

@@ -360,10 +360,10 @@ const actions = {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
-  async copyAddress(which) {
+  async copy(key, text) {
     try {
-      await navigator.clipboard.writeText(state[which]);
-      state.copied = which;
+      await navigator.clipboard.writeText(text);
+      state.copied = key;
       setTimeout(() => (state.copied = ''), 1500);
     } catch { /* clipboard not allowed */ }
   },

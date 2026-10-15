@@ -149,27 +149,37 @@ function setup(a) {
   </section>`;
 }
 
-function keyRow(label, note, which, a) {
-  return html`<div class="key">
-    <div class="key-main">
-      <div class="label">${label}</div>
-      <code data-test="${which}">${() => state[which]}</code>
-      <div class="muted small">${note}</div>
-    </div>
-    <button class="small-btn" @click="${() => a.copyAddress(which)}">${() => (state.copied === which ? 'Copied' : 'Copy')}</button>
-  </div>`;
+/** One of a key's identifiers (`value` a function), with Copy. */
+function idRow(kind, test, value, a, title = () => '') {
+  return html`<div class="id"><span class="label">${kind}</span><code data-test="${test}" title="${title}">${value}</code><button class="small-btn" @click="${() => a.copy(test, value())}">${() => (state.copied === test ? 'Copied' : 'Copy')}</button></div>`;
 }
 
+/** The three keys, each with its identifiers: Evrmore and Base addresses, the Nostr pubkey. */
 function keys(a) {
   return html`
   <div class="card keys">
-    ${keyRow('Identity', 'Runs the neuron: signs in to central on its own. Unencrypted.', 'identity', a)}
-    ${keyRow('Vault', html`<span class="${() => (state.unlocked ? 'badge on' : 'badge')}" data-test="vault-state">${() => (state.unlocked ? 'Unlocked' : 'Locked')}</span> Holds your funds. Encrypted with your passphrase.`, 'vault', a)}
-    <form class="unlock" hidden="${() => state.unlocked}" @submit="${(e) => a.unlock(form(e), e.target)}">
-      <input name="pass" type="password" aria-label="Vault passphrase" placeholder="Vault passphrase" autocomplete="current-password" required>
-      <button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>
-    </form>
-    <p class="error small" role="alert" hidden="${() => !state.vaultError}">${() => state.vaultError}</p>
+    <div class="key">
+      <h3>Identity</h3>
+      ${idRow('Evrmore', 'identity', () => state.identity, a)}
+      ${idRow('Base', 'identity-base', () => state.base.identity.address, a)}
+      <p class="muted small">Runs the neuron on its own: signs in to central and sends the daily Base batch. Unencrypted.</p>
+    </div>
+    <div class="key">
+      <h3>Vault <span class="${() => (state.unlocked ? 'badge on' : 'badge')}" data-test="vault-state">${() => (state.unlocked ? 'Unlocked' : 'Locked')}</span></h3>
+      ${idRow('Evrmore', 'vault', () => state.vault, a)}
+      ${idRow('Base', 'vault-base', () => state.base.vault.address, a)}
+      <p class="muted small">Holds your funds. Encrypted with your passphrase.</p>
+      <form class="unlock" hidden="${() => state.unlocked}" @submit="${(e) => a.unlock(form(e), e.target)}">
+        <input name="pass" type="password" aria-label="Vault passphrase" placeholder="Vault passphrase" autocomplete="current-password" required>
+        <button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>
+      </form>
+      <p class="error small" role="alert" hidden="${() => !state.vaultError}">${() => state.vaultError}</p>
+    </div>
+    <div class="key">
+      <h3>Nostr</h3>
+      ${idRow('Pubkey', 'nostr-pubkey', () => state.nostr.pubkey, a, () => state.nostr.npub)}
+      <p class="muted small">Signs the neuron's Nostr events on its own. Unencrypted, as the identity.</p>
+    </div>
   </div>`;
 }
 
@@ -190,6 +200,7 @@ function centralCard(a) {
       ${fact('Pending', 'pending', () => String(c().pending))}
     </dl>
     <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration, state.vault)}">${() => mismatchText(c().registration, state.vault)}</p>
+    ${streams()}
   </section>`;
 }
 
@@ -200,19 +211,17 @@ function streamRow(r) {
   return html`<div class="row srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="model" data-label="Model" data-test="model" title="${modelTitle(r)}">${r.model ?? '–'}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
 }
 
+/** Central's streams with our t1 and t2: collapsed in the Central card (central2 has ~80). */
 function streams() {
   return html`
-  <section class="card">
-    <header class="card-head">
-      <h2>Streams</h2>
-      <span class="muted small">${() => `${state.streams.length} from central`}</span>
-    </header>
-    <p class="muted" hidden="${() => state.streams.length > 0}">None yet: they arrive with the first poll.</p>
-    <div class="srows" hidden="${() => !state.streams.length}">
-      <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
-      <div>${() => state.streams.map((r) => streamRow(r).key(r.uuid))}</div>
-    </div>
-  </section>`;
+    <p class="muted small streams-none" hidden="${() => state.streams.length > 0}">Streams: none yet. They arrive with the first poll.</p>
+    <details class="streams" data-test="streams" hidden="${() => !state.streams.length}">
+      <summary>${() => `Streams: ${state.streams.length} from central, with our forecasts`}</summary>
+      <div class="srows">
+        <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
+        <div>${() => state.streams.map((r) => streamRow(r).key(r.uuid))}</div>
+      </div>
+    </details>`;
 }
 
 function relayRow(r) {
@@ -233,8 +242,6 @@ function nostrCard(a) {
       <h2>Nostr</h2>
       <span class="muted small">${() => `${n().subscriptions.length} of ${n().maxStreams} streams`}</span>
     </header>
-    <div class="label">Nostr pubkey</div>
-    <code data-test="nostr-pubkey" title="${() => n().npub}">${() => n().pubkey}</code>
     <ul class="relays">${() => n().relays.map((r) => relayRow(r).key(`${r.url} ${r.state} ${r.write}`))}</ul>
     <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Network streams. Each new observation is forecast and published as <code>&lt;stream&gt;_pred</code>.</p>
     <div class="srows" hidden="${() => !n().subscriptions.length}">
@@ -270,8 +277,8 @@ function baseCard(a) {
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => `The chain did not answer: ${b().error}`}</p>
     <dl class="facts">
       ${fact('RPC', 'base-rpc', () => (b().rpc.length ? rpcText(b()) : '–'))}
-      ${fact('Identity', 'base-identity', html`<code>${() => b().identity.address}</code><div class="${() => (b().identity.lowEth ? 'error small' : 'muted small')}">${() => gasText(b().identity) + (b().identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</div>`)}
-      ${fact('Vault', 'base-vault', html`<code>${() => b().vault.address}</code><div class="muted small">${() => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`}</div>`)}
+      ${fact('Identity', 'base-identity', html`<span class="${() => (b().identity.lowEth ? 'error' : '')}">${() => gasText(b().identity) + (b().identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
+      ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
       ${fact('Delegation', 'base-delegation', () => delegationText(b()))}
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
       ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}
@@ -403,10 +410,9 @@ function home(a) {
   <section hidden="${show('home')}">
     ${keys(a)}
     ${centralCard(a)}
-    ${streams()}
     ${nostrCard(a)}
-    ${baseCard(a)}
     ${network(a)}
+    ${baseCard(a)}
     ${settings(a)}
     ${backup(a)}
   </section>`;
