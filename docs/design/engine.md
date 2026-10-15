@@ -155,3 +155,75 @@ From Satori Lite:
 - No per-node diversity (Lite redraws hyperparameters on purpose). It is
   optional and left for later, seeded from the identity as the parked design
   planned ([../future/design/engine.md](../future/design/engine.md)).
+
+## Verified
+
+- `npm test` (`src/engine/engine.test.js`):
+  - namaste_club's tests ported as they are (`NC/tests/test_engine.py`):
+    iterate (`:179-200`), the weight rules (`:391-404`), blend (`:406-409`),
+    weights from error samples (`:418-433`) and too few samples (`:435-439`);
+  - recovery: φ = 0.5 over 400 buckets comes back in (0.4, 0.6) with λ1 = 0.5
+    and with 0.2; λ1 = 1e-4 shrinks it below 0.1;
+  - minimum data (7 buckets → naive, 8 → bar1); several points in a bucket; a
+    constant series (φ = 0, t1 = t2 = last); a gap; a stale first lag;
+    non-positive and non-finite values; any order;
+  - a model that keeps losing in the backtest gets w < 1;
+  - a random-walk guard: over 500 seeds of 8–40 buckets with 1% steps, the mean
+    |t2/last − 1| is 0.06% (bound 0.1%, a tenth of one step's typical move).
+- **Parity with namaste_club's own code.** `scripts/engine_parity.py` runs
+  namaste_club's `create_dataset`, `train_bvar_model` (lag 1, one stream,
+  `TIME_COLS = []`), `_gather_market_state` (compiled alone from `pool.py`),
+  `iterate_forecast`, `weight_from_errors` and `blend` on 10 series. It writes
+  `test/fixtures/engine-parity.json`, and the JS engine matches it to 9 decimal
+  places. The backtest weight is this app's deviation, so the script rebuilds
+  it from those same calls on each origin's truncated history. The series have
+  no gaps and no stale lag, where the two engines differ on purpose. The step-4
+  brief's golden values (zigzag φ = −0.705304, t1 = 103.56200, t2 = 104.56234;
+  1% compounding t1 = 148.87674, t2 = 150.34611 with 28 samples; the point an
+  hour on, r0 = 110/104 − 1, t1 = 108.50565, t2 = 108.85275) came out the
+  same from namaste_club's code, and the zigzag also by hand from the formula.
+- `npm run e2e`: the app in Chrome makes `naive` until the stream has 8
+  buckets, then `bar1` with the same t1, t2, φ and weight as node, and sends
+  them as Lite's payload.
+
+## Measured
+
+`node scripts/backtest.mjs` (read only) runs the neuron as the app does: a
+poll every 11 h stores the latest value, and the engine forecasts from all the
+history stored so far, starting from none. Each t2 is scored against the first
+observation ≥ 24 h later, as is persistence (the last value). Errors are
+median |forecast − actual| / actual, pooled over forecasts.
+
+History available on 2026-10-15:
+
+- **Central** serves only each stream's latest observation, so it has none.
+- **Base registry**: one stream, 2 daily entries. Too little to score.
+- **Binance 1 h closes** (the series namaste_club trains on): 21 of its 24
+  symbols over the last 400 days (MKR, EOS and XMR are gone). 871 forecasts
+  each, 18,291 in all.
+
+| | forecasts | engine | unfaded (w = 1) | persistence | engine / persistence |
+|---|---:|---:|---:|---:|---:|
+| all | 18,291 | 1.792% | 1.791% | 1.791% | 1.0006 |
+| first 30 days of history | 1,386 | 1.927% | 1.930% | 1.910% | 1.0088 |
+| after 30 days | 16,905 | 1.777% | 1.779% | 1.779% | 0.9991 |
+
+- Per symbol, engine / persistence ranges from 0.981 (UNI) to 1.055 (FIL).
+  It is at or below 1 on 9 of the 21 symbols.
+- The engine is closer than persistence on 48.8% of forecasts and farther on
+  49.5%. The rest are equal (`naive`, or w = 0).
+- `bar1` makes 99% of the forecasts (88% in the first 30 days). Its mean
+  weight is 0.97.
+
+Reading: on liquid crypto pairs the engine **ties persistence**. It neither
+wins nor loses in a way that matters (+0.06% of persistence's error overall).
+The shrinkage already keeps φ small, so the unfaded model is itself within a
+hair of persistence, and the fade has little to correct. The fade matters where
+the model is clearly worse: w = 2 − ratio, so it halves the model at 1.5×
+persistence's error and drops it at 2×. On streams that do not move
+(persistence error 0) it pins the model to persistence. namaste_club found
+those streams on safetrade, where its model lost (4.09% vs 3.32%). This app's
+backtest cannot test them: there is no history to test on.
+
+Not measured here: the research brief's simulation of time features
+(1.4–2.5× persistence's error with few rows) was not re-run.
