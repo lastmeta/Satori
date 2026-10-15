@@ -5,6 +5,7 @@ import { html, reactive } from '@arrow-js/core';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
+  amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash,
 } from './format.js';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 
@@ -38,6 +39,12 @@ export const state = reactive({
   subscribing: '', // `${pubkey}:${stream}` in flight
   networkError: '',
   relaysError: '',
+  // Base (docs/design/base.md): the status, what runs, the last action's result
+  base: null,
+  baseBusy: '', // '' | 'refresh' | 'delegate' | 'undelegate' | 'claim' | 'send'
+  baseError: '',
+  baseResult: '',
+  baseRpcError: '',
 });
 
 export const CATALOG_SHOWN = 50;
@@ -231,6 +238,50 @@ function nostrCard(a) {
   </section>`;
 }
 
+const BUSY = { delegate: 'Delegating…', undelegate: 'Stopping…', claim: 'Claiming…', send: 'Sending…' };
+
+function baseCard(a) {
+  const b = () => state.base;
+  const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
+  const delegated = () => b()?.vault?.delegated === 'identity';
+  const busy = () => !!state.baseBusy;
+  return html`
+  <section class="card base">
+    <header class="card-head">
+      <h2>Base</h2>
+      <button class="small-btn" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
+    </header>
+    <div class="muted small" data-test="base-rpc">${() => (b() ? `Base Sepolia via ${b().rpc.join(', ') || '–'} · ${b().config ?? '–'} addresses · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+    <p class="error small" role="status" data-test="base-error" hidden="${() => !b()?.error}">${() => `The chain did not answer: ${b()?.error}`}</p>
+    <dl class="facts">
+      ${fact('Identity', 'base-identity', html`<code>${() => b()?.identity.address ?? ''}</code><div class="${() => (b()?.identity.lowEth ? 'error small' : 'muted small')}">${() => gasText(b()?.identity) + (b()?.identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</div>`)}
+      ${fact('Vault', 'base-vault', html`<code>${() => b()?.vault.address ?? 'Unlock once to read it'}</code><div class="muted small">${() => `${amountText(b()?.vault.satori, 'SATORI')} · ${amountText(b()?.vault.eth, 'ETH')}`}</div>`)}
+      ${fact('Delegation', 'base-delegation', () => delegationText(b()))}
+      ${fact('Transfers', 'base-lock', () => lockText(b()?.vault.lock))}
+      ${fact('Claimable', 'base-claimable', () => `${amountText(b()?.claimable.rewards, 'SATORI')} rewards · ${amountText(b()?.claimable.airdrop, 'SATORI')} airdrop`)}
+      ${fact('Last batch', 'base-last-batch', html`<span title="${() => b()?.lastBatch?.hash ?? ''}">${() => batchText(b()?.lastBatch) + (b()?.lastBatch ? ` · ${shortHash(b().lastBatch.hash)}` : '')}</span>`)}
+      ${fact('Batch check', 'base-check', () => (b()?.checking ? 'Checking…' : checkText(b()?.lastCheck, b()?.nextCheck)))}
+    </dl>
+    <p class="muted small" hidden="${() => state.unlocked}">Unlock the vault to delegate, claim or send. The identity sends the daily batch on its own.</p>
+    <div hidden="${() => !state.unlocked}">
+      <div class="actions">
+        <button class="primary" data-test="base-delegate" hidden="${delegated}" disabled="${busy}" @click="${a.baseDelegate}">${() => (state.baseBusy === 'delegate' ? BUSY.delegate : 'Delegate prediction power')}</button>
+        <button data-test="base-undelegate" hidden="${() => !delegated()}" disabled="${busy}" @click="${a.baseUndelegate}">${() => (state.baseBusy === 'undelegate' ? BUSY.undelegate : 'Stop delegating')}</button>
+        <button data-test="base-claim" disabled="${busy}" @click="${a.baseClaim}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
+      </div>
+      <p class="muted small">Delegating lets the identity predict with the vault's SATORI; the SATORI stays in the vault, transfer-locked while delegated and through the round after you stop.</p>
+      <form class="send" @submit="${(e) => a.baseSend(form(e), e.target)}">
+        <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
+        <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
+        <input name="to" aria-label="To (0x address)" placeholder="To: 0x…" autocomplete="off" spellcheck="false" required>
+        <button type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send from the vault')}</button>
+      </form>
+    </div>
+    <p class="small" role="status" data-test="base-result" hidden="${() => !state.baseResult}">${() => state.baseResult}</p>
+    <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>
+  </section>`;
+}
+
 function catRow(s, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
   const paid = s.price_per_obs > 0 || s.encrypted || s.approval_required;
@@ -284,6 +335,15 @@ function settings(a) {
       <p class="error" role="alert" hidden="${() => !state.relaysError}">${() => state.relaysError}</p>
       <div class="actions"><button class="primary" type="submit">Save relays</button></div>
     </form>
+    <form class="fields base-rpc-form" @submit="${(e) => a.saveBaseRpc(form(e), e.target)}">
+      <label>Base RPC
+        <input name="rpc" autocomplete="off" spellcheck="false" placeholder="${() => (state.base?.rpc ?? []).join(', ')}">
+      </label>
+      <p class="muted small">An https:// URL or a path on this site. Empty: the default (a build: central's, then publicnode;
+        the dev server: /rpc, a local fork of Base Sepolia on 127.0.0.1:8545, scripts/fork.mjs).</p>
+      <p class="error" role="alert" hidden="${() => !state.baseRpcError}">${() => state.baseRpcError}</p>
+      <div class="actions"><button class="primary" type="submit">Save RPC</button></div>
+    </form>
   </details>`;
 }
 
@@ -323,6 +383,7 @@ function home(a) {
     ${centralCard(a)}
     ${streams()}
     ${nostrCard(a)}
+    ${baseCard(a)}
     ${network(a)}
     ${settings(a)}
     ${backup(a)}

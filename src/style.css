@@ -154,6 +154,13 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .crow .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nowrap { white-space: nowrap; }
 .crow button { flex: none; }
+.base p.error, .base [data-test=base-result] { margin: 10px 0 0; }
+.send { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.send input { margin: 0; flex: 1 1 140px; min-width: 0; }
+.send input[name=to] { flex: 3 1 260px; }
+select {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px;
+}
 label.check { display: flex; align-items: center; gap: 8px; color: var(--text); }
 label.check input { width: auto; margin: 0; }
 summary { cursor: pointer; color: var(--muted); }

@@ -1,8 +1,10 @@
 // App wiring: one tab → open the database → Setup, or Home with the neuron
 // running on the identity key from page load: register with central, then
 // poll on Satori Lite's schedule (docs/design/central.md), and follow the
-// subscribed Nostr streams, publishing `<stream>_pred` (docs/design/nostr.md).
-// Unlock/Lock open and wipe the vault; the neuron never needs it.
+// subscribed Nostr streams, publishing `<stream>_pred` (docs/design/nostr.md),
+// and the identity's daily batch on Base (docs/design/base.md).
+// Unlock/Lock open and wipe the vault; the neuron never needs it (Base's
+// delegate, claims and sends do).
 // window.satori is the same surface for agents (public/llms.txt).
 import { version } from '../package.json';
 import { state, render } from './ui/view.js';
@@ -10,12 +12,15 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb } from './db/opfs.js';
 import {
   generateEntropy, entropyFromWords, deriveKeys, writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault,
-  loadNostr, newNostrYaml,
+  loadNostr, newNostrYaml, evmAddress,
 } from './keys/index.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, claimTab } from './neuron/index.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
+import { createBase } from './neuron/base.js';
+import { checkRpcSetting } from './chain/config.js';
+import { shortHash, claimLine } from './ui/format.js';
 
 // The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
 export const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet.io' : 'https://network.satorinet.io';
@@ -23,6 +28,9 @@ export const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet
 // are read only, and the user's relays default to the test relay (scripts/test-relay.mjs).
 export const DEV_RELAY = 'ws://localhost:7778';
 export const NOSTR_DEFAULTS = import.meta.env.DEV ? { relays: [DEV_RELAY], centralWrite: false } : { relays: [], centralWrite: true };
+// And for Base: the dev server's RPC is /rpc, which Vite proxies to a local fork on 127.0.0.1:8545
+// (scripts/fork.mjs), so a dev checkout never sends to a public chain. A build: central's, then publicnode.
+export const DEV_RPC = import.meta.env.DEV ? '/rpc' : undefined;
 
 let db;
 let files = null; // { walletYaml, vaultYaml, nostrYaml } as stored
@@ -36,6 +44,7 @@ let pending = null; // setup only: { vault, identity? } entropy
 let central = null;
 let registration = null; // this page load's register result
 let poller = null;
+let base = null; // the Base flow
 
 /** Central's state for the UI and agents: plain values. */
 async function centralStatus() {
@@ -71,6 +80,23 @@ function refreshNostr() {
   })().catch((err) => console.error('[satori] nostr status', err)).finally(() => { nostrRefresh = null; });
   return nostrRefresh;
 }
+
+/** The Base card: one status read at a time, as the Nostr card. */
+let baseRefresh = null;
+let baseStale = false;
+function refreshBase() {
+  baseStale = true;
+  baseRefresh ??= (async () => {
+    while (baseStale) {
+      baseStale = false;
+      if (base) state.base = await base.status();
+    }
+  })().catch((err) => console.error('[satori] base status', err)).finally(() => { baseRefresh = null; });
+  return baseRefresh;
+}
+
+/** The vault's Base address: from vault.yaml's public key while locked, else from the unlocked vault. */
+const vaultEvm = () => (vaultPublic.pubkey ? evmAddress(vaultPublic.pubkey) : vault?.evmAddress ?? null);
 
 // ── core: used by the UI and by window.satori ───────────────────────────────
 
@@ -128,9 +154,14 @@ async function startNeuron() {
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: NOSTR_DEFAULTS,
     onChange: refreshNostr });
   await refreshNostr();
+  base?.stop();
+  base = createBase({ db, identity, vaultAddress: vaultEvm, vault: () => vault, central: () => central, devRpc: DEV_RPC,
+    onChange: refreshBase });
+  await refreshBase();
   state.screen = 'home';
   registerWith(c).catch((err) => console.error('[satori] register', err));
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
+  base.start();
 }
 
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
@@ -157,6 +188,26 @@ async function setCentral(raw) {
   await nostr.reconcile(); // this central's relays
 }
 
+/** The Base RPC setting ('' = the default): https or a same-origin path. → base status */
+async function setBaseRpc(raw) {
+  const url = checkRpcSetting(raw);
+  await db.set('base_rpc_url', url);
+  await db.checkpoint();
+  return base.refresh();
+}
+
+/** A Base action from the UI or an agent, one at a time; the card shows which. */
+async function baseAction(what, fn) {
+  if (state.baseBusy) throw new Error(`Busy (${state.baseBusy}). Try again when it is done.`);
+  state.baseBusy = what;
+  try {
+    return await fn();
+  } finally {
+    state.baseBusy = '';
+    refreshBase();
+  }
+}
+
 async function saveKeys({ walletYaml, vaultYaml, nostrYaml }) {
   await db.set('nostr_yaml', nostrYaml);
   await db.set('vault_yaml', vaultYaml); // vault first: boot needs both
@@ -172,6 +223,7 @@ async function unlock(passphrase) {
   vault?.lock();
   vault = v;
   state.unlocked = true;
+  if (!vaultPublic.pubkey) base?.refresh(); // an old vault.yaml: its Base address is known now
 }
 
 function lock() {
@@ -243,6 +295,16 @@ const shown = (fn) => async (...args) => {
     state.error = err?.message ?? String(err);
   }
 };
+
+/** A Base action from the card: its result or error is shown there. */
+async function baseUi(what, fn) {
+  Object.assign(state, { baseError: '', baseResult: '' });
+  try {
+    state.baseResult = await baseAction(what, fn);
+  } catch (err) {
+    state.baseError = err?.message ?? String(err);
+  }
+}
 
 const actions = {
   goStep,
@@ -365,6 +427,34 @@ const actions = {
       state.relaysError = err?.message ?? String(err);
     }
   },
+  baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
+  baseDelegate: () => baseUi('delegate', async () => {
+    const r = await base.delegate();
+    return r.steps.length ? `Delegated: ${r.steps.map((x) => `${x.step} by the ${x.by} (${shortHash(x.hash)})`).join(', ')}.`
+      : 'Already delegated to the identity.';
+  }),
+  baseUndelegate: () => baseUi('undelegate', async () => {
+    const r = await base.undelegate();
+    return r.steps.length ? `Stopped delegating (${shortHash(r.steps[0].hash)}).` : 'Not delegated.';
+  }),
+  baseClaim: () => baseUi('claim', async () => {
+    const r = await base.claim();
+    return [claimLine('Rewards', r.rewards), claimLine('Merkle', r.merkle), claimLine('Airdrop', r.airdrop)].join(' · ');
+  }),
+  baseSend: (f, el) => baseUi('send', async () => {
+    const r = await base.send({ asset: f.asset, to: String(f.to ?? '').trim(), amount: f.amount });
+    el.reset();
+    return `Sent ${f.amount} ${f.asset} (${shortHash(r.hash)}).`;
+  }),
+  async saveBaseRpc(f, el) {
+    state.baseRpcError = '';
+    try {
+      await setBaseRpc(f.rpc);
+      el.reset();
+    } catch (err) {
+      state.baseRpcError = err?.message ?? String(err);
+    }
+  },
   async saveCentral(f, el) {
     state.settingsError = '';
     try {
@@ -401,6 +491,7 @@ window.satori = {
       unlocked: state.unlocked,
       central: home ? await centralStatus() : null,
       nostr: home ? await nostrStatus() : null,
+      base: home ? await base.status() : null,
     };
   },
   /** Create a neuron (random keys unless words are given). The vault stays locked. */
@@ -447,6 +538,20 @@ window.satori = {
   },
   /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
+  /** Base: a fresh read of the chain (one multicall) and the last batch. */
+  async base() { ready(); await base.refresh(); return base.status(); },
+  /** Delegate the vault's prediction power to the identity (needs Unlock). → { steps: [{ step, by, hash }], settled } */
+  async delegate() { ready(); return baseAction('delegate', () => base.delegate()); },
+  /** Stop delegating (needs Unlock): SATORI stays transfer-locked through the next round. */
+  async undelegate() { ready(); return baseAction('undelegate', () => base.undelegate()); },
+  /** hub.claim(), the merkle drop, the airdrop, from the vault (needs Unlock). → { rewards, merkle, airdrop } */
+  async claim() { ready(); return baseAction('claim', () => base.claim()); },
+  /** The identity's daily batch now, if this round has none yet. → the check's result */
+  async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
+  /** From the vault (needs Unlock): { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' } → { hash } */
+  async send(o) { ready(); return baseAction('send', () => base.send(o)); },
+  /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
+  async setBaseRpc(url) { ready(); await setBaseRpc(url); return base.status(); },
 };
 
 async function boot() {

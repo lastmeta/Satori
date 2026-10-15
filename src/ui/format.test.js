@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
+  shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -101,4 +102,39 @@ test('catalogMatch: name, stream, description or tags, any case', () => {
   const s = { stream_name: 'btc-usd-price', name: 'Bitcoin USD Price', description: 'From CoinGecko', tags: ['crypto'] };
   for (const q of ['', 'BTC', 'bitcoin usd', 'coingecko', 'CRYPTO']) expect(catalogMatch(s, q), q).toBe(true);
   expect(catalogMatch(s, 'eth')).toBe(false);
+});
+
+test('Base: amounts, the delegation, the lock (until round N, free from N + 1 at 00:00 UTC)', () => {
+  expect(amountText('100', 'SATORI')).toBe('100 SATORI');
+  expect(amountText('0.000123456', 'ETH')).toBe('0.000123 ETH');
+  expect(amountText(null, 'ETH')).toBe('–');
+  expect(fmtUtc(20743 * 86400)).toBe('Oct 17, 00:00 UTC');
+  const v = { identity: { power: '100' }, vault: { delegated: 'identity', delegate: '0xI' } };
+  expect(delegationText(v)).toBe('Delegated to the identity · 100 SATORI of prediction power');
+  expect(delegationText({ ...v, vault: { delegated: 'none' } })).toBe('Not delegated');
+  expect(delegationText({ ...v, vault: { delegated: 'other', delegate: '0xO' } })).toBe('Delegated to 0xO, not this identity');
+  expect(delegationText(null)).toBe('–');
+  expect(lockText({ locked: false })).toBe('Free to send');
+  expect(lockText({ locked: true, indefinite: true })).toBe('SATORI transfer-locked while delegated');
+  expect(lockText({ locked: true, indefinite: false, untilRound: 20742, freeAt: 20743 * 86400 }))
+    .toBe('SATORI transfer-locked until round 20742 (free from Oct 17, 00:00 UTC)');
+});
+
+test('Base: gas, the last batch, the check, a claim', () => {
+  expect(gasText({ eth: '0.1', batchesLeft: 33 })).toBe('0.1 ETH · about 33 daily batches');
+  expect(gasText({ eth: '0.1', batchesLeft: 1 })).toBe('0.1 ETH · about 1 daily batch');
+  expect(gasText({ eth: '9', batchesLeft: 5000 })).toBe('9 ETH · about 1,000+ daily batches');
+  expect(gasText({ eth: null })).toBe('–');
+  const at = new Date(2026, 9, 15, 9, 0).getTime() / 1000;
+  expect(batchText(null)).toBe('None yet');
+  expect(batchText({ round: 20741, at, games: [{ gameId: 1, direction: 2 }, { gameId: 3, direction: 1 }],
+    dropped: [{ gameId: 4, error: 'StaleValue' }] })).toBe('Round 20741 · Oct 15, 09:00 · game 1 ↓, game 3 ↑ · left out: game 4 (StaleValue)');
+  expect(checkText(null, null)).toBe('Not yet');
+  expect(checkText({ round: 20741, sent: {} }, at)).toBe('sent round 20741 · next Oct 15, 09:00');
+  expect(checkText({ skipped: 'already predicted this round' }, null)).toBe('already predicted this round');
+  expect(checkText({ error: 'boom' }, null)).toBe('failed: boom');
+  expect(shortHash('0x' + 'ab'.repeat(32))).toBe('0xabab…abab');
+  expect(claimLine('Rewards', { hash: '0x' + 'ab'.repeat(32), amount: '3' })).toBe('Rewards: claimed 3 SATORI (0xabab…abab)');
+  expect(claimLine('Merkle', { skipped: 'this vault is not in the current drop' })).toBe('Merkle: this vault is not in the current drop');
+  expect(claimLine('Airdrop', { error: 'reverted: NothingToClaim' })).toBe('Airdrop: failed: reverted: NothingToClaim');
 });

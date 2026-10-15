@@ -109,24 +109,25 @@ async function answering(rpc, tries = 60) {
   return false;
 }
 
-/** anvil in the background (it outlives this script), logging to .fork.log; its pid in .fork.pid. */
+/** anvil in the background (it outlives this script), logging to .fork.<port>.log; its pid in .fork.<port>.pid. */
 export async function start(port = 8545) {
   const rpc = `http://127.0.0.1:${port}`;
   if (await answering(rpc, 1)) return { rpc, running: true };
   const anvil = process.env.ANVIL ?? `${homedir()}/.foundry/bin/anvil`;
-  const out = openSync(`${ROOT}.fork.log`, 'a');
+  const out = openSync(`${ROOT}.fork.${port}.log`, 'a');
   const child = spawn(anvil, ['--fork-url', FORK_URL, '--host', '127.0.0.1', '--port', String(port), '--block-time', '2'],
     { detached: true, stdio: ['ignore', out, out] });
   child.unref();
-  writeFileSync(`${ROOT}.fork.pid`, String(child.pid));
-  if (!(await answering(rpc))) throw new Error(`anvil did not answer on ${rpc} (see .fork.log)`);
+  writeFileSync(`${ROOT}.fork.${port}.pid`, String(child.pid));
+  if (!(await answering(rpc))) throw new Error(`anvil did not answer on ${rpc} (see .fork.${port}.log)`);
   return { rpc, pid: child.pid };
 }
 
-function stop() {
-  const pid = Number(readFileSync(`${ROOT}.fork.pid`, 'utf8'));
+function stop(port) {
+  const file = `${ROOT}.fork.${port}.pid`;
+  const pid = Number(readFileSync(file, 'utf8'));
   process.kill(pid);
-  rmSync(`${ROOT}.fork.pid`);
+  rmSync(file);
   return pid;
 }
 
@@ -143,10 +144,10 @@ async function main() {
   switch (cmd) {
     case 'start': {
       const r = await start(port);
-      console.log(r.running ? `already running on ${r.rpc}` : `anvil fork of Base Sepolia on ${r.rpc} (pid ${r.pid}; log .fork.log)`);
+      console.log(r.running ? `already running on ${r.rpc}` : `anvil fork of Base Sepolia on ${r.rpc} (pid ${r.pid}; log .fork.${port}.log)`);
       break;
     }
-    case 'stop': console.log(`stopped pid ${stop()}`); break;
+    case 'stop': console.log(`stopped pid ${stop(port)}`); break;
     case 'fund': {
       const eth = opt('eth', '0.1');
       const satori = opt('satori', '0');

@@ -93,3 +93,70 @@ export function catalogMatch(s, q) {
   const text = `${s.stream_name} ${s.name} ${s.description} ${s.tags.join(' ')}`.toLowerCase();
   return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => text.includes(w));
 }
+
+// ── Base (docs/design/base.md) ──
+
+/** 0x1234…abcd */
+export const shortHash = (h) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : '');
+
+/** A decimal amount string ('100.5') with its unit, or '–'. */
+export function amountText(x, unit) {
+  if (x == null) return '–';
+  return `${fmtNum(Number(x))} ${unit}`;
+}
+
+/** Unix seconds → 'Oct 17, 00:00 UTC' (rounds start at 00:00 UTC). */
+export function fmtUtc(s) {
+  return `${new Date(s * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23', timeZone: 'UTC' })} UTC`;
+}
+
+/** The vault's delegation in a few words. */
+export function delegationText(v) {
+  const d = v?.vault?.delegated;
+  if (d === 'identity') return `Delegated to the identity · ${amountText(v.identity.power, 'SATORI')} of prediction power`;
+  if (d === 'none') return 'Not delegated';
+  if (d === 'other') return `Delegated to ${v.vault.delegate}, not this identity`;
+  return '–';
+}
+
+/** The vault's SATORI transfer lock (the token's rule: locked while lockedUntil >= round). */
+export function lockText(lock) {
+  if (!lock) return '–';
+  if (!lock.locked) return 'Free to send';
+  if (lock.indefinite) return 'SATORI transfer-locked while delegated';
+  return `SATORI transfer-locked until round ${lock.untilRound} (free from ${fmtUtc(lock.freeAt)})`;
+}
+
+/** The identity's gas: its ETH and about how many daily batches it pays for. */
+export function gasText(id) {
+  if (id?.eth == null) return '–';
+  const n = id.batchesLeft;
+  return `${amountText(id.eth, 'ETH')}${n == null ? '' : ` · about ${n >= 1000 ? '1,000+' : n} daily batch${n === 1 ? '' : 'es'}`}`;
+}
+
+const arrow = (d) => (d === 1 ? '↑' : '↓');
+
+/** The last batch sent: round, time, each game's direction, what was left out. */
+export function batchText(b) {
+  if (!b) return 'None yet';
+  const games = b.games.map((g) => `game ${g.gameId} ${arrow(g.direction)}`).join(', ');
+  const out = b.dropped?.length ? ` · left out: ${b.dropped.map((g) => `game ${g.gameId} (${g.error})`).join(', ')}` : '';
+  return `Round ${b.round} · ${fmtWhen(b.at)} · ${games}${out}`;
+}
+
+/** The last check of the batch and when the next one runs. */
+export function checkText(c, next) {
+  const when = next ? `next ${fmtWhen(next)}` : '';
+  if (!c) return when || 'Not yet';
+  const what = c.sent ? `sent round ${c.round}` : c.skipped ? c.skipped : c.error ? `failed: ${c.error}` : '';
+  return [what, when].filter(Boolean).join(' · ');
+}
+
+/** One claim's result (base.claim()): claimed, skipped (why) or failed. */
+export function claimLine(name, r) {
+  if (!r) return '';
+  if (r.hash) return `${name}: claimed ${amountText(r.amount, 'SATORI')} (${shortHash(r.hash)})`;
+  if (r.skipped) return `${name}: ${r.skipped}`;
+  return `${name}: failed: ${r.error}`;
+}

@@ -32,7 +32,12 @@ const rawDuckdbWorker = {
 
 export default defineConfig({
   plugins: [cspHeader, rawDuckdbWorker],
-  server: { host: '0.0.0.0', port: 5180, strictPort: true },
+  // /rpc: the dev server's default Base RPC, a local anvil fork of Base Sepolia (node scripts/fork.mjs start),
+  // on the page's own origin, which the CSP allows ('self'); a build has no proxy and no such default.
+  server: {
+    host: '0.0.0.0', port: 5180, strictPort: true,
+    proxy: { '/rpc': { target: 'http://127.0.0.1:8545', changeOrigin: true, rewrite: () => '/' } },
+  },
   preview: { host: '0.0.0.0', port: 5181, strictPort: true },
   // DuckDB's worker and wasm are loaded by URL (?url), never pre-bundled; its
   // apache-arrow is, else the dev page loads it as ~125 separate modules.
