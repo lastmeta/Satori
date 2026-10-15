@@ -180,22 +180,45 @@ describe('minimum data and guards', () => {
     const fresh = [...grid(ZIG), { ts: grid(ZIG).at(-1).ts + 86400, value: 120 }];
     expect(forecast(fresh).t1).not.toBe(120);
   });
-  test('a non-positive last value → naive (returns need positive values)', () => {
-    expect(forecast(grid([...ZIG.slice(0, 9), 0]))).toEqual({ model: 'naive', t1: 0, t2: 0 });
-    expect(forecast(grid([...ZIG.slice(0, 9), -3]))).toEqual({ model: 'naive', t1: -3, t2: -3 });
+  test('a series with a value ≤ 0 is modeled on changes (bar1d), not returns: a 0 or a negative is a value, not a gap', () => {
+    expect(forecast(grid([...ZIG.slice(0, 9), 0])).model).toBe('bar1d');
+    expect(forecast(grid([...ZIG.slice(0, 9), -3])).model).toBe('bar1d');
+    expect(forecast(grid([100, -1, ...ZIG])).model).toBe('bar1d');
+    expect(forecast(grid([5, 0]))).toEqual({ model: 'naive', t1: 0, t2: 0 }); // too short either way
   });
-  test('an earlier non-positive bucket is a gap: no return into or out of it', () => {
-    const early = [...grid([100]), ...grid(ZIG, 2)]; // bucket 1 missing
-    expect(forecast(grid([100, -1, ...ZIG]))).toEqual(forecast(early));
-    expect(forecast(early).model).toBe('bar1');
-    const mid = [...grid(ZIG.slice(0, 5)), ...grid(ZIG.slice(5), 6)]; // bucket 5 missing: 3 + 3 pairs
-    expect(forecast(grid([...ZIG.slice(0, 5), 0, ...ZIG.slice(5)]))).toEqual(forecast(mid));
-    expect(forecast(mid).model).toBe('bar1');
+  test('bar1d: a named stream\'s counter (signed, from 0) rising steadily → t2 above the last (UP)', () => {
+    const counter = Array.from({ length: 12 }, (_, k) => -10 + 2 * k); // −10 … 12, every change +2
+    const f = forecast(grid(counter));
+    expect(f).toMatchObject({ model: 'bar1d', weight: 1 });
+    expect(f.phi).toBeCloseTo(1, 5);
+    expect(f.t1).toBeCloseTo(14, 5); // last + one step's change (capped at the largest change seen)
+    expect(f.t2).toBeCloseTo(16, 5);
+    const falling = forecast(grid(counter.map((x) => -x)));
+    expect(falling.t2).toBeLessThan(falling.t1);
+    expect(falling.t1).toBeLessThan(-12);
   });
-  test('the first lag never divides by a non-positive value: r0 = 0', () => {
+  test('bar1d: the same model at any level (a shift moves the forecast by the shift)', () => {
+    const { normal } = rng(7);
+    let d = 0;
+    let v = 0;
+    const counter = Array.from({ length: 40 }, () => { d = 0.5 * d + normal(); v += d; return v; });
+    const a = forecast(grid(counter));
+    const b = forecast(grid(counter.map((x) => x - 1000)));
+    expect(a.model).toBe('bar1d');
+    expect(b.phi).toBeCloseTo(a.phi, 12);
+    expect(b.weight).toBeCloseTo(a.weight, 12);
+    expect(b.t2 + 1000).toBeCloseTo(a.t2, 9);
+    expect(a.phi).toBeGreaterThan(0.1); // it finds the positive autocorrelation of the changes
+  });
+  test('bar1d: the first lag is the change from the value ≥ half a step older', () => {
     const p = [...grid(ZIG)];
     p.splice(9, 0, { ts: p[9].ts - 7 * 3600, value: -50 }); // earlier in the last bucket, ≥ 6 h back
-    expect(forecast(p)).toMatchObject({ model: 'bar1', t1: 105, t2: 105 });
+    const f = forecast(p);
+    expect(f.model).toBe('bar1d');
+    expect(Number.isFinite(f.t1) && Number.isFinite(f.t2)).toBe(true);
+  });
+  test('all positive: unchanged (returns), whatever bar1d does', () => {
+    expect(forecast(grid(ZIG)).model).toBe('bar1');
   });
   test('bar1 needs an observation every step (6 lag pairs of back-to-back buckets); once a day stays naive', () => {
     const days = (n, at, value) => Array.from({ length: n }, (_, d) => ({ ts: T0 + d * 86400 + at, value: value(d) }));

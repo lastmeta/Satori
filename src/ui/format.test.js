@@ -138,3 +138,7 @@ test('Base: gas, the last batch, the check, a claim', () => {
   expect(claimLine('Merkle', { skipped: 'this vault is not in the current drop' })).toBe('Merkle: this vault is not in the current drop');
   expect(claimLine('Airdrop', { error: 'reverted: NothingToClaim' })).toBe('Airdrop: failed: reverted: NothingToClaim');
 });
+
+test('modelTitle: bar1d, the AR(1) on changes', () => {
+  expect(modelTitle({ model: 'bar1d', phi: 0.51234, weight: 0.75 })).toBe('Bayesian AR(1) on 12 h changes (a series with values ≤ 0) · φ 0.512 · weight 0.75');
+});

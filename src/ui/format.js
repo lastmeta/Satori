@@ -45,6 +45,7 @@ const short = (x, digits) => String(Number(x.toFixed(digits))).replace('-', '−
 /** The engine model of a prediction in a few words (docs/design/engine.md). */
 export function modelTitle(p) {
   if (p.model === 'bar1') return `Bayesian AR(1) on 12 h returns · φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)}`;
+  if (p.model === 'bar1d') return `Bayesian AR(1) on 12 h changes (a series with values ≤ 0) · φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)}`;
   if (p.model === 'naive') return 'the last value: bar1 needs an observation every 12 h (6 lag pairs of back-to-back 12 h buckets)';
   return p.model ?? '';
 }

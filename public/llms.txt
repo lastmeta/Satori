@@ -60,8 +60,10 @@ Status: step 6 of the roadmap (Base). Next: a finishing pass.
     A pair is three back-to-back 12 h buckets, each with an observation, so
     bar1 needs an observation every 12 h (about 4 days of polls every 11 h).
     A stream central updates once a day, or a neuron that polls once a day,
-    stays naive: gaps are not bridged. Also used when the last value is not
-    positive (an earlier non-positive value is just a gap).
+    stays naive: gaps are not bridged.
+  - `bar1d`: the same model on changes (v_k − v_(k-1), additive steps
+    clamped to the largest change seen, absolute backtest errors) for a
+    series with any value ≤ 0, such as a named Base stream's signed counter.
   `phi` and `weight` are stored with each prediction (null for `naive`).
   `node scripts/backtest.mjs` measures it against persistence on real
   history: a tie on liquid crypto pairs.

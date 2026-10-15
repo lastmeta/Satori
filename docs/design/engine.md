@@ -78,10 +78,10 @@ For each stream that got a new observation, on all its stored observations
 1. Drop points with a non-finite time or value and sort by time. None left →
    `null`. `last` = the newest value.
 2. **Buckets**: b = floor(ts / 43,200) (12 h, UTC-aligned), the last value in
-   each. A bucket whose last value is not positive counts as a gap (returns
-   need positive values).
+   each.
 3. **Returns** between back-to-back buckets: r = v_k / v_{k−1} − 1
-   (non-finite → 0). Across a gap there is no return.
+   (non-finite → 0). Across a gap there is no return. A series with any
+   value ≤ 0 is modeled on changes instead (`bar1d`, below).
 4. **Pairs** (r_{k−1}, r_k), both present. Fewer than 6 (lag 1 + 5) →
    **`naive`**: t1 = t2 = last. A pair needs three back-to-back buckets, each
    with an observation, so `bar1` needs **an observation every step** (12 h for
@@ -96,8 +96,7 @@ For each stream that got a new observation, on all its stored observations
    one regressor; λ1 = 0.2 shrinks φ toward 0 (the random walk) unless the data
    say otherwise.
 6. **First lag** r0 = last / (the newest value at least 6 h older) − 1. It is 0
-   when there is no such value, when it is more than 24 h older, or when it is
-   not positive.
+   when there is no such value or when it is more than 24 h older.
 7. **Iterate** twice: q = clamp(φ·r, ±0.5) (non-finite → 0), r = q,
    g ← g·(1 + q). This gives g1 (12 h) and g2 (24 h).
 8. **Weight** w from a rolling backtest on the stream's own buckets. Take the
@@ -110,10 +109,35 @@ For each stream that got a new observation, on all its stored observations
    w = 1.
 9. **Fade**: t1 = last·(1 + w·(g1 − 1)), t2 = last·(1 + w·(g2 − 1)), with
    namaste_club's guards.
-10. A non-positive last value → `naive`.
-
 `bar1` returns `{model: 'bar1', t1, t2, phi, weight}` and `naive` returns
-`{model: 'naive', t1, t2}`. `phi` and `weight` are stored on the prediction,
+`{model: 'naive', t1, t2}`.
+
+### `bar1d`: a series with values ≤ 0 (step 6)
+
+A named Base stream's value is a signed counter that starts at 0
+(docs/design/base.md); returns of such a series mean nothing (a step from 0,
+a sign change). Until step 6 a non-positive bucket was a gap and a
+non-positive last value gave `naive`, so such a stream always forecast its
+last value, and the Base batch voted DOWN on it forever. Now, when any value
+is ≤ 0, the same model runs on additive changes:
+
+- r = v_k − v_{k−1} between back-to-back buckets; the first lag is last − the
+  value ≥ 6 h older; the pairs, φ and the 6-pair minimum are as above;
+- each iterated step is φ × the one before, clamped to ± the largest change
+  seen in the series (the ±50 % clamp is relative, and has no meaning here);
+  t1 = last + w·q1, t2 = last + w·(q1 + q2);
+- the backtest scores v_o + q1 + q2 and persistence v_o against v_{o+2} by
+  absolute error (a level may be 0), and w is the same function of the two
+  medians.
+
+It returns `{model: 'bar1d', t1, t2, phi, weight}`. A shift of the whole
+series shifts the forecast by the same amount and leaves φ and w unchanged
+(tested). A series of positive values is untouched (namaste_club's parity
+tests run as before). Central's and Nostr's streams take the same rule, so a
+stream with zeros or negatives (a temperature, a rate) is modeled on changes
+too, where before its non-positive values were gaps.
+
+`phi` and `weight` are stored on the prediction,
 and the Streams table shows the model, with φ and w on hover. An option
 `{weight}` forces w, as `MODEL_WEIGHT` does; the backtest uses it.
 
@@ -172,11 +196,11 @@ From namaste_club:
   with fewer than one observation per step (a daily stream, or a neuron that
   polls once a day) stays `naive`, rather than being fit on 24 h returns
   labelled 12 h.
-- **Non-positive values are gaps.** namaste_club computes percent changes on
-  any value and only guards the final result. Here a bucket whose value is
-  not positive gives no return into or out of it, a non-positive base gives a
-  first lag of 0, and only a non-positive last value makes the forecast
-  `naive`.
+- **Values ≤ 0: changes, not returns.** namaste_club computes percent
+  changes on any value and only guards the final result. Here a series with
+  any value ≤ 0 is modeled on additive changes (`bar1d`, above): a named
+  Base stream is a signed counter from 0. (Until step 6 such values were
+  gaps and a non-positive last value gave `naive`.)
 - **Left out:** posterior draws and the jitter. They spread 4,300 workers
   around the truth; for one node they only add error. Also left out: the
   random model and its 100,000 default (`NC/pool.py:840-845,881`).
@@ -201,8 +225,11 @@ From Satori Lite:
   - minimum data (7 buckets → naive, 8 → bar1); once a day stays naive (a
     daily stream at 00:01, a 9:00–18:00 tab), polls every 11 h reach bar1;
     several points in a bucket; a constant series (φ = 0, t1 = t2 = last); a
-    gap; a stale first lag; a non-positive bucket as a gap and a non-positive
-    first-lag base; non-finite values; any order;
+    gap; a stale first lag; non-finite values; any order;
+  - `bar1d`: a series with a 0 or a negative is modeled on changes; a steady
+    counter rising from −10 forecasts last + 2 and + 4 (UP), falling the
+    mirror; a shift moves the forecast by the shift (φ and w unchanged); an
+    AR(1) of changes gives φ > 0;
   - a model that keeps losing in the backtest gets w < 1;
   - a random-walk guard: over 500 seeds of 8–40 buckets with 1% steps, the mean
     |t2/last − 1| is 0.06% (bound 0.1%, a tenth of one step's typical move).

@@ -6,7 +6,9 @@
 // a relay stream's cadence (docs/design/nostr.md#the-engines-step).
 // `bar1`: a Bayesian AR(1) on 12 h returns, shrunk toward the random walk,
 // iterated two 12 h steps (t1, t2), each clamped, then faded toward persistence
-// by a weight from a rolling backtest. `naive`: t1 = t2 = the last value.
+// by a weight from a rolling backtest. `bar1d`: the same on changes
+// (v_k − v_{k−1}) for a series with any value ≤ 0, such as a named stream's
+// signed counter, where returns mean nothing. `naive`: t1 = t2 = the last value.
 // Pure functions.
 
 export const STEP_S = 43_200; // 12 h buckets, UTC-aligned (features.py:22, regrid_history.py:39)
@@ -28,27 +30,50 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
  * @param {{lambda1?: number, weight?: number, step?: number}} [options] weight forces the fade (namaste_club's
  *   MODEL_WEIGHT); step is the bucket in seconds (t1 is one step ahead, t2 two)
  */
+/** Returns (all values positive) or changes (any value ≤ 0): how a step is measured, compounded and applied. */
+const RETURNS = {
+  model: 'bar1',
+  change: (a, b) => b / a - 1,
+  cap: () => MAX_STEP_RETURN,
+  path: (q1, q2) => [1 + q1, (1 + q1) * (1 + q2)], // growth after one and two steps
+  apply: (last, g, w) => blend(last, g, w),
+  raw: (x, g) => x * g, // the backtest's unfaded forecast
+  error: (x, a) => Math.abs(x - a) / a, // relative (calibration.py)
+};
+const CHANGES = {
+  model: 'bar1d',
+  change: (a, b) => b - a,
+  cap: (r) => Math.max(0, ...r.filter((x) => x !== null).map(Math.abs)), // no step larger than the largest change seen
+  path: (q1, q2) => [q1, q1 + q2], // the change after one and two steps
+  apply: (last, d, w) => {
+    const x = last + w * d;
+    return Number.isFinite(x) ? x : last;
+  },
+  raw: (x, d) => x + d,
+  error: (x, a) => Math.abs(x - a), // absolute: a level may be 0
+};
+
 export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S } = {}) {
   const p = Array.from(points).filter((o) => Number.isFinite(o?.ts) && Number.isFinite(o?.value))
     .sort((a, b) => a.ts - b.ts);
   if (!p.length) return null;
   const last = p.at(-1).value;
   const naive = { model: 'naive', t1: last, t2: last };
-  if (!(last > 0)) return naive;
+  const m = p.every((o) => o.value > 0) ? RETURNS : CHANGES;
 
   const buckets = new Map(); // bucket → its last value (models.py:262-264)
   for (const { ts, value } of p) buckets.set(Math.floor(ts / step), value);
-  const kept = [...buckets].filter(([, x]) => x > 0); // a non-positive bucket is a gap: returns need positive values
-  const b = kept.map(([k]) => k);
-  const v = kept.map(([, x]) => x);
-  const r = b.map((k, i) => (i && k - b[i - 1] === 1 ? finiteOr0(v[i] / v[i - 1] - 1) : null)); // none across a gap
+  const b = [...buckets.keys()];
+  const v = [...buckets.values()];
+  const r = b.map((k, i) => (i && k - b[i - 1] === 1 ? finiteOr0(m.change(v[i - 1], v[i])) : null)); // none across a gap
 
   const pairs = pairsUpTo(r, b.length - 1);
   if (pairs.length < 1 + MIN_EXTRA_ROWS) return naive;
   const phi = fitPhi(pairs, lambda1);
-  const w = weight ?? backtestWeight(b, v, r, lambda1);
-  const [g1, g2] = iterate(phi, firstLag(p, step));
-  return { model: 'bar1', t1: blend(last, g1, w), t2: blend(last, g2, w), phi, weight: w };
+  const cap = m.cap(r);
+  const w = weight ?? backtestWeight(b, v, r, lambda1, m, cap);
+  const [x1, x2] = m.path(...steps(phi, firstLag(p, step, m), cap));
+  return { model: m.model, t1: m.apply(last, x1, w), t2: m.apply(last, x2, w), phi, weight: w };
 }
 
 /** (r[k−1], r[k]) for k ≤ upTo, both present: the lag-1 regression rows. */
@@ -77,30 +102,30 @@ function fitPhi(pairs, lambda1) {
 }
 
 /**
- * The newest return: last / (the newest value ≥ half a step older, 6 h at 12 h) − 1
- * (pool.py:889-900). 0 when there is none, when it is more than two steps old (a closed tab),
- * or when it is not positive.
+ * The newest step: the change from the newest value ≥ half a step older (6 h at 12 h)
+ * (pool.py:889-900). 0 when there is none or when it is more than two steps old (a closed tab).
  */
-function firstLag(p, step) {
+function firstLag(p, step, m = RETURNS) {
   const { ts, value } = p.at(-1);
   let j = p.length - 2;
   while (j >= 0 && ts - p[j].ts < MIN_SPACING_S * (step / STEP_S)) j--;
-  if (j < 0 || ts - p[j].ts > HORIZON_STEPS * step || !(p[j].value > 0)) return 0;
-  return finiteOr0(value / p[j].value - 1);
+  if (j < 0 || ts - p[j].ts > HORIZON_STEPS * step) return 0;
+  return finiteOr0(m.change(p[j].value, value));
 }
 
-/** Growth after each step: each step's return is the next lag, clamped (bvar.py:316-339). */
-export function iterate(phi, r0) {
+/** The next steps: each is φ × the one before, clamped to ±cap (bvar.py:316-339). */
+function steps(phi, r0, cap) {
   const out = [];
   let r = r0;
-  let g = 1;
-  for (let s = 0; s < HORIZON_STEPS; s++) {
-    r = clamp(finiteOr0(phi * r), -MAX_STEP_RETURN, MAX_STEP_RETURN);
-    g *= 1 + r;
-    out.push(g);
+  for (let k = 0; k < HORIZON_STEPS; k++) {
+    r = clamp(finiteOr0(phi * r), -cap, cap);
+    out.push(r);
   }
   return out;
 }
+
+/** Growth after each step, on returns (bvar.py:316-339). */
+export const iterate = (phi, r0) => RETURNS.path(...steps(phi, r0, MAX_STEP_RETURN));
 
 /** last·(1 + w·(g − 1)), with pool.py's guards (calibration.py:108-119; pool.py:1005-1016). */
 export function blend(last, g, w) {
@@ -132,7 +157,7 @@ function median(xs) {
  * with buckets o..o+2 back to back; fit on the pairs up to o, forecast two
  * steps from v[o] and score against v[o+2], as persistence (v[o]) is scored.
  */
-function backtestWeight(b, v, r, lambda1) {
+function backtestWeight(b, v, r, lambda1, m = RETURNS, cap = MAX_STEP_RETURN) {
   const me = [];
   const pe = [];
   const L = b.length - 1;
@@ -140,10 +165,10 @@ function backtestWeight(b, v, r, lambda1) {
     if (b[o + 2] - b[o] !== 2) continue;
     const pairs = pairsUpTo(r, o);
     if (pairs.length < 1 + MIN_EXTRA_ROWS) continue;
-    const g2 = iterate(fitPhi(pairs, lambda1), r[o] ?? 0)[1];
+    const x2 = m.path(...steps(fitPhi(pairs, lambda1), r[o] ?? 0, cap))[1];
     const a = v[o + 2];
-    me.push(Math.abs(v[o] * g2 - a) / a);
-    pe.push(Math.abs(v[o] - a) / a);
+    me.push(m.error(m.raw(v[o], x2), a));
+    pe.push(m.error(v[o], a));
   }
   return fadeWeight(me, pe);
 }
