@@ -1,7 +1,7 @@
 # satori: overview
 
 This is the source of truth for what is built (steps 1–6). Intent: [../intent/INTENT.md](../intent/INTENT.md).
-Later steps: [../future/README.md](../future/README.md).
+Later steps: [../plans/README.md](../plans/README.md).
 
 ## The flow
 
@@ -121,7 +121,7 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
   `'wasm-unsafe-eval'` for DuckDB, `connect-src 'self' https: wss: ws:` for the
   chosen central and the relays. An https page still can't open `ws://`
   (mixed content), so a deployed app needs `wss://` relays
-  ([issue](../future/issues/relays-not-wss.md)).
+  ([issue](../issues/relays-not-wss.md)).
 - The Nostr key is stored unencrypted like the identity, so the neuron signs
   its events on its own. `nostr.yaml` downloads need Unlock, as the other files.
 - Base: the identity signs the daily batch on its own; the vault signs only

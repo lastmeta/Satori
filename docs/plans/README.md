@@ -4,9 +4,9 @@ These were researched and reviewed on 2026-10-14/15 against Satori Lite
 (`../neuron`), satorilib, central and the contracts. They are kept here so later
 steps start from evidence, not from scratch.
 
-- [design/](design/): what is left of each part (runtime, Nostr transport,
-  chain, engine).
-- [issues/](issues/README.md): blockers outside this repo. Prod central lacks
+- This folder: what is left of each part ([runtime](runtime.md), [Nostr transport](transport.md),
+  [chain](chain.md), [engine](engine.md)).
+- [issues/](../issues/README.md): blockers outside this repo. Prod central lacks
   the Base and merkle routes. The relay list is ws:// only, so a deployed
   (https) app can't connect to it; the http dev server can.
 - Code: branch `draft/v1-full` holds half-built modules: Docker-compatible
@@ -20,13 +20,13 @@ steps start from evidence, not from scratch.
 2. ✅ **Two keys + Docker import/export**: identity (unencrypted) and vault
    (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
-4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence ([../design/engine.md](../design/engine.md)); left for later: [design/engine.md](design/engine.md).
-5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [design/transport.md](design/transport.md). A deployed app needs a wss relay ([issue](issues/relays-not-wss.md)).
-6. ✅ **Base**: delegate prediction power, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [design/chain.md](design/chain.md). A local fork for the dev server: `scripts/fork.mjs`.
-7. **Finishing pass**, incl. runtime hardening: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
+4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence ([../design/engine.md](../design/engine.md)); left for later: [design/engine.md](engine.md).
+5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [design/transport.md](transport.md). A deployed app needs a wss relay ([issue](../issues/relays-not-wss.md)).
+6. ✅ **Base**: delegate prediction power, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [design/chain.md](chain.md). A local fork for the dev server: `scripts/fork.mjs`.
+7. **Finishing pass**, incl. runtime hardening: catch-up, worker isolation of keys ([design/runtime.md](runtime.md)).
 8. **Later**, in rough order of value per effort: a per-stream chart and model
    view; bounties (the predictor's side first); the gasless relay (needs a
-   ruling, [issue](issues/relayer-predict-fee.md)); Evrmore balances and
+   ruling, [issue](../issues/relayer-predict-fee.md)); Evrmore balances and
    SATORIEVR sends; paid streams and payment channels; own data sources. Also:
    importing a Docker neuron's keys is a move (both would predict for one
    identity; the chain refuses a second batch per round), so Import could say
@@ -71,12 +71,12 @@ steps start from evidence, not from scratch.
   underflows (Panic 0x11). Anyone can do it to any delegated vault (1 wei).
   The app adds 500,000 gas to its own contract calls, which protects only its
   own writes; the fix belongs in the contracts
-  ([issue](issues/token-hook-gas-estimate.md)).
+  ([issue](../issues/token-hook-gas-estimate.md)).
 - Step 6 follows Lite's direction rule (UP if t2 > the latest value, else
   DOWN): a `naive` forecast always votes DOWN, and on D6 the one stream (the
   daily default stream) has two values, so every browser neuron votes DOWN
   for now. A seeded slope rule is parked as an option
-  ([design/engine.md](design/engine.md)).
+  ([design/engine.md](engine.md)).
 - A daily stream written later in hour 0 than the 00:01 batch fails
   `StaleValue` every other round (the contract compares clock hours); the
   batch still goes at the first check of the round ([../design/base.md](../design/base.md#when-in-the-round)).

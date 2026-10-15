@@ -43,7 +43,7 @@ Housekeeping, not blocking: nginx answers central `/health` without CORS
 Accepted behaviour; designed around, not fixable.
 
 - No tab open, no neuron: a UTC day with no open tab misses that round's Base
-  batch ([runtime.md](../design/runtime.md)).
+  batch ([runtime.md](../plans/runtime.md)).
 - iOS suspends a backgrounded page within seconds: foreground-only on iPhone.
 - A browser cannot host a Nostr relay (no listening sockets).
 - Arbitrary data-source URLs are subject to CORS (affects own data sources, later).

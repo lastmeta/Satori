@@ -76,7 +76,7 @@ with compact JSON content; satorilib's `json.dumps` puts a space after `,` and
   the CSP is asked, so such a relay shows as **blocked** and is not tried
   (`ws://localhost` and `127.0.0.1` are allowed). Central lists only
   `ws://satorian.satorinet.io:7777` today, so a deployed app needs a `wss://`
-  relay ([issue](../future/issues/relays-not-wss.md)). The dev server is plain
+  relay ([issue](../issues/relays-not-wss.md)). The dev server is plain
   `http://localhost:5180`, which can open any `ws://`.
 - **Publish to central's relays** (Settings, `meta.nostr_central_write`).
   Off by default on the dev server, on in a build. When off, central's relays

@@ -1,9 +1,9 @@
 # Engine: what is still ahead
 
-[← Later steps](../README.md)
+[← Roadmap](README.md)
 
 The point forecast is built (step 4): see
-[../../design/engine.md](../../design/engine.md) (`bar1`, a Bayesian AR(1) on
+[../design/engine.md](../design/engine.md) (`bar1`, a Bayesian AR(1) on
 12 h returns faded toward persistence, after `../namaste_club`). What is left
 here is for later steps.
 
@@ -12,7 +12,7 @@ here is for later steps.
 Step 6 follows Satori Lite, by the owner's direction (2026-10-15): UP(1) if
 t2 > the latest registry value, else DOWN(2)
 (`neuron/neuron-lite/satorineuron/base_predict.py:141-143`;
-[../../design/base.md](../../design/base.md)). Its consequence stays: a
+[../design/base.md](../design/base.md)). Its consequence stays: a
 forecast equal to the last value votes DOWN, so `naive` always does, and so
 does `bar1` when its weight or φ is 0; every browser neuron then casts the
 same vote. A fixable flaw, not a browser limit. The alternative studied:
@@ -39,12 +39,12 @@ The accuracy cost should be bounded and measured with `scripts/backtest.mjs`.
 | Sink | Value | Docker evidence |
 |---|---|---|
 | central-lite batch (built) | `value` = t2, `t1_value` = t1 | `engine.py:1052-1058,1097-1106` |
-| Base daily batch (built, step 6) | UP if t2 > the latest value, else DOWN, as Lite; step max(12 h, cadence) | `base_predict.py:141-143`; [../../design/base.md](../../design/base.md) |
-| `_pred` on Nostr (built, step 5) | t2 (`_runForecast` returns the second, autoregressed forecast), as a string; the step is the stream's cadence | `engine.py:714-739,1153-1186`; `start.py:1300,1322-1323`; [../../design/nostr.md](../../design/nostr.md) |
+| Base daily batch (built, step 6) | UP if t2 > the latest value, else DOWN, as Lite; step max(12 h, cadence) | `base_predict.py:141-143`; [../design/base.md](../design/base.md) |
+| `_pred` on Nostr (built, step 5) | t2 (`_runForecast` returns the second, autoregressed forecast), as a string; the step is the stream's cadence | `engine.py:714-739,1153-1186`; `start.py:1300,1322-1323`; [../design/nostr.md](../design/nostr.md) |
 
 For bounties (later): the bounty scorer scores against the next observation
 (`neuron/neuron-lite/scoring/mae.py`) while `_pred` and the bounty DM ship t2
-(flagged for the owner in [../../design/nostr.md](../../design/nostr.md#the-engines-step)).
+(flagged for the owner in [../design/nostr.md](../design/nostr.md#the-engines-step)).
 
 ## Not ported
 

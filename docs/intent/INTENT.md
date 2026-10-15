@@ -24,4 +24,4 @@ Lay an essentialist foundation first, then evolve it quickly.
 - a linear model as the engine, kept absolutely simple.
 
 **Later:** Nostr, Base, central, a better engine, and so on. The full design for
-these is already researched and parked in [../future/](../future/README.md).
+these is already researched and parked in [../plans/](../plans/README.md).

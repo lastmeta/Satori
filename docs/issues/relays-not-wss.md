@@ -2,7 +2,7 @@
 
 **Status:** open · **Blocks:** Nostr in a deployed (https) app · **Fix in:** relay hosting and central
 
-Nostr is built (step 5, [../../design/nostr.md](../../design/nostr.md)) and
+Nostr is built (step 5, [../design/nostr.md](../design/nostr.md)) and
 works from the dev server, which is plain `http://localhost:5180`, against
 `ws://` relays. A deployed app is served over https and can't reach today's
 only listed relay.

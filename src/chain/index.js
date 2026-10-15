@@ -30,7 +30,7 @@ export const HISTORY = 768; // the registry's ring (SatoriRegistry.sol HISTORY_S
  * a try/catch (SatoriToken.sol:831-842), so the estimate is the least gas at
  * which the hook may fail silently: SATORI minted or sent to a delegated vault
  * then leaves the delegate's power short, and the vault can never undelegate
- * (Panic 0x11, docs/future/issues/token-hook-gas-estimate.md). Unused gas is
+ * (Panic 0x11, docs/issues/token-hook-gas-estimate.md). Unused gas is
  * not charged.
  */
 export const HOOK_GAS = 500_000n;

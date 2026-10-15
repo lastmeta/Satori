@@ -125,7 +125,7 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
 
     observations: (limit = 100) => call('GET', `/api/v1/observations/batch?limit=${limit}`),
 
-    /** Base's addresses (base.py:15-19); prod answers 404 (docs/future/issues/central-prod-missing-base-routes.md). */
+    /** Base's addresses (base.py:15-19); prod answers 404 (docs/issues/central-prod-missing-base-routes.md). */
     baseConfig: () => call('GET', '/api/v1/base/config'),
     /** { root, address, amountWei, amount, proof }; 404 = not in the drop, or none published (merkle.py:45-58). */
     merkleProof: (address) => call('GET', `/api/v1/merkle/proof/${encodeURIComponent(address)}`),

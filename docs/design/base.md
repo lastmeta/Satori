@@ -132,7 +132,7 @@ contract call is the estimate + 500,000 (`HOOK_GAS`; unused gas is not
 charged): the token runs its transfer hook in a try/catch, so the bare
 estimate starves the hook, and SATORI that reaches a delegated vault that way
 (any claim) leaves it unable to ever undelegate. Found on the fork while
-building this step ([issue](../future/issues/token-hook-gas-estimate.md));
+building this step ([issue](../issues/token-hook-gas-estimate.md));
 Lite and the dapp send with the bare estimate. **The pad protects only our
 own writes**: a transfer or a `claimAirdropFor(vault)` someone else sends
 to our delegated vault with a bare estimate (1 wei is enough) still bricks
@@ -190,7 +190,7 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    `naive` forecast (too little history: D6's daily default stream has two
    values) always votes DOWN, and so does every browser neuron. Fixable, not
    inherent: the parked alternative (a seeded slope rule,
-   [../future/design/engine.md](../future/design/engine.md)) was set aside
+   [../plans/engine.md](../plans/engine.md)) was set aside
    for Lite's rule (owner, 2026-10-15). A **named** stream's value is a
    signed counter that starts at 0; the engine models any series with a
    value ≤ 0 on changes (`bar1d`, [engine.md](engine.md#bar1d-a-series-with-values--0-step-6)),
@@ -200,7 +200,7 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    (`StaleValue`, `EmptyStream`, `DuplicatePrediction`, …); an RPC failure is
    not a revert and stops the batch until the next check. This fixes Lite's
    "one stale game sinks the batch"
-   ([issue](../future/issues/base-batch-one-bad-game-reverts-all.md)): the
+   ([issue](../issues/base-batch-one-bad-game-reverts-all.md)): the
    simulate runs the contract's own pull and checks
    (`C/next/SatoriEngine.sol:777-810`), which no off-chain read reproduces,
    named games' 24 clock hours included (`:807`). Lite's own named-game rule
@@ -273,7 +273,7 @@ did, why it skipped, or its error.
    (ROUTES:1321-1331). Its 404 says which case
    (`central/src/api/v1/endpoints/merkle.py:45-58`): "no reward drop has been
    published yet", or "… is not in the current drop"; prod, which lacks the
-   route ([issue](../future/issues/central-prod-missing-base-routes.md)),
+   route ([issue](../issues/central-prod-missing-base-routes.md)),
    answers a plain "Not Found". Then `merkle.claimMerkle(amountWei, proof)`
    when `amountWei > alreadyMintedTo(vault)` (ROUTES:1360-1388, BC:94-104).
    The contract pays what its reserve allows and keeps the rest for a later
@@ -309,7 +309,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | Words: "Delegate prediction power" / "Stop delegating" (the dapp), not Lite's "Staking". | The app's Lock/Unlock is the passphrase. |
 | The vault's Base address is computed from `vault.yaml`'s public key. | Status without Unlock; Lite needs the decrypted vault. |
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
-| Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../future/issues/token-hook-gas-estimate.md)). |
+| Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
 | A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
 
 ## UI and agents

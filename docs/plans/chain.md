@@ -1,10 +1,10 @@
 # Chain: what is still ahead
 
-[← Later steps](../README.md)
+[← Roadmap](README.md)
 
 Step 6 built Base: config, the status multicall, delegate and stop, the
 identity's daily batch, claims (`hub.claim`, merkle, airdrop) and sends.
-[../../design/base.md](../../design/base.md) is the source of truth, with
+[../design/base.md](../design/base.md) is the source of truth, with
 Lite's and the dapp's file:line evidence and every deviation. What is left
 here is for later steps.
 

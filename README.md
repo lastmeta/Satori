@@ -73,7 +73,7 @@ Open **Network streams**, search, **Subscribe**: the Nostr card shows the
 latest observation and our `_pred` (value, seq, how many relays took it).
 To use satorian normally from the dev server, tick **Publish to central's
 relays** under Settings (a build does by default). An https deployment
-needs a `wss://` relay ([issue](docs/future/issues/relays-not-wss.md)).
+needs a `wss://` relay ([issue](docs/issues/relays-not-wss.md)).
 
 Base on the dev server: its RPC is `/rpc` by default, which Vite proxies to
 a local anvil fork of Base Sepolia (the real addresses; by default a dev
@@ -143,4 +143,4 @@ node scripts/backtest.mjs   # the engine vs persistence at 24 h on real history 
   engine: [docs/design/engine.md](docs/design/engine.md),
   Nostr: [docs/design/nostr.md](docs/design/nostr.md),
   Base: [docs/design/base.md](docs/design/base.md)
-- Later steps, already researched: [docs/future/README.md](docs/future/README.md)
+- Later steps, already researched: [docs/plans/README.md](docs/plans/README.md)

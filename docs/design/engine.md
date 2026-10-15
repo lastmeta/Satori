@@ -212,7 +212,7 @@ From Satori Lite:
   a step is about the same length.
 - No per-node diversity (Lite redraws hyperparameters on purpose). It is
   optional and left for later, seeded from the identity as the parked design
-  planned ([../future/design/engine.md](../future/design/engine.md)).
+  planned ([../plans/engine.md](../plans/engine.md)).
 
 ## Verified
 
