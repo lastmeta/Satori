@@ -117,12 +117,11 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       if (!e) {
         e = { url, blocked: https && url.startsWith('ws://') && !isLocal(url), relay: null, chunks: 0 };
         if (!e.blocked) {
-          const relay = makeRelay(url, {
+          e.relay = makeRelay(url, {
             onOpen: (r) => work(() => opened(url, r)),
             onEvent: (_id, ev) => work(() => intake(ev)),
             onState: () => onChange(),
           });
-          e.relay = relay;
         }
       }
       e.from = from;
@@ -185,9 +184,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const seq = await db.nextPredSeq(uuid);
     const at = t();
     const ev = sign(observationEvent({ stream: sub.stream_name + PRED, value: pub, seq, timestamp: at }));
-    const n2 = await publish(ev);
+    const took = await publish(ev);
     await db.addRelayPrediction({ stream_uuid: uuid, seq, value: pub, model: f?.model ?? 'echo', obs_seq: o.seq,
-      made_at: at, event_id: ev.id, relays: n2 });
+      made_at: at, event_id: ev.id, relays: took });
     await db.checkpoint();
     onChange();
   }

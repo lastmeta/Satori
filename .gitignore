@@ -3,3 +3,5 @@ dist/
 .dev.log
 test-results/
 playwright-report/
+.relay.log
+.provider.log
