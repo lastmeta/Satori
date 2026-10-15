@@ -62,7 +62,7 @@ Two paths, neither needs Nostr:
  │   ├─ central     fetch; login per batch                     → central.md     │
  │   ├─ base        viem: registry reads, delegate, batch, claims → chain.md    │
  │   ├─ scheduler   wall-clock deadlines + catch-up on resume  → runtime.md     │
- │   └─ engine      naive / SES + direction rule, t1+t2        → engine.md      │
+ │   └─ engine      bar1 (built, step 4) + direction rule      → engine.md      │
  │                                                                              │
  │  service worker: precache app shell + DuckDB wasm only (no neuron logic)     │
  └──────────┬──────────────────────────────────────┬────────────────────────────┘
@@ -86,7 +86,7 @@ the lock queue ([runtime.md](runtime.md)).
 | [identity.md](identity.md) | keys, backup words, encryption at rest, Docker import/export, Evrmore message signing |
 | [central.md](central.md) | built in step 3: [../../design/central.md](../../design/central.md); left here: base config, merkle proof, relays |
 | [chain.md](chain.md) | Base: config, stream reads, delegate/revoke, daily batch, claims, balances; Evrmore later |
-| [engine.md](engine.md) | forecaster, horizons, Base direction, per-node diversity |
+| [engine.md](engine.md) | built in step 4: [../../design/engine.md](../../design/engine.md); left here: Base direction, per-node diversity |
 | [storage.md](storage.md) | DuckDB-WASM on OPFS, schema, single-writer rule, durability |
 | [runtime.md](runtime.md) | background execution, leader election, scheduling, catch-up |
 | [ui.md](ui.md) | pages, ArrowJS, CSP and hosting |
@@ -165,8 +165,9 @@ only [ui.md](ui.md) changes.
 3. **Base streams.** Games from `registry.getAllDataStreams` +
    `games.binaryGameByStream`; history and latest values from registry views.
    ([chain.md](chain.md#base-streams))
-4. **Engine.** Naive floor + SES per stream, t1 and t2; a separate Base
-   direction rule that never defaults to a constant vote. ([engine.md](engine.md))
+4. **Engine.** Built in step 4 ([../../design/engine.md](../../design/engine.md)):
+   `bar1`/`naive` per stream, t1 and t2. Left: a separate Base direction rule
+   that never defaults to a constant vote. ([engine.md](engine.md))
 5. **Base.** Delegate / revoke, the daily batch signed by the identity (due
    whenever the current UTC round has none), merkle claim, airdrop claim,
    `hub.claim`, ETH and SATORI balances, the 250-SATORI central gate.
