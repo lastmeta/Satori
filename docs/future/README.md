@@ -24,3 +24,13 @@ steps start from evidence, not from scratch.
 5. **Nostr**: subscribe to streams, publish `_pred` ([design/transport.md](design/transport.md)). This needs a wss relay.
 6. **Better engine**: SES and backtest-driven selection ([design/engine.md](design/engine.md)).
 7. **Runtime hardening**: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
+
+## Noticed while building the MVP
+
+- A forgotten passphrase leaves only one way back: import the 24 words. The
+  MVP has no "use different words" button on Unlock; add one (it replaces the
+  sealed key, keeps the data).
+- The key lives on the main thread while unlocked; moving signing into a
+  worker is part of step 7.
+- Ticks are spaced from the start of the last run; there is no catch-up for
+  missed intervals while the tab was closed (step 7).
