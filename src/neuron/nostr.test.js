@@ -43,11 +43,17 @@ function fakeRelays() {
           && (f.until === undefined || e.created_at <= f.until))
           .sort((a, b) => b.created_at - a.created_at).slice(0, f.limit ?? 500);
       },
+      mute: false, // never answers OK until release()
+      held: [],
+      log: null, // an array to record call order in
       async publish(e) {
         if (r.state !== 'open') return { ok: false, message: 'not connected' };
         r.published.push(e);
+        r.log?.push(`publish ${e.kind}`);
+        if (r.mute) return new Promise((resolve) => r.held.push(() => resolve({ ok: r.ok, message: '' })));
         return { ok: r.ok, message: '' };
       },
+      release() { for (const f of r.held.splice(0)) f(); },
       deliver(e) { return hooks.onEvent(FOLLOW_ID, e); },
     };
     all.set(url, r);
@@ -207,7 +213,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     c.stored.push(announce('paid', { price: 5 }), announce('enc', { encrypted: true }), announce('gate', { approval: true }));
     for (const s of ['paid', 'enc', 'gate']) await expect(nostr.subscribe(PROV_PUB, s)).rejects.toThrow(/later/);
     c.stored.push({ ...announce('forged'), content: announce('x').content });
-    await expect(nostr.subscribe(PROV_PUB, 'forged')).rejects.toThrow(/signature/);
+    await expect(nostr.subscribe(PROV_PUB, 'forged')).rejects.toThrow(/not announced/); // a bad signature is not taken
     central.config = { max_streams: 2 };
     await nostr.start(); // the cap is read at start, as Lite
     c.stored.push(announce('a'), announce('b'), announce('c'));
@@ -335,7 +341,9 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await settle();
     u.published = [];
     await nostr.unsubscribe(PROV_PUB, 'btc');
+    await settle();
     expect(kinds(u)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
+    expect(await db.get('nostr_outbox')).toEqual([]); // answered: nothing waits
     expect(u.published[0].tags).toContainEqual(['action', 'unsubscribe']);
     expect(u.published[1].tags).toEqual([['d', 'btc_pred'], ['satori', 'datastream'], ['status', 'deleted']]);
     for (const r of relays.all.values()) expect(r.subs.has(FOLLOW_ID)).toBe(false);
@@ -361,5 +369,94 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(filters).toEqual(expect.arrayContaining([
       { kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] }, { kinds: [34601], authors: [OTHER], '#d': ['x'] }]));
     expect(filters).toHaveLength(2);
+  });
+
+  test('subscribe trusts only verified announcements by the asked provider with the asked name', async () => {
+    await boot();
+    openAll();
+    const OTHER = '5'.repeat(64);
+    const real = announce('btc', { price: 5, cadence: 3600 }, clock - 100); // the real stream is paid
+    const other = signEvent(announceEvent({ stream_name: 'btc', nostr_pubkey: nostrPubkey(OTHER), name: 'other', created_at: 1,
+      cadence_seconds: 1 }, clock), OTHER);
+    const forged = { ...announce('btc', { cadence: 1 }, clock), sig: '00'.repeat(64) };
+    const c = relays.get(CENTRAL_RELAY);
+    c.fetch = async () => [real, other, forged, { ...announce('eth', {}, clock + 5) }];
+    await expect(nostr.subscribe(PROV_PUB, 'btc')).rejects.toThrow(/later/);
+    c.fetch = async () => [other, forged];
+    await expect(nostr.subscribe(PROV_PUB, 'btc')).rejects.toThrow(/not announced/);
+  });
+
+  test("one `<name>_pred` per name: a second provider's stream of the same name is refused", async () => {
+    await subscribed('btc');
+    const OTHER = '5'.repeat(64);
+    relays.get(CENTRAL_RELAY).stored.push(signEvent(announceEvent({ stream_name: 'btc', nostr_pubkey: nostrPubkey(OTHER),
+      created_at: 1, cadence_seconds: 60 }, clock), OTHER));
+    await expect(nostr.subscribe(nostrPubkey(OTHER), 'btc')).rejects.toThrow(/already predict btc from/);
+    await nostr.unsubscribe(PROV_PUB, 'btc');
+    expect(await nostr.subscribe(nostrPubkey(OTHER), 'btc')).toMatchObject({ provider: nostrPubkey(OTHER) });
+  });
+
+  test('a relay that never answers OK holds up neither subscribing nor intake; the count follows its OK', async () => {
+    await boot();
+    openAll();
+    await settle();
+    const u = relays.get(USER_RELAY);
+    const c = relays.get(CENTRAL_RELAY);
+    u.mute = true;
+    c.stored.push(announce('a'), announce('b'));
+    await nostr.subscribe(PROV_PUB, 'a');
+    await nostr.subscribe(PROV_PUB, 'b');
+    void nostr.reconcile(); // its re-announcements wait on the mute relay too
+    await c.deliver(observe('a', '1', 1));
+    await c.deliver(observe('b', '2', 1));
+    await c.deliver(observe('a', '3', 2));
+    const preds = async () => (await nostr.status()).subscriptions.map((s) => [s.stream, s.prediction?.seq, s.prediction?.relays]);
+    expect((await preds()).sort()).toEqual([['a', 2, 0], ['b', 1, 0]]);
+    u.release();
+    await settle();
+    u.release();
+    await settle();
+    expect((await preds()).sort()).toEqual([['a', 2, 1], ['b', 1, 1]]);
+  });
+
+  test('the seq, the observation and the prediction are checkpointed before the `_pred` is sent (as Lite commits first)', async () => {
+    await subscribed('btc');
+    const log = [];
+    const u = relays.get(USER_RELAY);
+    u.log = log;
+    const checkpoint = db.checkpoint;
+    db.checkpoint = async () => { log.push('checkpoint'); return checkpoint(); };
+    await relays.get(CENTRAL_RELAY).deliver(observe('btc', '1', 1));
+    await settle();
+    expect(log.slice(0, 2)).toEqual(['checkpoint', 'publish 34601']);
+  });
+
+  test("central down at load: its last relay list (kept in meta) is used", async () => {
+    await boot();
+    expect(await db.get('nostr_central_relays')).toEqual([CENTRAL_RELAY]);
+    nostr.stop();
+    central.fail = true;
+    const again = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+      makeRelay: relays.make, now, defaults: { relays: [], centralWrite: false }, setInterval: () => 0, openWaitMs: 0 });
+    await again.start();
+    expect((await again.status()).relays.map((r) => [r.url, r.from])).toEqual([[CENTRAL_RELAY, ['central']]]);
+  });
+
+  test('an unsubscribe and its tombstone wait (kept over a reload) for a relay that is not open, and go when it opens', async () => {
+    await subscribed('btc');
+    const u = relays.get(USER_RELAY);
+    u.drop();
+    u.published = [];
+    await nostr.unsubscribe(PROV_PUB, 'btc');
+    expect(u.published).toEqual([]);
+    expect((await db.get('nostr_outbox')).map((x) => [x.url, x.event.kind])).toEqual([[USER_RELAY, 34602], [USER_RELAY, 34600]]);
+    nostr.stop(); // a reload
+    const again = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+      makeRelay: relays.make, now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0, openWaitMs: 0 });
+    await again.start();
+    relays.get(USER_RELAY).open();
+    await again.idle();
+    expect(kinds(relays.get(USER_RELAY)).filter(([k]) => k !== 10002)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
+    expect(await db.get('nostr_outbox')).toEqual([]);
   });
 });

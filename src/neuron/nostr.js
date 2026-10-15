@@ -3,6 +3,8 @@
 //   34601 in ─▶ subscribed? ─▶ verify ─▶ store once ─▶ forecast (step = cadence) ─▶ publish `<stream>_pred`
 //   hourly: refetch the relay list, reconnect, re-announce; NIP-65 daily
 // Relay streams are apart from central's: own tables, and nothing goes to central.
+// Intake runs one event at a time; sending (which waits for each relay's OK)
+// runs beside it, so a slow or mute relay holds nothing up.
 import { signEvent, verifyEvent, npub } from '../nostr/event.js';
 import { createRelay } from '../nostr/relay.js';
 import {
@@ -18,6 +20,7 @@ export const FOLLOW_ID = 'satori-follow'; // client.py:76
 const PAGE = 500; // strfry's maxFilterLimit (client.py:72-75)
 const MAX_FILTERS = 200; // strfry's maxReqFilterSize
 const MAX_PAGES = 100;
+const OUTBOX_MAX = 100; // unsubscribes and tombstones waiting for a relay
 const EPOCH = [946_684_800, 4_102_444_800]; // 2000–2100 (start.py:1413-1424)
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -48,18 +51,43 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let relays = new Map(); // url → { url, from: Set, relay, blocked, chunks }
   let timer = null;
   let tail = Promise.resolve();
+  const sending = new Set();
+  const log = (err) => console.error('[satori] nostr', err);
 
-  /** Background work (intake, a relay's open, announcements) runs one at a time, in order. */
-  const work = (fn) => (tail = tail.then(fn).catch((err) => console.error('[satori] nostr', err)));
+  /** Intake runs one event at a time, in order. */
+  const work = (fn) => (tail = tail.then(fn).catch(log));
+  /** Sends run beside the intake queue: a relay that is slow to say OK (or never does) holds nothing up. */
+  function background(p) {
+    const q = Promise.resolve(p).catch(log).finally(() => sending.delete(q));
+    sending.add(q);
+    return q;
+  }
+  /** Resolves when the queued intake and every send so far are done. */
+  async function idle() {
+    for (;;) {
+      const t0 = tail;
+      await t0;
+      if (sending.size) await Promise.all([...sending]);
+      else if (t0 === tail) return;
+    }
+  }
   const sign = (template) => signEvent(template, key.secret);
   const t = () => Math.floor(now());
   const writes = (e) => e.from.has('user') || (e.from.has('central') && centralWrite);
   const open = () => [...relays.values()].filter((e) => e.relay?.state === 'open');
+  const writable = () => open().filter(writes);
 
-  /** Publish to every open relay we write to → how many said OK. */
-  async function publish(event, targets = open().filter(writes)) {
+  /** Publish to every open relay we write to, at once → how many said OK. */
+  async function publish(event, targets = writable()) {
     const results = await Promise.all(targets.map((e) => e.relay.publish(event)));
     return results.filter((r) => r.ok).length;
+  }
+
+  /** Our `_pred` announcements, to the given relays, all at once (start.py:3442-3482). */
+  async function announce(targets = writable()) {
+    if (!targets.length) return;
+    const events = await announcements(t());
+    await Promise.all(events.map((ev) => publish(ev, targets)));
   }
 
   async function filters() {
@@ -86,22 +114,48 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   const announcements = async (at) => (await db.relayStreams({ active: true }))
     .map((sub) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey }), at)));
 
-  /** NIP-65 of the open relays, when the last one is a day old (start.py:370-389). */
-  async function relayList() {
+  /** NIP-65 of the open relays, when the last one is a day old (start.py:370-389); one at a time. */
+  let listing = null;
+  const relayList = () => (listing ??= (async () => {
     const at = t();
     if (at - ((await db.get('nostr_relay_list_at')) ?? 0) < RELAY_LIST_S) return;
-    if (!open().some(writes)) return;
+    if (!writable().length) return;
     if (!(await publish(sign(relayListEvent(open().map((e) => e.url), at))))) return;
     await db.set('nostr_relay_list_at', at);
     await db.checkpoint(); // OPFS keeps what is checkpointed: a reload must not send it again
+  })().finally(() => { listing = null; }));
+
+  // The outbox (meta.nostr_outbox): unsubscribes and tombstones for relays we
+  // write to that were not open or did not answer; sent when they open.
+  let boxTail = Promise.resolve();
+  const editOutbox = (fn) => (boxTail = boxTail.then(async () => {
+    await db.set('nostr_outbox', fn((await db.get('nostr_outbox')) ?? []).slice(-OUTBOX_MAX));
+    await db.checkpoint();
+  }));
+  /** An answer, OK or not, means the relay has seen it; nothing to resend. */
+  const answered = (r) => !['not connected', 'timeout', 'disconnected'].includes(r.message) || r.ok;
+  async function flushOutbox(e) {
+    await boxTail;
+    const mine = ((await db.get('nostr_outbox')) ?? []).filter((x) => x.url === e.url);
+    if (!mine.length || e.relay?.state !== 'open' || !writes(e)) return;
+    const results = await Promise.all(mine.map((x) => e.relay.publish(x.event)));
+    const done = new Set(mine.filter((x, i) => answered(results[i])).map((x) => x.event.id));
+    await editOutbox((box) => box.filter((x) => !(x.url === e.url && done.has(x.event.id))));
+  }
+  /** Keep events for every relay we write to, then send them where it is open. */
+  async function sendKept(events) {
+    const targets = [...relays.values()].filter((e) => e.relay && writes(e));
+    await editOutbox((box) => [...box, ...targets.flatMap((e) => events.map((event) => ({ url: e.url, event })))]);
+    for (const e of targets) background(flushOutbox(e));
   }
 
-  /** A relay (re)connected: announce our `_pred` streams there (start.py:326-328). */
-  async function opened(url, relay) {
+  /** A relay (re)connected: announce our `_pred` streams there (start.py:326-328), send what waits for it. */
+  function opened(url, relay) {
     const e = relays.get(url);
     if (e?.relay !== relay) return;
-    if (writes(e)) for (const ev of await announcements(t())) await publish(ev, [e]);
-    await relayList();
+    if (writes(e)) background(announce([e]));
+    background(flushOutbox(e));
+    background(relayList());
     onChange();
   }
 
@@ -118,7 +172,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         e = { url, blocked: https && url.startsWith('ws://') && !isLocal(url), relay: null, chunks: 0 };
         if (!e.blocked) {
           e.relay = makeRelay(url, {
-            onOpen: (r) => work(() => opened(url, r)),
+            onOpen: (r) => opened(url, r),
             onEvent: (_id, ev) => work(() => intake(ev)),
             onState: () => onChange(),
           });
@@ -147,18 +201,17 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   async function reconcile() {
     try {
       const list = await central().relays();
-      centralUrls = [...new Set((Array.isArray(list) ? list : []).map((r) => String(r?.relay_url ?? '').trim()).filter(isRelayUrl))];
+      const urls = [...new Set((Array.isArray(list) ? list : []).map((r) => String(r?.relay_url ?? '').trim()).filter(isRelayUrl))];
+      if (JSON.stringify(urls) !== JSON.stringify(centralUrls)) await db.set('nostr_central_relays', urls);
+      centralUrls = urls;
     } catch (err) {
-      console.warn('[satori] relay list from central', err?.message ?? err);
+      console.warn('[satori] relay list from central (the last one is kept)', err?.message ?? err);
     }
     const added = applyRelays();
     for (const e of relays.values()) if (e.relay?.state === 'closed' && !added.includes(e)) e.relay.connect();
     await connectNew(added);
-    await work(async () => {
-      for (const ev of await announcements(t())) await publish(ev);
-      await relayList();
-    });
     onChange();
+    await Promise.all([background(announce()), background(relayList())]);
   }
 
   /**
@@ -184,11 +237,15 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const seq = await db.nextPredSeq(uuid);
     const at = t();
     const ev = sign(observationEvent({ stream: sub.stream_name + PRED, value: pub, seq, timestamp: at }));
-    const took = await publish(ev);
     await db.addRelayPrediction({ stream_uuid: uuid, seq, value: pub, model: f?.model ?? 'echo', obs_seq: o.seq,
-      made_at: at, event_id: ev.id, relays: took });
-    await db.checkpoint();
+      made_at: at, event_id: ev.id, relays: 0 });
+    await db.checkpoint(); // the seq, the observation and the prediction are kept before anything is sent, as Lite commits first
     onChange();
+    background(publish(ev).then(async (n) => {
+      if (!n) return;
+      await db.setPredictionRelays(uuid, seq, n);
+      onChange();
+    }));
   }
 
   /** Every open relay's 34600s, paged back with `until` as discover_datastreams (client.py:809-882). */
@@ -250,6 +307,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     async start() {
       const cfg = await Promise.resolve().then(() => central().relayConfig()).catch(() => null);
       maxStreams = Number(cfg?.max_streams) > 0 ? Number(cfg.max_streams) : MAX_STREAMS;
+      centralUrls = (await db.get('nostr_central_relays')) ?? []; // used when central is down now
       userRelays = (await db.get('nostr_relays')) ?? defaults.relays;
       centralWrite = (await db.get('nostr_central_write')) ?? defaults.centralWrite;
       await reconcile();
@@ -262,8 +320,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       relays = new Map();
     },
     reconcile,
-    /** Resolves when the background work queued so far is done. */
-    idle: () => tail,
+    idle,
 
     async status() {
       return {
@@ -295,21 +352,28 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       if ((await db.countActiveRelay()) >= maxStreams) {
         throw new Error(`The limit of ${maxStreams} streams is reached (central's max_streams). Unsubscribe from one first.`);
       }
+      const clash = (await db.relayStreams({ active: true })).find((r) => r.stream_name === s);
+      if (clash) {
+        throw new Error(`You already predict ${s} from ${clash.provider_pubkey.slice(0, 8)}…: there is one ${s}${PRED} per name `
+          + '(Lite keeps its publications unique by name). Unsubscribe from that one first.');
+      }
       const filter = [{ kinds: [KIND.ANNOUNCE], authors: [p], '#d': [s] }];
       const events = (await Promise.all((await readable()).map((e) => e.relay.fetch(filter).catch(() => [])))).flat();
-      const [found] = catalog(events);
+      // Only what the asked provider signed, with the asked name: a relay may send anything.
+      const mine = events.filter((e) => e?.kind === KIND.ANNOUNCE && e.pubkey === p
+        && Array.isArray(e.tags) && e.tags.some((x) => Array.isArray(x) && x[0] === 'd' && x[1] === s) && verifyEvent(e));
+      const [found] = catalog(mine);
       if (!found) throw new Error(`${s} is not announced by ${p.slice(0, 8)}… on the connected relays.`);
-      if (!verifyEvent(found.event)) throw new Error('The announcement has a bad signature.');
       if (found.price_per_obs > 0 || found.encrypted || found.approval_required) {
         throw new Error('Paid, encrypted and approval-gated streams come later; this one is not free and open.');
       }
       const at = t();
       const sub = await db.subscribeRelay({ uuid, stream_name: s, provider_pubkey: p, name: found.name,
         cadence_seconds: found.cadence_seconds, meta: found.event.content, now: at });
-      await publish(sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at })));
-      await publish(sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey }), at)));
       await refollow();
       await db.checkpoint();
+      background(publish(sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at }))));
+      background(publish(sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey }), at))));
       onChange();
       return viewOf(uuid);
     },
@@ -321,10 +385,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       if (!(await db.relayStream(uuid))?.active) throw new Error(`Not subscribed to ${s} from ${p.slice(0, 8)}….`);
       const at = t();
       await db.unsubscribeRelay(uuid, at);
-      await publish(sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at, unsubscribe: true })));
-      await publish(sign(tombstoneEvent(s + PRED, key.pubkey, at)));
       await refollow();
       await db.checkpoint();
+      await sendKept([sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at, unsubscribe: true })),
+        sign(tombstoneEvent(s + PRED, key.pubkey, at))]);
       onChange();
       return true;
     },
@@ -344,9 +408,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       }
       await db.checkpoint();
       await connectNew(applyRelays());
-      await work(async () => { // a relay we now write to gets our announcements
-        for (const ev of await announcements(t())) await publish(ev);
-      });
+      background(announce()); // a relay we now write to gets our announcements
       onChange();
       return this.status();
     },

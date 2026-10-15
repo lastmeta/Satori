@@ -214,6 +214,8 @@ describe('relay streams (Nostr), apart from central', () => {
       p_relays: 2 });
     expect(eth).toMatchObject({ uuid: 'r-2', observations: 0, obs_value: null, p_value: null });
     expect((await db.relayPredictions('r-1', 1)).map((p) => p.value)).toEqual(['6.5']);
+    await db.setPredictionRelays('r-1', 2, 3); // the relays' OKs come after the row is kept
+    expect((await db.relayStreams()).find((r) => r.uuid === 'r-1')).toMatchObject({ p_seq: 2, p_relays: 3 });
     await db.unsubscribeRelay('r-2', 3000);
     expect((await db.relayStreams({ active: true })).map((r) => r.uuid)).toEqual(['r-1']);
   });

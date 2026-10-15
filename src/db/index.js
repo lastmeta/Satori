@@ -170,6 +170,9 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       (await rows('UPDATE relay_streams SET pred_seq = pred_seq + 1 WHERE uuid = ? RETURNING pred_seq', uuid))[0].pred_seq),
     addRelayPrediction: serial((p) => run('INSERT INTO relay_predictions VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       p.stream_uuid, p.seq, p.value, p.model ?? null, p.obs_seq ?? null, p.made_at, p.event_id, p.relays)),
+    /** How many relays took a published `_pred` (known after it is kept). */
+    setPredictionRelays: serial((uuid, seq, n) =>
+      run('UPDATE relay_predictions SET relays = ? WHERE stream_uuid = ? AND seq = ?', n, uuid, seq)),
     relayPredictions: serial((uuid, limit = 20) =>
       rows('SELECT * FROM relay_predictions WHERE stream_uuid = ? ORDER BY seq DESC LIMIT ?', uuid, limit)),
 
