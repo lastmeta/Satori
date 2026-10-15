@@ -1,0 +1,170 @@
+#!/usr/bin/env node
+// A local fork of Base Sepolia for the Base card (docs/design/base.md#the-local-fork-dev).
+// The dev server proxies /rpc to 127.0.0.1:8545, its default Base RPC, so a
+// dev checkout never sends to a public chain. anvil: ~/.foundry/bin/anvil (or $ANVIL).
+//
+//   node scripts/fork.mjs start [--port 8545]                 anvil --fork-url https://sepolia.base.org, 2 s blocks (as Base)
+//   node scripts/fork.mjs stop [--port 8545]
+//   node scripts/fork.mjs fund <0x…> [<0x…>] [--eth 0.1] [--satori 100]
+//   node scripts/fork.mjs airdrop <0x…> <SATORI>             loads an airdrop allocation (the deployer is its authority)
+//   node scripts/fork.mjs merkle <0x…> <SATORI>              sets a merkle root with that address; prints central's proof JSON
+//   node scripts/fork.mjs advance [days]                     moves chain time forward and mines
+//   node scripts/fork.mjs predict [up|down]                  the deployer predicts the default game (moves its next value)
+//
+// Every command but start takes --port. The deployer (0x9d31…8817, D6's admin,
+// root publisher and airdrop authority, ~519 SATORI) is impersonated.
+import { spawn } from 'node:child_process';
+import { openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import {
+  createPublicClient, createTestClient, createWalletClient, encodeAbiParameters, http, keccak256, concat,
+  parseAbi, parseEther, encodePacked,
+} from 'viem';
+import { baseSepolia } from 'viem/chains';
+import { DEFAULTS } from '../src/chain/config.js';
+
+export const DEPLOYER = '0x9d3109b8A045D63056Aa5C1d2c883F3F9fA18817';
+const FORK_URL = 'https://sepolia.base.org';
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+const abi = parseAbi([
+  'function transfer(address to, uint256 value) returns (bool)',
+  'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
+  'error Locked()', 'error Unauthorized()', 'error DuplicateRecipient()', 'error AlreadyPredicted()',
+  'function loadAirdropBatch(address[] recipients, uint256[] amounts)',
+  'function setMerkleRoot(bytes32 newRoot)',
+  'struct Request { uint32 gameId; bytes payload; }',
+  'function predictMultipleWithPayloads(Request[] requests)',
+]);
+
+export function clients(rpc) {
+  const transport = http(rpc);
+  return {
+    test: createTestClient({ mode: 'anvil', chain: baseSepolia, transport }),
+    pub: createPublicClient({ chain: baseSepolia, transport }),
+    deployer: createWalletClient({ account: DEPLOYER, chain: baseSepolia, transport }),
+  };
+}
+
+async function asDeployer(rpc, address, functionName, args) {
+  const { test, pub, deployer } = clients(rpc);
+  await test.impersonateAccount({ address: DEPLOYER });
+  await test.setBalance({ address: DEPLOYER, value: parseEther('10') }); // anvil's default gas limit is the block's (1.2e9)
+  const { request } = await pub.simulateContract({ account: DEPLOYER, address, abi, functionName, args }); // a revert says why
+  const hash = await deployer.writeContract(request);
+  const r = await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+  if (r.status !== 'success') throw new Error(`${functionName} failed (${hash})`);
+  return hash;
+}
+
+/** ETH (anvil_setBalance) and SATORI (from the deployer) to each address. */
+export async function fund(rpc, addresses, { eth = '0.1', satori = '0' } = {}) {
+  const { test } = clients(rpc);
+  for (const address of addresses) {
+    await test.setBalance({ address, value: parseEther(String(eth)) });
+    if (Number(satori) > 0) await asDeployer(rpc, DEFAULTS.token, 'transfer', [address, parseEther(String(satori))]);
+  }
+}
+
+export const airdrop = (rpc, address, satori) =>
+  asDeployer(rpc, DEFAULTS.airdrop, 'loadAirdropBatch', [[address], [parseEther(String(satori))]]);
+
+// SatoriMerkle's leaf: keccak256(keccak256(abi.encode(account, amount))) (SatoriMerkle.sol:185-188);
+// pairs hashed sorted, as OpenZeppelin's MerkleProof (contract/satori/scripts/merkle-drop.js).
+const leafOf = (account, amount) =>
+  keccak256(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [account, amount])));
+const pair = (a, b) => keccak256(concat(a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a]));
+
+/** A root over `address` and a filler entry; → central's /merkle/proof shape { root, address, amountWei, amount, proof }. */
+export async function merkle(rpc, address, satori) {
+  const amountWei = parseEther(String(satori));
+  const mine = leafOf(address, amountWei);
+  const other = leafOf('0x000000000000000000000000000000000000dEaD', 1n);
+  const root = pair(mine, other);
+  await asDeployer(rpc, DEFAULTS.merkle, 'setMerkleRoot', [root]);
+  return { root, address, amountWei: amountWei.toString(), amount: Number(satori), proof: [other] };
+}
+
+/** Chain time forward by `days`, then a block. */
+export async function advance(rpc, days = 1) {
+  const { test } = clients(rpc);
+  await test.increaseTime({ seconds: Math.round(Number(days) * 86400) });
+  await test.mine({ blocks: 1 });
+}
+
+/** The deployer predicts the default game (stream 1): its SATORI deployed this round moves the next round's value. */
+export const predict = (rpc, dir = 'up') =>
+  asDeployer(rpc, DEFAULTS.engine, 'predictMultipleWithPayloads', [[{ gameId: 1, payload: encodePacked(['uint8'], [dir === 'down' ? 2 : 1]) }]]);
+
+async function answering(rpc, tries = 60) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      if ((await clients(rpc).pub.getChainId()) === 84532) return true;
+    } catch { /* not yet */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
+}
+
+/** anvil in the background (it outlives this script), logging to .fork.log; its pid in .fork.pid. */
+export async function start(port = 8545) {
+  const rpc = `http://127.0.0.1:${port}`;
+  if (await answering(rpc, 1)) return { rpc, running: true };
+  const anvil = process.env.ANVIL ?? `${homedir()}/.foundry/bin/anvil`;
+  const out = openSync(`${ROOT}.fork.log`, 'a');
+  const child = spawn(anvil, ['--fork-url', FORK_URL, '--host', '127.0.0.1', '--port', String(port), '--block-time', '2'],
+    { detached: true, stdio: ['ignore', out, out] });
+  child.unref();
+  writeFileSync(`${ROOT}.fork.pid`, String(child.pid));
+  if (!(await answering(rpc))) throw new Error(`anvil did not answer on ${rpc} (see .fork.log)`);
+  return { rpc, pid: child.pid };
+}
+
+function stop() {
+  const pid = Number(readFileSync(`${ROOT}.fork.pid`, 'utf8'));
+  process.kill(pid);
+  rmSync(`${ROOT}.fork.pid`);
+  return pid;
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  const opt = (name, dflt) => {
+    const i = argv.indexOf(`--${name}`);
+    if (i < 0) return dflt;
+    return argv.splice(i, 2)[1];
+  };
+  const port = opt('port', '8545');
+  const rpc = `http://127.0.0.1:${port}`;
+  const [cmd, ...args] = argv;
+  switch (cmd) {
+    case 'start': {
+      const r = await start(port);
+      console.log(r.running ? `already running on ${r.rpc}` : `anvil fork of Base Sepolia on ${r.rpc} (pid ${r.pid}; log .fork.log)`);
+      break;
+    }
+    case 'stop': console.log(`stopped pid ${stop()}`); break;
+    case 'fund': {
+      const eth = opt('eth', '0.1');
+      const satori = opt('satori', '0');
+      await fund(rpc, argv.slice(1), { eth, satori });
+      console.log(`funded ${argv.slice(1).join(', ')}: ${eth} ETH${Number(satori) ? `, ${satori} SATORI` : ''}`);
+      break;
+    }
+    case 'airdrop': console.log(await airdrop(rpc, args[0], args[1])); break;
+    case 'merkle': console.log(JSON.stringify(await merkle(rpc, args[0], args[1]))); break;
+    case 'advance': await advance(rpc, args[0] ?? 1); console.log(`advanced ${args[0] ?? 1} day(s)`); break;
+    case 'predict': console.log(await predict(rpc, args[0])); break;
+    default:
+      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 18).join('\n'));
+      process.exitCode = cmd ? 1 : 0;
+  }
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err) => {
+    console.error(err.shortMessage ?? err.message ?? err);
+    process.exit(1);
+  });
+}
