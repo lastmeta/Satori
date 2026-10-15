@@ -249,7 +249,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
 
   // A new bitcoin row; central fails the batch: the prediction is kept.
   stub.batch = [entry('u-btc', 'bitcoin', T0 + 60, '67001.5'), BATCH[1]];
-  stub.fail.push(500);
+  stub.fail.push(500, 500); // a 5xx is resent once
   const r3 = await poll();
   expect(r3.poll).toMatchObject({ new: 1, predicted: 1 });
   expect(r3.submit.error).toBe('central 500: boom');
@@ -270,13 +270,25 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   const streams = await page.evaluate(() => window.satori.streams());
   expect(streams.map((s) => [s.name, s.observations, s.obs_value])).toEqual([['bitcoin', 2, 67001.5], ['eth', 1, 2500]]);
 
-  // The central URL: https only; a new one registers at once; '' is the default again.
+  // The central URL: https only; a new one registers at once. Its uuids differ, so the
+  // pending queue and the stream list are dropped and refill from it.
+  stub.batch = [entry('u-btc', 'bitcoin', T0 + 120, '67005.5'), BATCH[1]];
+  stub.fail.push(500, 500);
+  expect((await poll()).submit.error).toBe('central 500: boom');
   await expect(page.evaluate(() => window.satori.setCentral('http://central.test'))).rejects.toThrow(/https:\/\//);
+  expect((await status(page)).central.pending).toBe(1); // a refused URL changes nothing
+  elsewhere.batch = [{ ...entry('u-btc-2', 'bitcoin', T0 + 120, '67005.5'), stream: { uuid: 'u-btc-2', name: 'bitcoin', meta: '{"unit":"USD"}' } }];
   const c = await page.evaluate(() => window.satori.setCentral('https://central.test/'));
-  expect(c).toMatchObject({ url: 'https://central.test', registration: { ok: true, peer_id: 7 } });
+  expect(c).toMatchObject({ url: 'https://central.test', registration: { ok: true, peer_id: 7 }, pending: 0, lastPoll: null, lastSubmit: null });
   expect(elsewhere.registered).toHaveLength(1);
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://central.test');
+  expect(await page.evaluate(() => window.satori.streams())).toEqual([]);
+  await expect(page.locator('[data-test=stream]')).toHaveCount(0);
+  expect((await poll()).submit).toMatchObject({ successful: 1 });
+  expect(elsewhere.batches).toEqual([[expect.objectContaining({ stream_uuid: 'u-btc-2' })]]);
+  expect(await page.evaluate(() => window.satori.streams())).toMatchObject([{ uuid: 'u-btc-2', meta: { unit: 'USD' } }]);
   expect((await page.evaluate(() => window.satori.setCentral(''))).url).toBe(CENTRAL);
+  expect(await page.evaluate(() => window.satori.streams())).toEqual([]);
 
   // The keys, as in step 2.
   await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow(/Unlock the vault first/);

@@ -134,6 +134,31 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect(await db.pendingCount()).toBe(1);
   });
 
+  test('a local failure (the database) is recorded as the poll\'s error and logged, never thrown', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    central.batch = [entry('u-a', 'a', T, 1)];
+    const broken = { ...db, addObservations: async () => { throw new Error('IO Error: Could not write file'); } };
+    const r = await cycle({ db: broken, central, now });
+    expect(r).toEqual({ poll: { at: clock, error: 'IO Error: Could not write file' }, submit: null });
+    expect(await db.get('central_last_poll')).toEqual(r.poll);
+    expect(error).toHaveBeenCalledWith('[satori] cycle failed', expect.any(Error));
+    error.mockRestore();
+  });
+
+  test(`pending predictions older than ${2 * 11} h are dropped before sending`, async () => {
+    central.batch = [entry('u-a', 'a', T, 1), entry('u-b', 'b', T, 2)];
+    central.results = [new CentralError(503, 'down')];
+    await run();
+    expect(await db.pendingCount()).toBe(2);
+    clock += 2 * POLL_EVERY_S + 1; // both are now too old
+    central.batch = [entry('u-a', 'a', T + 60, 3)];
+    const r = await run();
+    expect(central.sent.at(-1).map((i) => i.stream_uuid)).toEqual(['u-a']);
+    expect(r.submit.successful).toBe(1);
+    expect(await db.pendingCount()).toBe(0);
+    expect((await db.predictions('b'))).toEqual([]);
+  });
+
   test('a batch that is not a list is a failed poll', async () => {
     central.batch = { detail: 'odd' };
     expect((await run()).poll).toEqual({ at: clock, error: 'central sent no list of observations' });
@@ -185,18 +210,18 @@ describe('schedule', () => {
 });
 
 describe('createPoller', () => {
-  function harness(runImpl) {
+  function harness(runImpl, store = db) {
     const timers = [];
     const ran = [];
-    const nexts = [];
+    const changes = [];
     const poller = createPoller(async () => { ran.push(clock); return runImpl?.(); }, {
-      db, now, rand: () => 0,
+      db: store, now, rand: () => 0,
       setTimeout: (fn, ms) => timers.push({ fn, ms, live: true }) - 1,
       clearTimeout: (id) => { if (timers[id]) timers[id].live = false; },
-      onNext: (at) => nexts.push(at),
+      onChange: (c) => changes.push(c),
     });
     const live = () => timers.filter((t) => t.live);
-    return { poller, timers, live, ran, nexts };
+    return { poller, timers, live, ran, changes };
   }
 
   test('start: due → 5–30 min, persisted; the timer runs a cycle, then every 11 h', async () => {
@@ -213,7 +238,10 @@ describe('createPoller', () => {
     expect(h.ran).toEqual([clock]);
     expect(await db.get('next_poll_at')).toBe(clock + POLL_EVERY_S);
     expect(h.live().map((t) => t.ms)).toEqual([POLL_EVERY_S * 1000]);
-    expect(h.nexts).toEqual([t0 + 300, clock + POLL_EVERY_S]);
+    // One flag, the poller's: onChange tells the UI when it runs and what is next.
+    expect(h.changes).toEqual([
+      { next: t0 + 300, running: false }, { next: t0 + 300, running: true }, { next: clock + POLL_EVERY_S, running: false },
+    ]);
   });
 
   test('a reload keeps a stored time that is still ahead', async () => {
@@ -242,14 +270,26 @@ describe('createPoller', () => {
     expect(h.live().map((t) => t.ms)).toEqual([POLL_EVERY_S * 1000]);
   });
 
-  test('a run that throws still schedules the next one; stop ends the schedule', async () => {
+  test('a run that throws still schedules the next one', async () => {
     const h = harness(() => { throw new Error('db gone'); });
     await h.poller.start();
     await expect(h.poller.poll()).rejects.toThrow('db gone');
     expect(h.poller.next).toBe(clock + POLL_EVERY_S);
     expect(h.live()).toHaveLength(1);
-    await h.poller.stop();
-    expect(h.live()).toHaveLength(0);
+  });
+
+  test('saving next_poll_at fails: the timer is set anyway and the error is logged', async () => {
+    let fail = false;
+    const store = { ...db, set: async (k, v) => { if (fail) throw new Error('QuotaExceededError'); return db.set(k, v); } };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const h = harness(() => ({ poll: 'ok' }), store);
+    await h.poller.start();
+    fail = true;
+    expect(await h.poller.poll()).toEqual({ poll: 'ok' });
+    expect(h.live().map((t) => t.ms)).toEqual([POLL_EVERY_S * 1000]);
+    expect(h.poller.next).toBe(clock + POLL_EVERY_S);
+    expect(error).toHaveBeenCalledWith('[satori] saving the next poll time', expect.any(Error));
+    error.mockRestore();
   });
 });
 

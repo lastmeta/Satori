@@ -1,12 +1,13 @@
 // The neuron's flow, as Satori Lite runs it (docs/design/central.md):
 //   page load → register with central; first poll 5–30 min later, then every 11 h:
 //   poll ─▶ store (insert or ignore) ─▶ forecast streams with a new row ─▶ send everything pending
-import { normalizeObservation, predictionItem, pyFloatStr } from '../central/index.js';
+import { normalizeObservation, predictionItem } from '../central/index.js';
 import { forecast as engineForecast } from '../engine/index.js';
 
 export const POLL_EVERY_S = 11 * 3600; // start.py:4785-4876
 export const FIRST_POLL_S = [5 * 60, 30 * 60]; // start.py:4777
 export const BATCH_LIMIT = 100;
+export const KEEP_PENDING_S = 2 * POLL_EVERY_S; // the cap on the kept queue (Lite's in-memory queue has none)
 
 const nowS = () => Date.now() / 1000;
 const errorText = (err) => String(err?.message ?? err);
@@ -28,12 +29,16 @@ export async function register({ central, vaultPubkey, vaultAddress, now = nowS 
   }
 }
 
-/** Lite's batch item from a stored prediction (its observed_at and hash as made). */
-const toItem = (p) => ({ stream_uuid: p.stream_uuid, stream_name: p.name, value: pyFloatStr(p.t2),
-  t1_value: pyFloatStr(p.t1), observed_at: p.observed_at, hash: p.hash });
+/** Lite's batch item, rebuilt from the stored prediction: the same bytes as when it was made. */
+const toItem = (p) => predictionItem({ streamUuid: p.stream_uuid, streamName: p.name, t1: p.t1, t2: p.t2, now: p.made_at });
 
-/** Send every pending prediction. successful > 0 marks them all sent; anything else keeps them (engine.py:446-454). */
+/**
+ * Send every pending prediction made in the last 2 × 11 h (older ones are
+ * dropped). successful > 0 marks them all sent; anything else keeps them
+ * (engine.py:446-454).
+ */
 async function submit(db, central, now) {
+  await db.dropPending(now() - KEEP_PENDING_S);
   const pending = await db.pending();
   if (!pending.length) return null;
   let result;
@@ -49,13 +54,7 @@ async function submit(db, central, now) {
   return result;
 }
 
-/**
- * One cycle. Never throws for central's errors: a failed poll is recorded and
- * ends the cycle; a failed submission keeps the queue.
- * @returns {Promise<{poll: object, submit: object | null}>}
- */
-export async function cycle({ db, central, forecast = engineForecast, now = nowS }) {
-  const at = now();
+async function pollAndSubmit(db, central, forecast, now, at) {
   let batch;
   try {
     batch = await central.observations(BATCH_LIMIT);
@@ -83,6 +82,24 @@ export async function cycle({ db, central, forecast = engineForecast, now = nowS
   return { poll, submit: sent };
 }
 
+/**
+ * One cycle: poll → store → forecast new rows → submit. Never throws: a failed
+ * poll or a local failure (the database) is the poll's error; a failed
+ * submission keeps the queue.
+ * @returns {Promise<{poll: object, submit: object | null}>}
+ */
+export async function cycle({ db, central, forecast = engineForecast, now = nowS }) {
+  const at = now();
+  try {
+    return await pollAndSubmit(db, central, forecast, now, at);
+  } catch (err) {
+    console.error('[satori] cycle failed', err);
+    const poll = { at, error: errorText(err) };
+    await db.set('central_last_poll', poll).catch(() => {});
+    return { poll, submit: null };
+  }
+}
+
 /** Lite's start delay: uniform whole seconds in 5–30 min. */
 export const startJitter = (rand = Math.random) =>
   FIRST_POLL_S[0] + Math.floor(rand() * (FIRST_POLL_S[1] - FIRST_POLL_S[0] + 1));
@@ -99,22 +116,27 @@ export function firstPollAt(stored, now, rand) {
 /**
  * The schedule: start() arms the first poll (meta.next_poll_at); each poll,
  * from the timer or poll(), runs `run` and arms the next one 11 h after it
- * ends, whatever the result. One run at a time: poll() during a run returns it.
+ * ends, whatever the result. One run at a time: poll() during a run returns
+ * it. onChange({ next, running }) follows both.
  */
 export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeout: st = setTimeout,
-  clearTimeout: ct = clearTimeout, onNext = () => {} }) {
+  clearTimeout: ct = clearTimeout, onChange = () => {} }) {
   let timer = null;
   let next = null;
   let running = null;
-  let stopped = false;
+  const changed = () => onChange({ next, running: !!running });
 
   async function arm(at) {
     next = at;
-    onNext(at);
-    await db.set('next_poll_at', at);
-    await db.checkpoint(); // OPFS keeps what is checkpointed; a tab may close at any time
     ct(timer);
-    if (!stopped) timer = st(() => void poll().catch(() => {}), Math.max(0, (at - now()) * 1000));
+    timer = st(() => void poll().catch((err) => console.error('[satori] poll', err)), Math.max(0, (at - now()) * 1000));
+    changed();
+    try {
+      await db.set('next_poll_at', at);
+      await db.checkpoint(); // OPFS keeps what is checkpointed; a tab may close at any time
+    } catch (err) {
+      console.error('[satori] saving the next poll time', err);
+    }
   }
 
   function poll() {
@@ -124,6 +146,7 @@ export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeo
         running = null;
         await arm(now() + POLL_EVERY_S);
       });
+      changed();
     }
     return running;
   }
@@ -131,11 +154,6 @@ export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeo
   return {
     start: async () => arm(firstPollAt(await db.get('next_poll_at'), now(), rand)),
     poll,
-    async stop() {
-      stopped = true;
-      ct(timer);
-      await running?.catch(() => {});
-    },
     get next() { return next; },
     get running() { return !!running; },
   };

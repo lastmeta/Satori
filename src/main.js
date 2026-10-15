@@ -65,15 +65,10 @@ async function registerWith(c) {
 }
 
 async function runCycle() {
-  state.polling = true;
-  try {
-    const r = await cycle({ db, central });
-    console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
-    return r;
-  } finally {
-    state.polling = false;
-    await refresh();
-  }
+  const r = await cycle({ db, central }); // never throws: errors are in r and in the status
+  console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
+  await refresh();
+  return r;
 }
 
 async function startNeuron() {
@@ -84,7 +79,9 @@ async function startNeuron() {
   state.vault = vaultPublic.address ?? '';
   state.centralDefault = DEFAULT_CENTRAL;
   const c = await connect();
-  poller = createPoller(runCycle, { db, onNext: (at) => { state.central = { ...state.central, nextPoll: at }; } });
+  poller = createPoller(runCycle, { db, onChange: ({ next, running }) => {
+    state.central = { ...state.central, nextPoll: next, polling: running };
+  } });
   await poller.start();
   await refresh();
   state.screen = 'home';
@@ -94,7 +91,11 @@ async function startNeuron() {
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
 const pollNow = () => poller.poll();
 
-/** Save the central URL ('' = the default) and register there at once. */
+/**
+ * Save the central URL ('' = the default) and register there at once. Another
+ * central has other stream uuids, so its pending predictions and stream list
+ * are dropped; the list refills with the next poll.
+ */
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
   if (url) {
@@ -102,6 +103,7 @@ async function setCentral(raw) {
     try { ok = new URL(url).protocol === 'https:'; } catch { /* not a URL */ }
     if (!ok) throw new Error('The central URL must be an https:// address.');
   }
+  if ((url || DEFAULT_CENTRAL) !== central.url) await db.resetCentral();
   await db.set('central_url', url);
   await db.checkpoint();
   const c = await connect();
@@ -267,9 +269,7 @@ const actions = {
       setTimeout(() => (state.copied = ''), 1500);
     } catch { /* clipboard not allowed */ }
   },
-  async pollNow() {
-    try { await pollNow(); } catch { /* shown in the status */ }
-  },
+  pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
   async saveCentral(f, el) {
     state.settingsError = '';
     try {
@@ -282,6 +282,11 @@ const actions = {
 };
 
 // ── window.satori: the same app for agents (see /llms.txt) ──────────────────
+
+/** Central's stream meta: the object its JSON text holds, the text if it is not JSON, or null. */
+function parseMeta(meta) {
+  try { return meta == null ? null : JSON.parse(meta); } catch { return meta; }
+}
 
 const ready = () => {
   if (state.screen !== 'home') throw new Error(`Not running (screen: ${state.screen}). Set up first.`);
@@ -317,7 +322,7 @@ window.satori = {
   /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit } */
   async poll() { ready(); return pollNow(); },
   /** Central's streams with the latest observation and our latest prediction. */
-  async streams() { ready(); return db.streams(); },
+  async streams() { ready(); return (await db.streams()).map((r) => ({ ...r, meta: parseMeta(r.meta) })); },
   /** One stream's predictions (uuid or name), newest first. */
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
   /** Set the central URL ('' = the default) and register there. → status().central */

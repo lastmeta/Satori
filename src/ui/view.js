@@ -23,9 +23,8 @@ export const state = reactive({
   backupWords: '',
   backupWif: '',
   copied: '',
-  central: { url: '', registration: null, lastPoll: null, nextPoll: null, lastSubmit: null, pending: 0 },
+  central: { url: '', registration: null, lastPoll: null, nextPoll: null, polling: false, lastSubmit: null, pending: 0 },
   centralDefault: '',
-  polling: false,
   streams: [],
   settingsError: '',
 });
@@ -153,7 +152,7 @@ function centralCard(a) {
   <section class="card central">
     <header class="card-head">
       <h2>Central</h2>
-      <button class="small-btn" @click="${a.pollNow}" disabled="${() => state.polling}">${() => (state.polling ? 'Polling…' : 'Poll now')}</button>
+      <button class="small-btn" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>
     </header>
     <code data-test="central-url">${() => c().url}</code>
     <dl class="facts">
