@@ -13,6 +13,11 @@ database reset never loses a wallet.
   (duckdb.org/2026/09/18/opfs-wasm).
 - Open with `db.open({ path: 'opfs://satori.duckdb', accessMode: READ_WRITE })`.
 - Startup self-test: write a row, close, reopen, read it back. Fail loudly.
+  Implemented by `openStore()` in `src/store/index.js` (API documented at its
+  top); the reopen terminates DuckDB's worker, so startup instantiates the wasm
+  twice.
+- Migrations are an ordered array in `src/store/schema.js` (one SQL string each,
+  each run in a transaction), not separate files.
 - Verified 2026-10-15 (Chrome 151, `e2e/opfs.spec.js`): `opfs://satori.duckdb`
   opened from a module worker that spawns DuckDB's eh worker, under the CSP
   header; write, `CHECKPOINT`, terminate, reopen and read, and again after a page
@@ -42,7 +47,8 @@ not in the field. If an extension is ever needed, self-host its wasm, point
   not run reliably in a tab (same source).
 - One OPFS handle per file: only the leader tab's worker opens the database
   ([runtime.md](runtime.md#one-neuron-per-browser)).
-- `navigator.storage.persist()` on first run. Eviction loses history, not keys
+- `navigator.storage.persist()` on first run, from the page: `persist()` is
+  exposed on `Window` only, not in workers (Storage Standard). Eviction loses history, not keys
   or money; Base history reloads from the registry, central-lite history
   regrows from the poll.
 - DuckDB is slow at single-row writes: batch inserts.
