@@ -91,7 +91,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const at = t();
     if (at - ((await db.get('nostr_relay_list_at')) ?? 0) < RELAY_LIST_S) return;
     if (!open().some(writes)) return;
-    if (await publish(sign(relayListEvent(open().map((e) => e.url), at)))) await db.set('nostr_relay_list_at', at);
+    if (!(await publish(sign(relayListEvent(open().map((e) => e.url), at))))) return;
+    await db.set('nostr_relay_list_at', at);
+    await db.checkpoint(); // OPFS keeps what is checkpointed: a reload must not send it again
   }
 
   /** A relay (re)connected: announce our `_pred` streams there (start.py:326-328). */
