@@ -228,7 +228,7 @@ describe('createBase', () => {
     v = await base.status();
     expect(v.vault).toMatchObject({ delegated: 'none', lock: { locked: true, indefinite: false, untilRound: ROUND + 1 } });
     await expect(base.send({ asset: 'SATORI', to: '0x' + '33'.repeat(20), amount: '1' }))
-      .rejects.toThrow(`SATORI is transfer-locked until round ${ROUND + 1} (free from ${new Date((ROUND + 2) * ROUND_S * 1000).toISOString().slice(0, 16)} UTC).`);
+      .rejects.toThrow(`SATORI is transfer-locked until round ${ROUND + 1} (free from Oct 17, 00:00 UTC).`);
     base.stop();
   });
 

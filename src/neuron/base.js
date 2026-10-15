@@ -8,6 +8,7 @@ import { fallback, formatEther, http, isAddress, parseEther, zeroAddress } from 
 import { createChain, errorText, revertName, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { loadConfig, rpcUrls } from '../chain/config.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
+import { fmtUtc } from '../ui/format.js';
 
 export const FIRST_CHECK_S = 10;
 export const CHECK_EVERY_S = 3600;
@@ -315,7 +316,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
         const lock = st.vault.lock;
         if (lock?.locked) {
           throw new Error(lock.indefinite ? 'SATORI is transfer-locked while delegated: stop delegating first.'
-            : `SATORI is transfer-locked until round ${lock.untilRound} (free from ${new Date(lock.freeAt * 1000).toISOString().slice(0, 16)} UTC).`);
+            : `SATORI is transfer-locked until round ${lock.untilRound} (free from ${fmtUtc(lock.freeAt)}).`);
         }
         return { hash: (await chain.sendSatori(v, to, wei)).hash };
       });
