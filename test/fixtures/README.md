@@ -1,4 +1,4 @@
-Parity vectors for `src/keys/`. Throwaway keys.
+Parity vectors for `src/keys/` and `src/central/`. Throwaway keys.
 
 - `identity-parity.json`: made from satorilib (the Docker neuron's code) by
   `scripts/identity_fixtures.py` on branch `draft/v1-full`: words, WIF, pubkey,
@@ -14,3 +14,8 @@ Parity vectors for `src/keys/`. Throwaway keys.
   turns a str password into Latin-1 bytes), the plain-text vault satorilib
   saves when the password is outside Latin-1, and a signature flagged
   uncompressed with what python-evrmorelib verifies it against.
+- `central-parity.json`: Python `str(float)` and numpy `str(np.float64)` of
+  439 floats (as raw bits) and 4 central payload hashes
+  (`sha256(value + observed_at)[:16]`), made inside the shipped Docker image
+  `satorinet/satori-lite:latest` by `scripts/central-parity.py` (offline; the
+  command is in the script).
