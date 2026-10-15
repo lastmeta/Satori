@@ -398,8 +398,15 @@ registry; Unlock → Delegate (three transactions, listed on the card); 10 s
 later the identity's batch held one game, game 1 DOWN (`predictedStreamsCount`
 1), stream 2 left out; the card's first fact named the RPC "/rpc: the local
 fork of Base Sepolia"; Stop delegating: `transferLockedUntil` 20742 at round
-20741. The screenshot (`docs/screenshots/base.png`) is from that run,
-delegated, with the last batch and the Delegate transactions shown.
+20741.
+
+The finishing pass's smoke (2026-10-15 21:05, a fresh profile, the UI only):
+setup, Poll now (central2: 83 of 83 accepted), subscribe to `demo-walk` on
+the test relay, `fork.mjs fund` (the identity 0.1 ETH; the vault 0.1 ETH and
+50 SATORI), Unlock → Delegate (three transactions) → 12 s later the
+identity's batch, round 20741, game 1 DOWN. The screenshot
+(`docs/screenshots/base.png`) is from that run, delegated, with the last
+batch and the Delegate transactions shown.
 
 ## The local fork (dev)
 
