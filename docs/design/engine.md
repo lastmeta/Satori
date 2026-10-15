@@ -3,9 +3,14 @@
 [← OVERVIEW](OVERVIEW.md)
 
 `src/engine/index.js`: `forecast(points) → {model, t1, t2, phi?, weight?} | null`.
-Pure functions, no dependency. Step 4 replaced step 3's least-squares line
+Pure functions. Step 4 replaced step 3's least-squares line
 (`ols-20`) with a one-stream, lag-1 cut of the engine the owner built in
 `../namaste_club` ("a simplified engine… take inspiration from it").
+
+Central's streams now get more: **`bvar`**, a multivariate model per target
+stream whose companions and priors each neuron draws and evolves on its own
+([below](#bvar-a-model-per-central-stream-unique-to-each-neuron)). `bar1`
+stays: it is `bvar`'s fallback and the model for Nostr and Base streams.
 
 Short names: `NC` = `../namaste_club`; `engine.py` = `../neuron/engine-lite/engine.py`.
 
@@ -159,6 +164,148 @@ every logged forecast, so the backtest window borrows its λ tuner's holdout.
 | `MIN_SAMPLES` | 5 | `calibration.py:34` |
 | `DEFAULT_WEIGHT` | 1 | `calibration.py:33` |
 
+## `bvar`: a model per central stream, unique to each neuron
+
+The owner's direction (2026-10-15): every neuron builds its own models, at
+least one per stream it predicts, unique in the algorithm, in its
+hyperparameters and priors, and above all in its **data**: which other
+streams it reads next to the target ("predict gold from gold + jobs +
+weather"). The uniqueness comes from exploring what relates to what and
+keeping what works, not from noise on identical models; over time each
+neuron finds its niche. The MVP: one algorithm, multivariate, with drawn
+priors and a drawn set of 1–3 companion streams per model, improved over
+time. Specs are stored locally only (Nostr subscriptions will make the
+choices public later).
+
+`src/engine/bvar.js` (the model) and `src/engine/evolve.js` (specs and
+evolution) are pure; the cycle stores the specs (`model_specs`,
+[storage.md](storage.md)).
+
+### The spec
+
+One per central target stream, in `model_specs`:
+
+```
+{ companions: [uuid, …] (1–3 other central streams), lambda1 ∈ {0.05, 0.1, 0.2, 0.5}, lambda2 ∈ {0.25, 0.5, 1.0} }
++ score (the champion's backtest error), generation (mutations proposed), accepted (mutations kept)
+```
+
+The λ grids are namaste_club's tuner's (`NC/models.py:589-590`). Lag stays 1.
+
+- **First draw**, when a target is first forecast: a deterministic RNG
+  seeded from the identity's public key and the target's uuid
+  (sha256 of `identity|target|draw|i` per draw), so neurons start
+  differently and each one reproducibly. The number of companions is drawn
+  from 1–3, then the companions from the pool (sorted by uuid), then λ1 and
+  λ2, each uniformly.
+- **The pool**: the other central streams with enough aligned history to
+  fit a one-companion model with the target (7 rows, below). A young neuron
+  has none, so its pool is every other central stream: the spec exists from
+  the first poll and falls back until the data arrive.
+- **Mutations** are seeded from identity + target + generation, so a
+  neuron's whole path is reproducible.
+
+### The model
+
+A Bayesian VAR(1) over [target, companions] on the 12 h UTC buckets
+(`NC/bvar.py:95-251`, `NC/models.py:254-305`):
+
+1. Each series: buckets as `bar1` (the last value in each 12 h bucket) and
+   its **own transform**: percent returns if all its values are > 0, else
+   additive changes (as `bar1d`). A bucket has a return only when the bucket
+   before it has a value.
+2. **Rows**: buckets k where every series has a return at k and at k − 1
+   (x = the returns at k − 1, y = those at k). Gaps break the chain: a row
+   needs three back-to-back buckets in every series. Fewer than
+   features + 5 rows (`NC/bvar.py:157-164`; 1 + companions features, so
+   7–9) → the spec can't fit.
+3. **Prior** (Minnesota, mean 0 = the random walk, `NC/bvar.py:188-213`):
+   for equation j, own lag variance λ1²; series k's lag (λ1·λ2)² ·
+   clip(σ_j²/σ_k², 1e-2, 1e2), σ² being each series' variance of y over the
+   rows, floored at 1e-12 (`:171`). No intercept, no time features.
+4. **Noise** σ_j² = the variance (ddof 0) of the OLS residuals of equation j,
+   floored at 1e-6 (`NC/bvar.py:177-180`). A singular XᵀX (a series that
+   never moves) is solved as `lstsq` does: its residuals are unique.
+5. **Posterior mean** per equation, (Σ0⁻¹ + XᵀX/σ_j²)⁻¹ Xᵀy_j/σ_j²
+   (`:215-229`): a k×k solve in plain JS, from running sums of the rows
+   (XᵀX, Xᵀy, Σx, Σy, Σy²), so a backtest adds each row once.
+6. **Forecast**: the first lags are each series' newest step, as `bar1`
+   takes it (the newest value against the newest one ≥ 6 h older, 0 if more
+   than 24 h older; `NC/pool.py:869-900`); a companion whose newest
+   observation is more than a step older than the target's gets 0. Iterate
+   two steps over all equations (`NC/bvar.py:316-339`): each predicted step
+   is the next lag, non-finite → 0, clamped as `bar1` clamps (±50 % for
+   returns, ± the largest change seen for changes). The target's two steps
+   give t1 (12 h) and t2 (24 h), turned back into values by its transform.
+7. **Fade** toward persistence as `bar1`: the weight from the spec's own
+   rolling backtest (below).
+
+**Fallbacks**: a spec that can't fit (not enough aligned rows, or a
+companion with no history) gives `bar1`'s forecast, which itself falls back
+to `naive`. The prediction's `model` says which: `bvar`, `bar1`, `bar1d` or
+`naive`.
+
+### The backtest: score and fade
+
+On the target's own buckets, the same origins as `bar1`'s backtest: of the
+last 28 bucket positions, those whose buckets o, o + 1, o + 2 are back to
+back and which have the 6 target pairs `bar1` needs up to o. At each origin
+the spec is fit on the rows up to bucket o only, iterated from the returns
+at o, and its unfaded t2 scored against the value at o + 2 (24 h later):
+relative error |x − a|/a, absolute for a target on changes. Where the spec
+can't fit at an origin, `bar1`'s forecast there is scored instead (what the
+live neuron would have sent). Nothing after o is used, except the actual at
+o + 2 (tested).
+
+- **score** = the median of those errors; none below 5 origins.
+- **fade weight** = namaste_club's `weight_from_errors` on the medians of
+  the same errors and persistence's (`NC/calibration.py:39-50`), as `bar1`.
+
+With no companions this is exactly `bar1` (tested on the parity cases).
+
+### Evolution
+
+After each poll that brought new rows, for each target that got one:
+
+1. Read the champion spec (or draw the first one).
+2. Score it on the backtest. With fewer than 5 origins, stop here: no
+   proposal, the generation stays.
+3. Propose **one** mutation (seeded by identity + target + generation), one
+   of those that apply, uniformly: swap a companion for another from the
+   pool, add one (fewer than 3), drop one (more than 1), or move λ1 or λ2 to
+   a neighbouring grid value.
+4. Score the challenger on the same origins.
+5. Keep it only if its score beats the champion's by the margin (2 %:
+   challenger < champion × 0.98). generation + 1; accepted + 1 if kept.
+6. Forecast with the champion; store the spec, its score and counts.
+
+The margin keeps a neuron from swapping on noise; the backtest decides
+whether it is enough ([Measured](#measured)).
+
+**CPU.** Everything is running sums and k×k solves (k ≤ 4); the slow part
+is reading the histories. The cycle records the engine's time in the last
+poll (`engine_ms`); measured below.
+
+### History from central (backfill)
+
+`bvar` needs aligned history, which 11 h polls build slowly (about 4 days
+for 7 rows). Central now serves a stream's past
+([central.md](central.md#history-an-addition-beyond-lite)); each stream is
+fetched once (up to 1,000 rows, the last ~41 days of central's hourly
+observations), and its rows are stored older than the newest polled row
+only. Backfilled rows never trigger a prediction: only a poll's new row
+does, as in Lite.
+
+### Scope
+
+Only central's streams get `bvar` and evolution. Nostr streams and Base's
+registry stay on `bar1` (univariate): a Nostr stream has its own cadence and
+its own history from its provider, and Base's daily batch reads the
+registry. They can join later: a Nostr stream as a companion once its
+cadence is regridded to central's 12 h buckets (the same bucketing works on
+any grid), and their targets once their histories are aligned with
+central's.
+
 ## The step (relay streams)
 
 `forecast(points, { step })` takes the bucket in seconds; the default is
@@ -176,14 +323,37 @@ returns the first row of `_runForecast`'s second, autoregressed forecast
 
 From namaste_club:
 
-- **One stream, lag 1, no time or exogenous features.** The browser forecasts
-  each stream when it gets a new row, from its own history. Time features enter
-  almost unshrunk (λ1²·100) and add 5 coefficients, so they need far more rows
-  than a young neuron has; the research simulation put the 24 h error at 1.4–2.5×
-  persistence's with few rows. Cross-stream lags and exogenous features need
-  aligned multi-stream tables and outside feeds. Lag 2 and the daily λ tuner
-  are left out too, so one setting is pinned by the tests and the parity
-  fixture.
+- **`bar1`: one stream, lag 1, no time or exogenous features.** Time
+  features enter almost unshrunk (λ1²·100) and add 5 coefficients, so they
+  need far more rows than a young neuron has; the research simulation put
+  the 24 h error at 1.4–2.5× persistence's with few rows. Lag 2 is left out
+  too, so one setting is pinned by the tests and the parity fixture.
+- **`bvar`: one small VAR per target, not one big VAR per worker.**
+  namaste_club fits one model over bitcoin, `safetrade_sat` and a random half
+  of the streams with ≥ 100 fresh observations (`NC/models.py:15-128`) and
+  predicts all of them with it. Here each target has its own model over
+  itself and 1–3 companions, so a neuron's spec for gold says what *it*
+  thinks gold depends on, and evolution can keep or drop each choice on that
+  target's own error. Few series also keep the fit within the aligned rows a
+  young neuron has (features + 5 = 7–9).
+- **`bvar`: the λ's are part of the spec, evolved locally.** namaste_club
+  tunes λ1 × λ2 × lag on a 28-row holdout once a day (one-step,
+  variance-normalised MSE, `NC/models.py:552-631`) and each worker samples a
+  pair weighted by (best/err)⁴ (`:637-666`). Here the first λ's are drawn
+  uniformly from the same grids and then move one grid step at a time,
+  kept only when the 24 h backtest error improves by the margin. No lag 2.
+- **`bvar`: gaps break the chain.** namaste_club merges the streams with an
+  outer join, back- and forward-fills the gaps and turns the filled cells
+  into 0 returns (`NC/models.py:255-305`). Here a row needs every series
+  present in three back-to-back buckets, so no fake zero enters the fit.
+- **`bvar`: each series has its own transform** (returns, or changes for a
+  series with a value ≤ 0); namaste_club takes percent changes of all.
+- **`bvar`: a stale companion's first lag is 0** (its newest observation more
+  than a step older than the target's). namaste_club takes each stream's
+  newest step whatever its age (`NC/pool.py:869-900`).
+- **The clamp on a change series in `bvar`'s backtest** is the largest change
+  seen up to the origin, so the backtest looks at nothing after it; `bar1d`'s
+  backtest uses the largest change in the whole series.
 - **The fade comes from a rolling backtest, not a log of past submissions.** It
   needs no new storage and no wait for submissions to be scored: the history
   is the record, and it has an opinion from 14 buckets (about 7 days). It also
@@ -207,12 +377,13 @@ From namaste_club:
 
 From Satori Lite:
 
-- The model is `bar1`/`naive`, not Lite's Starter/XGBoost adapters, and it
+- The model is `bvar`/`bar1`/`naive`, not Lite's Starter/XGBoost adapters, and it
   steps by 12 h buckets rather than by rows. Lite's rows arrive every ~11 h, so
   a step is about the same length.
-- No per-node diversity (Lite redraws hyperparameters on purpose). It is
-  optional and left for later, seeded from the identity as the parked design
-  planned ([../plans/engine.md](../plans/engine.md)).
+- Per-node diversity comes from the spec (the data each model reads, and
+  its λ's), drawn from the identity and evolved on the neuron's own
+  backtest; Lite redraws hyperparameters at random on every fit
+  (`adapters/_rng.py`).
 
 ## Verified
 

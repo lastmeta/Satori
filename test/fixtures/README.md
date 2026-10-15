@@ -23,6 +23,12 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   them (lag 1, one stream, no time features): φ, the first lag, g1/g2, the
   backtest weight, t1 and t2. Made by `scripts/engine_parity.py` from the
   namaste_club source (read only), with numpy and pandas in a scratch venv.
+- `bvar-parity.json`: 6 tables of 12 h returns (2–4 series, 7–150 rows, every
+  λ grid edge, a series that never moves, a step at the ±50 % clamp) and what
+  namaste_club's `train_bvar_model` and `iterate_forecast` make of them (no
+  time features): every equation's posterior mean, σ² and prior variances,
+  and each series' growth after one and two steps. Made by
+  `scripts/bvar_parity.py` the same way.
 - `nostr-parity.json`: Satori's Nostr events (`_pred` 34601, its 34600
   announcement and tombstone, the 34602 subscribe and unsubscribe, a 10002)
   built by satorilib's own `SatoriNostr` methods (`origin/base-upgrade`) and

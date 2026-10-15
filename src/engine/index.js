@@ -22,11 +22,11 @@ export const HOLDOUT = 28; // backtest origins, borrowed from the λ tuner's hol
 export const MIN_SAMPLES = 5; // calibration.py:34
 export const DEFAULT_WEIGHT = 1; // calibration.py:33
 
-const finiteOr0 = (x) => (Number.isFinite(x) ? x : 0);
-const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+export const finiteOr0 = (x) => (Number.isFinite(x) ? x : 0);
+export const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 /** Returns (all values positive) or changes (any value ≤ 0): how a step is measured, compounded and applied. */
-const RETURNS = {
+export const RETURNS = {
   model: 'bar1',
   change: (a, b) => b / a - 1,
   cap: () => MAX_STEP_RETURN,
@@ -35,7 +35,7 @@ const RETURNS = {
   raw: (x, g) => x * g, // the backtest's unfaded forecast
   error: (x, a) => Math.abs(x - a) / a, // relative (calibration.py)
 };
-const CHANGES = {
+export const CHANGES = {
   model: 'bar1d',
   change: (a, b) => b - a,
   cap: (r) => Math.max(0, ...r.filter((x) => x !== null).map(Math.abs)), // no step larger than the largest change seen
@@ -105,7 +105,7 @@ function fitPhi(pairs, lambda1) {
  * The newest step: the change from the newest value ≥ half a step older (6 h at 12 h)
  * (pool.py:889-900). 0 when there is none or when it is more than two steps old (a closed tab).
  */
-function firstLag(p, step, m = RETURNS) {
+export function firstLag(p, step, m = RETURNS) {
   const { ts, value } = p.at(-1);
   let j = p.length - 2;
   while (j >= 0 && ts - p[j].ts < MIN_SPACING_S * (step / STEP_S)) j--;
@@ -146,7 +146,7 @@ export function fadeWeight(modelErrs, persistErrs) {
   return weightFromErrors(median(modelErrs), median(persistErrs));
 }
 
-function median(xs) {
+export function median(xs) {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
