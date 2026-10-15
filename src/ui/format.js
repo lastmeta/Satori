@@ -169,3 +169,12 @@ export function claimLine(name, r) {
   if (r.skipped) return `${name}: ${r.skipped}`;
   return `${name}: failed: ${r.error}`;
 }
+
+const bytes = (n) => (n >= 1e9 ? `${short(n / 1e9, n >= 1e10 ? 0 : 1)} GB` : `${short(n / 1e6, n >= 1e7 ? 0 : 1)} MB`);
+
+/** Home's storage line (docs/design/pwa.md): kept (persistent) or not, and how much is used. */
+export function storageText(s) {
+  if (!s) return 'Storage: …';
+  const kept = s.persisted ? 'Storage: kept' : 'Storage: the browser may clear it; install Satori or back up your words';
+  return s.usage == null ? kept : `${kept} · ${bytes(s.usage)} of ${bytes(s.quota)} used`;
+}

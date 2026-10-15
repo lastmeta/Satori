@@ -5,7 +5,8 @@
 // and the identity's daily batch on Base (docs/design/base.md).
 // Unlock/Lock open and wipe the vault; the neuron never needs it (Base's
 // delegate, claims and sends do).
-// window.satori is the same surface for agents (public/llms.txt).
+// window.satori is the same surface for agents (public/llms.txt). The
+// installed app (service worker, Install, persistent storage) is src/pwa/.
 import { version } from '../package.json';
 import { state, render } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
@@ -21,6 +22,7 @@ import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { isHttps } from './util.js';
 import { shortHash, claimLine, stepText } from './ui/format.js';
+import { startPwa, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
 
 // The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
 const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet.io' : 'https://network.satorinet.io';
@@ -136,6 +138,7 @@ async function startNeuron() {
     onChange: refreshBase });
   await refreshBase();
   state.screen = 'home';
+  keepStorage(); // after setup and on each load until the browser keeps it: the keys live in this storage
   registerWith(c).catch((err) => console.error('[satori] register', err));
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
@@ -350,6 +353,8 @@ const actions = {
     } catch { /* clipboard not allowed */ }
   },
   pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
+  install: () => install().catch((err) => console.warn('[satori] install', err)),
+  update: applyUpdate,
   discover: shownAt('networkError', async () => {
     state.discovering = true;
     try {
@@ -436,8 +441,14 @@ window.satori = {
       central: home ? await centralStatus() : null,
       nostr: home ? await nostrStatus() : null,
       base: home ? await base.status() : null,
+      storage: await storage(),
+      app: { ...state.app },
     };
   },
+  /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
+  install() { return install(); },
+  /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */
+  update() { return applyUpdate(); },
   /** Create a neuron (random keys unless words are given). The vault stays locked. */
   async setup({ passphrase, vaultWords, identityWords } = {}) {
     await setup(async () => {
@@ -505,6 +516,7 @@ async function boot() {
   const root = document.getElementById('app');
   root.replaceChildren(); // index.html's "Opening…", painted before any module loads
   render(root, actions);
+  startPwa();
   if (!(await claimTab())) return void (state.screen = 'elsewhere');
   try {
     db = await openOpfsDb();

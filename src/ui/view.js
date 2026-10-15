@@ -5,7 +5,7 @@ import { html, reactive, watch } from '@arrow-js/core';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, rawText, catalogMatch, predText,
-  amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash, rpcText, rpcTitle,
+  amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash, rpcText, rpcTitle, storageText,
 } from './format.js';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 
@@ -51,6 +51,10 @@ export const state = reactive({
   baseResult: '',
   baseTxs: [], // the last action's transactions: [{ label, hash }]
   baseRpcError: '',
+  // the installed app (docs/design/pwa.md): status().app, Safari (no install prompt), status().storage
+  app: { installed: false, canInstall: false, update: false },
+  safari: false,
+  storage: null, // { persisted, usage, quota }
 });
 
 export const CATALOG_SHOWN = 50;
@@ -64,6 +68,14 @@ const form = (e) => {
 const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
 const errorLine = () => html`<p class="error" role="alert" hidden="${() => !state.error}">${() => state.error}</p>`;
 const wordList = (words) => html`<ol class="words">${() => words().map((w) => html`<li>${w}</li>`)}</ol>`;
+const SAFARI_ADD = 'To keep your keys, add Satori to the Dock (File › Add to Dock) or Home Screen (Share › Add to Home Screen). '
+  + 'The added app starts empty: set it up there, or import Backup’s files.';
+
+/** Install Satori (Chromium's prompt), or Safari's way to add it; hidden once installed (docs/design/pwa.md). */
+const install = (a) => html`<div class="install" hidden="${() => state.app.installed || !(state.app.canInstall || state.safari)}">
+  <button class="small-btn primary" data-test="install" hidden="${() => !state.app.canInstall}" @click="${a.install}">Install Satori</button>
+  <span class="muted small" data-test="install-hint">${() => (state.app.canInstall ? 'Keeps your keys, and runs in its own window.' : SAFARI_ADD)}</span>
+</div>`;
 
 function setup(a) {
   return html`
@@ -78,6 +90,7 @@ function setup(a) {
         <button @click="${() => a.goStep('restore')}">Restore from words</button>
         <button @click="${() => a.goStep('docker')}">Import Docker files</button>
       </div>
+      ${install(a)}
     </div>
 
     <div hidden="${showStep('words')}">
@@ -179,6 +192,10 @@ function keys(a) {
       <h3>Nostr</h3>
       ${idRow('Pubkey', 'nostr-pubkey', () => state.nostr.pubkey, a, () => state.nostr.npub)}
       <p class="muted small">Signs the neuron's Nostr events on its own. Unencrypted, as the identity.</p>
+    </div>
+    <div class="key">
+      <p class="${() => (state.storage?.persisted ? 'small muted' : 'small')}" data-test="storage">${() => storageText(state.storage)}</p>
+      ${install(a)}
     </div>
   </div>`;
 }
@@ -433,7 +450,10 @@ export function render(root, a) {
   html`
   <header class="top">
     <h1>Satori <span class="muted">neuron</span></h1>
-    <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
+    <div class="top-actions">
+      <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
+      <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
+    </div>
   </header>
   <main>
     <p class="muted center" hidden="${show('loading')}">Opening…</p>

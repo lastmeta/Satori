@@ -3,6 +3,7 @@ import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
+  storageText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -154,4 +155,12 @@ test('rpcText, rpcTitle, stepText: plain words on the card, the detail in the ho
   expect(stepText('setPredictorFee(0)')).toBe('Identity: fee to 0');
   expect(stepText('delegatePredictionPower(0x0)')).toBe('Vault: stops delegating');
   expect(stepText('somethingNew()')).toBe('somethingNew()');
+});
+
+test('storageText: kept or not (docs/design/pwa.md), and the usage of the quota when the browser says', () => {
+  expect(storageText(null)).toBe('Storage: …');
+  expect(storageText({ persisted: true, usage: 41_234_567, quota: 299_000_000_000 })).toBe('Storage: kept · 41 MB of 299 GB used');
+  expect(storageText({ persisted: false, usage: 512_000, quota: 1_200_000_000 }))
+    .toBe('Storage: the browser may clear it; install Satori or back up your words · 0.5 MB of 1.2 GB used');
+  expect(storageText({ persisted: true, usage: null, quota: null })).toBe('Storage: kept');
 });

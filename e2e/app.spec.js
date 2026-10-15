@@ -404,3 +404,21 @@ test('setup: one at a time, and it leaves rows it does not own', async ({ contex
   await page.goto('/e2e/store/');
   expect(await page.evaluate(() => window.probe({ cmd: 'app-meta', key: 'vault' }))).toEqual({ value: row0 });
 });
+
+test('the dev server has no service worker, and removes one left on its origin; status() has storage and app (docs/design/pwa.md)', async ({ context, page }) => {
+  await stubCentral(context);
+  expect(await openApp(page)).toBe('setup');
+  const registrations = () => page.evaluate(() => navigator.serviceWorker.getRegistrations().then((r) => r.length));
+  expect(await registrations()).toBe(0);
+  await page.evaluate(() => navigator.serviceWorker.register('/e2e/stale-sw.js'));
+  expect(await registrations()).toBe(1);
+  await reloadApp(page);
+  await expect.poll(registrations).toBe(0);
+  expect(await page.evaluate(() => navigator.serviceWorker.controller)).toBe(null);
+
+  const s = await status(page);
+  expect(s.app).toEqual({ installed: false, canInstall: false, update: false }); // no install prompt in a Playwright context
+  expect(s.storage).toEqual({ persisted: expect.any(Boolean), usage: expect.any(Number), quota: expect.any(Number) });
+  expect(await page.evaluate(() => window.satori.install())).toBe('unavailable');
+  expect(await page.evaluate(() => window.satori.update())).toBe(false);
+});
