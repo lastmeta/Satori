@@ -242,7 +242,10 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   await openApp(page);
   await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
   await expect(page.evaluate(() => window.satori.poll())).rejects.toThrow(/Set up first/);
-  const s0 = await page.evaluate((w) => window.satori.setup({ passphrase: 'pass', vaultWords: w }), v.words);
+  const s0 = await page.evaluate((w) => {
+    const { setup } = window.satori; // destructured: no `this`
+    return setup({ passphrase: 'pass', vaultWords: w });
+  }, v.words);
   expect(s0).toMatchObject({ screen: 'home', vault: v.address, unlocked: false });
   expect(s0.identity).toMatch(ADDRESS);
   expect(s0.central).toMatchObject({ url: CENTRAL, pending: 0, lastPoll: null, lastSubmit: null });

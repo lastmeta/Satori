@@ -521,7 +521,7 @@ window.satori = {
         keys.identity?.fill(0);
       }
     });
-    return this.status();
+    return window.satori.status();
   },
   /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit } */
   async poll() { ready(); return pollNow(); },
