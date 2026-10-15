@@ -1,6 +1,6 @@
 # Transport (Nostr): what is left after step 5
 
-[← OVERVIEW](OVERVIEW.md)
+[← Later steps](../README.md)
 
 Step 5 built Nostr as Satori Lite runs it for free streams: the Nostr key,
 relays (central's and the user's), discover, subscribe, intake, `_pred`

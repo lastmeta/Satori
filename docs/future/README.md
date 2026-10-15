@@ -4,9 +4,8 @@ These were researched and reviewed on 2026-10-14/15 against Satori Lite
 (`../neuron`), satorilib, central and the contracts. They are kept here so later
 steps start from evidence, not from scratch.
 
-- [design/OVERVIEW.md](design/OVERVIEW.md): the full v1 neuron that earns (central-lite, Base
-  daily batch, delegate and claims, scheduler and catch-up, CSP), plus the
-  component docs.
+- [design/](design/): what is left of each part (runtime, Nostr transport,
+  chain, engine).
 - [issues/](issues/README.md): blockers outside this repo. Prod central lacks
   the Base and merkle routes. The relay list is ws:// only, so a deployed
   (https) app can't connect to it; the http dev server can.
@@ -25,6 +24,13 @@ steps start from evidence, not from scratch.
 5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [design/transport.md](design/transport.md). A deployed app needs a wss relay ([issue](issues/relays-not-wss.md)).
 6. ✅ **Base**: delegate prediction power, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [design/chain.md](design/chain.md). A local fork for the dev server: `scripts/fork.mjs`.
 7. **Finishing pass**, incl. runtime hardening: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
+8. **Later**, in rough order of value per effort: a per-stream chart and model
+   view; bounties (the predictor's side first); the gasless relay (needs a
+   ruling, [issue](issues/relayer-predict-fee.md)); Evrmore balances and
+   SATORIEVR sends; paid streams and payment channels; own data sources. Also:
+   importing a Docker neuron's keys is a move (both would predict for one
+   identity; the chain refuses a second batch per round), so Import could say
+   to stop the Docker neuron.
 
 ## Noticed while building
 

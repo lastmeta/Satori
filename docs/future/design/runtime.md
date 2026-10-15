@@ -1,6 +1,6 @@
 # Runtime (background execution)
 
-[← OVERVIEW](OVERVIEW.md)
+[← Later steps](../README.md)
 
 The Docker neuron is a process that runs forever and restarts itself
 (`neuron/neuron-lite/start.py:102-118,5211-5228`). A browser neuron runs only
@@ -52,7 +52,7 @@ event and `online`: run every job that is due, in table order.
   arrives the leader has gone, and the follower promotes itself. Never `steal`.
   (With `ifAvailable` alone nothing queues and nothing takes over: MDN
   `LockManager.request`.)
-- Only the leader opens the OPFS database ([storage.md](storage.md)).
+- Only the leader opens the OPFS database.
 - No SharedWorker: DuckDB's `AsyncDuckDB` spawns its own nested Worker, which
   SharedWorkers cannot do in Chrome or Safari (browser-compat-data
   `api/Worker.json` worker_support), and Android Chrome lacks SharedWorker
@@ -70,6 +70,20 @@ A status line: "Neuron active" / "sleeping since HH:MM, will catch up when
 open"; last central batch, last Base batch and this round's state. Setup text:
 keep a pinned desktop tab or install the app; on iPhone the neuron works only
 while on screen.
+
+## Also left (from the parked identity, storage and UI notes)
+
+- **Keys in a worker.** The identity, the unlocked vault and the Nostr key
+  live on the main thread today; move them (and signing) into the neuron
+  worker, so no key reaches the page's context.
+- **`navigator.storage.persist()`** on first run. The keys are in the same
+  OPFS database as the data, so an eviction (Safari drops storage after 7 days
+  without a visit) loses them too: the vault's 24 words, checked at setup, are
+  the way back.
+- **Hosting.** A static https host that can set response headers: the CSP
+  (`csp.js`) must arrive as a header, on the page and on every worker script.
+- Not planned: EIP-191 signing (no caller), ECDH peer encryption (only for
+  Docker's engine IPC), Evrmore transaction signing ([chain.md](chain.md)).
 
 ## Not done
 

@@ -15,6 +15,17 @@ poll ─▶ GET observations/batch ─▶ store (insert or ignore) ─▶ foreca
      ─▶ queue {value: t2, t1_value: t1, observed_at, hash} ─▶ login (identity) ─▶ POST predictions/batch
 ```
 
+**How it earns** (verified in central's code, 2026-10-14): central scores
+these predictions in its daily run (`central/src/scripts/daily_run.py:1-8,25`)
+and keeps a predictor only with a reward, or a balance plus pool contribution
+of at least `stake_requirement` = 250 SATORI (`central/src/scripts/score.py:1992`,
+`mint.py:5`). Payouts go to `base_earnings` under the Base address of the
+registered **vault** pubkey (`central/src/scripts/distribution.py:48-53,278-280`),
+which the merkle drop publishes (`publish_merkle_root.py:1-6,34-37`) and the
+vault claims on Base ([base.md](base.md)). So register's `vault-pubkey`, and
+250 SATORI on the vault's Base address (or pool membership), are what make
+central-lite earn.
+
 Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 `neuron/engine-lite/engine.py`; `server.py` =
 `satorilib/src/satorilib/server/server.py`; `c/main.py` =

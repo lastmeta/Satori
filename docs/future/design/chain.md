@@ -1,6 +1,6 @@
 # Chain: what is still ahead
 
-[← OVERVIEW](OVERVIEW.md)
+[← Later steps](../README.md)
 
 Step 6 built Base: config, the status multicall, delegate and stop, the
 identity's daily batch, claims (`hub.claim`, merkle, airdrop) and sends.
