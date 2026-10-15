@@ -48,6 +48,10 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   // Unlock → Delegate prediction power: the identity's two steps, then the vault's.
   await page.getByLabel('Vault passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
+  // A word list on the page first (as after a setup in the UI): ArrowJS 1.0.6 reuses its <li> for other lists.
+  await page.getByText('Backup', { exact: true }).click();
+  await page.getByRole('button', { name: 'Identity words' }).click();
+  await page.getByRole('button', { name: 'Hide' }).click();
   await page.getByRole('button', { name: 'Delegate prediction power' }).click();
   await expect(fact(page, 'result')).toHaveText('Delegated prediction power to the identity.', { timeout: 30_000 });
   expect(rpc.sent.map((t) => [t.from, t.functionName])).toEqual([
@@ -57,7 +61,8 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'lock')).toHaveText('SATORI transfer-locked while delegated');
   await expect(page.getByRole('button', { name: 'Stop delegating' })).toBeVisible();
 
-  await expect(page.locator('[data-test=base-txs] li')).toHaveCount(3);
+  await expect(page.locator('[data-test=base-txs] > *')).toHaveCount(3);
+  await expect(page.locator('[data-test=base-txs]')).not.toContainText('renderTemplate');
   await expect(page.locator('[data-test=base-txs] code')).toHaveText([/^Identity: fee to 0 0x/, /^Identity: accepts this vault 0x/,
     /^Vault: delegates to the identity 0x/]); // plain words; a local fork: no explorer link
   await expect(page.locator('[data-test=base-txs] code').first()).toHaveAttribute('title', /^setPredictorFee\(0\) by the identity · 0x/);

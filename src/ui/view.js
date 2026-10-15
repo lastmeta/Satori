@@ -253,7 +253,11 @@ function nostrCard(a) {
 
 const BUSY = { delegate: 'Delegating…', undelegate: 'Stopping…', claim: 'Claiming…', send: 'Sending…' };
 
-/** A tx hash, linked to the explorer unless the RPC is a local fork; `title` (the call) in its hover. One root node (see streamRow). */
+/**
+ * A tx hash, linked to the explorer unless the RPC is a local fork; `title` (the call) in its hover. One root
+ * node (see streamRow), used as a list item itself: ArrowJS 1.0.6 reuses a rendered chunk for any template of
+ * the same text, so a `<li>${…}</li>` wrapping it would take the word list's text slot and print the template.
+ */
 const txLink = (hash, label = '', title = '') => {
   const ex = state.base.explorer;
   const text = `${label ? `${label} ` : ''}${shortHash(hash)}`;
@@ -304,7 +308,7 @@ function baseCard(a) {
       </form>
     </div>
     <p class="small" role="status" data-test="base-result" hidden="${() => !state.baseResult}">${() => state.baseResult}</p>
-    <ul class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => html`<li>${txLink(t.hash, t.label, t.title)}</li>`.key(t.hash))}</ul>
+    <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>
   </section>`;
 }

@@ -148,7 +148,7 @@ details.streams > summary { color: var(--text); }
 .nowrap { white-space: nowrap; }
 .crow button { flex: none; }
 .base p.error, .base [data-test=base-result] { margin: 10px 0 0; }
-.txs { list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.txs { margin: 4px 0 0; font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .txs code, [data-test=base-last-batch] code { font-size: 0.85rem; }
 a { color: var(--accent); }
 .send { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
