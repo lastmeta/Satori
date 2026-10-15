@@ -73,8 +73,10 @@ From `neuron/engine-lite/engine.py:1044-1106,1198-1202`:
 
 JS number formatting differs from Python's (`100` vs `100.0`, exponent forms),
 so the port needs a `pyFloatStr()` that mimics Python `repr` for floats. Byte
-parity is **planned, not verified**: no fixture exists yet; one generated from
-the Docker image must be checked in. Central stores the hash without checking
+parity is **verified** for 439 float64 values and 4 hashes:
+`test/fixtures/central-parity.json`, generated offline from
+`satorinet/satori-lite:latest` (numpy 1.24, `str(np.float64)` equals Python
+`str(float)` on every value) by `scripts/central-parity.py`. Central stores the hash without checking
 it (`central/src/main.py:567-574`), so a mismatch would be cosmetic, not fatal.
 
 Note: central silently maps an unknown `stream_uuid` to the `bitcoin` stream
