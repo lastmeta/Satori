@@ -4,7 +4,8 @@
 //   const db = await openDb(conn, close?)    // runs migrations
 //   await db.get(key) / db.set(key, value)   // meta, JSON values
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
-//   await db.addPrediction(p) → id / db.pending() / db.pendingCount() / db.markSent(ids, at)
+//   await db.addPrediction(p) → id / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
+//   await db.resetCentral()                  // the central URL changed
 //   await db.streams() / db.predictions(uuidOrName, limit)   // for the UI and agents
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
@@ -115,6 +116,14 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     pendingCount: serial(async () => (await rows("SELECT count(*) AS n FROM predictions WHERE status = 'pending'"))[0].n),
     markSent: serial(async (ids, at) => {
       if (ids.length) await run(`UPDATE predictions SET status = 'sent', sent_at = ? WHERE id IN (${ids.map(() => '?').join(', ')})`, at, ...ids);
+    }),
+    /** The cap on the kept queue: pending predictions made before `before` are deleted. */
+    dropPending: serial((before) => run("DELETE FROM predictions WHERE status = 'pending' AND made_at < ?", before)),
+    /** Another central: its uuids differ, so the pending queue, the stream list and the last poll/submission go. */
+    resetCentral: serial(async () => {
+      await run("DELETE FROM predictions WHERE status = 'pending'");
+      await run('DELETE FROM streams');
+      await run("DELETE FROM meta WHERE key IN ('central_last_poll', 'central_last_submit')");
     }),
     /** A stream's predictions (by uuid or name), newest first. */
     predictions: serial((stream, limit = 20) => rows(`SELECT p.*, s.name FROM predictions p

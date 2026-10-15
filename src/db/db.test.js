@@ -89,6 +89,36 @@ describe('predictions', () => {
   });
 });
 
+test('dropPending: only pending ones made before the cutoff', async () => {
+  await db.addObservations([obs()]);
+  const old = await db.addPrediction(pred({ made_at: 100 }));
+  const sent = await db.addPrediction(pred({ made_at: 100 }));
+  await db.markSent([sent], 150);
+  const fresh = await db.addPrediction(pred({ made_at: 300 }));
+  await db.dropPending(200);
+  expect((await db.predictions('u-btc')).map((p) => p.id)).toEqual([fresh, sent]);
+  expect(old).toBeLessThan(sent);
+});
+
+test('resetCentral: the pending queue, the stream list and the last poll/submission go; history and sent stay', async () => {
+  await db.addObservations([obs()]);
+  const sent = await db.addPrediction(pred());
+  await db.markSent([sent], 3000);
+  await db.addPrediction(pred({ t2: 9 }));
+  await db.set('central_last_poll', { at: 1 });
+  await db.set('central_last_submit', { at: 2 });
+  await db.set('next_poll_at', 5);
+  await db.resetCentral();
+  expect(await db.pendingCount()).toBe(0);
+  expect(await db.streams()).toEqual([]);
+  expect(await db.get('central_last_poll')).toBeUndefined();
+  expect(await db.get('central_last_submit')).toBeUndefined();
+  expect(await db.get('next_poll_at')).toBe(5);
+  expect(await db.history('u-btc')).toEqual([{ ts: 1000, value: 1 }]);
+  await db.addObservations([obs({ ts: 2000 })]); // the same stream from the new central comes back with its history
+  expect(await db.predictions('u-btc')).toMatchObject([{ id: sent, status: 'sent' }]);
+});
+
 test('streams: one row per stream with its latest observation and prediction', async () => {
   await db.addObservations([obs(), obs({ ts: 2000, value: 2 }), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
   await db.addPrediction(pred({ t2: 5 }));
