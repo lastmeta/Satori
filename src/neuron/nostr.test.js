@@ -6,7 +6,7 @@ import { memoryDb } from '../db/node.js';
 import { signEvent, verifyEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../nostr/satori.js';
 import { forecast } from '../engine/index.js';
-import { pyFloatStr } from '../central/index.js';
+import { pyFloatStr } from '../py.js';
 import { createNostr, FOLLOW_ID, MAX_STREAMS } from './nostr.js';
 
 vi.setConfig({ testTimeout: 60_000 });

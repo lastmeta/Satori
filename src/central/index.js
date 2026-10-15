@@ -9,31 +9,9 @@
 // network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
+import { pyFloatStr } from '../py.js';
 
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)
-
-/**
- * Python `str(float)` / `str(numpy.float64)`: shortest round-trip digits,
- * positional for 1e-4 <= |x| < 1e16, else `d.ddde±XX`. Checked against
- * test/fixtures/central-parity.json (made in the Docker image).
- * @param {number} x
- */
-export function pyFloatStr(x) {
-  if (Number.isNaN(x)) return 'nan';
-  if (!Number.isFinite(x)) return x > 0 ? 'inf' : '-inf';
-  if (x === 0) return Object.is(x, -0) ? '-0.0' : '0.0';
-  const [m, e] = x.toExponential().split('e'); // shortest digits, like repr
-  const exp = Number(e);
-  const sign = x < 0 ? '-' : '';
-  const digits = m.replace(/[-.]/g, '');
-  if (exp < -4 || exp >= 16) {
-    const mant = digits.length > 1 ? `${digits[0]}.${digits.slice(1)}` : digits;
-    return `${sign}${mant}e${exp < 0 ? '-' : '+'}${String(Math.abs(exp)).padStart(2, '0')}`;
-  }
-  if (exp < 0) return `${sign}0.${'0'.repeat(-exp - 1)}${digits}`;
-  if (digits.length <= exp + 1) return `${sign}${digits}${'0'.repeat(exp + 1 - digits.length)}.0`;
-  return `${sign}${digits.slice(0, exp + 1)}.${digits.slice(exp + 1)}`;
-}
 
 /**
  * One `/predictions/batch` item as Lite's engine makes it (engine.py:1044-1106,

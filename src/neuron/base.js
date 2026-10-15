@@ -5,11 +5,10 @@
 // The batch goes at the first check of each UTC round: 10 s after start, at
 // the next round's start (chain time) and at least hourly.
 import { fallback, formatEther, formatGwei, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
-import { createChain, errorText, same, DOWN, UP, ROUND_S } from '../chain/index.js';
+import { createChain, errorText, lockText, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { loadConfig, rpcUrls } from '../chain/config.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
-import { fmtUtc } from '../ui/format.js';
 
 export const FIRST_CHECK_S = 10;
 export const CHECK_EVERY_S = 3600;
@@ -332,10 +331,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
         if (kind === 'ETH') return { hash: (await chain.sendEth(v, to, wei)).hash };
         const st = await chain.status({ identity: identity.evmAddress, vault: v.evmAddress });
         const lock = st.vault.lock;
-        if (lock?.locked) {
-          throw new Error(lock.indefinite ? 'SATORI is transfer-locked while delegated: stop delegating first.'
-            : `SATORI is transfer-locked until round ${lock.untilRound} (free from ${fmtUtc(lock.freeAt)}).`);
-        }
+        if (lock?.locked) throw new Error(`${lockText(lock)}${lock.indefinite ? ': stop delegating first' : ''}.`);
         return { hash: (await chain.sendSatori(v, to, wei)).hash };
       });
     },

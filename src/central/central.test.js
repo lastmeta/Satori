@@ -1,8 +1,9 @@
 import { describe, test, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  pyFloatStr, predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS,
+  predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS,
 } from './index.js';
+import { pyFloatStr } from '../py.js';
 
 const parity = JSON.parse(readFileSync(new URL('../../test/fixtures/central-parity.json', import.meta.url)));
 const fromBits = (hex) => new DataView(Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16)).buffer).getFloat64(0);

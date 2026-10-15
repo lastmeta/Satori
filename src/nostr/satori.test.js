@@ -7,7 +7,7 @@ import {
   KIND, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
   catalog, parseObservation, numericValue, pyFloat, relayUuid, predValue,
 } from './satori.js';
-import { pyFloatStr } from '../central/index.js';
+import { pyFloatStr } from '../py.js';
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
 const live = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-live.json', import.meta.url)));

@@ -3,8 +3,9 @@
 import { describe, expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  pyJson, nostrPubkey, generateNostrSecret, npub, eventId, signEvent, verifyEvent,
+  nostrPubkey, generateNostrSecret, npub, eventId, signEvent, verifyEvent,
 } from './event.js';
+import { pyJson } from '../py.js';
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
 const live = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-live.json', import.meta.url)));

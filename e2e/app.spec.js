@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { verifyMessage, deriveKeys, entropyFromWords } from '../src/keys/index.js';
 import { readWallet } from '../src/keys/docker.js';
 import { forecast, STEP_S } from '../src/engine/index.js';
-import { pyFloatStr } from '../src/central/index.js';
+import { pyFloatStr } from '../src/py.js';
 import { openApp, reloadApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral as stubAt, CENTRAL } from './stub.js';
 

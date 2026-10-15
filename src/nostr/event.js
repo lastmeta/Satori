@@ -3,13 +3,11 @@
 //   nostrPubkey(secretHex) / generateNostrSecret() / npub(pubkeyHex)
 //   signEvent({ created_at, kind, tags, content }, secretHex) → event
 //   verifyEvent(event) → id and signature check
-//   pyJson(value) → Python's json.dumps (satorilib's event content)
 import { schnorr } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { bech32 } from '@scure/base';
 import { generateEntropy } from '../keys/keys.js';
-import { pyFloatStr } from '../central/index.js';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -25,28 +23,6 @@ export const generateNostrSecret = () => bytesToHex(generateEntropy());
 /** NIP-19 npub of a pubkey. */
 export const npub = (pubkeyHex) => bech32.encode('npub', bech32.toWords(hexToBytes(pubkeyHex)));
 
-const ESC = { '"': '\\"', '\\': '\\\\', '\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f' };
-// ensure_ascii: outside ' '..'~', anything without a short escape is \uXXXX (Python's json ESCAPE_ASCII).
-const pyStr = (s) => `"${s.replace(/[^ -~]|["\\]/g,
-  (c) => ESC[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}"`;
-
-/**
- * Python's json.dumps with its defaults (", " and ": ", ensure_ascii), which
- * satorilib uses for every event's content (models.py to_json). A safe integer
- * prints as an int, any other number as Python's float.
- */
-export function pyJson(v) {
-  if (v === null || v === undefined) return 'null';
-  if (typeof v === 'boolean') return String(v);
-  if (typeof v === 'string') return pyStr(v);
-  if (typeof v === 'number') {
-    if (Number.isNaN(v)) return 'NaN';
-    if (!Number.isFinite(v)) return v > 0 ? 'Infinity' : '-Infinity';
-    return Number.isSafeInteger(v) ? String(v) : pyFloatStr(v);
-  }
-  if (Array.isArray(v)) return `[${v.map(pyJson).join(', ')}]`;
-  return `{${Object.entries(v).map(([k, x]) => `${pyStr(k)}: ${pyJson(x)}`).join(', ')}}`;
-}
 
 /** NIP-01 id: sha256 of [0, pubkey, created_at, kind, tags, content]. */
 export const eventId = (e) =>

@@ -3,8 +3,7 @@
 // observation parsing, Lite's value unwrapping and the relay model uuid.
 import { sha1 } from '@noble/hashes/legacy';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { pyJson } from './event.js';
-import { pyFloatStr } from '../central/index.js';
+import { pyJson, pyFloatStr } from '../py.js';
 
 export const KIND = { ANNOUNCE: 34600, OBSERVATION: 34601, SUBSCRIPTION: 34602, RELAY_LIST: 10002 }; // models.py:512-514
 export const PRED = '_pred';

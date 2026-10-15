@@ -53,6 +53,20 @@ export function transferLock(lockedUntil, round) {
   };
 }
 
+/** Unix seconds → 'Oct 17, 00:00 UTC' (rounds start at 00:00 UTC). */
+export function fmtUtc(s) {
+  return `${new Date(s * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23', timeZone: 'UTC' })} UTC`;
+}
+
+/** The vault's SATORI transfer lock (the token's rule: locked while lockedUntil >= round). */
+export function lockText(lock) {
+  if (!lock) return '–';
+  if (!lock.locked) return 'Free to send';
+  if (lock.indefinite) return 'SATORI transfer-locked while delegated';
+  return `SATORI transfer-locked until round ${lock.untilRound} (free from ${fmtUtc(lock.freeAt)})`;
+}
+
 /** The one-byte payload: solidityPacked(['uint8'], [direction]) (base_predict.py:237). */
 export const payload = (direction) => encodePacked(['uint8'], [direction]);
 

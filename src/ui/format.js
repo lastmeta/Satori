@@ -97,6 +97,8 @@ export function catalogMatch(s, q) {
 
 // ── Base (docs/design/base.md) ──
 
+export { fmtUtc, lockText } from '../chain/index.js'; // the transfer lock's text lives with its rule
+
 /** 0x1234…abcd */
 export const shortHash = (h) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : '');
 
@@ -106,12 +108,6 @@ export function amountText(x, unit) {
   return `${fmtNum(Number(x))} ${unit}`;
 }
 
-/** Unix seconds → 'Oct 17, 00:00 UTC' (rounds start at 00:00 UTC). */
-export function fmtUtc(s) {
-  return `${new Date(s * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    hourCycle: 'h23', timeZone: 'UTC' })} UTC`;
-}
-
 /** The vault's delegation in a few words. */
 export function delegationText(v) {
   const d = v?.vault?.delegated;
@@ -119,14 +115,6 @@ export function delegationText(v) {
   if (d === 'none') return 'Not delegated';
   if (d === 'other') return `Delegated to ${v.vault.delegate}, not this identity`;
   return '–';
-}
-
-/** The vault's SATORI transfer lock (the token's rule: locked while lockedUntil >= round). */
-export function lockText(lock) {
-  if (!lock) return '–';
-  if (!lock.locked) return 'Free to send';
-  if (lock.indefinite) return 'SATORI transfer-locked while delegated';
-  return `SATORI transfer-locked until round ${lock.untilRound} (free from ${fmtUtc(lock.freeAt)})`;
 }
 
 /** The identity's gas: its ETH and about how many daily batches it pays for. */
