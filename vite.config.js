@@ -1,4 +1,5 @@
-import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createReadStream, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { CSP } from './csp.js';
@@ -30,8 +31,24 @@ const rawDuckdbWorker = {
   }),
 };
 
+// Builds only: dist/sw.js, the service worker (src/pwa/sw.js; docs/design/pwa.md), with the files it
+// precaches: the page and every hashed asset but DuckDB's mvp bundle (for browsers without wasm
+// exceptions, fetched only there). Its cache is named after the files and the page, so a build that
+// changes either is a new worker, which waits for the page's "Update ready, reload".
+const serviceWorker = {
+  name: 'service-worker',
+  apply: 'build',
+  enforce: 'post', // after the page (index.html) is in the bundle
+  generateBundle(_, bundle) {
+    const files = ['/', ...Object.keys(bundle).filter((f) => f.startsWith('assets/') && !f.includes('-mvp')).sort().map((f) => `/${f}`)];
+    const name = `satori-${createHash('sha256').update(files.join() + bundle['index.html'].source).digest('hex').slice(0, 12)}`;
+    const code = readFileSync(new URL('./src/pwa/sw.js', import.meta.url), 'utf8').replace(/^export /gm, '');
+    this.emitFile({ type: 'asset', fileName: 'sw.js', source: `${code}\nstart(self, ${JSON.stringify(files)}, '${name}');\n` });
+  },
+};
+
 export default defineConfig({
-  plugins: [cspHeader, rawDuckdbWorker],
+  plugins: [cspHeader, rawDuckdbWorker, serviceWorker],
   // /rpc: the dev server's default Base RPC, a local anvil fork of Base Sepolia (node scripts/fork.mjs start),
   // on the page's own origin, which the CSP allows ('self'); a build has no proxy and no such default.
   server: {

@@ -7,3 +7,4 @@ playwright-report/
 .provider.log
 .fork.*.log
 .fork.*.pid
+.preview.log
