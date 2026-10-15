@@ -84,7 +84,7 @@ the lock queue ([runtime.md](runtime.md)).
 | Doc | Covers |
 |---|---|
 | [identity.md](identity.md) | keys, backup words, encryption at rest, Docker import/export, Evrmore message signing |
-| [central.md](central.md) | login, peer register, base config, observations and predictions batch, merkle proof |
+| [central.md](central.md) | built in step 3: [../../design/central.md](../../design/central.md); left here: base config, merkle proof, relays |
 | [chain.md](chain.md) | Base: config, stream reads, delegate/revoke, daily batch, claims, balances; Evrmore later |
 | [engine.md](engine.md) | forecaster, horizons, Base direction, per-node diversity |
 | [storage.md](storage.md) | DuckDB-WASM on OPFS, schema, single-writer rule, durability |

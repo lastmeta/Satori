@@ -21,5 +21,5 @@ does it right: a UUID challenge stored 60 s in Redis and consumed on use
 
 Require `message` to be an unconsumed `/auth/challenge` UUID (preferred), or a
 timestamp within ±5 min plus a replay cache. The browser app already signs a
-challenge UUID ([central.md](../design/central.md)), so it needs no change.
+challenge UUID ([central.md](../../design/central.md)), so it needs no change.
 Docker neurons would need the matching satorilib change before enforcement.

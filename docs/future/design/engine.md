@@ -85,7 +85,7 @@ DOWN across seeds; a strictly rising series gives UP.
 
 | Sink | Value | Docker evidence |
 |---|---|---|
-| central-lite batch | `value` = t2, `t1_value` = t1, formatted as Python floats ([central.md](central.md#payload-fields-verified-parity-planned)) | `engine.py:1052-1058,1097-1106` |
+| central-lite batch | `value` = t2, `t1_value` = t1, formatted as Python floats ([central.md](../../design/central.md#payload-strings-parity-verified)) | `engine.py:1052-1058,1097-1106` |
 | Base daily batch | direction rule above | replaces `base_predict.py:141-143` |
 | `_pred` on Nostr (parity, after v1) | t2, as a string | `engine.py:714-737`; `start.py:1300,1322-1323` |
 
