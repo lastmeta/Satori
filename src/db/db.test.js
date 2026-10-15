@@ -153,3 +153,68 @@ test('calls run in order even when not awaited', async () => {
   await Promise.all(writes);
   expect((await read).map((o) => o.value)).toEqual([1, 2, 3]);
 });
+
+describe('relay streams (Nostr), apart from central', () => {
+  const sub = (o) => ({ uuid: 'r-1', stream_name: 'btc', provider_pubkey: 'e5', name: 'Bitcoin', cadence_seconds: 900,
+    meta: '{"a": 1}', now: 100, ...o });
+  const robs = (o) => ({ stream_uuid: 'r-1', seq: 1, ts: 1000, value: 5, raw: '"5"', event_id: 'e1', received_at: 1001, ...o });
+
+  test('a step-4 database gains the relay tables; central data stays', async () => {
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 3)) await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '3')`);
+    await conn.query(`INSERT INTO streams VALUES ('u-btc', 'bitcoin', NULL)`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    expect(await up.streams()).toMatchObject([{ uuid: 'u-btc' }]);
+    expect(await up.relayStreams()).toEqual([]);
+  });
+
+  test('subscribe, unsubscribe, subscribe again: the row stays, so do pred_created_at and the seq', async () => {
+    expect(await db.subscribeRelay(sub())).toMatchObject({ uuid: 'r-1', active: true, subscribed_at: 100, unsubscribed_at: null,
+      pred_created_at: 100, pred_seq: 0, name: 'Bitcoin', cadence_seconds: 900, meta: '{"a": 1}' });
+    expect(await db.countActiveRelay()).toBe(1);
+    expect(await db.nextPredSeq('r-1')).toBe(1);
+    expect(await db.nextPredSeq('r-1')).toBe(2);
+    await db.unsubscribeRelay('r-1', 200);
+    expect(await db.relayStream('r-1')).toMatchObject({ active: false, unsubscribed_at: 200 });
+    expect(await db.countActiveRelay()).toBe(0);
+    expect(await db.relayStreams({ active: true })).toEqual([]);
+    expect(await db.subscribeRelay(sub({ now: 300, name: 'BTC', cadence_seconds: null }))).toMatchObject({
+      active: true, subscribed_at: 300, unsubscribed_at: null, pred_created_at: 100, pred_seq: 2, name: 'BTC', cadence_seconds: null });
+    expect(await db.nextPredSeq('r-1')).toBe(3);
+    expect(await db.relayStream('nope')).toBeNull();
+  });
+
+  test('observations: insert or ignore on the event id and on (stream, seq); history is numeric rows, oldest first', async () => {
+    await db.subscribeRelay(sub());
+    expect(await db.addRelayObservation(robs())).toBe(true);
+    expect(await db.addRelayObservation(robs())).toBe(false); // the same event from another relay
+    expect(await db.addRelayObservation(robs({ event_id: 'e2' }))).toBe(false); // a new event, the same seq
+    expect(await db.addRelayObservation(robs({ seq: 2 }))).toBe(false); // the same event id, another seq
+    expect(await db.addRelayObservation(robs({ seq: 3, ts: 900, value: 4, event_id: 'e3' }))).toBe(true);
+    expect(await db.addRelayObservation(robs({ seq: 4, ts: 1100, value: null, raw: '"abc"', event_id: 'e4' }))).toBe(true);
+    expect(await db.addRelayObservation(robs({ seq: 5, ts: null, value: 7, event_id: 'e5' }))).toBe(true);
+    expect(await db.relayHistory('r-1')).toEqual([{ ts: 900, value: 4 }, { ts: 1000, value: 5 }]);
+    expect(await db.history('r-1')).toEqual([]); // central's table is untouched
+    expect(await db.streams()).toEqual([]);
+  });
+
+  test("relayStreams: each with its latest observation and our latest _pred", async () => {
+    await db.subscribeRelay(sub());
+    await db.subscribeRelay(sub({ uuid: 'r-2', stream_name: 'eth', name: 'Ether', now: 150 }));
+    await db.addRelayObservation(robs());
+    await db.addRelayObservation(robs({ seq: 9, ts: 2000, value: 6, raw: '"6"', event_id: 'e9', received_at: 2001 }));
+    await db.addRelayPrediction({ stream_uuid: 'r-1', seq: 1, value: '5.0', model: 'naive', obs_seq: 1, made_at: 1002, event_id: 'p1', relays: 1 });
+    await db.addRelayPrediction({ stream_uuid: 'r-1', seq: 2, value: '6.5', model: 'bar1', obs_seq: 9, made_at: 2002, event_id: 'p2', relays: 2 });
+    const [eth, btc] = await db.relayStreams();
+    expect(btc).toMatchObject({ uuid: 'r-1', stream_name: 'btc', active: true, observations: 2, obs_seq: 9, obs_ts: 2000,
+      obs_value: 6, obs_raw: '"6"', obs_received_at: 2001, p_seq: 2, p_value: '6.5', p_model: 'bar1', p_made_at: 2002,
+      p_relays: 2 });
+    expect(eth).toMatchObject({ uuid: 'r-2', observations: 0, obs_value: null, p_value: null });
+    expect((await db.relayPredictions('r-1', 1)).map((p) => p.value)).toEqual(['6.5']);
+    await db.unsubscribeRelay('r-2', 3000);
+    expect((await db.relayStreams({ active: true })).map((r) => r.uuid)).toEqual(['r-1']);
+  });
+});

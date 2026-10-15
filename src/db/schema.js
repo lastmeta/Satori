@@ -28,4 +28,17 @@ export const MIGRATIONS = [
   // null for `naive` and for older rows.
   `ALTER TABLE predictions ADD COLUMN phi DOUBLE;
    ALTER TABLE predictions ADD COLUMN weight DOUBLE;`,
+  // 4 (step 5): relay (Nostr) streams, apart from central's, as Lite's network.db
+  // (docs/design/nostr.md#storage-migration-4). uuid = Lite's relay model uuid.
+  // relay_streams: a subscription and its `_pred` publication (created_at, last seq).
+  // relay_observations: deduped on the event id and on (stream, seq); value is
+  // the unwrapped number or null. relay_predictions: what we published, to how many relays.
+  `CREATE TABLE relay_streams (uuid VARCHAR PRIMARY KEY, stream_name VARCHAR NOT NULL, provider_pubkey VARCHAR NOT NULL,
+     name VARCHAR, cadence_seconds BIGINT, meta VARCHAR, active BOOLEAN NOT NULL, subscribed_at BIGINT NOT NULL,
+     unsubscribed_at BIGINT, pred_created_at BIGINT NOT NULL, pred_seq BIGINT NOT NULL DEFAULT 0);
+   CREATE TABLE relay_observations (stream_uuid VARCHAR NOT NULL, seq BIGINT NOT NULL, ts BIGINT, value DOUBLE,
+     raw VARCHAR, event_id VARCHAR NOT NULL UNIQUE, received_at BIGINT NOT NULL, PRIMARY KEY (stream_uuid, seq));
+   CREATE TABLE relay_predictions (stream_uuid VARCHAR NOT NULL, seq BIGINT NOT NULL, value VARCHAR NOT NULL,
+     model VARCHAR, obs_seq BIGINT, made_at BIGINT NOT NULL, event_id VARCHAR NOT NULL, relays INTEGER NOT NULL,
+     PRIMARY KEY (stream_uuid, seq));`,
 ];
