@@ -157,7 +157,8 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   await page.getByLabel('Base RPC').fill('/rpc');
   await page.getByLabel('Daily batch: max fee (gwei)').fill('0.5');
   await page.getByRole('button', { name: 'Save Base settings' }).click();
-  await expect(page.getByLabel('Base RPC')).toHaveValue('/rpc');
+  await expect.poll(() => page.evaluate(async () => (await window.satori.base()).maxFeeGwei)).toBe(0.5); // saved
   expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpc: ['/rpc'], rpcSetting: '/rpc', maxFeeGwei: 0.5 });
+  await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue('0.5');
   expect(await page.evaluate(() => window.satori.setBaseRpc(''))).toMatchObject({ rpc: ['/rpc'], rpcSetting: '' }); // the dev server's default
 });
