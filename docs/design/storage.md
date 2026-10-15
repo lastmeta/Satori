@@ -13,6 +13,11 @@ database reset never loses a wallet.
   (duckdb.org/2026/09/18/opfs-wasm).
 - Open with `db.open({ path: 'opfs://satori.duckdb', accessMode: READ_WRITE })`.
 - Startup self-test: write a row, close, reopen, read it back. Fail loudly.
+- Verified 2026-10-15 (Chrome 151, `e2e/opfs.spec.js`): `opfs://satori.duckdb`
+  opened from a module worker that spawns DuckDB's eh worker, under the CSP
+  header; write, `CHECKPOINT`, terminate, reopen and read, and again after a page
+  reload. Also passes from a `vite build` bundle (`?url` imports for the wasm
+  and DuckDB worker).
 
 ### Bundle
 

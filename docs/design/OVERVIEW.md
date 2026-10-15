@@ -102,7 +102,7 @@ be used (see storage.md).
 | Package | Version | Why this pin |
 |---|---|---|
 | `@duckdb/duckdb-wasm` | 1.32.0 | `latest` (1.33.1-dev57.0) creates OPFS files but never writes them (duckdb.org/2026/09/18/opfs-wasm). |
-| `apache-arrow` | ^17 (the copy DuckDB resolves) | DuckDB 1.32.0 depends on `apache-arrow ^17.0.0`; a second copy (21.x) breaks `instanceof`. Inferred. |
+| `apache-arrow` | 17.0.0 (the copy DuckDB resolves) | DuckDB 1.32.0 depends on `apache-arrow ^17.0.0`; a second copy (21.x) breaks `instanceof`. Inferred. |
 | `@arrow-js/core` (ArrowJS) | 1.0.6 | UI runtime: `reactive`, `html`, `component`, `watch`. No dependencies. |
 | `viem` | 2.37.0 | Base reads/writes; the version the identity parity vector was checked with. |
 | `@noble/curves` | 1.9.7 | secp256k1 sign/recover for Evrmore messages; parity-verified. |
@@ -111,8 +111,8 @@ be used (see storage.md).
 | `@scure/bip39` | 1.6.0 | 24 backup words (entropy ↔ words only); parity-verified. |
 | `js-yaml` | 5.4.2 | read Docker `wallet.yaml` / `vault.yaml` / `nostr.yaml` on import. |
 | `vite` | 8.3.1 | static build, worker bundling. |
-| `vitest` | 5.0.2 | unit tests (parity vectors, engine, schema). |
-| `@playwright/test` | 1.63.0 | end-to-end tests in real Chromium (OPFS, workers, CSP, tab handover). |
+| `vitest` | 4.1.11 | unit tests (parity vectors, engine, schema). 5.0.2 needs Node ≥ 22.12; the dev box runs Node 20.20 ([issue](../issues/toolchain-node20.md)). |
+| `@playwright/test` | 1.63.0 | end-to-end tests in real Chromium (OPFS, workers, CSP, tab handover). Runs the system Google Chrome (`channel: 'chrome'`); no Playwright-managed Chromium is installed. |
 | `nostr-tools` | 2.25.2 | Nostr parity only (after v1). Brings noble 2.x; collapse onto it once the parity vectors pass. |
 
 No DuckDB extension is used at runtime: JSON is stored as `VARCHAR` and parsed

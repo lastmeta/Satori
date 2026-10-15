@@ -33,7 +33,8 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | [electrumx-wss.md](electrumx-wss.md) | ElectrumX operators | Evrmore balances/sends with redundancy |
 | [satorilib-paid-observation-parse.md](satorilib-paid-observation-parse.md) | satorilib | fetching latest value of a paid stream |
 
-Housekeeping, not blocking: nginx answers central `/health` without CORS
+Housekeeping, not blocking: the dev box runs Node 20, so vitest is pinned to
+4.x ([toolchain-node20.md](toolchain-node20.md)); nginx answers central `/health` without CORS
 (`central/nginx.conf:58-62,142-146`; the app uses `GET /`); the local
 `/code/Satori/satorilib` checkout is behind `origin/base-upgrade` (dec62db).
 
