@@ -193,11 +193,12 @@ function settings(a) {
   return html`
   <details class="card">
     <summary>Settings</summary>
-    <form class="fields" @submit="${(e) => a.saveCentral(form(e))}">
+    <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
       <label>Central URL
-        <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}" value="${() => (state.central.url === state.centralDefault ? '' : state.central.url)}">
+        <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>
-      <p class="muted small">Empty: the default, ${() => state.centralDefault}. Saving registers there at once.</p>
+      <p class="muted small">Now: ${() => state.central.url}. Empty: the default, ${() => state.centralDefault}.
+        Saving registers there at once.</p>
       <p class="error" role="alert" hidden="${() => !state.settingsError}">${() => state.settingsError}</p>
       <div class="actions"><button class="primary" type="submit">Save</button></div>
     </form>

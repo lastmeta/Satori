@@ -270,10 +270,11 @@ const actions = {
   async pollNow() {
     try { await pollNow(); } catch { /* shown in the status */ }
   },
-  async saveCentral(f) {
+  async saveCentral(f, el) {
     state.settingsError = '';
     try {
       await setCentral(f.url);
+      el.reset();
     } catch (err) {
       state.settingsError = err?.message ?? String(err);
     }
