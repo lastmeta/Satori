@@ -13,6 +13,7 @@ import {
 } from '../nostr/satori.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
 import { serial } from '../util.js';
+import { EPOCH } from '../central/index.js';
 
 export const MAX_STREAMS = 100; // network_db.py:14-36, until central says (relay-config)
 export const RECONCILE_S = 3600; // start.py:292
@@ -22,7 +23,6 @@ const PAGE = 500; // strfry's maxFilterLimit (client.py:72-75)
 const MAX_FILTERS = 200; // strfry's maxReqFilterSize
 const MAX_PAGES = 100;
 const OUTBOX_MAX = 100; // unsubscribes and tombstones waiting for a relay
-const EPOCH = [946_684_800, 4_102_444_800]; // 2000–2100 (start.py:1413-1424)
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const isRelayUrl = (u) => {

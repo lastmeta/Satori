@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, test } from 'vitest';
 import { zeroAddress } from 'viem';
 import { publicKeys, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
-import { fakeSatori, E18, INDEFINITE } from './fake-satori.js';
+import { fakeSatori, E18 } from './fake-satori.js';
 
-import { createChain, transferLock, payload, revertName, errorText, UP, DOWN, HOOK_GAS } from './index.js';
+import { createChain, transferLock, payload, revertName, errorText, UP, DOWN, HOOK_GAS, INDEFINITE } from './index.js';
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));

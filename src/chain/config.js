@@ -4,6 +4,7 @@
 // (contract/satori-ui/src/contracts/addresses.ts:199-221); central's payload
 // has no lens. The RPC: the user's setting, else (a build) central's rpcUrl
 // then publicnode as a fallback, as the dapp lists them.
+import { isHttps } from '../util.js';
 
 export const CHAIN_ID = 84532; // Base Sepolia
 
@@ -57,9 +58,7 @@ export function checkRpcSetting(raw) {
   const url = String(raw ?? '').trim();
   if (!url) return '';
   if (url.startsWith('/') && !url.startsWith('//')) return url;
-  let ok = false;
-  try { ok = new URL(url).protocol === 'https:'; } catch { /* not a URL */ }
-  if (!ok) throw new Error('The Base RPC must be an https:// URL or a path on this site (such as /rpc).');
+  if (!isHttps(url)) throw new Error('The Base RPC must be an https:// URL or a path on this site (such as /rpc).');
   return url;
 }
 

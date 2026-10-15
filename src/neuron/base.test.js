@@ -4,9 +4,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { zeroAddress } from 'viem';
 import { publicKeys, evmAddress, signDigest } from '../keys/keys.js';
-import { fakeSatori, E18, INDEFINITE } from '../chain/fake-satori.js';
+import { fakeSatori, E18 } from '../chain/fake-satori.js';
 import { CentralError } from '../central/index.js';
-import { UP, DOWN, ROUND_S } from '../chain/index.js';
+import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
 import {
   createBase, runBatch, stepFor, directionOf, nextCheckAt, toPoints, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
 } from './base.js';

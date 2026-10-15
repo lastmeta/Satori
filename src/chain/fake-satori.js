@@ -9,11 +9,10 @@
 import { zeroAddress } from 'viem';
 import * as abi from './abi.js';
 import { DEFAULTS } from './config.js';
+import { INDEFINITE, HISTORY } from './index.js';
 import { fakeRpc, revert } from './fake-rpc.js';
 
 export const E18 = 10n ** 18n;
-export const INDEFINITE = 2 ** 24 - 1;
-const HISTORY = 768;
 
 const lc = (a) => a.toLowerCase();
 

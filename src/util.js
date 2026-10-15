@@ -1,5 +1,10 @@
 // Small helpers shared by the modules.
 
+/** An https:// URL (central's, a Base RPC's). */
+export function isHttps(url) {
+  try { return new URL(url).protocol === 'https:'; } catch { return false; }
+}
+
 /**
  * A line: the functions passed to it run one at a time, in call order, and
  * one that fails doesn't stop the ones after it. line(fn) → fn's promise;

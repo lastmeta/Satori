@@ -8,15 +8,15 @@ import {
   custom, decodeFunctionData, encodeErrorResult, encodeFunctionResult, keccak256, parseAbi, parseTransaction,
   recoverTransactionAddress, toHex,
 } from 'viem';
+import { multicall3Abi } from './abi.js';
+import { DEFAULTS } from './config.js';
 
-const MULTICALL3 = '0xca11bde05977b3631167028862be2a173976ca11';
-const mc3 = parseAbi([
+const MULTICALL3 = DEFAULTS.multicall3.toLowerCase();
+const mc3 = [...multicall3Abi, ...parseAbi([ // the app's reads, and aggregate3, which viem's multicall sends
   'struct Call3 { address target; bool allowFailure; bytes callData; }',
   'struct Result { bool success; bytes returnData; }',
   'function aggregate3(Call3[] calls) payable returns (Result[] returnData)',
-  'function getEthBalance(address addr) view returns (uint256 balance)',
-  'function getCurrentBlockTimestamp() view returns (uint256 timestamp)',
-]);
+])];
 
 export class Revert extends Error {}
 export const revert = (name = '') => { throw Object.assign(new Revert(name || 'revert'), { errorName: name }); };

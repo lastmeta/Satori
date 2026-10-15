@@ -20,6 +20,7 @@ import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { checkRpcSetting } from './chain/config.js';
+import { isHttps } from './util.js';
 import { shortHash, claimLine } from './ui/format.js';
 
 // The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
@@ -152,11 +153,7 @@ const pollNow = () => poller.poll();
  */
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
-  if (url) {
-    let ok = false;
-    try { ok = new URL(url).protocol === 'https:'; } catch { /* not a URL */ }
-    if (!ok) throw new Error('The central URL must be an https:// address.');
-  }
+  if (url && !isHttps(url)) throw new Error('The central URL must be an https:// address.');
   if ((url || DEFAULT_CENTRAL) !== central.url) {
     await poller.idle(); // its rows are the old central's
     await db.resetCentral();

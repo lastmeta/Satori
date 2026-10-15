@@ -54,13 +54,13 @@ export function predictionItem({ streamUuid, streamName, t1, t2, now = Date.now(
   };
 }
 
-const EPOCH_MIN = 946684800; // 2000, as data_helper.py:_parse_epoch
-const EPOCH_MAX = 4102444800; // 2100
+/** Unix seconds Lite takes as a time: 2000–2100, exclusive (data_helper.py:_parse_epoch; start.py:1413-1424 for relays). */
+export const EPOCH = [946_684_800, 4_102_444_800];
 
 function parseEpoch(raw) {
   if (raw == null || raw === '') return null;
   const n = Number(raw);
-  if (n > EPOCH_MIN && n < EPOCH_MAX) return n;
+  if (n > EPOCH[0] && n < EPOCH[1]) return n;
   const s = String(raw);
   const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`); // no zone = UTC
   return Number.isNaN(ms) ? null : ms / 1000;
