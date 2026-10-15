@@ -35,7 +35,8 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | [satorilib-paid-observation-parse.md](satorilib-paid-observation-parse.md) | satorilib | fetching latest value of a paid stream |
 
 Housekeeping, not blocking: nginx answers central `/health` without CORS
-(`central/nginx.conf:58-62,142-146`; the app uses `GET /`); the local
+(`central/nginx.conf:58-62,142-146`; the app calls neither `/health` nor `/`:
+register's answer says whether central is up); the local
 `/code/Satori/satorilib` checkout is behind `origin/base-upgrade` (dec62db).
 
 ## Inherent browser limits
@@ -48,5 +49,7 @@ Accepted behaviour; designed around, not fixable.
 - A browser cannot host a Nostr relay (no listening sockets).
 - Arbitrary data-source URLs are subject to CORS (affects own data sources, later).
 - Browser storage can be evicted; backup words are mandatory.
-- Signing keys are JS bytes in worker memory while signed in (no secp256k1 in
-  WebCrypto).
+- Signing keys are JS bytes in memory (no secp256k1 in WebCrypto): the
+  identity and the Nostr key always, the vault only while unlocked (Unlock
+  to Lock). Today that memory is the main thread's; a worker is planned
+  ([runtime.md](../plans/runtime.md)).
