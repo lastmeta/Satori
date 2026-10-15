@@ -84,7 +84,7 @@ async function boot({ https = false, centralWrite = false, user = [USER_RELAY] }
   changes = 0;
   nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
     makeRelay: relays.make, now, https, defaults: { relays: user, centralWrite }, onChange: () => changes++,
-    setInterval: () => 0, clearInterval: () => {} });
+    setInterval: () => 0, clearInterval: () => {}, openWaitMs: 0 });
   await nostr.start();
 }
 const openAll = () => { for (const r of relays.all.values()) r.open(); };
@@ -154,9 +154,15 @@ describe('discover', () => {
     expect(list.find((s) => s.stream_name === 's1_pred').pred).toBe(true);
     expect(list[0].event).toBeUndefined(); // plain values for agents
   });
-  test('no relay open: an error', async () => {
+  test('no relay open: an error (right after a load it waits for the first one)', async () => {
     await boot();
     await expect(nostr.discover()).rejects.toThrow(/No relay is connected/);
+    const later = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+      makeRelay: relays.make, now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0, openWaitMs: 5000 });
+    await later.start();
+    const found = later.discover();
+    setTimeout(() => relays.get(USER_RELAY).open(), 300);
+    expect(await found).toEqual([]);
   });
 });
 

@@ -136,7 +136,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .relay .badge { margin: 0; }
 .nostr > code { display: block; margin-top: 2px; }
 .nrow {
-  display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr max-content 1fr 44px 60px 84px; gap: 10px; align-items: baseline;
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) max-content minmax(0, 1fr) 36px 52px max-content;
+  gap: 10px; align-items: baseline;
   padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.92rem;
 }
 .nrow.head { border-top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
@@ -151,6 +152,7 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .cmain { min-width: 0; }
 .crow .sname { font-weight: 550; }
 .crow .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nowrap { white-space: nowrap; }
 .crow button { flex: none; }
 label.check { display: flex; align-items: center; gap: 8px; color: var(--text); }
 label.check input { width: auto; margin: 0; }

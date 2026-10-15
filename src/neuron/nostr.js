@@ -40,7 +40,7 @@ const parseRaw = (raw) => {
  */
 export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay,
   forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:',
-  onChange = () => {}, setInterval: si = setInterval, clearInterval: ci = clearInterval }) {
+  onChange = () => {}, setInterval: si = setInterval, clearInterval: ci = clearInterval, openWaitMs = 10_000 }) {
   let maxStreams = MAX_STREAMS;
   let userRelays = defaults.relays;
   let centralWrite = defaults.centralWrite;
@@ -217,10 +217,13 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     return out;
   }
 
-  function readable() {
-    const list = open();
-    if (!list.length) throw new Error('No relay is connected yet. Try again in a moment.');
-    return list;
+  /** The open relays; right after a load, waits up to 10 s for the first one. */
+  async function readable() {
+    for (const end = Date.now() + openWaitMs; !open().length && Date.now() < end;) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    if (!open().length) throw new Error('No relay is connected. Check the relays under Settings.');
+    return open();
   }
 
   const view = (r) => ({
@@ -274,7 +277,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
 
     /** The relays' catalog: newest per (provider, stream), no tombstones; `pred` and `subscribed` marked. */
     async discover() {
-      const events = (await Promise.all(readable().map((e) => pages(e.relay).catch(() => [])))).flat();
+      const events = (await Promise.all((await readable()).map((e) => pages(e.relay).catch(() => [])))).flat();
       const active = new Set((await db.relayStreams({ active: true })).map((r) => r.uuid));
       return catalog(events).map(({ event, ...s }) => ({ ...s, subscribed: active.has(relayUuid(s.pubkey, s.stream_name)) }));
     },
@@ -292,7 +295,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         throw new Error(`The limit of ${maxStreams} streams is reached (central's max_streams). Unsubscribe from one first.`);
       }
       const filter = [{ kinds: [KIND.ANNOUNCE], authors: [p], '#d': [s] }];
-      const events = (await Promise.all(readable().map((e) => e.relay.fetch(filter).catch(() => [])))).flat();
+      const events = (await Promise.all((await readable()).map((e) => e.relay.fetch(filter).catch(() => [])))).flat();
       const [found] = catalog(events);
       if (!found) throw new Error(`${s} is not announced by ${p.slice(0, 8)}… on the connected relays.`);
       if (!verifyEvent(found.event)) throw new Error('The announcement has a bad signature.');
