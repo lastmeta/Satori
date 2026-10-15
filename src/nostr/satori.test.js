@@ -129,6 +129,13 @@ describe('the catalog (discover)', () => {
     ]);
     expect(list[1]).toMatchObject({ cadence_seconds: 900, price_per_obs: 0, tags: ['x'], created_at: 20 });
   });
+  test('a malformed event is skipped, not a crash: tags not arrays of strings, a d that is not a string', () => {
+    const good = ann(A, 'ok', 5);
+    for (const bad of [{ ...ann(B, 'x', 9), tags: [null] }, { ...ann(B, 'x', 9), tags: [['d', 5]] },
+      { ...ann(B, 'x', 9), tags: 'd' }, { ...ann(B, 'x', 9), tags: [['d', 'x'], ['t', null]] }, null, 7]) {
+      expect(catalog([good, bad]).map((e) => e.stream_name)).toEqual(['ok']);
+    }
+  });
   test('events are not mutated and the source event is kept for the subscribe check', () => {
     const e = sign(announceEvent(predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02' }), now));
     const [s] = catalog([e]);

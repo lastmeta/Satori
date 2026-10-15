@@ -10,6 +10,8 @@ export const KIND = { ANNOUNCE: 34600, OBSERVATION: 34601, SUBSCRIPTION: 34602, 
 export const PRED = '_pred';
 
 const tag = (e, name) => e.tags.find((t) => t[0] === name)?.[1];
+/** Tags as NIP-01 has them: an array of arrays of strings (a relay may serve anything). */
+const wellTagged = (e) => Array.isArray(e?.tags) && e.tags.every((t) => Array.isArray(t) && t.every((x) => typeof x === 'string'));
 const isDeleted = (e) => e.tags.some((t) => t[0] === 'status' && t[1] === 'deleted');
 
 /** A free observation (34601) as publish_observation sends it (client.py:579-610). */
@@ -80,7 +82,7 @@ export const relayListEvent = (urls, now) => ({ created_at: now, kind: KIND.RELA
 export function catalog(events) {
   const newest = new Map();
   for (const e of events) {
-    if (e?.kind !== KIND.ANNOUNCE || !Array.isArray(e.tags)) continue;
+    if (e?.kind !== KIND.ANNOUNCE || !wellTagged(e) || typeof e.pubkey !== 'string' || !Number.isFinite(e.created_at)) continue;
     const key = `${e.pubkey}:${tag(e, 'd') ?? ''}`;
     if (!newest.has(key) || e.created_at > newest.get(key).created_at) newest.set(key, e);
   }
