@@ -59,5 +59,12 @@ steps start from evidence, not from scratch.
 - A relay keeps one of two replaceable events with the same `created_at`
   (NIP-01): two `_pred` of one stream in one second lose one, as in Lite
   ([../design/nostr.md](../design/nostr.md#inherent-as-in-lite)).
+- Load time on the dev server (headless Chrome, this box), 2026-10-15: the
+  page paints "Opening…" at 0.3 s (index.html); a fresh profile reaches Setup
+  in ~4.5 s and a reload reaches Home in ~3.5 s (they were 5.6–6.0 s and
+  4.7–4.9 s before apache-arrow was pre-bundled and DuckDB's worker sent raw).
+  What remains: ~0.75 s of modules, ~1.8 s for DuckDB to fetch and compile
+  its 34 MB wasm (a cacheable wasm did not help), ~0.4 s to open the OPFS
+  file, ~0.15 s of migrations, ~0.3 s to start the neuron.
 - Satorian's catalog, 2026-10-15: 1,061 announcements, 924 live (111 of them
   `_pred`) from 43 providers; e5e6… alone announces ~400 streams.

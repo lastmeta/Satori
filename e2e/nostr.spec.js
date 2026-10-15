@@ -13,6 +13,7 @@ import { createRelay } from '../src/nostr/relay.js';
 import { verifyEvent } from '../src/nostr/event.js';
 import { relayUuid } from '../src/nostr/satori.js';
 import { readNostrYaml } from '../src/keys/docker.js';
+import { openApp, reloadApp } from './load.js';
 
 const CENTRAL = 'https://central2.satorinet.io';
 const CENTRAL_RELAY = 'ws://localhost:7782';
@@ -73,7 +74,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await provider.observe({ stream, value: '100', seq: 1, timestamp: t0 });
 
   // Setup: the Nostr key is made and registered with central.
-  await page.goto('/');
+  await openApp(page);
   await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
   const s0 = await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
   expect(s0.nostr.pubkey).toMatch(/^[0-9a-f]{64}$/);
@@ -147,7 +148,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   expect(await centralRelay.fetch([{ authors: [me] }])).toEqual([]);
 
   // A reload: the subscription, the key and the `_pred` seq are kept; the next observation is seq 3.
-  await page.reload();
+  await reloadApp(page);
   await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(me);
   await expect(sub.locator('[data-test=sub-seq]')).toHaveText('2');
   await expect.poll(async () => (await nostr(page)).relays.map((r) => r.state)).toEqual(['open', 'open']);
@@ -185,7 +186,7 @@ test('Docker import with nostr.yaml keeps the Docker Nostr key; refused subscrip
   const stub = await stubCentral(context);
   const wallet = fx.vectors[0];
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
-  await page.goto('/');
+  await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));

@@ -10,6 +10,7 @@ import { verifyMessage, deriveKeys, entropyFromWords } from '../src/keys/index.j
 import { readWallet } from '../src/keys/docker.js';
 import { forecast, STEP_S } from '../src/engine/index.js';
 import { pyFloatStr } from '../src/central/index.js';
+import { openApp, reloadApp, LOAD_TIMEOUT } from './load.js';
 
 const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
@@ -92,7 +93,7 @@ test('create, register, Poll now (observations in, predictions out), reload keep
   });
 
   // Setup: create, the vault's words, confirm three, passphrase.
-  await page.goto('/');
+  await openApp(page);
   await page.getByRole('button', { name: 'Create a new neuron' }).click();
   const words = await visible(page.locator('ol.words li')).allTextContents();
   expect(words).toHaveLength(24);
@@ -115,7 +116,7 @@ test('create, register, Poll now (observations in, predictions out), reload keep
   // Home: two addresses, the vault locked, registered with central2 (headers only, no token).
   const idAddr = page.locator('[data-test=identity]');
   const vaultAddr = page.locator('[data-test=vault]');
-  await expect(idAddr).toHaveText(ADDRESS);
+  await expect(idAddr).toHaveText(ADDRESS, { timeout: LOAD_TIMEOUT }); // the vault's encryption, then the neuron starts
   await expect(vaultAddr).toHaveText(vaultKeys.address);
   const identity = await idAddr.textContent();
   expect(identity).not.toBe(vaultKeys.address);
@@ -164,12 +165,12 @@ test('create, register, Poll now (observations in, predictions out), reload keep
 
   // Second tab: told to use the first one.
   const other = await context.newPage();
-  await other.goto('/');
+  expect(await openApp(other)).toBe('elsewhere');
   await expect(other.getByText('Satori is open in another tab')).toBeVisible();
   await other.close();
 
   // Reload: running at once with no passphrase; registered again; the schedule and the data are kept.
-  await page.reload();
+  await reloadApp(page);
   await expect(idAddr).toHaveText(identity);
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered).toHaveLength(2);
@@ -234,7 +235,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   const elsewhere = await stubCentral(context, 'https://central.test');
   const v = fx.vectors[2];
   stub.vaults[v.pubkey] = v.address;
-  await page.goto('/');
+  await openApp(page);
   await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
   await expect(page.evaluate(() => window.satori.poll())).rejects.toThrow(/Set up first/);
   const s0 = await page.evaluate((w) => window.satori.setup({ passphrase: 'pass', vaultWords: w }), v.words);
@@ -337,7 +338,7 @@ test('import Docker files; central has another vault for this identity: a mismat
   const vault = fx.vectors[fx.vaults.current.vector];
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
 
-  await page.goto('/');
+  await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
   // In the wrong slots: refused, and the message says so.
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
@@ -389,7 +390,7 @@ test('import Docker files; central has another vault for this identity: a mismat
 test('restore from words', async ({ context, page }) => {
   await stubCentral(context);
   const [v, id] = [fx.vectors[0], fx.vectors[3]];
-  await page.goto('/');
+  await openApp(page);
   await page.getByRole('button', { name: 'Restore from words' }).click();
   await page.getByLabel('Vault words (24)').fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
   await page.getByRole('button', { name: 'Continue' }).click();
@@ -400,7 +401,7 @@ test('restore from words', async ({ context, page }) => {
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
   await page.getByLabel('Repeat passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await expect(page.locator('[data-test=vault]')).toHaveText(v.address);
+  await expect(page.locator('[data-test=vault]')).toHaveText(v.address, { timeout: LOAD_TIMEOUT });
   await expect(page.locator('[data-test=identity]')).toHaveText(id.address);
 });
 
@@ -411,7 +412,7 @@ test('setup: one at a time, and it leaves rows it does not own', async ({ contex
   const row0 = { v: 1, note: 'not ours' };
   expect(await page.evaluate((r) => window.probe({ cmd: 'app-meta', key: 'vault', value: r }), row0)).toEqual({ value: row0 });
 
-  await page.goto('/');
+  await openApp(page);
   await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
   await expect(page.getByText(/prototype/)).toHaveCount(0);
   // Two setups at once (an agent retrying, or an agent and the UI): one wins, the other is refused.
@@ -424,7 +425,7 @@ test('setup: one at a time, and it leaves rows it does not own', async ({ contex
   await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeHidden();
 
   // What was stored is what the winner reported.
-  await page.reload();
+  await reloadApp(page);
   await expect(page.locator('[data-test=identity]')).toHaveText(done[0].identity);
   await expect(page.locator('[data-test=vault]')).toHaveText(done[0].vault);
   await expect(page.evaluate(() => window.satori.setup({ passphrase: 'pass' }))).rejects.toThrow(/already set up/i);

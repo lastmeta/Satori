@@ -160,7 +160,9 @@ WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-sato
   forecast and published as `_pred` (read back from 7781 and checked, with
   the 34600 and the 34602), nothing on 7782 from the app, kept over a reload,
   unsubscribed with the tombstone; Docker import with `nostr.yaml`. Satorian
-  and the dev relay are routed to nothing in every test.
+  and the dev relay are routed to nothing in every test. Every spec opens and
+  reloads the app through `e2e/load.js`, which waits up to 30 s for it to
+  leave "Opening…" (DuckDB-WASM takes seconds to start on a busy box).
 - Live, in a fresh browser profile on the dev server: central2 (writes
   allowed) for register, Poll now and the batch; prod only for read-only GETs.
   Nostr: satorian read only (its full catalog discovered: 924 live of 1,061
