@@ -102,7 +102,8 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   // The stored observation arrives with the follow REQ: stored, forecast, `_pred` seq 1 published to 7781.
   const sub = page.locator('[data-test=sub]').filter({ hasText: 'E2E walk' });
   await expect(sub.locator('[data-test=sub-obs]')).toHaveText('100');
-  await expect(sub.locator('[data-test=sub-pred]')).toHaveText('100.0');
+  await expect(sub.locator('[data-test=sub-pred]')).toHaveText('100');
+  await expect(sub.locator('[data-test=sub-pred]')).toHaveAttribute('title', `${stream}_pred · naive · sent as "100.0"`);
   await expect(sub.locator('[data-test=sub-seq]')).toHaveText('1');
   await expect(sub.locator('[data-test=sub-relays]')).toHaveText('1 relay');
 

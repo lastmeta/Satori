@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
-  fmtCadence, shortKey, relayText, obsText, catalogMatch,
+  fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -86,6 +86,14 @@ test('obsText: a relay value as sent (a dict as JSON)', () => {
   expect(obsText({ raw: '82234', value: 82234 })).toBe('82234');
   expect(obsText({ raw: { raw: '1', unit: 'tick' }, value: null })).toBe('{"raw":"1","unit":"tick"}');
   expect(obsText(null)).toBe('–');
+});
+
+test('predText: a published value as a number when it is one (the exact string is in the title)', () => {
+  expect(predText('97.16251735526325')).toBe('97.1625');
+  expect(predText('82109.0')).toBe('82,109.00');
+  expect(predText('abc')).toBe('abc');
+  expect(predText('{"raw": "1"}')).toBe('{"raw": "1"}');
+  expect(predText(null)).toBe('–');
 });
 
 test('catalogMatch: name, stream, description or tags, any case', () => {

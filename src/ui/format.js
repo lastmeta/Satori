@@ -81,6 +81,13 @@ export function obsText(o) {
   return typeof o.raw === 'string' ? o.raw : JSON.stringify(o.raw);
 }
 
+/** A published `_pred` value: as a number when it is one (Python's float text), else as sent. */
+export function predText(v) {
+  if (v == null) return '–';
+  const n = /^-?\d+(\.\d+)?(e[+-]\d+)?$/.test(v) ? Number(v) : NaN;
+  return Number.isFinite(n) ? fmtNum(n) : v;
+}
+
 /** Whether a catalog entry matches the search words (all of them, any case). */
 export function catalogMatch(s, q) {
   const text = `${s.stream_name} ${s.name} ${s.description} ${s.tags.join(' ')}`.toLowerCase();
