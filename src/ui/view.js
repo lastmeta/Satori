@@ -266,6 +266,8 @@ const rpcText = (b) => (b.localFork ? `${b.rpc.join(', ')}: the local fork of Ba
 function baseCard(a) {
   const b = () => state.base;
   const delegated = () => b().vault.delegated === 'identity';
+  const notDelegated = () => b().vault.delegated === 'none';
+  const lowEth = () => b().identity.lowEth && delegated(); // gas matters once the identity has a batch to send
   const busy = () => !!state.baseBusy;
   return html`
   <section class="card base">
@@ -277,13 +279,15 @@ function baseCard(a) {
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => `The chain did not answer: ${b().error}`}</p>
     <dl class="facts">
       ${fact('RPC', 'base-rpc', () => (b().rpc.length ? rpcText(b()) : '–'))}
-      ${fact('Identity', 'base-identity', html`<span class="${() => (b().identity.lowEth ? 'error' : '')}">${() => gasText(b().identity) + (b().identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
+      ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
       ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
-      ${fact('Delegation', 'base-delegation', () => delegationText(b()))}
+      ${fact('Delegation', 'base-delegation', () => (notDelegated()
+    ? `Not delegated: ${state.unlocked ? 'Delegate prediction power, below' : 'Unlock, then Delegate prediction power'}` : delegationText(b())))}
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
       ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}
       ${fact('Last batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
-      ${fact('Batch check', 'base-check', () => (b().checking ? 'Checking…' : checkText(b().lastCheck, b().nextCheck)))}
+      ${fact('Batch check', 'base-check', () => (b().checking ? 'Checking…'
+    : notDelegated() ? `Waits for delegation · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
     </dl>
     <p class="muted small" hidden="${() => state.unlocked}">Unlock the vault to delegate, claim or send. The identity sends the daily batch on its own.</p>
     <div hidden="${() => !state.unlocked}">

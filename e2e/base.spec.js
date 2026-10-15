@@ -32,7 +32,9 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   const I = base.identity.address.toLowerCase();
   const V = base.vault.address.toLowerCase();
   expect(base).toMatchObject({ rpc: ['/rpc'], config: 'bundled', round: ROUND, vault: { delegated: 'none', satori: '0' } });
-  await expect(fact(page, 'identity')).toContainText('low, send it a little Base ETH');
+  await expect(fact(page, 'identity')).toHaveText('0 ETH · about 0 daily batches'); // no warning before delegating
+  await expect(fact(page, 'delegation')).toHaveText('Not delegated: Unlock, then Delegate prediction power');
+  await expect(fact(page, 'check')).toContainText('Waits for delegation');
   await expect(page.getByText('Unlock the vault to delegate, claim or send.')).toBeVisible();
 
   rpc.eth[I] = 10n ** 17n;
@@ -91,6 +93,12 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   expect(next).toMatchObject({ round: ROUND + 1, sent: { games: [{ gameId: 1 }] } });
   await expect(fact(page, 'last-batch')).toContainText(`Round ${ROUND + 1}`);
   expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ skipped: 'already predicted this round' });
+
+  // Delegated, the identity's gas matters: below a week of batches it says so.
+  rpc.eth[I] = 10n ** 12n;
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(fact(page, 'identity')).toContainText('low, send it a little Base ETH');
+  rpc.eth[I] = 10n ** 17n;
 
   // Stop delegating: transfer-locked through the next round, then free.
   await page.getByRole('button', { name: 'Stop delegating' }).click();
