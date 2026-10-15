@@ -8,7 +8,7 @@ import { fakeSatori, E18, INDEFINITE } from '../chain/fake-satori.js';
 import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S } from '../chain/index.js';
 import {
-  createBase, runBatch, stepFor, directionOf, namedAllowed, nextCheckAt, toPoints, FIRST_CHECK_S, CHECK_EVERY_S,
+  createBase, runBatch, stepFor, directionOf, nextCheckAt, toPoints, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
 } from './base.js';
 
 const signerOf = (hex) => {
@@ -50,12 +50,6 @@ describe('rules', () => {
   test('direction as Lite\'s direction_from: UP above the latest, else DOWN (a tie is DOWN)', () => {
     expect([directionOf(2, 1), directionOf(1, 1), directionOf(0.5, 1)]).toEqual([UP, DOWN, DOWN]);
   });
-  test('named games: 24 clock hours after our last submit, as Lite\'s named_allowed', () => {
-    const last = H0 * 3600 + 14 * 3600 + 1800; // 14:30
-    expect(namedAllowed(0, last)).toBe(true);
-    expect(namedAllowed(last, last + 23 * 3600)).toBe(false); // 13:30 the next day
-    expect(namedAllowed(last, last + 23.5 * 3600)).toBe(true); // 14:00 the next day: the same clock hour
-  });
   test('the next check: the next round\'s start + 1 min on the chain\'s clock, at most an hour away', () => {
     const chainTime = ROUND * ROUND_S + 23.5 * 3600; // 23:30 on the chain
     expect(nextCheckAt({ now: 1000, chainTime })).toBe(1000 + 1800 + 60);
@@ -82,7 +76,7 @@ describe('the daily batch', () => {
       games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: 59058240589371161, t2: 59058240589371161 }] };
     expect(r).toEqual({ at: batch.at, round: ROUND, sent: batch });
     expect(db.m.get('base_last_batch')).toEqual(batch);
-    expect(db.m.get('base_last_submit_ts')).toBe(batch.at);
+    expect(db.m.get('base_pending_batch')).toBe(null);
     expect(db.checkpoint).toHaveBeenCalled();
     expect(await runBatch({ chain: chainOf(), identity, db })).toMatchObject({ skipped: 'already predicted this round' });
     expect(rpc.sent).toHaveLength(1);
@@ -93,18 +87,28 @@ describe('the daily batch', () => {
     s.streams[3] = { game: 13, named: false, cadence: 60, history: [{ hour: H0 + 1, value: 10n }, { hour: H0 + 2, value: 11n }] };
     s.streams[4] = { game: 14, named: false, cadence: 60, history: [{ hour: H0 + 1, value: 7n }] };
     s.deadGames[14] = 'StaleValue';
+    s.weights[13] = E18;
+    s.weights[14] = E18;
     const r = await runBatch({ chain: chainOf(), identity, db, forecast: up });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }, { gameId: 13, payload: '0x01' }]]);
     expect(r.sent.dropped).toEqual([expect.objectContaining({ streamId: 4, gameId: 14, error: 'StaleValue' })]);
   });
 
-  test('a named game waits 24 clock hours after our last batch; the others go without it', async () => {
+  test('a named game under 24 clock hours since our last prediction on it: the simulate drops it (the contract\'s own rule)', async () => {
     await delegated();
     s.streams[5] = { game: 15, named: true, cadence: 60, history: [{ hour: H0 + 1, value: 3n }] };
-    db.m.set('base_last_submit_ts', ROUND * ROUND_S - 2 * 3600); // 22:00 yesterday; now 09:00
+    s.weights[15] = E18;
+    s.lastPred[`${I}:15`] = H0 - 2; // 22:00 yesterday; now 09:00
     const r = await runBatch({ chain: chainOf(), identity, db, forecast: up });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]);
-    expect(r.sent.dropped).toEqual([expect.objectContaining({ gameId: 15, error: 'named: under 24 h since the last batch' })]);
+    expect(r.sent.dropped).toEqual([expect.objectContaining({ gameId: 15, named: true, error: 'DuplicatePrediction' })]);
+  });
+
+  test('a game without voting weight (anyone\'s new stream) is not in the batch at all', async () => {
+    await delegated();
+    for (let i = 10; i < 20; i++) s.streams[i] = { game: i + 100, named: false, cadence: 60, history: [{ hour: H0, value: 1000n }] };
+    await runBatch({ chain: chainOf(), identity, db });
+    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }]]);
   });
 
   test('nothing passes: no transaction, the reasons listed', async () => {
@@ -116,41 +120,67 @@ describe('the daily batch', () => {
     expect(db.m.has('base_last_batch')).toBe(false);
   });
 
-  test('the chain says DuplicatePrediction for the batch: resent once without the named games (base_predict.py:157-174)', async () => {
-    const sends = [];
-    const dup = Object.assign(new Error('dup'), { name: 'X' });
+  test('the round of a batch is its block\'s (a send at 23:59:59 can land in the next round)', async () => {
     const chain = {
-      batchState: async () => ({ round: ROUND, chainTime: 100, power: 1n, predicted: 0 }),
-      streams: async () => [{ streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440 }, { streamId: 2, gameId: 2, named: true, cadenceMinutes: 60 }],
+      batchState: async () => ({ round: ROUND, chainTime: (ROUND + 1) * ROUND_S - 1, power: 1n, predicted: 0 }),
+      streams: async () => [{ streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440 }],
       history: async () => [{ hour: 1, value: 5n }],
       simulateGame: async () => null,
-      sendBatch: async (_, list) => {
-        sends.push(list.map((g) => g.gameId));
-        if (list.some((g) => g.named)) throw dup;
-        return { hash: '0xh', at: 200, blockNumber: 1 };
-      },
+      fees: async () => ({ maxFeePerGas: 1n, maxPriorityFeePerGas: 1n }),
+      sendBatch: async () => ({ hash: '0xh', at: (ROUND + 1) * ROUND_S + 1, blockNumber: 1 }),
     };
-    const { revertName } = await import('../chain/index.js');
-    expect(revertName(dup)).toBe(null); // a plain error is not a revert: rethrown
-    expect(await runBatch({ chain, identity, db })).toMatchObject({ error: 'dup' });
-    expect(db.m.has('base_last_submit_ts')).toBe(false); // a failed send loses nothing (Lite wrote it before sending)
-
-    const { BaseError, ContractFunctionRevertedError, ContractFunctionExecutionError } = await import('viem');
-    const { engineAbi } = await import('../chain/abi.js');
-    const reverted = new ContractFunctionExecutionError(
-      new ContractFunctionRevertedError({ abi: engineAbi, data: '0xe372c20e', functionName: 'predictMultipleWithPayloads' }),
-      { abi: engineAbi, functionName: 'predictMultipleWithPayloads', args: [] });
-    expect(reverted).toBeInstanceOf(BaseError);
-    chain.sendBatch = async (_, list) => {
-      sends.push(list.map((g) => g.gameId));
-      if (list.some((g) => g.named)) throw reverted;
-      return { hash: '0xh', at: 200, blockNumber: 1 };
-    };
-    sends.length = 0;
     const r = await runBatch({ chain, identity, db });
-    expect(sends).toEqual([[1, 2], [1]]);
-    expect(r.sent).toMatchObject({ hash: '0xh', games: [{ gameId: 1 }], dropped: [{ gameId: 2, error: 'DuplicatePrediction' }] });
-    expect(db.m.get('base_last_submit_ts')).toBe(200);
+    expect(r).toMatchObject({ round: ROUND + 1, sent: { round: ROUND + 1, hash: '0xh' } });
+  });
+
+  test('a failed send is shown and stores no batch', async () => {
+    const chain = {
+      batchState: async () => ({ round: ROUND, chainTime: 100, power: 1n, predicted: 0 }),
+      streams: async () => [{ streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440 }],
+      history: async () => [{ hour: 1, value: 5n }],
+      simulateGame: async () => null,
+      fees: async () => ({ maxFeePerGas: 1n, maxPriorityFeePerGas: 1n }),
+      sendBatch: async () => { throw new Error('boom'); },
+    };
+    expect(await runBatch({ chain, identity, db })).toMatchObject({ error: 'boom' });
+    expect(db.m.has('base_last_batch')).toBe(false);
+  });
+
+  test('the hash is kept as soon as the batch is sent: the next check waits for it instead of sending again', async () => {
+    await delegated();
+    rpc.state.mine = false; // sent, not mined: the tab may close here
+    const first = runBatch({ chain: chainOf(), identity, db });
+    await vi.waitFor(() => expect(db.m.get('base_pending_batch')).toMatchObject({ round: ROUND, hash: expect.any(String) }));
+    const { hash } = db.m.get('base_pending_batch');
+    const again = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
+    expect(again).toMatchObject({ round: ROUND, skipped: `waiting for the batch already sent (${hash})` });
+    expect(rpc.sent).toHaveLength(1); // no second send
+    rpc.release();
+    const done = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
+    expect(done).toMatchObject({ round: ROUND, sent: { round: ROUND, hash, games: [{ gameId: 1 }] } });
+    expect(db.m.get('base_last_batch')).toMatchObject({ hash });
+    expect(db.m.get('base_pending_batch')).toBe(null);
+    await first;
+    expect(rpc.sent).toHaveLength(1);
+  });
+
+  test('a pending batch from an earlier round that never mined is let go', async () => {
+    await delegated();
+    db.m.set('base_pending_batch', { round: ROUND - 1, hash: '0x' + '12'.repeat(32), games: [], dropped: [] });
+    const r = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
+    expect(r).toMatchObject({ round: ROUND, sent: { round: ROUND } });
+  });
+
+  test('the spending ceiling: a max fee above it skips to the next check, and says why', async () => {
+    await delegated();
+    rpc.state.tip = 3n * 10n ** 9n; // 3 gwei
+    rpc.state.baseFee = 0n;
+    const r = await runBatch({ chain: chainOf(), identity, db, maxFeeWei: 2n * 10n ** 9n });
+    expect(r).toMatchObject({ round: ROUND, skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' });
+    expect(rpc.sent).toHaveLength(0);
+    rpc.state.tip = 10n ** 6n; // Base's usual 0.001 gwei
+    expect(await runBatch({ chain: chainOf(), identity, db, maxFeeWei: 2n * 10n ** 9n })).toMatchObject({ sent: { round: ROUND } });
+    expect(MAX_FEE_GWEI).toBe(2);
   });
 
   test('an RPC failure is an error for this check, not a dropped game', async () => {
@@ -169,15 +199,14 @@ describe('createBase', () => {
   beforeEach(() => {
     vault = null;
     central = {
-      url: 'https://central2.example', root: null, proofs: {},
+      url: 'https://central2.example', root: null, proofs: {}, calls: [],
       baseConfig: async () => { throw new CentralError(404, 'Not Found'); },
-      merkleRoot: async () => {
+      merkleProof: async (a) => { // central's two 404s (merkle.py:45-58); prod has no route: 'Not Found'
+        central.calls.push(a);
+        if (central.root === 'none') throw new CentralError(404, 'Not Found');
         if (!central.root) throw new CentralError(404, 'no reward drop has been published yet');
-        return { root: central.root };
-      },
-      merkleProof: async (a) => {
         const p = central.proofs[a.toLowerCase()];
-        if (!p) throw new CentralError(404, `${a} is not in the current drop`);
+        if (!p) throw new CentralError(404, `${a} is not in the current drop (nothing to claim, …)`);
         return p;
       },
     };
@@ -236,11 +265,14 @@ describe('createBase', () => {
     vault = vaultKey;
     expect(await base.claim()).toEqual({
       rewards: { skipped: 'nothing to claim on-chain' },
-      merkle: { skipped: 'no merkle drop published (https://central2.example: no reward drop has been published yet)' },
+      merkle: { skipped: 'no merkle drop published on https://central2.example' },
       airdrop: { skipped: 'no vested airdrop to claim' },
     });
     expect(rpc.sent).toHaveLength(0);
+    expect(central.calls).toEqual([vaultKey.evmAddress]); // the proof only, as Lite (routes.py:1321-1331)
 
+    central.root = 'none';
+    expect((await base.claim()).merkle).toEqual({ skipped: 'https://central2.example serves no merkle drop (Not Found)' });
     central.root = '0xroot';
     expect((await base.claim()).merkle).toEqual({ skipped: 'this vault is not in the current drop' });
 
@@ -258,6 +290,27 @@ describe('createBase', () => {
     expect(rpc.sent.map((t) => t.functionName)).toEqual(['claim', 'claimMerkle', 'claimAirdrop']);
     expect(s.balance[V]).toBe(115n * E18);
     expect((await base.claim()).merkle).toEqual({ skipped: 'already claimed: up to date with the drop' });
+  });
+
+  test('a merkle claim the reserve pays in part says what it paid (SatoriMerkle.sol:196-201)', async () => {
+    vault = vaultKey;
+    const proof = ['0x' + 'ab'.repeat(32)];
+    central.root = '0xroot';
+    central.proofs[V] = { amountWei: (5n * E18).toString(), proof };
+    s.merkle.drop[V] = { amount: 5n * E18, proof };
+    s.merkle.available = 2n * E18;
+    expect((await base.claim()).merkle).toEqual({ hash: expect.any(String), amount: '2' });
+  });
+
+  test('an RPC on another chain: an error, and no writes or batch', async () => {
+    const other = { request: async (a) => (a.method === 'eth_chainId' ? '0x2105' : rpc.request(a)) };
+    const { custom } = await import('viem');
+    const wrong = createBase({ db, identity, vaultAddress: () => vaultKey.evmAddress, vault: () => vaultKey, central: () => central,
+      transport: custom(other), now: () => at.t, setTimeout: () => 0, clearTimeout: () => {} });
+    expect((await wrong.refresh()).error).toBe('The RPC is on chain 8453, not Base Sepolia (84532): nothing is read or sent.');
+    await expect(wrong.delegate()).rejects.toThrow(/chain 8453/);
+    expect(await wrong.predict()).toMatchObject({ error: expect.stringMatching(/chain 8453/) });
+    expect(rpc.sent).toHaveLength(0);
   });
 
   test('a failing claim does not stop the others', async () => {

@@ -4,8 +4,8 @@
 //   · claims (Unlock: hub.claim, merkle, airdrop) · send (Unlock)
 // The batch goes at the first check of each UTC round: 10 s after start, at
 // the next round's start (chain time) and at least hourly.
-import { fallback, formatEther, http, isAddress, parseEther, zeroAddress } from 'viem';
-import { createChain, errorText, revertName, same, DOWN, UP, ROUND_S } from '../chain/index.js';
+import { fallback, formatEther, formatGwei, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
+import { createChain, errorText, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { loadConfig, rpcUrls } from '../chain/config.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
 import { fmtUtc } from '../ui/format.js';
@@ -13,11 +13,17 @@ import { fmtUtc } from '../ui/format.js';
 export const FIRST_CHECK_S = 10;
 export const CHECK_EVERY_S = 3600;
 export const AFTER_ROUND_S = 60; // the check after a round starts: 00:01 UTC, chain time
-export const NAMED_WAIT_HOURS = 24; // base_predict.py:131
 export const BATCH_GAS = 1_500_000n; // a one-game batch's limit (estimate + HOOK_GAS); measured 410k–790k used on the fork
 export const LOW_BATCHES = 7; // warn below a week of batches
-
-const errorOf = (err) => errorText(err);
+/**
+ * The unattended batch's ceiling on the max fee per gas (Settings). Base's fees
+ * are ~0.01 gwei (Base Sepolia, 2026-10-15: base fee 0.005, tip 0.001), so 2
+ * gwei only stops a spike of ~200× or an RPC quoting nonsense; it caps a
+ * batch at about 0.003 ETH (1.5M gas). It sits above the 1 gwei tip anvil
+ * quotes, so the local fork works.
+ */
+export const MAX_FEE_GWEI = 2;
+export const PENDING_WAIT_MS = 30_000; // how long a check waits for a batch sent earlier
 
 /** The engine's step for a registry stream: 12 h, or its cadence when slower (docs/design/base.md, the daily batch). */
 export const stepFor = (cadenceMinutes) => Math.max(STEP_S, (Number(cadenceMinutes) || 0) * 60);
@@ -25,31 +31,49 @@ export const stepFor = (cadenceMinutes) => Math.max(STEP_S, (Number(cadenceMinut
 /** Lite's direction_from (base_predict.py:141-143): UP if the forecast is above the latest value; a tie is DOWN. */
 export const directionOf = (forecast, latest) => (forecast > latest ? UP : DOWN);
 
-/** Lite's named_allowed (base_predict.py:146-149): 24 clock hours after our last submit (0 = unknown: try). */
-export const namedAllowed = (lastSubmitTs, now) =>
-  !(lastSubmitTs > 0) || Math.floor(now / 3600) >= Math.floor(lastSubmitTs / 3600) + NAMED_WAIT_HOURS;
-
 /** Registry history → the engine's points (the value's scale does not matter to a direction). */
 export const toPoints = (history) => history.map(({ hour, value }) => ({ ts: hour * 3600, value: Number(value) }));
 
 const plainAmount = (wei) => (wei == null ? null : formatEther(wei));
 
+/** A mined batch: stored as the last one, its round from its block (a send at 23:59:59 can land in the next round). */
+async function finish(db, b, mined) {
+  const batch = { round: Math.floor(mined.at / ROUND_S), at: mined.at, hash: b.hash, games: b.games, dropped: b.dropped };
+  await db.set('base_last_batch', batch);
+  await db.set('base_pending_batch', null);
+  await db.checkpoint();
+  return { at: mined.at, round: batch.round, sent: batch };
+}
+
 /**
  * The daily batch (start.py:1143-1236 with the fixes in docs/design/base.md).
  * Never throws: the result says what happened.
- * @returns {Promise<object>} { at, round, sent: {hash, at, games, dropped} } | { at, round?, skipped, dropped? } | { at, error }
+ * @returns {Promise<object>} { at, round, sent: {round, at, hash, games, dropped} } | { at, round?, skipped, dropped? } | { at, error }
  */
-export async function runBatch({ chain, identity, db, forecast = engineForecast }) {
+export async function runBatch({ chain, identity, db, forecast = engineForecast, maxFeeWei = parseGwei(String(MAX_FEE_GWEI)),
+  pendingWaitMs = PENDING_WAIT_MS }) {
   let at = null;
   try {
+    // A batch sent before the tab closed (or a check ended) has its hash kept: wait for it, never send twice.
+    const pending = await db.get('base_pending_batch');
+    if (pending) {
+      const mined = await chain.receipt(pending.hash, { timeout: pendingWaitMs });
+      if (mined?.status === 'success') return finish(db, pending, mined);
+      if (!mined) {
+        const st = await chain.batchState(identity.evmAddress);
+        if (pending.round === st.round) {
+          return { at: st.chainTime, round: st.round, skipped: `waiting for the batch already sent (${pending.hash})` };
+        }
+      }
+      await db.set('base_pending_batch', null); // reverted, or an earlier round's that never mined
+    }
+
     const state = await chain.batchState(identity.evmAddress);
     at = state.chainTime;
     const { round } = state;
     if (state.power === 0n) return { at, round, skipped: 'no prediction power delegated to the identity' };
     if (state.predicted !== 0) return { at, round, skipped: 'already predicted this round' };
 
-    const lastSubmit = (await db.get('base_last_submit_ts')) ?? 0;
-    const namedOk = namedAllowed(lastSubmit, state.chainTime);
     const games = [];
     const dropped = [];
     for (const g of await chain.streams()) {
@@ -59,34 +83,26 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast 
       if (!f) { dropped.push({ ...base, error: 'no history' }); continue; }
       const latest = Number(history.at(-1).value);
       const game = { ...base, direction: directionOf(f.t2, latest), model: f.model, latest, t2: f.t2 };
-      if (g.named && !namedOk) { dropped.push({ ...game, error: `named: under ${NAMED_WAIT_HOURS} h since the last batch` }); continue; }
+      // The contract's own checks, named games' 24 clock hours included (SatoriEngine.sol:791-810).
       const error = await chain.simulateGame(identity, game);
       if (error) dropped.push({ ...game, error });
       else games.push(game);
     }
     if (!games.length) return { at, round, skipped: dropped.length ? 'no game passes its simulation' : 'no streams with a game', dropped };
 
-    let list = games;
-    let sent;
-    try {
-      sent = await chain.sendBatch(identity, list);
-    } catch (err) {
-      // base_predict.py:157-174: a named game too early sinks the batch; resend once without them.
-      const rest = list.filter((g) => !g.named);
-      if (revertName(err) !== 'DuplicatePrediction' || rest.length === list.length || !rest.length) throw err;
-      for (const g of list.filter((x) => x.named)) dropped.push({ ...g, error: 'DuplicatePrediction' });
-      list = rest;
-      sent = await chain.sendBatch(identity, list);
+    const fees = await chain.fees();
+    if (fees.maxFeePerGas > maxFeeWei) {
+      return { at, round, dropped,
+        skipped: `gas above the ceiling: a max fee of ${formatGwei(fees.maxFeePerGas)} gwei > ${formatGwei(maxFeeWei)} gwei; the next check tries again` };
     }
-    // Only after the receipt (Lite writes it before sending, start.py:1228-1232).
-    const batch = { round, at: sent.at, hash: sent.hash, games: list, dropped };
-    await db.set('base_last_batch', batch);
-    await db.set('base_last_submit_ts', sent.at);
-    await db.checkpoint();
-    return { at: sent.at, round, sent: batch };
+    const sent = await chain.sendBatch(identity, games, { fees, onSent: async (hash) => {
+      await db.set('base_pending_batch', { round, hash, games, dropped });
+      await db.checkpoint();
+    } });
+    return finish(db, { hash: sent.hash, games, dropped }, sent);
   } catch (err) {
     console.warn('[satori] base batch', err);
-    return { at, error: errorOf(err) };
+    return { at, error: errorText(err) };
   }
 }
 
@@ -126,7 +142,11 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
 
   const resolve = (u) => (u.startsWith('/') && origin ? new URL(u, origin).href : u);
 
-  /** The chain for the current config and RPC (rebuilt when either changes). */
+  /**
+   * The chain for the current config and RPC (rebuilt when either changes).
+   * A new RPC is asked its chain id once: another chain than the config's is
+   * refused, for reads, writes and the batch alike.
+   */
   async function chainNow() {
     const loaded = await loadConfig({ fetchCentral: () => central().baseConfig(), cache, now: now() });
     cache = loaded.cache;
@@ -135,10 +155,18 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
     const key = JSON.stringify([loaded.config, urls]);
     if (made?.key !== key) {
       const t = transport ?? (urls.length === 1 ? http(resolve(urls[0])) : fallback(urls.map((u) => http(resolve(u)))));
-      made = { key, rpc: urls, fromCentral: !!cache.remote, chain: createChain({ config: loaded.config, transport: t }) };
+      made = { key, rpc: urls, config: loaded.config, fromCentral: !!cache.remote, chainId: null,
+        local: urls.every((u) => u.startsWith('/')), chain: createChain({ config: loaded.config, transport: t }) };
+    }
+    made.chainId ??= await made.chain.chainId(); // an RPC that does not answer is asked again next time
+    if (made.chainId !== loaded.config.chainId) {
+      throw new Error(`The RPC is on chain ${made.chainId}, not Base Sepolia (${loaded.config.chainId}): nothing is read or sent.`);
     }
     return made;
   }
+
+  /** The batch's ceiling on the max fee per gas, in wei (Settings; MAX_FEE_GWEI by default). */
+  const maxFeeWei = async () => parseGwei(String((await db.get('base_max_fee_gwei')) ?? MAX_FEE_GWEI));
 
   function needVault() {
     const v = vault();
@@ -152,7 +180,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
       status = await chain.status({ identity: identity.evmAddress, vault: vaultAddress() });
       statusError = status.round == null ? (status.errors[0] ?? 'no answer') : '';
     } catch (err) {
-      statusError = errorOf(err);
+      statusError = errorText(err);
     }
     changed();
     return view();
@@ -166,6 +194,8 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
     const vd = s?.vault?.delegate;
     return {
       rpc: made?.rpc ?? [], config: made ? (made.fromCentral ? 'central' : 'bundled') : null,
+      localFork: !!made?.local, // a path on this site: the dev server's /rpc, a local fork
+      explorer: made && !made.local ? made.config.explorerUrl : null, // links tx hashes (not for a local fork)
       error: statusError, errors: s?.errors ?? [],
       round: s?.round ?? null, chainTime: s?.chainTime ?? null,
       identity: {
@@ -203,9 +233,9 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
       let result;
       try {
         const { chain } = await chainNow();
-        result = await runBatch({ chain, identity, db, forecast });
+        result = await runBatch({ chain, identity, db, forecast, maxFeeWei: await maxFeeWei() });
       } catch (err) {
-        result = { at: null, error: errorOf(err) };
+        result = { at: null, error: errorText(err) };
       }
       lastCheck = result;
       await refresh();
@@ -227,26 +257,28 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
     }
   }
 
+  /**
+   * The merkle drop: central's proof alone, as Lite (routes.py:1321-1331); its
+   * 404 says which case (merkle.py:45-58), and prod, which lacks the route,
+   * answers a plain Not Found. What was paid is read back at the claim's
+   * block: the lane's reserve may pay only part (SatoriMerkle.sol:196-201).
+   */
   async function claimMerkle(chain, v) {
     const c = central();
-    const notFound = (e) => e?.status === 404;
-    try {
-      await c.merkleRoot();
-    } catch (err) {
-      if (notFound(err)) return { skipped: `no merkle drop published (${c.url}: ${err.detail})` };
-      throw err;
-    }
     let entry;
     try {
       entry = await c.merkleProof(v.evmAddress);
     } catch (err) {
-      if (notFound(err)) return { skipped: 'this vault is not in the current drop' };
-      throw err;
+      if (err?.status !== 404) throw err;
+      if (/no reward drop/i.test(err.detail)) return { skipped: `no merkle drop published on ${c.url}` };
+      if (/not in the current drop/i.test(err.detail)) return { skipped: 'this vault is not in the current drop' };
+      return { skipped: `${c.url} serves no merkle drop (${err.detail})` };
     }
-    const owed = BigInt(entry.amountWei) - await chain.alreadyMinted(v.evmAddress);
-    if (owed <= 0n) return { skipped: 'already claimed: up to date with the drop' };
-    const { hash } = await chain.claimMerkle(v, entry);
-    return { hash, amount: formatEther(owed) };
+    const before = await chain.alreadyMinted(v.evmAddress);
+    if (BigInt(entry.amountWei) <= before) return { skipped: 'already claimed: up to date with the drop' };
+    const { hash, receipt } = await chain.claimMerkle(v, entry);
+    const after = await chain.alreadyMinted(v.evmAddress, receipt.blockNumber);
+    return { hash, amount: formatEther(after - before) };
   }
 
   return {
@@ -284,7 +316,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
       return act(async (chain) => {
         const st = await chain.status({ identity: identity.evmAddress, vault: v.evmAddress });
         const each = async (fn) => {
-          try { return await fn(); } catch (err) { return { error: errorOf(err) }; }
+          try { return await fn(); } catch (err) { return { error: errorText(err) }; }
         };
         const rewards = await each(async () => {
           const owed = st.claimable.rewards;

@@ -333,7 +333,8 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
     /** On-chain rewards: hub.claim() from the vault (the dapp, useDashboard.ts:288-311). */
     claimRewards: (vault) => write(vault, hub('claim')),
-    alreadyMinted: (addr) => read(merkle('alreadyMintedTo', [addr])),
+    /** What the merkle lane has paid `addr` (at `blockNumber`, else now). */
+    alreadyMinted: (addr, blockNumber) => client.readContract({ ...merkle('alreadyMintedTo', [addr]), ...(blockNumber ? { blockNumber } : {}) }),
     /** claimMerkle(lifetimeEntitlement, proof) from the vault (base_claim.py:99-104). */
     claimMerkle: (vault, { amountWei, proof }) => write(vault, merkle('claimMerkle', [BigInt(amountWei), proof])),
     claimAirdrop: (vault) => write(vault, airdrop('claimAirdrop')),

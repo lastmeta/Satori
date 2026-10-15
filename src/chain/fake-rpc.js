@@ -38,6 +38,7 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
   const sent = []; // mined transactions: { from, to, functionName, args, value, hash, status }
   const receipts = {};
   const held = {}; // receipts of txs sent while state.mine is false
+  const txs = {}; // sent transactions, as eth_getTransactionByHash answers
   const blocks = [{ number: 0, timestamp }];
   const log = []; // every RPC method called
   const state = { down: false, tip: gasPrice, baseFee: 1n, mine: true }; // mine: false holds sent txs unmined (no receipt yet)
@@ -135,6 +136,12 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
         const { functionName, args } = c ? decodeFunctionData({ abi: c.abi, data: tx.data ?? '0x' }) : {};
         sent.push({ from, to: tx.to.toLowerCase(), functionName, args, value: tx.value ?? 0n, hash, status: status === '0x1',
           gas: tx.gas, maxFeePerGas: tx.maxFeePerGas, maxPriorityFeePerGas: tx.maxPriorityFeePerGas });
+        txs[hash] = {
+          hash, from, to: tx.to, nonce: toHex(tx.nonce ?? 0), value: toHex(tx.value ?? 0n), gas: toHex(tx.gas ?? 0n),
+          input: tx.data ?? '0x', type: '0x2', chainId: toHex(84532), maxFeePerGas: toHex(tx.maxFeePerGas ?? 0n),
+          maxPriorityFeePerGas: toHex(tx.maxPriorityFeePerGas ?? 0n), v: '0x0', r: '0x1', s: '0x1', yParity: '0x0',
+          blockHash: null, blockNumber: null, transactionIndex: null, accessList: [],
+        };
         (state.mine ? receipts : held)[hash] = {
           transactionHash: hash, transactionIndex: '0x0', blockHash: keccak256(toHex(block.number)), blockNumber: toHex(block.number),
           from, to: tx.to, cumulativeGasUsed: '0x1', gasUsed: '0x1', effectiveGasPrice: toHex(gasPrice),
@@ -143,7 +150,7 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
         return hash;
       }
       case 'eth_getTransactionReceipt': return receipts[params[0]] ?? null;
-      case 'eth_getTransactionByHash': return null;
+      case 'eth_getTransactionByHash': return txs[params[0]] ?? null;
       default: throw new RpcError(-32601, `fakeRpc: ${method} not faked`);
     }
   }
@@ -176,6 +183,10 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
     setTime(t) { timestamp = t; },
     advance(seconds) { timestamp += seconds; },
     /** Mine the held transactions (their receipts appear). */
-    release() { Object.assign(receipts, held); for (const k of Object.keys(held)) delete held[k]; },
+    release() {
+      Object.assign(receipts, held);
+      for (const k of Object.keys(held)) delete held[k];
+      blocks.push({ number: blocks.at(-1).number + 1, timestamp }); // a new block: viem's receipt watchers look again
+    },
   };
 }

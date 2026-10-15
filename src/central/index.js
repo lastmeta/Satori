@@ -4,7 +4,7 @@
 //   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.submitPredictions(items)         // login (identity) → POST /predictions/batch; one retry on 401
-//   await c.baseConfig() / c.merkleRoot() / c.merkleProof(address)   // Base (docs/design/base.md); 404 is a CentralError
+//   await c.baseConfig() / c.merkleProof(address)   // Base (docs/design/base.md); 404 is a CentralError
 // Errors are CentralError: status 0 for a timeout or a network failure. A
 // network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
@@ -150,8 +150,6 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
 
     /** Base's addresses (base.py:15-19); prod answers 404 (docs/future/issues/central-prod-missing-base-routes.md). */
     baseConfig: () => call('GET', '/api/v1/base/config'),
-    /** The current merkle drop { root, total, recipients }; 404 = none published (merkle.py:26-33). */
-    merkleRoot: () => call('GET', '/api/v1/merkle/root'),
     /** { root, address, amountWei, amount, proof }; 404 = not in the drop, or none published (merkle.py:45-58). */
     merkleProof: (address) => call('GET', `/api/v1/merkle/proof/${encodeURIComponent(address)}`),
 
