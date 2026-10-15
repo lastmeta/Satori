@@ -151,11 +151,9 @@ async function startNeuron() {
   } });
   await poller.start();
   await refresh();
-  nostr?.stop();
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: NOSTR_DEFAULTS,
     onChange: refreshNostr });
   await refreshNostr();
-  base?.stop();
   base = createBase({ db, identity, vaultAddress: vaultEvm, vault: () => vault, central: () => central, devRpc: DEV_RPC,
     onChange: refreshBase });
   await refreshBase();
