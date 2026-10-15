@@ -8,7 +8,7 @@ so a neuron moves between the two by moving two files.
 
 | Key | Stored as | Encrypted? | Used for |
 |---|---|---|---|
-| **identity** | `wallet.yaml` text in the db (`meta.wallet_yaml`) | no | everything the neuron does on its own: signs predictions now; later central login, Nostr, the daily Base batch |
+| **identity** | `wallet.yaml` text in the db (`meta.wallet_yaml`) | no | everything the neuron does on its own: central register and login ([central.md](central.md)); later Nostr, the daily Base batch |
 | **vault** | `vault.yaml` text in the db (`meta.vault_yaml`) | yes, with the passphrase | holds funds; later delegate, claims, sends. Only while unlocked. |
 
 The identity is unencrypted on purpose: the neuron must run after a page load
@@ -112,8 +112,9 @@ something that is not the entropy of the stored address.
 - **Setup → Restore from words**: the vault's 24 words (required) and the
   identity's (optional; a new identity if left empty), then the passphrase.
 - One setup runs at a time, from the UI or an agent; a second one is refused.
-- **Home** shows both addresses at all times. The neuron runs from page load,
-  signing with the identity. The vault card has **Unlock** (passphrase) or,
+- **Home** shows both addresses at all times. The neuron runs from page load
+  on the identity: it registers both public keys with central and signs
+  central's login challenge ([central.md](central.md)). The vault card has **Unlock** (passphrase) or,
   while unlocked, **Lock**.
 - **Backup** (Docker shows it behind login, so here it needs Unlock): the
   identity's and the vault's 24 words and private keys (WIF), and downloads of
@@ -130,7 +131,8 @@ something that is not the entropy of the stored address.
 - `index.js`: the two-key model. `writeKeys({identity?, vault}, passphrase)`
   (create and restore) and `importDocker({walletText, vaultText, passphrase})`
   return `{walletYaml, vaultYaml}` to store; `loadIdentity(walletYaml)`,
-  `vaultInfo(vaultYaml)` (the address while locked),
+  `vaultInfo(vaultYaml)` (the address and public key while locked, as Lite
+  reads them for central's register, `start.py:4637-4667`),
   `unlockVault(vaultYaml, passphrase)`.
 
 ## Tests

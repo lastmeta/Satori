@@ -20,7 +20,7 @@ steps start from evidence, not from scratch.
 1. ✅ **MVP**: keys, db, linear engine, local publish, basic UI.
 2. ✅ **Two keys + Docker import/export**: identity (unencrypted) and vault
    (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
-3. **Central data flow**: login, register, predictions batch ([design/central.md](design/central.md)).
+3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
 4. **Engine**, inspired by `../namaste_club` ([design/engine.md](design/engine.md)).
 5. **Nostr**: subscribe to streams, publish `_pred` ([design/transport.md](design/transport.md)). This needs a wss relay.
 6. **Base** (last): delegate, daily batch, claims, as the dapp in `../contract/satori-ui` does ([design/chain.md](design/chain.md)).
@@ -33,10 +33,17 @@ steps start from evidence, not from scratch.
   vault" button on Home yet (setup is the only path).
 - The unlocked vault and the identity live on the main thread; moving them
   into a worker is part of step 7.
-- Ticks are spaced from the start of the last run; there is no catch-up for
-  missed intervals while the tab was closed (step 7).
-- Ticks fit on observation times, so a gap is honest, but a window that spans
-  a long gap mixes old and new regimes. A better engine (step 4) may want to
-  drop observations older than some multiple of the interval.
+- The kept queue (pending predictions) has no cap, as Lite's in-memory queue
+  has none. Here it survives reloads, so if central rejected every batch for
+  days the queue would grow by one prediction per stream per poll until
+  central takes it. Fixable: cap it, or drop predictions older than a day.
+- Central's batch holds only each stream's latest observation and the neuron
+  polls every 11 h, so local history grows by about two points per stream a
+  day (Lite has the same limit). The step-4 engine starts from little data.
+- central2's scheduler is stale (newest observation 2026-10-14 23:00 UTC); its
+  batch is empty once that is older than 48 h (about 2026-10-16 23:00 UTC), so
+  dev polls then store nothing until central2 runs again.
+- Browsers throttle timers in background tabs: a poll can run late, never
+  early. A tab closed past its poll time polls 5–30 min after the next load.
 - ✅ `node_modules` was removed from `main`'s history (owner approved the
   force-push).

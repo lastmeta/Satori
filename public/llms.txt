@@ -1,57 +1,88 @@
 # Satori neuron (browser app)
 
-> The Satori neuron as a client-side web app. It fetches data from sources,
-> predicts the next value with a simple model, signs each prediction with the
-> neuron's identity key, and publishes it. Everything runs in the browser tab:
-> the keys, the database (DuckDB-WASM on OPFS) and the engine. There is no
-> server of our own. It is built to be driven by people and by AI agents alike.
+> The Satori neuron as a client-side web app. It registers with Satori's
+> central server, polls central for the latest observation of each data
+> stream, forecasts the next values with a simple model, and sends the
+> predictions back to central, the way the Docker neuron (Satori Lite) does.
+> Everything runs in the browser tab: the keys, the database (DuckDB-WASM on
+> OPFS) and the engine. There is no server of our own. It is built to be
+> driven by people and by AI agents alike.
 
-Status: step 2 of the roadmap (two keys + Docker import/export). Predictions
-are published locally for now; central, the engine, Nostr and Base come next.
+Status: step 3 of the roadmap (central data flow). Next: a better engine,
+Nostr, Base.
 
 ## Concepts
 
 - Identity key: the neuron's own key (Evrmore address, "E…"). Stored
-  unencrypted in this browser (Docker's `wallet.yaml`) so the neuron runs and
-  signs from page load with nobody present. It signs every prediction.
+  unencrypted in this browser (Docker's `wallet.yaml`) so the neuron runs from
+  page load with nobody present. It signs central's login challenge.
 - Vault key: holds funds. Stored encrypted with the passphrase (Docker's
   `vault.yaml`). **Unlock** (enter the passphrase) decrypts it into memory;
-  **Lock** wipes it. The neuron does not need the vault to run.
-- Stream: a source URL (https, JSON) + a dotted path to a number
-  (`data.amount`) + an interval in seconds (10 to 86400). Each interval the
-  neuron stores an observation, fits a least-squares line over the last 20
-  observations (in time), predicts the value one interval ahead, signs it and
-  publishes it.
-- Signed prediction: the message is the JSON
-  `{"stream","ts","target_ts","value","model","address"}` (that key order, no
-  spaces), signed as an Evrmore signed message (base64), verifiable against
-  the identity address.
+  **Lock** wipes it. The neuron does not need the vault to run; its public key
+  is read from `vault.yaml` while locked.
+- Central: `https://network.satorinet.io` in a build;
+  `https://central2.satorinet.io` (the dev central) on the dev server.
+  Changeable (https only).
+- Register: on every page load, `POST /api/v1/peer/register` with the
+  identity's and the vault's public keys. Central links the vault to the
+  identity once; a different vault on central shows as a "vault mismatch".
+- Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
+  each stream (under 48 h old). The first poll is 5–30 min after the page
+  loads (random), then every 11 h; the next time is stored, so a reload keeps
+  it. `satori.poll()` (or "Poll now") runs one at once.
+- Stream: one of central's streams, by uuid, with its name. Observations are
+  stored once per (stream, whole second).
+- Prediction: made only for a stream that got a new observation. `t1` is the
+  next step, `t2` the step after (the value central scores). Model `ols-20`: a
+  least-squares line over the last 20 values. Sent right after the poll in
+  one batch (`POST /api/v1/predictions/batch`, after a login signed by the
+  identity) as `{stream_uuid, stream_name, value: t2, t1_value: t1,
+  observed_at, hash}`, with Python's float formatting. Status `pending` until
+  central accepts the batch; a rejected or failed batch is resent with the
+  next poll.
+
+Times are unix seconds.
 
 ## Drive it from the page (window.satori)
 
 Open the app, wait for it to load, then in the page's JS context:
 
-- `await satori.status()` → `{ screen, identity, vault, unlocked, streams }`.
+- `await satori.status()` → `{ screen, identity, vault, unlocked, central }`.
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
-  tab has it open; only one tab runs the neuron) or `fatal`.
+  tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
+  `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
+  pending }`:
+  - `registration`: null while registering; `{ ok: true, peer_id,
+    wallet_address, vault_address, vaultMismatch }`; or `{ ok: false, error }`.
+  - `lastPoll`: `{ at, streams, new, predicted }` or `{ at, error }`.
+  - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
+    `{ at, error }`; `pending`: how many predictions wait to be sent.
 - `await satori.setup({ passphrase, vaultWords?, identityWords? })` → status.
   Creates the neuron on a fresh browser (random keys unless 24 words are
   given). Passphrase: at least 4 characters, Latin-1 only (no emoji or €), as
   Docker's vault encryption needs. The vault starts locked. One setup runs at
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
   and a call once set up throws `Already set up`.
-- `await satori.addStream({ name, url, path, interval_s })`;
-  `await satori.removeStream(name)` (deletes its data).
-- `await satori.predictions(stream, limit = 20)` → newest first, with
-  `message`, `signature`, `address`, `value`, `target_ts`.
-- `satori.verify(message, signature, address)` → boolean.
+- `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
+  the streams with a new row, and send everything pending (`submit` is null
+  when nothing was pending). One poll runs at a time; a call during one
+  returns it. The next poll is then 11 h later.
+- `await satori.streams()` → one row per stream: `uuid`, `name`, `meta`,
+  `observations`, `obs_ts`, `obs_value`, and our latest `t1`, `t2`, `model`,
+  `made_at`, `status` (`pending`/`sent`), `sent_at`.
+- `await satori.predictions(stream, limit = 20)` → one stream's predictions
+  (by uuid or name), newest first, with `observed_at` and `hash` as sent.
+- `await satori.setCentral(url)` → `status().central`: an https URL, or `''`
+  for the default; registers there at once.
 - `await satori.unlock(passphrase)`; `satori.lock()`.
 - While unlocked: `satori.backup('identity' | 'vault')` → `{ words, wif }`;
   `satori.file('wallet.yaml' | 'vault.yaml')` → the Docker file's text.
   Only these exact names; anything else throws.
 
 Errors are thrown as `Error` with a readable message (for example
-`Wrong passphrase`, `Unlock the vault first`).
+`Wrong passphrase`, `Unlock the vault first`). Central's errors are not
+thrown: they are in `status().central` (for example `central 500: …`,
+`central unreachable: Failed to fetch`, `central timed out (15 s)`).
 
 ## Drive it from the UI
 
@@ -63,12 +94,15 @@ Errors are thrown as `Error` with a readable message (for example
   encrypted, are refused with a message saying so.
 - Home: both addresses with Copy buttons; the vault card has a "Vault
   passphrase" field and Unlock, or a Lock button in the header while unlocked.
-  One card per stream (latest value, prediction, signed message under
-  "Signed prediction", Remove). "Add a stream" form. "Backup" (needs Unlock):
-  Identity words, Vault words, Download wallet.yaml, Download vault.yaml.
+  "Central" card: the URL, Registered, Last poll, Next poll, Last submission,
+  Pending, a vault mismatch if any, and "Poll now". "Streams": one row per
+  central stream (latest value and time, t1, t2, Sent/Pending). "Settings":
+  Central URL (empty = default), Save. "Backup" (needs Unlock): Identity
+  words, Vault words, Download wallet.yaml, Download vault.yaml.
 - Form fields have labels; elements carrying data have `data-test`
-  attributes: `identity`, `vault`, `vault-state`, `obs`, `pred`, `message`,
-  `signature`, `wif`.
+  attributes: `identity`, `vault`, `vault-state`, `central-url`, `registered`,
+  `last-poll`, `next-poll`, `last-submit`, `pending`, `mismatch`, `stream`
+  (a row) with `obs`, `t1`, `t2`, `status` inside, and `wif`.
 
 ## Docker neuron interop
 
@@ -78,7 +112,7 @@ github.com/SatoriNetwork/satorilib): one
 24 words. `wallet.yaml` / `vault.yaml` are read and written in Docker's format
 (vault fields: AES-256-CBC, PBKDF2-HMAC-SHA1 × 1,000,000 over the password's
 Latin-1 bytes), so a neuron moves between Docker and the browser by moving the
-two files.
+two files. Central sees the same identity either way.
 
 ## Code
 
@@ -89,15 +123,19 @@ build step beyond Vite, MIT licensed.
 - `src/main.js`: app wiring and `window.satori`.
 - `src/keys/`: identity and vault (`index.js`), derivations and Evrmore
   signing (`keys.js`), Docker files (`docker.js`).
+- `src/central/`: central's API (register, observations, login, predictions
+  batch) and Python-identical payload strings.
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API.
-- `src/engine/`: `predict(points, at)`, least-squares line.
-- `src/neuron/`: the tick (fetch → store → predict → sign → publish), the
-  scheduler, the one-tab lock.
+- `src/engine/`: `forecast(points) → { model, t1, t2 } | null`.
+- `src/neuron/`: register, the cycle (poll → store → forecast → submit), the
+  schedule, the one-tab lock.
 - `src/ui/`: ArrowJS screens.
-- `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`);
-  `docs/future/`: the researched roadmap.
-- `scripts/`: parity-vector generator run against satorilib (Python).
-- Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome).
+- `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`,
+  `central.md` with Satori Lite's file:line references); `docs/future/`: the
+  researched roadmap.
+- `scripts/`: parity-vector generators run against satorilib and the Docker
+  image (Python).
+- Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub central).
 
 ## Contribute
 
