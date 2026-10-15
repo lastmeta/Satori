@@ -289,26 +289,22 @@ function goStep(step) {
   state.step = step;
 }
 
-/** A UI action whose error is shown on the screen. */
-const shown = (fn) => async (...args) => {
-  state.error = '';
+/** A UI action whose error is shown at state[key], cleared when it starts. */
+const shownAt = (key, fn) => async (...args) => {
+  state[key] = '';
   try {
     await fn(...args);
   } catch (err) {
-    state.error = err?.message ?? String(err);
+    state[key] = err?.message ?? String(err);
   }
 };
 
 /** A Base action from the card: its result (text, and its txs, linked) or error is shown there. */
-async function baseUi(what, fn) {
-  Object.assign(state, { baseError: '', baseResult: '', baseTxs: [] });
-  try {
-    const { text, txs = [] } = await baseAction(what, fn);
-    Object.assign(state, { baseResult: text, baseTxs: txs });
-  } catch (err) {
-    state.baseError = err?.message ?? String(err);
-  }
-}
+const baseUi = (what, fn) => shownAt('baseError', async () => {
+  Object.assign(state, { baseResult: '', baseTxs: [] });
+  const { text, txs = [] } = await baseAction(what, fn);
+  Object.assign(state, { baseResult: text, baseTxs: txs });
+})();
 
 const claimTxs = (r) => [['Rewards', r.rewards], ['Merkle', r.merkle], ['Airdrop', r.airdrop]]
   .filter(([, x]) => x?.hash).map(([label, x]) => ({ label, hash: x.hash }));
@@ -346,7 +342,7 @@ const actions = {
     el.reset();
     goStep('passphrase');
   },
-  createKeys: shown(async (f, el) => {
+  createKeys: shownAt('error', async (f, el) => {
     if (f.pass1 !== f.pass2) throw new Error('The passphrases differ.');
     await setup(async () => {
       const out = await writeKeys(pending, f.pass1);
@@ -355,7 +351,7 @@ const actions = {
       return out;
     });
   }),
-  importDocker: shown(async (el) => {
+  importDocker: shownAt('error', async (el) => {
     const f = new FormData(el);
     await setup(async () => {
       const n = f.get('nostr');
@@ -367,15 +363,10 @@ const actions = {
       return out;
     });
   }),
-  async unlock(f, el) {
-    state.vaultError = '';
-    try {
-      await exclusive('unlock', () => unlock(f.pass));
-      el.reset();
-    } catch (err) {
-      state.vaultError = err?.message ?? String(err);
-    }
-  },
+  unlock: shownAt('vaultError', async (f, el) => {
+    await exclusive('unlock', () => unlock(f.pass));
+    el.reset();
+  }),
   lock,
   showBackup(which) {
     const { words, wif } = backupOf(which);
@@ -398,42 +389,31 @@ const actions = {
     } catch { /* clipboard not allowed */ }
   },
   pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
-  async discover() {
-    state.networkError = '';
+  discover: shownAt('networkError', async () => {
     state.discovering = true;
     try {
       state.catalog = await nostr.discover();
-    } catch (err) {
-      state.networkError = err?.message ?? String(err);
     } finally {
       state.discovering = false;
     }
-  },
-  async subscribe(pubkey, stream, on) {
-    state.networkError = '';
+  }),
+  subscribe: shownAt('networkError', async (pubkey, stream, on) => {
     state.subscribing = `${pubkey}:${stream}`;
     try {
       await setSubscribed(pubkey, stream, on);
-    } catch (err) {
-      state.networkError = err?.message ?? String(err);
     } finally {
       state.subscribing = '';
     }
-  },
+  }),
   fillRelays(el) {
     el.elements.relays.value = state.nostr.userRelays.join('\n');
     el.elements.centralWrite.checked = state.nostr.centralWrite;
   },
-  async saveRelays(f, el) {
-    state.relaysError = '';
-    try {
-      await nostr.setRelays({ relays: String(f.relays ?? '').split(/\s+/).filter(Boolean), centralWrite: f.centralWrite === 'on' });
-      await refreshNostr();
-      actions.fillRelays(el);
-    } catch (err) {
-      state.relaysError = err?.message ?? String(err);
-    }
-  },
+  saveRelays: shownAt('relaysError', async (f, el) => {
+    await nostr.setRelays({ relays: String(f.relays ?? '').split(/\s+/).filter(Boolean), centralWrite: f.centralWrite === 'on' });
+    await refreshNostr();
+    actions.fillRelays(el);
+  }),
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
   baseDelegate: () => baseUi('delegate', async () => {
     const r = await base.delegate();
@@ -459,25 +439,15 @@ const actions = {
     el.elements.rpc.value = state.base?.rpcSetting ?? '';
     el.elements.maxFee.value = state.base?.maxFeeGwei ?? '';
   },
-  async saveBase(f, el) {
-    state.baseRpcError = '';
-    try {
-      await setBaseRpc(f.rpc);
-      await setBaseMaxFee(f.maxFee);
-      actions.fillBase(el);
-    } catch (err) {
-      state.baseRpcError = err?.message ?? String(err);
-    }
-  },
-  async saveCentral(f, el) {
-    state.settingsError = '';
-    try {
-      await setCentral(f.url);
-      el.reset();
-    } catch (err) {
-      state.settingsError = err?.message ?? String(err);
-    }
-  },
+  saveBase: shownAt('baseRpcError', async (f, el) => {
+    await setBaseRpc(f.rpc);
+    await setBaseMaxFee(f.maxFee);
+    actions.fillBase(el);
+  }),
+  saveCentral: shownAt('settingsError', async (f, el) => {
+    await setCentral(f.url);
+    el.reset();
+  }),
 };
 
 // ── window.satori: the same app for agents (see /llms.txt) ──────────────────
