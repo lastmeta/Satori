@@ -15,7 +15,7 @@ window.probe = async ({ cmd, token }) => {
       for (const i of [1, 2, 3]) await db.addObservation(token, i, i * 10);
       await db.checkpoint(); // as tick() does; the reload is the only shutdown, as in a tab
     }
-    return { setting: await db.get('e2e'), values: await db.recentValues(token, 10), version: db.version };
+    return { setting: await db.get('e2e'), values: (await db.recent(token, 10)).map((o) => o.value), version: db.version };
   } catch (err) {
     return { error: String(err?.stack ?? err) };
   }

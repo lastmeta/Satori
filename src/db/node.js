@@ -8,7 +8,8 @@ import { openDb } from './index.js';
 
 let duck;
 
-export async function memoryDb() {
+/** A connection to a fresh, empty in-memory database. */
+export async function memoryConn() {
   if (duck) {
     duck.reset();
   } else {
@@ -20,5 +21,7 @@ export async function memoryDb() {
     await duck.instantiate();
   }
   duck.open({});
-  return openDb(duck.connect());
+  return duck.connect();
 }
+
+export const memoryDb = async () => openDb(await memoryConn());

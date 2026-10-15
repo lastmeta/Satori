@@ -68,7 +68,11 @@ test('create, tick, persist, unlock, lock, one tab', async ({ context, page }) =
   await expect(address).toHaveText(addr);
   await expect(page.getByText('2 obs · 2 predictions')).toBeVisible();
   await expect(page.locator('[data-test=obs]')).toHaveText('100,020.00');
-  await expect(page.locator('[data-test=pred]')).toHaveText('100,030.00'); // OLS through 100010, 100020
+  // OLS on time: the line through both observations, evaluated at target_ts.
+  const m1 = JSON.parse(message);
+  const m2 = JSON.parse(await page.locator('[data-test=message]').textContent());
+  expect(m2.target_ts - m2.ts).toBe(60_000);
+  expect(m2.value).toBeCloseTo(100_020 + (10 * (m2.target_ts - m2.ts)) / (m2.ts - m1.ts), 6);
 
   // Backup words need the passphrase again.
   await page.getByText('Backup words').click();

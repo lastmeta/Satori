@@ -158,7 +158,7 @@ function home(a) {
         <label>Source URL (https, returns JSON)
           <input name="url" type="url" placeholder="https://api.coinbase.com/v2/prices/ETH-USD/spot" required></label>
         <label>Path to the number <input name="path" placeholder="data.amount" required></label>
-        <label>Every (seconds) <input name="interval" type="number" min="10" step="1" value="60" required></label>
+        <label>Every (seconds) <input name="interval" type="number" min="10" max="86400" step="1" value="60" required></label>
         <p class="error" role="alert" hidden="${() => !state.formError}">${() => state.formError}</p>
         <div class="actions"><button class="primary" type="submit">Add stream</button></div>
       </form>

@@ -3,7 +3,7 @@
 //   const db = await openDb(conn, close?)    // runs migrations
 //   await db.get(key) / db.set(key, value)   // meta, JSON values
 //   await db.streams() / db.addStream(s) / db.removeStream(name) / db.setError(name, msg, at)
-//   await db.addObservation(stream, ts, value) / db.recentValues(stream, n)
+//   await db.addObservation(stream, ts, value) / db.recent(stream, n) → [{ts, value}]
 //   await db.addPrediction(p) → id / db.markPublished(id, at)
 //   await db.summary()                        // one row per stream for the UI
 //   await db.checkpoint() / db.close()
@@ -31,6 +31,9 @@ async function migrate(conn) {
   await conn.query('CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
   const [row] = toRows(await conn.query("SELECT value FROM meta WHERE key = 'schema_version'"));
   let version = row ? JSON.parse(row.value) : 0;
+  if (version > MIGRATIONS.length) {
+    throw new Error(`This database is from a newer version of the app (schema ${version}, this app knows ${MIGRATIONS.length}).`);
+  }
   for (; version < MIGRATIONS.length; version++) {
     await conn.query('BEGIN TRANSACTION');
     try {
@@ -82,9 +85,9 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
 
     addObservation: serial((stream, ts, value) =>
       run('INSERT INTO observations VALUES (?, ?, ?)', stream, ts, value)),
-    recentValues: serial(async (stream, n) => (await rows(
-      `SELECT value FROM (SELECT value, ts FROM observations WHERE stream = ?
-         ORDER BY ts DESC LIMIT ?) ORDER BY ts`, stream, n)).map((r) => r.value)),
+    recent: serial((stream, n) => rows(
+      `SELECT ts, value FROM (SELECT ts, value FROM observations WHERE stream = ?
+         ORDER BY ts DESC LIMIT ?) ORDER BY ts`, stream, n)),
 
     addPrediction: serial(async (p) => (await rows(
       `INSERT INTO predictions (stream, ts, target_ts, value, model, address, message, signature)

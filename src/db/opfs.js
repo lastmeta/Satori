@@ -7,7 +7,8 @@ import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import { openDb } from './index.js';
 
-export const DB_PATH = 'opfs://satori.duckdb';
+// Not 'satori.duckdb': the draft/v1-full app left a different schema under that name on this origin.
+export const DB_PATH = 'opfs://satori-mvp.duckdb';
 
 export async function openOpfsDb(path = DB_PATH) {
   const bundle = await duckdb.selectBundle({

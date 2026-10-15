@@ -4,7 +4,7 @@ import { state, render } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb } from './db/opfs.js';
 import { generateEntropy, entropyFromWords, deriveKeys, createVault, unlock } from './keys/index.js';
-import { tick, createScheduler, localPublisher, claimTab, DEFAULT_STREAM } from './neuron/index.js';
+import { tick, createScheduler, localPublisher, claimTab, streamError, DEFAULT_STREAM } from './neuron/index.js';
 
 const SPARK = 40;
 let db;
@@ -14,16 +14,16 @@ let pending = null; // entropy during setup only
 async function refresh() {
   const rows = await db.summary();
   const spark = {};
-  for (const r of rows) spark[r.name] = await db.recentValues(r.name, SPARK);
+  for (const r of rows) spark[r.name] = (await db.recent(r.name, SPARK)).map((o) => o.value);
   state.spark = spark;
   state.rows = rows;
 }
 
-const scheduler = createScheduler(async (stream) => {
+const scheduler = createScheduler(async (stream, signal) => {
   const id = identity;
   if (!id || id.locked) return;
-  await tick(stream, { db, identity: id, publish: localPublisher(db) });
-  if (!id.locked) await refresh();
+  await tick(stream, { db, identity: id, publish: localPublisher(db), signal });
+  if (!signal.aborted && !id.locked) await refresh();
 });
 
 function wipePending() {
@@ -35,6 +35,7 @@ function wipePending() {
 async function startSession(vault, pass) {
   identity = await unlock(vault, pass);
   state.address = identity.address;
+  state.backupWords = '';
   state.screen = 'home';
   await refresh();
   for (const s of await db.streams()) scheduler.start(s);
@@ -107,7 +108,11 @@ const actions = {
     Object.assign(state, { address: '', rows: [], spark: {}, backupWords: '', error: '', screen: 'unlock' });
   },
   showWords: busy(async (f, el) => {
-    state.backupWords = await identity.words(f.pass);
+    const id = identity;
+    // words() throws 'Locked' if Lock is pressed during the unseal; then stay quiet.
+    const words = await id.words(f.pass).catch((err) => { if (identity === id) throw err; });
+    if (identity !== id || id.locked) return;
+    state.backupWords = words;
     el.reset();
   }),
   hideWords() {
@@ -123,8 +128,8 @@ const actions = {
   async addStream(f, el) {
     state.formError = '';
     const s = { name: f.name.trim(), url: f.url.trim(), path: f.path.trim(), interval_s: Math.round(Number(f.interval)) };
-    if (!/^https:\/\//.test(s.url)) return void (state.formError = 'The source URL must start with https://');
-    if (!(s.interval_s >= 10)) return void (state.formError = 'Use an interval of at least 10 seconds.');
+    const bad = streamError(s);
+    if (bad) return void (state.formError = bad);
     if ((await db.streams()).some((x) => x.name === s.name)) return void (state.formError = `A stream named ${s.name} exists.`);
     try {
       await db.addStream(s);
@@ -137,7 +142,7 @@ const actions = {
   },
   async removeStream(name) {
     if (!confirm(`Remove ${name} and its data?`)) return;
-    scheduler.stop(name);
+    await scheduler.stop(name); // waits for a tick in flight, so it can't write after the delete
     await db.removeStream(name);
     await refresh();
   },

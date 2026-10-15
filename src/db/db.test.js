@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { memoryDb } from './node.js';
+import { memoryDb, memoryConn } from './node.js';
 import { MIGRATIONS } from './schema.js';
+import { openDb } from './index.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -14,6 +15,12 @@ const pred = (o) => ({ stream: 'BTC-USD', ts: 1000, target_ts: 61000, value: 10,
 test('migrations run and the version is stored', async () => {
   expect(db.version).toBe(MIGRATIONS.length);
   expect(await db.get('schema_version')).toBe(MIGRATIONS.length);
+});
+
+test('a database from a newer app version is refused, not migrated', async () => {
+  const conn = await memoryConn();
+  await (await openDb(conn)).set('schema_version', MIGRATIONS.length + 1);
+  await expect(openDb(conn)).rejects.toThrow(/newer version/);
 });
 
 test('meta holds JSON values', async () => {
@@ -33,7 +40,7 @@ describe('streams', () => {
     await db.addObservation('ETH-USD', 1, 2);
     await db.removeStream('ETH-USD');
     expect((await db.streams()).map((s) => s.name)).toEqual(['BTC-USD']);
-    expect(await db.recentValues('ETH-USD', 5)).toEqual([]);
+    expect(await db.recent('ETH-USD', 5)).toEqual([]);
   });
   test('last error is set and cleared', async () => {
     await db.addStream(btc);
@@ -44,11 +51,11 @@ describe('streams', () => {
   });
 });
 
-test('recentValues: latest n, oldest first', async () => {
+test('recent: latest n observations, oldest first, with their times', async () => {
   await db.addStream(btc);
   for (let i = 1; i <= 5; i++) await db.addObservation('BTC-USD', i * 1000, i * 10);
-  expect(await db.recentValues('BTC-USD', 3)).toEqual([30, 40, 50]);
-  expect(await db.recentValues('BTC-USD', 99)).toEqual([10, 20, 30, 40, 50]);
+  expect(await db.recent('BTC-USD', 2)).toEqual([{ ts: 4000, value: 40 }, { ts: 5000, value: 50 }]);
+  expect((await db.recent('BTC-USD', 99)).map((o) => o.value)).toEqual([10, 20, 30, 40, 50]);
 });
 
 test('predictions get ids and are marked published', async () => {
@@ -78,7 +85,7 @@ test('summary: one row per stream with latest observation and prediction', async
 test('calls run in order even when not awaited', async () => {
   await db.addStream(btc);
   const writes = [1, 2, 3].map((i) => db.addObservation('BTC-USD', i, i));
-  const read = db.recentValues('BTC-USD', 10);
+  const read = db.recent('BTC-USD', 10);
   await Promise.all(writes);
-  expect(await read).toEqual([1, 2, 3]);
+  expect((await read).map((o) => o.value)).toEqual([1, 2, 3]);
 });
