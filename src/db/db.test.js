@@ -155,8 +155,7 @@ test('calls run in order even when not awaited', async () => {
 });
 
 describe('relay streams (Nostr), apart from central', () => {
-  const sub = (o) => ({ uuid: 'r-1', stream_name: 'btc', provider_pubkey: 'e5', name: 'Bitcoin', cadence_seconds: 900,
-    meta: '{"a": 1}', now: 100, ...o });
+  const sub = (o) => ({ uuid: 'r-1', stream_name: 'btc', provider_pubkey: 'e5', name: 'Bitcoin', cadence_seconds: 900, now: 100, ...o });
   const robs = (o) => ({ stream_uuid: 'r-1', seq: 1, ts: 1000, value: 5, raw: '"5"', event_id: 'e1', received_at: 1001, ...o });
 
   test('a step-4 database gains the relay tables; central data stays', async () => {
@@ -197,17 +196,17 @@ describe('relay streams (Nostr), apart from central', () => {
   });
 
   test('subscribe, unsubscribe, subscribe again: the row stays, so do pred_created_at and the seq', async () => {
-    expect(await db.subscribeRelay(sub())).toMatchObject({ uuid: 'r-1', active: true, subscribed_at: 100, unsubscribed_at: null,
-      pred_created_at: 100, pred_seq: 0, name: 'Bitcoin', cadence_seconds: 900, meta: '{"a": 1}' });
+    expect(await db.subscribeRelay(sub())).toMatchObject({ uuid: 'r-1', active: true, subscribed_at: 100,
+      pred_created_at: 100, pred_seq: 0, name: 'Bitcoin', cadence_seconds: 900 });
     expect(await db.countActiveRelay()).toBe(1);
     expect(await db.nextPredSeq('r-1')).toBe(1);
     expect(await db.nextPredSeq('r-1')).toBe(2);
-    await db.unsubscribeRelay('r-1', 200);
-    expect(await db.relayStream('r-1')).toMatchObject({ active: false, unsubscribed_at: 200 });
+    await db.unsubscribeRelay('r-1');
+    expect(await db.relayStream('r-1')).toMatchObject({ active: false });
     expect(await db.countActiveRelay()).toBe(0);
     expect(await db.relayStreams({ active: true })).toEqual([]);
     expect(await db.subscribeRelay(sub({ now: 300, name: 'BTC', cadence_seconds: null }))).toMatchObject({
-      active: true, subscribed_at: 300, unsubscribed_at: null, pred_created_at: 100, pred_seq: 2, name: 'BTC', cadence_seconds: null });
+      active: true, subscribed_at: 300, pred_created_at: 100, pred_seq: 2, name: 'BTC', cadence_seconds: null });
     expect(await db.nextPredSeq('r-1')).toBe(3);
     expect(await db.relayStream('nope')).toBeNull();
   });

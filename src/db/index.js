@@ -8,7 +8,7 @@
 //   await db.resetCentral()                  // the central URL changed
 //   await db.streams() / db.predictions(uuidOrName, limit)   // for the UI and agents
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
-//   db.subscribeRelay(s) / unsubscribeRelay(uuid, at) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
+//   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
 //   db.addRelayObservation(o) → new? / relayHistory(uuid) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
@@ -134,17 +134,20 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       stream, stream, limit)),
 
     // ── relay (Nostr) streams ──
-    /** Subscribe (again): active from `now`; a row that exists keeps its pred_created_at and pred_seq. */
-    subscribeRelay: serial(async ({ uuid, stream_name, provider_pubkey, name, cadence_seconds, meta, now }) => {
-      await run(`INSERT INTO relay_streams (uuid, stream_name, provider_pubkey, name, cadence_seconds, meta, active,
-          subscribed_at, unsubscribed_at, pred_created_at, pred_seq) VALUES (?, ?, ?, ?, ?, ?, true, ?, NULL, ?, 0)
+    /**
+     * Subscribe (again): active from `now`; a row that exists keeps its
+     * pred_created_at and pred_seq. (meta and unsubscribed_at, from migration
+     * 4, are no longer written: nothing read them.)
+     */
+    subscribeRelay: serial(async ({ uuid, stream_name, provider_pubkey, name, cadence_seconds, now }) => {
+      await run(`INSERT INTO relay_streams (uuid, stream_name, provider_pubkey, name, cadence_seconds, active,
+          subscribed_at, pred_created_at, pred_seq) VALUES (?, ?, ?, ?, ?, true, ?, ?, 0)
         ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, cadence_seconds = excluded.cadence_seconds,
-          meta = excluded.meta, active = true, subscribed_at = excluded.subscribed_at, unsubscribed_at = NULL`,
-      uuid, stream_name, provider_pubkey, name ?? '', cadence_seconds ?? null, meta ?? null, now, now);
+          active = true, subscribed_at = excluded.subscribed_at`,
+      uuid, stream_name, provider_pubkey, name ?? '', cadence_seconds ?? null, now, now);
       return (await rows('SELECT * FROM relay_streams WHERE uuid = ?', uuid))[0];
     }),
-    unsubscribeRelay: serial((uuid, at) =>
-      run('UPDATE relay_streams SET active = false, unsubscribed_at = ? WHERE uuid = ?', at, uuid)),
+    unsubscribeRelay: serial((uuid) => run('UPDATE relay_streams SET active = false WHERE uuid = ?', uuid)),
     relayStream: serial(async (uuid) => (await rows('SELECT * FROM relay_streams WHERE uuid = ?', uuid))[0] ?? null),
     countActiveRelay: serial(async () => (await rows('SELECT count(*) AS n FROM relay_streams WHERE active'))[0].n),
     /**

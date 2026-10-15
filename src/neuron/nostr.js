@@ -369,7 +369,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       }
       const at = t();
       const sub = await db.subscribeRelay({ uuid, stream_name: s, provider_pubkey: p, name: found.name,
-        cadence_seconds: found.cadence_seconds, meta: found.event.content, now: at });
+        cadence_seconds: found.cadence_seconds, now: at });
       await refollow();
       await db.checkpoint();
       background(publish(sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at }))));
@@ -384,7 +384,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       const uuid = relayUuid(p, s);
       if (!(await db.relayStream(uuid))?.active) throw new Error(`Not subscribed to ${s} from ${p.slice(0, 8)}….`);
       const at = t();
-      await db.unsubscribeRelay(uuid, at);
+      await db.unsubscribeRelay(uuid);
       await refollow();
       await db.checkpoint();
       await sendKept([sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at, unsubscribe: true })),
