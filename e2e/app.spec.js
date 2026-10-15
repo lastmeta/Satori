@@ -35,8 +35,10 @@ async function stubCentral(context, url = CENTRAL) {
   const cors = {
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'authorization, content-type, wallet-pubkey, vault-pubkey, neuron-version, message, signature',
+    'access-control-allow-headers': 'authorization, content-type, wallet-pubkey, vault-pubkey, nostr-pubkey, neuron-version, message, signature',
   };
+  // No relay here (e2e/nostr.spec.js has its own): every socket but Vite's is closed at once.
+  await context.routeWebSocket((u) => u.port !== '5180', (ws) => ws.close());
   const reply = (route, status, json) => route.fulfill({ status, json, headers: cors });
   await context.route('https://network.satorinet.io/**', (route) => {
     stub.prod.push(route.request().url());
@@ -321,7 +323,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
     await expect(page.evaluate((w) => window.satori.backup(w), which)).rejects.toThrow(/'identity' or 'vault'/);
   }
   for (const name of ['vault.yml', 'Vault.yaml', 'vault', null]) {
-    await expect(page.evaluate((n) => window.satori.file(n), name)).rejects.toThrow(/'wallet.yaml' or 'vault.yaml'/);
+    await expect(page.evaluate((n) => window.satori.file(n), name)).rejects.toThrow(/'wallet.yaml', 'vault.yaml' or 'nostr.yaml'/);
   }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
@@ -363,17 +365,17 @@ test('import Docker files; central has another vault for this identity: a mismat
   await page.getByText('Settings').click();
   const url = page.getByLabel('Central URL');
   await url.fill('http://central.test');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'https://' })).toBeVisible();
   await context.route('https://down.test/**', (route) => route.abort());
   await url.fill('https://down.test');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://down.test');
   await expect(page.locator('[data-test=registered]')).toHaveText(/^No: central unreachable: /);
   await page.getByRole('button', { name: 'Poll now' }).click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('failed: central unreachable');
   await url.fill('');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.locator('[data-test=central-url]')).toHaveText(CENTRAL);
 
   // The imported vault unlocks with the Docker password and shows the same words.
