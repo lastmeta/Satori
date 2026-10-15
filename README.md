@@ -37,7 +37,7 @@ npm run e2e        # playwright, system Chrome: full flow + OPFS persistence smo
 |---|---|
 | `src/keys/` | 24 words ↔ secret, passphrase seal (PBKDF2 → AES-GCM), Evrmore address, sign/verify |
 | `src/db/` | DuckDB-WASM on OPFS; schema with a version for migrations; small async API |
-| `src/engine/` | `predict(values, steps)`: least-squares line |
+| `src/engine/` | `predict(points, at)`: least-squares line over time |
 | `src/neuron/` | `tick`, scheduler, publisher shape, single-tab Web Lock |
 | `src/ui/` + `src/main.js` | ArrowJS screens and app wiring |
 

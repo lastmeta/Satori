@@ -34,3 +34,10 @@ steps start from evidence, not from scratch.
   worker is part of step 7.
 - Ticks are spaced from the start of the last run; there is no catch-up for
   missed intervals while the tab was closed (step 7).
+- Ticks fit on observation times, so a gap is honest, but a window that spans
+  a long gap mixes old and new regimes. A better engine (step 6) may want to
+  drop observations older than some multiple of the interval.
+- **Open decision (owner):** commit 2b6f30e pushed `node_modules` (~50 MB pack)
+  into `main`'s history; e9cc109 untracked it. Removing it needs
+  `git filter-repo --path node_modules --invert-paths` and a force-push of
+  `main`, which is easiest while the repo is new.
