@@ -20,11 +20,11 @@ steps start from evidence, not from scratch.
 1. ✅ **MVP**: keys, db, linear engine, local publish, basic UI.
 2. ✅ **Two keys + Docker import/export**: identity (unencrypted) and vault
    (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
-3. **Publish to central**: login, register, predictions batch ([design/central.md](design/central.md)).
-4. **Base**: delegate, daily batch, claims ([design/chain.md](design/chain.md)).
+3. **Central data flow**: login, register, predictions batch ([design/central.md](design/central.md)).
+4. **Engine**, inspired by `../namaste_club` ([design/engine.md](design/engine.md)).
 5. **Nostr**: subscribe to streams, publish `_pred` ([design/transport.md](design/transport.md)). This needs a wss relay.
-6. **Better engine**: SES and backtest-driven selection ([design/engine.md](design/engine.md)).
-7. **Runtime hardening**: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
+6. **Base** (last): delegate, daily batch, claims, as the dapp in `../contract/satori-ui` does ([design/chain.md](design/chain.md)).
+7. **Finishing pass**, incl. runtime hardening: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
 
 ## Noticed while building
 
@@ -36,7 +36,7 @@ steps start from evidence, not from scratch.
 - Ticks are spaced from the start of the last run; there is no catch-up for
   missed intervals while the tab was closed (step 7).
 - Ticks fit on observation times, so a gap is honest, but a window that spans
-  a long gap mixes old and new regimes. A better engine (step 6) may want to
+  a long gap mixes old and new regimes. A better engine (step 4) may want to
   drop observations older than some multiple of the interval.
 - ✅ `node_modules` was removed from `main`'s history (owner approved the
   force-push).

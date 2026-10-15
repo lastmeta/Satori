@@ -7,7 +7,7 @@
 > server of our own. It is built to be driven by people and by AI agents alike.
 
 Status: step 2 of the roadmap (two keys + Docker import/export). Predictions
-are published locally for now; central, Base and Nostr come next.
+are published locally for now; central, the engine, Nostr and Base come next.
 
 ## Concepts
 
@@ -36,7 +36,10 @@ Open the app, wait for it to load, then in the page's JS context:
   tab has it open; only one tab runs the neuron) or `fatal`.
 - `await satori.setup({ passphrase, vaultWords?, identityWords? })` → status.
   Creates the neuron on a fresh browser (random keys unless 24 words are
-  given). Passphrase: at least 4 characters. The vault starts locked.
+  given). Passphrase: at least 4 characters, Latin-1 only (no emoji or €), as
+  Docker's vault encryption needs. The vault starts locked. One setup runs at
+  a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
+  and a call once set up throws `Already set up`.
 - `await satori.addStream({ name, url, path, interval_s })`;
   `await satori.removeStream(name)` (deletes its data).
 - `await satori.predictions(stream, limit = 20)` → newest first, with
@@ -45,6 +48,7 @@ Open the app, wait for it to load, then in the page's JS context:
 - `await satori.unlock(passphrase)`; `satori.lock()`.
 - While unlocked: `satori.backup('identity' | 'vault')` → `{ words, wif }`;
   `satori.file('wallet.yaml' | 'vault.yaml')` → the Docker file's text.
+  Only these exact names; anything else throws.
 
 Errors are thrown as `Error` with a readable message (for example
 `Wrong passphrase`, `Unlock the vault first`).
@@ -54,7 +58,9 @@ Errors are thrown as `Error` with a readable message (for example
 - Setup: "Create a new neuron" (shows the vault's 24 words, asks for three of
   them, then a passphrase), "Restore from words" (vault words, optional
   identity words), or "Import Docker files" (`wallet.yaml`, `vault.yaml`, the
-  vault password).
+  vault password). `wallet.yaml` is the unencrypted file and `vault.yaml` the
+  encrypted one; files in the wrong slots, or a vault.yaml that is not
+  encrypted, are refused with a message saying so.
 - Home: both addresses with Copy buttons; the vault card has a "Vault
   passphrase" field and Unlock, or a Lock button in the header while unlocked.
   One card per stream (latest value, prediction, signed message under
@@ -70,8 +76,9 @@ The keys are Satori Lite's (github.com/SatoriNetwork/satori-lite and
 github.com/SatoriNetwork/satorilib): one
 32-byte secp256k1 secret per key = the private key = the BIP39 entropy of its
 24 words. `wallet.yaml` / `vault.yaml` are read and written in Docker's format
-(vault fields: AES-256-CBC, PBKDF2-HMAC-SHA1 × 1,000,000), so a neuron moves
-between Docker and the browser by moving the two files.
+(vault fields: AES-256-CBC, PBKDF2-HMAC-SHA1 × 1,000,000 over the password's
+Latin-1 bytes), so a neuron moves between Docker and the browser by moving the
+two files.
 
 ## Code
 
@@ -89,6 +96,7 @@ build step beyond Vite, MIT licensed.
 - `src/ui/`: ArrowJS screens.
 - `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`);
   `docs/future/`: the researched roadmap.
+- `scripts/`: parity-vector generator run against satorilib (Python).
 - Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome).
 
 ## Contribute

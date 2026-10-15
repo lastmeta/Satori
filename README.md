@@ -47,6 +47,7 @@ npm run e2e        # playwright, system Chrome: full flow + OPFS persistence smo
 | `src/neuron/` | `tick`, scheduler, publisher shape, single-tab Web Lock |
 | `src/ui/` + `src/main.js` | ArrowJS screens, app wiring, `window.satori` |
 | `public/llms.txt` | how an AI agent drives the app |
+| `scripts/` | parity vectors from satorilib's own code (Python) |
 
 ## Docs
 

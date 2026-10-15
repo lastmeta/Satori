@@ -43,9 +43,15 @@ the identity key is unencrypted, as in Docker):
   downloads) needs Unlock, as Docker's dashboard needs login.
 - **Remove** stops the stream's tick and waits for one in flight before it
   deletes the stream's data.
-- A database from a newer app version is refused, not migrated. The step-1
-  prototype's single sealed key (`meta.vault`) is not converted: setup says
-  so, and restoring its 24 words as the vault keeps it.
+- A database from a newer app version is refused, not migrated. Setup writes
+  only its own rows (`meta.wallet_yaml`, `meta.vault_yaml`, the default
+  stream) and leaves any other row as it is.
+- One setup runs at a time, from the UI or an agent (`window.satori.setup`):
+  both take the same guard, and a second one is refused.
+- Import takes `wallet.yaml` only in plain text and `vault.yaml` only
+  encrypted; files in each other's slots are refused as swapped. The vault is
+  never stored in plain text. Passphrases are Latin-1 only, as Docker's
+  encryption needs ([keys.md](keys.md#the-files)).
 - Only one tab opens the database. Other tabs say "Satori is open in another tab".
 - Default stream: BTC-USD spot from `api.coinbase.com`, which allows browser
   calls (`Access-Control-Allow-Origin: *`).
@@ -64,11 +70,17 @@ lines), `vite` 8.3.1, `vitest` 4.1.11,
 
 - `npm test` (vitest, `--maxWorkers=2`): keys (satorilib parity vectors,
   Docker `wallet.yaml`/`vault.yaml` incl. old vaults, WIF-only, mismatched and
-  wrong-password files; the two-key model), engine, db, neuron and ui.
+  wrong-password files, Latin-1 passwords, uncompressed-flag signatures; files
+  in the wrong slots and plain-text vaults refused; the two-key model),
+  engine, db, neuron and ui.
 - `npm run e2e` (Playwright, system Chrome, one worker): create → ticks signed
   by the identity → second tab refused → reload runs with no passphrase →
   Unlock (wrong passphrase refused) → backup words and both files downloaded
-  and read back → Lock, ticks go on; Docker import (wrong password refused) with
-  a failing source beside a working one; restore from words; the agent API.
-  Also an OPFS persistence smoke under the CSP.
+  and read back → Lock, ticks go on; Docker import (swapped files and a wrong
+  password refused) with a failing source beside a working one; restore from
+  words; the agent API (exact key and file names); two setups at once (one
+  wins) leaving other `meta` rows alone. Also an OPFS persistence smoke under
+  the CSP.
+- Parity vectors come from satorilib itself (`test/fixtures/README.md`;
+  `scripts/satorilib_edges.py` runs on the satorilib source in Python).
 - Dev app: `npm run dev` → http://localhost:5180
