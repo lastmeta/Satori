@@ -1,0 +1,88 @@
+// Key derivations, exactly as the Docker neuron (satorilib) does them.
+// One 32-byte secp256k1 secret ("entropy") is at once the private key and the
+// BIP39 entropy of the 24 words. No HD path, no mnemonicToSeed.
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { sha256 } from '@noble/hashes/sha2';
+import { ripemd160 } from '@noble/hashes/legacy';
+import { bytesToHex, concatBytes, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
+import { createBase58check, base64 } from '@scure/base';
+import { entropyToMnemonic, mnemonicToEntropy } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english';
+
+const b58c = createBase58check(sha256);
+const N = secp256k1.CURVE.n;
+const ADDRESS_VERSION = 0x21; // Evrmore P2PKH, 'E…'
+const MAGIC = utf8ToBytes('Evrmore Signed Message:\n');
+
+const toBig = (b) => BigInt('0x' + (bytesToHex(b) || '0'));
+
+function checkKey(k) {
+  if (!(k instanceof Uint8Array) || k.length !== 32) throw new Error('key must be 32 bytes');
+  const n = toBig(k);
+  if (n < 1n || n >= N) throw new Error('key out of secp256k1 range');
+  return k;
+}
+
+/** 32 random bytes with 1 ≤ k < n. */
+export function generateEntropy() {
+  for (;;) {
+    const k = randomBytes(32);
+    const n = toBig(k);
+    if (n >= 1n && n < N) return k;
+  }
+}
+
+/** Compressed or uncompressed pubkey bytes → Evrmore P2PKH address. */
+function addressFromPubkey(pub) {
+  return b58c.encode(concatBytes(Uint8Array.of(ADDRESS_VERSION), ripemd160(sha256(pub))));
+}
+
+/** @param {Uint8Array} entropy @returns {{words: string, pubkey: string, address: string}} */
+export function deriveKeys(entropy) {
+  const pub = secp256k1.getPublicKey(checkKey(entropy), true);
+  return {
+    words: entropyToMnemonic(entropy, wordlist),
+    pubkey: bytesToHex(pub),
+    address: addressFromPubkey(pub),
+  };
+}
+
+/** 24 backup words → entropy. Tolerates case and extra whitespace. */
+export function entropyFromWords(words) {
+  const norm = words.trim().toLowerCase().split(/\s+/).join(' ');
+  const e = mnemonicToEntropy(norm, wordlist);
+  if (e.length !== 32) throw new Error('expected 24 words');
+  return checkKey(e);
+}
+
+function varint(n) {
+  if (n < 0xfd) return Uint8Array.of(n);
+  if (n <= 0xffff) return Uint8Array.of(0xfd, n & 0xff, n >> 8);
+  return Uint8Array.of(0xfe, n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, n >>> 24);
+}
+
+function messageHash(msg) {
+  const m = utf8ToBytes(msg);
+  return sha256(sha256(concatBytes(varint(MAGIC.length), MAGIC, varint(m.length), m)));
+}
+
+/** Evrmore signed message: base64 of [27+recid+4] || r || s (low-S, RFC 6979). */
+export function signMessage(entropy, msg) {
+  const sig = secp256k1.sign(messageHash(msg), checkKey(entropy), { lowS: true });
+  return base64.encode(concatBytes(Uint8Array.of(27 + sig.recovery + 4), sig.toCompactRawBytes()));
+}
+
+/** True when `signature` signs `msg` for the given pubkey (hex) or address. */
+export function verifyMessage(msg, signature, { pubkey, address } = {}) {
+  try {
+    const raw = base64.decode(signature);
+    if (raw.length !== 65 || raw[0] < 27 || raw[0] > 34) return false;
+    const pub = secp256k1.Signature.fromCompact(raw.slice(1))
+      .addRecoveryBit((raw[0] - 27) & 3)
+      .recoverPublicKey(messageHash(msg));
+    if (pubkey && pub.toHex(true) === pubkey.toLowerCase()) return true;
+    return !!address && addressFromPubkey(pub.toRawBytes(raw[0] >= 31)) === address;
+  } catch {
+    return false;
+  }
+}
