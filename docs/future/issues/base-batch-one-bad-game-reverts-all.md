@@ -1,6 +1,6 @@
 # One bad game reverts the whole daily Base batch
 
-**Status:** open · **Kind:** fixable flaw · **Fix in:** Docker neuron (`neuron/`); avoided by design in the browser app
+**Status:** open in Lite · **Kind:** fixable flaw · **Fix in:** Docker neuron (`neuron/`); avoided in the browser app (built in step 6: each game simulated alone)
 
 ## Precondition
 
@@ -31,7 +31,7 @@ substitute: the call first runs `satoriRegistry.updateValues` (`SatoriEngine.sol
 which pulls a fresh value for due PULL streams before the `EmptyStream` /
 `StaleValue` checks (`:791-810`), so an off-chain read drops games that would
 pass. The browser app simulates
-([chain.md](../design/chain.md#daily-prediction-batch)).
+([base.md](../../design/base.md#the-daily-batch-the-identity-on-its-own)).
 
 The simulate also fixes the reinstall case: Docker's named-game wait uses its
 own stored timestamp (`base_predict.py:146-149`), which is 0 after a reinstall,

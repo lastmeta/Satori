@@ -23,7 +23,7 @@ steps start from evidence, not from scratch.
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
 4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence ([../design/engine.md](../design/engine.md)); left for later: [design/engine.md](design/engine.md).
 5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [design/transport.md](design/transport.md). A deployed app needs a wss relay ([issue](issues/relays-not-wss.md)).
-6. **Base** (last): delegate, daily batch, claims, as the dapp in `../contract/satori-ui` does ([design/chain.md](design/chain.md)).
+6. ✅ **Base**: delegate prediction power, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [design/chain.md](design/chain.md). A local fork for the dev server: `scripts/fork.mjs`.
 7. **Finishing pass**, incl. runtime hardening: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
 
 ## Noticed while building
@@ -59,6 +59,21 @@ steps start from evidence, not from scratch.
 - A relay keeps one of two replaceable events with the same `created_at`
   (NIP-01): two `_pred` of one stream in one second lose one, as in Lite
   ([../design/nostr.md](../design/nostr.md#inherent-as-in-lite)).
+- Step 6, on the fork: on D6 a delegated vault that receives SATORI (any
+  claim) in a transaction sent with `eth_estimateGas`'s limit can never
+  undelegate: the token's try/catch hook starves and rewards' undelegate
+  underflows (Panic 0x11). The app adds 500,000 gas to every write; the fix
+  belongs in the contracts ([issue](issues/token-hook-gas-estimate.md)).
+- Step 6 follows Lite's direction rule (UP if t2 > the latest value, else
+  DOWN): a `naive` forecast always votes DOWN, and on D6 the one stream (the
+  daily default stream) has two values, so every browser neuron votes DOWN
+  for now. A seeded slope rule is parked as an option
+  ([design/engine.md](design/engine.md)).
+- A vault's delegator share of the identity's wins shows on the lens only
+  after its loyalty builds (on the fork: 9 rounds after delegating, with the
+  default stream moving), so the first rounds' Claim finds 0 on-chain rewards.
+- On a fork moved ahead in time the Base card's times are the chain's (days
+  ahead of the wall clock), while the next check is local time.
 - Load time on the dev server (headless Chrome, this box), 2026-10-15: the
   page paints "Opening…" at 0.3 s (index.html); a fresh profile reaches Setup
   in ~4.5 s and a reload reaches Home in ~3.5 s (they were 5.6–6.0 s and

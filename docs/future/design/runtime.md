@@ -32,7 +32,7 @@ one-minute tick is enough. "Runs while closed" is inherent and not offered.
 
 Deadlines live in `settings`. One `setTimeout` loop in the neuron worker wakes
 at most every 60 s and runs whatever is due. The batch rule is in
-[chain.md](chain.md#daily-prediction-batch): checking
+[base.md](../../design/base.md#the-daily-batch-the-identity-on-its-own): checking
 `predictedStreamsCount` each tick means a tab open at any time during a round
 can earn that round, and catching up can never submit twice in one round.
 

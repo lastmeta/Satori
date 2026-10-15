@@ -22,7 +22,7 @@ references and every deviation). This file keeps only what is still to do.
   (`neuron/neuron-lite/start.py:453-517`) and dedupes their observations by the
   on-chain `round` before the event id and the seq
   (`neuron/neuron-lite/satorineuron/network_db.py:597-636`). The browser may
-  read the chain instead ([chain.md](chain.md#base-streams)).
+  read the chain instead ([base.md](../../design/base.md#the-daily-batch-the-identity-on-its-own)).
 - **Paid and encrypted streams.** Per-subscriber NIP-04 events, payment
   channels (34603-34606), the `#p` personal filter and kind 34604 in the
   follow (origin client 1687-1745). Port the live-push decrypt path, not origin

@@ -7,17 +7,15 @@ The point forecast is built (step 4): see
 12 h returns faded toward persistence, after `../namaste_club`). What is left
 here is for later steps.
 
-## Base direction (step 6)
+## Base direction (an option, set aside in step 6)
 
-A separate duty from the point forecast. Satori Lite sends UP(1) if the latest
-forecast > the latest observed value, else DOWN(2)
-(`neuron/neuron-lite/satorineuron/base_predict.py:141-143`; inputs at
-`start.py:1201-1218`). Copying that onto this engine would send DOWN whenever
-the forecast equals the last value: `naive` always, and `bar1` when its weight
-is 0 or φ is 0. Every browser neuron would then cast the same constant vote.
-That is a fixable flaw, not a browser limit.
-
-Rule:
+Step 6 follows Satori Lite, by the owner's direction (2026-10-15): UP(1) if
+t2 > the latest registry value, else DOWN(2)
+(`neuron/neuron-lite/satorineuron/base_predict.py:141-143`;
+[../../design/base.md](../../design/base.md)). Its consequence stays: a
+forecast equal to the last value votes DOWN, so `naive` always does, and so
+does `bar1` when its weight or φ is 0; every browser neuron then casts the
+same vote. A fixable flaw, not a browser limit. The alternative studied:
 
 1. Direction = sign of an OLS slope over the last *k* registry values, *k* drawn
    once per (node, stream) from the identity seed in [5, 20] (Docker's Starter
@@ -26,8 +24,7 @@ Rule:
 3. Fewer than 5 values → seeded coin flip.
 
 Inferred: on random-walk prices no rule beats ~50%; this one at least matches
-Docker's spread of votes. Fixture: a random-walk series must not produce all
-DOWN across seeds; a strictly rising series gives UP.
+Docker's spread of votes.
 
 ## Diversity between nodes (optional)
 
@@ -42,7 +39,7 @@ The accuracy cost should be bounded and measured with `scripts/backtest.mjs`.
 | Sink | Value | Docker evidence |
 |---|---|---|
 | central-lite batch (built) | `value` = t2, `t1_value` = t1 | `engine.py:1052-1058,1097-1106` |
-| Base daily batch (step 6) | direction rule above | replaces `base_predict.py:141-143` |
+| Base daily batch (built, step 6) | UP if t2 > the latest value, else DOWN, as Lite; step max(12 h, cadence) | `base_predict.py:141-143`; [../../design/base.md](../../design/base.md) |
 | `_pred` on Nostr (built, step 5) | t2 (`_runForecast` returns the second, autoregressed forecast), as a string; the step is the stream's cadence | `engine.py:714-739,1153-1186`; `start.py:1300,1322-1323`; [../../design/nostr.md](../../design/nostr.md) |
 
 For bounties (later): the bounty scorer scores against the next observation

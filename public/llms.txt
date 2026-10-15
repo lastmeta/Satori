@@ -5,12 +5,14 @@
 > stream, forecasts the next values with a simple model, and sends the
 > predictions back to central, the way the Docker neuron (Satori Lite) does.
 > It also follows Satori streams on Nostr relays and publishes a prediction
-> stream (`<stream>_pred`) for each one it subscribes to.
+> stream (`<stream>_pred`) for each one it subscribes to, and predicts on
+> Base: the vault delegates its prediction power to the identity, which sends
+> one batch of up/down predictions every UTC round on its own.
 > Everything runs in the browser tab: the keys, the database (DuckDB-WASM on
 > OPFS) and the engine. There is no server of our own. It is built to be
 > driven by people and by AI agents alike.
 
-Status: step 5 of the roadmap (Nostr). Next: Base.
+Status: step 6 of the roadmap (Base). Next: a finishing pass.
 
 ## Concepts
 
@@ -94,6 +96,42 @@ Status: step 5 of the roadmap (Nostr). Next: Base.
 - Hourly: the relay list again, dropped relays reconnected, `_pred`
   announcements again; daily: a NIP-65 relay list (10002).
 
+- Base (Base Sepolia, chain 84532, the D6 contracts; docs/design/base.md):
+  each key's 32-byte secret is also its EVM key, so the identity and the
+  vault each have a Base (0x) address (the vault's is read from vault.yaml's
+  public key while locked). Addresses: bundled, with central's
+  `/api/v1/base/config` over them (cached 1 h; prod answers 404, central2
+  serves it). RPC: Settings or `setBaseRpc`; empty = the default: on the dev
+  server `/rpc`, a local anvil fork (`node scripts/fork.mjs start`); in a
+  build central's (`https://sepolia.base.org`), then publicnode.
+- Delegate prediction power (needs Unlock): the identity sets its predictor
+  fee to 0 (`rewards.setPredictorFee(0)`, set-once) and accepts only this
+  vault (`hub.setAllowedDelegator(vault)`), then the vault calls
+  `hub.delegatePredictionPower(identity)`. Each step only when needed. While
+  delegated the vault's SATORI is transfer-locked; Stop delegating
+  (`delegatePredictionPower(0x0)`) leaves it locked through the next round:
+  the token refuses transfers while `transferLockedUntil >= round`, so
+  "until round N" means free from round N + 1 at 00:00 UTC. ("Staking" in the
+  Docker neuron.)
+- The daily batch (the identity, no Unlock): once per UTC round
+  (`block.timestamp / 86400`), at the first check of the round (10 s after
+  load, after Delegate, at the round's start on the chain's clock, at least
+  hourly), when the identity has delegated power and no batch this round.
+  Every registry stream with a binary game is forecast by the engine (step
+  = max(12 h, the stream's cadence)); direction UP (payload `0x01`) if t2 >
+  the latest value, else DOWN (`0x02`), as the Docker neuron. Named games wait
+  24 clock hours after the last batch. Each game is simulated alone first and
+  only the ones that pass are sent, in one `engine.predictMultipleWithPayloads`.
+  The batch is stored after its receipt.
+- Claims (needs Unlock), each on its own: `hub.claim()` when the rewards lens
+  says > 0 (the vault's share of the identity's wins); the merkle drop
+  (`GET /api/v1/merkle/root`, `/proof/{vault}` on central, then `claimMerkle`
+  when owed); the vested airdrop (`claimAirdrop`).
+- Gas: both addresses need a little Base ETH (the identity for the batch,
+  the vault for its actions). Every transaction is simulated first (a revert
+  costs nothing and names the contract's error) and sent with 500,000 gas
+  over the estimate (unused gas is not charged).
+
 Times are unix seconds.
 
 ## Drive it from the page (window.satori)
@@ -102,7 +140,7 @@ Open the app and wait for it to load: `window.satori` exists once the page's
 script runs; then call `await satori.status()` until `screen` is no longer
 `loading` (DuckDB and the keys take a moment). Then, in the page's JS context:
 
-- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr }`.
+- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base }`.
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
   tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
@@ -167,6 +205,29 @@ script runs; then call `await satori.status()` until `screen` is no longer
 - `await satori.setRelays({ relays?: ['wss://…'], centralWrite?: boolean })`
   → `nostr()`: the user's relays (ws:// or wss://; they replace the list) and
   whether central's relays are written to.
+- `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
+  config: 'central' | 'bundled', error, errors, round, chainTime,
+  identity: { address, eth, power, fee, allowedDelegator, batchesLeft, lowEth },
+  vault: { address, eth, satori, delegate, delegated: 'identity' | 'none' | 'other',
+  lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
+  lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, t2 }],
+  dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
+  are decimal strings (ETH, SATORI); `fee` is in basis points (1000 = the
+  10 % default); `direction` 1 = UP, 2 = DOWN; `lastCheck` is the last
+  batch check: `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
+- `await satori.delegate()` (needs Unlock) → `{ steps: [{ step, by: 'identity' | 'vault', hash }], settled }`.
+  `steps` is empty when everything was in place.
+- `await satori.undelegate()` (needs Unlock) → the same shape.
+- `await satori.predictBase()` → the batch now, if due: `{ at, round, sent: { hash, games, dropped } }`
+  or `{ …, skipped: 'already predicted this round' | 'no prediction power delegated to the identity' | … }`
+  or `{ at, error }`.
+- `await satori.claim()` (needs Unlock) → `{ rewards, merkle, airdrop }`, each
+  `{ hash, amount }`, `{ skipped: why }` or `{ error }`.
+- `await satori.send({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`
+  (needs Unlock) → `{ hash }`, from the vault. SATORI while transfer-locked
+  throws, saying until which round.
+- `await satori.setBaseRpc(url)` → `base()`: an https URL, a path on this
+  site (such as `/rpc`), or `''` for the default.
 
 Errors are thrown as `Error` with a readable message (for example
 `Wrong passphrase`, `Unlock the vault first`). Central's errors are not
@@ -189,10 +250,15 @@ thrown: they are in `status().central` (for example `central 500: …`,
   weight in its hover title, Sent/Pending). "Nostr": the Nostr pubkey, each
   relay with its state ("Connected · read only"), and each subscribed stream
   (latest value and time, our `_pred` value, its seq, how many relays took it,
-  Unsubscribe). "Network streams" (opening it discovers): a search box and the
-  first 50 matching streams with Subscribe/Unsubscribe. "Settings":
-  Central URL (empty = default), Save; Nostr relays (one per line) and
-  "Publish to central's relays", Save relays. "Backup" (needs Unlock):
+  Unsubscribe). "Base": the RPC and round, both Base addresses with their ETH
+  (the identity's as daily batches of gas), the vault's SATORI, Delegation,
+  Transfers (the lock), Claimable, Last batch, Batch check, and after Unlock
+  "Delegate prediction power" or "Stop delegating", "Claim", and a send form
+  (asset, Amount, "To (0x address)", "Send from the vault"). "Network streams"
+  (opening it discovers): a search box and the first 50 matching streams with
+  Subscribe/Unsubscribe. "Settings": Central URL (empty = default), Save;
+  Nostr relays (one per line) and "Publish to central's relays", Save relays;
+  Base RPC, Save RPC. "Backup" (needs Unlock):
   Identity words, Vault words, Download wallet.yaml, Download vault.yaml,
   Download nostr.yaml.
 - Form fields have labels; elements carrying data have `data-test`
@@ -201,7 +267,11 @@ thrown: they are in `status().central` (for example `central 500: …`,
   (a row) with `obs`, `t1`, `t2`, `model`, `status` inside, `wif`,
   `nostr-pubkey`, `relay` (with `relay-state`), `sub` (a subscribed stream,
   with `sub-obs`, `sub-pred`, `sub-seq`, `sub-relays`), `network`,
-  `catalog-summary` and `catalog-row` (with `catalog-action`).
+  `catalog-summary` and `catalog-row` (with `catalog-action`), and on the
+  Base card `base-rpc`, `base-error`, `base-identity`, `base-vault`,
+  `base-delegation`, `base-lock`, `base-claimable`, `base-last-batch`,
+  `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
+  `base-result`, `base-action-error`.
 
 ## Docker neuron interop
 
@@ -213,7 +283,8 @@ github.com/SatoriNetwork/satorilib): one
 Latin-1 bytes), so a neuron moves between Docker and the browser by moving the
 two files (and `nostr.yaml` for the same Nostr key). Central sees the same
 identity either way. The Nostr events are satorilib's byte for byte (content
-serialized as Python's `json.dumps`).
+serialized as Python's `json.dumps`). On Base the same secrets give the same 0x addresses as the
+Docker neuron's (`ethAddress`), so delegation and rewards follow the keys.
 
 ## Code
 
@@ -235,18 +306,25 @@ build step beyond Vite, MIT licensed.
   WebSocket with reconnect (`relay.js`).
 - `src/neuron/`: register, the cycle (poll → store → forecast → submit), the
   schedule, the one-tab lock; `nostr.js`: relays, discover, subscribe, intake
-  → `_pred`, reconcile.
+  → `_pred`, reconcile; `base.js`: the daily batch and its schedule,
+  delegate, claims, sends.
+- `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
+  `index.js` (`createChain`: status multicall, delegate, the batch's pieces,
+  claims, sends); `fake-rpc.js` and `fake-satori.js` are test doubles.
 - `src/ui/`: ArrowJS screens.
 - `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`,
   `central.md` with Satori Lite's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
-  Lite's and satorilib's); `docs/future/`: the researched roadmap.
+  Lite's and satorilib's, `base.md` with Lite's, the dapp's and the
+  contracts'); `docs/future/`: the researched roadmap and open issues.
 - `scripts/`: parity-vector generators run against satorilib, the Docker
   image and namaste_club (Python); `backtest.mjs` (node, read only);
   `test-relay.mjs` (an in-memory Nostr relay: `node scripts/test-relay.mjs
-  7778`) and `provider.mjs` (a throwaway stream provider for a test relay).
+  7778`) and `provider.mjs` (a throwaway stream provider for a test relay);
+  `fork.mjs` (a local anvil fork of Base Sepolia: start, fund, airdrop,
+  merkle, advance, predict).
 - Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub
-  central, two test relays).
+  central, two test relays, a fake chain behind `/rpc`).
 
 ## Contribute
 

@@ -1,6 +1,6 @@
 # satori: overview
 
-This is the source of truth for what is built (steps 1–5). Intent: [../intent/INTENT.md](../intent/INTENT.md).
+This is the source of truth for what is built (steps 1–6). Intent: [../intent/INTENT.md](../intent/INTENT.md).
 Later steps: [../future/README.md](../future/README.md).
 
 ## The flow
@@ -55,18 +55,35 @@ On the dev server central's relays (satorian, production) are **read only**
 `ws://localhost:7778` (`scripts/test-relay.mjs`); a build writes to central's
 relays.
 
+On Base the neuron predicts as Lite does ([base.md](base.md)): the vault
+delegates its prediction power to the identity once (Unlock), and the
+identity sends one batch of up/down predictions each UTC round on its own.
+
+```
+status (no key): one multicall ── ETH ×2, the vault's SATORI, delegation, fee, lock, round, claimables
+Unlock ─▶ Delegate: identity setPredictorFee(0), setAllowedDelegator(vault) ─▶ vault delegatePredictionPower(identity)
+each round, first check: power > 0, no batch yet ─▶ registry streams with a game ─▶ engine (t2) vs latest: UP/DOWN
+     ─▶ simulate each game alone ─▶ predictMultipleWithPayloads(the ones that pass) ─▶ receipt ─▶ persist
+Unlock ─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH; SATORI when not transfer-locked
+```
+
+On the dev server the Base RPC is `/rpc`, which Vite proxies to a local
+anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
+(`https://sepolia.base.org`) with publicnode as a fallback.
+
 ## Parts
 
 | Part | Folder | Does |
 |---|---|---|
-| keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Docker files, Unlock/Lock the vault, sign and verify Evrmore messages. Also the **Nostr key** (`nostr.yaml`, random, plaintext as in Docker; [nostr.md](nostr.md)). |
-| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `pyFloatStr`/`predictionItem` (Python's float strings and the payload hash); `normalizeObservation`. 15 s timeouts; network errors wrapped. |
+| keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Docker files, Unlock/Lock the vault, sign and verify Evrmore messages. Each key's Base (EVM) address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)). Also the **Nostr key** (`nostr.yaml`, random, plaintext as in Docker; [nostr.md](nostr.md)). |
+| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `pyFloatStr`/`predictionItem` (Python's float strings and the payload hash); `normalizeObservation`; for Base `baseConfig`, `merkleRoot`, `merkleProof`. 15 s timeouts; network errors wrapped. |
+| chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, claims, sends; every write simulated first, one at a time, with gas over the estimate. Test doubles: `fake-rpc.js`, `fake-satori.js`. |
 | db | `src/db/` | DuckDB-WASM 1.32.0 stored in OPFS (`opfs://satori-mvp.duckdb`; `satori.duckdb` on this origin holds the old draft's schema), with tables `meta`, `streams` (uuid, name, meta), `observations` (stream_uuid, ts, value), `predictions` (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash, status, sent_at), and for Nostr `relay_streams`, `relay_observations`, `relay_predictions` ([nostr.md](nostr.md#storage-migration-4)). Times are unix seconds. |
 | engine | `src/engine/` | `forecast(points, { step }) → {model, t1, t2, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1` or `naive`; step 12 h for central, a relay stream's cadence. Pure, no dependency. |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
-| neuron | `src/neuron/` | `register`, `cycle` (poll → store → forecast → submit), the poll schedule (`createPoller`), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile. |
-| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (both addresses, Unlock/Lock, central's status with Poll now, the streams with our t1/t2, the Nostr card, Network streams, Settings, backup). |
-| agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page (status, setup, poll, streams, predictions, setCentral, unlock/lock, backup, Docker files; nostr, discover, subscribe, unsubscribe, setRelays). `/llms.txt` tells an agent what the app is, how to drive it, where the code is, and that pull requests are welcome. |
+| neuron | `src/neuron/` | `register`, `cycle` (poll → store → forecast → submit), the poll schedule (`createPoller`), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends. |
+| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (both addresses, Unlock/Lock, central's status with Poll now, the streams with our t1/t2, the Nostr card, the Base card, Network streams, Settings, backup). |
+| agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page (status, setup, poll, streams, predictions, setCentral, unlock/lock, backup, Docker files; nostr, discover, subscribe, unsubscribe, setRelays; base, delegate, undelegate, claim, predictBase, send, setBaseRpc). `/llms.txt` tells an agent what the app is, how to drive it, where the code is, and that pull requests are welcome. |
 
 ## Rules
 
@@ -107,6 +124,11 @@ relays.
   ([issue](../future/issues/relays-not-wss.md)).
 - The Nostr key is stored unencrypted like the identity, so the neuron signs
   its events on its own. `nostr.yaml` downloads need Unlock, as the other files.
+- Base: the identity signs the daily batch on its own; the vault signs only
+  after Unlock (delegate, stop, claims, sends). Transactions go only to the
+  configured RPC (Settings, `meta.base_rpc_url`: https or a same-origin path);
+  the dev server's default is the local fork, so a checkout never sends to a
+  public chain ([base.md](base.md#config)).
 
 ## Tech (pinned)
 
@@ -118,6 +140,9 @@ output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
 1.63.0. Steps 3 and 4 added no dependency. Step 5 added only a dev dependency,
 `ws` 8.22.0, for the test relay and the node-side scripts (the browser has
 WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-satori-lite-and-why)).
+Step 6 added `viem` 2.37.0 (released 2025-09-02, as the parked design
+planned): ABI encoding, multicall, transaction serialization and the RPC
+client for Base; signing stays in `src/keys` (`@noble/curves`).
 
 ## Verify
 
@@ -141,7 +166,14 @@ WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-sato
   with a fake socket, the test relay over real sockets, and the whole flow
   with fake relays: read-only relays, discover paging, subscribe refusals and
   the cap, intake dedupe and echo, `_pred` seq, announce on open, reconcile,
-  NIP-65, unsubscribe); the CSP; ui.
+  NIP-65, unsubscribe); Base (the keys' Base addresses against satorilib's
+  `ethAddress` and viem, `signDigest` against viem's `sign`; every ABI entry
+  against the D6 build output; the config overlay and its cache; the chain
+  module against a fake D6: the status multicall, the transfer lock's `>=`,
+  delegate and stop, simulates, sends, claims; the batch: due rules, the
+  engine's step, Lite's direction, named games' 24 h, per-game simulation,
+  Lite's resend, persisted only after the receipt, the schedule; claims' and
+  sends' branches); the CSP; ui.
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
   stub and prod blocked: create → register (headers checked) → first poll
   5–30 min out → Poll now: two streams stored, forecast and sent after an
@@ -160,17 +192,26 @@ WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-sato
   forecast and published as `_pred` (read back from 7781 and checked, with
   the 34600 and the 34602), nothing on 7782 from the app, kept over a reload,
   unsubscribed with the tombstone; Docker import with `nostr.yaml`. Satorian
-  and the dev relay are routed to nothing in every test. Every spec opens and
+  and the dev relay are routed to nothing in every test. Base
+  (`e2e/base.spec.js`) against a fake D6 behind `/rpc` and a stub central
+  serving a merkle proof: Unlock → Delegate, the identity's batch on its own,
+  claims and the next batch a round later, Stop delegating, the lock through
+  round N, sends, Lock; the other specs keep off `/rpc`. Every spec opens and
   reloads the app through `e2e/load.js`, which waits up to 30 s for it to
   leave "Opening…" (DuckDB-WASM takes seconds to start on a busy box).
 - Live, in a fresh browser profile on the dev server: central2 (writes
   allowed) for register, Poll now and the batch; prod only for read-only GETs.
   Nostr: satorian read only (its full catalog discovered: 924 live of 1,061
   announcements; only REQ and CLOSE sent to it), the dev relay on 7778 for
-  every write.
+  every write. Base: the dev app against an anvil fork of Base Sepolia
+  (delegate, the batch on its own, claims including `hub.claim`, stop, the
+  lock, a send: [base.md](base.md#live-in-the-running-app-2026-10-15)); and
+  `src/chain/fork.test.js` runs the chain module against the real D6
+  contracts on a fork (`BASE_FORK`).
 - Parity vectors come from satorilib, the Docker image and namaste_club
   (`test/fixtures/README.md`; `scripts/`).
 - `node scripts/backtest.mjs`: the engine against persistence at 24 h on real
   history, read only ([engine.md](engine.md#measured)): a tie on 400 days of
   21 crypto pairs.
-- Dev app: `npm run dev` → http://localhost:5180
+- Dev app: `npm run dev` → http://localhost:5180; for Base, `node scripts/fork.mjs start`
+  (an anvil fork on 8545, which the dev server proxies as `/rpc`).

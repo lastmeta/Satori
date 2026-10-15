@@ -116,9 +116,15 @@ transfer-locked …". Lite calls the same thing "Staking" ("Stake your vault
 
 **Sending a transaction** (`src/chain/index.js`, `write()`), as EVM:60-93:
 simulate the call first (a revert throws with the contract's error name and
-costs no gas), fees `maxFeePerGas = 2 × gasPrice`, `maxPriorityFeePerGas =
-gasPrice` (EVM:74-75), send, wait for the receipt, and throw unless its status
-is success. After a write the app re-reads until the change shows, 5 × 1 s
+costs no gas), estimate, fees `maxFeePerGas = 2 × gasPrice`,
+`maxPriorityFeePerGas = gasPrice` (EVM:74-75), send, wait for the receipt, and
+throw unless its status is success. The gas limit is the estimate + 500,000
+(`HOOK_GAS`; unused gas is not charged): the token runs its transfer hook in a
+try/catch, so the bare estimate starves the hook, and SATORI that reaches a
+delegated vault that way (any claim) leaves it unable to ever undelegate. Found
+on the fork while building this step
+([issue](../future/issues/token-hook-gas-estimate.md)); Lite and the dapp send
+with the bare estimate. After a write the app re-reads until the change shows, 5 × 1 s
 as Lite (`_stake_status_after`, ROUTES:1449-1463), then trusts the receipt:
 the public RPC is load-balanced and lags a block or two. Writes run one at a
 time (one queue for both keys), so the identity's batch and its setup never
@@ -155,7 +161,12 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    Lite's latest relay `_pred` for the stream (START:1200-1206), which is t2
    ([nostr.md](nostr.md#the-engines-step)). For an AR(1), t1 and t2 lie on
    the same side of the latest value, so the choice rarely changes a
-   direction.
+   direction. As in Lite, a forecast equal to the latest value is DOWN, so a
+   `naive` forecast (too little history: D6's daily default stream has two
+   values) always votes DOWN, and so does every browser neuron. Fixable, not
+   inherent: the parked alternative (a seeded slope rule,
+   [../future/design/engine.md](../future/design/engine.md)) was set aside
+   for Lite's rule (owner, 2026-10-15).
 6. **Named games** wait 24 clock hours after our last submit (BP:146-149,
    `NAMED_WAIT_HOURS`, Lite 639e3ce; the engine's rule at
    `C/next/SatoriEngine.sol:800-809`): left out until then.
@@ -180,9 +191,10 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 
 ### When in the round
 
-**At the first check of the round, never held.** Checks run 5 s after the
-page loads, after Delegate, then at the next round's start (00:01 UTC,
-chain time) and at least hourly. Why:
+**At the first check of the round, never held.** Checks run 10 s after the
+page loads and after Delegate, then at the next round's start (00:01 UTC on
+the chain's clock) and at least hourly; `window.satori.predictBase()` runs one
+at once. Why:
 
 - A tab can close at any moment. One batch per round
   (`AlreadyPredicted`, `C/next/SatoriEngine.sol:716`) means a held batch that
@@ -230,10 +242,12 @@ did, why it skipped, or its error.
 ## Send (Unlock)
 
 From the vault: ETH (a plain transfer, estimated first), or SATORI
-(`token.transfer`) when it is not transfer-locked by the rule above. The
-card shows the identity's ETH and warns when it covers fewer than 7 daily
-batches (1,000,000 gas each at 2 × the gas price; measured 410k–790k gas
-for a one-game batch on the fork, more with scoring).
+(`token.transfer`) when it is not transfer-locked by the rule above (the app
+says until when before it simulates). The card shows the identity's ETH as
+daily batches of gas and warns below 7: a batch is counted at 1,500,000 gas
+(the estimate + `HOOK_GAS`, which the node wants covered up front) at 2 × the
+gas price. Measured on the fork: 408k gas for a round's first one-game batch,
+645k–790k once it also scores the previous prediction.
 
 ## Deviations from Lite and the dapp, and why
 
@@ -251,6 +265,20 @@ for a one-game batch on the fork, more with scoring).
 | The vault's Base address is computed from `vault.yaml`'s public key. | Status without Unlock; Lite needs the decrypted vault. |
 | Named games wait on the chain's clock (block time), not the local clock. | The same rule as the contract, also on a fork moved forward in time. |
 | The dev server's default RPC is a local fork (`/rpc`). | A dev checkout never sends to a public chain. |
+| Every write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../future/issues/token-hook-gas-estimate.md)). |
+
+## UI and agents
+
+- Home's **Base** card: the RPC and round; the identity's Base address and its
+  ETH as daily batches of gas (red below 7); the vault's Base address, SATORI
+  and ETH; the delegation; the transfer lock; what is claimable; the last batch
+  (round, time, each game's direction, what was left out, the tx); the last
+  check and the next. After Unlock: Delegate prediction power or Stop
+  delegating, Claim, and Send from the vault (SATORI or ETH). **Settings**:
+  Base RPC.
+- `window.satori`: `base()`, `delegate()`, `undelegate()`, `claim()`,
+  `predictBase()`, `send({ asset, to, amount })`, `setBaseRpc(url)`;
+  `status().base` ([/llms.txt](../../public/llms.txt)).
 
 ## Storage
 
@@ -273,7 +301,41 @@ for a one-game batch on the fork, more with scoring).
   the batch, claims, Stop delegating, the lock, a send.
 - Against a fork: `BASE_FORK=http://127.0.0.1:8546 npx vitest run
   src/chain/fork.test.js` runs the chain module against the real D6
-  contracts on an anvil fork (`node scripts/fork.mjs start --port 8546`).
+  contracts on an anvil fork (`node scripts/fork.mjs start --port 8546`):
+  delegate (three steps), the registry's streams and history, a batch and
+  `AlreadyPredicted` after it, the airdrop and merkle claims a round later
+  (and that the delegate's power then equals the vault's balance), stop, the
+  lock still on in round N, a SATORI send in round N + 1, an ETH send.
+
+### Live, in the running app (2026-10-15)
+
+The dev server (`/rpc` → the fork on 8545), a fresh throwaway browser
+profile, central2 for register (its `base/config` answered, so the card says
+"central addresses"), its merkle routes stubbed with the fork's proof:
+
+1. Funded: the vault 100 SATORI and 0.1 ETH, the identity 0.1 ETH. Before:
+   `predictionDelegateInfo(vault).delegate` 0x0, `effectivePredictorFee(identity)`
+   1000, `transferLockedUntil(vault)` 0.
+2. Unlock → Delegate prediction power: `setPredictorFee(0)` and
+   `setAllowedDelegator(vault)` by the identity, `delegatePredictionPower(identity)`
+   by the vault. After: the vault's delegate = the identity, the identity's
+   power 100 SATORI, fee 0, `transferLockedUntil` 16,777,215.
+3. 10 s later the identity's batch, on its own: round 20741, game 1 DOWN;
+   `predictedStreamsCount(identity, 20741)` = 1.
+4. Airdrop loaded (600) and a merkle root (5); a round later: the next batch
+   (round 20742), then Claim: merkle 5 SATORI and airdrop 100.69 SATORI
+   claimed, on-chain rewards skipped (the lens said 0: a delegator's share
+   needs its loyalty, which lags). The identity's power followed the vault's
+   balance (205.69). Batches each round to 20752, the deployer predicting
+   every other round so the default stream moves; at round 20752 the lens
+   said 341.82 SATORI and Claim sent `hub.claim()`: claimed.
+5. Stop delegating at round 20752: `transferLockedUntil` 20753. A SATORI
+   send was refused in round 20752 ("until round 20753") and the card still
+   said locked in round 20753; in round 20754 it said free and 1 SATORI
+   went to 0x…dEaD.
+
+The screenshot (`docs/screenshots/base.png`) is from step 4, delegated, with
+the last batch shown.
 
 ## The local fork (dev)
 
@@ -284,7 +346,8 @@ for a one-game batch on the fork, more with scoring).
 - `fund <address…> [--eth 0.1] [--satori 100]`: ETH by `anvil_setBalance`;
   SATORI from the deployer (`0x9d31…8817`, impersonated).
 - `airdrop <address> <SATORI>`: loads an airdrop allocation.
-- `merkle <address> <SATORI>`: sets a merkle root for that one address
-  (and the merkle reserve dial, which D6 leaves at 0), prints the proof JSON
-  a stub central serves.
+- `merkle <address> <SATORI>`: sets a merkle root over that address and a
+  filler entry, and prints the proof as central's `/merkle/proof` shape (a
+  stub central serves it). The merkle lane's reserve is 0 in the round D6
+  was deployed and accrues each round, so claim a round later.
 - `advance [days]`: moves chain time and mines.

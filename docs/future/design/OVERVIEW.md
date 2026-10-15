@@ -84,9 +84,9 @@ the lock queue ([runtime.md](runtime.md)).
 | Doc | Covers |
 |---|---|
 | [identity.md](identity.md) | keys, backup words, encryption at rest, Docker import/export, Evrmore message signing |
-| [central.md](central.md) | built in step 3: [../../design/central.md](../../design/central.md); left here: base config, merkle proof, relays |
-| [chain.md](chain.md) | Base: config, stream reads, delegate/revoke, daily batch, claims, balances; Evrmore later |
-| [engine.md](engine.md) | built in step 4: [../../design/engine.md](../../design/engine.md); left here: Base direction, per-node diversity |
+| [central.md](central.md) | built in steps 3, 5 and 6: [../../design/central.md](../../design/central.md), [../../design/base.md](../../design/base.md) |
+| [chain.md](chain.md) | built in step 6: [../../design/base.md](../../design/base.md); left here: the gasless relay, the airdrop without Unlock, Evrmore |
+| [engine.md](engine.md) | built in step 4: [../../design/engine.md](../../design/engine.md); left here: a seeded Base direction (an option), per-node diversity |
 | [storage.md](storage.md) | DuckDB-WASM on OPFS, schema, single-writer rule, durability |
 | [runtime.md](runtime.md) | background execution, leader election, scheduling, catch-up |
 | [ui.md](ui.md) | pages, ArrowJS, CSP and hosting |
@@ -164,7 +164,7 @@ only [ui.md](ui.md) changes.
    batch; base config; merkle proof. ([central.md](central.md))
 3. **Base streams.** Games from `registry.getAllDataStreams` +
    `games.binaryGameByStream`; history and latest values from registry views.
-   ([chain.md](chain.md#base-streams))
+   ([base.md](../../design/base.md#the-daily-batch-the-identity-on-its-own))
 4. **Engine.** Built in step 4 ([../../design/engine.md](../../design/engine.md)):
    `bar1`/`naive` per stream, t1 and t2. Left: a separate Base direction rule
    that never defaults to a constant vote. ([engine.md](engine.md))
