@@ -3,6 +3,7 @@
 //   poll ─▶ store (insert or ignore) ─▶ forecast streams with a new row ─▶ send everything pending
 import { normalizeObservation, predictionItem } from '../central/index.js';
 import { forecast as engineForecast } from '../engine/index.js';
+import { createSchedule } from './schedule.js';
 
 export const POLL_EVERY_S = 11 * 3600; // start.py:4785-4876
 export const FIRST_POLL_S = [5 * 60, 30 * 60]; // start.py:4777
@@ -121,44 +122,25 @@ export function firstPollAt(stored, now, rand) {
  * it; idle() waits for it without starting one. onChange({ next, running })
  * follows both.
  */
-export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeout: st = setTimeout,
-  clearTimeout: ct = clearTimeout, onChange = () => {} }) {
-  let timer = null;
-  let next = null;
-  let running = null;
-  const changed = () => onChange({ next, running: !!running });
-
-  async function arm(at) {
-    next = at;
-    ct(timer);
-    timer = st(() => void poll().catch((err) => console.error('[satori] poll', err)), Math.max(0, (at - now()) * 1000));
-    changed();
-    try {
-      await db.set('next_poll_at', at);
-      await db.checkpoint(); // OPFS keeps what is checkpointed; a tab may close at any time
-    } catch (err) {
-      console.error('[satori] saving the next poll time', err);
-    }
-  }
-
-  function poll() {
-    if (!running) {
-      ct(timer);
-      running = Promise.resolve().then(run).finally(async () => {
-        running = null;
-        await arm(now() + POLL_EVERY_S);
-      });
-      changed();
-    }
-    return running;
-  }
-
+export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeout, clearTimeout, onChange = () => {} }) {
+  const s = createSchedule(run, {
+    now, setTimeout, clearTimeout, name: 'poll', after: () => now() + POLL_EVERY_S,
+    onChange: () => onChange({ next: s.next, running: s.running }),
+    async onArm(at) {
+      try {
+        await db.set('next_poll_at', at);
+        await db.checkpoint(); // OPFS keeps what is checkpointed; a tab may close at any time
+      } catch (err) {
+        console.error('[satori] saving the next poll time', err);
+      }
+    },
+  });
   return {
-    start: async () => arm(firstPollAt(await db.get('next_poll_at'), now(), rand)),
-    poll,
-    idle: () => Promise.resolve(running).catch(() => {}),
-    get next() { return next; },
-    get running() { return !!running; },
+    start: async () => s.start(firstPollAt(await db.get('next_poll_at'), now(), rand)),
+    poll: s.run,
+    idle: s.idle,
+    get next() { return s.next; },
+    get running() { return s.running; },
   };
 }
 

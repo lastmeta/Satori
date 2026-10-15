@@ -8,6 +8,7 @@ import { fallback, formatEther, formatGwei, http, isAddress, parseEther, parseGw
 import { createChain, errorText, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { loadConfig, rpcUrls } from '../chain/config.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
+import { createSchedule } from './schedule.js';
 import { fmtUtc } from '../ui/format.js';
 
 export const FIRST_CHECK_S = 10;
@@ -134,10 +135,6 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
   let status = null; // the last status read
   let statusError = '';
   let lastCheck = null;
-  let next = null;
-  let timer = null;
-  let running = null;
-  let stopped = true;
   const changed = () => onChange();
 
   const resolve = (u) => (u.startsWith('/') && origin ? new URL(u, origin).href : u);
@@ -212,7 +209,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
         lock: s?.vault?.lock ?? null,
       },
       claimable: { rewards: plainAmount(s?.claimable?.rewards), airdrop: plainAmount(s?.claimable?.airdrop) },
-      lastCheck, nextCheck: next, checking: !!running,
+      lastCheck, nextCheck: schedule.next, checking: schedule.running,
     };
   }
 
@@ -220,34 +217,23 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
     return { ...v, lastBatch: (await db.get('base_last_batch')) ?? null };
   }
 
-  // ── the batch's schedule ──
-  function arm(at) {
-    next = at;
-    ct(timer);
-    timer = stopped ? null : st(() => void check().catch((err) => console.error('[satori] base', err)), Math.max(0, (at - now()) * 1000));
-    changed();
+  // ── the batch's schedule: a check runs the batch if due; one at a time; then the next check is armed ──
+  async function check() {
+    let result;
+    try {
+      const { chain } = await chainNow();
+      result = await runBatch({ chain, identity, db, forecast, maxFeeWei: await maxFeeWei() });
+    } catch (err) {
+      result = { at: null, error: errorText(err) };
+    }
+    lastCheck = result;
+    await refresh();
+    return result;
   }
-
-  /** The batch now, if due; one at a time (a call during one returns it). Then the next check is armed. */
-  function check() {
-    running ??= (async () => {
-      changed();
-      let result;
-      try {
-        const { chain } = await chainNow();
-        result = await runBatch({ chain, identity, db, forecast, maxFeeWei: await maxFeeWei() });
-      } catch (err) {
-        result = { at: null, error: errorText(err) };
-      }
-      lastCheck = result;
-      await refresh();
-      return result;
-    })().finally(() => {
-      running = null;
-      arm(nextCheckAt({ now: now(), chainTime: lastCheck?.at ?? status?.chainTime ?? null }));
-    });
-    return running;
-  }
+  const schedule = createSchedule(check, {
+    now, setTimeout: st, clearTimeout: ct, name: 'base', onChange: changed,
+    after: () => nextCheckAt({ now: now(), chainTime: lastCheck?.at ?? status?.chainTime ?? null }),
+  });
 
   // ── vault actions (Unlock) ──
   async function act(fn) {
@@ -291,23 +277,18 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
     },
 
     start() {
-      stopped = false;
-      arm(now() + FIRST_CHECK_S);
+      schedule.start(now() + FIRST_CHECK_S);
       refresh().catch(() => {});
     },
-    stop() {
-      stopped = true;
-      ct(timer);
-      timer = null;
-    },
+    stop: schedule.stop,
     /** The batch now if due (window.satori.predictBase). */
-    predict: () => check(),
+    predict: schedule.run,
 
     /** Delegate prediction power (docs/design/base.md): needs Unlock. Then a batch check soon. */
     async delegate() {
       const v = needVault();
       const r = await act((chain) => chain.delegate({ identity, vault: v }));
-      if (!stopped) arm(now() + FIRST_CHECK_S);
+      schedule.arm(now() + FIRST_CHECK_S);
       return r;
     },
     async undelegate() {
