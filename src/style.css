@@ -140,6 +140,6 @@ details.card > summary { color: var(--text); font-weight: 500; }
   .srow .sname { grid-column: 1 / 3; }
   .srow > :last-child { grid-column: 3; grid-row: 1; }
   .srow > .muted.small { display: none; }
-  .srow [data-label]::before { content: attr(data-label) " "; color: var(--muted); font-size: 0.75rem; }
+  .srow [data-label]::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.75rem; }
   .srow .num { text-align: left; }
 }
