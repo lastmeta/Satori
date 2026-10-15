@@ -148,7 +148,7 @@ function home(a) {
       <button class="small-btn" @click="${a.copyAddress}">${() => (state.copied ? 'Copied' : 'Copy')}</button>
     </div>
 
-    <div class="streams">${() => state.rows.map((r) => streamCard(r, a))}</div>
+    <div class="streams">${() => state.rows.map((r) => streamCard(r, a).key(r.name))}</div>
     <p class="muted" hidden="${() => state.rows.length > 0}">No streams yet. Add one below.</p>
 
     <details class="card">
