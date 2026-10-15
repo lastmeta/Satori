@@ -132,12 +132,15 @@ From namaste_club:
   almost unshrunk (λ1²·100) and add 5 coefficients, so they need far more rows
   than a young neuron has; the research simulation put the 24 h error at 1.4–2.5×
   persistence's with few rows. Cross-stream lags and exogenous features need
-  aligned multi-stream tables and outside feeds. Lag 2 and the λ tuner pick
-  settings across a fleet; one node gains little from them.
+  aligned multi-stream tables and outside feeds. Lag 2 and the daily λ tuner
+  are left out too, so one setting is pinned by the tests and the parity
+  fixture.
 - **The fade comes from a rolling backtest, not a log of past submissions.** It
-  needs no new storage and works from the first day. It also avoids
-  namaste_club's feedback loop, where the logged values were the already-faded
-  (and jittered) ones, so a faded model was scored as part persistence.
+  needs no new storage and no wait for submissions to be scored: the history
+  is the record, and it has an opinion from 14 buckets (about 7 days). It also
+  avoids namaste_club's feedback loop, where the logged values are the fleet's
+  mean of what was submitted, already faded and jittered (`NC/pool.py:516-534`),
+  so a faded model is scored as part persistence.
 - **Gaps.** namaste_club drops empty buckets, so a return across a gap counts
   as one 12 h step. A browser tab gets closed, so here a gap breaks the
   return, and a first lag more than 24 h old counts as 0.
