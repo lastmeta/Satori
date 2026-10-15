@@ -41,6 +41,7 @@ async function stubCentral(context, url = CENTRAL) {
   // No relay here (e2e/nostr.spec.js has its own): every socket but Vite's is closed at once.
   await context.routeWebSocket((u) => u.port !== '5180', (ws) => ws.close());
   const reply = (route, status, json) => route.fulfill({ status, json, headers: cors });
+  await context.route('**/rpc', (route) => route.abort()); // no chain here (e2e/base.spec.js has a fake one)
   await context.route('https://network.satorinet.io/**', (route) => {
     stub.prod.push(route.request().url());
     return route.abort();

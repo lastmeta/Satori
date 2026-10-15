@@ -33,6 +33,7 @@ async function stubCentral(context) {
   const stub = { registered: [], prod: [], blocked: [] };
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS',
     'access-control-allow-headers': 'wallet-pubkey, vault-pubkey, nostr-pubkey, neuron-version' };
+  await context.route('**/rpc', (route) => route.abort()); // no chain here (e2e/base.spec.js has a fake one)
   await context.route('https://network.satorinet.io/**', (route) => {
     stub.prod.push(route.request().url());
     return route.abort();
