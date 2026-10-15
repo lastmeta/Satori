@@ -73,7 +73,8 @@ describe('the daily batch', () => {
     const r = await runBatch({ chain: chainOf(), identity, db });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }]]);
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
-      games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: 59058240589371161, t2: 59058240589371161 }] };
+      // latest: the registry's int232, exact; t2: the engine's float forecast, as an integer (both decimal strings, as JSON keeps them)
+      games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: '59058240589371161', t2: '59058240589371160' }] };
     expect(r).toEqual({ at: batch.at, round: ROUND, sent: batch });
     expect(db.m.get('base_last_batch')).toEqual(batch);
     expect(db.m.get('base_pending_batch')).toBe(null);

@@ -89,8 +89,10 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
       const f = history.length ? forecast(toPoints(history), { step: stepFor(g.cadenceMinutes) }) : null;
       const base = { streamId: g.streamId, gameId: g.gameId, named: g.named };
       if (!f) { dropped.push({ ...base, error: 'no history' }); continue; }
-      const latest = Number(history.at(-1).value);
-      const game = { ...base, direction: directionOf(f.t2, latest), model: f.model, latest, t2: f.t2 };
+      const last = history.at(-1).value; // int232, in the stream's own units
+      // As decimal strings, as amounts are: an int232 is often beyond 2^53 (the default stream is a ratio × 1e18).
+      const game = { ...base, direction: directionOf(f.t2, Number(last)), model: f.model, latest: last.toString(),
+        t2: BigInt(Math.round(f.t2)).toString() };
       // The contract's own checks, named games' 24 clock hours included (SatoriEngine.sol:791-810).
       const error = await chain.simulateGame(identity, game);
       if (error) dropped.push({ ...game, error });

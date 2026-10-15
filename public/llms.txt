@@ -222,8 +222,12 @@ script runs; then call `await satori.status()` until `screen` is no longer
   lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, t2 }],
   dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
   are decimal strings (ETH, SATORI); `fee` is in basis points (1000 = the
-  10 % default); `direction` 1 = UP, 2 = DOWN; `lastCheck` is the last
-  batch check: `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
+  10 % default); `direction` 1 = UP, 2 = DOWN; a game's `latest` is the
+  registry's last value (an `int232` in the stream's own units: the default
+  stream, id 1, is the capital deployed in predictions ÷ the supply × 1e18)
+  and `t2` the engine's forecast in the same units, rounded, both as decimal
+  strings (they pass 2^53); `lastCheck` is the last batch check:
+  `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
 - `await satori.delegate()` (needs Unlock) → `{ steps: [{ step, by: 'identity' | 'vault', hash }], settled }`.
   `steps` is empty when everything was in place.
 - `await satori.undelegate()` (needs Unlock) → the same shape.
