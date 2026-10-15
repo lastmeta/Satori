@@ -334,7 +334,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `relay-state`), `sub` (a subscribed stream, with `sub-obs`, `sub-pred`,
   `sub-seq`, `sub-relays`, `unsubscribe`), `network`, `catalog-summary` and
   `catalog-row` (with `catalog-action`: Subscribe or Unsubscribe), on the Base
-  card `base-rpc`, `base-error`, `base-identity`, `base-vault`,
+  card `base-refresh`, `base-rpc`, `base-error`, `base-identity`, `base-vault`,
   `base-delegation`, `base-lock`, `base-claimable`, `base-last-batch`,
   `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
   `base-result`, `base-txs` (the last action's transactions),

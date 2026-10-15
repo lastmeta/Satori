@@ -272,7 +272,7 @@ function baseCard(a) {
   <section class="card base">
     <header class="card-head">
       <h2>Base</h2>
-      <button class="small-btn" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
+      <button class="small-btn" data-test="base-refresh" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
     <div class="muted small" title="${() => (b().config === 'central' ? 'Contract addresses from central' : 'Built-in contract addresses (central serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>

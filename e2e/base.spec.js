@@ -40,7 +40,7 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   rpc.eth[I] = 10n ** 17n;
   rpc.eth[V] = 10n ** 17n;
   s.balance[V] = 100n * E18;
-  await page.getByRole('button', { name: 'Refresh' }).click();
+  await fact(page, 'refresh').click();
   await expect(fact(page, 'vault')).toContainText('100 SATORI · 0.1 ETH');
   await expect(fact(page, 'identity')).not.toContainText('low');
   await expect(fact(page, 'lock')).toHaveText('Free to send');
