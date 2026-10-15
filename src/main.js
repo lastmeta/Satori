@@ -54,13 +54,20 @@ async function refresh() {
   state.streams = await db.streams();
 }
 
-/** The Nostr card, refreshed at most once per task however many changes come in. */
+/**
+ * The Nostr card. One status read at a time: changes during a read ask for
+ * one more read after it, however many there were.
+ */
 let nostrRefresh = null;
+let nostrStale = false;
 function refreshNostr() {
-  nostrRefresh ??= Promise.resolve().then(async () => {
-    nostrRefresh = null;
-    if (nostr) state.nostr = await nostr.status();
-  }).catch((err) => console.error('[satori] nostr status', err));
+  nostrStale = true;
+  nostrRefresh ??= (async () => {
+    while (nostrStale) {
+      nostrStale = false;
+      if (nostr) state.nostr = await nostr.status();
+    }
+  })().catch((err) => console.error('[satori] nostr status', err)).finally(() => { nostrRefresh = null; });
   return nostrRefresh;
 }
 

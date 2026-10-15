@@ -171,6 +171,31 @@ describe('relay streams (Nostr), apart from central', () => {
     expect(await up.relayStreams()).toEqual([]);
   });
 
+  test('a step-5 database: each stream gets its latest observation, latest prediction and count kept on its row', async () => {
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 4)) await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '4')`);
+    await conn.query(`INSERT INTO relay_streams VALUES ('r-1', 'btc', 'e5', 'B', 900, NULL, true, 1, NULL, 1, 2),
+      ('r-2', 'eth', 'e5', 'E', 900, NULL, true, 1, NULL, 1, 0)`);
+    await conn.query(`INSERT INTO relay_observations VALUES ('r-1', 7, 70, 7.5, '"7.5"', 'e7', 71), ('r-1', 9, 90, 9.5, '"9.5"', 'e9', 91),
+      ('r-1', 8, 80, 8.5, '"8.5"', 'e8', 92)`);
+    await conn.query(`INSERT INTO relay_predictions VALUES ('r-1', 1, '7.5', 'naive', 7, 71, 'p1', 1), ('r-1', 2, '9.5', 'naive', 9, 91, 'p2', 2)`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    const [btc, eth] = await up.relayStreams(); // the same subscribed_at: by uuid
+    expect(btc).toMatchObject({ uuid: 'r-1', observations: 3, obs_seq: 9, obs_ts: 90, obs_value: 9.5, obs_raw: '"9.5"',
+      obs_received_at: 91, p_seq: 2, p_value: '9.5', p_model: 'naive', p_made_at: 91, p_relays: 2, pred_seq: 2 });
+    expect(eth).toMatchObject({ uuid: 'r-2', observations: 0, obs_seq: null, p_seq: null });
+  });
+
+  test('the latest observation is the highest seq, whatever order they arrive in', async () => {
+    await db.subscribeRelay(sub());
+    await db.addRelayObservation(robs({ seq: 5, value: 5, event_id: 'e5' }));
+    await db.addRelayObservation(robs({ seq: 3, value: 3, event_id: 'e3' }));
+    expect(await db.relayStream('r-1')).toMatchObject({ observations: 2, obs_seq: 5, obs_value: 5 });
+  });
+
   test('subscribe, unsubscribe, subscribe again: the row stays, so do pred_created_at and the seq', async () => {
     expect(await db.subscribeRelay(sub())).toMatchObject({ uuid: 'r-1', active: true, subscribed_at: 100, unsubscribed_at: null,
       pred_created_at: 100, pred_seq: 0, name: 'Bitcoin', cadence_seconds: 900, meta: '{"a": 1}' });

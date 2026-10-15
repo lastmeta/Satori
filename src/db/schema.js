@@ -41,4 +41,27 @@ export const MIGRATIONS = [
    CREATE TABLE relay_predictions (stream_uuid VARCHAR NOT NULL, seq BIGINT NOT NULL, value VARCHAR NOT NULL,
      model VARCHAR, obs_seq BIGINT, made_at BIGINT NOT NULL, event_id VARCHAR NOT NULL, relays INTEGER NOT NULL,
      PRIMARY KEY (stream_uuid, seq));`,
+  // 5 (step 5 review): each relay stream keeps its latest observation, latest
+  // prediction and observation count on its row, set at insert time, so the
+  // status (on every change) reads one row per stream, not every observation.
+  `ALTER TABLE relay_streams ADD COLUMN observations BIGINT DEFAULT 0;
+   ALTER TABLE relay_streams ADD COLUMN obs_seq BIGINT;
+   ALTER TABLE relay_streams ADD COLUMN obs_ts BIGINT;
+   ALTER TABLE relay_streams ADD COLUMN obs_value DOUBLE;
+   ALTER TABLE relay_streams ADD COLUMN obs_raw VARCHAR;
+   ALTER TABLE relay_streams ADD COLUMN obs_received_at BIGINT;
+   ALTER TABLE relay_streams ADD COLUMN p_seq BIGINT;
+   ALTER TABLE relay_streams ADD COLUMN p_value VARCHAR;
+   ALTER TABLE relay_streams ADD COLUMN p_model VARCHAR;
+   ALTER TABLE relay_streams ADD COLUMN p_made_at BIGINT;
+   ALTER TABLE relay_streams ADD COLUMN p_relays INTEGER;
+   UPDATE relay_streams SET observations = x.n, obs_seq = x.seq, obs_ts = x.ts, obs_value = x.value, obs_raw = x.raw,
+     obs_received_at = x.received_at
+   FROM (SELECT stream_uuid, count(*) AS n, max(seq) AS seq, arg_max(ts, seq) AS ts, arg_max(value, seq) AS value,
+     arg_max(raw, seq) AS raw, arg_max(received_at, seq) AS received_at FROM relay_observations GROUP BY stream_uuid) x
+   WHERE x.stream_uuid = relay_streams.uuid;
+   UPDATE relay_streams SET p_seq = x.seq, p_value = x.value, p_model = x.model, p_made_at = x.made_at, p_relays = x.relays
+   FROM (SELECT stream_uuid, max(seq) AS seq, arg_max(value, seq) AS value, arg_max(model, seq) AS model,
+     arg_max(made_at, seq) AS made_at, arg_max(relays, seq) AS relays FROM relay_predictions GROUP BY stream_uuid) x
+   WHERE x.stream_uuid = relay_streams.uuid;`,
 ];

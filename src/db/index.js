@@ -136,7 +136,8 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     // ── relay (Nostr) streams ──
     /** Subscribe (again): active from `now`; a row that exists keeps its pred_created_at and pred_seq. */
     subscribeRelay: serial(async ({ uuid, stream_name, provider_pubkey, name, cadence_seconds, meta, now }) => {
-      await run(`INSERT INTO relay_streams VALUES (?, ?, ?, ?, ?, ?, true, ?, NULL, ?, 0)
+      await run(`INSERT INTO relay_streams (uuid, stream_name, provider_pubkey, name, cadence_seconds, meta, active,
+          subscribed_at, unsubscribed_at, pred_created_at, pred_seq) VALUES (?, ?, ?, ?, ?, ?, true, ?, NULL, ?, 0)
         ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, cadence_seconds = excluded.cadence_seconds,
           meta = excluded.meta, active = true, subscribed_at = excluded.subscribed_at, unsubscribed_at = NULL`,
       uuid, stream_name, provider_pubkey, name ?? '', cadence_seconds ?? null, meta ?? null, now, now);
@@ -146,33 +147,50 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       run('UPDATE relay_streams SET active = false, unsubscribed_at = ? WHERE uuid = ?', at, uuid)),
     relayStream: serial(async (uuid) => (await rows('SELECT * FROM relay_streams WHERE uuid = ?', uuid))[0] ?? null),
     countActiveRelay: serial(async () => (await rows('SELECT count(*) AS n FROM relay_streams WHERE active'))[0].n),
-    /** Each relay stream, newest subscription first, with its latest observation and our latest `_pred`. */
-    relayStreams: serial(({ active } = {}) => rows(`
-      SELECT s.*, (SELECT count(*) FROM relay_observations x WHERE x.stream_uuid = s.uuid) AS observations,
-        o.seq AS obs_seq, o.ts AS obs_ts, o.value AS obs_value, o.raw AS obs_raw, o.received_at AS obs_received_at,
-        p.seq AS p_seq, p.value AS p_value, p.model AS p_model, p.made_at AS p_made_at, p.relays AS p_relays
-      FROM relay_streams s
-      LEFT JOIN (SELECT * FROM relay_observations QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY seq DESC) = 1) o
-        ON o.stream_uuid = s.uuid
-      LEFT JOIN (SELECT * FROM relay_predictions QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY seq DESC) = 1) p
-        ON p.stream_uuid = s.uuid
-      ${active ? 'WHERE s.active' : ''}
-      ORDER BY s.subscribed_at DESC, s.uuid`)),
+    /**
+     * Each relay stream, newest subscription first, with its latest observation
+     * (obs_*, the highest seq), our latest `_pred` (p_*) and its observation
+     * count: all kept on the stream's row at insert time (migration 5).
+     */
+    relayStreams: serial(({ active } = {}) =>
+      rows(`SELECT * FROM relay_streams ${active ? 'WHERE active' : ''} ORDER BY subscribed_at DESC, uuid`)),
     /** Insert or ignore (the event id, or the stream's seq, seen before): true when new (network_db.py:597-636). */
-    addRelayObservation: serial(async (o) => (await rows(
-      'INSERT OR IGNORE INTO relay_observations VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING seq',
-      o.stream_uuid, o.seq, o.ts ?? null, o.value ?? null, o.raw ?? null, o.event_id, o.received_at)).length > 0),
+    addRelayObservation: serial(async (o) => {
+      await run('BEGIN TRANSACTION');
+      try {
+        const fresh = (await rows('INSERT OR IGNORE INTO relay_observations VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING seq',
+          o.stream_uuid, o.seq, o.ts ?? null, o.value ?? null, o.raw ?? null, o.event_id, o.received_at)).length > 0;
+        if (fresh) {
+          await run('UPDATE relay_streams SET observations = observations + 1 WHERE uuid = ?', o.stream_uuid);
+          await run(`UPDATE relay_streams SET obs_seq = ?, obs_ts = ?, obs_value = ?, obs_raw = ?, obs_received_at = ?
+            WHERE uuid = ? AND (obs_seq IS NULL OR obs_seq < ?)`,
+          o.seq, o.ts ?? null, o.value ?? null, o.raw ?? null, o.received_at, o.stream_uuid, o.seq);
+        }
+        await run('COMMIT');
+        return fresh;
+      } catch (err) {
+        await run('ROLLBACK');
+        throw err;
+      }
+    }),
     /** The engine's input for a relay stream: [{ts, value}] with a number and a time, oldest first. */
     relayHistory: serial((uuid) => rows(`SELECT ts, value FROM relay_observations
       WHERE stream_uuid = ? AND value IS NOT NULL AND ts IS NOT NULL ORDER BY ts, seq`, uuid)),
     /** The `_pred` seq for the next publish: last + 1, kept (network_db.py:835-848). */
     nextPredSeq: serial(async (uuid) =>
       (await rows('UPDATE relay_streams SET pred_seq = pred_seq + 1 WHERE uuid = ? RETURNING pred_seq', uuid))[0].pred_seq),
-    addRelayPrediction: serial((p) => run('INSERT INTO relay_predictions VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      p.stream_uuid, p.seq, p.value, p.model ?? null, p.obs_seq ?? null, p.made_at, p.event_id, p.relays)),
+    addRelayPrediction: serial(async (p) => {
+      await run('INSERT INTO relay_predictions VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        p.stream_uuid, p.seq, p.value, p.model ?? null, p.obs_seq ?? null, p.made_at, p.event_id, p.relays);
+      await run(`UPDATE relay_streams SET p_seq = ?, p_value = ?, p_model = ?, p_made_at = ?, p_relays = ?
+        WHERE uuid = ? AND (p_seq IS NULL OR p_seq < ?)`,
+      p.seq, p.value, p.model ?? null, p.made_at, p.relays, p.stream_uuid, p.seq);
+    }),
     /** How many relays took a published `_pred` (known after it is kept). */
-    setPredictionRelays: serial((uuid, seq, n) =>
-      run('UPDATE relay_predictions SET relays = ? WHERE stream_uuid = ? AND seq = ?', n, uuid, seq)),
+    setPredictionRelays: serial(async (uuid, seq, n) => {
+      await run('UPDATE relay_predictions SET relays = ? WHERE stream_uuid = ? AND seq = ?', n, uuid, seq);
+      await run('UPDATE relay_streams SET p_relays = ? WHERE uuid = ? AND p_seq = ?', n, uuid, seq);
+    }),
     relayPredictions: serial((uuid, limit = 20) =>
       rows('SELECT * FROM relay_predictions WHERE stream_uuid = ? ORDER BY seq DESC LIMIT ?', uuid, limit)),
 
