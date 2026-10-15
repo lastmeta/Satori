@@ -364,7 +364,7 @@ test('import Docker files; central has another vault for this identity: a mismat
     .toHaveText(`Vault mismatch: central has ${stub.otherVault} for this identity, not this vault (${vault.address}).`);
 
   // Settings: https only; an unreachable central is shown, not thrown.
-  await page.getByText('Settings').click();
+  await page.locator('summary', { hasText: 'Settings' }).click();
   const url = page.getByLabel('Central URL');
   await url.fill('http://central.test');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
