@@ -385,8 +385,14 @@ profile, central2 for register (its `base/config` answered, so the card says
    said locked in round 20753; in round 20754 it said free and 1 SATORI
    went to 0x…dEaD.
 
-The screenshot (`docs/screenshots/base.png`) is from step 4, delegated, with
-the last batch shown.
+After the review (the same day, a fresh fork and profile): a junk stream
+made with `fork.mjs stream` (stream 2, game 2, voting weight 0) was on the
+registry; Unlock → Delegate (three transactions, listed on the card); 10 s
+later the identity's batch held one game, game 1 DOWN (`predictedStreamsCount`
+1), stream 2 left out; the card's first fact named the RPC "/rpc: the local
+fork of Base Sepolia"; Stop delegating: `transferLockedUntil` 20742 at round
+20741. The screenshot (`docs/screenshots/base.png`) is from that run,
+delegated, with the last batch and the Delegate transactions shown.
 
 ## The local fork (dev)
 
