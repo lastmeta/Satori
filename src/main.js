@@ -531,7 +531,7 @@ window.satori = {
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
   /** Set the central URL ('' = the default) and register there. → status().central */
   async setCentral(url) { ready(); await setCentral(url); return centralStatus(); },
-  async unlock(passphrase) { ready(); await unlock(passphrase); return true; },
+  async unlock(passphrase) { ready(); await exclusive('unlock', () => unlock(passphrase)); return true; },
   lock() { lock(); return true; },
   /** { words, wif } of 'identity' or 'vault'; needs Unlock, as Docker's dashboard needs login. */
   backup(which) { ready(); return backupOf(which); },

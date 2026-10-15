@@ -335,7 +335,10 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   // The keys, as in step 2.
   await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow(/Unlock the vault first/);
   await expect(page.evaluate(() => window.satori.unlock('nope'))).rejects.toThrow(/Wrong passphrase/);
-  await page.evaluate(() => window.satori.unlock('pass'));
+  // One Unlock at a time, as the UI's: a second while one runs is refused.
+  const unlocks = await page.evaluate(() => Promise.allSettled([window.satori.unlock('pass'), window.satori.unlock('pass')])
+    .then((all) => all.map((r) => (r.status === 'fulfilled' ? r.value : r.reason.message))));
+  expect(unlocks).toEqual([true, 'Busy (unlock). Try again when it is done.']);
   expect(await page.evaluate(() => window.satori.backup('vault'))).toEqual({ words: v.words, wif: v.wif });
   expect(await page.evaluate(() => window.satori.file('vault.yaml'))).toContain(`address: ${v.address}`);
   expect(await page.evaluate(() => window.satori.file('wallet.yaml'))).toContain(`address: ${s0.identity}`);
