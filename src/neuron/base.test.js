@@ -231,6 +231,13 @@ describe('createBase', () => {
     expect((await base.status()).lastBatch).toBe(null);
   });
 
+  test('another central: its config is read at once (central2 serves one, prod 404s), not an hour later', async () => {
+    central.baseConfig = async () => ({ chainId: 84532, rpcUrl: 'https://sepolia.base.org' }); // as central2: the bundle's values
+    expect((await base.refresh()).config).toBe('central');
+    central = { ...central, url: 'https://prod.example', baseConfig: async () => { throw new CentralError(404, 'Not Found'); } };
+    expect((await base.refresh()).config).toBe('bundled');
+  });
+
   test('vault actions need Unlock', async () => {
     await expect(base.delegate()).rejects.toThrow('Unlock the vault first');
     await expect(base.claim()).rejects.toThrow('Unlock the vault first');

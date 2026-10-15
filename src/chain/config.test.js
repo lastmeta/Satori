@@ -45,6 +45,16 @@ describe('loadConfig', () => {
     expect(fetchCentral).toHaveBeenCalledTimes(2);
   });
 
+  test('the cache is per central: another central is asked at once, not an hour later', async () => {
+    const fetchCentral = vi.fn(async () => CENTRAL2);
+    const { cache } = await loadConfig({ fetchCentral, url: 'https://central2.example', now: 1000 });
+    expect(cache.url).toBe('https://central2.example');
+    await loadConfig({ fetchCentral, cache, url: 'https://central2.example', now: 1001 });
+    expect(fetchCentral).toHaveBeenCalledTimes(1);
+    await loadConfig({ fetchCentral, cache, url: 'https://other.example', now: 1002 });
+    expect(fetchCentral).toHaveBeenCalledTimes(2);
+  });
+
   test('prod\'s 404 or central down → the bundle', async () => {
     const { config } = await loadConfig({ fetchCentral: async () => { throw new Error('central 404: Not Found'); }, now: 1 });
     expect(config).toEqual(DEFAULTS);

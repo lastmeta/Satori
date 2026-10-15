@@ -148,16 +148,18 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
    * refused, for reads, writes and the batch alike.
    */
   async function chainNow() {
-    const loaded = await loadConfig({ fetchCentral: () => central().baseConfig(), cache, now: now() });
+    const c = central();
+    const loaded = await loadConfig({ fetchCentral: () => c.baseConfig(), url: c.url, cache, now: now() });
     cache = loaded.cache;
     const setting = (await db.get('base_rpc_url')) || '';
     const urls = rpcUrls({ config: loaded.config, setting, devDefault: devRpc });
     const key = JSON.stringify([loaded.config, urls]);
     if (made?.key !== key) {
       const t = transport ?? (urls.length === 1 ? http(resolve(urls[0])) : fallback(urls.map((u) => http(resolve(u)))));
-      made = { key, rpc: urls, config: loaded.config, fromCentral: !!cache.remote, chainId: null,
+      made = { key, rpc: urls, config: loaded.config, chainId: null,
         local: urls.every((u) => u.startsWith('/')), chain: createChain({ config: loaded.config, transport: t }) };
     }
+    made.fromCentral = !!cache.remote; // central2 serves the bundle's own values: the same chain, another source
     made.chainId ??= await made.chain.chainId(); // an RPC that does not answer is asked again next time
     if (made.chainId !== loaded.config.chainId) {
       throw new Error(`The RPC is on chain ${made.chainId}, not Base Sepolia (${loaded.config.chainId}): nothing is read or sent.`);

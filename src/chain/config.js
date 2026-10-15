@@ -31,17 +31,17 @@ const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const valid = (k, v) => (ADDRESS.test(DEFAULTS[k]) ? ADDRESS.test(v) : typeof v === 'string' && /^https:\/\//.test(v));
 
 /**
- * The config, from a cache younger than 1 h or a fresh fetch. `fetchCentral`
- * returns central's JSON or throws (prod's 404, central down): the defaults
- * then. Only non-empty values for chain 84532 are taken; addresses must look
- * like addresses.
- * @returns {Promise<{config: typeof DEFAULTS, cache: {remote: object|null, at: number}}>}
+ * The config, from a cache of the same central (`url`) younger than 1 h, or a
+ * fresh fetch. `fetchCentral` returns central's JSON or throws (prod's 404,
+ * central down): the defaults then. Only non-empty values for chain 84532 are
+ * taken; addresses must look like addresses.
+ * @returns {Promise<{config: typeof DEFAULTS, cache: {remote: object|null, at: number, url?: string}}>}
  */
-export async function loadConfig({ fetchCentral, cache, now }) {
-  if (!(cache && now - cache.at < CONFIG_TTL_S)) {
+export async function loadConfig({ fetchCentral, url, cache, now }) {
+  if (!(cache && cache.url === url && now - cache.at < CONFIG_TTL_S)) {
     let remote = null;
     try { remote = (await fetchCentral?.()) ?? null; } catch { /* the defaults */ }
-    cache = { remote, at: now };
+    cache = { remote, at: now, url };
   }
   const r = cache.remote && typeof cache.remote === 'object' && (cache.remote.chainId ?? CHAIN_ID) === CHAIN_ID
     ? cache.remote : {};

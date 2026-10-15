@@ -171,7 +171,8 @@ const pollNow = () => poller.poll();
 /**
  * Save the central URL ('' = the default) and register there at once. Another
  * central has other stream uuids, so its pending predictions and stream list
- * are dropped; the list refills with the next poll.
+ * are dropped; the list refills with the next poll. Its relays and its Base
+ * config follow.
  */
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
@@ -187,6 +188,7 @@ async function setCentral(raw) {
   await refresh();
   await registerWith(c);
   await nostr.reconcile(); // this central's relays
+  await base.refresh(); // this central's Base config
 }
 
 /** The Base RPC setting ('' = the default): https or a same-origin path. → base status */
