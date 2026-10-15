@@ -178,10 +178,10 @@ describe('register', () => {
   const fake = (r) => ({ register: vi.fn(async () => { if (r instanceof Error) throw r; return r; }) });
   test('sends the vault pubkey; the result says whether central has our vault', async () => {
     const c = fake(res);
-    expect(await register({ central: c, vaultPubkey: '03cd', vaultAddress: 'Evault', now })).toEqual({
+    expect(await register({ central: c, vaultPubkey: '03cd', vaultAddress: 'Evault', nostrPubkey: 'ee', now })).toEqual({
       at: clock, ok: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer already registered', vaultMismatch: false,
     });
-    expect(c.register).toHaveBeenCalledWith({ vaultPubkey: '03cd' });
+    expect(c.register).toHaveBeenCalledWith({ vaultPubkey: '03cd', nostrPubkey: 'ee' });
   });
   test('another vault, or none kept: a mismatch', async () => {
     expect((await register({ central: fake({ ...res, vault_address: 'Eother' }), vaultPubkey: '03cd', vaultAddress: 'Evault', now })).vaultMismatch).toBe(true);

@@ -1,6 +1,7 @@
 // Central's API as Satori Lite uses it (docs/design/central.md):
 //   const c = createCentral({ url, identity, version })
-//   await c.register({ vaultPubkey })        // POST /peer/register; null when there is no vault pubkey
+//   await c.register({ vaultPubkey, nostrPubkey })   // POST /peer/register; null when there is no vault pubkey
+//   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.submitPredictions(items)         // login (identity) → POST /predictions/batch; one retry on 401
 // Errors are CentralError: status 0 for a timeout or a network failure. A
@@ -132,12 +133,17 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     url: base,
 
     /** POST /peer/register as satorilib's checkin (server.py:384-434): headers only, no token. */
-    async register({ vaultPubkey }) {
+    async register({ vaultPubkey, nostrPubkey }) {
       if (!vaultPubkey) return null;
-      return call('POST', '/api/v1/peer/register', {
-        'wallet-pubkey': identity.pubkey, 'vault-pubkey': vaultPubkey, 'neuron-version': `browser-${version}`,
-      });
+      const headers = { 'wallet-pubkey': identity.pubkey, 'vault-pubkey': vaultPubkey };
+      if (nostrPubkey) headers['nostr-pubkey'] = nostrPubkey;
+      return call('POST', '/api/v1/peer/register', { ...headers, 'neuron-version': `browser-${version}` });
     },
+
+    /** Central's relays, [{relay_url, nostr_pubkey, evr_address}] (peer.py:123-163). */
+    relays: () => call('GET', '/api/v1/peer/relays'),
+    /** { max_streams } (peer.py:166-173). */
+    relayConfig: () => call('GET', '/api/v1/peer/relay-config'),
 
     observations: (limit = 100) => call('GET', `/api/v1/observations/batch?limit=${limit}`),
 

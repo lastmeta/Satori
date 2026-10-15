@@ -16,11 +16,11 @@ const errorText = (err) => String(err?.message ?? err);
  * Register with central (on every start). Never throws: the result says what
  * happened, and whether central's vault for this identity is ours.
  */
-export async function register({ central, vaultPubkey, vaultAddress, now = nowS }) {
+export async function register({ central, vaultPubkey, vaultAddress, nostrPubkey, now = nowS }) {
   const at = now();
   if (!vaultPubkey) return { at, ok: false, skipped: true, error: 'no vault public key in vault.yaml' };
   try {
-    const r = await central.register({ vaultPubkey });
+    const r = await central.register({ vaultPubkey, nostrPubkey });
     const vault = r?.vault_address ?? null;
     return { at, ok: true, peer_id: r?.peer_id ?? null, wallet_address: r?.wallet_address ?? null,
       vault_address: vault, message: r?.message ?? '', vaultMismatch: vault !== vaultAddress };

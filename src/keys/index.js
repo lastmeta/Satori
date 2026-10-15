@@ -8,9 +8,11 @@
 //   vaultInfo(vaultYaml)                            // { address, pubkey } while locked
 //   const v = await unlockVault(vaultYaml, pass)    // Unlock; throws 'Wrong passphrase'
 //   v.sign(msg), v.backup(), v.lock()               // Lock wipes the key; then both throw 'Locked'
+//   loadNostr(nostrYaml)                            // { secret, pubkey, npub }: the Nostr key (nostr.yaml)
 export { generateEntropy, entropyFromWords, entropyFromWif, deriveKeys, signMessage, verifyMessage } from './keys.js';
 import { generateEntropy, deriveKeys, publicKeys, signMessage } from './keys.js';
-import { readWallet, writeWallet, parse, secrecy } from './docker.js';
+import { readWallet, writeWallet, parse, secrecy, readNostrYaml, writeNostrYaml } from './docker.js';
+import { generateNostrSecret, npub } from '../nostr/event.js';
 
 export const MIN_PASSPHRASE = 4; // Docker vault-setup (neuron/web/routes.py:589)
 
@@ -55,16 +57,25 @@ function signer(secret) {
   };
 }
 
-/** New files for a vault (and an identity, random when not given). */
+/** New files for a vault (and an identity, random when not given), and a random Nostr key. */
 export async function writeKeys({ identity = generateEntropy(), vault }, passphrase) {
   checkPassphrase(passphrase);
   notSame(identity, vault);
   const [walletYaml, vaultYaml] = await Promise.all([writeWallet(identity), writeWallet(vault, { password: passphrase })]);
-  return { walletYaml, vaultYaml };
+  return { walletYaml, vaultYaml, nostrYaml: newNostrYaml() };
+}
+
+/** nostr.yaml for a new random Nostr key (start.py:135-145). */
+export const newNostrYaml = () => writeNostrYaml(generateNostrSecret());
+
+/** The Nostr key from nostr.yaml: plaintext, as the identity, so the neuron signs on its own. */
+export function loadNostr(nostrYaml) {
+  const { secretHex, pubkeyHex } = readNostrYaml(nostrYaml);
+  return { secret: secretHex, pubkey: pubkeyHex, npub: npub(pubkeyHex) };
 }
 
 /**
- * Docker's two files and the vault's passphrase → files to store. wallet.yaml
+ * Docker's two files (and nostr.yaml, optional: a new key otherwise) and the vault's passphrase → files to store. wallet.yaml
  * must be plain text and vault.yaml encrypted (files in the wrong slots are
  * named as such), so the funds' key is never stored in plain text. Refuses a
  * wrong passphrase, a watch-only file, and a file whose stored fields don't
@@ -72,7 +83,7 @@ export async function writeKeys({ identity = generateEntropy(), vault }, passphr
  * given unless its address is encrypted (an old vault), so the address can
  * show while locked.
  */
-export async function importDocker({ walletText, vaultText, passphrase }) {
+export async function importDocker({ walletText, vaultText, passphrase, nostrText }) {
   const [w, v] = [secrecy(walletText), secrecy(vaultText)];
   if (w === 'encrypted' && v === 'plain') {
     throw new Error('The files are swapped: wallet.yaml is the unencrypted one, vault.yaml the encrypted one.');
@@ -83,6 +94,7 @@ export async function importDocker({ walletText, vaultText, passphrase }) {
   if (v === 'plain' || v === 'mixed') {
     throw new Error('vault.yaml: this file is not encrypted, so it is not a vault. Choose the encrypted vault.yaml.');
   }
+  const nostrYaml = nostrText ? writeNostrYaml(readNostrYaml(nostrText).secretHex) : newNostrYaml();
   const read = async (name, text, opts) => {
     try {
       const r = await readWallet(text, opts);
@@ -97,7 +109,7 @@ export async function importDocker({ walletText, vaultText, passphrase }) {
   notSame(id.entropy, vault.entropy);
   const walletYaml = await writeWallet(id.entropy);
   const vaultYaml = vaultInfo(vaultText).address ? vaultText : await writeWallet(vault.entropy, { password: passphrase });
-  return { walletYaml, vaultYaml };
+  return { walletYaml, vaultYaml, nostrYaml };
 }
 
 /** The identity from its unencrypted wallet.yaml. */

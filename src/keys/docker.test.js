@@ -3,7 +3,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
-import { readWallet, writeWallet, decryptField, encryptField, secrecy } from './docker.js';
+import { readWallet, writeWallet, decryptField, encryptField, secrecy, readNostrYaml, writeNostrYaml } from './docker.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 
@@ -104,5 +104,21 @@ describe('vault.yaml (AES-256-CBC, PBKDF2-SHA1 1e6)', () => {
     expect(await decryptField(doc.entropy, 'pw')).toBe(v.entropy);
     expect(await decryptField(doc.privateKey, 'pw')).toBe(v.wif);
     expect(await decryptField(doc.words, 'pw')).toBe(v.words);
+  });
+});
+
+describe('nostr.yaml (Satori Lite start.py:120-149)', () => {
+  test('reads the satorilib fixture and writes it back byte for byte', () => {
+    expect(readNostrYaml(fx.nostr.yaml)).toEqual({ secretHex: fx.nostr.secretHex, pubkeyHex: fx.nostr.pubkeyHex });
+    expect(writeNostrYaml(fx.nostr.secretHex)).toBe(fx.nostr.yaml);
+  });
+  test('a pubkey that is not the secret’s, no secret, or a bad secret is refused', () => {
+    expect(() => readNostrYaml(fx.nostr.yaml.replace(fx.nostr.pubkeyHex, '00'.repeat(32)))).toThrow(/does not match/);
+    expect(() => readNostrYaml(`pubkey_hex: ${fx.nostr.pubkeyHex}\n`)).toThrow(/secret_hex/);
+    expect(() => readNostrYaml('secret_hex: nope\n')).toThrow(/secret_hex/);
+    expect(() => readNostrYaml('- a list\n')).toThrow();
+  });
+  test('upper case and no pubkey_hex are accepted', () => {
+    expect(readNostrYaml(`secret_hex: ${fx.nostr.secretHex.toUpperCase()}\n`).pubkeyHex).toBe(fx.nostr.pubkeyHex);
   });
 });

@@ -7,6 +7,7 @@ import { load, dump } from 'js-yaml';
 import { base64 } from '@scure/base';
 import { concatBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { deriveKeys, entropyFromWif } from './keys.js';
+import { nostrPubkey } from '../nostr/event.js';
 
 const ITERATIONS = 1_000_000;
 const ENCRYPTED = ['entropy', 'privateKey', 'words']; // what satorilib encrypts today (identity.py:682-692)
@@ -128,3 +129,27 @@ export async function writeWallet(entropy, { password } = {}) {
   return dump({ ...secret, publicKey: k.pubkey, scripthash: k.scripthash, evr: { address: k.address } },
     { sortKeys: true, lineWidth: -1 });
 }
+
+/**
+ * nostr.yaml → { secretHex, pubkeyHex }. Lite's _initNostrKeys writes
+ * {pubkey_hex, secret_hex} (start.py:120-149); a pubkey_hex that is not the
+ * secret's is refused.
+ */
+export function readNostrYaml(text) {
+  const doc = parse(text);
+  const secretHex = str(doc.secret_hex).trim().toLowerCase();
+  let pubkeyHex;
+  try {
+    pubkeyHex = nostrPubkey(secretHex);
+  } catch {
+    throw new Error('nostr.yaml: no valid secret_hex (64 hex characters)');
+  }
+  if (doc.pubkey_hex != null && String(doc.pubkey_hex).trim().toLowerCase() !== pubkeyHex) {
+    throw new Error('nostr.yaml: pubkey_hex does not match its secret_hex');
+  }
+  return { secretHex, pubkeyHex };
+}
+
+/** nostr.yaml as Lite writes it (yaml.dump, keys sorted). */
+export const writeNostrYaml = (secretHex) =>
+  dump({ pubkey_hex: nostrPubkey(secretHex), secret_hex: secretHex }, { sortKeys: true, lineWidth: -1 });

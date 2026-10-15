@@ -3,8 +3,8 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
-import { writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault, verifyMessage } from './index.js';
-import { writeWallet } from './docker.js';
+import { writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault, verifyMessage, loadNostr } from './index.js';
+import { writeWallet, readNostrYaml } from './docker.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 
@@ -107,5 +107,26 @@ describe('importDocker', () => {
   test('the same key as identity and vault is refused', async () => {
     const vaultText = await writeWallet(hex(a.entropyHex), { password: PASS });
     await expect(importDocker({ walletText: a.walletYaml, vaultText, passphrase: PASS })).rejects.toThrow(/same key/i);
+  });
+});
+
+describe('the Nostr key (a third, random key, plaintext as in Docker)', () => {
+  test('setup makes one, not derived from the identity or the vault', async () => {
+    const one = await writeKeys({ identity: hex(a.entropyHex), vault: hex(b.entropyHex) }, PASS);
+    const two = await writeKeys({ identity: hex(a.entropyHex), vault: hex(b.entropyHex) }, PASS);
+    const k = readNostrYaml(one.nostrYaml);
+    expect(k.pubkeyHex).toMatch(/^[0-9a-f]{64}$/);
+    expect(readNostrYaml(two.nostrYaml).pubkeyHex).not.toBe(k.pubkeyHex);
+  });
+  test("Docker import keeps a given nostr.yaml, refuses a bad one, and makes one when there is none", async () => {
+    const files = { walletText: a.walletYaml, vaultText: fx.vaults.current.yaml, passphrase: fx.vaults.password };
+    expect((await importDocker({ ...files, nostrText: fx.nostr.yaml })).nostrYaml).toBe(fx.nostr.yaml);
+    await expect(importDocker({ ...files, nostrText: 'secret_hex: 00\n' })).rejects.toThrow(/nostr.yaml/);
+    const made = await importDocker(files);
+    expect(readNostrYaml(made.nostrYaml).pubkeyHex).not.toBe(fx.nostr.pubkeyHex);
+  });
+  test('loadNostr: the key to sign with and its public forms', () => {
+    expect(loadNostr(fx.nostr.yaml)).toEqual({ secret: fx.nostr.secretHex, pubkey: fx.nostr.pubkeyHex,
+      npub: 'npub1vf6kzy7dj9axtynrat2smg848rvh5h2vhux9wdryzspkf7df3nyqk599tm' });
   });
 });

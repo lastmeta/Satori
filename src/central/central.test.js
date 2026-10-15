@@ -96,6 +96,12 @@ describe('register', () => {
     expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'neuron-version': 'browser-0.1.0' });
     expect(calls[0].body).toBeUndefined();
   });
+  test('the Nostr pubkey as nostr-pubkey, when there is one (satorilib server.py:394-399)', async () => {
+    const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, {}) });
+    await client(fetch).register({ vaultPubkey: '03cd', nostrPubkey: 'ee'.repeat(32) });
+    expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'nostr-pubkey': 'ee'.repeat(32),
+      'neuron-version': 'browser-0.1.0' });
+  });
   test('no vault pubkey: nothing is sent', async () => {
     const { fetch, calls } = mockFetch({});
     expect(await client(fetch).register({ vaultPubkey: null })).toBeNull();
@@ -107,6 +113,15 @@ describe('register', () => {
     expect(err).toBeInstanceOf(CentralError);
     expect(err).toMatchObject({ status: 409, detail: 'wallet conflicts', message: 'central 409: wallet conflicts' });
   });
+});
+
+test("relays and relay-config: central's GETs, no token (peer.py:123-173)", async () => {
+  const relays = [{ relay_url: 'ws://satorian.satorinet.io:7777', nostr_pubkey: 'e5', evr_address: 'EM' }];
+  const { fetch, calls } = mockFetch({ 'GET /api/v1/peer/relays': json(200, relays),
+    'GET /api/v1/peer/relay-config': json(200, { max_streams: 60 }) });
+  expect(await client(fetch).relays()).toEqual(relays);
+  expect(await client(fetch).relayConfig()).toEqual({ max_streams: 60 });
+  expect(calls.map((c) => c.headers)).toEqual([{}, {}]);
 });
 
 test('observations: GET the batch with a limit, no token', async () => {
