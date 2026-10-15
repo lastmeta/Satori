@@ -191,18 +191,6 @@ async function setBaseMaxFee(raw) {
   await refreshBase();
 }
 
-/** A Base action from the UI or an agent, one at a time; the card shows which. */
-async function baseAction(what, fn) {
-  if (state.baseBusy) throw new Error(`Busy (${state.baseBusy}). Try again when it is done.`);
-  state.baseBusy = what;
-  try {
-    return await fn();
-  } finally {
-    state.baseBusy = '';
-    refreshBase();
-  }
-}
-
 async function saveKeys({ walletYaml, vaultYaml, nostrYaml }) {
   await db.set('nostr_yaml', nostrYaml);
   await db.set('vault_yaml', vaultYaml); // vault first: boot needs both
@@ -250,16 +238,22 @@ async function setSubscribed(pubkey, stream, on) {
   return r;
 }
 
-/** One action at a time, for the UI and agents alike; state.busy says which. */
-async function exclusive(what, fn) {
-  if (state.busy) throw new Error(`Busy (${state.busy}). Try again when it is done.`);
-  state.busy = what;
+/**
+ * One action at a time per slot, for the UI and agents alike; state[slot]
+ * says which: 'busy' (setup, unlock) or 'baseBusy' (the Base card's).
+ */
+async function exclusive(what, fn, slot = 'busy') {
+  if (state[slot]) throw new Error(`Busy (${state[slot]}). Try again when it is done.`);
+  state[slot] = what;
   try {
     return await fn();
   } finally {
-    state.busy = '';
+    state[slot] = '';
   }
 }
+
+/** A Base action, one at a time; then the card is read again. */
+const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => void refreshBase());
 
 /** Setup, from the UI or an agent: one at a time, and only on the Setup screen. */
 const setup = (makeFiles) => exclusive('setup', async () => {
