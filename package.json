@@ -4,7 +4,7 @@
   "license": "MIT",
   "version": "0.1.0",
   "type": "module",
-  "description": "The Satori neuron as a client-side browser app (MVP)",
+  "description": "The Satori neuron as a client-side browser app",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
