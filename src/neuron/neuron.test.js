@@ -187,10 +187,7 @@ describe('register', () => {
     expect((await register({ central: fake({ ...res, vault_address: 'Eother' }), vaultPubkey: '03cd', vaultAddress: 'Evault', now })).vaultMismatch).toBe(true);
     expect((await register({ central: fake({ ...res, vault_address: null }), vaultPubkey: '03cd', vaultAddress: 'Evault', now })).vaultMismatch).toBe(true);
   });
-  test('no vault pubkey: skipped; a failure is returned, never thrown', async () => {
-    const c = fake(res);
-    expect(await register({ central: c, vaultPubkey: null, vaultAddress: null, now })).toEqual({ at: clock, ok: false, skipped: true, error: 'no vault public key in vault.yaml' });
-    expect(c.register).not.toHaveBeenCalled();
+  test('a failure is returned, never thrown', async () => {
     expect(await register({ central: fake(new CentralError(409, 'taken')), vaultPubkey: '03cd', vaultAddress: 'E', now }))
       .toEqual({ at: clock, ok: false, error: 'central 409: taken' });
   });

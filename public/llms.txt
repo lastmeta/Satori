@@ -155,10 +155,9 @@ script runs; then call `await satori.status()` until `screen` is no longer
   tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
   pending }`:
-  - `registration`: null while registering; then one of
-    `{ at, ok: true, peer_id, wallet_address, vault_address, message, vaultMismatch }`,
-    `{ at, ok: false, error }` (central refused or is unreachable), or
-    `{ at, ok: false, skipped: true, error }` (no vault public key to send).
+  - `registration`: null while registering; then
+    `{ at, ok: true, peer_id, wallet_address, vault_address, message, vaultMismatch }`
+    or `{ at, ok: false, error }` (central refused or is unreachable).
   - `lastPoll`: `{ at, streams, new, predicted }` or `{ at, error }` (central's
     error, or a local one such as a database write).
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or

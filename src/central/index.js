@@ -1,6 +1,6 @@
 // Central's API as Satori Lite uses it (docs/design/central.md):
 //   const c = createCentral({ url, identity, version })
-//   await c.register({ vaultPubkey, nostrPubkey })   // POST /peer/register; null when there is no vault pubkey
+//   await c.register({ vaultPubkey, nostrPubkey })   // POST /peer/register
 //   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.submitPredictions(items)         // login (identity) → POST /predictions/batch; one retry on 401
@@ -135,7 +135,6 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
 
     /** POST /peer/register as satorilib's checkin (server.py:384-434): headers only, no token. */
     async register({ vaultPubkey, nostrPubkey }) {
-      if (!vaultPubkey) return null;
       const headers = { 'wallet-pubkey': identity.pubkey, 'vault-pubkey': vaultPubkey };
       if (nostrPubkey) headers['nostr-pubkey'] = nostrPubkey;
       return call('POST', '/api/v1/peer/register', { ...headers, 'neuron-version': `browser-${version}` });

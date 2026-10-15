@@ -91,6 +91,13 @@ describe('importDocker', () => {
     expect(vaultInfo(r.vaultYaml)).toEqual({ address: old.address, pubkey: old.pubkey });
     expect((await unlockVault(r.vaultYaml, password)).address).toBe(old.address);
   });
+  test('a vault without a plain publicKey is re-written too: every stored vault has one, read while locked', async () => {
+    const noKey = fx.vaults.current.yaml.split('\n').filter((l) => !l.startsWith('publicKey:')).join('\n');
+    expect(vaultInfo(noKey).pubkey).toBe(null);
+    const r = await importDocker({ walletText: a.walletYaml, vaultText: noKey, passphrase: password });
+    const v = fx.vectors[fx.vaults.current.vector];
+    expect(vaultInfo(r.vaultYaml)).toEqual({ address: v.address, pubkey: v.pubkey });
+  });
   test('wrong passphrase, a mismatched file, a watch-only file are refused', async () => {
     await expect(importDocker({ walletText: a.walletYaml, vaultText: fx.vaults.current.yaml, passphrase: wrongPassword }))
       .rejects.toThrow(/vault\.yaml: wrong passphrase/i);

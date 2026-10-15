@@ -77,9 +77,6 @@ function coalesce(name, fn) {
 const refreshNostr = coalesce('nostr status', async () => { state.nostr = await nostr.status(); });
 const refreshBase = coalesce('base status', async () => { state.base = await base.status(); });
 
-/** The vault's Base address: from vault.yaml's public key while locked, else from the unlocked vault. */
-const vaultEvm = () => (vaultPublic.pubkey ? evmAddress(vaultPublic.pubkey) : vault?.evmAddress ?? null);
-
 // ── core: used by the UI and by window.satori ───────────────────────────────
 
 /** The stored (or default) central; a new client means a new register result. */
@@ -135,7 +132,7 @@ async function startNeuron() {
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: NOSTR_DEFAULTS,
     onChange: refreshNostr });
   await refreshNostr();
-  base = createBase({ db, identity, vaultAddress: vaultEvm, vault: () => vault, central: () => central, devRpc: DEV_RPC,
+  base = createBase({ db, identity, vaultAddress: evmAddress(vaultPublic.pubkey), vault: () => vault, central: () => central, devRpc: DEV_RPC,
     onChange: refreshBase });
   await refreshBase();
   state.screen = 'home';
@@ -206,7 +203,6 @@ async function unlock(passphrase) {
   vault?.lock();
   vault = v;
   state.unlocked = true;
-  if (!vaultPublic.pubkey) base?.refresh(); // an old vault.yaml: its Base address is known now
 }
 
 function lock() {

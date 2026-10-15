@@ -19,7 +19,6 @@ const errorText = (err) => String(err?.message ?? err);
  */
 export async function register({ central, vaultPubkey, vaultAddress, nostrPubkey, now = nowS }) {
   const at = now();
-  if (!vaultPubkey) return { at, ok: false, skipped: true, error: 'no vault public key in vault.yaml' };
   try {
     const r = await central.register({ vaultPubkey, nostrPubkey });
     const vault = r?.vault_address ?? null;

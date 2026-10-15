@@ -52,11 +52,6 @@ describe('status: one multicall', () => {
       errors: [],
     });
   });
-  test('without the vault (an old vault.yaml before Unlock): the identity\'s part', async () => {
-    const st = await chain.status({ identity: identity.evmAddress, vault: null });
-    expect(st.vault).toBe(null);
-    expect(st.identity.fee).toBe(1000);
-  });
 });
 
 describe('delegate prediction power (Lite\'s Enable staking + the dapp\'s instant signing)', () => {

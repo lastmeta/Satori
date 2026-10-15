@@ -272,7 +272,7 @@ function baseCard(a) {
     <dl class="facts">
       ${fact('RPC', 'base-rpc', () => (b().rpc.length ? rpcText(b()) : '–'))}
       ${fact('Identity', 'base-identity', html`<code>${() => b().identity.address}</code><div class="${() => (b().identity.lowEth ? 'error small' : 'muted small')}">${() => gasText(b().identity) + (b().identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</div>`)}
-      ${fact('Vault', 'base-vault', html`<code>${() => b().vault.address ?? 'Unlock once to read it'}</code><div class="muted small">${() => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`}</div>`)}
+      ${fact('Vault', 'base-vault', html`<code>${() => b().vault.address}</code><div class="muted small">${() => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`}</div>`)}
       ${fact('Delegation', 'base-delegation', () => delegationText(b()))}
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
       ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}

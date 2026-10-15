@@ -17,7 +17,7 @@ export function fmtWhen(s) {
 export function registrationText(r) {
   if (!r) return 'Registering…';
   if (r.ok) return `Yes · peer ${r.peer_id}`;
-  return `${r.skipped ? 'Not sent' : 'No'}: ${r.error}`;
+  return `No: ${r.error}`;
 }
 
 /** Why central's vault for this identity is not ours, or ''. */

@@ -121,7 +121,7 @@ export function nextCheckAt({ now, chainTime }) {
  * @param {object} o
  * @param {object} o.db the app's db
  * @param {{evmAddress: string, signDigest: Function}} o.identity
- * @param {() => string|null} o.vaultAddress the vault's Base address (known while locked from vault.yaml)
+ * @param {string} o.vaultAddress the vault's Base address (from vault.yaml's public key: no Unlock needed)
  * @param {() => object|null} o.vault the unlocked vault signer, or null
  * @param {() => object} o.central the current central client
  * @param {string} [o.devRpc] the dev server's default RPC (the local fork)
@@ -176,7 +176,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
   async function refresh() {
     try {
       const { chain } = await chainNow();
-      status = await chain.status({ identity: identity.evmAddress, vault: vaultAddress() });
+      status = await chain.status({ identity: identity.evmAddress, vault: vaultAddress });
       statusError = status.round == null ? (status.errors[0] ?? 'no answer') : '';
     } catch (err) {
       statusError = errorText(err);
@@ -190,7 +190,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
     const s = status;
     const gas = s?.gasPrice ? BATCH_GAS * 2n * s.gasPrice : null;
     const batchesLeft = s?.identity.eth != null && gas ? Number(s.identity.eth / gas) : null;
-    const vd = s?.vault?.delegate;
+    const vd = s?.vault.delegate;
     return {
       rpc: made?.rpc ?? [], config: made ? (made.fromCentral ? 'central' : 'bundled') : null,
       localFork: !!made?.local, // a path on this site: the dev server's /rpc, a local fork
@@ -203,12 +203,12 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
         batchesLeft, lowEth: batchesLeft != null && batchesLeft < LOW_BATCHES,
       },
       vault: {
-        address: vaultAddress(), eth: plainAmount(s?.vault?.eth), satori: plainAmount(s?.vault?.satori),
+        address: vaultAddress, eth: plainAmount(s?.vault.eth), satori: plainAmount(s?.vault.satori),
         delegate: vd ?? null,
         delegated: vd == null ? null : same(vd, identity.evmAddress) ? 'identity' : same(vd, zeroAddress) ? 'none' : 'other',
-        lock: s?.vault?.lock ?? null,
+        lock: s?.vault.lock ?? null,
       },
-      claimable: { rewards: plainAmount(s?.claimable?.rewards), airdrop: plainAmount(s?.claimable?.airdrop) },
+      claimable: { rewards: plainAmount(s?.claimable.rewards), airdrop: plainAmount(s?.claimable.airdrop) },
       lastCheck, nextCheck: schedule.next, checking: schedule.running,
     };
   }

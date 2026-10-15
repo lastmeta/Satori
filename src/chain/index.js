@@ -188,20 +188,17 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
     /**
      * Everything the Base card shows, in one multicall (each read may fail on
-     * its own) plus the gas price. `vault` may be null (an old vault.yaml
-     * without its public key, before an Unlock).
+     * its own) plus the gas price.
      */
     async status({ identity, vault }) {
       const calls = [
         ['round', token('getCurrentRound')], ['chainTime', mc3('getCurrentBlockTimestamp')],
         ['identityEth', mc3('getEthBalance', [identity])], ['identityInfo', rewards('predictionDelegateInfo', [identity])],
         ['fee', rewards('effectivePredictorFee', [identity])], ['allowed', hub('allowedDelegator', [identity])],
+        ['vaultEth', mc3('getEthBalance', [vault])], ['satori', token('balanceOf', [vault])],
+        ['vaultInfo', rewards('predictionDelegateInfo', [vault])], ['lockedUntil', token('transferLockedUntil', [vault])],
+        ['rewards', lens('getTotalClaimableRewards', [vault])], ['airdrop', airdrop('claimableAirdrop', [vault])],
       ];
-      if (vault) {
-        calls.push(['vaultEth', mc3('getEthBalance', [vault])], ['satori', token('balanceOf', [vault])],
-          ['vaultInfo', rewards('predictionDelegateInfo', [vault])], ['lockedUntil', token('transferLockedUntil', [vault])],
-          ['rewards', lens('getTotalClaimableRewards', [vault])], ['airdrop', airdrop('claimableAirdrop', [vault])]);
-      }
       const [results, gasPrice] = await Promise.all([
         client.multicall({ contracts: calls.map(([, call]) => call), allowFailure: true }),
         client.getGasPrice().catch(() => null),
@@ -221,12 +218,12 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
           address: identity, eth: r.identityEth ?? null, delegate: r.identityInfo?.[0] ?? null,
           power: r.identityInfo?.[1] ?? null, fee: r.fee ?? null, allowedDelegator: r.allowed ?? null,
         },
-        vault: vault ? {
+        vault: {
           address: vault, eth: r.vaultEth ?? null, satori: r.satori ?? null, delegate: r.vaultInfo?.[0] ?? null,
           lockedUntil: r.lockedUntil ?? null,
           lock: r.lockedUntil == null || round == null ? null : transferLock(r.lockedUntil, round),
-        } : null,
-        claimable: vault ? { rewards: r.rewards?.[0] ?? null, rewardsComplete: r.rewards?.[1] ?? null, airdrop: r.airdrop ?? null } : null,
+        },
+        claimable: { rewards: r.rewards?.[0] ?? null, rewardsComplete: r.rewards?.[1] ?? null, airdrop: r.airdrop ?? null },
         errors,
       };
     },

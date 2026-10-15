@@ -211,7 +211,7 @@ describe('createBase', () => {
       },
     };
     timers.length = 0;
-    base = createBase({ db, identity, vaultAddress: () => vaultKey.evmAddress, vault: () => vault, central: () => central,
+    base = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
       transport: rpc.transport, now: () => at.t, setTimeout: (fn, ms) => (timers.push({ fn, ms }), timers.length),
       clearTimeout: () => {} });
   });
@@ -312,7 +312,7 @@ describe('createBase', () => {
   test('an RPC on another chain: an error, and no writes or batch', async () => {
     const other = { request: async (a) => (a.method === 'eth_chainId' ? '0x2105' : rpc.request(a)) };
     const { custom } = await import('viem');
-    const wrong = createBase({ db, identity, vaultAddress: () => vaultKey.evmAddress, vault: () => vaultKey, central: () => central,
+    const wrong = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vaultKey, central: () => central,
       transport: custom(other), now: () => at.t, setTimeout: () => 0, clearTimeout: () => {} });
     expect((await wrong.refresh()).error).toBe('The RPC is on chain 8453, not Base Sepolia (84532): nothing is read or sent.');
     await expect(wrong.delegate()).rejects.toThrow(/chain 8453/);

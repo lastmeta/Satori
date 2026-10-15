@@ -26,8 +26,6 @@ test('registrationText and mismatchText', () => {
   expect(registrationText(null)).toBe('Registering…');
   expect(registrationText({ ok: true, peer_id: 7 })).toBe('Yes · peer 7');
   expect(registrationText({ ok: false, error: 'central 409: taken' })).toBe('No: central 409: taken');
-  expect(registrationText({ ok: false, skipped: true, error: 'no vault public key in vault.yaml' }))
-    .toBe('Not sent: no vault public key in vault.yaml');
   expect(mismatchText(null, 'Ev')).toBe('');
   expect(mismatchText({ ok: true, vaultMismatch: false, vault_address: 'Ev' }, 'Ev')).toBe('');
   expect(mismatchText({ ok: true, vaultMismatch: true, vault_address: 'Ex' }, 'Ev'))

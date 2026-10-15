@@ -102,11 +102,6 @@ describe('register', () => {
     expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'nostr-pubkey': 'ee'.repeat(32),
       'neuron-version': 'browser-0.1.0' });
   });
-  test('no vault pubkey: nothing is sent', async () => {
-    const { fetch, calls } = mockFetch({});
-    expect(await client(fetch).register({ vaultPubkey: null })).toBeNull();
-    expect(calls).toEqual([]);
-  });
   test('a refusal is a CentralError with the status and detail', async () => {
     const { fetch } = mockFetch({ 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });
     const err = await client(fetch).register({ vaultPubkey: '03cd' }).catch((e) => e);

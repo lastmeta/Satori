@@ -5,7 +5,7 @@
 //   const { walletYaml, vaultYaml } = await writeKeys({ identity?, vault }, passphrase)  // to store
 //   const { walletYaml, vaultYaml } = await importDocker({ walletText, vaultText, passphrase })
 //   const id = await loadIdentity(walletYaml)       // id.address, id.pubkey, id.sign(msg), id.backup()
-//   vaultInfo(vaultYaml)                            // { address, pubkey } while locked
+//   vaultInfo(vaultYaml)                            // { address, pubkey } while locked (every stored vault has both)
 //   const v = await unlockVault(vaultYaml, pass)    // Unlock; throws 'Wrong passphrase'
 //   v.sign(msg), v.backup(), v.lock()               // Lock wipes the key; then both throw 'Locked'
 //   loadNostr(nostrYaml)                            // { secret, pubkey }: the Nostr key (nostr.yaml)
@@ -90,8 +90,8 @@ export function loadNostr(nostrYaml) {
  * named as such), so the funds' key is never stored in plain text. Refuses a
  * wrong passphrase, a watch-only file, and a file whose stored fields don't
  * match its key. The identity is re-written from its key; the vault is kept as
- * given unless its address is encrypted (an old vault), so the address can
- * show while locked.
+ * given unless its address or public key is not in plain text (an old vault),
+ * so both are read while locked: central's register and the Base address.
  */
 export async function importDocker({ walletText, vaultText, passphrase, nostrText }) {
   const [w, v] = [secrecy(walletText), secrecy(vaultText)];
@@ -118,7 +118,8 @@ export async function importDocker({ walletText, vaultText, passphrase, nostrTex
   const vault = await read('vault.yaml', vaultText, { password: passphrase });
   notSame(id.entropy, vault.entropy);
   const walletYaml = await writeWallet(id.entropy);
-  const vaultYaml = vaultInfo(vaultText).address ? vaultText : await writeWallet(vault.entropy, { password: passphrase });
+  const info = vaultInfo(vaultText);
+  const vaultYaml = info.address && info.pubkey ? vaultText : await writeWallet(vault.entropy, { password: passphrase });
   return { walletYaml, vaultYaml, nostrYaml };
 }
 
@@ -129,7 +130,8 @@ export async function loadIdentity(walletYaml) {
 
 /**
  * The vault's address and public key, read without the passphrase, as Lite
- * does for central's register (start.py:4637-4667); each null if encrypted (an old vault).
+ * does for central's register (start.py:4637-4667); each null if encrypted or
+ * missing (an old vault, re-written on import).
  */
 export function vaultInfo(vaultYaml) {
   const doc = parse(vaultYaml);
