@@ -137,6 +137,12 @@ test('import Docker files; a failing source does not stop other streams', async 
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Import Docker files' }).click();
+  // In the wrong slots: refused, and the message says so.
+  await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
+  await page.getByLabel('vault.yaml').setInputFiles(file('wallet.yaml', wallet.walletYaml));
+  await page.getByLabel('Vault password').fill(fx.vaults.password);
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'The files are swapped' })).toBeVisible();
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel('Vault password').fill(fx.vaults.wrongPassword);

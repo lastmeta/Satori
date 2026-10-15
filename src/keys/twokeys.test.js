@@ -82,6 +82,18 @@ describe('importDocker', () => {
     await expect(importDocker({ walletText: `publicKey: ${a.pubkey}\n`, vaultText: fx.vaults.current.yaml, passphrase: password }))
       .rejects.toThrow(/wallet\.yaml: no private key/i);
   });
+  test('files in the wrong slots are refused, and the message says which', async () => {
+    const current = fx.vaults.current.yaml;
+    await expect(importDocker({ walletText: current, vaultText: a.walletYaml, passphrase: password }))
+      .rejects.toThrow(/swapped/i);
+    await expect(importDocker({ walletText: current, vaultText: fx.vaults.old.yaml, passphrase: password }))
+      .rejects.toThrow(/wallet\.yaml: .*encrypted.*vault\.yaml/i);
+    await expect(importDocker({ walletText: a.walletYaml, vaultText: b.walletYaml, passphrase: password }))
+      .rejects.toThrow(/vault\.yaml: .*not encrypted/i);
+  });
+  test('a plain-text vault is never kept: Unlock refuses it whatever the passphrase', async () => {
+    await expect(unlockVault(b.walletYaml, 'anything')).rejects.toThrow(/not encrypted/i);
+  });
   test('the same key as identity and vault is refused', async () => {
     const vaultText = await writeWallet(hex(a.entropyHex), { password: PASS });
     await expect(importDocker({ walletText: a.walletYaml, vaultText, passphrase: PASS })).rejects.toThrow(/same key/i);

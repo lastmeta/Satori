@@ -10,7 +10,7 @@
 //   v.sign(msg), v.backup(), v.lock()               // Lock wipes the key; then both throw 'Locked'
 export { generateEntropy, entropyFromWords, entropyFromWif, deriveKeys, signMessage, verifyMessage } from './keys.js';
 import { generateEntropy, deriveKeys, publicKeys, signMessage } from './keys.js';
-import { readWallet, writeWallet, parse } from './docker.js';
+import { readWallet, writeWallet, parse, secrecy } from './docker.js';
 
 export const MIN_PASSPHRASE = 4; // Docker vault-setup (neuron/web/routes.py:589)
 
@@ -56,13 +56,25 @@ export async function writeKeys({ identity = generateEntropy(), vault }, passphr
 }
 
 /**
- * Docker's two files and the vault's passphrase → files to store. Refuses a
+ * Docker's two files and the vault's passphrase → files to store. wallet.yaml
+ * must be plain text and vault.yaml encrypted (files in the wrong slots are
+ * named as such), so the funds' key is never stored in plain text. Refuses a
  * wrong passphrase, a watch-only file, and a file whose stored fields don't
- * match its key (Docker: "wallet or vault file corrupt"). The identity is
- * re-written from its key; the vault is kept as given unless its address is
- * encrypted (an old vault), so the address can show while locked.
+ * match its key. The identity is re-written from its key; the vault is kept as
+ * given unless its address is encrypted (an old vault), so the address can
+ * show while locked.
  */
 export async function importDocker({ walletText, vaultText, passphrase }) {
+  const [w, v] = [secrecy(walletText), secrecy(vaultText)];
+  if (w === 'encrypted' && v === 'plain') {
+    throw new Error('The files are swapped: wallet.yaml is the unencrypted one, vault.yaml the encrypted one.');
+  }
+  if (w === 'encrypted' || w === 'mixed') {
+    throw new Error('wallet.yaml: this file is encrypted, so it is a vault.yaml. Choose the unencrypted wallet.yaml.');
+  }
+  if (v === 'plain' || v === 'mixed') {
+    throw new Error('vault.yaml: this file is not encrypted, so it is not a vault. Choose the encrypted vault.yaml.');
+  }
   const read = async (name, text, opts) => {
     try {
       const r = await readWallet(text, opts);
@@ -72,7 +84,7 @@ export async function importDocker({ walletText, vaultText, passphrase }) {
       throw new Error(`${name}: ${err.message}`);
     }
   };
-  const id = await read('wallet.yaml', walletText, { password: passphrase });
+  const id = await read('wallet.yaml', walletText);
   const vault = await read('vault.yaml', vaultText, { password: passphrase });
   notSame(id.entropy, vault.entropy);
   const walletYaml = await writeWallet(id.entropy);

@@ -44,7 +44,21 @@ export function parse(text) {
 }
 
 /**
- * Read a wallet.yaml or vault.yaml. Load order as satorilib (identity.py
+ * Which kind of file this is, by its secret fields (entropy, privateKey,
+ * words), read with satorilib's rules: a 44-char entropy, a 52-char WIF and
+ * words with spaces are plain text (identity.py:131,152,595). 'plain' (a
+ * wallet.yaml), 'encrypted' (a vault.yaml), 'mixed', or '' (no key).
+ */
+export function secrecy(text) {
+  const doc = parse(text);
+  const plain = { entropy: (v) => v.length === 44, privateKey: (v) => v.length === 52, words: (v) => v.includes(' ') };
+  const kinds = new Set(ENCRYPTED.filter((f) => str(doc[f])).map((f) => (plain[f](str(doc[f])) ? 'plain' : 'encrypted')));
+  return kinds.size > 1 ? 'mixed' : [...kinds][0] ?? '';
+}
+
+/**
+ * Read a wallet.yaml (no password: its key must be plain text) or a vault.yaml
+ * (password: its key must be encrypted). Load order as satorilib (identity.py
  * loadFromYaml): entropy → 52-char WIF → watch-only (refused: no key). Older
  * vaults also encrypted publicKey, scripthash and evr.address; they are
  * decrypted by the same length rule (identity.py:666-676). Everything is
@@ -53,9 +67,11 @@ export function parse(text) {
  */
 export async function readWallet(text, { password } = {}) {
   const doc = parse(text);
+  const kind = secrecy(text);
+  if (typeof password === 'string' && (kind === 'plain' || kind === 'mixed')) throw new Error('This file is not encrypted');
+  if (typeof password !== 'string' && (kind === 'encrypted' || kind === 'mixed')) throw new Error('This file is encrypted: it needs its passphrase');
   const evr = doc.evr ?? {};
   const open = async (v, expectLength) => {
-    if (typeof password !== 'string') throw new Error('This file is encrypted: it needs its passphrase');
     let out;
     try { out = await decryptField(v, password); } catch { throw wrong(); }
     if (out.length !== expectLength) throw wrong();

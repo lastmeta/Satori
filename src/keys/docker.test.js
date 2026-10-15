@@ -3,7 +3,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
-import { readWallet, writeWallet, decryptField, encryptField } from './docker.js';
+import { readWallet, writeWallet, decryptField, encryptField, secrecy } from './docker.js';
 
 vi.setConfig({ testTimeout: 180_000 });
 
@@ -41,8 +41,24 @@ describe('wallet.yaml (plaintext)', () => {
   test('an encrypted file without a passphrase is refused', async () => {
     await expect(readWallet(fx.vaults.current.yaml)).rejects.toThrow(/encrypted/i);
   });
+  test('a plain-text file read as a vault is refused, whatever the passphrase', async () => {
+    await expect(readWallet(vec(0).walletYaml, { password: 'anything' })).rejects.toThrow(/not encrypted/i);
+    await expect(readWallet(fx.wifOnly.yaml, { password: 'anything' })).rejects.toThrow(/not encrypted/i);
+  });
   test('written without a passphrase it equals what satorilib writes', async () => {
     for (const v of fx.vectors) expect(load(await writeWallet(hex(v.entropyHex)))).toEqual(load(v.walletYaml));
+  });
+});
+
+describe('secrecy: which a file is, by its secret fields (satorilib length rules)', () => {
+  test('plain, encrypted, mixed, or no key at all', () => {
+    expect(secrecy(vec(0).walletYaml)).toBe('plain');
+    expect(secrecy(fx.wifOnly.yaml)).toBe('plain');
+    expect(secrecy(fx.vaults.current.yaml)).toBe('encrypted');
+    expect(secrecy(fx.vaults.old.yaml)).toBe('encrypted');
+    expect(secrecy(`entropy: ${vec(0).entropy}\nwords: ${load(fx.vaults.current.yaml).words}\n`)).toBe('mixed');
+    expect(secrecy(`publicKey: ${vec(0).pubkey}\n`)).toBe('');
+    expect(secrecy('')).toBe('');
   });
 });
 
