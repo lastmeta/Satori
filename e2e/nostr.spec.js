@@ -164,6 +164,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   const [unsub] = await user.fetch([{ kinds: [34602], authors: [me], '#d': [stream] }]);
   expect(unsub.tags).toEqual([['d', stream], ['p', provider.pubkey], ['stream', stream], ['action', 'unsubscribe'],
     ['satori', 'unsubscription']]);
+  await page.waitForTimeout(1100); // not in seq 3's second (NIP-01's tie rule, as above)
   await provider.observe({ stream, value: '103', seq: 4, timestamp: t0 + 180 });
   await page.waitForTimeout(500);
   const [last] = await user.fetch([{ kinds: [34601], authors: [me], '#d': [pred] }]);
