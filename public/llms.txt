@@ -4,11 +4,13 @@
 > central server, polls central for the latest observation of each data
 > stream, forecasts the next values with a simple model, and sends the
 > predictions back to central, the way the Docker neuron (Satori Lite) does.
+> It also follows Satori streams on Nostr relays and publishes a prediction
+> stream (`<stream>_pred`) for each one it subscribes to.
 > Everything runs in the browser tab: the keys, the database (DuckDB-WASM on
 > OPFS) and the engine. There is no server of our own. It is built to be
 > driven by people and by AI agents alike.
 
-Status: step 4 of the roadmap (the engine). Next: Nostr, Base.
+Status: step 5 of the roadmap (Nostr). Next: Base.
 
 ## Concepts
 
@@ -60,6 +62,32 @@ Status: step 4 of the roadmap (the engine). Next: Nostr, Base.
   the last poll/submission (another central has other stream uuids); the list
   refills with the next poll.
 
+- Nostr key: a third key, random (not derived from the identity or the
+  vault), stored unencrypted like the identity (Docker's `nostr.yaml`,
+  `{pubkey_hex, secret_hex}`). It signs the neuron's Nostr events; its 64-hex
+  pubkey is sent to central on register (`nostr-pubkey`).
+- Relays: central's list (`GET /api/v1/peer/relays`, today
+  `ws://satorian.satorinet.io:7777`) plus the user's (Settings or
+  `setRelays`). On the dev server central's relays are read only (requests,
+  never events) and the user's relays default to the test relay
+  `ws://localhost:7778`; a build writes to central's relays too. An https page
+  cannot open `ws://` relays (shown as blocked); it needs `wss://`.
+- Network streams: the relays' catalog of stream announcements (kind 34600),
+  newest per (provider pubkey, stream name), deleted ones dropped. A
+  provider is a Nostr pubkey (64 hex). Prediction streams end in `_pred`.
+- Subscribe: to a free, open stream (paid, encrypted or approval-gated ones
+  come later), at most central's `max_streams` (60) at once. It publishes a
+  subscription event (34602) and announces `<stream>_pred` (34600). Each new
+  observation (34601) of the stream is stored, forecast one cadence ahead
+  (the engine with the stream's `cadence_seconds` as its step) and published
+  as `<stream>_pred` with `value` = the forecast as a string (`"82378.0"`),
+  `seq_num` = our last + 1. A value with no number is echoed. Relay streams
+  and predictions are kept apart from central's and never sent to central.
+  Unsubscribe publishes the unsubscription and deletes the `_pred`
+  announcement (a tombstone).
+- Hourly: the relay list again, dropped relays reconnected, `_pred`
+  announcements again; daily: a NIP-65 relay list (10002).
+
 Times are unix seconds.
 
 ## Drive it from the page (window.satori)
@@ -68,7 +96,7 @@ Open the app and wait for it to load: `window.satori` exists once the page's
 script runs; then call `await satori.status()` until `screen` is no longer
 `loading` (DuckDB and the keys take a moment). Then, in the page's JS context:
 
-- `await satori.status()` → `{ screen, identity, vault, unlocked, central }`.
+- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr }`.
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
   tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
@@ -104,8 +132,30 @@ script runs; then call `await satori.status()` until `screen` is no longer
   predictions and the stream list (see Concepts).
 - `await satori.unlock(passphrase)`; `satori.lock()`.
 - While unlocked: `satori.backup('identity' | 'vault')` → `{ words, wif }`;
-  `satori.file('wallet.yaml' | 'vault.yaml')` → the Docker file's text.
-  Only these exact names; anything else throws.
+  `satori.file('wallet.yaml' | 'vault.yaml' | 'nostr.yaml')` → the Docker
+  file's text. Only these exact names; anything else throws.
+- `await satori.nostr()` (also `status().nostr`) → `{ pubkey, npub,
+  maxStreams, centralWrite, userRelays, relays, subscriptions }`. `relays`:
+  `[{ url, from: ['central' | 'user'], write, state, error }]`, state
+  `open` | `connecting` | `closed` (it retries) | `blocked`. `subscriptions`:
+  `[{ uuid, stream, provider, name, cadence_seconds, subscribed_at,
+  observations, observation: { seq, ts, value, raw, received_at } | null,
+  prediction: { stream, seq, value, model, made_at, relays } | null }]`
+  (`value` is the number taken from the observation or null; `raw` is what
+  the provider sent; `prediction.relays` is how many relays took our latest
+  `_pred`; `model` is `bar1`, `naive` or `echo`).
+- `await satori.discover()` → the catalog: `[{ pubkey, stream_name, name,
+  description, cadence_seconds, price_per_obs, encrypted, approval_required,
+  tags, metadata, created_at, pred, subscribed }]`, newest first. Throws when
+  no relay is connected yet (wait for a relay's `state: 'open'`).
+- `await satori.subscribe(pubkey, stream_name)` → the subscription (as in
+  `nostr().subscriptions`). Throws for a `_pred` stream, one no connected
+  relay announces, a paid/encrypted/gated one, or over `maxStreams`. Again on
+  a subscribed stream: returns it.
+- `await satori.unsubscribe(pubkey, stream_name)` → true.
+- `await satori.setRelays({ relays?: ['wss://…'], centralWrite?: boolean })`
+  → `nostr()`: the user's relays (ws:// or wss://; they replace the list) and
+  whether central's relays are written to.
 
 Errors are thrown as `Error` with a readable message (for example
 `Wrong passphrase`, `Unlock the vault first`). Central's errors are not
@@ -116,8 +166,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
 
 - Setup: "Create a new neuron" (shows the vault's 24 words, asks for three of
   them, then a passphrase), "Restore from words" (vault words, optional
-  identity words), or "Import Docker files" (`wallet.yaml`, `vault.yaml`, the
-  vault password). `wallet.yaml` is the unencrypted file and `vault.yaml` the
+  identity words), or "Import Docker files" (`wallet.yaml`, `vault.yaml`,
+  optional `nostr.yaml`, the vault password). `wallet.yaml` is the unencrypted file and `vault.yaml` the
   encrypted one; files in the wrong slots, or a vault.yaml that is not
   encrypted, are refused with a message saying so.
 - Home: both addresses with Copy buttons; the vault card has a "Vault
@@ -125,13 +175,22 @@ thrown: they are in `status().central` (for example `central 500: …`,
   "Central" card: the URL, Registered, Last poll, Next poll, Last submission,
   Pending, a vault mismatch if any, and "Poll now". "Streams": one row per
   central stream (latest value and time, t1, t2, the model with phi and
-  weight in its hover title, Sent/Pending). "Settings":
-  Central URL (empty = default), Save. "Backup" (needs Unlock): Identity
-  words, Vault words, Download wallet.yaml, Download vault.yaml.
+  weight in its hover title, Sent/Pending). "Nostr": the Nostr pubkey, each
+  relay with its state ("Connected · read only"), and each subscribed stream
+  (latest value and time, our `_pred` value, its seq, how many relays took it,
+  Unsubscribe). "Network streams" (opening it discovers): a search box and the
+  first 50 matching streams with Subscribe/Unsubscribe. "Settings":
+  Central URL (empty = default), Save; Nostr relays (one per line) and
+  "Publish to central's relays", Save relays. "Backup" (needs Unlock):
+  Identity words, Vault words, Download wallet.yaml, Download vault.yaml,
+  Download nostr.yaml.
 - Form fields have labels; elements carrying data have `data-test`
   attributes: `identity`, `vault`, `vault-state`, `central-url`, `registered`,
   `last-poll`, `next-poll`, `last-submit`, `pending`, `mismatch`, `stream`
-  (a row) with `obs`, `t1`, `t2`, `model`, `status` inside, and `wif`.
+  (a row) with `obs`, `t1`, `t2`, `model`, `status` inside, `wif`,
+  `nostr-pubkey`, `relay` (with `relay-state`), `sub` (a subscribed stream,
+  with `sub-obs`, `sub-pred`, `sub-seq`, `sub-relays`), `network`,
+  `catalog-summary` and `catalog-row` (with `catalog-action`).
 
 ## Docker neuron interop
 
@@ -141,7 +200,9 @@ github.com/SatoriNetwork/satorilib): one
 24 words. `wallet.yaml` / `vault.yaml` are read and written in Docker's format
 (vault fields: AES-256-CBC, PBKDF2-HMAC-SHA1 × 1,000,000 over the password's
 Latin-1 bytes), so a neuron moves between Docker and the browser by moving the
-two files. Central sees the same identity either way.
+two files (and `nostr.yaml` for the same Nostr key). Central sees the same
+identity either way. The Nostr events are satorilib's byte for byte (content
+serialized as Python's `json.dumps`).
 
 ## Code
 
@@ -156,17 +217,25 @@ build step beyond Vite, MIT licensed.
   batch) and Python-identical payload strings.
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API.
 - `src/engine/`: `forecast(points) → { model, t1, t2, phi?, weight? } | null`,
-  pure; `forecast(points, { weight })` forces the fade.
+  pure; `forecast(points, { weight })` forces the fade, `{ step }` sets the
+  bucket in seconds (12 h by default; a relay stream's cadence).
+- `src/nostr/`: NIP-01 events and the Nostr key over `@noble/curves`
+  (`event.js`), Satori's events and parsing (`satori.js`), one relay over a
+  WebSocket with reconnect (`relay.js`).
 - `src/neuron/`: register, the cycle (poll → store → forecast → submit), the
-  schedule, the one-tab lock.
+  schedule, the one-tab lock; `nostr.js`: relays, discover, subscribe, intake
+  → `_pred`, reconcile.
 - `src/ui/`: ArrowJS screens.
 - `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`,
   `central.md` with Satori Lite's file:line references, `engine.md` with
-  namaste_club's, the deviations and the backtest numbers); `docs/future/`:
-  the researched roadmap.
+  namaste_club's, the deviations and the backtest numbers, `nostr.md` with
+  Lite's and satorilib's); `docs/future/`: the researched roadmap.
 - `scripts/`: parity-vector generators run against satorilib, the Docker
-  image and namaste_club (Python); `backtest.mjs` (node, read only).
-- Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub central).
+  image and namaste_club (Python); `backtest.mjs` (node, read only);
+  `test-relay.mjs` (an in-memory Nostr relay: `node scripts/test-relay.mjs
+  7778`) and `provider.mjs` (a throwaway stream provider for a test relay).
+- Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub
+  central, two test relays).
 
 ## Contribute
 
