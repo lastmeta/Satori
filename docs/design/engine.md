@@ -78,37 +78,49 @@ For each stream that got a new observation, on all its stored observations
 1. Drop points with a non-finite time or value and sort by time. None left →
    `null`. `last` = the newest value.
 2. **Buckets**: b = floor(ts / 43,200) (12 h, UTC-aligned), the last value in
-   each.
-3. **Returns** between consecutive buckets: r = v_k / v_{k−1} − 1 (non-finite →
-   0). Across a gap there is no return.
+   each. A bucket whose last value is not positive counts as a gap (returns
+   need positive values).
+3. **Returns** between back-to-back buckets: r = v_k / v_{k−1} − 1
+   (non-finite → 0). Across a gap there is no return.
 4. **Pairs** (r_{k−1}, r_k), both present. Fewer than 6 (lag 1 + 5) →
-   **`naive`**: t1 = t2 = last. Eight gapless buckets give 6 pairs.
+   **`naive`**: t1 = t2 = last. A pair needs three back-to-back buckets, each
+   with an observation, so `bar1` needs **an observation every step** (12 h for
+   central): 8 gapless buckets give 6 pairs, about 4 days of polls every 11 h.
+   A stream observed once a day never gets a pair and stays `naive`. That
+   covers a daily central stream such as `crypto_fear_greed`, observed at 00:01
+   (`central/src/scripts/extra_streams.py:27`). It also covers a neuron that
+   polls once a day, such as a tab open only 9:00–18:00. Gaps are not bridged
+   (see Deviations).
 5. **φ** = Σxy / (Σxx + σ²/λ1²), where σ² = max(var(y − φ_ols·x), 1e-6) and
    φ_ols = Σxy/Σxx (0 when Σxx = 0). This is namaste_club's posterior mean with
    one regressor; λ1 = 0.2 shrinks φ toward 0 (the random walk) unless the data
    say otherwise.
 6. **First lag** r0 = last / (the newest value at least 6 h older) − 1. It is 0
-   when there is no such value or it is more than 24 h older.
+   when there is no such value, when it is more than 24 h older, or when it is
+   not positive.
 7. **Iterate** twice: q = clamp(φ·r, ±0.5) (non-finite → 0), r = q,
    g ← g·(1 + q). This gives g1 (12 h) and g2 (24 h).
-8. **Weight** w from a rolling backtest on the stream's own buckets. Take each
-   of the last 28 origins o whose buckets o, o+1, o+2 are consecutive and which
-   have at least 6 pairs up to o. Fit φ on those pairs, predict v_o·g2 from
-   r_o, and score it against v_{o+2}; persistence predicts v_o. Both errors are
-   relative, |x − a|/a. w = clamp(2 − median(model)/median(persistence), 0, 1),
+8. **Weight** w from a rolling backtest on the stream's own buckets. Take the
+   last 28 origins (bucket positions), then drop those whose buckets o, o+1,
+   o+2 are not back to back or which have fewer than 6 pairs up to o. On each
+   one left, fit φ on the pairs up to o, predict v_o·g2 from r_o, and score it
+   against v_{o+2}; persistence predicts v_o. Both errors are relative,
+   |x − a|/a. w = clamp(2 − median(model)/median(persistence), 0, 1),
    with namaste_club's rule for a zero persistence error. Fewer than 5 origins →
    w = 1.
 9. **Fade**: t1 = last·(1 + w·(g1 − 1)), t2 = last·(1 + w·(g2 − 1)), with
    namaste_club's guards.
-10. A non-positive value anywhere in the buckets → `naive` (returns need
-    positive values).
+10. A non-positive last value → `naive`.
 
 `bar1` returns `{model: 'bar1', t1, t2, phi, weight}` and `naive` returns
 `{model: 'naive', t1, t2}`. `phi` and `weight` are stored on the prediction,
 and the Streams table shows the model, with φ and w on hover. An option
 `{weight}` forces w, as `MODEL_WEIGHT` does; the backtest uses it.
 
-### Constants (copied)
+### Constants
+
+Copied from namaste_club, except `HOLDOUT`: namaste_club's calibration uses
+every logged forecast, so the backtest window borrows its λ tuner's holdout.
 
 | Constant | Value | namaste_club |
 |---|---|---|
@@ -119,16 +131,17 @@ and the Streams table shows the model, with φ and w on hover. An option
 | `HORIZON_STEPS` | 2 | `bvar.py:285`, `pool.py:991` |
 | `MAX_STEP_RETURN` | 0.5 | `bvar.py:286` |
 | `MIN_SPACING_S` | 6 h | `pool.py:872` |
-| `HOLDOUT` | 28 | `models.py:552` |
+| `HOLDOUT` | 28 | the λ tuner's holdout, `models.py:552` (borrowed) |
 | `MIN_SAMPLES` | 5 | `calibration.py:34` |
 | `DEFAULT_WEIGHT` | 1 | `calibration.py:33` |
 
 ## The step (relay streams)
 
 `forecast(points, { step })` takes the bucket in seconds; the default is
-`STEP_S` (12 h), central's. Everything is counted in buckets (8 before `bar1`,
-28 backtest origins, two clamped steps), and the first lag's minimum spacing
-is half a step (6 h at 12 h), so a series on any grid gives the same model
+`STEP_S` (12 h), central's. Everything is counted in buckets (6 lag pairs of
+back-to-back buckets before `bar1`, 28 backtest origins, two clamped steps),
+and the first lag's minimum spacing is half a step (6 h at 12 h), so a series
+on any grid gives the same model
 (tested: the same values on a 15 min grid with `step: 900` give exactly the
 12 h result). A Nostr stream uses its `cadence_seconds` (12 h when it has
 none) and publishes t1, one cadence ahead, as Lite's `predictForRelay`
@@ -155,9 +168,15 @@ From namaste_club:
   so a faded model is scored as part persistence.
 - **Gaps.** namaste_club drops empty buckets, so a return across a gap counts
   as one 12 h step. A browser tab gets closed, so here a gap breaks the
-  return, and a first lag more than 24 h old counts as 0.
-- **Non-positive values → naive.** namaste_club computes percent changes on
-  any value and only guards the final result.
+  return, and a first lag more than 24 h old counts as 0. The cost: a stream
+  with fewer than one observation per step (a daily stream, or a neuron that
+  polls once a day) stays `naive`, rather than being fit on 24 h returns
+  labelled 12 h.
+- **Non-positive values are gaps.** namaste_club computes percent changes on
+  any value and only guards the final result. Here a bucket whose value is
+  not positive gives no return into or out of it, a non-positive base gives a
+  first lag of 0, and only a non-positive last value makes the forecast
+  `naive`.
 - **Left out:** posterior draws and the jitter. They spread 4,300 workers
   around the truth; for one node they only add error. Also left out: the
   random model and its 100,000 default (`NC/pool.py:840-845,881`).
@@ -179,9 +198,11 @@ From Satori Lite:
     weights from error samples (`:418-433`) and too few samples (`:435-439`);
   - recovery: φ = 0.5 over 400 buckets comes back in (0.4, 0.6) with λ1 = 0.5
     and with 0.2; λ1 = 1e-4 shrinks it below 0.1;
-  - minimum data (7 buckets → naive, 8 → bar1); several points in a bucket; a
-    constant series (φ = 0, t1 = t2 = last); a gap; a stale first lag;
-    non-positive and non-finite values; any order;
+  - minimum data (7 buckets → naive, 8 → bar1); once a day stays naive (a
+    daily stream at 00:01, a 9:00–18:00 tab), polls every 11 h reach bar1;
+    several points in a bucket; a constant series (φ = 0, t1 = t2 = last); a
+    gap; a stale first lag; a non-positive bucket as a gap and a non-positive
+    first-lag base; non-finite values; any order;
   - a model that keeps losing in the backtest gets w < 1;
   - a random-walk guard: over 500 seeds of 8–40 buckets with 1% steps, the mean
     |t2/last − 1| is 0.06% (bound 0.1%, a tenth of one step's typical move).
@@ -198,12 +219,14 @@ From Satori Lite:
   hour on, r0 = 110/104 − 1, t1 = 108.50565, t2 = 108.85275) came out the
   same from namaste_club's code, and the zigzag also by hand from the formula.
 - `npm run e2e`: the app in Chrome makes `naive` until the stream has 8
-  buckets, then `bar1` with the same t1, t2, φ and weight as node, and sends
-  them as Lite's payload.
+  back-to-back buckets, then `bar1` with the same t1, t2, φ and weight as
+  node, and sends them as Lite's payload.
 - Live, on the dev server against central2, in a fresh profile with throwaway
   keys: Poll now stored 83 streams and central accepted 83 of 83 predictions.
   Every stream was `naive`, with t1 = t2 = its latest value: a new neuron has
-  one observation per stream, and `bar1` starts after about 4 days of polls.
+  one observation per stream. `bar1` starts once a stream has an observation
+  in 8 back-to-back 12 h buckets, about 4 days of polls every 11 h. A daily
+  stream, or a neuron that polls once a day, stays `naive`.
 
 ![Home after Poll now: the Model column](../screenshots/engine.png)
 

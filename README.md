@@ -16,10 +16,12 @@ each stream that got a new observation, and sends the predictions to central
 after a login signed by the identity. The engine (`bar1`, after the owner's
 `namaste_club`) is a Bayesian AR(1) on 12 h returns: shrunk toward "tomorrow
 = today", iterated to t1 (12 h) and t2 (24 h), and faded toward the last value
-as far as its own backtest says it trails it. With less than 4 days of history
-it sends the last value (`naive`). Predictions central does not take are kept and sent with the next
-poll. **Poll now** runs a cycle at once. No server of our own: the browser
-talks to central directly.
+as far as its own backtest says it trails it. It sends the last value
+(`naive`) until a stream has an observation in 8 back-to-back 12 h buckets
+(6 lag pairs), about 4 days of polls every 11 h. A stream central updates
+once a day, or a neuron that polls once a day, stays `naive`. Predictions
+central does not take are kept and sent with the next poll. **Poll now** runs
+a cycle at once. No server of our own: the browser talks to central directly.
 
 On Nostr the neuron has its own key (`nostr.yaml`, as Docker), reads central's
 relays plus the ones under Settings, and lists the streams the relays

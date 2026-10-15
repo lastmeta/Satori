@@ -35,8 +35,11 @@ steps start from evidence, not from scratch.
   into a worker is part of step 7.
 - Central's batch holds only each stream's latest observation and the neuron
   polls every 11 h, so local history grows by about two points per stream a
-  day (Lite has the same limit). The engine is `naive` for each stream's first
-  4 days (8 buckets of 12 h), then `bar1`.
+  day (Lite has the same limit). The engine needs an observation every 12 h
+  (6 lag pairs of back-to-back 12 h buckets): with 11 h polls a stream gets
+  `bar1` after about 4 days. A daily stream (`crypto_fear_greed`) or a tab
+  open only part of the day (one poll a day) stays `naive`; gaps are not
+  bridged.
 - central2's scheduler is stale (newest observation 2026-10-14 23:00 UTC); its
   batch is empty once that is older than 48 h (about 2026-10-16 23:00 UTC), so
   dev polls then store nothing until central2 runs again.

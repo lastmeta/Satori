@@ -27,8 +27,11 @@ first poll 5–30 min later, then every 11 h (or Poll now):
    history ([engine.md](engine.md)): `t1` 12 h ahead and `t2` 24 h ahead.
    `bar1` is a Bayesian AR(1) on 12 h returns after `../namaste_club`. It is
    shrunk toward the random walk, iterated two steps, each step clamped, and
-   faded toward persistence by a weight from a rolling backtest. Below 8 buckets
-   of 12 h it is `naive` (the last value).
+   faded toward persistence by a weight from a rolling backtest. It is `naive`
+   (the last value) until the stream has 6 lag pairs of back-to-back 12 h
+   buckets, so it needs an observation every 12 h: about 4 days of 11 h polls.
+   A stream central updates once a day, or a neuron that polls once a day,
+   stays `naive`.
 5. **Submit** everything pending right after the poll, as Lite's payload
    (`value` = t2, `t1_value`, `observed_at`, `hash`, byte-identical strings).
    A batch central rejects (`successful == 0`) or a failed call keeps the
@@ -147,8 +150,8 @@ WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-sato
   passphrase refused) → backup words and both files → Lock, polls go on; the
   agent API (dedupe, a failed batch kept and resent, a 401 retried, the
   central URL setting: another central drops the queue and the list, which
-  refills from it; the engine: naive until 8 buckets of 12 h, then bar1 with
-  node's numbers); Docker import with a vault mismatch and Settings
+  refills from it; the engine: naive until 8 back-to-back buckets of 12 h,
+  then bar1 with node's numbers); Docker import with a vault mismatch and Settings
   (https only, an unreachable central shown); restore from words; two setups
   at once (one wins) leaving other `meta` rows alone. Also an OPFS persistence
   smoke under the CSP. Nostr (`e2e/nostr.spec.js`) against two test relays,

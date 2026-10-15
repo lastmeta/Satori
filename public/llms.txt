@@ -50,11 +50,16 @@ Status: step 5 of the roadmap (Nostr). Next: Base.
     toward 0 ("tomorrow = today") with a N(0, 0.2^2) prior: phi = sum(x*y) /
     (sum(x*x) + sigma^2 / 0.2^2). Two 12 h steps give t1 and t2, each step's
     return clamped to +-50%. Then t = last * (1 + weight * (growth - 1)).
-    `weight` in [0, 1] comes from a backtest on the stream's own last 28 origins:
+    `weight` in [0, 1] comes from a backtest on the stream's own buckets (of
+    the last 28 origins, those with three back-to-back buckets):
     weight = clamp(2 - model error / persistence error, 0, 1), so a model that
     trails the last value is faded toward it (1 with fewer than 5 origins).
-  - `naive`: t1 = t2 = the last value. Used until a stream has 8 consecutive
-    12 h buckets (about 4 days of polls), and when a value is not positive.
+  - `naive`: t1 = t2 = the last value. Used until a stream has 6 lag pairs.
+    A pair is three back-to-back 12 h buckets, each with an observation, so
+    bar1 needs an observation every 12 h (about 4 days of polls every 11 h).
+    A stream central updates once a day, or a neuron that polls once a day,
+    stays naive: gaps are not bridged. Also used when the last value is not
+    positive (an earlier non-positive value is just a gap).
   `phi` and `weight` are stored with each prediction (null for `naive`).
   `node scripts/backtest.mjs` measures it against persistence on real
   history: a tie on liquid crypto pairs.
