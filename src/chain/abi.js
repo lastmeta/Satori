@@ -53,3 +53,8 @@ export const airdropAbi = parseAbi([
   'function airdropAllocation(address) view returns (uint256)',
   'function airdropClaimed(address user) view returns (uint256)',
 ]);
+
+// Multicall3 (same address on every chain), so ETH balances join the multicall.
+export const ethBalanceAbi = parseAbi([
+  'function getEthBalance(address addr) view returns (uint256 balance)',
+]);
