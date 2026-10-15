@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  generateEntropy, deriveKeys, entropyFromWords, signMessage, verifyMessage, createVault, unlock,
+  generateEntropy, deriveKeys, publicKeys, entropyFromWords, signMessage, verifyMessage, createVault, unlock,
 } from './index.js';
 import { seal, unseal, ITERATIONS } from './seal.js';
 
@@ -17,6 +17,7 @@ describe('derivations match satorilib (Docker neuron)', () => {
   for (const v of fx.vectors) {
     test(v.label, () => {
       expect(deriveKeys(hex(v.entropyHex))).toEqual({ words: v.words, pubkey: v.pubkey, address: v.address });
+      expect(publicKeys(hex(v.entropyHex))).toEqual({ pubkey: v.pubkey, address: v.address });
       expect(entropyFromWords(v.words)).toEqual(hex(v.entropyHex));
     });
   }
@@ -112,5 +113,12 @@ describe('unlock / lock', () => {
     id.lock();
     expect(id.locked).toBe(true);
     expect(() => id.sign('m')).toThrow(/locked/i);
+    await expect(id.words('pw')).rejects.toThrow(/locked/i);
+  });
+  test('Lock during the words unseal: the words are not returned', async () => {
+    const id = await unlock(await createVault(hex(v.entropyHex), 'pw', fast), 'pw');
+    const pending = id.words('pw');
+    id.lock();
+    await expect(pending).rejects.toThrow(/locked/i);
   });
 });

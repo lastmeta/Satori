@@ -37,14 +37,15 @@ function addressFromPubkey(pub) {
   return b58c.encode(concatBytes(Uint8Array.of(ADDRESS_VERSION), ripemd160(sha256(pub))));
 }
 
-/** @param {Uint8Array} entropy @returns {{words: string, pubkey: string, address: string}} */
-export function deriveKeys(entropy) {
+/** @param {Uint8Array} entropy @returns {{pubkey: string, address: string}} */
+export function publicKeys(entropy) {
   const pub = secp256k1.getPublicKey(checkKey(entropy), true);
-  return {
-    words: entropyToMnemonic(entropy, wordlist),
-    pubkey: bytesToHex(pub),
-    address: addressFromPubkey(pub),
-  };
+  return { pubkey: bytesToHex(pub), address: addressFromPubkey(pub) };
+}
+
+/** publicKeys plus the 24 words. The words are the whole secret: build them only to show them. */
+export function deriveKeys(entropy) {
+  return { words: entropyToMnemonic(entropy, wordlist), ...publicKeys(entropy) };
 }
 
 /** 24 backup words → entropy. Tolerates case and extra whitespace. */
