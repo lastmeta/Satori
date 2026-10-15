@@ -21,7 +21,6 @@ this app deliberately differs.
 import ast
 import contextlib
 import json
-import math
 import random
 import statistics
 import subprocess

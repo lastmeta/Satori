@@ -180,10 +180,31 @@ describe('minimum data and guards', () => {
     const fresh = [...grid(ZIG), { ts: grid(ZIG).at(-1).ts + 86400, value: 120 }];
     expect(forecast(fresh).t1).not.toBe(120);
   });
-  test('non-positive values → naive (returns need positive values)', () => {
+  test('a non-positive last value → naive (returns need positive values)', () => {
     expect(forecast(grid([...ZIG.slice(0, 9), 0]))).toEqual({ model: 'naive', t1: 0, t2: 0 });
     expect(forecast(grid([...ZIG.slice(0, 9), -3]))).toEqual({ model: 'naive', t1: -3, t2: -3 });
-    expect(forecast(grid([100, -1, ...ZIG]))).toEqual({ model: 'naive', t1: 105, t2: 105 });
+  });
+  test('an earlier non-positive bucket is a gap: no return into or out of it', () => {
+    const early = [...grid([100]), ...grid(ZIG, 2)]; // bucket 1 missing
+    expect(forecast(grid([100, -1, ...ZIG]))).toEqual(forecast(early));
+    expect(forecast(early).model).toBe('bar1');
+    const mid = [...grid(ZIG.slice(0, 5)), ...grid(ZIG.slice(5), 6)]; // bucket 5 missing: 3 + 3 pairs
+    expect(forecast(grid([...ZIG.slice(0, 5), 0, ...ZIG.slice(5)]))).toEqual(forecast(mid));
+    expect(forecast(mid).model).toBe('bar1');
+  });
+  test('the first lag never divides by a non-positive value: r0 = 0', () => {
+    const p = [...grid(ZIG)];
+    p.splice(9, 0, { ts: p[9].ts - 7 * 3600, value: -50 }); // earlier in the last bucket, ≥ 6 h back
+    expect(forecast(p)).toMatchObject({ model: 'bar1', t1: 105, t2: 105 });
+  });
+  test('bar1 needs an observation every step (6 lag pairs of back-to-back buckets); once a day stays naive', () => {
+    const days = (n, at, value) => Array.from({ length: n }, (_, d) => ({ ts: T0 + d * 86400 + at, value: value(d) }));
+    // A daily central stream, e.g. crypto_fear_greed at 00:01 (central/src/scripts/extra_streams.py:27).
+    expect(forecast(days(120, 60, (d) => 50 + (d % 7))).model).toBe('naive');
+    // A tab open only 9:00–18:00 polls once a day: one bucket of two, never back to back.
+    expect(forecast(days(120, 9 * 3600 + 1200, (d) => 100 * 1.001 ** d)).model).toBe('naive');
+    // Polls every 11 h: 9 polls fill 8 back-to-back buckets, 6 pairs.
+    expect(forecast(ZIG.slice(0, 9).map((value, k) => ({ ts: T0 + 600 + k * 11 * 3600, value }))).model).toBe('bar1');
   });
   test('non-finite points are dropped; none left → null; one → naive', () => {
     const p = [...grid(ZIG), { ts: NaN, value: 1 }, { ts: T0, value: Infinity }, { ts: T0, value: null }];

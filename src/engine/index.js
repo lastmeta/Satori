@@ -16,7 +16,7 @@ export const MIN_EXTRA_ROWS = 5; // rows ≥ features + 5 (bvar.py:158)
 export const HORIZON_STEPS = 2; // 2 × 12 h = central's 24 h (bvar.py:285)
 export const MAX_STEP_RETURN = 0.5; // bvar.py:286
 export const MIN_SPACING_S = 6 * 3600; // the first lag's span at 12 h, half a step (pool.py:872)
-export const HOLDOUT = 28; // backtest origins (models.py:552)
+export const HOLDOUT = 28; // backtest origins, borrowed from the λ tuner's holdout (models.py:552)
 export const MIN_SAMPLES = 5; // calibration.py:34
 export const DEFAULT_WEIGHT = 1; // calibration.py:33
 
@@ -38,9 +38,9 @@ export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S } = 
 
   const buckets = new Map(); // bucket → its last value (models.py:262-264)
   for (const { ts, value } of p) buckets.set(Math.floor(ts / step), value);
-  const b = [...buckets.keys()];
-  const v = [...buckets.values()];
-  if (v.some((x) => !(x > 0))) return naive;
+  const kept = [...buckets].filter(([, x]) => x > 0); // a non-positive bucket is a gap: returns need positive values
+  const b = kept.map(([k]) => k);
+  const v = kept.map(([, x]) => x);
   const r = b.map((k, i) => (i && k - b[i - 1] === 1 ? finiteOr0(v[i] / v[i - 1] - 1) : null)); // none across a gap
 
   const pairs = pairsUpTo(r, b.length - 1);
@@ -78,13 +78,14 @@ function fitPhi(pairs, lambda1) {
 
 /**
  * The newest return: last / (the newest value ≥ half a step older, 6 h at 12 h) − 1
- * (pool.py:889-900). 0 when there is none, or when it is more than two steps old (a closed tab).
+ * (pool.py:889-900). 0 when there is none, when it is more than two steps old (a closed tab),
+ * or when it is not positive.
  */
 function firstLag(p, step) {
   const { ts, value } = p.at(-1);
   let j = p.length - 2;
   while (j >= 0 && ts - p[j].ts < MIN_SPACING_S * (step / STEP_S)) j--;
-  if (j < 0 || ts - p[j].ts > HORIZON_STEPS * step) return 0;
+  if (j < 0 || ts - p[j].ts > HORIZON_STEPS * step || !(p[j].value > 0)) return 0;
   return finiteOr0(value / p[j].value - 1);
 }
 
@@ -127,8 +128,8 @@ function median(xs) {
 }
 
 /**
- * The rolling backtest that sets the fade: at each of the last HOLDOUT origins
- * o with buckets o..o+2 consecutive, fit on the pairs up to o, forecast two
+ * The rolling backtest that sets the fade: of the last HOLDOUT origins o, those
+ * with buckets o..o+2 back to back; fit on the pairs up to o, forecast two
  * steps from v[o] and score against v[o+2], as persistence (v[o]) is scored.
  */
 function backtestWeight(b, v, r, lambda1) {
