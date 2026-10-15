@@ -1,4 +1,4 @@
-Parity vectors for `src/keys/` and `src/central/`. Throwaway keys.
+Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys.
 
 - `identity-parity.json`: made from satorilib (the Docker neuron's code) by
   `scripts/identity_fixtures.py` on branch `draft/v1-full`: words, WIF, pubkey,
@@ -19,3 +19,7 @@ Parity vectors for `src/keys/` and `src/central/`. Throwaway keys.
   (`sha256(value + observed_at)[:16]`), made inside the shipped Docker image
   `satorinet/satori-lite:latest` by `scripts/central-parity.py` (offline; the
   command is in the script).
+- `engine-parity.json`: 10 series and what namaste_club's own code makes of
+  them (lag 1, one stream, no time features): φ, the first lag, g1/g2, the
+  backtest weight, t1 and t2. Made by `scripts/engine_parity.py` from the
+  namaste_club source (read only), with numpy and pandas in a scratch venv.

@@ -21,7 +21,7 @@ steps start from evidence, not from scratch.
 2. ✅ **Two keys + Docker import/export**: identity (unencrypted) and vault
    (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
-4. **Engine**, inspired by `../namaste_club` ([design/engine.md](design/engine.md)).
+4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence ([../design/engine.md](../design/engine.md)); left for later: [design/engine.md](design/engine.md).
 5. **Nostr**: subscribe to streams, publish `_pred` ([design/transport.md](design/transport.md)). This needs a wss relay.
 6. **Base** (last): delegate, daily batch, claims, as the dapp in `../contract/satori-ui` does ([design/chain.md](design/chain.md)).
 7. **Finishing pass**, incl. runtime hardening: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
@@ -35,7 +35,8 @@ steps start from evidence, not from scratch.
   into a worker is part of step 7.
 - Central's batch holds only each stream's latest observation and the neuron
   polls every 11 h, so local history grows by about two points per stream a
-  day (Lite has the same limit). The step-4 engine starts from little data.
+  day (Lite has the same limit). The engine is `naive` for each stream's first
+  4 days (8 buckets of 12 h), then `bar1`.
 - central2's scheduler is stale (newest observation 2026-10-14 23:00 UTC); its
   batch is empty once that is older than 48 h (about 2026-10-16 23:00 UTC), so
   dev polls then store nothing until central2 runs again.
