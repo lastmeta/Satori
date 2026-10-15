@@ -11,14 +11,6 @@ inside DuckDB, instead of a separate IndexedDB format.
 
 Still to build, with the evidence gathered earlier:
 
-## Nostr key (step 5)
-
-`nostr.yaml`, plaintext hex, random, independent of both wallets
-(`neuron/neuron-lite/start.py:120-149`): `pubkey_hex`, `secret_hex`. Registered
-with central in v1; signs Nostr events. `draft/v1-full` has
-`importNostrYaml`/`exportNostrYaml` and a fixture (`fx.nostr` in
-`test/fixtures/identity-parity.json`, already on `main`).
-
 ## Base address (step 4)
 
 The same 32-byte secret is the EVM private key

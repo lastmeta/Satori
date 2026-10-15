@@ -8,8 +8,8 @@ steps start from evidence, not from scratch.
   daily batch, delegate and claims, scheduler and catch-up, CSP), plus the
   component docs.
 - [issues/](issues/README.md): blockers outside this repo. Prod central lacks
-  the Base and merkle routes. The relay list is ws:// only, so a browser can't
-  connect to it.
+  the Base and merkle routes. The relay list is ws:// only, so a deployed
+  (https) app can't connect to it; the http dev server can.
 - Code: branch `draft/v1-full` holds half-built modules: Docker-compatible
   identity (with parity fixtures from the Python), the central client (with
   Python float/hash parity), Base chain reads, ABIs and transactions, and a
@@ -22,7 +22,7 @@ steps start from evidence, not from scratch.
    (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
 4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence ([../design/engine.md](../design/engine.md)); left for later: [design/engine.md](design/engine.md).
-5. **Nostr**: subscribe to streams, publish `_pred` ([design/transport.md](design/transport.md)). This needs a wss relay.
+5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [design/transport.md](design/transport.md). A deployed app needs a wss relay ([issue](issues/relays-not-wss.md)).
 6. **Base** (last): delegate, daily batch, claims, as the dapp in `../contract/satori-ui` does ([design/chain.md](design/chain.md)).
 7. **Finishing pass**, incl. runtime hardening: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
 
@@ -44,3 +44,14 @@ steps start from evidence, not from scratch.
   early. A tab closed past its poll time polls 5–30 min after the next load.
 - ✅ `node_modules` was removed from `main`'s history (owner approved the
   force-push).
+- The brief's ids for the `_pred` 34601 and the 34602 (345fa77e…, 484c59ab…)
+  hold only with compact JSON content; satorilib's `json.dumps` writes
+  `", "` and `": "`, so Lite's ids for the same events are 3e82a076… and
+  13dc7e51… (`test/fixtures/nostr-parity.json`, made by satorilib's own client).
+- The parked engine doc said `_pred` ships t2; Lite's `predictForRelay` sends
+  its first prediction (`engine-lite/data/structs.py:32-33`), t1. Fixed there.
+- A relay keeps one of two replaceable events with the same `created_at`
+  (NIP-01): two `_pred` of one stream in one second lose one, as in Lite
+  ([../design/nostr.md](../design/nostr.md#inherent-as-in-lite)).
+- Satorian's catalog, 2026-10-15: 1,061 announcements, 924 live (111 of them
+  `_pred`) from 43 providers; e5e6… alone announces ~400 streams.

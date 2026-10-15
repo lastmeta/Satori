@@ -1,6 +1,6 @@
 # satori: overview
 
-This is the source of truth for what is built (steps 1–4). Intent: [../intent/INTENT.md](../intent/INTENT.md).
+This is the source of truth for what is built (steps 1–5). Intent: [../intent/INTENT.md](../intent/INTENT.md).
 Later steps: [../future/README.md](../future/README.md).
 
 ## The flow
@@ -16,7 +16,7 @@ first poll 5–30 min later, then every 11 h (or Poll now):
 ```
 
 1. **Register** on every page load: `wallet-pubkey` (identity), `vault-pubkey`
-   (read from `vault.yaml` while locked) and `neuron-version`. The result is
+   (read from `vault.yaml` while locked), `nostr-pubkey` and `neuron-version`. The result is
    shown on Home, with a **vault mismatch** if central holds another vault for
    this identity.
 2. **Poll** central's observations batch (the latest observation of each
@@ -37,17 +37,33 @@ first poll 5–30 min later, then every 11 h (or Poll now):
 
 No passphrase is needed: the identity key is unencrypted, as in Docker.
 
+Next to it, the neuron follows Satori streams on Nostr relays and publishes a
+prediction stream for each, as Lite does ([nostr.md](nostr.md)). Relay
+streams are kept apart from central's: relay predictions go only to Nostr.
+
+```
+relays = central's /peer/relays + Settings      subscribe (Network streams): 34602 + `<stream>_pred` 34600
+REQ follow {kinds:[34601], authors:[p], #d:[…]} ──▶ verify ──▶ store once ──▶ forecast (step = cadence) ──▶ `<stream>_pred` 34601, seq + 1
+on each (re)connect and hourly: announce `<stream>_pred`; hourly: relay list, reconnect; daily: NIP-65
+```
+
+On the dev server central's relays (satorian, production) are **read only**
+(REQ, never EVENT) and the user's relays default to the test relay
+`ws://localhost:7778` (`scripts/test-relay.mjs`); a build writes to central's
+relays.
+
 ## Parts
 
 | Part | Folder | Does |
 |---|---|---|
-| keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Docker files, Unlock/Lock the vault, sign and verify Evrmore messages. |
+| keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Docker files, Unlock/Lock the vault, sign and verify Evrmore messages. Also the **Nostr key** (`nostr.yaml`, random, plaintext as in Docker; [nostr.md](nostr.md)). |
 | central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `pyFloatStr`/`predictionItem` (Python's float strings and the payload hash); `normalizeObservation`. 15 s timeouts; network errors wrapped. |
-| db | `src/db/` | DuckDB-WASM 1.32.0 stored in OPFS (`opfs://satori-mvp.duckdb`; `satori.duckdb` on this origin holds the old draft's schema), with tables `meta`, `streams` (uuid, name, meta), `observations` (stream_uuid, ts, value), `predictions` (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash, status, sent_at). Times are unix seconds. |
-| engine | `src/engine/` | `forecast(points) → {model, t1, t2, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1` or `naive`. Pure, no dependency. |
-| neuron | `src/neuron/` | `register`, `cycle` (poll → store → forecast → submit), the poll schedule (`createPoller`), one tab only (a Web Lock). |
-| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (both addresses, Unlock/Lock, central's status with Poll now, the streams with our t1/t2, Settings, backup). |
-| agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page (status, setup, poll, streams, predictions, setCentral, unlock/lock, backup, Docker files). `/llms.txt` tells an agent what the app is, how to drive it, where the code is, and that pull requests are welcome. |
+| db | `src/db/` | DuckDB-WASM 1.32.0 stored in OPFS (`opfs://satori-mvp.duckdb`; `satori.duckdb` on this origin holds the old draft's schema), with tables `meta`, `streams` (uuid, name, meta), `observations` (stream_uuid, ts, value), `predictions` (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash, status, sent_at), and for Nostr `relay_streams`, `relay_observations`, `relay_predictions` ([nostr.md](nostr.md#storage-migration-4)). Times are unix seconds. |
+| engine | `src/engine/` | `forecast(points, { step }) → {model, t1, t2, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1` or `naive`; step 12 h for central, a relay stream's cadence. Pure, no dependency. |
+| nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
+| neuron | `src/neuron/` | `register`, `cycle` (poll → store → forecast → submit), the poll schedule (`createPoller`), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile. |
+| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (both addresses, Unlock/Lock, central's status with Poll now, the streams with our t1/t2, the Nostr card, Network streams, Settings, backup). |
+| agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page (status, setup, poll, streams, predictions, setCentral, unlock/lock, backup, Docker files; nostr, discover, subscribe, unsubscribe, setRelays). `/llms.txt` tells an agent what the app is, how to drive it, where the code is, and that pull requests are welcome. |
 
 ## Rules
 
@@ -82,7 +98,12 @@ No passphrase is needed: the identity key is unencrypted, as in Docker.
 - OPFS keeps what DuckDB has checkpointed, so the app checkpoints after each
   cycle and each schedule change.
 - The page is sent with a strict CSP header: no inline script,
-  `'wasm-unsafe-eval'` for DuckDB, `connect-src 'self' https:` for the chosen central.
+  `'wasm-unsafe-eval'` for DuckDB, `connect-src 'self' https: wss: ws:` for the
+  chosen central and the relays. An https page still can't open `ws://`
+  (mixed content), so a deployed app needs `wss://` relays
+  ([issue](../future/issues/relays-not-wss.md)).
+- The Nostr key is stored unencrypted like the identity, so the neuron signs
+  its events on its own. `nostr.yaml` downloads need Unlock, as the other files.
 
 ## Tech (pinned)
 
@@ -91,7 +112,9 @@ No passphrase is needed: the identity key is unencrypted, as in Docker.
 the payload hash), `@scure/base` 1.2.6, `@scure/bip39` 1.6.0, `js-yaml` 5.4.2
 (step 2: reads and writes Docker's `wallet.yaml`/`vault.yaml`, whose PyYAML
 output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
-1.63.0. Steps 3 and 4 added no dependency.
+1.63.0. Steps 3 and 4 added no dependency. Step 5 added only a dev dependency,
+`ws` 8.22.0, for the test relay and the node-side scripts (the browser has
+WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-satori-lite-and-why)).
 
 ## Verify
 
@@ -106,8 +129,16 @@ output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
   local failure, register and mismatch, the schedule, its jitter and a failed
   save); engine (namaste_club's own tests ported, recovery and shrinkage,
   minimum data, gaps, a random-walk guard, and parity with namaste_club's code:
-  `scripts/engine_parity.py`); db (migrations from steps 2 and 3, a change of
-  central); ui.
+  `scripts/engine_parity.py`; the step: the same series on any grid gives the
+  same model); db (migrations from steps 2, 3 and 4, a change of central, the
+  relay tables and their dedupe); nostr (every event rebuilt byte for byte
+  against satorilib's own client and nostr-sdk's signatures, Lite's value
+  unwrapping on its own function's outputs, Lite's pinned relay uuid, the
+  catalog, intake parsing, the relay client's REQ/EOSE/OK and reconnect backoff
+  with a fake socket, the test relay over real sockets, and the whole flow
+  with fake relays: read-only relays, discover paging, subscribe refusals and
+  the cap, intake dedupe and echo, `_pred` seq, announce on open, reconcile,
+  NIP-65, unsubscribe); the CSP; ui.
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
   stub and prod blocked: create → register (headers checked) → first poll
   5–30 min out → Poll now: two streams stored, forecast and sent after an
@@ -120,9 +151,18 @@ output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
   node's numbers); Docker import with a vault mismatch and Settings
   (https only, an unreachable central shown); restore from words; two setups
   at once (one wins) leaving other `meta` rows alone. Also an OPFS persistence
-  smoke under the CSP.
+  smoke under the CSP. Nostr (`e2e/nostr.spec.js`) against two test relays,
+  7782 as central's (read only) and 7781 as the user's: a provider's stream
+  discovered and subscribed in the UI, its stored and live observations
+  forecast and published as `_pred` (read back from 7781 and checked, with
+  the 34600 and the 34602), nothing on 7782 from the app, kept over a reload,
+  unsubscribed with the tombstone; Docker import with `nostr.yaml`. Satorian
+  and the dev relay are routed to nothing in every test.
 - Live, in a fresh browser profile on the dev server: central2 (writes
   allowed) for register, Poll now and the batch; prod only for read-only GETs.
+  Nostr: satorian read only (its full catalog discovered: 924 live of 1,061
+  announcements; only REQ and CLOSE sent to it), the dev relay on 7778 for
+  every write.
 - Parity vectors come from satorilib, the Docker image and namaste_club
   (`test/fixtures/README.md`; `scripts/`).
 - `node scripts/backtest.mjs`: the engine against persistence at 24 h on real

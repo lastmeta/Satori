@@ -123,6 +123,18 @@ and the Streams table shows the model, with φ and w on hover. An option
 | `MIN_SAMPLES` | 5 | `calibration.py:34` |
 | `DEFAULT_WEIGHT` | 1 | `calibration.py:33` |
 
+## The step (relay streams)
+
+`forecast(points, { step })` takes the bucket in seconds; the default is
+`STEP_S` (12 h), central's. Everything is counted in buckets (8 before `bar1`,
+28 backtest origins, two clamped steps), and the first lag's minimum spacing
+is half a step (6 h at 12 h), so a series on any grid gives the same model
+(tested: the same values on a 15 min grid with `step: 900` give exactly the
+12 h result). A Nostr stream uses its `cadence_seconds` (12 h when it has
+none) and publishes t1, one cadence ahead, as Lite's `predictForRelay`
+returns its first prediction (`engine-lite/engine.py:714-739`,
+`data/structs.py:32-33`) ([nostr.md](nostr.md#the-engines-step)).
+
 ## Deviations, and why
 
 From namaste_club:

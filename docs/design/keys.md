@@ -4,12 +4,13 @@
 
 The browser neuron holds Satori's two keys, made, stored and used the way the
 Docker neuron (Satori Lite, `../neuron`) and satorilib (`../satorilib`) do it,
-so a neuron moves between the two by moving two files.
+so a neuron moves between the two by moving two files (three with `nostr.yaml`).
 
 | Key | Stored as | Encrypted? | Used for |
 |---|---|---|---|
-| **identity** | `wallet.yaml` text in the db (`meta.wallet_yaml`) | no | everything the neuron does on its own: central register and login ([central.md](central.md)); later Nostr, the daily Base batch |
+| **identity** | `wallet.yaml` text in the db (`meta.wallet_yaml`) | no | everything the neuron does on its own: central register and login ([central.md](central.md)); its pubkey is the `wallet_pubkey` of our Nostr announcements; later the daily Base batch |
 | **vault** | `vault.yaml` text in the db (`meta.vault_yaml`) | yes, with the passphrase | holds funds; later delegate, claims, sends. Only while unlocked. |
+| Nostr key | `nostr.yaml` text in the db (`meta.nostr_yaml`) | no | signs the neuron's Nostr events ([nostr.md](nostr.md)); random, not one of the two keys above, as in Docker |
 
 The identity is unencrypted on purpose: the neuron must run after a page load
 with nobody there to type a passphrase. The vault is where the funds are, so it
@@ -170,4 +171,8 @@ against.
   the same key twice would put the funds' key unencrypted on disk).
 - **Ticks run from page load with no login.** Docker's UI needs login, but its
   neuron process also runs on `wallet.yaml` alone (`start.py:75`).
-- **Not yet:** `nostr.yaml` (Nostr step) and the Base address (Base step).
+- **Nostr key (step 5):** `nostr.yaml` `{pubkey_hex, secret_hex}`, a third,
+  random key, plaintext as Docker keeps it (`start.py:120-149`): made at setup,
+  imported with the Docker files (optional), downloaded under Backup; an
+  install from before step 5 gets one on its next load ([nostr.md](nostr.md)).
+- **Not yet:** the Base address (Base step).

@@ -10,11 +10,11 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 |---|---|---|
 | [central-prod-missing-base-routes.md](central-prod-missing-base-routes.md) | central deploy | merkle claim on prod; live Base config |
 
-## Fixable — blocks the next step (Nostr parity)
+## Fixable — blocks Nostr in a deployed (https) app
 
 | Issue | Where the fix goes | Blocks |
 |---|---|---|
-| [relays-not-wss.md](relays-not-wss.md) | relay hosting + central | following Nostr streams, publishing `_pred` |
+| [relays-not-wss.md](relays-not-wss.md) | relay hosting + central | Nostr from an https page (works on the http dev server) |
 
 ## Fixable — flaws to fix, not blocking
 

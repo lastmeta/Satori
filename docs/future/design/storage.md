@@ -81,9 +81,9 @@ Differences from Docker, on purpose:
 - Central-lite values share `observations` instead of separate `streams` /
   `history` tables.
 - No `engine_state`: the engine refits from `observations` each time.
-- No relay, subscription or publication tables until Nostr parity
-  ([transport.md](transport.md)); no channels, bounties, data sources or access
-  requests until those land.
+- Relay streams, observations and predictions: built in step 5 (migration 4,
+  [../../design/nostr.md](../../design/nostr.md#storage-migration-4)); no
+  channels, bounties, data sources or access requests until those land.
 
 ## Engine reads
 

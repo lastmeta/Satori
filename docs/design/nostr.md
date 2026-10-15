@@ -45,7 +45,7 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 | Publish `_pred` | `_networkPublishObservation` (START:3549-3617): seq = `last_seq_num + 1` (NDB:835-848), content `{stream_name, timestamp: int(now), value, seq_num}` (MODELS:105-140, Python `json.dumps`), tags `[d, stream, seq, satori=observation]` (CLIENT:579-596), to every connected relay; seq advances even with none. | The same bytes (content is serialized as Python's `json.dumps`, with `", "` and `": "`), to every connected relay we write to; the count that answered OK is stored. |
 | Announce `_pred` | `_networkAnnouncePublications` (START:3442-3482) on each new connection (START:326-328, 4539): `DatastreamMetadata` (MODELS:14-40) with `name "Predictions for <name>"`, `description ""`, `tags []`, the source's cadence, `created_at` = when the publication was added, `metadata {source_stream_name, source_provider_pubkey, wallet_pubkey}` (the identity's compressed pubkey); tags `[d, satori=datastream, stream=satori:stream:<name>, source_stream, source_pubkey]` (CLIENT:294-356). | The same, on every connect and reconnect, on subscribe, and hourly. |
 | Unsubscribe | Soft delete (NDB:496-503), 34602 with `action=unsubscribe`, `satori=unsubscription` (CLIENT:1600-1644), and a tombstone 34600 for `_pred` (`[d, satori=datastream, status=deleted]`, content = empty metadata with `created_at 0`; START:3683-3720). | The same three steps. The row stays (inactive), so a later subscribe keeps counting `_pred` seq from where it was. |
-| Cadence | Hourly reconcile loop (START:200-292); NIP-65 10002 of the connected relays daily (START:288-291, 370-389, CLIENT:405-428). | Hourly reconcile; NIP-65 when the last one is a day old (`meta.nostr_relay_list_at`). |
+| Cadence | Hourly reconcile loop (START:200-292); NIP-65 10002 of the connected relays daily (START:288-291, 370-389, CLIENT:405-428). | Hourly reconcile; NIP-65 of the relays open at the time, when the last one is a day old (`meta.nostr_relay_list_at`), checked when a relay we write to opens and hourly. |
 
 ## Event shapes (verified)
 
@@ -141,6 +141,33 @@ ahead.
   that announces a stream (34600) and publishes a random walk (34601) on it.
 - The e2e runs two of these relays (7781 as the user's, 7782 as central's) and
   checks that nothing of the app's reaches central's while it is read only.
+
+## Inherent, as in Lite
+
+- Two `_pred` events of one stream in the same second: the relay keeps one
+  (NIP-01's tie rule for replaceable events with equal `created_at`), and the
+  other's OK is false, so that publish counts 0 relays. Lite stamps
+  `created_at` the same way; with cadences of a minute or more it needs two
+  observations of one stream within a second (the stored one and a live one).
+- History is what the neuron received while the tab was open: a reopened tab
+  gets each stream's latest observation, not the ones it missed.
+
+## UI and agents
+
+- Home's **Nostr** card: the Nostr pubkey (npub on hover), each relay with its
+  state (Connected, Connecting, Disconnected and retrying, Blocked) and "read
+  only", and each subscribed stream with its latest observation (as sent), when
+  it was observed, our latest `_pred` value, its seq and how many relays took
+  it, and Unsubscribe.
+- **Network streams**: Discover (on opening), a search over name, stream,
+  description and tags, the first 50 matches; prediction streams are hidden
+  and counted; paid or gated streams show but can't be subscribed.
+- **Settings**: the user's relays (one per line) and "Publish to central's
+  relays". **Backup**: Download `nostr.yaml`. **Import Docker files**: an
+  optional `nostr.yaml`.
+- `window.satori`: `nostr()`, `discover()`, `subscribe(pubkey, stream)`,
+  `unsubscribe(pubkey, stream)`, `setRelays({ relays, centralWrite })`,
+  `file('nostr.yaml')`; `status().nostr` ([/llms.txt](../../public/llms.txt)).
 
 ## Later
 

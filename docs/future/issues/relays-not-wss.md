@@ -1,17 +1,26 @@
 # No relay reachable from an HTTPS page
 
-**Status:** open · **Blocks:** Nostr parity (not v1) · **Fix in:** relay hosting and central
+**Status:** open · **Blocks:** Nostr in a deployed (https) app · **Fix in:** relay hosting and central
+
+Nostr is built (step 5, [../../design/nostr.md](../../design/nostr.md)) and
+works from the dev server, which is plain `http://localhost:5180`, against
+`ws://` relays. A deployed app is served over https and can't reach today's
+only listed relay.
 
 ## Precondition
 
 The app is served over HTTPS (any real deployment). Browsers block `ws://`
-from an HTTPS page as mixed content.
+from an HTTPS page as mixed content, before the CSP is consulted; only
+`ws://localhost` and `ws://127.0.0.1` are exempt. The app's CSP allows
+`connect-src … wss: ws:` (`csp.js`); `ws:` is only of use to the http dev
+page. On an https page the app shows such a relay as **blocked** and does not
+try it.
 
 ## Finding (verified)
 
-- Central's relay list, probed 2026-10-14, holds one relay:
+- Central's relay list, probed 2026-10-15 (prod and central2), holds one relay:
   `ws://satorian.satorinet.io:7777`. Port 7777 has no TLS and
-  `https://satorian.satorinet.io:443` did not answer.
+  `https://satorian.satorinet.io:443` did not answer (2026-10-14).
 - How central builds that list: relays are discovered from NIP-65 (kind 10002)
   events (`central/relay_watcher/nip65.py:169-211`) into `discovered_relays`.
   `/peer/relays` returns only those with `relay_daily_scores` traffic
@@ -19,8 +28,9 @@ from an HTTPS page as mixed content.
   relays only when no such rows exist (`central/src/api/v1/endpoints/peer.py:125-150`).
 - A Docker neuron's NIP-65 lists the relays it is **connected to**
   (`neuron/neuron-lite/start.py:370-383`), and it connects only to relays
-  central lists or its own DB entries. (`neuron/web/routes.py:444-445` only
-  builds a `ws://` display hint for Settings; it registers nothing.)
+  central lists or its own DB entries. One neuron already lists a wss relay
+  in its 10002 (`wss://satori-home.net-hub.de`, seen on satorian 2026-10-15),
+  but central does not list it.
 
 So a new wss URL is not listed just because someone announces it: it also needs
 traffic, and neurons won't connect to it until it is listed.
@@ -36,5 +46,5 @@ traffic, and neurons won't connect to it until it is listed.
    - operators add it as a user relay on Docker neurons so traffic builds.
 3. Optional: sort `wss://` entries first in `/peer/relays`.
 
-Until then the browser app can develop Nostr parity against a local relay on
-`ws://localhost` (allowed as a secure context).
+Meanwhile a user can add a `wss://` relay under Settings (written to and read
+from), and the dev server reads satorian over `ws://`.

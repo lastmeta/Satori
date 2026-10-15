@@ -43,11 +43,11 @@ The accuracy cost should be bounded and measured with `scripts/backtest.mjs`.
 |---|---|---|
 | central-lite batch (built) | `value` = t2, `t1_value` = t1 | `engine.py:1052-1058,1097-1106` |
 | Base daily batch (step 6) | direction rule above | replaces `base_predict.py:141-143` |
-| `_pred` on Nostr (step 5) | t2, as a string | `engine.py:714-737`; `start.py:1300,1322-1323` |
+| `_pred` on Nostr (built, step 5) | t1 (Lite's first prediction, `data/structs.py:32-33`), as a string; the step is the stream's cadence | `engine.py:714-739`; `start.py:1300,1322-1323`; [../../design/nostr.md](../../design/nostr.md) |
 
-Inferred open point, for when bounties land: the bounty scorer appears to score
-against the next observation (`neuron/neuron-lite/scoring/mae.py`) while `_pred`
-ships t2.
+For bounties (later): the bounty scorer scores against the next observation
+(`neuron/neuron-lite/scoring/mae.py`), which is what `_pred` ships (t1, one
+cadence ahead).
 
 ## Not ported
 

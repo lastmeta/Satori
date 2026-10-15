@@ -72,7 +72,7 @@ Two paths, neither needs Nostr:
    auth, register, base/config,              registry / games / engine / hub /
    observations, predictions, merkle proof   rewards / merkle / airdrop / token
 
-   later (Nostr parity): nostr worker module → wss relays, kinds 34600-34609, 10002
+   Nostr (built, step 5: ../../design/nostr.md): relays, kinds 34600-34602, 10002
 ```
 
 Only one tab per browser runs the neuron: it holds a Web Lock named
@@ -113,7 +113,7 @@ be used (see storage.md).
 | `vite` | 8.3.1 | static build, worker bundling. |
 | `vitest` | 5.0.2 | unit tests (parity vectors, engine, schema). |
 | `@playwright/test` | 1.63.0 | end-to-end tests in real Chromium (OPFS, workers, CSP, tab handover). |
-| `nostr-tools` | 2.25.2 | Nostr parity only (after v1). Brings noble 2.x; collapse onto it once the parity vectors pass. |
+| ~~`nostr-tools`~~ | — | Not used: step 5 signs and verifies over `@noble/curves` and has its own small relay client ([../../design/nostr.md](../../design/nostr.md)). |
 
 No DuckDB extension is used at runtime: JSON is stored as `VARCHAR` and parsed
 in JS, because the `json` extension is not built into the 1.32.0 wasm and
