@@ -11,6 +11,7 @@
 //   node scripts/fork.mjs merkle <0x…> <SATORI>              sets a merkle root with that address; prints central's proof JSON
 //   node scripts/fork.mjs advance [days]                     moves chain time forward and mines
 //   node scripts/fork.mjs predict [up|down]                  the deployer predicts the default game (moves its next value)
+//   node scripts/fork.mjs stream <name>                      anyone's new stream (a 0.001 SATORI burn) with one value: its game has no voting weight
 //
 // Every command but start takes --port. The deployer (0x9d31…8817, D6's admin,
 // root publisher and airdrop authority, ~519 SATORI) is impersonated.
@@ -38,6 +39,11 @@ const abi = parseAbi([
   'function setMerkleRoot(bytes32 newRoot)',
   'struct Request { uint32 gameId; bytes payload; }',
   'function predictMultipleWithPayloads(Request[] requests)',
+  'function approve(address spender, uint256 value) returns (bool)',
+  'function createSimpleDataStream(string name, address provider, uint24 minCadenceMinutes) returns (uint32)',
+  'function setValues(uint32[] streamIds, int232[] values) returns (uint256)',
+  'function getAllDataStreams() view returns (uint32[])',
+  'function binaryGameByStream(uint32) view returns (uint32)',
 ]);
 
 export function clients(rpc) {
@@ -100,6 +106,17 @@ export async function advance(rpc, days = 1) {
 export const predict = (rpc, dir = 'up') =>
   asDeployer(rpc, DEFAULTS.engine, 'predictMultipleWithPayloads', [[{ gameId: 1, payload: encodePacked(['uint8'], [dir === 'down' ? 2 : 1]) }]]);
 
+/** A new stream from the deployer (hub.createSimpleDataStream burns 0.001 SATORI) with one value. → { streamId, gameId } */
+export async function stream(rpc, name) {
+  await asDeployer(rpc, DEFAULTS.token, 'approve', [DEFAULTS.hub, parseEther('1')]);
+  await asDeployer(rpc, DEFAULTS.hub, 'createSimpleDataStream', [name, DEPLOYER, 60]);
+  const { pub } = clients(rpc);
+  const streamId = (await pub.readContract({ address: DEFAULTS.registry, abi, functionName: 'getAllDataStreams' })).at(-1);
+  await asDeployer(rpc, DEFAULTS.registry, 'setValues', [[streamId], [1000n]]);
+  const gameId = await pub.readContract({ address: DEFAULTS.games, abi, functionName: 'binaryGameByStream', args: [streamId] });
+  return { streamId, gameId };
+}
+
 async function answering(rpc, tries = 60) {
   for (let i = 0; i < tries; i++) {
     try {
@@ -160,8 +177,9 @@ async function main() {
     case 'merkle': console.log(JSON.stringify(await merkle(rpc, args[0], args[1]))); break;
     case 'advance': await advance(rpc, args[0] ?? 1); console.log(`advanced ${args[0] ?? 1} day(s)`); break;
     case 'predict': console.log(await predict(rpc, args[0])); break;
+    case 'stream': console.log(JSON.stringify(await stream(rpc, args[0] ?? `junk-${Date.now()}`))); break;
     default:
-      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 18).join('\n'));
+      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 20).join('\n'));
       process.exitCode = cmd ? 1 : 0;
   }
 }

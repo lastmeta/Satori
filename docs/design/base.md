@@ -352,7 +352,8 @@ round, hash, games) and `base_last_batch` (the last batch mined, above).
 - Against a fork: `BASE_FORK=http://127.0.0.1:8546 npx vitest run
   src/chain/fork.test.js` runs the chain module against the real D6
   contracts on an anvil fork (`node scripts/fork.mjs start --port 8546`):
-  delegate (three steps), the registry's streams and history, a batch and
+  delegate (three steps), the registry's streams (a new junk stream left
+  out: no voting weight) and history, a batch and
   `AlreadyPredicted` after it, the airdrop and merkle claims a round later
   (and that the delegate's power then equals the vault's balance), stop, the
   lock still on in round N, a SATORI send in round N + 1, an ETH send.
@@ -403,5 +404,7 @@ the last batch shown.
 - `advance [days]`: moves chain time and mines.
 - `predict [up|down]`: the deployer predicts the default game, so the default
   stream's next value moves (and delegators' rewards can show).
+- `stream [name]`: a new stream from the deployer (a 0.001 SATORI burn) with
+  one value; its game has no voting weight, so the batch leaves it out.
 - `stop [--port 8545]`: stops the fork `start` began (its pid is in
   `.fork.<port>.pid`, its log in `.fork.<port>.log`).

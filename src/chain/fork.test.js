@@ -8,7 +8,7 @@ import { http, zeroAddress } from 'viem';
 import { generateEntropy, publicKeys, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
 import { createChain, revertName, DOWN, INDEFINITE } from './index.js';
-import { fund, airdrop, merkle, advance, clients } from '../../scripts/fork.mjs';
+import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/fork.mjs';
 
 const RPC = process.env.BASE_FORK;
 const E18 = 10n ** 18n;
@@ -37,8 +37,11 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     expect(on.identity).toMatchObject({ fee: 0, power: 100n * E18, allowedDelegator: V });
     expect(on.vault).toMatchObject({ delegate: I, lockedUntil: INDEFINITE, lock: { locked: true, indefinite: true } });
 
+    const junk = await stream(RPC, `junk-${Date.now()}`); // anyone's stream: a game, but no voting weight
+    expect(junk.gameId).toBeGreaterThan(0);
     const streams = await chain.streams();
     expect(streams.find((g) => g.streamId === 1)).toMatchObject({ gameId: 1, named: false, cadenceMinutes: 1440 });
+    expect(streams.find((g) => g.streamId === junk.streamId)).toBeUndefined();
     expect((await chain.history(1)).length).toBeGreaterThan(1);
     expect(await chain.batchState(I)).toMatchObject({ round: on.round, power: 100n * E18, predicted: 0 });
     expect(await chain.simulateGame(identity, { gameId: 1, direction: DOWN })).toBe(null);

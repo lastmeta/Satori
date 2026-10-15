@@ -89,6 +89,7 @@ node scripts/fork.mjs airdrop 0xVAULT 600              # an airdrop allocation
 node scripts/fork.mjs merkle 0xVAULT 5                 # a merkle root; prints the proof a (stub) central serves
 node scripts/fork.mjs advance 1                        # a day later (then window.satori.predictBase(), or wait for the hourly check)
 node scripts/fork.mjs predict up                       # the deployer predicts the default game, so its value moves
+node scripts/fork.mjs stream                           # anyone's new stream: a game with no voting weight, left out of the batch
 node scripts/fork.mjs stop
 ```
 
