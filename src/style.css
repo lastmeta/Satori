@@ -104,7 +104,6 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .unlock { display: flex; gap: 10px; margin-top: 12px; }
 .unlock input { margin: 0; flex: 1; min-width: 0; }
 .keys .error { margin: 8px 0 0; }
-.note { background: var(--accent-soft); border-radius: 9px; padding: 10px 12px; font-size: 0.9rem; }
 .backup-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .backup-row .label { width: 110px; }
 .backup { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }

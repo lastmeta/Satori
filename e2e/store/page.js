@@ -1,13 +1,23 @@
 // The real db module on OPFS (its own file, not the app's), for e2e/store.spec.js.
-import { openOpfsDb } from '../../src/db/opfs.js';
+// 'app-meta' reads (and with a value, writes) one meta row of the app's own db.
+import { openOpfsDb, DB_PATH } from '../../src/db/opfs.js';
 
 window.violations = [];
 document.addEventListener('securitypolicyviolation', (e) =>
   window.violations.push(`${e.violatedDirective} ${e.blockedURI}`));
 
 let db;
-window.probe = async ({ cmd, token }) => {
+window.probe = async ({ cmd, token, key, value }) => {
   try {
+    if (cmd === 'app-meta') {
+      const app = await openOpfsDb(DB_PATH);
+      try {
+        if (value !== undefined) await app.set(key, value);
+        return { value: await app.get(key) };
+      } finally {
+        await app.close();
+      }
+    }
     db ??= await openOpfsDb('opfs://e2e-smoke.duckdb');
     if (cmd === 'write') {
       await db.set('e2e', token);

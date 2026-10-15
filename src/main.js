@@ -47,7 +47,6 @@ async function startNeuron() {
 async function saveKeys({ walletYaml, vaultYaml }) {
   await db.set('vault_yaml', vaultYaml); // vault first: boot needs both
   await db.set('wallet_yaml', walletYaml);
-  if (state.legacyKey) await db.set('vault', null); // the step-1 prototype's sealed key
   if (!(await db.streams()).length) await db.addStream(DEFAULT_STREAM);
   await db.checkpoint();
   await startNeuron();
@@ -70,14 +69,33 @@ function lock() {
 }
 
 function backupOf(which) {
+  if (which !== 'identity' && which !== 'vault') throw new Error("Name the key: 'identity' or 'vault'.");
   if (!vault) throw new Error('Unlock the vault first');
   return (which === 'vault' ? vault : identity).backup();
 }
 
 function fileText(name) {
+  if (name !== 'wallet.yaml' && name !== 'vault.yaml') throw new Error("Name the file: 'wallet.yaml' or 'vault.yaml'.");
   if (!vault) throw new Error('Unlock the vault first');
   return name === 'vault.yaml' ? files.vaultYaml : files.walletYaml;
 }
+
+/** One action at a time, for the UI and agents alike; state.busy says which. */
+async function exclusive(what, fn) {
+  if (state.busy) throw new Error(`Busy (${state.busy}). Try again when it is done.`);
+  state.busy = what;
+  try {
+    return await fn();
+  } finally {
+    state.busy = '';
+  }
+}
+
+/** Setup, from the UI or an agent: one at a time, and only on the Setup screen. */
+const setup = (makeFiles) => exclusive('setup', async () => {
+  if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
+  await saveKeys(await makeFiles());
+});
 
 async function addStream(s) {
   const bad = streamError(s);
@@ -108,16 +126,13 @@ function goStep(step) {
   state.step = step;
 }
 
-const busy = (what, fn) => async (...args) => {
-  if (state.busy) return;
-  state.busy = what;
+/** A UI action whose error is shown on the screen. */
+const shown = (fn) => async (...args) => {
   state.error = '';
   try {
     await fn(...args);
   } catch (err) {
     state.error = err?.message ?? String(err);
-  } finally {
-    state.busy = '';
   }
 };
 
@@ -154,30 +169,34 @@ const actions = {
     el.reset();
     goStep('passphrase');
   },
-  createKeys: busy('setup', async (f, el) => {
+  createKeys: shown(async (f, el) => {
     if (f.pass1 !== f.pass2) throw new Error('The passphrases differ.');
-    const out = await writeKeys(pending, f.pass1);
-    wipePending();
-    el.reset();
-    await saveKeys(out);
-  }),
-  importDocker: busy('setup', async (el) => {
-    const f = new FormData(el);
-    const out = await importDocker({
-      walletText: await f.get('wallet').text(), vaultText: await f.get('vault').text(), passphrase: f.get('pass'),
+    await setup(async () => {
+      const out = await writeKeys(pending, f.pass1);
+      wipePending();
+      el.reset();
+      return out;
     });
-    el.reset();
-    await saveKeys(out);
   }),
-  unlock: busy('unlock', async (f, el) => {
+  importDocker: shown(async (el) => {
+    const f = new FormData(el);
+    await setup(async () => {
+      const out = await importDocker({
+        walletText: await f.get('wallet').text(), vaultText: await f.get('vault').text(), passphrase: f.get('pass'),
+      });
+      el.reset();
+      return out;
+    });
+  }),
+  async unlock(f, el) {
     state.vaultError = '';
     try {
-      await unlock(f.pass);
+      await exclusive('unlock', () => unlock(f.pass));
       el.reset();
     } catch (err) {
       state.vaultError = err?.message ?? String(err);
     }
-  }),
+  },
   lock,
   showBackup(which) {
     const { words, wif } = backupOf(which);
@@ -232,10 +251,17 @@ window.satori = {
   },
   /** Create a neuron (random keys unless words are given). The vault stays locked. */
   async setup({ passphrase, vaultWords, identityWords } = {}) {
-    if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
-    const keys = { vault: vaultWords ? entropyFromWords(vaultWords) : generateEntropy() };
-    if (identityWords) keys.identity = entropyFromWords(identityWords);
-    await saveKeys(await writeKeys(keys, passphrase));
+    await setup(async () => {
+      const keys = {};
+      try {
+        keys.vault = vaultWords ? entropyFromWords(vaultWords) : generateEntropy();
+        if (identityWords) keys.identity = entropyFromWords(identityWords);
+        return await writeKeys(keys, passphrase);
+      } finally {
+        keys.vault?.fill(0);
+        keys.identity?.fill(0);
+      }
+    });
     return this.status();
   },
   async predictions(stream, limit = 20) {
@@ -259,7 +285,6 @@ async function boot() {
   try {
     db = await openOpfsDb();
     if ((await db.get('wallet_yaml')) && (await db.get('vault_yaml'))) return void (await startNeuron());
-    state.legacyKey = !!(await db.get('vault'));
     state.screen = 'setup';
   } catch (err) {
     state.fatal = `The neuron did not start: ${err?.message ?? err}`;

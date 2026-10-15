@@ -207,6 +207,44 @@ test('agent API: window.satori drives the same app', async ({ context, page }) =
   await page.evaluate(() => window.satori.unlock('pass'));
   expect(await page.evaluate(() => window.satori.backup('vault'))).toEqual({ words: v.words, wif: v.wif });
   expect(await page.evaluate(() => window.satori.file('vault.yaml'))).toContain(`address: ${v.address}`);
+  expect(await page.evaluate(() => window.satori.file('wallet.yaml'))).toContain(`address: ${status.identity}`);
+  expect((await page.evaluate(() => window.satori.backup('identity'))).words).not.toBe(v.words);
+  // Only the exact names: anything else throws, never falls back to the identity.
+  for (const which of ['Vault', 'vaults', '', null]) {
+    await expect(page.evaluate((w) => window.satori.backup(w), which)).rejects.toThrow(/'identity' or 'vault'/);
+  }
+  for (const name of ['vault.yml', 'Vault.yaml', 'vault', null]) {
+    await expect(page.evaluate((n) => window.satori.file(n), name)).rejects.toThrow(/'wallet.yaml' or 'vault.yaml'/);
+  }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+});
+
+test('setup: one at a time, and it leaves rows it does not own', async ({ context, page }) => {
+  await stubCoinbase(context);
+  // A meta row this app does not own (the step-1 prototype kept its key as meta.vault).
+  await page.goto('/e2e/store/');
+  const row = { v: 1, note: 'not ours' };
+  expect(await page.evaluate((r) => window.probe({ cmd: 'app-meta', key: 'vault', value: r }), row)).toEqual({ value: row });
+
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
+  await expect(page.getByText(/prototype/)).toHaveCount(0);
+  // Two setups at once (an agent retrying, or an agent and the UI): one wins, the other is refused.
+  const results = await page.evaluate(() => Promise.allSettled([
+    window.satori.setup({ passphrase: 'pass' }), window.satori.setup({ passphrase: 'pass' }),
+  ]).then((all) => all.map((r) => (r.status === 'fulfilled' ? r.value : { error: r.reason.message }))));
+  const done = results.filter((r) => r.screen === 'home');
+  expect(done).toHaveLength(1);
+  expect(results.find((r) => r.error)?.error).toMatch(/busy|already set up/i);
+  await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeHidden();
+
+  // What was stored is what the winner reported.
+  await page.reload();
+  await expect(page.locator('[data-test=identity]')).toHaveText(done[0].identity);
+  await expect(page.locator('[data-test=vault]')).toHaveText(done[0].vault);
+  await expect(page.evaluate(() => window.satori.setup({ passphrase: 'pass' }))).rejects.toThrow(/already set up/i);
+
+  await page.goto('/e2e/store/');
+  expect(await page.evaluate(() => window.probe({ cmd: 'app-meta', key: 'vault' }))).toEqual({ value: row });
 });

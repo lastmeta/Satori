@@ -12,7 +12,6 @@ export const state = reactive({
   error: '',
   // setup
   step: 'choose', // choose | words | confirm | restore | docker | passphrase
-  legacyKey: false, // a sealed key from the step-1 prototype is in this browser
   words: [],
   confirmAt: [],
   // home
@@ -46,8 +45,6 @@ function setup(a) {
       <p class="muted">A neuron has two keys. The <strong>identity</strong> signs predictions on its own,
         so it stays unencrypted in this browser. The <strong>vault</strong> holds your funds and is
         encrypted with your passphrase.</p>
-      <p class="note" hidden="${() => !state.legacyKey}">This browser holds a key from the first
-        prototype. To keep it, choose “Restore from words” and enter its 24 words as the vault.</p>
       <div class="actions">
         <button class="primary" @click="${a.newWords}">Create a new neuron</button>
         <button @click="${() => a.goStep('restore')}">Restore from words</button>
