@@ -3,7 +3,8 @@
 //   await c.register({ vaultPubkey })        // POST /peer/register; null when there is no vault pubkey
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.submitPredictions(items)         // login (identity) → POST /predictions/batch; one retry on 401
-// Errors are CentralError: status 0 for a timeout or a network failure.
+// Errors are CentralError: status 0 for a timeout or a network failure. A
+// network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 
@@ -93,20 +94,31 @@ export class CentralError extends Error {
 export function createCentral({ url, identity, version, fetch: fetchFn = globalThis.fetch }) {
   const base = url.replace(/\/+$/, '');
 
-  async function call(method, path, headers = {}, body) {
+  async function once(method, path, headers, body) {
     let res;
+    let text;
     try {
       res = await fetchFn(base + path, { method, headers, body, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      text = await res.text();
     } catch (err) {
       if (err?.name === 'TimeoutError') throw new CentralError(0, 'timeout', `central timed out (${TIMEOUT_MS / 1000} s)`);
       // nginx's 429/502 pages have no CORS header: the browser shows them as this TypeError too.
       throw new CentralError(0, 'network', `central unreachable: ${err?.message ?? err}`);
     }
-    const text = await res.text();
     let data = text;
     try { data = JSON.parse(text); } catch { /* not JSON */ }
     if (!res.ok) throw new CentralError(res.status, typeof data?.detail === 'string' ? data.detail : text);
     return data;
+  }
+
+  /** One call, resent once on a network error, a timeout or a 5xx (as satorilib's _makeAuthenticatedCall, server.py:231-268). */
+  async function call(method, path, headers = {}, body) {
+    try {
+      return await once(method, path, headers, body);
+    } catch (err) {
+      if (err.status === 0 || err.status >= 500) return once(method, path, headers, body);
+      throw err;
+    }
   }
 
   /** A fresh token: sign central's challenge with the identity (server.py:87-118 signs a timestamp). */

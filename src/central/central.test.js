@@ -141,9 +141,15 @@ describe('submitPredictions', () => {
     await expect(client(fetch).submitPredictions([])).rejects.toMatchObject({ status: 401 });
     expect(calls.filter((c) => c.path === '/api/v1/predictions/batch')).toHaveLength(2);
   });
-  test('other errors are not retried', async () => {
+  test('a 5xx is resent once with the same token; a second 5xx throws', async () => {
     const { fetch, calls } = mockFetch({ ...login(), 'POST /api/v1/predictions/batch': () => json(500, { detail: 'boom' }) });
     await expect(client(fetch).submitPredictions([])).rejects.toMatchObject({ status: 500, detail: 'boom' });
+    expect(calls.filter((c) => c.path === '/api/v1/predictions/batch')).toHaveLength(2);
+    expect(calls.filter((c) => c.path === '/api/v1/auth/login')).toHaveLength(1);
+  });
+  test('other 4xx are not retried', async () => {
+    const { fetch, calls } = mockFetch({ ...login(), 'POST /api/v1/predictions/batch': () => json(422, { detail: 'bad' }) });
+    await expect(client(fetch).submitPredictions([])).rejects.toMatchObject({ status: 422 });
     expect(calls.filter((c) => c.path === '/api/v1/predictions/batch')).toHaveLength(1);
   });
   test('a failed login is the error (signature refused)', async () => {
@@ -161,15 +167,28 @@ describe('transport', () => {
     await client(fetch).observations();
     expect(calls[0].signal).toBeInstanceOf(AbortSignal);
   });
-  test('a timeout is a CentralError saying so', async () => {
-    const fetch = async () => { throw new DOMException('signal timed out', 'TimeoutError'); };
+  test('a timeout is a CentralError saying so, after one resend', async () => {
+    const fetch = vi.fn(async () => { throw new DOMException('signal timed out', 'TimeoutError'); });
+    await expect(client(fetch).observations()).rejects.toMatchObject({ status: 0, message: 'central timed out (15 s)' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  test('a body that stalls past the timeout is a timeout too', async () => {
+    const fetch = async () => ({ ok: true, status: 200,
+      text: async () => { throw new DOMException('signal timed out', 'TimeoutError'); } });
     await expect(client(fetch).observations()).rejects.toMatchObject({ status: 0, message: 'central timed out (15 s)' });
   });
-  test('a network TypeError (offline, or an nginx 429/502 with no CORS header) is wrapped', async () => {
-    const fetch = async () => { throw new TypeError('Failed to fetch'); };
+  test('a network TypeError (offline, or an nginx 429/502 with no CORS header) is wrapped, after one resend', async () => {
+    const fetch = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
     const err = await client(fetch).observations().catch((e) => e);
     expect(err).toBeInstanceOf(CentralError);
     expect(err).toMatchObject({ status: 0, message: 'central unreachable: Failed to fetch' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  test('one network failure, then an answer: the answer', async () => {
+    const { fetch: ok } = mockFetch({ 'GET /api/v1/observations/batch?limit=100': json(200, [{ id: 1 }]) });
+    let n = 0;
+    const fetch = async (...a) => { if (n++ === 0) throw new TypeError('Failed to fetch'); return ok(...a); };
+    expect(await client(fetch).observations()).toEqual([{ id: 1 }]);
   });
   test('a non-JSON error body is the detail; a trailing slash on the URL is fine', async () => {
     const { fetch, calls } = mockFetch({ 'GET /api/v1/observations/batch?limit=100': () => new Response('Bad Gateway', { status: 502 }) });
