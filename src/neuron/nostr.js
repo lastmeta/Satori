@@ -334,11 +334,20 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       };
     },
 
-    /** The relays' catalog: newest per (provider, stream), no tombstones; `pred` and `subscribed` marked. */
+    /**
+     * The relays' catalog: newest per (provider, stream), no tombstones;
+     * `pred` and `subscribed` marked, and `relays`: the ones that sent it.
+     */
     async discover() {
-      const events = (await Promise.all((await readable()).map((e) => pages(e.relay).catch(() => [])))).flat();
+      const from = new Map(); // event id → the relays that sent it
+      const events = (await Promise.all((await readable()).map(async (e) => {
+        const list = await pages(e.relay).catch(() => []);
+        for (const ev of list) from.set(ev.id, [...(from.get(ev.id) ?? []), e.url]);
+        return list;
+      }))).flat();
       const active = new Set((await db.relayStreams({ active: true })).map((r) => r.uuid));
-      return catalog(events).map(({ event, ...s }) => ({ ...s, subscribed: active.has(relayUuid(s.pubkey, s.stream_name)) }));
+      return catalog(events).map(({ event, ...s }) => ({ ...s, relays: from.get(event.id),
+        subscribed: active.has(relayUuid(s.pubkey, s.stream_name)) }));
     },
 
     /**

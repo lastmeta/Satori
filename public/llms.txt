@@ -199,7 +199,8 @@ script runs; then call `await satori.status()` until `screen` is no longer
   `_pred`; `model` is `bar1`, `naive` or `echo`).
 - `await satori.discover()` → the catalog: `[{ pubkey, stream_name, name,
   description, cadence_seconds, price_per_obs, encrypted, approval_required,
-  tags, metadata, created_at, pred, subscribed }]`, newest first. Right after
+  tags, metadata, created_at, pred, subscribed, relays }]`, newest first;
+  `relays` lists the relays that sent the announcement. Right after
   a load it waits up to 10 s for the relays still connecting, then throws if
   none is open.
 - `await satori.subscribe(pubkey, stream_name)` → the subscription (as in

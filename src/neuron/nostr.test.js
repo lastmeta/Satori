@@ -151,7 +151,9 @@ describe('discover', () => {
     // 501 announcements on central's relay: the first page holds 500.
     for (let i = 0; i < 501; i++) c.stored.push(announce(`s${i}`, {}, clock - 1000 + i));
     c.stored.push(signEvent(tombstoneEvent('s5', PROV_PUB, clock), PROV));
-    u.stored.push(announce('s1', { name: 'newer' }, clock), announce('s1_pred', {}, clock));
+    const both = announce('s2', {}, clock - 1000 + 2);
+    c.stored.splice(2, 1, both);
+    u.stored.push(announce('s1', { name: 'newer' }, clock), announce('s1_pred', {}, clock), both);
     const list = await nostr.discover();
     expect(list).toHaveLength(501); // 501 − s5 + s1_pred
     expect(list.find((s) => s.stream_name === 's1')).toMatchObject({ name: 'newer', pubkey: PROV_PUB, subscribed: false, pred: false });
@@ -159,6 +161,10 @@ describe('discover', () => {
     expect(list.find((s) => s.stream_name === 's5')).toBeUndefined();
     expect(list.find((s) => s.stream_name === 's1_pred').pred).toBe(true);
     expect(list[0].event).toBeUndefined(); // plain values for agents
+    // Which relays sent each entry's (newest) announcement: where to find the stream.
+    expect(list.find((s) => s.stream_name === 's1').relays).toEqual([USER_RELAY]);
+    expect(list.find((s) => s.stream_name === 's0').relays).toEqual([CENTRAL_RELAY]);
+    expect(list.find((s) => s.stream_name === 's2').relays.sort()).toEqual([CENTRAL_RELAY, USER_RELAY].sort());
   });
   test('no relay open: an error (right after a load it waits for the first one)', async () => {
     await boot();
