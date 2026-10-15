@@ -3,6 +3,7 @@
 // re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, reactive } from '@arrow-js/core';
 import { fmtNum, fmtTime, sparkPoints } from './format.js';
+import { MIN_PASSPHRASE } from '../keys/index.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | setup | home
@@ -110,7 +111,8 @@ function setup(a) {
 
     <form hidden="${showStep('passphrase')}" @submit="${(e) => a.createKeys(form(e), e.target)}">
       <h2>Choose a passphrase</h2>
-      <p class="muted">It encrypts the vault in this browser. At least 4 characters.</p>
+      <p class="muted">It encrypts the vault in this browser. At least ${MIN_PASSPHRASE} characters,
+        Latin-1 only (no emoji or €), as Docker needs.</p>
       <label>Passphrase <input name="pass1" type="password" autocomplete="new-password" required></label>
       <label>Repeat passphrase <input name="pass2" type="password" autocomplete="new-password" required></label>
       ${errorLine()}

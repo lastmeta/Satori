@@ -21,7 +21,7 @@ describe('writeKeys', () => {
     const doc = load(vaultYaml);
     expect(doc.evr.address).toBe(b.address);
     expect(doc.words).not.toContain(' ');
-    expect(vaultInfo(vaultYaml)).toEqual({ address: b.address, pubkey: b.pubkey });
+    expect(vaultInfo(vaultYaml)).toEqual({ address: b.address });
   });
   test('no identity given: a new random one', async () => {
     const one = await writeKeys({ vault: hex(b.entropyHex) }, PASS);
@@ -51,7 +51,7 @@ describe('identity', () => {
 describe('vault', () => {
   test('address shows while locked; Unlock needs the passphrase; Lock wipes', async () => {
     const vaultYaml = await writeWallet(hex(b.entropyHex), { password: PASS });
-    expect(vaultInfo(vaultYaml)).toEqual({ address: b.address, pubkey: b.pubkey });
+    expect(vaultInfo(vaultYaml)).toEqual({ address: b.address });
     await expect(unlockVault(vaultYaml, 'nope')).rejects.toThrow(/wrong passphrase/i);
     const v = await unlockVault(vaultYaml, PASS);
     expect(v).toMatchObject({ address: b.address, pubkey: b.pubkey, locked: false });
@@ -63,7 +63,7 @@ describe('vault', () => {
     expect(() => v.backup()).toThrow(/locked/i);
   });
   test('an old vault (address encrypted) has no address until imported', () => {
-    expect(vaultInfo(fx.vaults.old.yaml)).toEqual({ address: null, pubkey: null });
+    expect(vaultInfo(fx.vaults.old.yaml)).toEqual({ address: null });
   });
 });
 
@@ -77,7 +77,7 @@ describe('importDocker', () => {
   test('an old vault is re-written so its address shows while locked', async () => {
     const r = await importDocker({ walletText: a.walletYaml, vaultText: fx.vaults.old.yaml, passphrase: password });
     const old = fx.vectors[fx.vaults.old.vector];
-    expect(vaultInfo(r.vaultYaml)).toEqual({ address: old.address, pubkey: old.pubkey });
+    expect(vaultInfo(r.vaultYaml)).toEqual({ address: old.address });
     expect((await unlockVault(r.vaultYaml, password)).address).toBe(old.address);
   });
   test('wrong passphrase, a mismatched file, a watch-only file are refused', async () => {
