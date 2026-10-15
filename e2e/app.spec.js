@@ -8,6 +8,8 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { verifyMessage, deriveKeys, entropyFromWords } from '../src/keys/index.js';
 import { readWallet } from '../src/keys/docker.js';
+import { forecast, STEP_S } from '../src/engine/index.js';
+import { pyFloatStr } from '../src/central/index.js';
 
 const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
@@ -216,8 +218,9 @@ test('create, register, Poll now (observations in, predictions out), reload keep
   stub.batch = [entry('u-btc', 'bitcoin', T0 + 3600, '67100.5'), BATCH[1]];
   await page.getByRole('button', { name: 'Poll now' }).click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('2 streams, 1 new, 1 predicted');
-  await expect(btc.locator('[data-test=t1]')).toHaveText('67,200.50');
-  await expect(btc.locator('[data-test=t2]')).toHaveText('67,300.50');
+  await expect(btc.locator('[data-test=t1]')).toHaveText('67,100.50'); // two observations: naive, the last value
+  await expect(btc.locator('[data-test=t2]')).toHaveText('67,100.50');
+  await expect(btc.locator('[data-test=model]')).toHaveText('naive');
   expect(stub.batches).toHaveLength(2);
 
   expect(stub.prod).toEqual([]);
@@ -262,13 +265,30 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   stub.fail.push(401);
   const r4 = await poll();
   expect(r4).toMatchObject({ poll: { new: 0 }, submit: { successful: 1 } });
-  expect(stub.batches.at(-1)).toEqual([expect.objectContaining({ stream_uuid: 'u-btc', value: '67003.5', t1_value: '67002.5' })]);
+  expect(stub.batches.at(-1)).toEqual([expect.objectContaining({ stream_uuid: 'u-btc', value: '67001.5', t1_value: '67001.5' })]);
   expect((await status(page)).central.pending).toBe(0);
   const preds = await page.evaluate(() => window.satori.predictions('bitcoin'));
-  expect(preds.map((p) => [p.status, p.t1])).toEqual([['sent', 67002.5], ['sent', 67000.5]]);
-  expect(preds[0]).toMatchObject({ stream_uuid: 'u-btc', name: 'bitcoin', model: 'ols-20', hash: stub.batches.at(-1)[0].hash });
+  expect(preds.map((p) => [p.status, p.t1])).toEqual([['sent', 67001.5], ['sent', 67000.5]]);
+  expect(preds[0]).toMatchObject({ stream_uuid: 'u-btc', name: 'bitcoin', model: 'naive', phi: null, weight: null,
+    hash: stub.batches.at(-1)[0].hash });
   const streams = await page.evaluate(() => window.satori.streams());
   expect(streams.map((s) => [s.name, s.observations, s.obs_value])).toEqual([['bitcoin', 2, 67001.5], ['eth', 1, 2500]]);
+
+  // The engine: naive until a stream has 8 buckets of 12 h, then bar1, with the same numbers as in node.
+  const ZIG = [67100.5, 67000.5, 67200.5, 67100.5, 67300.5, 67200.5, 67400.5];
+  for (const [k, value] of ZIG.entries()) {
+    stub.batch = [entry('u-btc', 'bitcoin', T0 + (k + 1) * STEP_S, String(value)), BATCH[1]];
+    expect((await poll()).poll).toMatchObject({ new: 1, predicted: 1 });
+    if (k === 0) await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveText('naive');
+  }
+  const [bar1] = await page.evaluate(() => window.satori.predictions('bitcoin', 1));
+  const history = [[T0, 67000.5], [T0 + 60, 67001.5], ...ZIG.map((v, k) => [T0 + (k + 1) * STEP_S, v])];
+  const expected = forecast(history.map(([ts, value]) => ({ ts, value })));
+  expect(bar1).toMatchObject({ model: 'bar1', t1: expected.t1, t2: expected.t2, phi: expected.phi, weight: expected.weight });
+  expect(bar1.t2).not.toBe(67400.5);
+  expect(stub.batches.at(-1)).toEqual([expect.objectContaining({ value: pyFloatStr(expected.t2), t1_value: pyFloatStr(expected.t1) })]);
+  await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveText('bar1');
+  await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveAttribute('title', /^Bayesian AR\(1\) on 12 h returns · φ /);
 
   // The central URL: https only; a new one registers at once. Its uuids differ, so the
   // pending queue and the stream list are dropped and refill from it.

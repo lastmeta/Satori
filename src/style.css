@@ -120,13 +120,14 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 
 .srows { margin-top: 8px; }
 .srow {
-  display: grid; grid-template-columns: minmax(0, 1.6fr) 1fr 1fr 1fr 1fr 70px; gap: 10px; align-items: baseline;
+  display: grid; grid-template-columns: minmax(0, 1.6fr) 1fr 1fr 1fr 1fr 56px 70px; gap: 10px; align-items: baseline;
   padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.92rem;
 }
 .srow.head { border-top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .srow .sname { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .srow .num { text-align: right; font-variant-numeric: tabular-nums; }
 .srow .badge { justify-self: end; margin: 0; }
+.srow .model { color: var(--muted); font-size: 0.85rem; }
 .srow > :last-child { justify-self: end; }
 summary { cursor: pointer; color: var(--muted); }
 details.card > summary { color: var(--text); font-weight: 500; }

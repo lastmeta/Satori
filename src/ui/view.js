@@ -2,7 +2,7 @@
 // Every screen is built once and shown or hidden, so typing is never lost to a
 // re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, reactive } from '@arrow-js/core';
-import { fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText } from './format.js';
+import { fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle } from './format.js';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 
 export const state = reactive({
@@ -170,7 +170,7 @@ function streamRow(r) {
   // One root node, no whitespace around it: ArrowJS 1.0.6 breaks a keyed list
   // of multi-node items once it goes empty and back.
   const sent = r.status === 'sent';
-  return html`<div class="srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
+  return html`<div class="srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="model" data-label="Model" data-test="model" title="${modelTitle(r)}">${r.model ?? '–'}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
 }
 
 function streams() {
@@ -182,7 +182,7 @@ function streams() {
     </header>
     <p class="muted" hidden="${() => state.streams.length > 0}">None yet: they arrive with the first poll.</p>
     <div class="srows" hidden="${() => !state.streams.length}">
-      <div class="srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span></span></div>
+      <div class="srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
       <div>${() => state.streams.map((r) => streamRow(r).key(r.uuid))}</div>
     </div>
   </section>`;

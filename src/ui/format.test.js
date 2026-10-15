@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText } from './format.js';
+import { fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle } from './format.js';
 
 test('fmtNum', () => {
   expect(fmtNum(67123.456)).toBe('67,123.46');
@@ -50,4 +50,12 @@ test('pickIndexes', () => {
   expect(new Set(ix).size).toBe(3);
   expect(ix.every((i) => i >= 0 && i < 24)).toBe(true);
   expect([...ix].sort((a, b) => a - b)).toEqual(ix);
+});
+
+test('modelTitle: the engine model in a few words (the Streams table hover)', () => {
+  expect(modelTitle({ model: 'bar1', phi: -0.12345, weight: 0.8 })).toBe('Bayesian AR(1) on 12 h returns · φ −0.123 · weight 0.8');
+  expect(modelTitle({ model: 'bar1', phi: 0, weight: 1 })).toBe('Bayesian AR(1) on 12 h returns · φ 0 · weight 1');
+  expect(modelTitle({ model: 'naive' })).toBe('the last value (fewer than 8 × 12 h of history)');
+  expect(modelTitle({ model: 'ols-20' })).toBe('ols-20');
+  expect(modelTitle({ model: null })).toBe('');
 });

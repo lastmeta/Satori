@@ -40,6 +40,15 @@ export function submitText(s) {
   return `${fmtWhen(s.at)} · ${s.successful} of ${s.total_submitted} accepted${s.successful > 0 ? '' : kept}`;
 }
 
+const short = (x, digits) => String(Number(x.toFixed(digits))).replace('-', '−');
+
+/** The engine model of a prediction in a few words (docs/design/engine.md). */
+export function modelTitle(p) {
+  if (p.model === 'bar1') return `Bayesian AR(1) on 12 h returns · φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)}`;
+  if (p.model === 'naive') return 'the last value (fewer than 8 × 12 h of history)';
+  return p.model ?? '';
+}
+
 /** n distinct sorted random indexes in [0, max). */
 export function pickIndexes(n, max, rand = Math.random) {
   const s = new Set();
