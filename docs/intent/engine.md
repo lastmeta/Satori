@@ -3,8 +3,9 @@
 ## In a nutshell
 
 A neuron takes in several data streams and turns them into forecasts of the
-future, for more than one of them. Today a forecast is one prediction of the
-next time step. The neuron broadcasts its forecasts to the network over Nostr,
+future, for more than one of them. A forecast predicts a stream one cadence
+ahead. The default cadence is a day, which is what central and the Base
+contract score. The neuron broadcasts its forecasts to the network over Nostr,
 and to whatever else needs them, such as the Base contract or central.
 
 Every neuron's models are unique **for a good reason**. A neuron differs from
