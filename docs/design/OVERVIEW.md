@@ -1,0 +1,53 @@
+# satori MVP: overview
+
+This is the source of truth for step 1. Intent: [../intent/INTENT.md](../intent/INTENT.md).
+Later steps: [../future/README.md](../future/README.md).
+
+## The flow
+
+```
+source ──fetch──▶ observations ──▶ engine (linear) ──▶ prediction ──sign──▶ publish
+ (URL + JSON path)  (DuckDB)        least squares        (DuckDB)   (identity key)  (local outbox)
+```
+
+The app runs one **tick** each minute for each stream:
+1. Fetch the stream's URL, read the number at its JSON path, and store it as an observation.
+2. Fit a straight line to the last 20 observations (ordinary least squares) and
+   predict the value one interval ahead.
+3. Sign the prediction with the identity key and store it.
+4. Publish it. In step 1 the publisher only marks the prediction as published.
+   It has the same shape a central or Nostr publisher will use later.
+
+## Parts
+
+| Part | Folder | Does |
+|---|---|---|
+| keys | `src/keys/` | create or import 24 words; seal them with a passphrase (PBKDF2 → AES-GCM); unlock; Evrmore address; sign and verify messages. The key format is the Docker neuron's: one 32-byte secret = entropy of the 24 words = private key. |
+| db | `src/db/` | DuckDB-WASM 1.32.0 stored in OPFS (`opfs://satori.duckdb`), with tables `meta`, `streams`, `observations`, `predictions`. |
+| engine | `src/engine/` | `predict(values, steps)` returns the OLS line evaluated `steps` points ahead. It is a pure function. |
+| neuron | `src/neuron/` | tick: source → db → engine → sign → publish; the scheduler; one tab only (a Web Lock). |
+| ui | `src/ui/` | ArrowJS screens: Setup, Unlock, Home (streams, latest values and predictions, add stream, backup words, lock). |
+
+## Rules
+
+- Keys exist in memory only while unlocked. The database holds only the sealed
+  words. **Lock** wipes the keys from memory.
+- Only one tab opens the database. Other tabs say "Satori is open in another tab".
+- Default stream: BTC-USD spot from `api.coinbase.com`, which allows browser
+  calls (`Access-Control-Allow-Origin: *`).
+- The page is sent with a strict CSP header: no inline script, `'wasm-unsafe-eval'` for DuckDB.
+
+## Tech (pinned)
+
+`@duckdb/duckdb-wasm` 1.32.0 (newer `latest` builds don't write to OPFS),
+`@arrow-js/core` 1.0.6, `@noble/curves` 1.9.7, `@noble/hashes` 1.8.0,
+`@scure/base` 1.2.6, `@scure/bip39` 1.6.0, `vite` 8.3.1, `vitest` 4.1.11,
+`@playwright/test` 1.63.0.
+
+## Verify
+
+- `npm test`: unit tests for keys, engine and db, including Docker key parity
+  vectors from `draft/v1-full`.
+- `npm run e2e`: Chromium runs create → tick → reload → unlock → data still
+  there, and the second-tab check.
+- Dev app: `npm run dev` → http://localhost:5180

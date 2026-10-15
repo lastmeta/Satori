@@ -1,0 +1,26 @@
+# Later steps (parked)
+
+These were researched and reviewed on 2026-10-14/15 against Satori Lite
+(`../neuron`), satorilib, central and the contracts. They are kept here so later
+steps start from evidence, not from scratch.
+
+- [design/OVERVIEW.md](design/OVERVIEW.md): the full v1 neuron that earns (central-lite, Base
+  daily batch, delegate and claims, scheduler and catch-up, CSP), plus the
+  component docs.
+- [issues/](issues/README.md): blockers outside this repo. Prod central lacks
+  the Base and merkle routes. The relay list is ws:// only, so a browser can't
+  connect to it.
+- Code: branch `draft/v1-full` holds half-built modules: Docker-compatible
+  identity (with parity fixtures from the Python), the central client (with
+  Python float/hash parity), Base chain reads, ABIs and transactions, and a
+  naive/SES engine with a backtest.
+
+## Suggested stair steps
+
+1. **MVP** (now): keys, db, linear engine, local publish, basic UI.
+2. **Docker key import/export**: wallet.yaml and vault.yaml, from the draft branch.
+3. **Publish to central**: login, register, predictions batch ([design/central.md](design/central.md)).
+4. **Base**: delegate, daily batch, claims ([design/chain.md](design/chain.md)).
+5. **Nostr**: subscribe to streams, publish `_pred` ([design/transport.md](design/transport.md)). This needs a wss relay.
+6. **Better engine**: SES and backtest-driven selection ([design/engine.md](design/engine.md)).
+7. **Runtime hardening**: catch-up, worker isolation of keys ([design/runtime.md](design/runtime.md)).
