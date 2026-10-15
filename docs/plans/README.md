@@ -21,9 +21,14 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    already do (one schedule, one serial line, one stub central, shared
    constants, no dead code), a Home grouped by key, and agents first
    (`/llms.txt`, `<body data-screen>`, `data-test` on every action).
-8. **Runtime hardening**: catch-up on resume, the keys in a worker,
-   `navigator.storage.persist()` ([runtime.md](runtime.md)).
-9. **Later**, in rough order of value per effort: a per-stream chart and model
+8. ✅ **Installable app (PWA)**: the manifest, a service worker in builds
+   (the page and DuckDB's wasm precached; offline start), Install Satori,
+   Update ready, and persistent storage for the keys, shown on Home
+   ([../design/pwa.md](../design/pwa.md)). It does not run the neuron while
+   closed.
+9. **Runtime hardening**: catch-up on resume, the keys in a worker
+   ([runtime.md](runtime.md)).
+10. **Later**, in rough order of value per effort: a per-stream chart and model
    view; bounties (the predictor's side first); the gasless relay (needs a
    ruling, [issue](../issues/relayer-predict-fee.md)); Evrmore balances and
    SATORIEVR sends; paid streams and payment channels; own data sources. Also:

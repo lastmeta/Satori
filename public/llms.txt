@@ -13,7 +13,8 @@
 > driven by people and by AI agents alike.
 
 Status: steps 1–6 of the roadmap are built (two keys, central's data flow,
-the engine, Nostr, Base), and a finishing pass is done (2026-10-15).
+the engine, Nostr, Base), a finishing pass is done, and a build installs as
+an app (PWA) (2026-10-15).
 
 ## Quick start (an agent)
 
@@ -171,6 +172,18 @@ Every method is below; `await satori.status()` shows everything at once.
   estimate. The tip is the node's `eth_maxPriorityFeePerGas`, the max fee
   2 × the base fee + the tip.
 
+- The installed app (PWA; docs/design/pwa.md): a build (not the dev server)
+  has a service worker that caches the page and the hashed `/assets/` (the
+  app's code, DuckDB's wasm and worker), so it starts offline with its stored
+  keys and data; it touches no other request (central, relays, RPC,
+  `/llms.txt`). It never runs the neuron while the app is closed. The keys
+  live in this origin's storage (OPFS), which a browser may clear unless it
+  is persistent: the neuron asks for it (`navigator.storage.persist()`) after
+  setup and on each load until it is kept. Installing helps keep it (Chrome
+  grants it to installed apps; Safari keeps a Home Screen or Dock app's data).
+  A Safari web app has its own storage, apart from Safari's: set it up there
+  or import the Docker files. An app window and a tab share the one-tab lock.
+
 Times are unix seconds.
 
 ## Drive it from the page (window.satori)
@@ -179,7 +192,7 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 (synchronous, kept current; `await satori.status()` says the same). Then, in
 the page's JS context:
 
-- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base }`.
+- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base, storage, app }`.
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
   tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
@@ -191,6 +204,22 @@ the page's JS context:
     error, or a local one such as a database write).
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
     `{ at, error }`; `pending`: how many predictions wait to be sent.
+
+  `storage` and `app` are there on every screen. `storage`: `{ persisted,
+  usage, quota }` (`persisted`: the browser keeps this origin's data, the keys
+  included, under storage pressure; `usage` and `quota` in bytes, null if the
+  browser does not say). `app`: `{ installed, canInstall, update }`
+  (`installed`: running as an installed app, or installed from this page;
+  `canInstall`: Chromium offered its install prompt; `update`: a new version
+  is waiting, see `update()`).
+- `await satori.install()` → `'accepted' | 'dismissed' | 'unavailable'`: the
+  browser's install prompt when `status().app.canInstall` (Chromium only; it
+  needs a user gesture, which Playwright's `page.evaluate` provides; a person
+  answers it). `'unavailable'` when there is none (installed, Safari,
+  Firefox, an incognito window such as Playwright's default context, or not
+  offered yet).
+- `satori.update()` → true, then the page reloads into the new version, when
+  `status().app.update`; false when none is waiting. Never automatic.
 - `await satori.setup({ passphrase, vaultWords?, identityWords? })` → status.
   Creates the neuron on a fresh browser (random keys unless 24 words are
   given). Passphrase: at least 4 characters, Latin-1 only (no emoji or €), as
@@ -304,7 +333,11 @@ thrown: they are in `status().central` (for example `central 500: …`,
 - Home, top to bottom. **Keys**: each key with its identifiers and Copy:
   the identity (Evrmore and Base addresses), the vault (the same, its
   Locked/Unlocked badge, the "Vault passphrase" field and Unlock), the Nostr
-  pubkey; the header has Lock while unlocked. **Central**: the URL,
+  pubkey, then the storage line ("Storage: kept", or "Storage: the browser may
+  clear it; install Satori or back up your words", with the usage of the
+  quota) and **Install Satori** when the browser offers it (Safari: how to
+  add it to the Dock or Home Screen); the header has Lock while unlocked and
+  "Update ready, reload" when a new version waits. Setup shows Install too. **Central**: the URL,
   Registered, Last poll, Next poll, Last submission, Pending, a vault mismatch
   if any, "Poll now", and a collapsed "Streams: N from central" (one row per
   stream: latest value and time, t1, t2, the model with phi and weight in its
@@ -338,8 +371,9 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `base-delegation`, `base-lock`, `base-claimable`, `base-last-batch`,
   `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
   `base-result`, `base-txs` (the last action's transactions),
-  `base-action-error`, and under Backup `wif`, `download-wallet`,
-  `download-vault`, `download-nostr`.
+  `base-action-error`, under Backup `wif`, `download-wallet`,
+  `download-vault`, `download-nostr`, and for the installed app `storage`,
+  `install`, `install-hint` and `update`.
 
 ## Base on the dev server: the local fork
 
@@ -403,6 +437,10 @@ build step beyond Vite, MIT licensed.
   `index.js` (`createChain`: status multicall, delegate, the batch's pieces,
   claims, sends).
 - `src/ui/`: ArrowJS screens.
+- `src/pwa/`: the installed app: `sw.js` (the service worker; a build writes
+  it to `dist/sw.js` with the files to precache, `vite.config.js`) and
+  `index.js` (register it in a build, Update, Install, persistent storage);
+  `public/manifest.webmanifest` and the icons.
 - `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`,
   `central.md` with Satori Lite's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
@@ -420,7 +458,9 @@ build step beyond Vite, MIT licensed.
   JSON-RPC, an in-memory DuckDB); `e2e/`: Playwright specs and their stub
   central (`stub.js`).
 - Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub
-  central, two test relays, a fake chain behind `/rpc`).
+  central, two test relays, a fake chain behind `/rpc`), `npm run e2e:pwa`
+  (a build on `vite preview` :5181: the manifest, the service worker,
+  offline, Update, one neuron).
 
 ## Contribute
 

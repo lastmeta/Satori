@@ -1,7 +1,7 @@
 # satori: overview
 
-This is the source of truth for what is built (steps 1–6 and the finishing
-pass). Intent: [../intent/INTENT.md](../intent/INTENT.md). The roadmap and
+This is the source of truth for what is built (steps 1–6, the finishing
+pass and the installable app). Intent: [../intent/INTENT.md](../intent/INTENT.md). The roadmap and
 what is left: [../plans/README.md](../plans/README.md). Open issues:
 [../issues/](../issues/README.md). Questions for the owner:
 [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md). For agents, and the one
@@ -9,7 +9,7 @@ reference for `window.satori`: [/llms.txt](../../public/llms.txt).
 
 Component docs: [keys.md](keys.md), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
-[storage.md](storage.md).
+[storage.md](storage.md), [pwa.md](pwa.md) (the installed app).
 
 ## The flow
 
@@ -90,7 +90,8 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
 | engine | `src/engine/` | `forecast(points, { step }) → {model, t1, t2, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence. Pure, no dependency. |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
 | neuron | `src/neuron/` | `register`, `cycle` (poll → store → forecast → submit), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends, the Base settings. |
-| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (the keys with their Evrmore, Base and Nostr identifiers, Unlock/Lock; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |
+| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (the keys with their Evrmore, Base and Nostr identifiers, Unlock/Lock, the storage line and Install Satori; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |
+| pwa | `src/pwa/`, `public/manifest.webmanifest` | The installed app ([pwa.md](pwa.md)): the manifest and the Satori icons; the service worker (`sw.js`, written to `dist/sw.js` by a build-only Vite plugin; none on the dev server): precaches the page and the hashed assets (DuckDB's wasm and worker), cache first for `/assets/`, network first for the page, nothing else touched; "Update ready, reload"; Install Satori (Chromium's prompt, Safari's Add to Dock / Home Screen); persistent storage asked for at start, shown on Home. It never runs the neuron while closed. |
 | agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page, under the same guards; `<body data-screen>` and `data-test` on what carries data or an action. [/llms.txt](../../public/llms.txt) is the one reference for both: what the app is, how to drive it, what's possible, where the code is, and that pull requests are welcome. |
 | shared | `src/util.js`, `src/py.js` | `serial()` (one at a time, in order: the db, the chain's writes, Nostr's intake and outbox), `isHttps()`; Python's `str(float)` and `json.dumps` texts, byte for byte (central's payloads, every Nostr event's content). |
 | tests | `test/`, `e2e/` | Parity fixtures and test doubles (a fake D6 behind JSON-RPC, an in-memory DuckDB); Playwright specs and their one stub central (`e2e/stub.js`). |
@@ -127,7 +128,12 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
   encrypted; files in each other's slots are refused as swapped. The vault is
   never stored in plain text. Passphrases are Latin-1 only, as Docker's
   encryption needs ([keys.md](keys.md#the-files)).
-- Only one tab opens the database. Other tabs say "Satori is open in another tab".
+- Only one tab opens the database. Other tabs say "Satori is open in another tab";
+  an installed app's window counts as a tab ([pwa.md](pwa.md#one-neuron)).
+- The service worker exists only in a build and caches only this origin's
+  `/assets/` and the page; a new version waits for **Update ready, reload**
+  and never reloads the page on its own. The neuron asks for persistent
+  storage after setup and on each load until it is kept ([pwa.md](pwa.md)).
 - OPFS keeps what DuckDB has checkpointed, so every write that must survive
   a closed tab is checkpointed at once ([storage.md](storage.md#the-checkpoint-rule)).
 - The page is sent with a strict CSP header: no inline script,
@@ -157,7 +163,8 @@ output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
 WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-satori-lite-and-why)).
 Step 6 added `viem` 2.37.0 (released 2025-09-02, as the parked design
 planned): ABI encoding, multicall, transaction serialization and the RPC
-client for Base; signing stays in `src/keys` (`@noble/curves`).
+client for Base; signing stays in `src/keys` (`@noble/curves`). The
+installable app added none (no Workbox: the service worker is about 25 lines).
 
 ## Verify
 
@@ -190,7 +197,7 @@ client for Base; signing stays in `src/keys` (`@noble/curves`).
   the hash kept at send and waited for, persisted only after the receipt, the
   max-fee ceiling, the schedule, the config cache per central, the settings
   checked before either is saved; claims' and sends' branches); the CSP; ui
-  text; `serial()`.
+  text; `serial()`; the service worker's routing (`src/pwa/sw.test.js`).
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
   stub and prod blocked: create → register (headers checked) → first poll
   5–30 min out → Poll now: two streams stored, forecast and sent after an
@@ -218,7 +225,15 @@ client for Base; signing stays in `src/keys` (`@noble/curves`).
   settings (nothing half-saved); the other specs keep off `/rpc`. Every spec
   uses the one stub central (`e2e/stub.js`) and opens and reloads the app
   through `e2e/load.js`, which waits up to 30 s for `<body data-screen>` to
-  leave `loading` (DuckDB-WASM takes seconds to start on a busy box).
+  leave `loading` (DuckDB-WASM takes seconds to start on a busy box). The dev
+  server registers no service worker and removes one left on its origin.
+- `npm run e2e:pwa` (a build on `vite preview` :5181, `e2e/pwa.spec.js`, each
+  test in its own Chrome profile with every host but localhost unresolvable):
+  the manifest valid and installable, the worker served with the CSP and
+  controlling the page, Install and the storage line, `persist()` after
+  setup; offline the page, DuckDB and the stored neuron load while central and
+  Base fail and say so; a new version waits for Update; an app window and a
+  tab run one neuron ([pwa.md](pwa.md#verify)).
 - Live, in a fresh browser profile on the dev server: central2 (writes
   allowed) for register, Poll now and the batch; prod only for read-only GETs.
   Nostr: satorian read only (its full catalog discovered: 924 live of 1,061
@@ -241,4 +256,5 @@ client for Base; signing stays in `src/keys` (`@noble/curves`).
   history, read only ([engine.md](engine.md#measured)): a tie on 400 days of
   21 crypto pairs.
 - Dev app: `npm run dev` → http://localhost:5180; for Base, `node scripts/fork.mjs start`
-  (an anvil fork on 8545, which the dev server proxies as `/rpc`).
+  (an anvil fork on 8545, which the dev server proxies as `/rpc`). The
+  installable app: `npm run build && npm run preview` → http://localhost:5181.

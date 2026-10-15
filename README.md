@@ -85,16 +85,41 @@ A build uses central's RPC (`https://sepolia.base.org`), then publicnode; any
 https RPC can be set under **Settings**, and so can the daily batch's max fee
 (2 gwei by default).
 
+## The installed app (PWA)
+
+A build can be installed as an app: it keeps your keys (installed apps get
+persistent storage; Safari otherwise deletes a site's data after 7 days
+of use without a visit), runs in its own window, and starts offline from its cache.
+It does not run the neuron while closed. The dev server has no service
+worker, so try it on a build:
+
+```sh
+npm run build && npm run preview     # the build on http://localhost:5181
+```
+
+Open http://localhost:5181 in Chrome or Edge and click **Install Satori**
+(on Setup, or on Home under the keys) or the install icon in the address bar;
+the app opens in its own window. Safari: File › Add to Dock (on iOS, Share ›
+Add to Home Screen); its app has its own storage, so set it up there. Home
+shows **Storage: kept** once the browser keeps the data. A new build shows
+**Update ready, reload** in the header. A build talks to the production
+central (`network.satorinet.io`) and writes to central's relays (change the
+central under Settings), and the data on :5181 is not the dev server's
+(:5180 is another origin). Details: [docs/design/pwa.md](docs/design/pwa.md).
+
+![Home on a build: the storage line and Install Satori](docs/screenshots/pwa.png)
+
 ## Test
 
 ```sh
 npm test           # vitest (2 workers): parity with satorilib, the Docker image and namaste_club; central, the neuron, the engine, the db, Nostr, Base against a fake D6, ui text
 npm run e2e        # playwright, system Chrome: the app against a stub central, two test relays (7781/7782) and a fake chain behind /rpc
+npm run e2e:pwa    # builds, then the installed app on vite preview :5181: manifest, service worker, offline, Update, one neuron
 node scripts/fork.mjs start --port 8546 && BASE_FORK=http://127.0.0.1:8546 npx vitest run src/chain/fork.test.js   # the chain module against the real contracts
 node scripts/backtest.mjs   # the engine vs persistence at 24 h on real history (read only)
 ```
 
-Run the two suites one after the other. Playwright starts Chrome without its
+Run the suites one after the other. Playwright starts Chrome without its
 sandbox (its default), so the e2e also runs as root or in a container; Chrome
 launched by hand there needs `--no-sandbox`.
 
@@ -103,7 +128,7 @@ launched by hand there needs `--no-sandbox`.
 - Intent: [docs/intent/INTENT.md](docs/intent/INTENT.md)
 - Design, the source of truth, with the file map:
   [docs/design/OVERVIEW.md](docs/design/OVERVIEW.md) (keys, central, engine,
-  Nostr, Base, storage)
+  Nostr, Base, storage, the installed app)
 - For agents, and the `window.satori` reference: [public/llms.txt](public/llms.txt)
 - Roadmap and what is left: [docs/plans/README.md](docs/plans/README.md);
   issues outside this repo: [docs/issues/](docs/issues/README.md); questions
