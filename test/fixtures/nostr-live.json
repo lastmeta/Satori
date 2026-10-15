@@ -1,0 +1,57 @@
+{
+ "about": "Events read from ws://satorian.satorinet.io:7777 on 2026-10-15 (read-only REQ): a free observation and a Base bridge observation (a dict value), as relays serve them.",
+ "events": [
+  {
+   "content": "{\"stream_name\": \"btc-usd-price\", \"timestamp\": 1792078200, \"value\": \"82234\", \"seq_num\": 10600}",
+   "created_at": 1792078200,
+   "id": "728d2e69fbfcea7eb1606d47b3cdd9e61ea7d30aae32b9f8c94cd306f5ad1bee",
+   "kind": 34601,
+   "pubkey": "e5e6ce948344b1e0178f9ccf49fcb499b4b4f00fc09c7637535ee82fc7bf503d",
+   "sig": "b4515adec69bd0ff51d3539418d04ff211845e7caa60a1abecebc3607a2c719f7881761949e7889ba1cd74eed9d18abfe64e3fd9ea5e58485f30cbc3c25e34ee",
+   "tags": [
+    [
+     "d",
+     "btc-usd-price"
+    ],
+    [
+     "stream",
+     "btc-usd-price"
+    ],
+    [
+     "seq",
+     "10600"
+    ],
+    [
+     "satori",
+     "observation"
+    ]
+   ]
+  },
+  {
+   "content": "{\"stream_name\": \"satori-84532-1\", \"timestamp\": 1792022400, \"value\": {\"chainId\": 84532, \"streamId\": 1, \"block\": 48140021, \"round\": 20741, \"raw\": \"59058240589371161\", \"unit\": \"raw\", \"hour\": 497784}, \"seq_num\": 2}",
+   "created_at": 1792048351,
+   "id": "7170a92f9daea5aa7d0aef83e9cba6015ef4660c534207cff153afd4d75836f5",
+   "kind": 34601,
+   "pubkey": "cb45de2a76a5df79ea8aff0c867e96e527f803eb389420419e441a4946129838",
+   "sig": "69290ad664161727bda19db0cbaac840279adadfa37c67a44599434a137aa680844e89341983481a8126e4f489800635061439bc12d9993abafd6016eec7c4fe",
+   "tags": [
+    [
+     "d",
+     "satori-84532-1"
+    ],
+    [
+     "stream",
+     "satori-84532-1"
+    ],
+    [
+     "seq",
+     "2"
+    ],
+    [
+     "satori",
+     "observation"
+    ]
+   ]
+  }
+ ]
+}

@@ -23,3 +23,12 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   them (lag 1, one stream, no time features): φ, the first lag, g1/g2, the
   backtest weight, t1 and t2. Made by `scripts/engine_parity.py` from the
   namaste_club source (read only), with numpy and pandas in a scratch venv.
+- `nostr-parity.json`: Satori's Nostr events (`_pred` 34601, its 34600
+  announcement and tombstone, the 34602 subscribe and unsubscribe, a 10002)
+  built by satorilib's own `SatoriNostr` methods (`origin/base-upgrade`) and
+  signed by nostr-sdk 0.45 with the `nostr` key above, the clock pinned; Lite's
+  `_numericObservationValue` on 17 values; the relay uuid Lite pins in
+  `neuron/tests/test_relay_ids.py`. Made by `scripts/nostr_vectors.py`.
+- `nostr-live.json`: two 34601 events as `ws://satorian.satorinet.io:7777`
+  served them (a read-only REQ, 2026-10-15): a free price stream and a Base
+  bridge stream whose value is a dict.
