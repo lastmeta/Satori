@@ -184,23 +184,24 @@ probably not what was meant.
 
 ## UI and agents
 
-- Home's **Nostr** card: the Nostr pubkey (npub on hover), each relay with its
-  state (Connected, Connecting, Disconnected and retrying, Blocked) and "read
-  only", and each subscribed stream with its latest observation (as sent), when
-  it was observed, our latest `_pred` value, its seq and how many relays took
-  it, and Unsubscribe.
+- Home's **Keys** card: the Nostr pubkey (npub on hover). The **Nostr** card:
+  each relay with its state (Connected, Connecting, Disconnected and
+  retrying, Blocked) and "read only", and each subscribed stream with its
+  latest observation (formatted as our `_pred` is; what the provider sent on
+  hover), when it was observed, our latest `_pred` value, its seq and how
+  many relays took it, and Unsubscribe.
 - **Network streams**: Discover (on opening), a search over name, stream,
   description and tags, the first 50 matches; prediction streams are hidden
   and counted; paid or gated streams show but can't be subscribed.
 - **Settings**: the user's relays (one per line) and "Publish to central's
   relays". **Backup**: Download `nostr.yaml`. **Import Docker files**: an
   optional `nostr.yaml`.
-- `window.satori`: `nostr()`, `discover()`, `subscribe(pubkey, stream)`,
-  `unsubscribe(pubkey, stream)`, `relayPredictions(pubkey, stream)`, `setRelays({ relays, centralWrite })`,
-  `file('nostr.yaml')`; `status().nostr` ([/llms.txt](../../public/llms.txt)).
+- Agents: `window.satori`'s Nostr methods and their shapes are in
+  [/llms.txt](../../public/llms.txt), the one reference.
 
 ## Later
 
 Paid streams (NIP-04 per subscriber, payment channels), bounties, access
-requests, the bridge's round dedupe and Base streams (step 6), own data
-sources and publications.
+requests, own data sources and publications ([../plans/transport.md](../plans/transport.md)).
+Base's bridge streams are not needed: step 6 reads the registry on the chain
+([base.md](base.md#the-daily-batch-the-identity-on-its-own)).

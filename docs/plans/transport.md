@@ -17,12 +17,6 @@ references and every deviation). This file keeps only what is still to do.
   lists only `ws://satorian.satorinet.io:7777`
   ([issue](../issues/relays-not-wss.md)). Until then Nostr works from the dev
   server (plain http) and against `ws://localhost`.
-- **Base bridge streams (step 6).** Streams `satori-<chainId>-<id>` from the
-  bridge provider; Lite subscribes to them automatically
-  (`neuron/neuron-lite/start.py:453-517`) and dedupes their observations by the
-  on-chain `round` before the event id and the seq
-  (`neuron/neuron-lite/satorineuron/network_db.py:597-636`). The browser may
-  read the chain instead ([base.md](../design/base.md#the-daily-batch-the-identity-on-its-own)).
 - **Paid and encrypted streams.** Per-subscriber NIP-04 events, payment
   channels (34603-34606), the `#p` personal filter and kind 34604 in the
   follow (origin client 1687-1745). Port the live-push decrypt path, not origin
@@ -36,6 +30,12 @@ references and every deviation). This file keeps only what is still to do.
   observation and hunts other relays for it, rechecking after 24 h
   (`start.py:4407-4547`). The browser stays connected to every listed relay;
   with more relays listed, hunting may be worth adding.
+
+Not to do: **Base bridge streams** (`satori-<chainId>-<id>`, which Lite
+subscribes to automatically, `neuron/neuron-lite/start.py:453-517`, and
+dedupes by the on-chain round, `network_db.py:597-636`). Step 6 reads the
+registry on the chain instead, the values the engine anchors on, with no
+relay ([base.md](../design/base.md#the-daily-batch-the-identity-on-its-own)).
 
 ## Inherent and accepted
 

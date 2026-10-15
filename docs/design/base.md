@@ -314,24 +314,31 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 
 ## UI and agents
 
-- Home's **Base** card: the active RPC first (the local fork named as such),
-  the round; the identity's Base address and its ETH as daily batches of gas
-  (red below 7); the vault's Base address, SATORI and ETH; the delegation;
-  the transfer lock; what is claimable; the last batch (round, time, each
-  game's direction, what was left out, the tx); the last check and the next.
-  After Unlock: Delegate prediction power or Stop delegating, Claim, and Send
-  from the vault (SATORI or ETH); each action lists its transactions. Tx
+- Home's **Keys** card holds both Base addresses (with the Evrmore ones).
+  The **Base** card: the round, the active RPC in plain words (the local fork
+  named "Local test chain"; the URLs on hover); the identity's ETH as daily
+  batches of gas (red below 7, once delegated: before that the identity has
+  no batch to pay for); the vault's SATORI and ETH; the delegation (until
+  delegated: "Unlock, then Delegate prediction power"); the transfer lock;
+  what is claimable; the last batch (round, time, each game's direction, what
+  was left out, the tx); the last check and the next ("Waits for delegation"
+  until then). After Unlock: Delegate prediction power or Stop delegating,
+  Claim, and Send from the vault (SATORI or ETH); each action lists its
+  transactions in plain words ("Identity: fee to 0"; the call on hover). Tx
   hashes link to the explorer, except on a local fork. **Settings**: Base
-  RPC and the batch's max fee (gwei).
-- `window.satori`: `base()`, `delegate()`, `undelegate()`, `claim()`,
-  `predictBase()`, `send({ asset, to, amount })`, `setBaseRpc(url)`,
-  `setBaseMaxFee(gwei)`; `status().base` ([/llms.txt](../../public/llms.txt)).
+  RPC and the batch's max fee (gwei), prefilled with what is stored, both
+  checked before either is saved (`base.setSettings`).
+- Agents: `window.satori`'s Base methods and their shapes are in
+  [/llms.txt](../../public/llms.txt), the one reference.
 
 ## Storage
 
 `meta` keys only, no migration: `base_rpc_url` and `base_max_fee_gwei` (the
 settings), `base_pending_batch` (a batch sent and not yet confirmed: its
-round, hash, games) and `base_last_batch` (the last batch mined, above).
+round, hash, games) and `base_last_batch` (the last batch mined, above; a
+game's `latest` and `t2` as decimal strings) ([storage.md](storage.md)). The
+config cache (1 h) is in memory and per central: another central URL is
+asked at once.
 
 ## Testing
 
