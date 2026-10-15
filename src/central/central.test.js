@@ -124,6 +124,24 @@ test("relays and relay-config: central's GETs, no token (peer.py:123-173)", asyn
   expect(calls.map((c) => c.headers)).toEqual([{}, {}]);
 });
 
+test("Base: the config and the merkle drop, central's GETs; both 404 kinds keep their detail (merkle.py:26-58)", async () => {
+  const proof = { root: '0xr', address: '0xV', amountWei: '5000000000000000000', amount: 5, proof: ['0xp'] };
+  const { fetch, calls } = mockFetch({
+    'GET /api/v1/base/config': json(200, { chainId: 84532 }),
+    'GET /api/v1/merkle/root': json(200, { root: '0xr', total: 5, recipients: 1 }),
+    'GET /api/v1/merkle/proof/0xV': json(200, proof),
+    'GET /api/v1/merkle/proof/0xW': json(404, { detail: '0xW is not in the current drop (nothing to claim, …)' }),
+  });
+  const c = client(fetch);
+  expect(await c.baseConfig()).toEqual({ chainId: 84532 });
+  expect(await c.merkleRoot()).toEqual({ root: '0xr', total: 5, recipients: 1 });
+  expect(await c.merkleProof('0xV')).toEqual(proof);
+  expect(await c.merkleProof('0xW').catch((e) => e)).toMatchObject({ status: 404, detail: expect.stringMatching(/not in the current drop/) });
+  expect(calls.map((x) => x.headers)).toEqual([{}, {}, {}, {}]);
+  const none = mockFetch({ 'GET /api/v1/merkle/root': json(404, { detail: 'no reward drop has been published yet' }) });
+  expect(await client(none.fetch).merkleRoot().catch((e) => e)).toMatchObject({ status: 404, detail: 'no reward drop has been published yet' });
+});
+
 test('observations: GET the batch with a limit, no token', async () => {
   const { fetch, calls } = mockFetch({ 'GET /api/v1/observations/batch?limit=100': json(200, [{ id: 1 }]) });
   expect(await client(fetch).observations()).toEqual([{ id: 1 }]);
