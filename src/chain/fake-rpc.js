@@ -18,7 +18,7 @@ const mc3 = [...multicall3Abi, ...parseAbi([ // the app's reads, and aggregate3,
   'function aggregate3(Call3[] calls) payable returns (Result[] returnData)',
 ])];
 
-export class Revert extends Error {}
+class Revert extends Error {}
 export const revert = (name = '') => { throw Object.assign(new Revert(name || 'revert'), { errorName: name }); };
 
 class RpcError extends Error {

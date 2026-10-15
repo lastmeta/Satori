@@ -13,9 +13,9 @@ import { fmtUtc } from '../ui/format.js';
 
 export const FIRST_CHECK_S = 10;
 export const CHECK_EVERY_S = 3600;
-export const AFTER_ROUND_S = 60; // the check after a round starts: 00:01 UTC, chain time
-export const BATCH_GAS = 1_500_000n; // a one-game batch's limit (estimate + HOOK_GAS); measured 410k–790k used on the fork
-export const LOW_BATCHES = 7; // warn below a week of batches
+const AFTER_ROUND_S = 60; // the check after a round starts: 00:01 UTC, chain time
+const BATCH_GAS = 1_500_000n; // a one-game batch's limit (estimate + HOOK_GAS); measured 410k–790k used on the fork
+const LOW_BATCHES = 7; // warn below a week of batches
 /**
  * The unattended batch's ceiling on the max fee per gas (Settings). Base's fees
  * are ~0.01 gwei (Base Sepolia, 2026-10-15: base fee 0.005, tip 0.001), so 2
@@ -24,7 +24,7 @@ export const LOW_BATCHES = 7; // warn below a week of batches
  * quotes, so the local fork works.
  */
 export const MAX_FEE_GWEI = 2;
-export const PENDING_WAIT_MS = 30_000; // how long a check waits for a batch sent earlier
+const PENDING_WAIT_MS = 30_000; // how long a check waits for a batch sent earlier
 
 /** The engine's step for a registry stream: 12 h, or its cadence when slower (docs/design/base.md, the daily batch). */
 export const stepFor = (cadenceMinutes) => Math.max(STEP_S, (Number(cadenceMinutes) || 0) * 60);

@@ -25,11 +25,6 @@ export const DEFAULT_WEIGHT = 1; // calibration.py:33
 const finiteOr0 = (x) => (Number.isFinite(x) ? x : 0);
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
-/**
- * @param {Iterable<{ts: number, value: number}>} points
- * @param {{lambda1?: number, weight?: number, step?: number}} [options] weight forces the fade (namaste_club's
- *   MODEL_WEIGHT); step is the bucket in seconds (t1 is one step ahead, t2 two)
- */
 /** Returns (all values positive) or changes (any value ≤ 0): how a step is measured, compounded and applied. */
 const RETURNS = {
   model: 'bar1',
@@ -53,6 +48,11 @@ const CHANGES = {
   error: (x, a) => Math.abs(x - a), // absolute: a level may be 0
 };
 
+/**
+ * @param {Iterable<{ts: number, value: number}>} points
+ * @param {{lambda1?: number, weight?: number, step?: number}} [options] weight forces the fade (namaste_club's
+ *   MODEL_WEIGHT); step is the bucket in seconds (t1 is one step ahead, t2 two)
+ */
 export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S } = {}) {
   const p = Array.from(points).filter((o) => Number.isFinite(o?.ts) && Number.isFinite(o?.value))
     .sort((a, b) => a.ts - b.ts);

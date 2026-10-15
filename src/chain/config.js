@@ -6,7 +6,7 @@
 // then publicnode as a fallback, as the dapp lists them.
 import { isHttps } from '../util.js';
 
-export const CHAIN_ID = 84532; // Base Sepolia
+const CHAIN_ID = 84532; // Base Sepolia
 
 export const DEFAULTS = Object.freeze({
   chainId: CHAIN_ID,
@@ -26,7 +26,7 @@ export const DEFAULTS = Object.freeze({
 });
 
 export const FALLBACK_RPC = 'https://base-sepolia-rpc.publicnode.com';
-export const CONFIG_TTL_S = 3600;
+const CONFIG_TTL_S = 3600;
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const valid = (k, v) => (ADDRESS.test(DEFAULTS[k]) ? ADDRESS.test(v) : typeof v === 'string' && /^https:\/\//.test(v));

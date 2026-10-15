@@ -72,7 +72,7 @@ describe('addObservations', () => {
   test("keeps each stream's latest name and meta", async () => {
     await db.addObservations([obs()]);
     await db.addObservations([obs({ ts: 2000, name: 'btc', meta: '{"unit":"USD"}' })]);
-    expect(await db.rows('SELECT * FROM streams')).toEqual([{ uuid: 'u-btc', name: 'btc', meta: '{"unit":"USD"}' }]);
+    expect(await db.streams()).toMatchObject([{ uuid: 'u-btc', name: 'btc', meta: '{"unit":"USD"}' }]);
   });
   test('history is oldest first', async () => {
     await db.addObservations([obs({ ts: 3000, value: 3 }), obs({ ts: 1000, value: 1 }), obs({ ts: 2000, value: 2 })]);

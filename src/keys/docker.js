@@ -14,7 +14,7 @@ const ENCRYPTED = ['entropy', 'privateKey', 'words']; // what satorilib encrypts
 const subtle = globalThis.crypto.subtle;
 
 /** The password's bytes as pycryptodome's PBKDF2 takes a str: Latin-1, one byte per character. */
-export function passwordBytes(password) {
+function passwordBytes(password) {
   if (/[^\x00-\xff]/.test(password)) throw new Error('A vault passphrase can only use Latin-1 characters.');
   return Uint8Array.from(password, (c) => c.charCodeAt(0));
 }

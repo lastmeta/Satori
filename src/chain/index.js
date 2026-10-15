@@ -57,7 +57,7 @@ export function transferLock(lockedUntil, round) {
 export const payload = (direction) => encodePacked(['uint8'], [direction]);
 
 /** Our signer, a viem account, or a 0x private key → a viem account. */
-export function toAccount(key) {
+function toAccount(key) {
   if (typeof key === 'string') return privateKeyToAccount(key);
   if (key?.signTransaction) return key;
   if (!key?.signDigest) throw new Error('No key to sign with');
@@ -163,8 +163,6 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const delegateOf = async (addr) => (await read(rewards('predictionDelegateInfo', [addr])))[0];
 
   return {
-    config,
-    client,
     fees,
     /** What the RPC says it is (the app refuses a chain other than the config's). */
     chainId: () => client.getChainId(),

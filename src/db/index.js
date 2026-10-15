@@ -64,7 +64,6 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
 
   return {
     version,
-    rows: inOrder(rows),
     get: inOrder(async (key) => {
       const [row] = await rows('SELECT value FROM meta WHERE key = ?', key);
       return row ? JSON.parse(row.value) : undefined;
