@@ -422,8 +422,8 @@ const actions = {
     return { text: `Sent ${f.amount} ${f.asset}.`, txs: [{ label: `${f.asset} to ${shortHash(String(f.to).trim())}`, hash: r.hash }] };
   }),
   fillBase(el) {
-    el.elements.rpc.value = state.base?.rpcSetting ?? '';
-    el.elements.maxFee.value = state.base?.maxFeeGwei ?? '';
+    el.elements.rpc.value = state.base.rpcSetting;
+    el.elements.maxFee.value = state.base.maxFeeGwei ?? '';
   },
   saveBase: shownAt('baseRpcError', async (f, el) => {
     await setBaseRpc(f.rpc);

@@ -39,8 +39,13 @@ export const state = reactive({
   subscribing: '', // `${pubkey}:${stream}` in flight
   networkError: '',
   relaysError: '',
-  // Base (docs/design/base.md): the status, what runs, the last action's result
-  base: null,
+  // Base (docs/design/base.md): the status (window.satori.base()'s shape), what runs, the last action's result
+  base: {
+    rpc: [], rpcSetting: '', maxFeeGwei: null, localFork: false, explorer: null, config: null, error: '', round: null,
+    identity: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false },
+    vault: { address: '', eth: null, satori: null, delegate: null, delegated: null, lock: null },
+    claimable: { rewards: null, airdrop: null }, lastBatch: null, lastCheck: null, nextCheck: null, checking: false,
+  },
   baseBusy: '', // '' | 'refresh' | 'delegate' | 'undelegate' | 'claim' | 'send'
   baseError: '',
   baseResult: '',
@@ -243,7 +248,7 @@ const BUSY = { delegate: 'Delegating…', undelegate: 'Stopping…', claim: 'Cla
 
 /** A tx hash, linked to the explorer unless the RPC is a local fork. One root node (see streamRow). */
 const txLink = (hash, label = '') => {
-  const ex = state.base?.explorer;
+  const ex = state.base.explorer;
   const text = `${label ? `${label} ` : ''}${shortHash(hash)}`;
   return ex ? html`<a href="${`${ex}/tx/${hash}`}" target="_blank" rel="noopener" title="${hash}">${text}</a>`
     : html`<code title="${hash}">${text}</code>`;
@@ -254,7 +259,7 @@ const rpcText = (b) => (b.localFork ? `${b.rpc.join(', ')}: the local fork of Ba
 function baseCard(a) {
   const b = () => state.base;
   const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
-  const delegated = () => b()?.vault?.delegated === 'identity';
+  const delegated = () => b().vault.delegated === 'identity';
   const busy = () => !!state.baseBusy;
   return html`
   <section class="card base">
@@ -262,17 +267,17 @@ function baseCard(a) {
       <h2>Base</h2>
       <button class="small-btn" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
-    <div class="muted small">${() => (b() ? `Base Sepolia · ${b().config ?? '–'} addresses · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
-    <p class="error small" role="status" data-test="base-error" hidden="${() => !b()?.error}">${() => `The chain did not answer: ${b()?.error}`}</p>
+    <div class="muted small">${() => (b().config ? `Base Sepolia · ${b().config} addresses · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+    <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => `The chain did not answer: ${b().error}`}</p>
     <dl class="facts">
-      ${fact('RPC', 'base-rpc', () => (b() ? rpcText(b()) : '–'))}
-      ${fact('Identity', 'base-identity', html`<code>${() => b()?.identity.address ?? ''}</code><div class="${() => (b()?.identity.lowEth ? 'error small' : 'muted small')}">${() => gasText(b()?.identity) + (b()?.identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</div>`)}
-      ${fact('Vault', 'base-vault', html`<code>${() => b()?.vault.address ?? 'Unlock once to read it'}</code><div class="muted small">${() => `${amountText(b()?.vault.satori, 'SATORI')} · ${amountText(b()?.vault.eth, 'ETH')}`}</div>`)}
+      ${fact('RPC', 'base-rpc', () => (b().rpc.length ? rpcText(b()) : '–'))}
+      ${fact('Identity', 'base-identity', html`<code>${() => b().identity.address}</code><div class="${() => (b().identity.lowEth ? 'error small' : 'muted small')}">${() => gasText(b().identity) + (b().identity.lowEth ? ': low, send it a little Base ETH for the daily batch' : '')}</div>`)}
+      ${fact('Vault', 'base-vault', html`<code>${() => b().vault.address ?? 'Unlock once to read it'}</code><div class="muted small">${() => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`}</div>`)}
       ${fact('Delegation', 'base-delegation', () => delegationText(b()))}
-      ${fact('Transfers', 'base-lock', () => lockText(b()?.vault.lock))}
-      ${fact('Claimable', 'base-claimable', () => `${amountText(b()?.claimable.rewards, 'SATORI')} rewards · ${amountText(b()?.claimable.airdrop, 'SATORI')} airdrop`)}
-      ${fact('Last batch', 'base-last-batch', html`<span>${() => batchText(b()?.lastBatch)}</span> <span>${() => (b()?.lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
-      ${fact('Batch check', 'base-check', () => (b()?.checking ? 'Checking…' : checkText(b()?.lastCheck, b()?.nextCheck)))}
+      ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
+      ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}
+      ${fact('Last batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
+      ${fact('Batch check', 'base-check', () => (b().checking ? 'Checking…' : checkText(b().lastCheck, b().nextCheck)))}
     </dl>
     <p class="muted small" hidden="${() => state.unlocked}">Unlock the vault to delegate, claim or send. The identity sends the daily batch on its own.</p>
     <div hidden="${() => !state.unlocked}">
