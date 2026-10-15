@@ -25,3 +25,27 @@ Lay an essentialist foundation first, then evolve it quickly.
 
 **Later:** Nostr, Base, central, a better engine, and so on. The full design for
 these is already researched and parked in [../plans/](../plans/README.md).
+
+## The owner's direction (2026-10-15)
+
+Set by the owner; quoted where these are the owner's own words.
+
+- **Two keys, on purpose.** The **identity** is stored unencrypted so the
+  neuron signs on its own (central's login, predictions, Nostr, the Base
+  batch). The **vault** is encrypted with the passphrase and holds the funds.
+  The Docker neuron keeps them in `wallet.yaml` and `vault.yaml`; so does
+  this app.
+- **Follow what Satori already made, simplified.** Satori Lite (the Docker
+  neuron), satorilib and central are the patterns: their behaviour, cadence,
+  protocols and payloads, simplified, not new flows. Any deviation is written
+  down with its reason in the design docs. For the finishing pass: "Simplify
+  refactor essentialism but follow what we already made".
+- **The order of steps:** keys → central's data flow → an engine inspired by
+  `namaste_club` → Nostr → Base last, integrating what the dapp
+  (`contract/satori-ui`) does → a finishing pass.
+- **Agents are a core purpose.** It is client-side so AI agents can drive it.
+  `/llms.txt` says what the app is and how an agent drives it, what's
+  possible, where the code lives (the repository and a file map), and that
+  pull requests to github.com/lastmeta/Satori are welcome; it and
+  `window.satori` stay current with every step.
+- **MIT** licensed.
