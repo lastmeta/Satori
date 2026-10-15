@@ -12,7 +12,29 @@
 > OPFS) and the engine. There is no server of our own. It is built to be
 > driven by people and by AI agents alike.
 
-Status: step 6 of the roadmap (Base). Next: a finishing pass.
+Status: steps 1–6 of the roadmap are built (two keys, central's data flow,
+the engine, Nostr, Base), and a finishing pass is done (2026-10-15).
+
+## Quick start (an agent)
+
+In the page's JS context (Playwright's `page.evaluate`, a browser console):
+
+1. Wait until `document.body.dataset.screen` is not `loading` (DuckDB-WASM
+   and the keys take a few seconds; it is kept current: `setup`, `home`,
+   `elsewhere`, `fatal`). Then `window.satori` is ready.
+2. On `setup`: `await satori.setup({ passphrase: 'at least 4 chars' })` → the
+   status, `screen: 'home'`. The neuron now runs on its own.
+3. `await satori.poll()`: central's observations in, predictions out.
+4. `await satori.discover()`, then `await satori.subscribe(pubkey, stream_name)`
+   for a free stream: each observation is forecast and published as
+   `<stream>_pred`.
+5. Base: fund both Base addresses (on the dev server's local fork:
+   `node scripts/fork.mjs fund <identity 0x…>` and
+   `node scripts/fork.mjs fund <vault 0x…> --satori 100`), then
+   `await satori.unlock(passphrase)`, `await satori.delegate()`,
+   `await satori.predictBase()`.
+
+Every method is below; `await satori.status()` shows everything at once.
 
 ## Concepts
 
@@ -85,8 +107,12 @@ Status: step 6 of the roadmap (Base). Next: a finishing pass.
   newest per (provider pubkey, stream name), deleted ones dropped. A
   provider is a Nostr pubkey (64 hex). Prediction streams end in `_pred`.
 - Subscribe: to a free, open stream (paid, encrypted or approval-gated ones
-  come later), at most central's `max_streams` (60) at once. It publishes a
-  subscription event (34602) and announces `<stream>_pred` (34600). Each new
+  come later), at most `maxStreams` at once: central's `max_streams` (60
+  today), or Lite's own 100 when central has not answered. It publishes a
+  subscription event (34602) and announces `<stream>_pred` (34600). The
+  first observation that arrives is the relays' stored latest one (an
+  observation is replaceable: a relay keeps one per stream), so it may be
+  old; then each new one. Each new
   observation (34601) of the stream is stored, forecast two cadences ahead
   (t2 of the engine with the stream's `cadence_seconds` as its step, as Lite
   sends) and published as `<stream>_pred` with `value` = the forecast as a
@@ -116,6 +142,9 @@ Status: step 6 of the roadmap (Base). Next: a finishing pass.
   the token refuses transfers while `transferLockedUntil >= round`, so
   "until round N" means free from round N + 1 at 00:00 UTC. ("Staking" in the
   Docker neuron.)
+- Prediction power: the vault's SATORI, delegated to the identity. A vault
+  with no SATORI, or one that has not delegated, gives the identity none, and
+  the batch skips (`no prediction power delegated to the identity`).
 - The daily batch (the identity, no Unlock): once per UTC round
   (`block.timestamp / 86400`), at the first check of the round (10 s after
   load, after Delegate, at the round's start on the chain's clock, at least
@@ -146,9 +175,9 @@ Times are unix seconds.
 
 ## Drive it from the page (window.satori)
 
-Open the app and wait for it to load: `window.satori` exists once the page's
-script runs; then call `await satori.status()` until `screen` is no longer
-`loading` (DuckDB and the keys take a moment). Then, in the page's JS context:
+Open the app and wait until `document.body.dataset.screen` is not `loading`
+(synchronous, kept current; `await satori.status()` says the same). Then, in
+the page's JS context:
 
 - `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base }`.
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
@@ -176,17 +205,24 @@ script runs; then call `await satori.status()` until `screen` is no longer
 - `await satori.streams()` → one row per stream: `uuid`, `name`, `meta`
   (central's stream meta: the parsed object when it is JSON, else its text,
   or null), `observations`, `obs_ts`, `obs_value`, and our latest `t1`, `t2`,
-  `model` (`bar1`/`naive`), `phi`, `weight`, `made_at`, `status`
+  `model` (`bar1`, `bar1d` or `naive`), `phi`, `weight`, `made_at`, `status`
   (`pending`/`sent`), `sent_at`.
 - `await satori.predictions(stream, limit = 20)` → one stream's predictions
-  (by uuid or name), newest first, with `observed_at` and `hash` as sent.
+  (by uuid or name), newest first: `[{ id, stream_uuid, name, made_at, model,
+  t1, t2, phi, weight, observed_at, hash, status, sent_at }]`. `observed_at`
+  and `hash` are what was sent: as in Lite, `observed_at` is the time the
+  prediction was made (Python's float text of unix seconds), not the
+  observation's time; `hash` = sha256(value + observed_at)[:16].
 - `await satori.setCentral(url)` → `status().central`: an https URL, or `''`
   for the default; registers there at once. A different URL drops the pending
   predictions and the stream list (see Concepts).
-- `await satori.unlock(passphrase)`; `satori.lock()`.
+- `await satori.unlock(passphrase)` → true (one at a time, as the UI's:
+  another while one runs throws `Busy (unlock)…`); `satori.lock()` → true.
 - While unlocked: `satori.backup('identity' | 'vault')` → `{ words, wif }`;
   `satori.file('wallet.yaml' | 'vault.yaml' | 'nostr.yaml')` → the Docker
-  file's text. Only these exact names; anything else throws.
+  file's text. Only these exact names; anything else throws. These need
+  Unlock as Docker's dashboard needs login, `wallet.yaml` and `nostr.yaml`
+  too, although they are stored unencrypted: they are private keys.
 - `await satori.nostr()` (also `status().nostr`) → `{ pubkey, npub,
   maxStreams, centralWrite, userRelays, relays, subscriptions }`. `relays`:
   `[{ url, from: ['central' | 'user'], write, state, error }]`, state
@@ -196,7 +232,8 @@ script runs; then call `await satori.status()` until `screen` is no longer
   prediction: { stream, seq, value, model, made_at, relays } | null }]`
   (`value` is the number taken from the observation or null; `raw` is what
   the provider sent; `prediction.relays` is how many relays took our latest
-  `_pred`; `model` is `bar1`, `naive` or `echo`).
+  `_pred`; `model` is `bar1`, `bar1d`, `naive` or `echo`). `maxStreams` is
+  100 until central's relay config answers, then central's (60).
 - `await satori.discover()` → the catalog: `[{ pubkey, stream_name, name,
   description, cadence_seconds, price_per_obs, encrypted, approval_required,
   tags, metadata, created_at, pred, subscribed, relays }]`, newest first;
@@ -216,7 +253,7 @@ script runs; then call `await satori.status()` until `screen` is no longer
   → `nostr()`: the user's relays (ws:// or wss://; they replace the list) and
   whether central's relays are written to.
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
-  rpcSetting, localFork, explorer, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
+  rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
   identity: { address, eth, power, fee, allowedDelegator, batchesLeft, lowEth },
   vault: { address, eth, satori, delegate, delegated: 'identity' | 'none' | 'other',
   lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
@@ -229,6 +266,10 @@ script runs; then call `await satori.status()` until `screen` is no longer
   and `t2` the engine's forecast in the same units, rounded, both as decimal
   strings (they pass 2^53); `lastCheck` is the last batch check:
   `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
+  `rpcSetting` and `maxFeeSetting` are what Settings stored (`''` and null:
+  the defaults); `maxFeeGwei` is the ceiling in force. Before the first
+  chain read (a second or two after load) `status().base` has `rpc: []`,
+  `config: null` and null chain values; `satori.base()` reads at once.
 - `await satori.delegate()` (needs Unlock) → `{ steps: [{ step, by: 'identity' | 'vault', hash }], settled }`.
   `steps` is empty when everything was in place.
 - `await satori.undelegate()` (needs Unlock) → the same shape.
@@ -244,7 +285,8 @@ script runs; then call `await satori.status()` until `screen` is no longer
   site (such as `/rpc`), or `''` for the default. A saved URL replaces the
   default.
 - `await satori.setBaseMaxFee(gwei)` → `base()`: the batch's ceiling on the
-  max fee per gas (a positive number; `''` or null = 2 gwei).
+  max fee per gas (a positive number; `''` or null = 2 gwei). Settings saves
+  both at once and checks both before saving either.
 
 Errors are thrown as `Error` with a readable message (for example
 `Wrong passphrase`, `Unlock the vault first`). Central's errors are not
@@ -259,37 +301,65 @@ thrown: they are in `status().central` (for example `central 500: …`,
   optional `nostr.yaml`, the vault password). `wallet.yaml` is the unencrypted file and `vault.yaml` the
   encrypted one; files in the wrong slots, or a vault.yaml that is not
   encrypted, are refused with a message saying so.
-- Home: both addresses with Copy buttons; the vault card has a "Vault
-  passphrase" field and Unlock, or a Lock button in the header while unlocked.
-  "Central" card: the URL, Registered, Last poll, Next poll, Last submission,
-  Pending, a vault mismatch if any, and "Poll now". "Streams": one row per
-  central stream (latest value and time, t1, t2, the model with phi and
-  weight in its hover title, Sent/Pending). "Nostr": the Nostr pubkey, each
-  relay with its state ("Connected · read only"), and each subscribed stream
-  (latest value and time, our `_pred` value, its seq, how many relays took it,
-  Unsubscribe). "Base": the RPC and round, both Base addresses with their ETH
-  (the identity's as daily batches of gas), the vault's SATORI, Delegation,
-  Transfers (the lock), Claimable, Last batch, Batch check, and after Unlock
-  "Delegate prediction power" or "Stop delegating", "Claim", and a send form
-  (asset, Amount, "To (0x address)", "Send from the vault"). "Network streams"
-  (opening it discovers): a search box and the first 50 matching streams with
-  Subscribe/Unsubscribe. "Settings": Central URL (empty = default), Save;
-  Nostr relays (one per line) and "Publish to central's relays", Save relays;
-  Base RPC and "Daily batch: max fee (gwei)", Save Base settings. "Backup" (needs Unlock):
-  Identity words, Vault words, Download wallet.yaml, Download vault.yaml,
-  Download nostr.yaml.
-- Form fields have labels; elements carrying data have `data-test`
-  attributes: `identity`, `vault`, `vault-state`, `central-url`, `registered`,
-  `last-poll`, `next-poll`, `last-submit`, `pending`, `mismatch`, `stream`
-  (a row) with `obs`, `t1`, `t2`, `model`, `status` inside, `wif`,
-  `nostr-pubkey`, `relay` (with `relay-state`), `sub` (a subscribed stream,
-  with `sub-obs`, `sub-pred`, `sub-seq`, `sub-relays`), `network`,
-  `catalog-summary` and `catalog-row` (with `catalog-action`), and on the
-  Base card `base-rpc`, `base-error`, `base-identity`, `base-vault`,
+- Home, top to bottom. **Keys**: each key with its identifiers and Copy:
+  the identity (Evrmore and Base addresses), the vault (the same, its
+  Locked/Unlocked badge, the "Vault passphrase" field and Unlock), the Nostr
+  pubkey; the header has Lock while unlocked. **Central**: the URL,
+  Registered, Last poll, Next poll, Last submission, Pending, a vault mismatch
+  if any, "Poll now", and a collapsed "Streams: N from central" (one row per
+  stream: latest value and time, t1, t2, the model with phi and weight in its
+  hover title, Sent/Pending). **Nostr**: each relay with its state
+  ("Connected · read only"), each subscribed stream (latest value and time,
+  our `_pred` value, its seq, how many relays took it, Unsubscribe).
+  **Network streams** (opening it discovers): a search box and the first 50
+  matching streams with Subscribe/Unsubscribe. **Base**: the round, the RPC,
+  the identity's ETH (as daily batches of gas; a low warning once
+  delegated), the vault's SATORI and ETH, Delegation (until delegated: what
+  to do), Transfers (the lock), Claimable, Last batch, Batch check, and after
+  Unlock "Delegate prediction power" or "Stop delegating", "Claim", and a
+  send form (asset, Amount, "To (0x address)", "Send from the vault").
+  **Settings**: Central (URL, empty = default; Save), Nostr (relays one per
+  line, "Publish to central's relays"; Save relays), Base (Base RPC, "Daily
+  batch: max fee (gwei)"; Save Base settings). **Backup** (needs Unlock):
+  Identity words, Vault words, Download wallet.yaml, vault.yaml, nostr.yaml.
+- Every screen is built once and shown or hidden (the `hidden` attribute),
+  so Setup's labels stay in the DOM on Home: query visible elements, or use
+  `data-test`.
+- Form fields have labels; elements carrying data or actions have
+  `data-test` attributes: `identity`, `identity-base`, `vault`, `vault-base`,
+  `vault-state`, `nostr-pubkey`, `unlock`, `lock`, `central-url`,
+  `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`,
+  `mismatch`, `poll-now`, `streams` (the collapsed list) with `stream` rows
+  and `obs`, `t1`, `t2`, `model`, `status` inside, `relay` (with
+  `relay-state`), `sub` (a subscribed stream, with `sub-obs`, `sub-pred`,
+  `sub-seq`, `sub-relays`, `unsubscribe`), `network`, `catalog-summary` and
+  `catalog-row` (with `catalog-action`: Subscribe or Unsubscribe), on the Base
+  card `base-rpc`, `base-error`, `base-identity`, `base-vault`,
   `base-delegation`, `base-lock`, `base-claimable`, `base-last-batch`,
   `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
   `base-result`, `base-txs` (the last action's transactions),
-  `base-action-error`.
+  `base-action-error`, and under Backup `wif`, `download-wallet`,
+  `download-vault`, `download-nostr`.
+
+## Base on the dev server: the local fork
+
+The dev server's default Base RPC is `/rpc`, which it proxies to an anvil
+fork of Base Sepolia on 127.0.0.1:8545 (the real D6 contracts; nothing goes
+to a public chain). `node scripts/fork.mjs --help` lists:
+
+- `start` / `stop` (anvil in the background, 2 s blocks; needs Foundry's
+  anvil), every command taking `--port 8545`;
+- `fund <0x…> [<0x…> …] [--eth 0.1] [--satori N]`: each address gets the ETH
+  (0.1 by default) and, only with `--satori`, N SATORI from the deployer
+  (~519 in all);
+- `airdrop <0x…> <SATORI>`, `merkle <0x…> <SATORI>` (prints the proof a stub
+  central serves), `advance [days]` (chain time; then `predictBase()`),
+  `predict [up|down]` (moves the default stream), `stream [name]` (a game
+  with no voting weight, which the batch leaves out).
+
+Recipe: `fund <identity 0x…>` (gas for the batch) and
+`fund <vault 0x…> --satori 100` (gas and the power to delegate), then
+Unlock, `delegate()`, `predictBase()`.
 
 ## Docker neuron interop
 
@@ -310,7 +380,9 @@ Repository: https://github.com/lastmeta/Satori (this app is the repository
 root; branch `main`). Plain JavaScript ES modules, no
 build step beyond Vite, MIT licensed.
 
-- `src/main.js`: app wiring and `window.satori`.
+- `src/main.js`: app wiring and `window.satori`; `src/util.js`: `serial()`
+  (one at a time, in order) and `isHttps()`; `src/py.js`: Python's
+  `str(float)` and `json.dumps` texts, byte for byte.
 - `src/keys/`: identity and vault (`index.js`), derivations and Evrmore
   signing (`keys.js`), Docker files (`docker.js`).
 - `src/central/`: central's API (register, observations, login, predictions
@@ -322,10 +394,11 @@ build step beyond Vite, MIT licensed.
 - `src/nostr/`: NIP-01 events and the Nostr key over `@noble/curves`
   (`event.js`), Satori's events and parsing (`satori.js`), one relay over a
   WebSocket with reconnect (`relay.js`).
-- `src/neuron/`: register, the cycle (poll → store → forecast → submit), the
-  schedule, the one-tab lock; `nostr.js`: relays, discover, subscribe, intake
-  → `_pred`, reconcile; `base.js`: the daily batch and its schedule,
-  delegate, claims, sends.
+- `src/neuron/`: register, the cycle (poll → store → forecast → submit),
+  central's status, the schedule (`schedule.js`, shared with Base), the
+  one-tab lock; `nostr.js`: relays, discover, subscribe, intake → `_pred`,
+  reconcile; `base.js`: the daily batch and its schedule, delegate, claims,
+  sends, the Base settings.
 - `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
   `index.js` (`createChain`: status multicall, delegate, the batch's pieces,
   claims, sends).
@@ -334,13 +407,18 @@ build step beyond Vite, MIT licensed.
   `central.md` with Satori Lite's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
   Lite's and satorilib's, `base.md` with Lite's, the dapp's and the
-  contracts'); `docs/future/`: the researched roadmap and open issues.
+  contracts', `storage.md`: tables, migrations, meta keys); `docs/plans/`:
+  the roadmap and what is left of each part; `docs/issues/`: open issues
+  outside this repo; `docs/inbox/QUESTIONS.md`: open questions for the
+  owner.
 - `scripts/`: parity-vector generators run against satorilib, the Docker
   image and namaste_club (Python); `backtest.mjs` (node, read only);
   `test-relay.mjs` (an in-memory Nostr relay: `node scripts/test-relay.mjs
   7778`) and `provider.mjs` (a throwaway stream provider for a test relay);
-  `fork.mjs` (a local anvil fork of Base Sepolia: start, fund, airdrop,
-  merkle, advance, predict).
+  `fork.mjs` (the local fork of Base Sepolia, above).
+- `test/`: fixtures (parity vectors) and test doubles (a fake D6 behind
+  JSON-RPC, an in-memory DuckDB); `e2e/`: Playwright specs and their stub
+  central (`stub.js`).
 - Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub
   central, two test relays, a fake chain behind `/rpc`).
 
