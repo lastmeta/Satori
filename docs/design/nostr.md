@@ -172,7 +172,15 @@ probably not what was meant.
   `created_at` the same way; with cadences of a minute or more it needs two
   observations of one stream within a second (the stored one and a live one).
 - History is what the neuron received while the tab was open: a reopened tab
-  gets each stream's latest observation, not the ones it missed.
+  gets each stream's latest observation, not the ones it missed. For the same
+  reason the first observation after subscribing is the relays' stored latest
+  one (34601 is replaceable: one per stream), however old.
+
+## Measured
+
+- Satorian's catalog, 2026-10-15: 1,061 announcements, 924 live (111 of them
+  `_pred`) from 43 providers; one provider (e5e6…) announces ~400 streams.
+  The whole catalog pages back in one Discover.
 
 ## UI and agents
 

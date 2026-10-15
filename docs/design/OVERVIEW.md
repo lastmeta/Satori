@@ -209,6 +209,13 @@ client for Base; signing stays in `src/keys` (`@noble/curves`).
   lock, a send: [base.md](base.md#live-in-the-running-app-2026-10-15)); and
   `src/chain/fork.test.js` runs the chain module against the real D6
   contracts on a fork (`BASE_FORK`).
+- Load time on the dev server (headless Chrome, the dev box, 2026-10-15):
+  the page paints "Opening…" at 0.3 s (`index.html`); a fresh profile reaches
+  Setup in ~4.5 s and a reload reaches Home in ~3.5 s (5.6–6.0 s and 4.7–4.9 s
+  before apache-arrow was pre-bundled and DuckDB's worker sent raw). What
+  remains: ~0.75 s of modules, ~1.8 s for DuckDB to fetch and compile its
+  34 MB wasm (a cacheable wasm did not help), ~0.4 s to open the OPFS file,
+  ~0.15 s of migrations, ~0.3 s to start the neuron.
 - Parity vectors come from satorilib, the Docker image and namaste_club
   (`test/fixtures/README.md`; `scripts/`).
 - `node scripts/backtest.mjs`: the engine against persistence at 24 h on real
