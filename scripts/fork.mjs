@@ -23,6 +23,7 @@ import {
 } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { DEFAULTS } from '../src/chain/config.js';
+import { HOOK_GAS } from '../src/chain/index.js';
 
 export const DEPLOYER = '0x9d3109b8A045D63056Aa5C1d2c883F3F9fA18817';
 const FORK_URL = 'https://sepolia.base.org';
@@ -52,7 +53,8 @@ async function asDeployer(rpc, address, functionName, args) {
   await test.impersonateAccount({ address: DEPLOYER });
   await test.setBalance({ address: DEPLOYER, value: parseEther('10') }); // anvil's default gas limit is the block's (1.2e9)
   const { request } = await pub.simulateContract({ account: DEPLOYER, address, abi, functionName, args }); // a revert says why
-  const hash = await deployer.writeContract(request);
+  const gas = await pub.estimateContractGas({ account: DEPLOYER, address, abi, functionName, args });
+  const hash = await deployer.writeContract({ ...request, gas: gas + HOOK_GAS }); // SATORI to a delegated vault: the hook needs it
   const r = await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
   if (r.status !== 'success') throw new Error(`${functionName} failed (${hash})`);
   return hash;
