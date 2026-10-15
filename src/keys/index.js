@@ -9,8 +9,12 @@
 //   const v = await unlockVault(vaultYaml, pass)    // Unlock; throws 'Wrong passphrase'
 //   v.sign(msg), v.backup(), v.lock()               // Lock wipes the key; then both throw 'Locked'
 //   loadNostr(nostrYaml)                            // { secret, pubkey }: the Nostr key (nostr.yaml)
-export { generateEntropy, entropyFromWords, entropyFromWif, deriveKeys, signMessage, verifyMessage } from './keys.js';
-import { generateEntropy, deriveKeys, publicKeys, signMessage } from './keys.js';
+//   id.evmAddress, id.signDigest(hash32)            // Base: the same secret's EVM address and tx signatures
+//   evmAddress(pubkey)                              // the vault's Base address while locked
+export {
+  generateEntropy, entropyFromWords, entropyFromWif, deriveKeys, signMessage, verifyMessage, evmAddress,
+} from './keys.js';
+import { generateEntropy, deriveKeys, publicKeys, signMessage, signDigest, evmAddress } from './keys.js';
 import { readWallet, writeWallet, parse, secrecy, readNostrYaml, writeNostrYaml } from './docker.js';
 import { generateNostrSecret } from '../nostr/event.js';
 
@@ -39,10 +43,16 @@ function signer(secret) {
   return {
     address,
     pubkey,
+    evmAddress: evmAddress(pubkey), // Base (docs/design/base.md#keys-on-base)
     get locked() { return secret === null; },
     sign(msg) {
       if (!secret) throw new Error('Locked');
       return signMessage(secret, msg);
+    },
+    /** A Base transaction's signature: the key never leaves this closure. */
+    signDigest(hash) {
+      if (!secret) throw new Error('Locked');
+      return signDigest(secret, hash);
     },
     /** The 24 words and the private key (WIF), for backup. */
     backup() {

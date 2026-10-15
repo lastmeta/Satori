@@ -3,7 +3,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
-import { writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault, verifyMessage, loadNostr } from './index.js';
+import { writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault, verifyMessage, loadNostr, evmAddress } from './index.js';
 import { writeWallet, readNostrYaml } from './docker.js';
 
 vi.setConfig({ testTimeout: 180_000 });
@@ -46,6 +46,11 @@ describe('identity', () => {
     expect(verifyMessage('m', id.sign('m'), { address: a.address })).toBe(true);
     expect(id.backup()).toEqual({ words: a.words, wif: a.wif });
   });
+  test('its Base address is satorilib\'s ethAddress, and it signs a digest on its own (the daily batch)', async () => {
+    const id = await loadIdentity(a.walletYaml);
+    expect(id.evmAddress).toBe(a.ethAddress);
+    expect(id.signDigest(new Uint8Array(32).fill(7))).toMatchObject({ yParity: expect.any(Number) });
+  });
 });
 
 describe('vault', () => {
@@ -61,6 +66,12 @@ describe('vault', () => {
     expect(v.locked).toBe(true);
     expect(() => v.sign('m')).toThrow(/locked/i);
     expect(() => v.backup()).toThrow(/locked/i);
+    expect(() => v.signDigest(new Uint8Array(32))).toThrow(/locked/i);
+    expect(v.evmAddress).toBe(b.ethAddress); // an address, not a secret: kept after Lock
+  });
+  test('the vault\'s Base address while locked: from the public key in vault.yaml', async () => {
+    const vaultYaml = await writeWallet(hex(b.entropyHex), { password: PASS });
+    expect(evmAddress(vaultInfo(vaultYaml).pubkey)).toBe(b.ethAddress);
   });
   test('an old vault (address encrypted) has no address until imported', () => {
     expect(vaultInfo(fx.vaults.old.yaml)).toEqual({ address: null, pubkey: null });

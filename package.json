@@ -19,7 +19,8 @@
     "@noble/hashes": "1.8.0",
     "@scure/base": "1.2.6",
     "@scure/bip39": "1.6.0",
-    "js-yaml": "5.4.2"
+    "js-yaml": "5.4.2",
+    "viem": "2.37.0"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

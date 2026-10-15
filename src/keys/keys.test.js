@@ -1,7 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { privateKeyToAccount, sign } from 'viem/accounts';
 import {
   generateEntropy, deriveKeys, publicKeys, entropyFromWords, entropyFromWif, signMessage, verifyMessage,
+  evmAddress, signDigest,
 } from './keys.js';
 
 vi.setConfig({ testTimeout: 60_000 }); // shared box; noble builds tables on first use
@@ -89,5 +91,28 @@ describe('Evrmore message signing', () => {
     expect(verifyMessage('hello', sig, { pubkey: b.pubkey })).toBe(false);
     expect(verifyMessage('hello', sig, { address: b.address })).toBe(false);
     expect(verifyMessage('hello', 'not base64!', { address: a.address })).toBe(false);
+  });
+});
+
+describe('Base (EVM): the same secret, as satorilib (Account.from_key(entropy))', () => {
+  for (const v of fx.vectors) {
+    test(`the address from the public key is satorilib's ethAddress: ${v.label}`, () => {
+      expect(evmAddress(v.pubkey)).toBe(v.ethAddress);
+      expect(evmAddress(publicKeys(hex(v.entropyHex)).pubkey)).toBe(privateKeyToAccount(`0x${v.entropyHex}`).address);
+    });
+  }
+  test('an uncompressed or malformed public key', () => {
+    const v = fx.vectors[0];
+    expect(() => evmAddress('02' + '00'.repeat(32))).toThrow();
+    expect(() => evmAddress('nope')).toThrow();
+    expect(evmAddress(v.pubkey.toUpperCase().replace(/^0/, '0'))).toBe(v.ethAddress);
+  });
+  test('signDigest is viem\'s sign over the same 32 bytes (RFC 6979, low-S)', async () => {
+    const v = fx.vectors[1];
+    const hash = `0x${'ab'.repeat(32)}`;
+    const ours = signDigest(hex(v.entropyHex), hex('ab'.repeat(32)));
+    const theirs = await sign({ hash, privateKey: `0x${v.entropyHex}` });
+    expect(ours).toEqual({ r: theirs.r, s: theirs.s, yParity: theirs.yParity, v: theirs.v });
+    expect(() => signDigest(hex(v.entropyHex), new Uint8Array(31))).toThrow();
   });
 });

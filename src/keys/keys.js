@@ -5,6 +5,7 @@
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { ripemd160 } from '@noble/hashes/legacy';
+import { keccak_256 } from '@noble/hashes/sha3';
 import { bytesToHex, concatBytes, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
 import { createBase58check, base64 } from '@scure/base';
 import { entropyToMnemonic, mnemonicToEntropy } from '@scure/bip39';
@@ -114,4 +115,24 @@ export function verifyMessage(msg, signature, { pubkey, address } = {}) {
   } catch {
     return false;
   }
+}
+
+/**
+ * The Base (EVM) address of a public key (hex, compressed or not), EIP-55
+ * checksummed: satorilib's `ethAddress`, `Account.from_key(entropy)` on the
+ * same secret (wallet/ethereum/wallet.py:114-121).
+ */
+export function evmAddress(pubkeyHex) {
+  const pub = secp256k1.ProjectivePoint.fromHex(pubkeyHex.toLowerCase()).toRawBytes(false);
+  const hex = bytesToHex(keccak_256(pub.slice(1)).slice(-20));
+  const sum = bytesToHex(keccak_256(utf8ToBytes(hex)));
+  return '0x' + [...hex].map((c, i) => (parseInt(sum[i], 16) >= 8 ? c.toUpperCase() : c)).join('');
+}
+
+/** An ECDSA signature over a 32-byte digest (an EVM transaction hash), as viem's `sign`: RFC 6979, low-S. */
+export function signDigest(entropy, digest) {
+  if (!(digest instanceof Uint8Array) || digest.length !== 32) throw new Error('digest must be 32 bytes');
+  const { r, s, recovery } = secp256k1.sign(digest, checkKey(entropy), { lowS: true });
+  const h32 = (n) => `0x${n.toString(16).padStart(64, '0')}`;
+  return { r: h32(r), s: h32(s), yParity: recovery, v: recovery ? 28n : 27n };
 }
