@@ -4,7 +4,7 @@
 
 ArrowJS (`@arrow-js/core` 1.0.6: `reactive`, `html`, `component`, `watch`) on the
 main thread. State arrives from the neuron worker as snapshots; actions go to it
-as messages. Charts read Arrow tables from DuckDB queries run in the worker.
+as messages.
 
 ## What it replaces (verified)
 
@@ -20,33 +20,40 @@ Flask routes become function calls into the worker; there is no server session.
 | Page | Does | Docker counterpart |
 |---|---|---|
 | **Welcome** | create (show 24 words, confirm), import (wallet.yaml / vault.yaml / nostr.yaml, words, WIF), set passphrase | `/vault-setup`, `/api/wallet/import` (`routes.py:570-622,2281-2492`) |
-| **Unlock** | passphrase; "remember on this device" for the identity; idle auto-lock wipes the vault from memory | `/login` (`routes.py:462-568`) |
-| **Lock** | Lock / unlock toggle and status (locked, unlock time); identity and vault Base addresses with QR and ETH balance; gas warning | Settings "Staking" card (`settings.html:744-870`) |
-| **Claim** | claimable merkle reward, airdrop, on-chain prediction rewards; one button each | dashboard claim cards (`dashboard.html:2184-2258`) |
-| **Predictions** | per stream: observations vs predictions chart, error, chosen model; last Base batch and its games | `/local-predictions` (`local_predictions.html:695-960`) |
-| **Status** | neuron active/sleeping, relays (wss reachable or not), central, last poll/batch, next due, storage used | dashboard monitoring (`routes.py:850-979`) |
+| **Sign in** | passphrase; "remember on this device" for the identity; idle timeout wipes the vault from memory | `/login` (`routes.py:462-568`) |
+| **Delegate** | Delegate / Revoke and status ("transfers locked until"); identity and vault Base addresses with QR and ETH balance; gas warning; vault SATORI vs the 250 central gate | Settings "Staking" card (`settings.html:744-870`) |
+| **Claim** | merkle reward ("no drop published yet" vs "not in the drop"), airdrop, on-chain prediction rewards; one button each | dashboard claim cards (`dashboard.html:2184-2258`) |
+| **Status** | neuron active/sleeping, central and register state, last central batch, this round's Base batch and its games, next due, 250 gate, storage used | dashboard monitoring (`routes.py:850-979`) |
 | **Backup** | show words (passphrase required), export legacy `wallet.yaml`/`vault.yaml` and `nostr.yaml` | `/api/wallet/download` (`routes.py:3214-3258`) |
-| **Settings** | central URL, Base RPC URL, extra relays | Settings page |
+| **Settings** | central URL, Base RPC URL | Settings page |
 
-The page is called **Lock**, never "Stake": the Docker "Stake" page is the
-legacy central pool/lender page (`neuron/web/templates/stake.html`), a different
-thing. A small "Add SATORI to MetaMask" button
-(`wallet_addEthereumChain`/`wallet_watchAsset`, `dashboard.html:3625-3710`) is
-cheap and kept.
+Never "Stake": the Docker "Stake" page is the legacy central pool/lender page
+(`neuron/web/templates/stake.html`). Delegation words: OVERVIEW decision 1.
 
-Named games have no page in Docker (grep of templates for "game": 0 hits); they
-show up only as games in the Base batch list.
+Later: per-stream chart and model view, "Add SATORI to MetaMask"
+(`dashboard.html:3625-3710`), relay settings, pub/sub, marketplace, bounties,
+channels, Evrmore send, data sources, pool/lender, reward address.
 
 ## Security
 
-- Strict CSP: scripts from our origin only; no third-party scripts at runtime.
+Content-Security-Policy, sent as an **HTTP response header** on the HTML and on
+every worker script (a dedicated worker's CSP comes from its own response, not
+the page's `<meta>`):
+
+```
+default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self';
+connect-src 'self' https: ; img-src 'self' data:; style-src 'self';
+object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+```
+
+- `'wasm-unsafe-eval'` is required: without it WebAssembly is blocked, which
+  stops DuckDB (MDN CSP `script-src`).
+- `connect-src https:` because central and the RPC are user-chosen URLs; Nostr
+  parity adds `wss:`.
+- The host must set headers ([OVERVIEW](OVERVIEW.md#tech-stack-pinned)).
+- Playwright asserts DuckDB and key derivation run under this exact policy.
 - Keys never reach the main thread. Words and private keys are rendered only on
-  the Backup page after re-entering the passphrase.
-
-## Later
-
-Pub/sub management, marketplace, bounties, channels, Evrmore send, data
-sources, pool/lender, reward address.
+  Backup after re-entering the passphrase.
 
 ## Dropped
 

@@ -1,128 +1,129 @@
-# Transport (Nostr)
+# Transport (Nostr) — parity, after v1
 
 [← OVERVIEW](OVERVIEW.md)
 
-Streams and predictions travel over Nostr. The browser speaks the same wire
-protocol as Docker's satorilib `SatoriNostr`, using `nostr-tools` 2.25.2 in the
-neuron worker.
+v1 does not use Nostr: both earning paths run over HTTPS
+([OVERVIEW](OVERVIEW.md#how-v1-earns-verified)). This doc is the next step,
+Nostr parity: follow free streams, publish `<stream>_pred`, announce it. It is
+blocked until a relay has a wss:// endpoint ([issue](../issues/relays-not-wss.md)).
+`nostr-tools` 2.25.2 in the neuron worker speaks the same wire protocol as
+Docker's satorilib `SatoriNostr`.
 
-Reference implementation: the neuron needs satorilib on `origin/base-upgrade`
-(commit dec62db: `set_followed_authors`, `find_datastreams`); the local
-`/code/Satori/satorilib` checkout is behind it
-([issue](../issues/satorilib-checkout-behind.md)). "origin client" below means
-`git show origin/base-upgrade:src/satorilib/satori_nostr/client.py`.
+"origin client" below means
+`git show origin/base-upgrade:src/satorilib/satori_nostr/client.py` (commit
+dec62db), which the Docker neuron needs (`set_followed_authors`,
+`find_datastreams`); the local satorilib checkout is behind it.
 
 ## Wire protocol (verified)
 
 Kinds (`satorilib/src/satorilib/satori_nostr/models.py:512-521`), all
 parameterized-replaceable:
 
-| Kind | Meaning | v1 |
+| Kind | Meaning | Parity step |
 |---|---|---|
-| 34600 | datastream announcement, `d=stream_name` | read (discovery); publish for `_pred` |
-| 34601 | observation, `d=stream_name` (relay keeps latest only) | read + publish `_pred` |
+| 34600 | datastream announcement | read (discovery); publish for `_pred` |
+| 34601 | observation (relay keeps latest per stream, `models.py:513`) | read; publish `_pred` |
 | 34602 | subscription announcement | publish |
-| 34603 | payment notification | later |
-| 34604-34606 | channel commitment / open / settled | later |
-| 34607 | bounty announcement | later |
-| 34608 | prediction DM to bounty host | later |
-| 34609 | access request DM | later |
-| 10002 | NIP-65 relay list | publish daily |
+| 10002 | NIP-65 relay list | last, see below |
+| 34603-34609 | payments, channels, bounties, prediction and access DMs | later |
 
-Encryption is **NIP-04 only** (`satorilib/src/satorilib/satori_nostr/encryption.py:1-10`).
-The browser must use NIP-04 to interoperate with Docker neurons. v1 needs no
-encryption at all (free streams), so the NIP-44 question can wait.
+Encryption is **NIP-04 only** (`satorilib/src/satorilib/satori_nostr/encryption.py:1-10`);
+free streams need none.
 
-Free observation (34601): content = JSON `{stream_name, timestamp, value,
-seq_num}`, tags `d`, `stream`, `seq`, `satori=observation`
+**Free observation (34601)**: content = JSON `{stream_name, timestamp (int),
+value, seq_num}`, tags `d`, `stream`, `seq`, `satori=observation`
 (`satorilib/src/satorilib/satori_nostr/client.py:530-656`). Empty content is a
 heartbeat and is skipped (`client.py:1643-1700`).
 
-Predictions are an ordinary 34601 on the sibling stream `<stream>_pred`
-(`neuron/neuron-lite/start.py:1318-1321`), announced as a publication.
+**`_pred` observation**: an ordinary 34601 on `<stream>_pred`
+(`neuron/neuron-lite/start.py:1318-1323`) whose `value` is a **string**, the
+engine's forecast text (`start.py:1300`, from `predictForRelay`,
+`neuron/engine-lite/engine.py:732`) or the JSON-dumped echo of a non-numeric
+value (`start.py:1304-1308`). `seq_num` = local `last_seq_num + 1`.
+
+**`_pred` announcement (34600)** (origin client `announce_datastream`, 294-345):
+
+- tags: `d=<stream>_pred`, `satori=datastream`, one `t` per topic tag,
+  `stream=compute_stream_topic_tag(name)` (`models.py:534`),
+  `source_stream=<source name>`, `source_pubkey=<source provider>`;
+- content: `DatastreamMetadata.to_json()` (origin `models.py:14-40`) with
+  `stream_name, nostr_pubkey, name, description, encrypted, price_per_obs,
+  created_at, cadence_seconds, tags` and `metadata = {source_stream_name,
+  source_provider_pubkey, wallet_pubkey}` (`start.py:3454-3477`).
+
+Both shapes go into the parity fixtures.
 
 ## Relays
 
-- List = central `GET /api/v1/peer/relays` ∪ user-added relays
-  (`start.py:314-323`; `neuron/neuron-lite/satorineuron/network_db.py:712-726`).
-- **wss:// only.** An HTTPS page cannot open `ws://` (mixed content). `ws://`
-  entries are shown as "unreachable from the browser", except
-  `ws://localhost` for development. The only relay central lists today is
-  `ws://satorian.satorinet.io:7777` (probed 2026-10-14), so this blocks v1
-  ([issue](../issues/relays-not-wss.md)).
-- Stream cap: `relay-config.max_streams` (60 live), local default 100
+- Docker's reconcile hunts only on central `GET /api/v1/peer/relays`, falling
+  back to the relay_urls of existing subscriptions (`start.py:4466-4471`).
+  User-added relays are used only for publisher connections
+  (`start.py:316-322`). Parity: same; a user-added relay list for hunting would
+  be a browser-side change.
+- **wss:// only.** An HTTPS page cannot open `ws://` (mixed content); `ws://`
+  entries are shown as unreachable, except `ws://localhost` in development.
+- Stream cap: `relay-config.max_streams` (`peer.py:164-172`), fetched once at
+  start as Docker does (`start.py:238-246`); local default 100
   (`network_db.py:14-36`).
 
-## Filters
+## Filter
 
-Same two shapes as origin client (`origin client:1687-1745`; `start.py:402-409,432-455`):
+One: `{kinds:[34601], authors:[subscribed providers]}`, chunked 200 authors per
+filter, id `satori-follow`. Docker also subscribes a personal `#p` filter and
+kind 34604 (origin client 1687-1745); those carry only paid, channel and bounty
+traffic, added when those land. Keep ≤ 20 subscriptions per connection (strfry
+`maxSubsPerConnection`, `relay_manager.py:691`).
 
-1. Personal: `{kinds:[34601..34606,34608,34609], '#p':[me]}`.
-2. Followed: `{kinds:[34601,34604], authors:[subscribed providers]}`, chunked 200
-   authors per filter, subscription id `satori-follow`.
-
-Added for the browser: `since` = last seen `created_at` per relay (stored in
-`relay_cursor`), so reopening the tab does not replay everything and a frozen
-tab catches up. Keep ≤ 20 subscriptions per connection (strfry
-`maxSubsPerConnection`, `neuron/neuron-lite/satorineuron/relay_manager.py:691`).
+No `since` and no cursor table: 34601 is replaceable, so a resubscribe returns
+at most one event per stream, and intake dedupes it.
 
 ## Reconcile (hourly + on open/online/resume)
 
-Port of `_networkReconcile` (`start.py:200-302`), one async loop, no threads:
+Port of `_networkReconcile` (`start.py:4407-4547`), driven by the loop at
+`start.py:200-302`:
 
-1. Fetch relays and relay-config.
-2. Subscriptions with no observation within 1.5 × cadence are inactive (all, on
-   first run). Skip any marked stale in the last 24 h.
-3. For each relay (shuffled): connect; `find_datastreams` for wanted
-   `(provider, name)` pairs — per-author filters `{authors:[a], '#d':[names]}`
-   (`origin client:945-1000`); freshness from the latest 34601 vs cadence × 1.5
-   (`start.py:1047-1110`); subscribe fresh matches, record `relay_url`.
+1. Fetch `/peer/relays`.
+2. Subscriptions with no observation within 1.5 × cadence are inactive. Skip
+   any marked stale in the last 24 h.
+3. For each relay (shuffled): connect; `find_datastreams` with per-author
+   filters `{authors:[a], '#d':[names]}` (origin client 945-1000); freshness from
+   the latest 34601 vs cadence × 1.5 (`start.py:1047-1110`); subscribe fresh
+   matches.
 4. Mark not-found as stale; disconnect relays carrying nothing we need.
-5. Base stream auto-selection ([chain.md](chain.md#stream-selection)).
-6. Refresh the followed-authors filter.
-7. Announce our `_pred` publications (34600) on each connected relay.
-8. Publish 10002 with `['r', url]` for connected relays, once per 24 h
-   (`start.py:370-389`).
+5. Announce `_pred` publications (34600) on each connected relay.
 
-Reconnect per relay with backoff on close; no process restart.
+Base streams are not found here; they come from the registry
+([chain.md](chain.md#base-streams)). Reconnect per relay with backoff.
 
 ## Intake
 
-Port of `_networkListen` / `_networkProcessObservation`
-(`start.py:621-667,1112-1137`):
+Port of `_networkProcessObservation` (`start.py:621-667,1112-1137`): drop
+unsubscribed streams; unwrap the value (`_numericObservationValue`,
+`start.py:1364-1424`; reject `unit:'tick'` without a converted value; timestamps
+outside 2000-2100 rejected); insert with dedupe by event id, then
+`(stream, provider, seq)` (`network_db.py:598-636`). Only a new row runs the
+engine and the `_pred` publish. Model ids keep Docker's uuid5:
+`uuid5(NAMESPACE_DNS, 'satori-relay:<lowercased pubkey>:<stream>:')`, trailing
+colon (`neuron/neuron-lite/satorineuron/relay_ids.py:28-32,48-77`).
 
-1. Drop events for streams we don't subscribe to; dedupe by event id in memory.
-2. Unwrap the value (`_numericObservationValue`, `start.py:1364-1424`): prefer
-   `value`; reject `unit:'tick'` without a converted value; else `raw`. Reject
-   timestamps outside 2000-2100 (`_safeEpoch`).
-3. Insert into `observations` with dedupe by Base `round` (bridge streams), then
-   event id, then `(stream, provider, seq)`.
-4. Only a new row triggers the engine and the `_pred` publish.
+## NIP-65 (last)
 
-## Publish `_pred`
-
-Port of `start.py:1276-1330`:
-
-1. Numeric: engine forecast. Non-numeric or no forecast: echo the last value.
-2. Save to `predictions`; `seq` = local `publications.last_seq_num + 1`.
-3. `finalizeEvent` kind 34601 on `<stream>_pred` to every connected relay; mark
-   published on the first OK.
-
-Relay-side model ids reproduce Docker's uuid5 so an imported history keys the
-same: `uuid5(NAMESPACE_DNS, 'satori-relay:<lowercased pubkey>:<stream>:')` —
-note the trailing colon (`neuron/neuron-lite/satorineuron/relay_ids.py:28-32,48-77`).
+Docker publishes kind 10002 with `['r', url]` for its connected relays daily
+(`start.py:370-389`). Central uses it only to discover relays and count
+`neuron_count` (`central/relay_watcher/nip65.py:1-6,169-211`). A browser node
+connects only to relays central already lists, so it adds nothing; publish only
+user-added wss relays, if any.
 
 ## Inherent and accepted
 
-- Kind 34601 is replaceable per (author, d): relays keep only the latest
-  observation. History is whatever the node received while open. On reopen the
-  node gets the latest value, not the ones it missed. Docker has the same
-  property with less downtime.
+- For non-Base Nostr streams, history is what the node received while open; a
+  reopened node gets each stream's latest value, not the ones it missed. (Base
+  streams are not affected: their history comes from the registry.)
 - A browser cannot host a relay ([issues](../issues/README.md#inherent-browser-limits)).
 
 ## Later
 
-Paid streams (per-subscriber NIP-04 events, payment channels), bounties,
-access requests, own data sources. When paid streams come: port the live-push
-decrypt path, not origin client's `parse_observation_event`, which returns None
-for paid events ([issue](../issues/satorilib-paid-observation-parse.md)).
+Paid streams (per-subscriber NIP-04 events, payment channels), bounties, access
+requests, own data sources. For paid streams port the live-push decrypt path,
+not origin client's `parse_observation_event`, which returns None for paid
+events ([issue](../issues/satorilib-paid-observation-parse.md)).

@@ -6,11 +6,11 @@ Source of truth for what this app is. Intent: [../intent/INTENT.md](../intent/IN
 
 A Satori neuron that runs entirely client-side: one static web app, no server of
 our own. It does what the Docker neuron (`../neuron`) does for a user: hold the
-keys, follow data streams, forecast them, publish predictions, lock on Base so
-the daily on-chain prediction batch earns, and claim rewards. The Docker neuron
-stays. This is a second way to run a neuron, and it talks to the same network
-(central, Nostr relays, Base) with the same keys and wire formats, so a user can
-move between the two.
+keys, forecast data streams, submit predictions to central and to Base, delegate
+the vault's prediction power on Base, and claim rewards. The Docker neuron
+stays. This is a second way to run a neuron. It talks to the same network
+(central, Base, later Nostr relays) with the same keys, so a user can move
+between the two.
 
 "It'll do it all" is the end state. v1 is the smallest neuron that earns; the
 rest of the Docker neuron's duties come later (see [Scope](#scope)).
@@ -19,58 +19,78 @@ rest of the Docker neuron's duties come later (see [Scope](#scope)).
 
 - Paths in citations are relative to `/code/Satori/` (for example
   `neuron/neuron-lite/start.py:1143`). Each claim about the existing system
-  cites file:line. **Verified** = read in code or probed live during research on
-  2026-10-14. **Inferred** = a reading of the design, not traced end to end.
-- "Lock" is the owner's word for delegating the vault's prediction power to the
-  identity on Base (`hub.delegatePredictionPower`). The Docker UI labels the same
-  toggle "Staking" (`neuron/web/templates/settings.html:744-870`); code
-  identifiers keep their names.
+  cites file:line. **Verified** = read in code or probed live during research
+  (2026-10-14/15). **Inferred** = a reading of the design, not traced end to end.
+- Words. **Delegate / Revoke** = `hub.delegatePredictionPower(identity)` /
+  `(0x0)`, the words Satori's dapp uses (`contract/satori-ui/src`). The token's
+  transfer lock is shown as "transfers locked until". **Sign in** = entering the
+  passphrase. Docker labels the delegation toggle "Staking"
+  (`neuron/web/templates/settings.html:744-870`). Code identifiers keep their
+  names. (Owner decision 1.)
 - **identity** = the always-available key (Docker `wallet.yaml`); **vault** =
   the password-encrypted key (Docker `vault.yaml`).
+
+## How v1 earns (verified)
+
+Two paths, neither needs Nostr:
+
+1. **Central-lite → merkle drop.** Central scores central-lite predictions in its
+   daily run (`central/src/scripts/daily_run.py:1-8,25`), keeps a predictor only
+   if it has a reward or balance + pool contribution ≥ `stake_requirement` = 250
+   SATORI (`central/src/scripts/score.py:1992`, `central/src/scripts/mint.py:5`),
+   and records payouts in `base_earnings` keyed by the Base address derived from
+   the peer's registered **vault pubkey** (`central/src/scripts/distribution.py:48-53,278-280`;
+   `central/src/services/base_distribution.py:55-66,84-130`). That ledger is what
+   the merkle root publishes (`central/src/scripts/publish_merkle_root.py:1-6,34-37`).
+   So peer register with the vault pubkey, and ≥ 250 SATORI on the vault's Base
+   address (`central/src/scripts/base_balance_watcher.py:1-11`) or pool
+   membership, are earning-critical.
+2. **Base daily batch → on-chain rewards.** The identity, holding the vault's
+   delegated power, submits one direction per binary game per UTC-day round;
+   rewards are claimed with `hub.claim()` ([chain.md](chain.md)).
 
 ## Architecture
 
 ```
- ┌───────────────────────────── browser tab (the "leader") ─────────────────────────────┐
- │                                                                                       │
- │  main thread: UI (ArrowJS components)  ◄── BroadcastChannel ──►  follower tabs         │
- │        │  postMessage (commands / state snapshots)                  ("running in       │
- │        ▼                                                             another tab")     │
- │  neuron worker (owns everything stateful)                                              │
- │   ├─ keys        unlocked secrets in memory only            → identity.md              │
- │   ├─ store       DuckDB-WASM on OPFS (opfs://satori.duckdb) → storage.md               │
- │   ├─ nostr       nostr-tools pool, wss:// relays only       → transport.md             │
- │   ├─ central     fetch + JWT                                → central.md               │
- │   ├─ base        viem: reads, lock, daily batch, claims     → chain.md                 │
- │   ├─ scheduler   wall-clock deadlines + catch-up on resume  → runtime.md               │
- │   └─ engine      naive / SES / damped Holt, t1+t2           → engine.md                │
- │                                                                                       │
- │  service worker: precache app shell + DuckDB wasm only (no neuron logic)               │
- └──────────┬───────────────────────┬──────────────────────────┬──────────────────────────┘
-            │ HTTPS (CORS)          │ WSS                       │ HTTPS JSON-RPC (CORS)
-            ▼                       ▼                           ▼
-   central (network.satorinet.io)   Nostr relays (wss only)     Base Sepolia RPC
-   auth, register, relays,          kinds 34600-34609, 10002    engine / hub / rewards /
-   observations, predictions,                                   games / registry / merkle /
-   base/config, merkle proof                                    airdrop / token
+ ┌──────────────────────── browser tab (the "leader") ────────────────────────┐
+ │  main thread: UI (ArrowJS)                                                   │
+ │        │  postMessage (commands / state snapshots)                           │
+ │        ▼                                                                     │
+ │  neuron worker (owns everything stateful)                                    │
+ │   ├─ keys        decrypted secrets in memory only           → identity.md    │
+ │   ├─ store       DuckDB-WASM on OPFS (opfs://satori.duckdb) → storage.md     │
+ │   ├─ central     fetch; login per batch                     → central.md     │
+ │   ├─ base        viem: registry reads, delegate, batch, claims → chain.md    │
+ │   ├─ scheduler   wall-clock deadlines + catch-up on resume  → runtime.md     │
+ │   └─ engine      naive / SES + direction rule, t1+t2        → engine.md      │
+ │                                                                              │
+ │  service worker: precache app shell + DuckDB wasm only (no neuron logic)     │
+ └──────────┬──────────────────────────────────────┬────────────────────────────┘
+            │ HTTPS (CORS)                         │ HTTPS JSON-RPC (CORS)
+            ▼                                      ▼
+   central (network.satorinet.io)            Base Sepolia RPC
+   auth, register, base/config,              registry / games / engine / hub /
+   observations, predictions, merkle proof   rewards / merkle / airdrop / token
+
+   later (Nostr parity): nostr worker module → wss relays, kinds 34600-34609, 10002
 ```
 
-Only one tab per browser runs the neuron: it wins a Web Lock named
-`satori-neuron` and spawns the neuron worker. Other tabs show state and send
-commands ([runtime.md](runtime.md)).
+Only one tab per browser runs the neuron: it holds a Web Lock named
+`satori-neuron`. Other tabs show "Satori is running in another tab" and wait in
+the lock queue ([runtime.md](runtime.md)).
 
 ## Component docs
 
 | Doc | Covers |
 |---|---|
 | [identity.md](identity.md) | keys, backup words, encryption at rest, Docker import/export, Evrmore message signing |
-| [central.md](central.md) | login/JWT, peer register, relays, base config, observations and predictions batch, merkle proof |
-| [transport.md](transport.md) | Nostr wire protocol subset, relay reconcile, subscribe, intake, publish `_pred` |
+| [central.md](central.md) | login, peer register, base config, observations and predictions batch, merkle proof |
+| [chain.md](chain.md) | Base: config, stream reads, delegate/revoke, daily batch, claims, balances; Evrmore later |
+| [engine.md](engine.md) | forecaster, horizons, Base direction, per-node diversity |
 | [storage.md](storage.md) | DuckDB-WASM on OPFS, schema, single-writer rule, durability |
-| [engine.md](engine.md) | forecaster, horizons, per-node diversity |
-| [chain.md](chain.md) | Base: config, lock/unlock, daily batch, claims, balances; Evrmore later |
 | [runtime.md](runtime.md) | background execution, leader election, scheduling, catch-up |
-| [ui.md](ui.md) | pages, ArrowJS, what replaces Flask |
+| [ui.md](ui.md) | pages, ArrowJS, CSP and hosting |
+| [transport.md](transport.md) | Nostr parity (after v1): wire protocol, reconcile, intake, `_pred` |
 | [../issues/README.md](../issues/README.md) | blockers outside this repo, and inherent browser limits |
 
 ## Tech stack (pinned)
@@ -84,7 +104,6 @@ be used (see storage.md).
 | `@duckdb/duckdb-wasm` | 1.32.0 | `latest` (1.33.1-dev57.0) creates OPFS files but never writes them (duckdb.org/2026/09/18/opfs-wasm). |
 | `apache-arrow` | ^17 (the copy DuckDB resolves) | DuckDB 1.32.0 depends on `apache-arrow ^17.0.0`; a second copy (21.x) breaks `instanceof`. Inferred. |
 | `@arrow-js/core` (ArrowJS) | 1.0.6 | UI runtime: `reactive`, `html`, `component`, `watch`. No dependencies. |
-| `nostr-tools` | 2.25.2 | pool, `finalizeEvent`, `nip04`. |
 | `viem` | 2.37.0 | Base reads/writes; the version the identity parity vector was checked with. |
 | `@noble/curves` | 1.9.7 | secp256k1 sign/recover for Evrmore messages; parity-verified. |
 | `@noble/hashes` | 1.8.0 | sha256, ripemd160, pbkdf2; parity-verified. |
@@ -93,14 +112,17 @@ be used (see storage.md).
 | `js-yaml` | 5.4.2 | read Docker `wallet.yaml` / `vault.yaml` / `nostr.yaml` on import. |
 | `vite` | 8.3.1 | static build, worker bundling. |
 | `vitest` | 5.0.2 | unit tests (parity vectors, engine, schema). |
-| `@playwright/test` | 1.63.0 | end-to-end tests in real Chromium (OPFS, workers, hidden-tab behaviour). |
+| `@playwright/test` | 1.63.0 | end-to-end tests in real Chromium (OPFS, workers, CSP, tab handover). |
+| `nostr-tools` | 2.25.2 | Nostr parity only (after v1). Brings noble 2.x; collapse onto it once the parity vectors pass. |
 
-nostr-tools 2.25.2 brings `@noble/curves` 2.0.1 / `@noble/hashes` 2.0.1 with it, so
-two noble major versions ship. Accept that for v1; collapse onto noble 2.x once
-the parity vectors pass on it (vectors, not version numbers, are the contract).
+No DuckDB extension is used at runtime: JSON is stored as `VARCHAR` and parsed
+in JS, because the `json` extension is not built into the 1.32.0 wasm and
+autoloads from `extensions.duckdb.org` (verified, [storage.md](storage.md#bundle)).
 
-Hosting: any static HTTPS host. No COOP/COEP needed, because the non-threaded
-DuckDB `eh` bundle is used ([storage.md](storage.md#bundle)).
+Hosting: a static HTTPS host **that can set response headers** (Cloudflare
+Pages, Netlify `_headers`, nginx). The CSP that protects the keys must reach the
+worker scripts as an HTTP header ([ui.md](ui.md#security)). No COOP/COEP: the
+non-threaded DuckDB `eh` bundle is used.
 
 "Arrow.js" in the intent is read as ArrowJS (`@arrow-js/core`), the reactive UI
 runtime, used together with DuckDB-WASM. Apache Arrow is also used, as the
@@ -109,24 +131,22 @@ only [ui.md](ui.md) changes.
 
 ## Neuron duties → browser tech
 
-Duty numbers follow the lifecycle map of `neuron/neuron-lite/start.py`.
-
 | Docker duty | Evidence | Browser | v1? |
 |---|---|---|---|
 | Config (YAML) | `neuron/neuron-lite/satorineuron/config/__init__.py:3-95` | `settings` table in DuckDB | yes |
 | Identity, vault, Nostr keys | `start.py:75-76,120-149`; `satorilib/src/satorilib/wallet/identity.py:309-320` | `@noble/*` + `@scure/*`, WebCrypto at rest | yes |
-| Watchdogs, `os._exit` restarts | `start.py:102-118,4883-4892` | dropped; per-connection reconnect | no (dropped) |
-| Central check-in, JWT, register | `start.py:4972-5006`; `central/src/api/v1/endpoints/auth.py:21-86` | `fetch` | yes |
-| Central observation poll + predictions batch (11 h) | `start.py:4766-4881`; `central/src/main.py:292-330,438-602` | `fetch` on open and on a deadline | yes |
-| Relay reconcile (hourly) | `start.py:200-302` | nostr-tools pool in the worker | yes |
-| Base stream auto-selection | `start.py:453-543` | viem multicall + Nostr lookup | yes |
-| Observation intake | `start.py:621-667,1112-1137` | WebSocket handler → DuckDB insert | yes |
-| Relay prediction + `_pred` publish | `start.py:1276-1362` | engine in worker, nostr-tools publish | yes |
-| Base daily batch | `start.py:1143-1281`; `neuron/neuron-lite/satorineuron/base_predict.py:135-174` | viem `writeContract` | yes |
-| Lock / unlock, merkle claim, airdrop claim | `base_predict.py:242-323`; `base_claim.py:84-121` | viem | yes |
-| Engine + training queue | `neuron/engine-lite/engine.py:1253-1364` | small JS forecaster, refit per observation | yes (new engine) |
+| Watchdogs, `os._exit` restarts | `start.py:102-118,4883-4892` | dropped | no (dropped) |
+| Central check-in, login, register | `start.py:4972-5006`; `central/src/api/v1/endpoints/auth.py:21-86` | `fetch` | yes |
+| Central observation poll + predictions batch (11 h) | `start.py:4766-4881`; `central/src/main.py:292-330,483-602` | `fetch` on a deadline | yes |
+| Base stream selection | `start.py:453-543` | registry + games views over multicall (not Nostr) | yes (changed) |
+| Base daily batch | `start.py:1143-1281`; `neuron/neuron-lite/satorineuron/base_predict.py:135-174` | viem; due per UTC round | yes (changed) |
+| Delegate / revoke, merkle claim, airdrop claim | `base_predict.py:242-323`; `base_claim.py:84-121` | viem | yes |
+| On-chain reward claim | none in Docker | `hub.claim()` | yes (new) |
+| Engine + training queue | `neuron/engine-lite/engine.py:1253-1364` | small JS forecaster | yes (new engine) |
+| Relay reconcile, observation intake | `start.py:200-302,4407-4547,621-667,1112-1137` | nostr-tools pool | parity, after v1 |
+| `_pred` publish, 34600 announce, NIP-65 | `start.py:1276-1362,370-389,3454-3477` | nostr-tools | parity, after v1 |
 | Bounties (host and join) | `start.py:669-882,1334-1362` | nostr-tools + DuckDB | later |
-| Evrmore payment channels | `start.py:1589-3440` | needs JS P2SH/CSV port + WSS ElectrumX | later |
+| Evrmore payment channels | `start.py:1589-3440` | JS P2SH/CSV port + WSS ElectrumX | later |
 | Own data sources (publishing) | `start.py:3842-4016` | `fetch` (CORS-limited) | later |
 | Evrmore send / balances | `neuron/web/routes.py:1531-1637` | WSS ElectrumX + JS asset tx | later |
 | Local strfry relay | `neuron/neuron-lite/satorineuron/relay_manager.py:421-456` | impossible in a browser | never |
@@ -139,32 +159,45 @@ Duty numbers follow the lifecycle map of `neuron/neuron-lite/start.py`.
 
 1. **Keys.** Create or import identity, vault and Nostr key; back up; encrypted
    at rest; byte-compatible with Docker. ([identity.md](identity.md))
-2. **Central.** Login, register (all three pubkeys), relay list, base config,
-   observation poll and predictions batch. ([central.md](central.md))
-3. **Streams.** Connect to wss relays; auto-select the Base bridge streams
-   `satori-<chainId>-<id>`; ingest free observations; publish `<stream>_pred`.
-   ([transport.md](transport.md))
-4. **Engine.** Naive floor + SES + damped Holt, chosen per stream by rolling
-   error; ship t1 and t2. ([engine.md](engine.md))
-5. **Base.** Lock / unlock, the daily prediction batch signed by the identity,
-   merkle claim, airdrop claim, ETH and SATORI balances. ([chain.md](chain.md))
-6. **Runtime.** One leader tab; everything driven by persisted deadlines with a
-   catch-up pass on open, resume and reconnect. ([runtime.md](runtime.md))
-7. **UI.** Unlock, Lock, Claim, Backup/Import, Predictions, Status.
+2. **Central.** Register all three pubkeys (earning-critical: the vault pubkey
+   is the payee); observation poll and predictions batch, logging in once per
+   batch; base config; merkle proof. ([central.md](central.md))
+3. **Base streams.** Games from `registry.getAllDataStreams` +
+   `games.binaryGameByStream`; history and latest values from registry views.
+   ([chain.md](chain.md#base-streams))
+4. **Engine.** Naive floor + SES per stream, t1 and t2; a separate Base
+   direction rule that never defaults to a constant vote. ([engine.md](engine.md))
+5. **Base.** Delegate / revoke, the daily batch signed by the identity (due
+   whenever the current UTC round has none), merkle claim, airdrop claim,
+   `hub.claim`, ETH and SATORI balances, the 250-SATORI central gate.
+   ([chain.md](chain.md))
+6. **Runtime.** One leader tab, queued handover; persisted deadlines; catch-up
+   on open, resume and reconnect. ([runtime.md](runtime.md))
+7. **UI.** Welcome, Sign in, Delegate, Claim, Backup, Status, Settings.
    ([ui.md](ui.md))
 
-Free streams only. A v1 neuron is a subscriber and predictor; it does not
-publish its own data sources or host bounties.
+Free central streams and Base games only. No Nostr in v1.
+
+### Next — Nostr parity ([transport.md](transport.md))
+
+Relay reconcile and intake of free 34601 streams, `_pred` publish with its 34600
+announcement, then NIP-65. Blocked on a wss relay
+([issue](../issues/relays-not-wss.md)). Nothing in central or the contracts
+reads `_pred` (verified: grep of `central/src`, `central/relay_watcher`; the Base
+batch reads local predictions, `start.py:1201-1213`), so this is network
+service, not earning.
 
 ### Later (in rough order of value per effort)
 
-- Manual subscribe/unsubscribe and a marketplace view (Nostr only; cheap).
+- Per-stream chart and model view; "Add SATORI to MetaMask".
+- Manual subscribe/unsubscribe and a marketplace view.
 - Bounty participation (predictor side: one NIP-04 DM per prediction).
 - Gasless relay through `SatoriHub.relay` (needs an owner ruling, see issues).
 - Evrmore balances over WSS ElectrumX; SATORIEVR send.
 - Paid streams and Evrmore payment channels; bounty hosting and payouts.
 - Own data sources (JS parsers instead of Python `exec`).
-- Optional heavier models (Pyodide XGBoost, ONNX) if they ever beat naive.
+- Damped Holt or heavier models, only if a backtest on Satori's own histories
+  shows a win.
 
 ### Never
 
@@ -175,47 +208,46 @@ Hosting a relay; host metrics; process restarts; the TTY CLI.
 Each has a recommended default that the design already assumes, so work can
 start without an answer.
 
-1. **Identity at rest.** The identity has to sign without a prompt (central
-   login, the daily batch). Docker keeps it in plaintext
+1. **Words.** Docs use Delegate / Revoke (Satori dapp) and "Sign in" for the
+   passphrase, so "unlock" never means three things. If you want "Lock" for
+   delegation, only labels change; the passphrase page stays "Sign in".
+2. **Identity at rest.** The identity signs without a prompt (central login, the
+   daily batch). Docker keeps it in plaintext
    (`neuron/neuron-lite/satorineuron/init/wallet.py:94-111`). Default: one
-   passphrase for both keys, plus an opt-in "remember on this device" that
-   wraps the identity only with a non-extractable WebCrypto key, so a reloaded
-   tab predicts without a prompt. The vault always needs the passphrase.
-   ([identity.md](identity.md#at-rest))
-2. **Tab-only runtime.** A browser neuron works only while a tab or installed
-   PWA is open; a day with no open tab misses that day's batch. This is
-   inherent. Default: accept it, catch up on open, and show "last active".
-   ([runtime.md](runtime.md))
+   passphrase, plus opt-in "remember on this device" that wraps the identity
+   only with a non-extractable WebCrypto key. The vault always needs the
+   passphrase. ([identity.md](identity.md#at-rest))
 3. **Which central.** Prod `network.satorinet.io` returns 404 for
    `/api/v1/base/config` and `/api/v1/merkle/*`; dev `central2` serves them.
-   Default: bundle the Base addresses, target prod for login/predictions, and
-   treat claims as blocked on prod until it is deployed.
+   Default: bundle the Base addresses, target prod for register/predictions,
+   claims blocked on prod until deployed.
    ([issue](../issues/central-prod-missing-base-routes.md))
-4. **Relays.** The only relay central lists is `ws://satorian.satorinet.io:7777`,
-   which an HTTPS page cannot open. v1 cannot follow streams until at least one
-   relay has a wss:// endpoint. ([issue](../issues/relays-not-wss.md))
-5. **Gas.** Both the identity and the vault need Base ETH, as in Docker. The live
+4. **Base stream history source.** Default: registry views
+   (`getHistoryPage`, up to 768 entries per stream), which match the value the
+   contract anchors on. Your "events are the read model" rule points at
+   `StreamValueUpdated` logs instead, but the public RPC caps `eth_getLogs` at
+   200 blocks (~400 s on Base, probed), so that means the indexer
+   (`https://app.satorinet.io/api`) as a dependency. Recommend registry views
+   for v1; they are a contract API, not a reconstruction.
+5. **Gas.** Both identity and vault need Base ETH, as in Docker. The live
    gasless relay could remove that, but its Predict fee (0.25 SATORI) would be
-   paid by the identity, which holds none. Default: v1 needs ETH; owner decides
-   on a 0-fee Predict. ([issue](../issues/relayer-predict-fee.md))
-6. **hub.claim.** Neither neuron calls `SatoriHub.claim` for on-chain prediction
-   rewards today (`base_predict.py:67-75` has only `delegatePredictionPower`).
-   Default: add it to the Claim page in v1 (one write). Owner confirms that
-   these rewards are meant to be claimed from the neuron.
-7. **Same keys in both neurons.** Importing a Docker identity and running both
-   means two nodes with one Nostr pubkey publishing the same `_pred`
-   coordinates. Default: import is a move; the app warns the user to stop the
-   Docker neuron. The chain refuses a second batch the same day
-   (`predictedStreamsCount`, `base_predict.py:209-240`).
+   paid by the identity, which holds none. Default: v1 needs ETH.
+   ([issue](../issues/relayer-predict-fee.md))
+6. **Same keys in both neurons.** Importing a Docker identity and running both
+   means two nodes submitting for one identity. Default: import is a move; the
+   app warns to stop the Docker neuron. The chain refuses a second batch per
+   round (`contract/satori/contracts/next/SatoriEngine.sol:716`).
 
 ## Testing and verification
 
-- Parity vectors (identity, message signing, vault decrypt, addresses, payload
-  hash, relay uuid5) are generated from the shipped Docker image and checked in
-  as JSON fixtures; vitest asserts them. Signatures are checked by
+- Parity vectors (identity, message signing, vault decrypt including old vaults
+  with encrypted `publicKey`/`address`, central-lite payload hash) are
+  generated from the shipped Docker image and checked in as JSON fixtures;
+  vitest asserts them. None exist yet. Signatures are checked by
   cross-verification, never byte equality ([identity.md](identity.md#signing)).
-- Playwright runs the built app in Chromium against a local central and a local
-  wss relay: unlock, observation in, `_pred` out, prediction batch on an anvil
-  fork of Base Sepolia.
+- Playwright runs the built app in Chromium, under the production CSP, against a
+  local central and an anvil fork of Base Sepolia: fresh install → delegate →
+  one batch; leader tab closes → follower takes over; DuckDB and PBKDF2 run
+  under the CSP.
 - OPFS round trip at startup (write, reopen, read) guards against DuckDB
   regressions ([storage.md](storage.md)).

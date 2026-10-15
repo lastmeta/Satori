@@ -12,7 +12,7 @@ Any one game in the day's batch fails a per-game check in
 - `EmptyStream`: the stream has no values yet;
 - `DuplicatePrediction` on a non-named game whose target is longer than a day.
 
-Evidence: `contract/satori/contracts/next/SatoriEngine.sol:788-812` reverts the whole call for
+Evidence: `contract/satori/contracts/next/SatoriEngine.sol:783-810` reverts the whole call for
 any of these.
 
 ## Finding (verified)
@@ -25,12 +25,15 @@ time is already written (`start.py:1231`).
 
 ## Fix
 
-Pre-check each game (e.g. `eth_call` / simulate a one-game batch, or read
-`getLatestUpdateInfo` against the last prediction hour) and send only the games
-that pass. The browser app does this ([chain.md](../design/chain.md#daily-prediction-batch)).
+Simulate each game as a one-game batch (`eth_call` / `simulateContract`) and
+send only the games that pass. Reading `getLatestUpdateInfo` off-chain is not a
+substitute: the call first runs `satoriRegistry.updateValues` (`SatoriEngine.sol:783`),
+which pulls a fresh value for due PULL streams before the `EmptyStream` /
+`StaleValue` checks (`:791-810`), so an off-chain read drops games that would
+pass. The browser app simulates
+([chain.md](../design/chain.md#daily-prediction-batch)).
 
-Related: the named-game wait uses the neuron's own stored timestamp
-(`base_predict.py:146-149`), while the contract uses the on-chain last
-prediction hour. After a reinstall the local timestamp is 0 and the neuron
-relies on the revert-and-retry. Reading `PredictionMade.hour`
-(`contract/satori/contracts/next/SatoriEngine.sol:326`) would make it exact.
+The simulate also fixes the reinstall case: Docker's named-game wait uses its
+own stored timestamp (`base_predict.py:146-149`), which is 0 after a reinstall,
+while the contract uses the on-chain last prediction hour (`:800-809`), which
+the simulate evaluates exactly.

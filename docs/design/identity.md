@@ -11,8 +11,8 @@ a neuron between the two.
 | Key | Docker storage | Used for |
 |---|---|---|
 | identity | `wallet.yaml`, plaintext (`neuron/neuron-lite/satorineuron/init/wallet.py:94-111`) | central login signature; signs the daily Base batch (`neuron/neuron-lite/start.py:1164-1165,1234`); sets predictor fee 0 |
-| vault | `vault.yaml`, per-field encrypted (`init/wallet.py:113-159`) | lock/unlock (`hub.delegatePredictionPower`), merkle and airdrop claims (`neuron/neuron-lite/satorineuron/base_claim.py:84-121`) |
-| Nostr | `nostr.yaml`, plaintext hex, random (`start.py:120-149`) | all Nostr events and NIP-04 |
+| vault | `vault.yaml`, per-field encrypted (`init/wallet.py:113-159`) | delegate/revoke (`hub.delegatePredictionPower`), `hub.claim`, merkle and airdrop claims (`neuron/neuron-lite/satorineuron/base_claim.py:84-121`) |
+| Nostr | `nostr.yaml`, plaintext hex, random (`start.py:120-149`) | registered with central in v1; Nostr events from parity on |
 
 Each wallet key is one 32-byte secp256k1 secret ("entropy") used directly as:
 
@@ -68,24 +68,26 @@ Base transactions use viem with a local account; EIP-1559 fees as Docker does
 
 Recommended (owner decision 1 in OVERVIEW):
 
-- One passphrase. Argon2id (hash-wasm) or PBKDF2-SHA256 at a high count, then
-  AES-256-GCM. Ciphertext and parameters live in IndexedDB.
-- Unlocking decrypts in the **neuron worker** only, never the main thread.
+- One passphrase. WebCrypto PBKDF2-SHA256 (600,000 iterations, stored with the
+  ciphertext so it can rise later), then AES-256-GCM. Ciphertext and parameters
+  live in IndexedDB. No Argon2/hash-wasm: WebCrypto PBKDF2 is already needed
+  for Docker vault import, so it adds no dependency.
+- Signing in decrypts in the **neuron worker** only, never the main thread.
 - "Remember on this device" (opt-in): the identity entropy is also wrapped with a
   non-extractable AES-GCM `CryptoKey` stored in IndexedDB, so a reloaded or
   discarded tab can log in and run the daily batch without a prompt. This stops
   the key from being copied out as bytes; it does not stop a script running on
-  our origin from using it (inferred), so CSP is strict and dependencies are
-  minimal.
-- The vault is always passphrase-only, decrypted for one transaction (lock,
-  unlock, claims) and wiped after.
+  our origin from using it (inferred), so the CSP is strict
+  ([ui.md](ui.md#security)) and dependencies are minimal.
+- The vault is always passphrase-only, decrypted for one transaction
+  (delegate, revoke, claims) and wiped after.
 - The passphrase is never stored. (Docker stores it in plaintext as
   `'vault password'`, `neuron/neuron-lite/cli.py:251-252`; not copied.)
 - Call `navigator.storage.persist()` on first run. Safari can delete storage
   after 7 days without a visit, so backup words are mandatory at onboarding.
 
 WebCrypto has no secp256k1, so the signing key is necessarily a JS byte array in
-worker memory while unlocked (inferred from platform docs).
+worker memory while signed in (inferred from platform docs).
 
 ## Two-key model: kept
 
@@ -108,13 +110,21 @@ After import everything is re-derived from entropy and checked against the file'
 stored pubkey and address; a mismatch is shown, as `identity.py:141-148` does.
 
 Docker vault encryption (verified, decrypted by WebCrypto in about 1.7 s per
-field under Node): each of `entropy`, `privateKey`, `words` is
+field under Node): a field is
 `base64(salt16 || iv16 || AES-256-CBC(PKCS7(utf8(value))))`, key =
 PBKDF2-HMAC-**SHA1**(password, salt, 1,000,000, 32 bytes)
-(`satorilib/src/satorilib/utils/secret.py:10-42,60-94`). Import decrypts only
-`entropy` and derives the rest. A wrong password does not raise in Python; the
-dict stays encrypted (`wallet/identity.py:662-692`), so the browser checks the
-derived pubkey against the file to detect it.
+(`satorilib/src/satorilib/utils/secret.py:10-42,60-94`). Current writers encrypt
+`entropy`, `privateKey`, `words` (`wallet/identity.py:686-689`). Older vaults
+also encrypted `publicKey`, `scripthash` and `evr.address`, and the reader still
+decrypts them by length (`wallet/identity.py:666-676`): `publicKey` if length
+≠ 66, `scripthash` if ≠ 64, `evr.address` if > 34. The browser ports that rule.
+
+Import decrypts `entropy` first. A wrong password shows up there as an AES-CBC
+padding failure (WebCrypto throws on decrypt); that is the wrong-password
+signal. (Python swallows it and leaves the dict encrypted,
+`wallet/identity.py:662-692`.) Then it decrypts any length-flagged fields, derives
+everything from entropy, and compares with the plaintext stored values; a
+mismatch is a corrupt or mismatched file, not a wrong password.
 
 Export writes the same legacy format so the files load in Docker. The browser's
 own at-rest format is the stronger one above.
@@ -129,5 +139,5 @@ own at-rest format is the stronger one above.
 ## Tests
 
 Fixtures from the Docker image: entropy → words, WIF, pubkey, address,
-scripthash, ETH address; a Python-encrypted vault field + password; a Python
-message signature. Assert equality on everything except signature bytes.
+scripthash, ETH address; a current and an old-format (encrypted `publicKey` /
+address) vault + password, plus a wrong password; a Python message signature. Assert equality on everything except signature bytes.

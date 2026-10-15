@@ -11,79 +11,74 @@ discarded or closed as normal and makes up for it on return.
 
 - Visible tab: timers run normally.
 - Chrome, hidden > 5 min and silent: timers wake about once a minute
-  (intensive throttling). WebSockets stay open.
-- Chrome Energy Saver may **freeze** a hidden tab (timers, sockets' callbacks,
-  promises all stop), and may **discard** it under memory pressure.
+  (intensive throttling).
+- Chrome Energy Saver may **freeze** a hidden tab, and may **discard** it under
+  memory pressure. A tab is not frozen while it holds a Web Lock that blocks
+  another tab's request (developer.chrome.com/blog/freezing-on-energy-saver), so
+  the leader is exempt only while a follower tab is queued.
 - iOS Safari and iOS PWAs suspend JavaScript within seconds of backgrounding.
 - Service workers are killed when idle; they cannot host the neuron loop.
-  Periodic Background Sync is Chromium-only with browser-chosen intervals.
 
-Sources: developer.chrome.com (timer-throttling-in-chrome-88,
-freezing-on-energy-saver, page-lifecycle-api).
-
-Docker's cadences are 60 s, hourly, 6-11 h and 24 h
-(`start.py:290,1257,3888,4785,4885`), so a one-minute tick is enough. What the
-browser cannot give is "runs while closed". That is inherent.
+Docker's v1-relevant cadences are 11 h and 24 h (`start.py:1257,4785`), so a
+one-minute tick is enough. "Runs while closed" is inherent and not offered.
 
 ## Scheduling: deadlines, not intervals
 
-Every recurring job stores its next due time in `settings`:
-
 | Job | Due | Docker equivalent |
 |---|---|---|
-| relay reconcile | +1 h | `start.py:200-302` |
-| central-lite poll | +11 h (first: +5-30 min) | `start.py:4766-4800` |
-| Base daily batch | last submit + 24 h | `start.py:1256-1281` |
-| NIP-65 publish | +24 h | `start.py:370-389` |
-| JWT refresh | expiry − 5 min | `satorilib/src/satorilib/server/server.py:120-140` |
+| Base stream refresh | each tick while delegated | replaces `start.py:453-543` |
+| central-lite poll | +11 h; first 5-30 min after each worker start | `start.py:4766-4800` |
+| Base daily batch | current UTC round has no batch on chain | `start.py:1256-1281` (was last + 24 h) |
 
-One `setTimeout` loop in the neuron worker wakes at most every 60 s and runs
-whatever is due. Intake is event-driven (WebSocket messages).
+Deadlines live in `settings`. One `setTimeout` loop in the neuron worker wakes
+at most every 60 s and runs whatever is due. The batch rule is in
+[chain.md](chain.md#daily-prediction-batch): checking
+`predictedStreamsCount` each tick means a tab open at any time during a round
+can earn that round, and catching up can never submit twice in one round.
 
 ## Catch-up pass
 
-Runs on worker start, on `visibilitychange` → visible, on the Page Lifecycle
-`resume` event and on `online`:
-
-1. Reconnect relays; resubscribe with `since` = last seen per relay.
-2. Re-login if the JWT expired.
-3. Run every job whose deadline has passed, in table order.
-
-Because the batch checks `predictedStreamsCount` on chain first
-([chain.md](chain.md#daily-prediction-batch)), catching up can never submit twice
-in one round.
+On worker start, `visibilitychange` → visible, the Page Lifecycle `resume`
+event and `online`: run every job that is due, in table order.
 
 ## One neuron per browser
 
-- The tab that wins `navigator.locks.request('satori-neuron', {ifAvailable:true})`
-  spawns the neuron worker and holds the lock until it closes. Never `steal`.
-- Other tabs are followers: they read state over a `BroadcastChannel` and show
-  "running in another tab"; their commands are forwarded to the leader. When the
-  leader closes, a queued follower takes the lock and starts.
+- On load, each tab probes with
+  `navigator.locks.request('satori-neuron', {ifAvailable:true}, cb)`. Granted →
+  this tab is the leader: spawn the neuron worker and hold the lock until close.
+  `null` → follower.
+- A follower shows "Satori is running in another tab" and nothing else, and
+  makes a second, **queued** request without `ifAvailable`. When that grant
+  arrives the leader has gone, and the follower promotes itself. Never `steal`.
+  (With `ifAvailable` alone nothing queues and nothing takes over: MDN
+  `LockManager.request`.)
 - Only the leader opens the OPFS database ([storage.md](storage.md)).
-- SharedWorker is not used: not dependable on Chrome Android.
+- No SharedWorker: DuckDB's `AsyncDuckDB` spawns its own nested Worker, which
+  SharedWorkers cannot do in Chrome or Safari (browser-compat-data
+  `api/Worker.json` worker_support), and Android Chrome lacks SharedWorker
+  before 148.
 
 ## Workers
 
-- **neuron worker** (dedicated): DuckDB, keys, sockets, scheduler, engine.
-  The engine is cheap enough to run inline; a separate engine worker is added
-  only if hundreds of streams make it necessary.
+- **neuron worker** (dedicated): keys, scheduler, engine, fetch/viem; spawns
+  DuckDB's worker.
 - **service worker**: precaches the app shell and DuckDB wasm. No neuron logic.
 
 ## What the user sees
 
 A status line: "Neuron active" / "sleeping since HH:MM, will catch up when
-open" / "running in another tab"; last observation, last `_pred`, last Base
-batch and next due. Recommended setup text: keep a pinned desktop tab or
-install the app; on iPhone the neuron works only while on screen.
+open"; last central batch, last Base batch and this round's state. Setup text:
+keep a pinned desktop tab or install the app; on iPhone the neuron works only
+while on screen.
 
 ## Not done
 
-No silent-audio or WebRTC keep-alive tricks (they defeat the browser's power
-management); no Docker-style restart watchdogs.
+No silent-audio or WebRTC keep-alive tricks; no restart watchdogs; no
+follower mirroring or command forwarding.
 
-## Unverified, test before relying on it
+## Test before relying on it
 
-Whether dedicated-worker timers in a hidden tab escape intensive throttling.
-Not documented; measure drift with Playwright on desktop and Android Chrome.
-Nothing above depends on sub-minute timing.
+- Playwright: close the leader; a follower becomes leader and runs the batch.
+- Whether dedicated-worker timers in a hidden tab escape intensive throttling
+  is not documented; measure drift on desktop and Android Chrome. Nothing above
+  depends on sub-minute timing.

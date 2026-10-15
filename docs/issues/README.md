@@ -8,18 +8,21 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 
 | Issue | Where the fix goes | Blocks |
 |---|---|---|
-| [relays-not-wss.md](relays-not-wss.md) | relay operators (+ optionally central) | following streams, publishing `_pred` |
 | [central-prod-missing-base-routes.md](central-prod-missing-base-routes.md) | central deploy | merkle claim on prod; live Base config |
 
-## Fixable — flaws to fix, not blocking v1
+## Fixable — blocks the next step (Nostr parity)
+
+| Issue | Where the fix goes | Blocks |
+|---|---|---|
+| [relays-not-wss.md](relays-not-wss.md) | relay hosting + central | following Nostr streams, publishing `_pred` |
+
+## Fixable — flaws to fix, not blocking
 
 | Issue | Where | Precondition |
 |---|---|---|
 | [central-login-replayable.md](central-login-replayable.md) | central | someone sees one login header set |
 | [central-register-unauthenticated.md](central-register-unauthenticated.md) | central | someone knows a wallet pubkey (public) |
-| [base-batch-one-bad-game-reverts-all.md](base-batch-one-bad-game-reverts-all.md) | Docker neuron | a subscribed stream with no new value since the last prediction |
-| [central-health-no-cors.md](central-health-no-cors.md) | central nginx | browser wants `/health` |
-| [satorilib-checkout-behind.md](satorilib-checkout-behind.md) | local checkout | reading satorilib as the reference |
+| [base-batch-one-bad-game-reverts-all.md](base-batch-one-bad-game-reverts-all.md) | Docker neuron | a game with no new value since our last prediction on it |
 
 ## Fixable — needed for later scope
 
@@ -30,16 +33,19 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | [electrumx-wss.md](electrumx-wss.md) | ElectrumX operators | Evrmore balances/sends with redundancy |
 | [satorilib-paid-observation-parse.md](satorilib-paid-observation-parse.md) | satorilib | fetching latest value of a paid stream |
 
+Housekeeping, not blocking: nginx answers central `/health` without CORS
+(`central/nginx.conf:58-62,142-146`; the app uses `GET /`); the local
+`/code/Satori/satorilib` checkout is behind `origin/base-upgrade` (dec62db).
+
 ## Inherent browser limits
 
 Accepted behaviour; designed around, not fixable.
 
-- No tab open, no neuron: a day with no open tab misses that day's Base batch
-  ([runtime.md](../design/runtime.md)).
+- No tab open, no neuron: a UTC day with no open tab misses that round's Base
+  batch ([runtime.md](../design/runtime.md)).
 - iOS suspends a backgrounded page within seconds: foreground-only on iPhone.
 - A browser cannot host a Nostr relay (no listening sockets).
-- Arbitrary data-source URLs are subject to CORS (affects publishing own
-  data sources, later).
+- Arbitrary data-source URLs are subject to CORS (affects own data sources, later).
 - Browser storage can be evicted; backup words are mandatory.
-- Signing keys are JS bytes in worker memory while unlocked (no secp256k1 in
+- Signing keys are JS bytes in worker memory while signed in (no secp256k1 in
   WebCrypto).
