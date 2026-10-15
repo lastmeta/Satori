@@ -83,9 +83,10 @@ Status: step 5 of the roadmap (Nostr). Next: Base.
 - Subscribe: to a free, open stream (paid, encrypted or approval-gated ones
   come later), at most central's `max_streams` (60) at once. It publishes a
   subscription event (34602) and announces `<stream>_pred` (34600). Each new
-  observation (34601) of the stream is stored, forecast one cadence ahead
-  (the engine with the stream's `cadence_seconds` as its step) and published
-  as `<stream>_pred` with `value` = the forecast as a string (`"82378.0"`),
+  observation (34601) of the stream is stored, forecast two cadences ahead
+  (t2 of the engine with the stream's `cadence_seconds` as its step, as Lite
+  sends) and published as `<stream>_pred` with `value` = the forecast as a
+  string (`"82378.0"`),
   `seq_num` = our last + 1. A value with no number is echoed. Relay streams
   and predictions are kept apart from central's and never sent to central.
   Unsubscribe publishes the unsubscription and deletes the `_pred`
@@ -151,8 +152,9 @@ script runs; then call `await satori.status()` until `screen` is no longer
   `_pred`; `model` is `bar1`, `naive` or `echo`).
 - `await satori.discover()` → the catalog: `[{ pubkey, stream_name, name,
   description, cadence_seconds, price_per_obs, encrypted, approval_required,
-  tags, metadata, created_at, pred, subscribed }]`, newest first. Throws when
-  no relay is connected yet (wait for a relay's `state: 'open'`).
+  tags, metadata, created_at, pred, subscribed }]`, newest first. Right after
+  a load it waits up to 10 s for the relays still connecting, then throws if
+  none is open.
 - `await satori.subscribe(pubkey, stream_name)` → the subscription (as in
   `nostr().subscriptions`). Throws for a `_pred` stream, one no connected
   relay announces, a paid/encrypted/gated one, or over `maxStreams`. Again on

@@ -216,7 +216,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await expect(nostr.subscribe(PROV_PUB, 'c')).rejects.toThrow(/limit of 2/);
   });
 
-  test('a new observation is stored, forecast one cadence ahead and published as `_pred` (seq + 1) where we write', async () => {
+  test('a new observation is stored, forecast two cadences ahead (t2, as Lite) and published as `_pred` (seq + 1) where we write', async () => {
     await subscribed('btc');
     const c = relays.get(CENTRAL_RELAY);
     const u = relays.get(USER_RELAY);
@@ -233,12 +233,13 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const lastPub = u.published.at(-1);
     const f = forecast(values.map((value, k) => ({ ts: t0 + (k + 1) * 900, value })), { step: 900 });
     expect(f.model).toBe('bar1');
-    expect(JSON.parse(lastPub.content)).toEqual({ stream_name: 'btc_pred', timestamp: clock, value: pyFloatStr(f.t1), seq_num: 10 });
+    expect(f.t2).not.toBe(f.t1);
+    expect(JSON.parse(lastPub.content)).toEqual({ stream_name: 'btc_pred', timestamp: clock, value: pyFloatStr(f.t2), seq_num: 10 });
     expect(lastPub.tags).toEqual([['d', 'btc_pred'], ['stream', 'btc_pred'], ['seq', '10'], ['satori', 'observation']]);
     expect(JSON.parse(u.published[0].content)).toMatchObject({ value: '100.0', seq_num: 1 }); // naive at first
     const [s] = (await nostr.status()).subscriptions;
     expect(s).toMatchObject({ observations: 10, observation: { seq: 59, value: 105, raw: '105', ts: clock },
-      prediction: { stream: 'btc_pred', seq: 10, value: pyFloatStr(f.t1), model: 'bar1', relays: 1, made_at: clock } });
+      prediction: { stream: 'btc_pred', seq: 10, value: pyFloatStr(f.t2), model: 'bar1', relays: 1, made_at: clock } });
     expect(changes).toBeGreaterThan(0);
   });
 

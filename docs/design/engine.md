@@ -144,9 +144,9 @@ and the first lag's minimum spacing is half a step (6 h at 12 h), so a series
 on any grid gives the same model
 (tested: the same values on a 15 min grid with `step: 900` give exactly the
 12 h result). A Nostr stream uses its `cadence_seconds` (12 h when it has
-none) and publishes t1, one cadence ahead, as Lite's `predictForRelay`
-returns its first prediction (`engine-lite/engine.py:714-739`,
-`data/structs.py:32-33`) ([nostr.md](nostr.md#the-engines-step)).
+none) and publishes t2, two cadences ahead, as Lite's `predictForRelay`
+returns the first row of `_runForecast`'s second, autoregressed forecast
+(`engine-lite/engine.py:733-735, 1176-1186`) ([nostr.md](nostr.md#the-engines-step)).
 
 ## Deviations, and why
 

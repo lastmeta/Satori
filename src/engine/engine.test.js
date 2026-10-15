@@ -218,7 +218,7 @@ describe('minimum data and guards', () => {
   });
 });
 
-describe('the step (a relay stream forecasts one cadence ahead)', () => {
+describe('the step (a relay stream forecasts in steps of its cadence)', () => {
   const at = (step) => (values) => values.map((value, k) => ({ ts: T0 + (k + 1) * step - 1, value }));
   test('the same series on a 15 min grid with step 900 gives the same model as on 12 h', () => {
     for (const seed of [1, 2, 3]) {

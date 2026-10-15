@@ -51,8 +51,11 @@ steps start from evidence, not from scratch.
   hold only with compact JSON content; satorilib's `json.dumps` writes
   `", "` and `": "`, so Lite's ids for the same events are 3e82a076… and
   13dc7e51… (`test/fixtures/nostr-parity.json`, made by satorilib's own client).
-- The parked engine doc said `_pred` ships t2; Lite's `predictForRelay` sends
-  its first prediction (`engine-lite/data/structs.py:32-33`), t1. Fixed there.
+- `_pred` ships t2: Lite's `predictForRelay` returns the first row of
+  `_runForecast`'s second, autoregressed forecast (`engine-lite/engine.py:733-735,
+  1176-1186`). (Step 5 first shipped t1; a review caught it.) Lite's bounty
+  scorer, though, scores against the next observation: flagged in
+  [../design/nostr.md](../design/nostr.md#the-engines-step).
 - A relay keeps one of two replaceable events with the same `created_at`
   (NIP-01): two `_pred` of one stream in one second lose one, as in Lite
   ([../design/nostr.md](../design/nostr.md#inherent-as-in-lite)).

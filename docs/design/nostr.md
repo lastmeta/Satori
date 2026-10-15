@@ -41,11 +41,11 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 | Intake | `_networkListen` drops streams not subscribed by (stream_name, author) (START:1112-1137); empty content is a heartbeat (CLIENT:1818-1820); content is `DatastreamObservation` JSON (MODELS:105-140). `save_observation` dedupes by round, event id, then (stream, provider, seq) (NDB:597-636); only a new row runs the engine (START:621-667). | Same order: empty → skip; JSON with `stream_name, timestamp, value, seq_num`; subscribed by (stream_name, author); id and signature verified; insert or ignore on event id and (stream, provider, seq). Only a new row is forecast. |
 | Value | `_numericObservationValue` (START:1365-1410): a scalar → `float()`; a dict → `value`, else `raw` unless `unit == 'tick'`; anything else none (the prediction echoes). Timestamps outside 2000–2100 give no forecast (`_safeEpoch`, START:1413-1424). | `numericValue` (`src/nostr/satori.js`), with Python's `float()` rules for strings; checked against Lite's own function on 17 values (fixture). |
 | Model id | `uuid5(DNS, "satori-relay:<lowercase pubkey>:<stream>:")` (`satorineuron/relay_ids.py`), pinned in `neuron/tests/test_relay_ids.py:23-28`. | Same uuid keys the relay tables; the vector is Lite's pinned one. |
-| Forecast | `predictForRelay` → `str(firstPrediction)` (`engine-lite/engine.py:714-739`); no forecast or a non-numeric value echoes the value (`json.dumps` unless a string) (START:1276-1310). | `forecast(history, { step: cadence })`; value = `pyFloatStr(t1)` (Python's `str(float)`), t1 one cadence ahead; echo as Lite when there is no number. |
+| Forecast | `predictForRelay` → `str(firstPredictionOf(_runForecast(…)))` (`engine-lite/engine.py:714-739`); `_runForecast` returns the second, autoregressed forecast (the first with its value appended), falling back to the first (`:1153-1186`): t2. With little data the StarterAdapter forecasts the last value, as a float (`"82234.0"`). No model, a bad timestamp or a non-numeric value echoes the value (`json.dumps` unless a string) (START:1276-1310, 1413-1424). | `forecast(history, { step: cadence })`; value = `pyFloatStr(t2)` (Python's `str(float)`), two cadences ahead; `naive` gives the last value as a float, as Lite's starter; echo as Lite when there is no number. |
 | Publish `_pred` | `_networkPublishObservation` (START:3549-3617): seq = `last_seq_num + 1` (NDB:835-848), content `{stream_name, timestamp: int(now), value, seq_num}` (MODELS:105-140, Python `json.dumps`), tags `[d, stream, seq, satori=observation]` (CLIENT:579-596), to every connected relay; seq advances even with none. | The same bytes (content is serialized as Python's `json.dumps`, with `", "` and `": "`), to every connected relay we write to; the count that answered OK is stored. |
 | Announce `_pred` | `_networkAnnouncePublications` (START:3442-3482) on each new connection (START:326-328, 4539): `DatastreamMetadata` (MODELS:14-40) with `name "Predictions for <name>"`, `description ""`, `tags []`, the source's cadence, `created_at` = when the publication was added, `metadata {source_stream_name, source_provider_pubkey, wallet_pubkey}` (the identity's compressed pubkey); tags `[d, satori=datastream, stream=satori:stream:<name>, source_stream, source_pubkey]` (CLIENT:294-356). | The same, on every connect and reconnect, on subscribe, and hourly. |
 | Unsubscribe | Soft delete (NDB:496-503), 34602 with `action=unsubscribe`, `satori=unsubscription` (CLIENT:1600-1644), and a tombstone 34600 for `_pred` (`[d, satori=datastream, status=deleted]`, content = empty metadata with `created_at 0`; START:3683-3720). | The same three steps. The row stays (inactive), so a later subscribe keeps counting `_pred` seq from where it was. |
-| Cadence | Hourly reconcile loop (START:200-292); NIP-65 10002 of the connected relays daily (START:288-291, 370-389, CLIENT:405-428). | Hourly reconcile; NIP-65 of the relays open at the time, when the last one is a day old (`meta.nostr_relay_list_at`), checked when a relay we write to opens and hourly. |
+| Cadence | Hourly reconcile loop (START:200-292); NIP-65 10002 of the connected relays daily (START:288-291, 370-389, CLIENT:405-428). | Hourly reconcile; NIP-65 of the relays open at the time, when the last one is a day old (`meta.nostr_relay_list_at`), checked hourly and whenever any relay opens, sent only when a relay we write to is open. |
 
 ## Event shapes (verified)
 
@@ -109,10 +109,17 @@ with compact JSON content; satorilib's `json.dumps` puts a space after `,` and
 
 `forecast(points, { step })` (default 12 h, central's) buckets history by
 `step` instead of 12 h; the first-lag spacing is `step / 2` (6 h at 12 h) and
-the rest (8 buckets before `bar1`, 28 backtest origins, two clamped steps) is
+the rest (6 lag pairs before `bar1`, so at least one observation every step;
+28 backtest origins; two clamped steps) is
 counted in buckets, so nothing else changes. A relay stream uses its
-`cadence_seconds` (12 h when it has none), and publishes t1, one cadence
-ahead.
+`cadence_seconds` (12 h when it has none), and publishes t2, two cadences
+ahead, as Lite does (the Forecast row above).
+
+Lite's bounty code scores a prediction against seq + 1, the next observation
+(`neuron-lite/scoring/mae.py`; START:1344-1358 submits it for `seq_num + horizon`
+with horizon 1), yet the value it sends there and on `_pred` is t2, two steps
+ahead. We follow what Lite sends. **For the owner:** one of the two is
+probably not what was meant.
 
 ## Deviations from Satori Lite, and why
 
@@ -126,7 +133,6 @@ ahead.
 | No round dedupe (bridge streams) and no paid, encrypted or approval-gated streams. | Base bridge streams are step 6; payments are later. Such streams show in the catalog but can't be subscribed. |
 | Catalog events are not signature-checked; the announcement subscribed from and every stored observation are. | A schnorr verify costs ~4 ms in JS; ~1,000 catalog events would block the tab for seconds. The relay checks signatures on the way in. |
 | The relay connection, NIP-65 and the `_pred` announcement go to relays we write to; with "Publish to central's relays" off, central's relays are read only. | A dev checkout must not write to production (satorian). |
-| A `naive` forecast publishes the last value as a float string (`"82234.0"`); Lite echoes the raw string (`"82234"`) when its engine has nothing. | Our engine always returns a number for a numeric stream. |
 | A non-numeric dict echo is serialized from the parsed JSON: an integral float (`2.0`) prints as `2`. | JavaScript's JSON has no int/float distinction; only echoes of non-numeric values are affected. |
 | Built without nostr-tools. | Signing and verifying are ~30 lines over `@noble/curves` (already a dependency), and the relay client is specific (Satori's filters, OK counts); nostr-tools would add its own `@noble`/`@scure` versions and a general pool we don't need. |
 

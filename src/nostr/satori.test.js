@@ -70,9 +70,9 @@ describe("the value: Lite's _numericObservationValue", () => {
     expect(pyFloat('nan')).toBeNaN();
     for (const bad of ['', ' ', '0x10', '1__0', '_1', '1e', 'e5', '.', '1,5', '12abc']) expect(pyFloat(bad), bad).toBeNull();
   });
-  test('the published value: t1 as Python prints it, else an echo as Lite (json.dumps unless a string)', () => {
-    expect(predValue({ t1: 80100.5 }, '80000')).toBe('80100.5');
-    expect(predValue({ t1: 82234 }, '82234')).toBe('82234.0');
+  test("the published value: t2 as Python prints it (predictForRelay returns _runForecast's second, autoregressed forecast), else an echo as Lite", () => {
+    expect(predValue({ t1: 80050.5, t2: 80100.5 }, '80000')).toBe('80100.5');
+    expect(predValue({ t1: 82234, t2: 82234 }, '82234')).toBe('82234.0'); // Lite's StarterAdapter: the last value as a float
     expect(predValue(null, 'abc')).toBe('abc');
     expect(predValue(null, { raw: '1', unit: 'tick' })).toBe('{"raw": "1", "unit": "tick"}');
     expect(predValue(null, 7)).toBe('7');

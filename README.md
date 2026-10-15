@@ -7,7 +7,7 @@ Nostr flow (subscribe to streams, publish `<stream>_pred`):
 
 ```
 register ─▶ poll central (5–30 min after start, then every 11 h) ─▶ store ─▶ forecast new rows ─▶ submit the batch
-relays ─▶ subscribed stream's observation (34601) ─▶ store ─▶ forecast one cadence ahead ─▶ publish <stream>_pred (34601)
+relays ─▶ subscribed stream's observation (34601) ─▶ store ─▶ forecast two cadences ahead (t2) ─▶ publish <stream>_pred (34601)
 ```
 
 On every page load the neuron registers its identity and vault public keys
@@ -27,7 +27,7 @@ On Nostr the neuron has its own key (`nostr.yaml`, as Docker), reads central's
 relays plus the ones under Settings, and lists the streams the relays
 announce (**Network streams**). Subscribing to one publishes the subscription
 and announces `<stream>_pred`; every new observation of that stream is
-stored, forecast one cadence ahead and published as `<stream>_pred` to the
+stored, forecast two cadences ahead (t2, as Lite sends) and published as `<stream>_pred` to the
 relays it writes to. Relay streams are kept apart from central's.
 
 ![Home with Nostr](docs/screenshots/nostr.png)
