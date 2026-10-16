@@ -309,10 +309,11 @@ After each poll that brought new rows, for each target that got one:
    challenger < champion × 0.95). generation + 1; accepted + 1 if kept.
 7. Forecast with the champion; store the spec, its score and counts.
 
-The margin keeps a neuron from swapping on noise. It started at 2 %; the
-backtest showed that chasing noise (7 % of proposals kept, the λ's drifting
-to the loosest values, 0.27 % worse than `bar1`), so it ships at 5 %
-([Measured](#measured)).
+The margin keeps a neuron from swapping on noise. It started at 2 %, where
+the backtest showed churn (7.1 % of proposals kept) and the λ's drifting to
+the loosest values; at 5 % 1.9 % are kept and the λ's stay spread, so it
+ships at 5 %. That is the reason, not accuracy: the two settings' errors are
+within the neurons' scatter ([Measured](#measured)).
 
 **CPU.** Everything is running sums and k×k solves (k ≤ 4); the slow part
 is reading the histories. The cycle records the engine's time in the last
@@ -595,12 +596,15 @@ XRP + FIL (0.5, 1), BNB + XLM (0.2, 0.5). Kept by mutation: swap 676 of
 20,682, λ1 319 of 20,615, add 273 of 13,900, drop 264 of 13,978, λ2 163 of
 20,705.
 
-**The margin.** At 2 % the neurons chased noise: 7.1% of proposals were
-kept, the λ's drifted to the loosest values (λ1 = 0.5 in 41 and λ2 = 1 in 48
-of the 105 champions), and `bvar` ran 0.27% behind `bar1` (0.35% after 30
-days). A 5 % margin keeps 1.9%, spreads the λ's, and ties `bar1`; 10 % keeps
-almost nothing (0.45%) and is no better. Scoring on 84 origins at 2 % also
-ties, at three times the CPU. So the margin is 5 % and the window stays 28.
+**The margin.** At 2 % the neurons churned: 7.1% of proposals were kept,
+and the λ's drifted to the loosest values (λ1 = 0.5 in 41 and λ2 = 1 in 48
+of the 105 champions). At 5 % 1.9% are kept and the λ's stay spread; 10 %
+keeps almost nothing (0.45%). The margin is 5 % for that, the kept-proposal
+rate and the λ drift, **not for accuracy**: pooled bvar / bar1 is 1.0027 at
+2 % and 1.0000 at 5 %, but the five neurons scatter from 0.9986 to 1.0046 at
+2 % and from 0.9972 to 1.0031 at 5 %, so the difference is within that
+scatter. Scoring on 84 origins at 2 % also ties, at three times the CPU, so
+the window stays 28.
 
 **Reading.** On liquid crypto pairs `bvar` with evolution **ties `bar1` and
 persistence**: every setting is within ±0.4% of `bar1`, and the five

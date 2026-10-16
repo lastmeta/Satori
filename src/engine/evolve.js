@@ -12,8 +12,9 @@ import { prepare, backtestOf, errorsAt, forecastSpec, inPool } from './bvar.js';
 export const LAMBDA1_GRID = [0.05, 0.1, 0.2, 0.5]; // namaste_club's tuner (models.py:589)
 export const LAMBDA2_GRID = [0.25, 0.5, 1.0]; // models.py:590
 export const MAX_COMPANIONS = 3;
-// a challenger must beat the champion's score by 5 %: at 2 % the backtest showed neurons chasing noise
-// (7 % of proposals kept, λ's drifting to the loosest values, 0.27 % worse than bar1); docs/design/engine.md#measured
+// a challenger must beat the champion's score by 5 %: at 2 % the backtest showed churn (7.1 % of proposals kept
+// against 1.9 %) and the λ's drifting to the loosest values; accuracy was the same within the neurons' scatter
+// (docs/design/engine.md#measured)
 export const MARGIN = 0.05;
 export const MIN_ALIGNED = 2 + MIN_EXTRA_ROWS; // the rows a one-companion model needs: the pool's bar
 
