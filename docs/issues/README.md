@@ -24,6 +24,7 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | [central-login-replayable.md](central-login-replayable.md) | central | someone sees one login header set |
 | [central-register-unauthenticated.md](central-register-unauthenticated.md) | central | someone knows a wallet pubkey (public) |
 | [base-batch-one-bad-game-reverts-all.md](base-batch-one-bad-game-reverts-all.md) | Docker neuron (the browser simulates each game) | a game with no new value since our last prediction on it |
+| [duckdb-wasm-opfs-wal.md](duckdb-wasm-opfs-wal.md) | DuckDB (replay), DuckDB-WASM (the OPFS WAL); worked around here | a write committed without a checkpoint on OPFS: lost on reload, or (an ALTER on a table with a nextval default) the database does not open |
 
 ## Fixable — needed for later scope
 

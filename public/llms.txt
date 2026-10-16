@@ -235,6 +235,13 @@ Every method is below; `await satori.status()` shows everything at once.
   grants it to installed apps; Safari keeps a Home Screen or Dock app's data).
   A Safari web app has its own storage, apart from Safari's: set it up there
   or import the Docker files. An app window and a tab share the one-tab lock.
+- The database (docs/design/storage.md): every commit is checkpointed, so a
+  reload or a closed tab at any moment keeps every committed write, the keys
+  included. A WAL an older version left is renamed aside in OPFS (never
+  deleted) before the database opens; when DuckDB could not replay it, the
+  app opens anyway, as of the last checkpoint, with a notice ("Recovered the
+  database: unsaved changes from the last session were set aside.") and
+  `status().recovered` says the file's new name.
 
 Times are unix seconds.
 
@@ -244,7 +251,7 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 (synchronous, kept current; `await satori.status()` says the same). Then, in
 the page's JS context:
 
-- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base, storage, app }`.
+- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base, storage, app, recovered }`.
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
   tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
@@ -267,7 +274,11 @@ the page's JS context:
   browser does not say). `app`: `{ installed, canInstall, update }`
   (`installed`: running as an installed app, or installed from this page;
   `canInstall`: Chromium offered its install prompt; `update`: a new version
-  is waiting, see `update()`).
+  is waiting, see `update()`). `recovered`: null, or the name a WAL DuckDB
+  could not replay was set aside under at this page load
+  (`satori-mvp.duckdb.wal.unreplayed-<time>`; its changes are not in the
+  database; the keys are, as setup checkpoints them). `fatal`: the screen
+  shows the error; nothing was deleted, and a reload tries again.
 - `await satori.install()` → `'accepted' | 'dismissed' | 'unavailable'`: the
   browser's install prompt when `status().app.canInstall` (Chromium only; it
   needs a user gesture, which Playwright's `page.evaluate` provides; a person
@@ -439,8 +450,9 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
   `base-result`, `base-txs` (the last action's transactions),
   `base-action-error`, under Backup `wif`, `download-wallet`,
-  `download-vault`, `download-nostr`, and for the installed app `storage`,
-  `install`, `install-hint` and `update`.
+  `download-vault`, `download-nostr`, for the installed app `storage`,
+  `install`, `install-hint` and `update`, and `notice` (the recovered
+  database's, with Dismiss) and `fatal` (the error that stopped the start).
 
 ## Base on the dev server: the local fork
 
@@ -491,7 +503,8 @@ build step beyond Vite, MIT licensed.
   signing (`keys.js`), Docker files (`docker.js`).
 - `src/central/`: central's API (register, observations, login, predictions
   batch) and Python-identical payload strings.
-- `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API.
+- `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API; every
+  commit checkpointed; `recover.js` sets aside a WAL an older version left.
 - `src/engine/`: `forecast(points, { step, horizon }) → { model, t1, t2, value,
   horizon, phi?, weight? } | null`, pure: `step` is the bucket in seconds (12 h
   by default; a relay stream's cadence), `horizon` how far ahead `value` is
@@ -526,7 +539,7 @@ build step beyond Vite, MIT licensed.
   `central.md` with Satori Lite's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
   Lite's and satorilib's, `base.md` with Lite's, the dapp's and the
-  contracts', `storage.md`: tables, migrations, meta keys, `pwa.md`: the
+  contracts', `storage.md`: tables, migrations, meta keys, the checkpoint rule and recovery, `pwa.md`: the
   installed app, `deploy.md`: the image and the build variables); `docs/plans/`:
   the roadmap and what is left of each part; `docs/issues/`: open issues
   outside this repo; `docs/inbox/QUESTIONS.md`: open questions for the

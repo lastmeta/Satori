@@ -56,7 +56,12 @@ export const state = reactive({
   app: { installed: false, canInstall: false, update: false },
   safari: false,
   storage: null, // { persisted, usage, quota }
+  // the database (docs/design/storage.md#recovery): the name a WAL DuckDB could not replay was set aside under
+  recovered: null,
+  noticeDismissed: false,
 });
+
+export const RECOVERED_NOTICE = 'Recovered the database: unsaved changes from the last session were set aside.';
 
 export const CATALOG_SHOWN = 50;
 
@@ -463,6 +468,10 @@ export function render(root, a) {
     </div>
   </header>
   <main>
+    <div class="notice small" role="status" data-test="notice" hidden="${() => !state.recovered || state.noticeDismissed}">
+      <span title="${() => `Kept in this site's storage as ${state.recovered}`}">${RECOVERED_NOTICE}</span>
+      <button class="small-btn" @click="${a.dismissNotice}">Dismiss</button>
+    </div>
     <p class="muted center" hidden="${show('loading')}">Opening…</p>
     <section class="card narrow" hidden="${show('elsewhere')}">
       <h2>Satori is open in another tab</h2>
@@ -470,7 +479,12 @@ export function render(root, a) {
     </section>
     <section class="card narrow" hidden="${show('fatal')}">
       <h2>Satori could not start</h2>
-      <p class="error">${() => state.fatal}</p>
+      <p class="error" data-test="fatal">${() => state.fatal}</p>
+      <p class="muted small">Nothing was deleted: your keys and data stay in this browser’s storage for this site.
+        Reload to try again. If it keeps failing, report this message at
+        <a href="https://github.com/lastmeta/Satori/issues" target="_blank" rel="noopener">github.com/lastmeta/Satori/issues</a>.
+        Meanwhile your backup (the 24 words, or the Dockerized Neuron files) can set the neuron up in another browser.</p>
+      <div class="actions"><button class="primary" @click="${() => location.reload()}">Reload</button></div>
     </section>
     ${setup(a)}
     ${home(a)}

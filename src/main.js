@@ -364,6 +364,7 @@ const actions = {
   pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
   install: () => install().catch((err) => console.warn('[satori] install', err)),
   update: applyUpdate,
+  dismissNotice() { state.noticeDismissed = true; },
   discover: shownAt('networkError', async () => {
     state.discovering = true;
     try {
@@ -452,6 +453,7 @@ window.satori = {
       base: home ? await base.status() : null,
       storage: await storage(),
       app: { ...state.app },
+      recovered: state.recovered,
     };
   },
   /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
@@ -531,6 +533,7 @@ async function boot() {
   if (!(await claimTab())) return void (state.screen = 'elsewhere');
   try {
     db = await openOpfsDb();
+    state.recovered = db.recovered; // a WAL DuckDB could not replay, set aside (docs/design/storage.md#recovery)
     if ((await db.get('wallet_yaml')) && (await db.get('vault_yaml'))) return void (await startNeuron());
     state.screen = 'setup';
   } catch (err) {

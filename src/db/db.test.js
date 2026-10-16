@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { mkdtempSync, statSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { memoryDb, memoryConn } from '../../test/memory-db.js';
 import { MIGRATIONS } from './schema.js';
 import { openDb } from './index.js';
@@ -16,6 +19,24 @@ const addPrediction = async (d, p) => (await d.addPredictions([p]))[0];
 test('migrations run and the version is stored', async () => {
   expect(db.version).toBe(MIGRATIONS.length);
   expect(await db.get('schema_version')).toBe(MIGRATIONS.length);
+});
+
+test('every commit is checkpointed at once: a database file keeps nothing in its WAL (storage.md#the-checkpoint-rule)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'satori-db-'));
+  try {
+    const path = join(dir, 'n.duckdb');
+    const wal = () => (existsSync(`${path}.wal`) ? statSync(`${path}.wal`).size : 0);
+    const conn = await memoryConn(path);
+    const fileDb = await openDb(conn); // the migrations: before, DuckDB kept them in the WAL (6 kB)
+    expect(wal()).toBe(0);
+    await fileDb.set('wallet_yaml', 'w');
+    await fileDb.addObservations([obs()]);
+    await fileDb.addPredictions([pred(), pred({ t2: 4 })]);
+    expect(wal()).toBe(0);
+    expect((await conn.query("SELECT current_setting('checkpoint_threshold') AS t")).toArray()[0].toJSON().t).toBe('0 bytes');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a database from a newer app version is refused, not migrated', async () => {
@@ -117,7 +138,7 @@ describe('predictions', () => {
     expect(await db.predictions('bitcoin')).toMatchObject([{ id: a, status: 'sent', sent_at: 3000 }]);
     await db.markSent([], 4000); // nothing to do
   });
-  test('addPredictions: a poll\'s predictions in one transaction; their ids in order', async () => {
+  test('addPredictions: a poll\'s predictions in one transaction (one checkpoint); their ids in order', async () => {
     await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
     const ids = await db.addPredictions([pred({ t2: 1 }), pred({ stream_uuid: 'u-eth', t2: 2 }), pred({ t2: 3 })]);
     expect(ids).toHaveLength(3);

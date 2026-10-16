@@ -3,8 +3,10 @@
 [← OVERVIEW](OVERVIEW.md)
 
 One database per browser profile and origin: `opfs://satori-mvp.duckdb`
-(`src/db/opfs.js`), DuckDB-WASM 1.32.0 (newer builds create OPFS files but
-never write them). The name stays: renaming it would orphan stored keys and
+(`src/db/opfs.js`), DuckDB-WASM 1.32.0, which is DuckDB 1.4.3. Newer builds
+are dev builds only (`1.33.1-devNN`; npm's `latest` is dev57, `next` dev65,
+which is DuckDB 1.5.6). They create OPFS files but never write them, and the
+WAL bug below is still in DuckDB 1.5.6. The name stays: renaming it would orphan stored keys and
 data, and `satori.duckdb` on this origin holds an earlier draft's other schema.
 Only the tab that holds the `satori-neuron` Web Lock opens it. The API is
 `src/db/index.js`: every call runs one at a time, in call order (`serial()`,
@@ -13,13 +15,120 @@ false`): JSON is kept as text and parsed in JS. Times are unix seconds.
 
 ## The checkpoint rule
 
-OPFS keeps what DuckDB has **checkpointed**; a tab may close at any moment and
-nothing runs on close. So every write that must survive is followed by
-`CHECKPOINT`: setup (the keys), each central cycle (after its submission),
-each new poll time, a Settings save, a new relay list from central, NIP-65's
-time, each outbox edit, each history run from central, a relay observation and its `_pred` (before the
-`_pred` is sent, as Lite commits first), a subscribe and an unsubscribe, the
-Base batch's hash as soon as it is sent and the batch after its receipt.
+OPFS keeps what DuckDB has **checkpointed** in the database file. A tab may
+close at any moment, and nothing runs on close. DuckDB-WASM 1.32.0's WAL on
+OPFS can't be relied on. Measured in Chrome (`e2e/wal.spec.js`, and probes
+on raw connections):
+
+- **After a checkpoint, nothing new reaches the WAL file.** Its old bytes stay
+  (DuckDB's truncate never takes effect on OPFS). A later write that isn't
+  checkpointed is gone after a reload: CREATE, CHECKPOINT, INSERT, reload
+  gives 0 rows. That's why every write that must survive was followed by
+  `CHECKPOINT`.
+- **A WAL written before the first checkpoint replays, unless it holds
+  migration 3.** That migration is an `ALTER TABLE … ADD COLUMN` on
+  `predictions`, whose `id` defaults to `nextval(…)`. DuckDB 1.4.3 can't
+  replay that, so the open fails: "Failure while replaying WAL file …
+  Calling DatabaseManager::GetDefaultDatabase with no default database set"
+  ([duckdb#18259](https://github.com/duckdb/duckdb/issues/18259); also
+  [#19712](https://github.com/duckdb/duckdb/issues/19712) and
+  [#20543](https://github.com/duckdb/duckdb/issues/20543)). This was the
+  owner's "Satori could not start" on the live site. A first load runs all
+  the migrations, and before setup nothing checkpointed, so a reload on
+  Setup replayed them. The e2e only ever reloaded after setup, which
+  checkpoints. Bisected on raw connections: the meta table plus migrations
+  1–2 replay; adding migration 3 fails.
+- **A WAL the database has moved past can be replayed again.** The stale
+  bytes carry the checkpoint they belong to. Checkpoints that never touch
+  the WAL file (DuckDB's own, below) move the database file on, so the next
+  open may replay those bytes once more. In a profile set up with the
+  version before this fix and never reloaded since, that WAL holds
+  migration 3, so the open fails.
+
+So **DuckDB checkpoints every commit itself**. `openDb` runs
+`SET checkpoint_threshold = '0b'` (`wal_autocheckpoint` is the same setting)
+before the migrations, then a `CHECKPOINT` after them. A commit's changes go
+straight to the database file and the WAL stays at 0 bytes. The e2e checks
+this after the first load, after setup, and after writes with no explicit
+`CHECKPOINT`. No write path can forget, now or later, including the ones
+that never checkpointed (central's relay list, a `_pred`'s relay count, a
+failed poll's `central_last_poll`). The explicit `CHECKPOINT`s from before
+stay where they are: setup (the keys), each central cycle (after its submission), each new poll time,
+a Settings save, a new relay list from central, NIP-65's time, each outbox
+edit, each history run from central, a relay observation and its `_pred`
+(before the `_pred` is sent, as Lite commits first), a subscribe and an
+unsubscribe, the Base batch's hash as soon as it is sent and the batch after
+its receipt. Each one now finds nothing to do (about 2 ms).
+
+**The keys** are three `meta` rows, each its own commit, so each is
+checkpointed before setup returns. The e2e copies the database file alone,
+without any WAL, right after `satori.setup()` and finds all three in it. A
+reload right after setup keeps them, and so does Chrome killed (`SIGKILL`,
+every process of the profile) right after setup.
+
+**The cost**, measured in Chrome on OPFS on this shared 8-core box (load
+about 3). The database held 83 streams × 1,001 rows (13 MB). Each figure is
+two runs, under DuckDB's default and with every commit checkpointed:
+
+| Write pattern | Before (16 MB, explicit CHECKPOINTs) | Every commit checkpointed |
+|---|---|---|
+| A poll: 83 new rows (one transaction), the specs, 83 predictions, the last poll, sent, the submission, a CHECKPOINT | 2.8–2.9 s (one commit per prediction) | 4.9–5.1 s with one commit per prediction; **2.4–2.5 s** with the poll's predictions in one transaction (`addPredictions`, now) |
+| History: 83 streams × 1,000 rows, one `addHistory` each (as `history.js`, once per stream) | 3.5–4.2 s | 8.1–8.7 s |
+| One statement of 10,000 rows (`addHistory`) | 79–87 ms | 153–160 ms |
+| A `meta` write (a Setting) | 9–12 ms, plus its CHECKPOINT | 27–31 ms |
+| A relay observation, its seq and its `_pred`, a CHECKPOINT | 117–121 ms | 152–170 ms |
+| `CHECKPOINT` with nothing to do | 1–2 ms | 1–2 ms |
+| The database file afterwards | 12.9 MB | 12.6 MB |
+
+The history run is the only real cost, about +55 ms per stream, so about
++5 s for 83 streams. It runs once per stream, in the background, and its
+fetches overlap the writes. One
+statement of 83,000 rows (`addHistory` with 83 k comma-joined values) stops
+the wasm with "memory access out of bounds" under either setting. The
+history never sends one: it is at most 1,000 rows per stream, one stream per
+statement.
+
+## Recovery
+
+A WAL that isn't empty comes from an older version, because every commit is
+checkpointed now. Before the database opens, `src/db/recover.js` moves it
+out of DuckDB's way. It is renamed in OPFS, never deleted
+(`FileSystemFileHandle.move`: Chrome 102, Firefox 111, Safari 15.2, the same
+releases that have the sync access handles DuckDB needs):
+
+1. DuckDB opens the database once on that WAL and runs `CHECKPOINT`. It
+   either replays the WAL or skips it as already checkpointed, so whatever
+   the WAL held is now in the database file. Then the worker is ended, which
+   lets go of the files. The move is retried every 100 ms for up to 5 s
+   while the ended worker still holds them. The WAL is renamed
+   `satori-mvp.duckdb.wal.checkpointed-<time>` with no notice. This happens
+   once to every profile set up before this version.
+2. If DuckDB fails to replay it ("Failure while replaying WAL"), it is
+   renamed `satori-mvp.duckdb.wal.unreplayed-<time>`. That is the owner's
+   profile, and any profile reloaded before its first checkpoint under an
+   older version.
+
+Then the database opens on no WAL, as of its last checkpoint, and the app
+goes on as usual. In case 2 a small notice shows above the screen: "Recovered
+the database: unsaved changes from the last session were set aside."
+Dismiss hides it. For agents, `satori.status().recovered` holds the file's
+new name for that page load (null otherwise). `<time>` is the ISO time with
+`:` and `.` as `-`.
+
+**What can be lost** is only what the set-aside WAL held: writes that were
+never checkpointed. Under older versions those were the first load's
+migrations, which run again at once. On a set-up neuron, they could only be
+writes the old version already lost on a reload (the first point above).
+**Never the keys**: setup checkpointed them in every version, and now each
+row is checkpointed as it is written. The set-aside files stay in this
+site's storage (a few kB each).
+
+Any other failure to open, the database file itself included, is not
+touched. The WAL stays where it is, and the "Satori could not start" screen
+shows the error with a way forward. It says nothing was deleted, offers
+Reload, links to the issue tracker, and points to the backup (the 24 words,
+or the Dockerized Neuron files) for another browser. Nothing is ever deleted
+on its own.
 
 ## Migrations
 

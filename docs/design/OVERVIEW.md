@@ -99,7 +99,7 @@ alone when the build sets it.
 | keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Docker files, Unlock/Lock the vault, sign and verify Evrmore messages. Each key's Base (EVM) address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)). Also the **Nostr key** (`nostr.yaml`, random, plaintext as in Docker; [nostr.md](nostr.md)). |
 | central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash, with Python's float strings from `src/py.js`); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. |
 | chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
-| db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule). Times are unix seconds. |
+| db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time; every commit checkpointed; a WAL an older version left set aside before the open (`recover.js`) ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule, recovery). Times are unix seconds. |
 | engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (identity-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
 | neuron | `src/neuron/` | `register`, `cycle` (poll → store → history → forecast → submit), `history.js` (central's history for new streams), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends, the Base settings. |
@@ -151,8 +151,12 @@ alone when the build sets it.
   `/assets/` and the page; a new version waits for **Update ready, reload**
   and never reloads the page on its own. The neuron asks for persistent
   storage after setup and on each load until it is kept ([pwa.md](pwa.md)).
-- OPFS keeps what DuckDB has checkpointed, so every write that must survive
-  a closed tab is checkpointed at once ([storage.md](storage.md#the-checkpoint-rule)).
+- OPFS keeps what DuckDB has checkpointed, so DuckDB checkpoints every
+  commit itself (`checkpoint_threshold = '0b'`) and the WAL stays empty: a
+  reload or a closed tab at any moment keeps every committed write, the keys
+  included. A WAL an older version left is set aside, never deleted, before
+  the database opens, with a notice when it held changes DuckDB can't replay
+  ([storage.md](storage.md#the-checkpoint-rule), [recovery](storage.md#recovery)).
 - The page is sent with a strict CSP header: no inline script,
   `'wasm-unsafe-eval'` for DuckDB, `connect-src 'self' https: wss: ws:` for the
   chosen central and the relays. An https page still can't open `ws://`
@@ -209,7 +213,10 @@ sha256, already a dependency). The deploy image added none to npm; it is
   companion found, neurons diverging); central's history (200, 404 held for a
   day, partial lists, 4 calls at a time, backfilled rows never predicted);
   db (migrations from steps 2–6, a change of central, the relay tables and
-  their dedupe, specs, history inserts, doubles bit for bit); nostr (every event rebuilt byte for byte
+  their dedupe, specs, history inserts, doubles bit for bit, a poll's
+  predictions in one transaction, every commit checkpointed: a database file
+  keeps nothing in its WAL; `recover.js`: a WAL set aside as checkpointed or
+  unreplayed, any other failure left alone, the rename retried while held); nostr (every event rebuilt byte for byte
   against satorilib's own client and nostr-sdk's signatures, Lite's value
   unwrapping on its own function's outputs, Lite's pinned relay uuid, the
   catalog, intake parsing, the relay client's REQ/EOSE/OK and reconnect backoff
@@ -242,7 +249,12 @@ sha256, already a dependency). The deploy image added none to npm; it is
   Poll now, with node's specs and numbers); Docker import with a vault mismatch and Settings
   (https only, an unreachable central shown); restore from words; two setups
   at once (one wins) leaving other `meta` rows alone. Also an OPFS persistence
-  smoke under the CSP. Nostr (`e2e/nostr.spec.js`) against two test relays,
+  smoke under the CSP, and reloads and crashes with no checkpoint
+  (`e2e/wal.spec.js`): a fresh profile reloaded on Setup and while it loads,
+  no WAL left, setup's keys in the database file itself as setup returns and
+  after Chrome is killed, and the WALs older versions left (the owner's,
+  which DuckDB can't replay: Setup with the notice; a set-up neuron's, set
+  aside silently; keys checkpointed under an unreplayable WAL: kept). Nostr (`e2e/nostr.spec.js`) against two test relays,
   7782 as central's (read only) and 7781 as the user's: a provider's stream
   discovered and subscribed in the UI, its stored and live observations
   forecast and published as `_pred` (read back from 7781 and checked, with

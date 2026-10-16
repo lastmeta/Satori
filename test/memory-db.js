@@ -1,6 +1,6 @@
 // Test helper (never imported by the app): DuckDB-WASM's node blocking bundle,
-// the same duckdb-eh.wasm as the browser, in memory. Each call returns a fresh,
-// empty database; the wasm is instantiated once per test file.
+// the same duckdb-eh.wasm as the browser, in memory or on a node file. Each
+// call returns a fresh database; the wasm is instantiated once per test file.
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import duckdb from '@duckdb/duckdb-wasm/blocking';
@@ -8,8 +8,8 @@ import { openDb } from '../src/db/index.js';
 
 let duck;
 
-/** A connection to a fresh, empty in-memory database. */
-export async function memoryConn() {
+/** A connection to a fresh, empty database: in memory, or the file at `path` (read-write). */
+export async function memoryConn(path) {
   if (duck) {
     duck.reset();
   } else {
@@ -20,7 +20,7 @@ export async function memoryConn() {
     }, new duckdb.VoidLogger(), duckdb.NODE_RUNTIME);
     await duck.instantiate();
   }
-  duck.open({});
+  duck.open(path ? { path, accessMode: duckdb.DuckDBAccessMode.READ_WRITE } : {});
   return duck.connect();
 }
 

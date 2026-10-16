@@ -32,6 +32,8 @@ body { margin: 0; background: var(--bg); }
 .top { display: flex; align-items: center; justify-content: space-between; min-height: 68px; padding: 8px 0; }
 .top-actions { display: flex; gap: 8px; }
 .install { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 14px; }
 h1 { font-size: 1.25rem; margin: 0; font-weight: 650; letter-spacing: 0.01em; }
 h2 { font-size: 1.15rem; margin: 0 0 8px; }
 h3 { font-size: 1rem; margin: 0; }

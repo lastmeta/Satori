@@ -64,7 +64,12 @@ async function migrate(conn) {
 
 export async function openDb(conn, closeDb = async () => conn.close()) {
   await conn.query('SET autoload_known_extensions = false');
+  // DuckDB checkpoints every commit itself, so nothing is left in the WAL: on OPFS,
+  // DuckDB-WASM 1.32.0 keeps only what is checkpointed, and cannot replay a WAL
+  // that holds migration 3 (docs/design/storage.md#the-checkpoint-rule).
+  await conn.query("SET checkpoint_threshold = '0b'");
   const version = await migrate(conn);
+  await conn.query('CHECKPOINT'); // whatever the migrations left, before anything else runs
 
   const line = serial();
   const inOrder = (fn) => (...args) => line(() => fn(...args));
@@ -178,7 +183,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       }
     }),
 
-    /** A poll's predictions, in one transaction. → their ids, in order */
+    /** A poll's predictions, in one transaction (one checkpoint). → their ids, in order */
     addPredictions: inOrder(async (list) => {
       const ids = [];
       await run('BEGIN TRANSACTION');

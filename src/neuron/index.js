@@ -85,7 +85,7 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
       const { observed_at, hash } = predictionItem({ t1: f.t1, t2: f.t2, now: made_at });
       made.push({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight, observed_at, hash });
     }
-    await db.addPredictions(made); // one transaction
+    await db.addPredictions(made); // one transaction: every commit is a checkpoint (docs/design/storage.md)
     poll.predicted = made.length;
   }
   await db.set('central_last_poll', poll);
