@@ -6,7 +6,7 @@
 //   runModels({ fresh, histories, specs, seed }) → { forecasts: Map(uuid → forecast), specs: Map(uuid → row) }
 import { sha256 } from '@noble/hashes/sha2';
 import { utf8ToBytes } from '@noble/hashes/utils';
-import { STEP_S, MIN_EXTRA_ROWS, MIN_SAMPLES, forecast as bar1, median } from './index.js';
+import { STEP_S, MIN_EXTRA_ROWS, MIN_SAMPLES, HOLDOUT, forecast as bar1, median } from './index.js';
 import { prepare, backtestOf, errorsAt, forecastSpec, alignedRows } from './bvar.js';
 
 export const LAMBDA1_GRID = [0.05, 0.1, 0.2, 0.5]; // namaste_club's tuner (models.py:589)
@@ -74,10 +74,11 @@ export const accepts = (champion, challenger, margin = MARGIN) => challenger < c
  * its champion (drawn on first sight), one proposal when the backtest has an
  * opinion, and the forecast (bvar, else bar1, else naive).
  * @param {{fresh: string[], histories: Map<string, {ts: number, value: number}[]>, specs?: Map<string, object>,
- *   seed: string, step?: number, margin?: number}} o histories: every central stream's; seed: the identity's public key
+ *   seed: string, step?: number, margin?: number, window?: number}} o histories: every central stream's; seed: the
+ *   identity's public key; window: the backtest origins a spec is scored on (the fade uses the last HOLDOUT of them)
  * @returns {{forecasts: Map<string, object>, specs: Map<string, {spec, score, generation, accepted}>}}
  */
-export function runModels({ fresh, histories, specs = new Map(), seed, step = STEP_S, margin = MARGIN }) {
+export function runModels({ fresh, histories, specs = new Map(), seed, step = STEP_S, margin = MARGIN, window = HOLDOUT }) {
   const cache = new Map();
   const series = (u) => {
     if (!cache.has(u)) cache.set(u, histories.has(u) ? prepare(histories.get(u), step) : null);
@@ -92,26 +93,28 @@ export function runModels({ fresh, histories, specs = new Map(), seed, step = ST
     const poolOf = () => (pool ??= poolFor(target, T, histories, series));
     const row = specs.get(target) ?? { spec: drawSpec(seeded(seed, target, 'draw'), poolOf()), generation: 0, accepted: 0 };
     let { spec, generation, accepted } = row;
-    const bt = backtestOf(T);
+    const bt = backtestOf(T, window);
     const errorsOf = (s) => (s.companions.length && s.companions.every(series)
-      ? errorsAt([T, ...s.companions.map(series)], s, bt) : bt.base);
-    let errors = errorsOf(spec);
-    let score = bt.origins.length >= MIN_SAMPLES ? median(errors) : null;
+      ? errorsAt([T, ...s.companions.map(series)], s, bt) : { errors: bt.base, acc: null });
+    let run = errorsOf(spec);
+    let score = bt.origins.length >= MIN_SAMPLES ? median(run.errors) : null;
     let proposal = null;
     if (score !== null) {
       const m = mutate(spec, seeded(seed, target, generation), poolOf());
-      const e = errorsOf(m.spec);
-      const s = median(e);
+      const challenger = errorsOf(m.spec);
+      const s = median(challenger.errors);
       generation++;
       proposal = { op: m.op, spec: m.spec, score: s, accepted: accepts(score, s, margin) };
       if (proposal.accepted) {
         ({ spec } = m);
-        errors = e;
+        run = challenger;
         score = s;
         accepted++;
       }
     }
-    const f = forecastSpec(T, spec.companions.map(series), spec, errors, bt.persist) ?? bar1(histories.get(target), { step });
+    const recent = (xs) => xs.filter((_, i) => bt.origins[i].recent); // the fade: bar1's last HOLDOUT origins
+    const f = forecastSpec(T, spec.companions.map(series), spec, run.acc, recent(run.errors), recent(bt.persist))
+      ?? bar1(histories.get(target), { step });
     if (f) forecasts.set(target, { ...f, proposal });
     out.set(target, { spec, score, generation, accepted });
   }
@@ -121,6 +124,6 @@ export function runModels({ fresh, histories, specs = new Map(), seed, step = ST
 /** The other streams with enough aligned history for a one-companion model; all the others while none has. */
 function poolFor(target, T, histories, series) {
   const others = [...histories.keys()].filter((u) => u !== target).sort();
-  const aligned = others.filter((u) => series(u) && alignedRows(T, series(u)) >= MIN_ALIGNED);
+  const aligned = others.filter((u) => series(u) && alignedRows(T, series(u), MIN_ALIGNED) >= MIN_ALIGNED);
   return aligned.length ? aligned : others;
 }

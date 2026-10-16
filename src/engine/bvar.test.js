@@ -113,11 +113,12 @@ describe('the model on series', () => {
     expect(Math.abs(fit.coef[0][0])).toBeLessThan(0.15);
     const bt = backtestOf(T);
     expect(bt.origins).toHaveLength(HOLDOUT);
-    const errors = errorsAt([T, C], { lambda1: 0.5, lambda2: 1 }, bt);
+    const { errors, acc } = errorsAt([T, C], { lambda1: 0.5, lambda2: 1 }, bt);
     const median = (xs) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
     expect(median(errors)).toBeLessThan(median(bt.base) * 0.9);
-    const f = forecastSpec(T, [C], { lambda1: 0.5, lambda2: 1 }, errors, bt.persist);
-    expect(f).toMatchObject({ model: 'bvar', rows: 398, weight: 1 });
+    const f = forecastSpec(T, [C], { lambda1: 0.5, lambda2: 1 }, acc, errors, bt.persist);
+    expect(f).toMatchObject({ model: 'bvar', rows: 398, weight: 1, horizon: 2 * STEP_S });
+    expect(f.value).toBe(f.t2);
     expect(f.phi).toBe(fit.coef[0][0]);
   });
 
@@ -154,9 +155,12 @@ describe('the model on series', () => {
     const T = prepare(grid([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
     const C = prepare(grid([1, 2, 3, 4, 5, 6, 7, 8]));
     const bt = backtestOf(T);
-    expect(forecastSpec(T, [C], { lambda1: 0.2, lambda2: 0.5 }, bt.base, bt.persist)).toBeNull(); // 6 rows < 2 + 5
-    expect(forecastSpec(T, [], { lambda1: 0.2, lambda2: 0.5 }, bt.base, bt.persist)).toBeNull();
-    expect(forecastSpec(T, [null], { lambda1: 0.2, lambda2: 0.5 }, bt.base, bt.persist)).toBeNull();
+    const spec = { lambda1: 0.2, lambda2: 0.5 };
+    const { acc } = errorsAt([T, C], spec, bt);
+    expect(acc.N).toBe(6);
+    expect(forecastSpec(T, [C], spec, acc, bt.base, bt.persist)).toBeNull(); // 6 rows < 2 + 5
+    expect(forecastSpec(T, [], spec, acc, bt.base, bt.persist)).toBeNull();
+    expect(forecastSpec(T, [null], spec, acc, bt.base, bt.persist)).toBeNull();
   });
 
   test('a stale companion\'s first step is 0', () => {
@@ -168,8 +172,8 @@ describe('the model on series', () => {
     expect(stale.lag).not.toBe(0);
     const bt = backtestOf(T);
     const spec = { lambda1: 0.5, lambda2: 1 };
-    const a = forecastSpec(T, [fresh], spec, bt.base, bt.persist);
-    const b = forecastSpec(T, [stale], spec, bt.base, bt.persist);
+    const a = forecastSpec(T, [fresh], spec, errorsAt([T, fresh], spec, bt).acc, bt.base, bt.persist);
+    const b = forecastSpec(T, [stale], spec, errorsAt([T, stale], spec, bt).acc, bt.base, bt.persist);
     // the same fit would give another forecast with the stale lag; with 0 it is the own lag alone
     const fit = fitSums(sumsOf(rowsOf([T, stale]), 2), 0.5, 1);
     const [q1] = iterateVar(fit.coef, [T.lag, 0], [0.5, 0.5]).map((x) => x[0]);
@@ -185,7 +189,7 @@ describe('the backtest', () => {
     const errs = (t, c) => {
       const T = prepare(grid(t));
       const bt = backtestOf(T);
-      return { bt, base: bt.base, e: errorsAt([T, prepare(grid(c))], spec, bt) };
+      return { bt, base: bt.base, e: errorsAt([T, prepare(grid(c))], spec, bt).errors };
     };
     const a = errs(target, comp);
     const cut = a.bt.origins[10].k + 2; // origin 10's actual; nothing later may matter to it
@@ -203,7 +207,7 @@ describe('the backtest', () => {
     const T = prepare(grid(target));
     const C = prepare(grid(comp, 40)); // the companion starts 40 buckets late
     const bt = backtestOf(T);
-    const e = errorsAt([T, C], { lambda1: 0.2, lambda2: 0.5 }, bt);
+    const e = errorsAt([T, C], { lambda1: 0.2, lambda2: 0.5 }, bt).errors;
     const n = bt.origins.filter((o) => o.k < C.b[0] + 8).length; // rows from its bucket +2; 7 rows need bucket +8
     expect(n).toBeGreaterThan(0);
     expect(e.slice(0, n)).toEqual(bt.base.slice(0, n));
