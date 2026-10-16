@@ -129,11 +129,13 @@ is ≤ 0, the same model runs on additive changes:
 - r = v_k − v_{k−1} between back-to-back buckets; the first lag is last − the
   value ≥ 6 h older; the pairs, φ and the 6-pair minimum are as above;
 - each iterated step is φ × the one before, clamped to ± the largest change
-  seen in the series (the ±50 % clamp is relative, and has no meaning here);
+  seen in the series (in the backtest, up to the origin; the ±50 % clamp is
+  relative, and has no meaning here);
   t1 = last + w·q1, t2 = last + w·(q1 + q2);
 - the backtest scores v_o + q1 + q2 and persistence v_o against v_{o+2} by
-  absolute error (a level may be 0), and w is the same function of the two
-  medians.
+  absolute error (a level may be 0), on origins from the series' first value
+  ≤ 0 on ([the transform as known at the origin](#the-backtest-score-and-fade)),
+  and w is the same function of the two medians.
 
 It returns `{model: 'bar1d', t1, t2, phi, weight}`. A shift of the whole
 series shifts the forecast by the same amount and leaves φ and w unchanged
@@ -257,11 +259,25 @@ On the target's own buckets, the same origins as `bar1`'s backtest: of the
 last 28 bucket positions, those whose buckets o, o + 1, o + 2 are back to
 back and which have the 6 target pairs `bar1` needs up to o. At each origin
 the spec is fit on the rows up to bucket o only, iterated from the returns
-at o, and its unfaded t2 scored against the value at o + 2 (24 h later):
-relative error |x − a|/a, absolute for a target on changes. Where the spec
-can't fit at an origin, `bar1`'s forecast there is scored instead (what the
-live neuron would have sent). Nothing after o is used, except the actual at
-o + 2 (tested).
+at o, each step clamped by the largest step up to o, and its unfaded t2
+scored against the value at o + 2 (24 h later): relative error |x − a|/a,
+absolute for a target on changes. Where the spec can't fit at an origin,
+`bar1`'s forecast there is scored instead (what the live neuron would have
+sent).
+
+**The transform as known at the origin.** A series' transform (returns, or
+changes once any value is ≤ 0) is the one its data up to the origin would
+choose. A target whose first value ≤ 0 came at bucket z is on changes now
+and was on returns before z, so it is scored only on origins from z on: one
+model, one error unit (absolute) throughout. A companion whose first value
+≤ 0 came after an origin was still on returns there, so at that origin the
+spec can't be fit as it is now and `bar1`'s error stands in. `bar1`'s own
+backtest does the same. So each scored forecast uses nothing after its
+origin except the actual at o + 2 (tested: a late zero, a late large change
+for the clamp, and every series changed after an origin's actual). What a
+late value ≤ 0 does change is which origins are scored. (Before the review,
+the transform was the whole series', so a late zero turned earlier origins'
+models from returns into changes.)
 
 - **score** = the median of those errors; none below 5 origins.
 - **fade weight** = namaste_club's `weight_from_errors` on the medians of
@@ -387,9 +403,9 @@ From namaste_club:
 - **`bvar`: a stale companion's first lag is 0** (its newest observation more
   than a step older than the target's). namaste_club takes each stream's
   newest step whatever its age (`NC/pool.py:869-900`).
-- **The clamp on a change series in `bvar`'s backtest** is the largest change
-  seen up to the origin, so the backtest looks at nothing after it; `bar1d`'s
-  backtest uses the largest change in the whole series.
+- **The clamp on a change series in a backtest** is the largest change seen
+  up to the origin, and a series is on the transform its data up to the
+  origin choose (above), so a backtest looks at nothing after the origin.
 - **The fade comes from a rolling backtest, not a log of past submissions.** It
   needs no new storage and no wait for submissions to be scored: the history
   is the record, and it has an opinion from 14 buckets (about 7 days). It also

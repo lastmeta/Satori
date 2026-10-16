@@ -79,7 +79,9 @@ export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S, hor
   if (pairs.length < 1 + MIN_EXTRA_ROWS) return naive;
   const phi = fitPhi(pairs, lambda1);
   const cap = m.cap(r);
-  const w = weight ?? backtestWeight(b, v, r, lambda1, m, cap, n);
+  // the backtest scores only origins where the transform, as known then, is this one: from the first value ≤ 0 on
+  const since = m === CHANGES ? Math.floor(p.find((o) => !(o.value > 0)).ts / step) : -Infinity;
+  const w = weight ?? backtestWeight(b, v, r, lambda1, m, n, since);
   const t = m.path(...steps(phi, firstLag(p, step, m), cap, Math.max(n, HORIZON_STEPS))).map((x) => m.apply(last, x, w));
   return { model: m.model, t1: t[0], t2: t[1], value: t[n - 1], horizon: n * step, phi, weight: w };
 }
@@ -162,19 +164,21 @@ export function median(xs) {
 
 /**
  * The rolling backtest that sets the fade: of the last HOLDOUT origins o, those
- * with buckets o..o+n back to back (n steps to the horizon); fit on the pairs up
- * to o, forecast n steps from v[o] and score against v[o+n], as persistence
- * (v[o]) is scored.
+ * with buckets o..o+n back to back (n steps to the horizon) and, for a change
+ * series, from its first value ≤ 0 on (`since`: before it the stream was on
+ * returns); fit on the pairs up to o, forecast n steps from v[o], clamped by the
+ * largest step up to o, and score against v[o+n], as persistence (v[o]) is scored.
+ * Nothing after o is used but the actual.
  */
-function backtestWeight(b, v, r, lambda1, m = RETURNS, cap = MAX_STEP_RETURN, n = HORIZON_STEPS) {
+function backtestWeight(b, v, r, lambda1, m = RETURNS, n = HORIZON_STEPS, since = -Infinity) {
   const me = [];
   const pe = [];
   const L = b.length - 1;
   for (let o = Math.max(2, L - n + 1 - HOLDOUT); o + n <= L; o++) {
-    if (b[o + n] - b[o] !== n) continue;
+    if (b[o + n] - b[o] !== n || b[o] < since) continue;
     const pairs = pairsUpTo(r, o);
     if (pairs.length < 1 + MIN_EXTRA_ROWS) continue;
-    const x = m.path(...steps(fitPhi(pairs, lambda1), r[o] ?? 0, cap, n))[n - 1];
+    const x = m.path(...steps(fitPhi(pairs, lambda1), r[o] ?? 0, m.cap(r.slice(0, o + 1)), n))[n - 1];
     const a = v[o + n];
     me.push(m.error(m.raw(v[o], x), a));
     pe.push(m.error(v[o], a));

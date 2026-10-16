@@ -45,6 +45,8 @@ export function prepare(points, step = STEP_S) {
   const r = (k) => (k >= k0 && k < k0 + len ? steps[k - k0] : NaN);
   return {
     m, b, v, step, last: p.at(-1).value, lastTs: p.at(-1).ts, lag: firstLag(p, step, m), r,
+    /** The first bucket the transform, as known then, is this one: a change series' first value ≤ 0. */
+    since: m === RETURNS ? -Infinity : Math.floor(p.find((o) => !(o.value > 0)).ts / step),
     /** Bucket k makes a regression row: a step into it and into the one before. */
     pair: (k) => r(k) === r(k) && r(k - 1) === r(k - 1),
     cap: m === RETURNS ? MAX_STEP_RETURN : caps[len - 1],
@@ -223,7 +225,8 @@ export function backtestOf(T, window = HOLDOUT) {
   let pairs = 0;
   for (let o = 0; o + 2 <= L; o++) {
     if (T.pair(b[o])) pairs++;
-    if (o < first || b[o + 2] - b[o] !== 2 || pairs < 1 + MIN_EXTRA_ROWS) continue;
+    // origins from the first value ≤ 0 on, for a change series: before it the stream was on returns
+    if (o < first || b[o + 2] - b[o] !== 2 || pairs < 1 + MIN_EXTRA_ROWS || b[o] < T.since) continue;
     origins.push({ k: b[o], v: v[o], actual: v[o + 2], recent: o >= L - 1 - HOLDOUT });
   }
   const bt = { origins, persist: origins.map((o) => m.error(o.v, o.actual)) };
@@ -245,7 +248,8 @@ export function errorsAt(S, { lambda1, lambda2 }, bt) {
   const errors = [];
   let o = 0;
   const score = (origin) => {
-    const fit = fitSums(acc, lambda1, lambda2);
+    // a companion still on returns at this origin (its first value ≤ 0 came later) can't be read as it is now
+    const fit = S.some((s) => origin.k < s.since) ? null : fitSums(acc, lambda1, lambda2);
     if (!fit) return bt.base[errors.length];
     const [q1, q2] = targetSteps(fit, S.map((s) => finiteOr0(s.r(origin.k))), S.map((s) => s.capAt(origin.k)));
     return T.m.error(T.m.raw(origin.v, T.m.path(q1, q2)[1]), origin.actual);

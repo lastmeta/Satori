@@ -202,6 +202,23 @@ describe('the backtest', () => {
     expect(b.e.slice(11)).not.toEqual(a.e.slice(11));
   });
 
+  test('a late value ≤ 0: the target is scored only from it on; a companion\'s gives bar1\'s error before it', () => {
+    const { target, comp } = leader(90, 0.5, 13);
+    const late = (xs, at) => xs.map((x, k) => (k === at ? 0 : k > at ? x - 200 : x));
+    const T = prepare(grid(late(target, 75)));
+    const bt = backtestOf(T);
+    expect(T.m.model).toBe('bar1d');
+    expect(bt.origins.length).toBeGreaterThan(5);
+    expect(bt.origins.every((o) => o.k >= T.b[75])).toBe(true); // returns as known before it: not scored
+    const P = prepare(grid(target));
+    const btP = backtestOf(P);
+    const C = prepare(grid(late(comp, 80)));
+    const e = errorsAt([P, C], { lambda1: 0.5, lambda2: 1 }, btP).errors;
+    const before = btP.origins.map((o) => o.k < C.b[80]);
+    expect(before.some(Boolean) && before.some((x) => !x)).toBe(true);
+    e.forEach((x, i) => (before[i] ? expect(x).toBe(btP.base[i]) : expect(x).not.toBe(btP.base[i])));
+  });
+
   test('where the spec can\'t fit at an origin, bar1\'s error stands in', () => {
     const { target, comp } = leader(60, 0.5, 12);
     const T = prepare(grid(target));

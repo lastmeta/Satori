@@ -308,3 +308,40 @@ describe('the horizon: a forecast is one cadence ahead (docs/intent/engine.md)',
     expect(horizonSteps(STEP_S, 3600)).toBe(1);
   });
 });
+
+describe('the backtest uses the transform as known at each origin (a late value ≤ 0)', () => {
+  test('a stream whose first value ≤ 0 came late is scored only on origins from it on, each from its own history', () => {
+    const values = arPrices(70, 0.3, 0.03, 41);
+    values[55] = 0; // a late zero, inside the last 28 origins
+    for (let k = 56; k < 70; k++) values[k] -= 60; // and negatives after it
+    const pts = grid(values);
+    const me = [];
+    const pe = [];
+    const L = values.length - 1;
+    for (let o = Math.max(2, L - 1 - HOLDOUT); o + 2 <= L; o++) {
+      if (o < 55) continue; // returns as known then: another model, not scored
+      const f = forecast(pts.slice(0, o + 1), { weight: 1 }); // the engine as it was at the origin
+      expect(f.model).toBe('bar1d');
+      me.push(Math.abs(f.value - values[o + 2]));
+      pe.push(Math.abs(values[o] - values[o + 2]));
+    }
+    expect(me.length).toBeGreaterThanOrEqual(MIN_SAMPLES);
+    const f = forecast(pts);
+    expect(f.model).toBe('bar1d');
+    expect(f.weight).toBeCloseTo(fadeWeight(me, pe), 12);
+  });
+
+  test('the clamp of a change series at an origin is the largest change up to it', () => {
+    const values = Array.from({ length: 50 }, (_, k) => -5 + k + (k % 2 ? 0.5 : 0));
+    values[49] = values[48] + 40; // one huge change at the end, after every origin's actual
+    const pts = grid(values);
+    const me = [];
+    const pe = [];
+    for (let o = 49 - 1 - HOLDOUT; o + 2 <= 49; o++) {
+      const g = forecast(pts.slice(0, o + 1), { weight: 1 });
+      me.push(Math.abs(g.value - values[o + 2]));
+      pe.push(Math.abs(values[o] - values[o + 2]));
+    }
+    expect(forecast(pts).weight).toBeCloseTo(fadeWeight(me, pe), 12);
+  });
+});
