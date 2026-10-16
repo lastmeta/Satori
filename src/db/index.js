@@ -6,7 +6,7 @@
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
 //   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.specs() / db.saveSpecs(map, at) / db.models()
 //   await db.needHistory() → uuids / db.addHistory(uuid, rows, at) → rows added (older than the newest polled only)
-//   await db.addPrediction(p) → id / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
+//   await db.addPredictions(list) → ids / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
 //   await db.resetCentral()                  // the central URL changed
 //   await db.streams() / db.predictions(uuidOrName, limit)   // for the UI and agents
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
@@ -178,10 +178,23 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       }
     }),
 
-    addPrediction: inOrder(async (p) => (await rows(
-      `INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
-       VALUES (?, ${D}, ?, ${D}, ${D}, ${D}, ${D}, ?, ?) RETURNING id`,
-      p.stream_uuid, dbl(p.made_at), p.model, dbl(p.t1), dbl(p.t2), dbl(p.phi), dbl(p.weight), p.observed_at, p.hash))[0].id),
+    /** A poll's predictions, in one transaction. → their ids, in order */
+    addPredictions: inOrder(async (list) => {
+      const ids = [];
+      await run('BEGIN TRANSACTION');
+      try {
+        for (const p of list) {
+          ids.push((await rows(`INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
+            VALUES (?, ${D}, ?, ${D}, ${D}, ${D}, ${D}, ?, ?) RETURNING id`,
+          p.stream_uuid, dbl(p.made_at), p.model, dbl(p.t1), dbl(p.t2), dbl(p.phi), dbl(p.weight), p.observed_at, p.hash))[0].id);
+        }
+        await run('COMMIT');
+      } catch (err) {
+        await run('ROLLBACK');
+        throw err;
+      }
+      return ids;
+    }),
     /** The kept queue: every pending prediction, oldest first, with its stream's name. */
     pending: inOrder(() => rows(`SELECT p.*, s.name FROM predictions p JOIN streams s ON s.uuid = p.stream_uuid
       WHERE p.status = 'pending' ORDER BY p.id`)),

@@ -77,15 +77,16 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
     const out = await engine({ fresh, histories, specs, seed });
     poll.engine_ms = Math.round(performance.now() - t0);
     await db.saveSpecs(out.specs, Math.floor(now()));
+    const made = [];
     for (const uuid of fresh) {
       const f = out.forecasts.get(uuid);
       if (!f) continue;
       const made_at = now();
       const { observed_at, hash } = predictionItem({ t1: f.t1, t2: f.t2, now: made_at });
-      await db.addPrediction({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight,
-        observed_at, hash });
-      poll.predicted++;
+      made.push({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight, observed_at, hash });
     }
+    await db.addPredictions(made); // one transaction
+    poll.predicted = made.length;
   }
   await db.set('central_last_poll', poll);
   const sent = await submit(db, central, now);

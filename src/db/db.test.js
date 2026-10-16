@@ -11,6 +11,7 @@ beforeEach(async () => { db = await memoryDb(); });
 const obs = (o) => ({ stream_uuid: 'u-btc', name: 'bitcoin', meta: null, ts: 1000, value: 1, ...o });
 const pred = (o) => ({ stream_uuid: 'u-btc', made_at: 2000.5, model: 'bar1', t1: 2, t2: 3, phi: -0.25, weight: 0.75,
   observed_at: '2000.5', hash: 'abcd', ...o });
+const addPrediction = async (d, p) => (await d.addPredictions([p]))[0];
 
 test('migrations run and the version is stored', async () => {
   expect(db.version).toBe(MIGRATIONS.length);
@@ -46,8 +47,8 @@ test('a step-3 database: predictions gain the engine\'s phi and weight (null on 
     VALUES ('u-btc', 1, 'ols-20', 2, 3, '1.0', 'h')`);
   const up = await openDb(conn);
   expect(up.version).toBe(MIGRATIONS.length);
-  await up.addPrediction(pred({ made_at: 5 }));
-  await up.addPrediction(pred({ made_at: 6, model: 'naive', phi: undefined, weight: undefined }));
+  await addPrediction(up, pred({ made_at: 5 }));
+  await addPrediction(up, pred({ made_at: 6, model: 'naive', phi: undefined, weight: undefined }));
   expect((await up.predictions('u-btc')).map((p) => [p.model, p.phi, p.weight]))
     .toEqual([['naive', null, null], ['bar1', -0.25, 0.75], ['ols-20', null, null]]);
 });
@@ -60,7 +61,7 @@ test('doubles come back bit for bit (DuckDB-WASM sends parameters as JSON, which
   await db.addHistory('u-btc', xs.map((value, i) => ({ ts: 50_000 + i, value })), 1);
   expect((await db.history('u-btc')).slice(400, 800).map((o) => o.value)).toEqual(xs);
   for (const x of xs.slice(0, 120)) {
-    await db.addPrediction(pred({ made_at: 1792000000 + x, t1: x, t2: x * 1000.123, phi: x / 7, weight: x / 3 }));
+    await addPrediction(db, pred({ made_at: 1792000000 + x, t1: x, t2: x * 1000.123, phi: x / 7, weight: x / 3 }));
   }
   const ps = (await db.predictions('u-btc', 200)).reverse();
   expect(ps.map((p) => [p.made_at, p.t1, p.t2, p.phi, p.weight]))
@@ -102,8 +103,8 @@ describe('addObservations', () => {
 describe('predictions', () => {
   test('stored pending; pending() is oldest first with the stream name; markSent', async () => {
     await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
-    const a = await db.addPrediction(pred());
-    const b = await db.addPrediction(pred({ stream_uuid: 'u-eth', t2: 7 }));
+    const a = await addPrediction(db, pred());
+    const b = await addPrediction(db, pred({ stream_uuid: 'u-eth', t2: 7 }));
     expect(b).toBeGreaterThan(a);
     expect(await db.pending()).toMatchObject([
       { id: a, stream_uuid: 'u-btc', name: 'bitcoin', t1: 2, t2: 3, observed_at: '2000.5', hash: 'abcd', status: 'pending' },
@@ -116,9 +117,17 @@ describe('predictions', () => {
     expect(await db.predictions('bitcoin')).toMatchObject([{ id: a, status: 'sent', sent_at: 3000 }]);
     await db.markSent([], 4000); // nothing to do
   });
+  test('addPredictions: a poll\'s predictions in one transaction; their ids in order', async () => {
+    await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
+    const ids = await db.addPredictions([pred({ t2: 1 }), pred({ stream_uuid: 'u-eth', t2: 2 }), pred({ t2: 3 })]);
+    expect(ids).toHaveLength(3);
+    expect(ids).toEqual([...ids].sort((a, b) => a - b));
+    expect((await db.pending()).map((p) => [p.id, p.t2])).toEqual([[ids[0], 1], [ids[1], 2], [ids[2], 3]]);
+    expect(await db.addPredictions([])).toEqual([]);
+  });
   test('predictions(stream) by uuid or name, newest first, with a limit', async () => {
     await db.addObservations([obs()]);
-    for (const t2 of [1, 2, 3]) await db.addPrediction(pred({ t2 }));
+    for (const t2 of [1, 2, 3]) await addPrediction(db, pred({ t2 }));
     expect((await db.predictions('u-btc')).map((p) => p.t2)).toEqual([3, 2, 1]);
     expect((await db.predictions('bitcoin', 2)).map((p) => p.t2)).toEqual([3, 2]);
     expect(await db.predictions('nope')).toEqual([]);
@@ -127,10 +136,10 @@ describe('predictions', () => {
 
 test('dropPending: only pending ones made before the cutoff', async () => {
   await db.addObservations([obs()]);
-  const old = await db.addPrediction(pred({ made_at: 100 }));
-  const sent = await db.addPrediction(pred({ made_at: 100 }));
+  const old = await addPrediction(db, pred({ made_at: 100 }));
+  const sent = await addPrediction(db, pred({ made_at: 100 }));
   await db.markSent([sent], 150);
-  const fresh = await db.addPrediction(pred({ made_at: 300 }));
+  const fresh = await addPrediction(db, pred({ made_at: 300 }));
   await db.dropPending(200);
   expect((await db.predictions('u-btc')).map((p) => p.id)).toEqual([fresh, sent]);
   expect(old).toBeLessThan(sent);
@@ -138,9 +147,9 @@ test('dropPending: only pending ones made before the cutoff', async () => {
 
 test('resetCentral: the pending queue, the stream list and the last poll/submission go; history and sent stay', async () => {
   await db.addObservations([obs()]);
-  const sent = await db.addPrediction(pred());
+  const sent = await addPrediction(db, pred());
   await db.markSent([sent], 3000);
-  await db.addPrediction(pred({ t2: 9 }));
+  await addPrediction(db, pred({ t2: 9 }));
   await db.set('central_last_poll', { at: 1 });
   await db.set('central_last_submit', { at: 2 });
   await db.set('next_poll_at', 5);
@@ -157,8 +166,8 @@ test('resetCentral: the pending queue, the stream list and the last poll/submiss
 
 test('streams: one row per stream with its latest observation and prediction', async () => {
   await db.addObservations([obs(), obs({ ts: 2000, value: 2 }), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
-  await db.addPrediction(pred({ t2: 5 }));
-  const id = await db.addPrediction(pred({ made_at: 2100, t1: 6, t2: 7 }));
+  await addPrediction(db, pred({ t2: 5 }));
+  const id = await addPrediction(db, pred({ made_at: 2100, t1: 6, t2: 7 }));
   await db.markSent([id], 2200);
   const [btc, eth] = await db.streams();
   expect(btc).toMatchObject({ uuid: 'u-btc', name: 'bitcoin', observations: 2, obs_ts: 2000, obs_value: 2,
