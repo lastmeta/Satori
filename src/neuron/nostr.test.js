@@ -256,6 +256,26 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(changes).toBeGreaterThan(0);
   });
 
+  test('a stream with no cadence is forecast a day ahead, in day steps (the default cadence is a day)', async () => {
+    await boot();
+    openAll();
+    await settle();
+    const c = relays.get(CENTRAL_RELAY);
+    const u = relays.get(USER_RELAY);
+    c.stored.push(announce('slow', { cadence: 0 }));
+    await nostr.subscribe(PROV_PUB, 'slow');
+    u.published = [];
+    const values = [50, 51, 50, 52, 51, 53, 52, 54, 53, 55, 54];
+    const t0 = Math.floor(clock / 86_400) * 86_400 - values.length * 86_400;
+    for (const [k, v] of values.entries()) await c.deliver(observe('slow', String(v), k + 1, t0 + (k + 1) * 86_400));
+    await settle();
+    const points = values.map((value, k) => ({ ts: t0 + (k + 1) * 86_400, value }));
+    const f = forecast(points, { step: 86_400, horizon: 86_400 });
+    expect(f).toMatchObject({ model: 'bar1', horizon: 86_400 });
+    expect(f.value).not.toBe(forecast(points, { step: 43_200, horizon: 43_200 }).value);
+    expect(JSON.parse(u.published.at(-1).content)).toMatchObject({ stream_name: 'slow_pred', value: pyFloatStr(f.value) });
+  });
+
   test('a 60 s stream is forecast in 60 s steps, 60 s ahead', async () => {
     await boot();
     openAll();

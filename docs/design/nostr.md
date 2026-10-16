@@ -125,7 +125,8 @@ one that never answers (10 s timeout), delays nothing else.
 12 h; the first-lag spacing is `step / 2` (6 h at 12 h) and the rest (6 lag
 pairs before `bar1`, so at least one observation every step; 28 backtest
 origins; the clamp) is counted in buckets, so nothing else changes. A relay
-stream uses its `cadence_seconds` (12 h when it has none) as both the step and
+stream uses its `cadence_seconds` (a day when it has none, the owner's
+default cadence) as both the step and
 the horizon: `_pred` is the forecast **one cadence ahead**
 ([engine.md](engine.md#the-step-and-the-horizon)).
 

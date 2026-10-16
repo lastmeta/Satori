@@ -11,11 +11,12 @@ import {
   KIND, PRED, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
   catalog, parseObservation, numericValue, predValue, relayUuid,
 } from '../nostr/satori.js';
-import { forecast as engineForecast, STEP_S } from '../engine/index.js';
+import { forecast as engineForecast } from '../engine/index.js';
 import { serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
 
 export const MAX_STREAMS = 100; // network_db.py:14-36, until central says (relay-config)
+export const DEFAULT_CADENCE_S = 86_400; // a stream that announces none: a day, the owner's default (docs/intent/engine.md)
 export const RECONCILE_S = 3600; // start.py:292
 export const RELAY_LIST_S = 86_400; // start.py:291
 export const FOLLOW_ID = 'satori-follow'; // client.py:76
@@ -232,7 +233,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const fresh = await db.addRelayObservation({ stream_uuid: uuid, seq: o.seq, ts, value,
       raw: JSON.stringify(o.value) ?? 'null', event_id: e.id, received_at: t() });
     if (!fresh) return;
-    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : STEP_S;
+    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
     // one cadence ahead (docs/intent/engine.md): steps of the cadence, one of them
     const f = value === null ? null : forecast(await db.relayHistory(uuid), { step: cadence, horizon: cadence });
     const pub = predValue(f, o.value);

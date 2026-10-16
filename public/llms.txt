@@ -99,7 +99,10 @@ Every method is below; `await satori.status()` shows everything at once.
     a companion; move lambda1 or lambda2 one grid step), seeded by identity +
     target + generation, is scored on the same origins and kept only if it
     beats the champion's score by 5 %. `generation` counts the mutations
-    proposed, `accepted` the ones kept. Specs stay in this browser
+    proposed, `accepted` the ones kept. A companion must stay aligned with the
+    target (a row shared in the target's last 4 row buckets, 7 in all): one
+    that stops, or one drawn before there was history, is replaced from the
+    aligned streams before the spec is scored. Specs stay in this browser
     (`model_specs`). A spec that can't fit yet (fewer than 6 + companions
     aligned rows, or a companion with no history) falls back to `bar1`, then
     `naive`; the prediction's `model` says which.
@@ -149,8 +152,9 @@ Every method is below; `await satori.status()` shows everything at once.
   observation is replaceable: a relay keeps one per stream), so it may be
   old; then each new one. Each new
   observation (34601) of the stream is stored, forecast one cadence ahead
-  (the engine with the stream's `cadence_seconds` as its step and its
-  horizon; a forecast is one cadence ahead, the owner's rule) and published
+  (the engine with the stream's `cadence_seconds`, a day when it has none,
+  as its step and its horizon; a forecast is one cadence ahead, the owner's
+  rule) and published
   as `<stream>_pred` with `value` = the forecast as a string (`"82378.0"`),
   `seq_num` = our last + 1. A value with no number is echoed. Relay streams
   and predictions are kept apart from central's and never sent to central.

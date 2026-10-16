@@ -364,7 +364,7 @@ polls every ~11 h and predicts two of those steps, about 24 h.
 | Path | Step | Horizon | Sent |
 |---|---|---|---|
 | Central | 12 h | 24 h (2 steps) | `value` = t2, `t1_value` = t1: Lite's payload, unchanged |
-| Nostr `_pred` | the source's `cadence_seconds` (12 h when none) | one cadence (1 step) | `value`, = t1 ([nostr.md](nostr.md#the-engines-step)) |
+| Nostr `_pred` | the source's `cadence_seconds` (a day when none: the default cadence) | one cadence (1 step) | `value`, = t1 ([nostr.md](nostr.md#the-engines-step)) |
 | Base daily batch | horizon / n, n = max(1, floor(horizon / max(12 h, cadence))) | max(24 h, cadence) | UP/DOWN from `value`: an hourly stream in two 12 h steps, the daily default stream in one 24 h step ([base.md](base.md)) |
 
 With the default horizon the numbers are the ones before the rule (the
