@@ -119,8 +119,9 @@ describe('mutations', () => {
 
 describe('the acceptance rule', () => {
   test(`a challenger must beat the champion by ${MARGIN * 100} %`, () => {
-    expect(accepts(1, 0.97)).toBe(true);
-    expect(accepts(1, 0.9801)).toBe(false);
+    expect(MARGIN).toBe(0.05);
+    expect(accepts(1, 0.94)).toBe(true);
+    expect(accepts(1, 0.9501)).toBe(false);
     expect(accepts(1, 1)).toBe(false);
     expect(accepts(1, 1.2)).toBe(false);
     expect(accepts(0, 0)).toBe(false); // a target that never moves keeps its champion

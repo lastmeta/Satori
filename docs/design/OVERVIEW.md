@@ -19,8 +19,8 @@ does ([central.md](central.md)):
 ```
 page load ──▶ register with central (identity + vault public keys)
 first poll 5–30 min later, then every 11 h (or Poll now):
-  GET observations ──▶ store (DuckDB) ──▶ forecast streams with a new row ──▶ queue ──▶ login (identity) ──▶ POST predictions
-                       insert or ignore    engine: {model, t1, t2}            pending      signs the challenge    batch; kept on failure
+  GET observations ──▶ store (DuckDB) ──▶ history for new streams ──▶ forecast streams with a new row ──▶ queue ──▶ login (identity) ──▶ POST predictions
+                       insert or ignore    once per stream (central)    each one's bvar spec, evolved      pending      signs the challenge    batch; kept on failure
 ```
 
 1. **Register** on every page load: `wallet-pubkey` (identity), `vault-pubkey`
@@ -31,16 +31,25 @@ first poll 5–30 min later, then every 11 h (or Poll now):
    stream, under 48 h old). The next poll time is stored, so a reload keeps
    the 11 h cadence; a due one waits Lite's 5–30 min start jitter.
 3. **Store** each observation once per (stream, whole second).
-4. **Forecast** only the streams that got a new row, from all their stored
+4. **History**: a stream seen for the first time gets its past from central
+   (`/observations/history`, an addition beyond Lite; up to 1,000 hourly rows),
+   stored older than its newest polled row, so it never triggers a prediction
+   ([central.md](central.md#history-an-addition-beyond-lite)). Central2 answers
+   404 today: remembered for a day, then asked again.
+5. **Forecast** only the streams that got a new row, from all their stored
    history ([engine.md](engine.md)): `t1` 12 h ahead and `t2` 24 h ahead.
-   `bar1` is a Bayesian AR(1) on 12 h returns after `../namaste_club`. It is
-   shrunk toward the random walk, iterated two steps, each step clamped, and
-   faded toward persistence by a weight from a rolling backtest. It is `naive`
-   (the last value) until the stream has 6 lag pairs of back-to-back 12 h
-   buckets, so it needs an observation every 12 h: about 4 days of 11 h polls.
-   A stream central updates once a day, or a neuron that polls once a day,
-   stays `naive`.
-5. **Submit** everything pending right after the poll, as Lite's payload
+   Each target has its **own spec**, drawn from the identity: `bvar`, a
+   Bayesian VAR(1) of the target and 1–3 companion streams (namaste_club's
+   Minnesota prior with the spec's λ1 and λ2), faded toward persistence by its
+   own backtest. After each poll one mutation of each spec (swap, add or drop
+   a companion, move λ1 or λ2) is scored on the same backtest and kept only if
+   it beats the champion by the margin, so neurons start differently and each
+   keeps what predicts better. A spec that can't fit yet falls back to `bar1`
+   (the AR(1) of the target alone), then `naive` (the last value); the
+   prediction's `model` says which. `bar1` needs 6 lag pairs of back-to-back
+   12 h buckets (about 4 days of 11 h polls without history); `bvar` 7–9
+   aligned rows.
+6. **Submit** everything pending right after the poll, as Lite's payload
    (`value` = t2, `t1_value`, `observed_at`, `hash`, byte-identical strings).
    A batch central rejects (`successful == 0`) or a failed call keeps the
    predictions for the next poll; ones older than 2 × 11 h are dropped.
@@ -86,10 +95,10 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
 | keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Docker files, Unlock/Lock the vault, sign and verify Evrmore messages. Each key's Base (EVM) address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)). Also the **Nostr key** (`nostr.yaml`, random, plaintext as in Docker; [nostr.md](nostr.md)). |
 | central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash, with Python's float strings from `src/py.js`); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. |
 | chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
-| db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule). Times are unix seconds. |
-| engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). Pure, no dependency. |
+| db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule). Times are unix seconds. |
+| engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (identity-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
-| neuron | `src/neuron/` | `register`, `cycle` (poll → store → forecast → submit), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends, the Base settings. |
+| neuron | `src/neuron/` | `register`, `cycle` (poll → store → history → forecast → submit), `history.js` (central's history for new streams), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends, the Base settings. |
 | ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (the keys with their Evrmore, Base and Nostr identifiers, Unlock/Lock, the storage line and Install Satori; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |
 | pwa | `src/pwa/`, `public/manifest.webmanifest` | The installed app ([pwa.md](pwa.md)): the manifest and the Satori icons; the service worker (`sw.js`, written to `dist/sw.js` by a build-only Vite plugin; none on the dev server): precaches the page and the hashed assets (DuckDB's wasm and worker), cache first for `/assets/`, network first for the page, nothing else touched; "Update ready, reload"; Install Satori (Chromium's prompt, Safari's Add to Dock / Home Screen); persistent storage asked for at start, shown on Home. It never runs the neuron while closed. |
 | agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page, under the same guards; `<body data-screen>` and `data-test` on what carries data or an action. [/llms.txt](../../public/llms.txt) is the one reference for both: what the app is, how to drive it, what's possible, where the code is, and that pull requests are welcome. |
@@ -165,6 +174,8 @@ Step 6 added `viem` 2.37.0 (released 2025-09-02, as the parked design
 planned): ABI encoding, multicall, transaction serialization and the RPC
 client for Base; signing stays in `src/keys` (`@noble/curves`). The
 installable app added none (no Workbox: the service worker is about 25 lines).
+`bvar` added none (plain JS k×k solves; its seeded draws use `@noble/hashes`'
+sha256, already a dependency).
 
 ## Verify
 
@@ -180,8 +191,16 @@ installable app added none (no Workbox: the service worker is about 25 lines).
   save); engine (namaste_club's own tests ported, recovery and shrinkage,
   minimum data, gaps, a random-walk guard, and parity with namaste_club's code:
   `scripts/engine_parity.py`; the step: the same series on any grid gives the
-  same model); db (migrations from steps 2, 3 and 4, a change of central, the
-  relay tables and their dedupe); nostr (every event rebuilt byte for byte
+  same model; the horizon in 1, 2 and 3 steps); bvar (every equation's
+  posterior mean, σ² and prior against namaste_club's `bvar.py` to 9 decimals,
+  `scripts/bvar_parity.py`; with no companions it is bar1; a leading
+  companion learned; gaps; per-series transforms; the fallbacks; no
+  look-ahead in the backtest); evolution (the identity-seeded RNG, the first
+  draw, each mutation, the margin, one proposal per poll, a leading
+  companion found, neurons diverging); central's history (200, 404 held for a
+  day, partial lists, 4 calls at a time, backfilled rows never predicted);
+  db (migrations from steps 2–6, a change of central, the relay tables and
+  their dedupe, specs, history inserts, doubles bit for bit); nostr (every event rebuilt byte for byte
   against satorilib's own client and nostr-sdk's signatures, Lite's value
   unwrapping on its own function's outputs, Lite's pinned relay uuid, the
   catalog, intake parsing, the relay client's REQ/EOSE/OK and reconnect backoff
@@ -208,7 +227,8 @@ installable app added none (no Workbox: the service worker is about 25 lines).
   central URL setting: another central drops the queue and the list, which
   refill from it, after a poll still running with the old one; one Unlock at a
   time; the engine: naive until 8 back-to-back buckets of 12 h, then bar1 with
-  node's numbers); Docker import with a vault mismatch and Settings
+  node's numbers; a central with history: bvar for every stream on the first
+  Poll now, with node's specs and numbers); Docker import with a vault mismatch and Settings
   (https only, an unreachable central shown); restore from words; two setups
   at once (one wins) leaving other `meta` rows alone. Also an OPFS persistence
   smoke under the CSP. Nostr (`e2e/nostr.spec.js`) against two test relays,
@@ -253,8 +273,9 @@ installable app added none (no Workbox: the service worker is about 25 lines).
 - Parity vectors come from satorilib, the Docker image and namaste_club
   (`test/fixtures/README.md`; `scripts/`).
 - `node scripts/backtest.mjs`: the engine against persistence at 24 h on real
-  history, read only ([engine.md](engine.md#measured)): a tie on 400 days of
-  21 crypto pairs.
+  history, read only, and 5 simulated neurons running bvar with evolution on
+  21 crypto pairs at once ([engine.md](engine.md#measured)): all three tie on
+  400 days.
 - Dev app: `npm run dev` → http://localhost:5180; for Base, `node scripts/fork.mjs start`
   (an anvil fork on 8545, which the dev server proxies as `/rpc`). The
   installable app: `npm run build && npm run preview` → http://localhost:5181.

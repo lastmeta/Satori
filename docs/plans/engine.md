@@ -26,13 +26,21 @@ same vote. A fixable flaw, not a browser limit. The alternative studied:
 Inferred: on random-walk prices no rule beats ~50%; this one at least matches
 Docker's spread of votes.
 
-## Diversity between nodes (optional)
+## Diversity between nodes (built)
 
-Docker deliberately makes nodes differ: hyperparameters are redrawn on every fit
-(`adapters/_rng.py`; `xgb.py:280-386`; `ets_model.py:63-74`), and namaste_club
-draws coefficients from the posterior per worker. If wanted here, seed an RNG
-from the identity pubkey and draw λ1 or a small posterior perturbation from it.
-The accuracy cost should be bounded and measured with `scripts/backtest.mjs`.
+Built as the owner directed (2026-10-15, [../intent/engine.md](../intent/engine.md)):
+each central target has its own `bvar` spec (1–3 companion streams, λ1, λ2),
+drawn from the identity and evolved after each poll
+([../design/engine.md](../design/engine.md#bvar-a-model-per-central-stream-unique-to-each-neuron)).
+Left for later:
+
+- **Public specs.** Nostr subscriptions will make a neuron's data choices
+  visible; the specs stay local until then.
+- **Nostr and Base streams in bvar.** A Nostr stream can be a companion once
+  its cadence is regridded to central's 12 h buckets; their targets once their
+  histories align with central's.
+- **More algorithms** (the first axis of uniqueness): one algorithm for now.
+- **Lag 2, time features**, the posterior draws: left out, as for `bar1`.
 
 ## Which value goes where
 

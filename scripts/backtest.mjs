@@ -1,7 +1,9 @@
 // Backtest the engine against persistence at central's 24 h horizon, on real
 // history, read only (docs/design/engine.md#measured):
 //
-//   node scripts/backtest.mjs [days = 400] [SYMBOL,SYMBOL,...]
+//   node scripts/backtest.mjs [days = 400] [SYMBOL,SYMBOL,...] [--neurons 5] [--margin 0.05] [--window 28] [--backfill]
+//
+// BACKTEST_CACHE=dir keeps the downloaded closes there (and reads them back).
 //
 // History:
 // - the Base registry's hourly history (getHistoryPage, an eth_call on Base
@@ -17,8 +19,16 @@
 // (central/src/scripts/score.py:249-253), as is persistence (the last value).
 // Errors are |forecast − actual| / actual; medians are pooled over forecasts,
 // as namaste_club reports them (NC/calibration.py:4-10).
+//
+// Then the neurons: each (an identity seed) runs bvar with evolution on all the
+// symbols at once, as the app runs central's streams (src/engine/evolve.js:
+// each symbol a target, the others its pool), on the same polls; they are
+// scored like bar1 and persistence. --backfill starts each neuron with 1,000
+// hourly closes, as central's history gives a new neuron.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { keccak_256 } from '@noble/hashes/sha3';
-import { forecast, STEP_S } from '../src/engine/index.js';
+import { forecast, STEP_S, HOLDOUT } from '../src/engine/index.js';
+import { runModels, MARGIN } from '../src/engine/evolve.js';
 
 const RPC = 'https://sepolia.base.org';
 const REGISTRY = '0x1ED75AB0a66Ba7d23C3E5c84798e90205E76743a';
@@ -30,8 +40,20 @@ const POLL_S = 11 * 3600; // Lite's poll (start.py:4785-4876)
 const HORIZON_S = 24 * 3600;
 const YOUNG_S = 30 * 86400;
 
-const days = Number(process.argv[2] ?? 400);
-const symbols = process.argv[3] ? process.argv[3].split(',') : SYMBOLS;
+const flag = (name, dflt) => {
+  const i = process.argv.indexOf(`--${name}`);
+  if (i < 0) return dflt;
+  const v = process.argv[i + 1];
+  return v === undefined || v.startsWith('--') ? true : v;
+};
+const args = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.match(/^--(neurons|margin|window)$/));
+const days = Number(args[0] ?? 400);
+const symbols = args[1] ? args[1].split(',') : SYMBOLS;
+const NEURONS = Number(flag('neurons', 5));
+const margin = Number(flag('margin', MARGIN));
+const window = Number(flag('window', HOLDOUT));
+const BACKFILL = flag('backfill', false) ? 1000 * 3600 : 0; // central's history: up to 1,000 hourly rows
+const CACHE = process.env.BACKTEST_CACHE;
 const hex = (bytes) => Buffer.from(bytes).toString('hex');
 const word = (n) => BigInt(n).toString(16).padStart(64, '0');
 const selector = (sig) => hex(keccak_256(new TextEncoder().encode(sig)).slice(0, 4));
@@ -58,8 +80,19 @@ async function registrySeries() {
   return out;
 }
 
-/** A symbol's 1 h closes over the last `days`: [[ts at the hour's end, close]]. */
+/** A symbol's 1 h closes over the last `days`: [[ts at the hour's end, close]] (kept in BACKTEST_CACHE). */
 async function binanceSeries(symbol) {
+  const file = CACHE && `${CACHE}/${symbol}-${days}.json`;
+  if (file && existsSync(file)) return JSON.parse(readFileSync(file, 'utf8'));
+  const series = await fetchBinance(symbol);
+  if (file && series.length) {
+    mkdirSync(CACHE, { recursive: true });
+    writeFileSync(file, JSON.stringify(series));
+  }
+  return series;
+}
+
+async function fetchBinance(symbol) {
   const series = [];
   let start = Date.now() - days * 86400e3;
   for (;;) {
@@ -132,17 +165,166 @@ for (const { name, series } of await registrySeries().catch((err) => (console.lo
   summary(name, rows);
   all.push(...rows);
 }
+const market = [];
 for (const symbol of symbols) {
   const series = await binanceSeries(symbol).catch(() => []);
   if (series.length < 24 * 30) {
     console.log(`${symbol}: ${series.length} hours; skipped`);
     continue;
   }
+  market.push({ symbol, series });
+  if (BACKFILL) continue;
   const rows = simulate(series);
   summary(symbol, rows);
   all.push(...rows);
 }
-console.log('');
-summary('all', all);
-summary('first 30 days', all.filter((r) => r.young));
-summary('after 30 days', all.filter((r) => !r.young));
+if (!BACKFILL) {
+  console.log('');
+  summary('all', all);
+  summary('first 30 days', all.filter((r) => r.young));
+  summary('after 30 days', all.filter((r) => !r.young));
+}
+neurons(market);
+
+/**
+ * The neurons: every symbol a target with the others as its pool, polled together
+ * every 11 h (each poll stores each symbol's latest close if it is new), each
+ * target forecast by runModels (bvar + evolution) and, for comparison, bar1.
+ */
+function neurons(symbolsData) {
+  const names = symbolsData.map((d) => d.symbol);
+  const start = Math.max(...symbolsData.map((d) => d.series[0][0])) + BACKFILL;
+  const end = Math.min(...symbolsData.map((d) => d.series.at(-1)[0]));
+  const polls = [];
+  for (let t = start; t + HORIZON_S <= end; t += POLL_S) polls.push(t);
+  const at = (series, t) => { // the last close at or before t, and the first ≥ t + 24 h
+    let lo = 0;
+    let hi = series.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (series[mid][0] <= t) lo = mid; else hi = mid - 1;
+    }
+    let j = lo;
+    while (j < series.length && series[j][0] < t + HORIZON_S) j++;
+    return { now: series[lo], later: series[j] };
+  };
+  console.log(`\nneurons: bvar with evolution on ${names.length} symbols at once, ${polls.length} polls every 11 h` +
+    `${BACKFILL ? ', each starting with 1,000 hourly closes' : ', from no history'}; margin ${margin}, scored on ${window} origins`);
+  const bar1Rows = [];
+  const results = [];
+  for (let n = 0; n < NEURONS; n++) {
+    const seed = `backtest-neuron-${n}`;
+    const histories = new Map(symbolsData.map((d) => [d.symbol,
+      BACKFILL ? d.series.filter(([ts]) => ts <= start && ts > start - BACKFILL).map(([ts, value]) => ({ ts, value })) : []]));
+    let specs = new Map();
+    const rows = [];
+    let proposals = 0;
+    let accepted = 0;
+    const ms = [];
+    const ops = {};
+    for (const [p, t] of polls.entries()) {
+      const fresh = [];
+      const truth = new Map();
+      for (const d of symbolsData) {
+        const { now, later } = at(d.series, t);
+        const h = histories.get(d.symbol);
+        if (h.at(-1)?.ts === now[0]) continue;
+        h.push({ ts: now[0], value: now[1] });
+        fresh.push(d.symbol);
+        truth.set(d.symbol, { value: now[1], actual: later?.[1] });
+      }
+      const t0 = performance.now();
+      const out = runModels({ fresh, histories, specs, seed, margin, window });
+      ms.push(performance.now() - t0);
+      for (const [k, row] of out.specs) specs.set(k, row);
+      for (const k of fresh) {
+        const f = out.forecasts.get(k);
+        const { value, actual } = truth.get(k);
+        if (f.proposal) {
+          proposals++;
+          ops[f.proposal.op] = (ops[f.proposal.op] ?? [0, 0]).map((x, i) => x + (i === 0 ? 1 : f.proposal.accepted ? 1 : 0));
+          if (f.proposal.accepted) accepted++;
+        }
+        if (!(actual > 0)) continue;
+        const err = (x) => Math.abs(x - actual) / actual;
+        const row = { symbol: k, poll: p, young: t - start < YOUNG_S, model: f.model, bvar: err(f.t2), persist: err(value) };
+        if (n === 0) {
+          const b = forecast(histories.get(k));
+          bar1Rows.push({ symbol: k, poll: p, bar1: err(b.t2) });
+        }
+        rows.push(row);
+      }
+    }
+    const b1 = new Map(bar1Rows.map((r) => [`${r.symbol}:${r.poll}`, r.bar1]));
+    for (const r of rows) r.bar1 = b1.get(`${r.symbol}:${r.poll}`);
+    results.push({ seed, rows, specs, proposals, accepted, ms, ops });
+  }
+  const med = (rows, key) => median(rows.map((r) => r[key]));
+  const line = (label, rows) => {
+    const m = med(rows, 'bvar');
+    const p = med(rows, 'persist');
+    const b = med(rows, 'bar1');
+    return [label.padEnd(26), String(rows.length).padStart(6), pct(m).padStart(9), pct(b).padStart(9), pct(p).padStart(9),
+      (m / p).toFixed(4).padStart(9), (m / b).toFixed(4).padStart(9), (b / p).toFixed(4).padStart(9),
+      `${((rows.filter((r) => r.model === 'bvar').length / rows.length) * 100).toFixed(0)}%`.padStart(6)].join(' ');
+  };
+  console.log(['neuron'.padEnd(26), 'n'.padStart(6), 'bvar'.padStart(9), 'bar1'.padStart(9), 'persist'.padStart(9),
+    'bvar/pers'.padStart(9), 'bvar/bar1'.padStart(9), 'bar1/pers'.padStart(9), 'bvar%'.padStart(6)].join(' '));
+  for (const r of results) {
+    console.log(`${line(r.seed, r.rows)}  accepted ${r.accepted}/${r.proposals} (${((r.accepted / r.proposals) * 100).toFixed(1)}%)`);
+  }
+  const pooled = results.flatMap((r) => r.rows);
+  console.log(line('all neurons', pooled));
+  console.log(line('  first 30 days', pooled.filter((r) => r.young)));
+  console.log(line('  after 30 days', pooled.filter((r) => !r.young)));
+  // per-forecast: how often bvar is closer than bar1
+  const closer = pooled.filter((r) => r.bvar < r.bar1).length / pooled.length;
+  const farther = pooled.filter((r) => r.bvar > r.bar1).length / pooled.length;
+  console.log(`bvar closer than bar1 on ${(closer * 100).toFixed(1)}% of forecasts, farther on ${(farther * 100).toFixed(1)}%`);
+  // per symbol, all neurons pooled
+  const perSymbol = names.map((s) => {
+    const rs = pooled.filter((r) => r.symbol === s);
+    return `${s.replace('USDT', '')} ${(med(rs, 'bvar') / med(rs, 'bar1')).toFixed(3)}`;
+  });
+  console.log(`bvar/bar1 per symbol: ${perSymbol.join(', ')}`);
+  const ops = {};
+  for (const r of results) for (const [op, [n, a]] of Object.entries(r.ops)) ops[op] = [(ops[op]?.[0] ?? 0) + n, (ops[op]?.[1] ?? 0) + a];
+  console.log(`accepted by mutation: ${Object.entries(ops).map(([op, [n, a]]) => `${op} ${a}/${n}`).join(', ')}`);
+  // divergence: each target's final champion across the neurons
+  const short = (u) => u.replace('USDT', '');
+  let distinct = 0;
+  let jac = 0;
+  let pairs = 0;
+  const sizes = [0, 0, 0, 0];
+  const l1 = {};
+  const l2 = {};
+  for (const s of names) {
+    const champs = results.map((r) => r.specs.get(s).spec);
+    distinct += new Set(champs.map((c) => JSON.stringify({ ...c, companions: [...c.companions].sort() }))).size;
+    for (const c of champs) {
+      sizes[c.companions.length]++;
+      l1[c.lambda1] = (l1[c.lambda1] ?? 0) + 1;
+      l2[c.lambda2] = (l2[c.lambda2] ?? 0) + 1;
+    }
+    for (let i = 0; i < champs.length; i++) {
+      for (let j = i + 1; j < champs.length; j++) {
+        const a = new Set(champs[i].companions);
+        const b = new Set(champs[j].companions);
+        const inter = [...a].filter((x) => b.has(x)).length;
+        jac += inter / new Set([...a, ...b]).size;
+        pairs++;
+      }
+    }
+  }
+  console.log(`final champions: ${distinct} distinct specs of ${names.length * results.length} (${names.length} targets × ${results.length} neurons);` +
+    ` mean companion overlap (Jaccard) between two neurons on a target ${(jac / pairs).toFixed(3)};` +
+    ` companions 1/2/3: ${sizes.slice(1).join('/')}; λ1 ${JSON.stringify(l1)}; λ2 ${JSON.stringify(l2)}`);
+  for (const s of names.slice(0, 4)) {
+    console.log(`  ${short(s)}: ${results.map((r) => {
+      const c = r.specs.get(s);
+      return `${c.spec.companions.map(short).join('+')} λ${c.spec.lambda1}/${c.spec.lambda2} g${c.generation} a${c.accepted}`;
+    }).join(' | ')}`);
+  }
+  const allMs = results.flatMap((r) => r.ms);
+  console.log(`runModels per poll (${names.length} targets): median ${median(allMs).toFixed(1)} ms, max ${Math.max(...allMs).toFixed(1)} ms`);
+}

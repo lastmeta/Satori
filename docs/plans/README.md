@@ -14,7 +14,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 2. ✅ **Two keys + Docker import/export**: identity (unencrypted) and vault
    (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
-4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence ([../design/engine.md](../design/engine.md)); left for later: [engine.md](engine.md).
+4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence; then `bvar`, each central stream's own Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved after each poll, with history from central ([../design/engine.md](../design/engine.md)); left for later: [engine.md](engine.md).
 5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [transport.md](transport.md). A deployed app needs a wss relay ([issue](../issues/relays-not-wss.md)).
 6. ✅ **Base**: delegate prediction power, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [chain.md](chain.md). A local fork for the dev server: `scripts/fork.mjs`.
 7. ✅ **Finishing pass**: simpler code that follows what Lite and satorilib
@@ -67,12 +67,13 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 ### Inherent (as in Lite, or the browser's)
 
 - Central's batch holds only each stream's latest observation and the neuron
-  polls every 11 h, so local history grows by about two points per stream a
-  day (Lite has the same limit). The engine needs an observation every 12 h
-  (6 lag pairs of back-to-back 12 h buckets): with 11 h polls a stream gets
-  `bar1` after about 4 days. A daily stream (`crypto_fear_greed`) or a tab
-  open only part of the day (one poll a day) stays `naive`; gaps are not
-  bridged.
+  polls every 11 h, so without central's history (`/observations/history`,
+  404 on central2 until it is deployed) local history grows by about two
+  points per stream a day (Lite has the same limit). The engine needs an
+  observation every 12 h (6 lag pairs of back-to-back 12 h buckets): with
+  11 h polls a stream gets `bar1` after about 4 days and `bvar` a little
+  later. A daily stream (`crypto_fear_greed`) or a tab open only part of the
+  day (one poll a day) stays `naive`; gaps are not bridged.
 - Browsers throttle timers in background tabs: a poll can run late, never
   early. A tab closed past its poll time polls 5–30 min after the next load.
 - A relay keeps one of two replaceable events with the same `created_at`

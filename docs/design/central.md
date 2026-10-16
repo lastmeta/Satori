@@ -11,7 +11,7 @@ at `:65`).
 ```
 page load ─▶ register (wallet-pubkey, vault-pubkey)            once per start
          └─▶ schedule: first poll 5–30 min later, then every 11 h
-poll ─▶ GET observations/batch ─▶ store (insert or ignore) ─▶ forecast streams with a new row
+poll ─▶ GET observations/batch ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams with a new row
      ─▶ queue {value: t2, t1_value: t1, observed_at, hash} ─▶ login (identity) ─▶ POST predictions/batch
 ```
 
@@ -42,7 +42,7 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
 | Store | `value` = float; epoch = `observed_at`, falling back to `ts` (`data_helper.py:40-93`), truncated to whole seconds (`engine.py:669-673`); `INSERT OR IGNORE` on `(stream_uuid, epoch)` (`stream_store.py:48-56,150-170`); the stream's name/meta are upserted (`server.py:1334-1358`). | Same rule into `observations (stream_uuid, ts, value)`, primary key `(stream_uuid, ts)`; `streams (uuid, name, meta)`. Rows with no stream, no finite value or no time are dropped. |
 | Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Same: `addObservations` returns the streams that got a new row; only those are forecast. |
-| Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `forecast(points) → {model, t1, t2} \| null` (`src/engine/`). The model is `bar1` (a Bayesian AR(1) on 12 h returns, faded toward persistence) or `naive` ([engine.md](engine.md)): t1 is 12 h ahead, t2 24 h. |
+| Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `runModels` (`src/engine/evolve.js`) for the streams with a new row, over every central stream's history: each target's own `bvar` spec (a Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved), falling back to `bar1` (a Bayesian AR(1) on 12 h returns) or `naive` ([engine.md](engine.md)): t1 is 12 h ahead, t2 24 h. |
 | Payload | `{stream_uuid, stream_name, value: str(t2), t1_value: str(t1), observed_at: str(time.time() at prediction), hash: sha256(value + observed_at)[:16]}` (`engine.py:1044-1106,1188-1206`). | Byte-identical: `pyFloatStr` mimics Python's `str(float)`; checked against a fixture made in the Docker image (below). |
 | Queue | `collectAndSubmitPredictions` right after the poll (`start.py:4693-4736`, called at `:4870`); `flushPredictionQueue` keeps the whole queue when `successful == 0` or the call failed, and clears it otherwise (`engine.py:432-454`). | Predictions are stored with `status = 'pending'`; after every successful poll the pending ones made in the last 2 × 11 h are sent (older ones are dropped); on `successful > 0` all are marked `sent`, otherwise they stay pending for the next cycle. |
 | Submit | Log in (`POST /api/v1/auth/login`, headers `wallet-pubkey`, `message`, `signature` by the **identity**; `server.py:87-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
@@ -59,6 +59,7 @@ other `server.py` methods for routes central-lite does not serve.
 |---|---|---|---|
 | `POST /api/v1/peer/register` (headers `wallet-pubkey`, `vault-pubkey`, `nostr-pubkey`, `neuron-version`) → `{success, peer_id, wallet_address, vault_address, nostr_pubkey, message}` | none | `c/main.py:705-838` | every page load; again when the central URL changes |
 | `GET /api/v1/observations/batch?limit=100` → `[{id, observed_at, value, hash, stream_id, stream: {uuid, name, meta, …}, ts, stream_uuid}]` | none | `c/main.py:292-341` | each poll |
+| `GET /api/v1/observations/history?stream_uuid=<uuid>&limit=1000&since=<now − 1,000 h>` → `[{id, stream_uuid, observed_at, value, ts}]`, oldest first | none | being added to central (2026-10-15); central2 answers 404 today | once per stream ([below](#history-an-addition-beyond-lite)) |
 | `GET /api/v1/auth/challenge` → `{challenge}` (a UUID) | none | `c/main.py:268-281` | before each login |
 | `POST /api/v1/auth/login` (headers `wallet-pubkey`, `message`, `signature`) → `{access_token, expires_in: 3600, …}` | signature | `c/auth.py:21-86` | before each submission, once more on a 401 |
 | `POST /api/v1/predictions/batch` → `{total_submitted, successful, failed, prediction_ids, errors}` | Bearer | `c/main.py:483-602`; schema `central/src/models/schemas.py:92-113` | right after each poll, when anything is pending |
@@ -66,6 +67,43 @@ other `server.py` methods for routes central-lite does not serve.
 
 Central silently maps an unknown `stream_uuid` to its `bitcoin` stream
 (`c/main.py:536-551`), so the browser only submits uuids it received.
+
+## History: an addition beyond Lite
+
+Lite has no history call: its local history grows by one row per stream per
+poll, about two a day, so `bvar` (and `bar1`) would wait days for aligned
+rows. Central is adding `GET /api/v1/observations/history` (2026-10-15):
+`stream_uuid`, `limit` 1..1000 (default 500), `since` (unix seconds,
+exclusive), answering `[{id, stream_uuid, observed_at, value, ts}]` oldest to
+newest. `src/neuron/history.js`:
+
+- **Which streams**: those with `streams.history_at` null: a stream first seen
+  in a poll, and on load every stream that has never been fetched (all of
+  them, the first time a neuron runs this version). Once per stream per
+  central; another central (Settings) fetches again.
+- **When**: on load (in the background), and in each poll right after its
+  rows are stored, before the forecasts, so the first poll of a new neuron
+  already forecasts from history. One run at a time; a call during a run
+  gets one more run after it.
+- **The call**: `limit=1000&since=<now − 1,000 h>`. Central observes hourly
+  (`central/scheduler.py:76`), so that is the last ~41 days whether the route
+  counts `limit` from `since` forward or back from now. At most 4 calls at a
+  time.
+- **The rows**: normalized exactly as poll rows (`observed_at`, else `ts`, in
+  whole seconds; rows with no finite value, no time or another stream are
+  dropped), then **insert or ignore, only rows older than the stream's
+  newest polled row**. A backfilled row never triggers a prediction: only a
+  poll's new row does, as in Lite. (A row newer than the last poll would
+  otherwise be stored first, and the next poll's copy of it would not be
+  new, so that stream would not be predicted for 11 h.)
+- **Failures** never break the poll. The first failure stops the run; the
+  streams not fetched wait for the next run (the next poll or load). A **404**
+  means the route is missing on this central: it is quiet (no warning) and
+  remembered for a day (`meta.central_history.retryAt`), then asked again.
+- **Shown**: Home's Central card has a History line ("Oct 16, 09:30 · 83
+  streams, 81,234 rows", or "Not on this central (central 404: Not Found);
+  next try …"); `status().central.history` = the last run `{at, url, streams,
+  rows, left, error, retryAt}` and `needed` (streams with no history yet).
 
 ## Payload strings (parity verified)
 
@@ -130,4 +168,5 @@ relay list and Base's config are read from the new central at once.
 | The observations GET sends no token; satorilib sends one through `_makeAuthenticatedCall` (`server.py:1322`). | Central does not ask for one (`c/main.py:292-293`), and the poll then never needs a login. |
 | Register is not retried in a loop (Lite's `authWithCentral` backs off from 30 s up to 6 h, `start.py:4976-5006`). It runs again on the next load or a central URL change. | In practice Lite does not retry either: `checkin` swallows register errors (`server.py:405-414`) and `_getChallenge` falls back to a timestamp when central is down (`server.py:65-85`), so `checkin` almost never raises and the backoff almost never fires. |
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
-| The model is `bar1`/`naive` after namaste_club, not Lite's adapters. | [engine.md](engine.md#deviations-and-why) |
+| The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the identity and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
+| Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |

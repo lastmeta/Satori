@@ -24,8 +24,3 @@ today, so nothing waits on an answer.
    an https page can't open, so a deployed app has no Nostr until a `wss://`
    relay is listed (TLS in front of satorian, and central listing it). Who
    sets it up, and where? ([../issues/relays-not-wss.md](../issues/relays-not-wss.md))
-5. **Per-node diversity.** Docker redraws hyperparameters on every fit, so its
-   nodes differ; every browser neuron runs the same `bar1` on the same data
-   and sends the same numbers. An RNG seeded from the identity could draw λ or
-   a small posterior perturbation per node, at a bounded and measured accuracy
-   cost ([../plans/engine.md](../plans/engine.md)). Wanted?

@@ -275,12 +275,14 @@ After each poll that brought new rows, for each target that got one:
    pool, add one (fewer than 3), drop one (more than 1), or move λ1 or λ2 to
    a neighbouring grid value.
 4. Score the challenger on the same origins.
-5. Keep it only if its score beats the champion's by the margin (2 %:
-   challenger < champion × 0.98). generation + 1; accepted + 1 if kept.
+5. Keep it only if its score beats the champion's by the margin (5 %:
+   challenger < champion × 0.95). generation + 1; accepted + 1 if kept.
 6. Forecast with the champion; store the spec, its score and counts.
 
-The margin keeps a neuron from swapping on noise; the backtest decides
-whether it is enough ([Measured](#measured)).
+The margin keeps a neuron from swapping on noise. It started at 2 %; the
+backtest showed that chasing noise (7 % of proposals kept, the λ's drifting
+to the loosest values, 0.27 % worse than `bar1`), so it ships at 5 %
+([Measured](#measured)).
 
 **CPU.** Everything is running sums and k×k solves (k ≤ 4); the slow part
 is reading the histories. The cycle records the engine's time in the last
@@ -435,9 +437,41 @@ From Satori Lite:
   1% compounding t1 = 148.87674, t2 = 150.34611 with 28 samples; the point an
   hour on, r0 = 110/104 − 1, t1 = 108.50565, t2 = 108.85275) came out the
   same from namaste_club's code, and the zigzag also by hand from the formula.
+- `npm test`, `bvar` (`src/engine/bvar.test.js`, `evolve.test.js`):
+  - **parity with namaste_club's `bvar.py`**: `scripts/bvar_parity.py` runs
+    `train_bvar_model` (no time features) and `iterate_forecast` on 6 tables
+    of returns (2–4 series, 7–150 rows, every λ grid edge, a series that never
+    moves, a step at the ±50 % clamp) and catches the prior variances on
+    their way into `np.diag`; every equation's prior, posterior mean, σ² and
+    each series' growth match to 9 decimals (`test/fixtures/bvar-parity.json`);
+  - with no companions it is `bar1` (φ, weight, t1, t2 on every parity case);
+    a companion that leads the target is learned (its coefficient 0.6 comes
+    back in 0.45–0.75) and beats `bar1` in the backtest; λ2 → 0 shrinks it
+    away; rows need every series in three back-to-back buckets; each series'
+    own transform; the fallbacks (too few rows, no companion, a companion
+    with no history); a stale companion's first lag is 0;
+  - **no look-ahead**: changing every series after an origin's actual leaves
+    that origin's error unchanged; where the spec can't fit at an origin,
+    `bar1`'s error stands in;
+  - the identity-seeded RNG (the same parts the same stream); the first
+    draw (reproducible, valid, 40 identities give 36+ specs and every count
+    and λ); each mutation changes one thing to a valid spec (no add at 3, no
+    drop at 1, λ at a grid end moves inward); the 5 % rule; one proposal per
+    poll, none below 5 origins; evolution finds a leading companion and
+    keeps it; six identities end with different champions.
+- `npm test`, the cycle: history and engine (`src/neuron/history.test.js`,
+  `neuron.test.js`): the backfill against a mocked fetch (200, 404 held a
+  day per central, partial lists, a failure stopping the run, 4 calls at a
+  time, rows counted across overlapping calls), backfilled rows never
+  predicted while the poll's new row is; specs drawn, stored and evolved
+  over 40 polls, `bvar` predictions; the same identity draws the same specs.
 - `npm run e2e`: the app in Chrome makes `naive` until the stream has 8
   back-to-back buckets, then `bar1` with the same t1, t2, φ and weight as
-  node, and sends them as Lite's payload.
+  node, and sends them as Lite's payload. With a stub central that serves
+  history, the first Poll now backfills 3 streams (600 hourly rows each) and
+  forecasts each with `bvar`, with the same specs, scores and numbers as node
+  running `runModels` with the identity's pubkey; the Model column shows
+  "bvar · +eth +gold" and the History line "3 streams, 1,800 rows".
 - Live, on the dev server against central2, in a fresh profile with throwaway
   keys: Poll now stored 83 streams and central accepted 83 of 83 predictions.
   Every stream was `naive`, with t1 = t2 = its latest value: a new neuron has
@@ -457,34 +491,89 @@ median |forecast − actual| / actual, pooled over forecasts.
 
 History available on 2026-10-15:
 
-- **Central** serves only each stream's latest observation, so it has none.
+- **Central** serves only each stream's latest observation, so it has none
+  (its history route is being added).
 - **Base registry**: one stream, 2 daily entries. Too little to score.
 - **Binance 1 h closes** (the series namaste_club trains on): 21 of its 24
   symbols over the last 400 days (MKR, EOS and XMR are gone). 871 forecasts
   each, 18,291 in all.
 
+### `bar1` against persistence
+
 | | forecasts | engine | unfaded (w = 1) | persistence | engine / persistence |
 |---|---:|---:|---:|---:|---:|
-| all | 18,291 | 1.792% | 1.791% | 1.791% | 1.0006 |
-| first 30 days of history | 1,386 | 1.927% | 1.930% | 1.910% | 1.0088 |
-| after 30 days | 16,905 | 1.777% | 1.779% | 1.779% | 0.9991 |
+| all | 18,291 | 1.860% | 1.859% | 1.854% | 1.0035 |
+| first 30 days of history | 1,386 | 2.003% | 2.003% | 1.974% | 1.0147 |
+| after 30 days | 16,905 | 1.844% | 1.844% | 1.841% | 1.0016 |
 
-- Per symbol, engine / persistence ranges from 0.981 (UNI) to 1.055 (FIL).
-  It is at or below 1 on 9 of the 21 symbols.
-- The engine is closer than persistence on 48.8% of forecasts and farther on
-  49.5%. The rest are equal (`naive`, or w = 0).
+- Per symbol, engine / persistence ranges from 0.984 (ETH) to 1.049 (FIL).
+  It is at or below 1 on 10 of the 21 symbols.
+- The engine is closer than persistence on 48.6% of forecasts and farther on
+  49.7%. The rest are equal (`naive`, or w = 0).
 - `bar1` makes 99% of the forecasts (88% in the first 30 days). Its mean
-  weight is 0.97.
+  weight is 0.99.
 
-Reading: on liquid crypto pairs the engine **ties persistence**. It neither
-wins nor loses in a way that matters (+0.06% of persistence's error overall).
-The shrinkage already keeps φ small, so the unfaded model is itself within a
-hair of persistence, and the fade has little to correct. The fade matters where
-the model is clearly worse: w = 2 − ratio, so it halves the model at 1.5×
-persistence's error and drops it at 2×. On streams that do not move
-(persistence error 0) it pins the model to persistence. namaste_club found
-those streams on safetrade, where its model lost (4.09% vs 3.32%). This app's
-backtest cannot test them: there is no history to test on.
+(An earlier run the same day, before the window moved, gave 1.0006 overall.)
+
+### `bvar` with evolution: 5 neurons
+
+`--neurons 5` simulates five neurons (identity seeds `backtest-neuron-0…4`),
+each running `runModels` on all 21 symbols at once, as the app runs
+central's streams: every symbol a target, the other 20 its pool, one
+proposal per target per poll. The same polls, the same scoring; `bar1` and
+persistence on the same forecasts.
+
+| margin | scored on | start | bvar | bar1 | persistence | bvar / bar1 | bvar / persistence | after 30 days, bvar / bar1 | proposals kept |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 2 % | 28 origins | no history | 1.865% | 1.860% | 1.854% | 1.0027 | 1.0062 | 1.0035 | 7.1% |
+| **5 % (shipped)** | 28 origins | no history | 1.860% | 1.860% | 1.854% | **1.0000** | 1.0035 | 1.0013 | 1.9% |
+| 10 % | 28 origins | no history | 1.863% | 1.860% | 1.854% | 1.0014 | 1.0049 | 1.0021 | 0.45% |
+| 2 % | 84 origins | no history | 1.860% | 1.860% | 1.854% | 0.9999 | 1.0034 | 1.0016 | 4.5% |
+| 5 % | 28 origins | 1,000 hourly rows (central's history) | 1.801% | 1.799% | 1.803% | 1.0011 | 0.9988 | 0.9975 | 1.7% |
+
+91,455 forecasts per row (81,795 with the backfill, which starts 1,000 h
+later). Each neuron at the shipped setting, bvar / bar1: 0.9990, 1.0023,
+1.0031, 0.9990, 0.9972 (vs persistence 1.0024, 1.0058, 1.0066, 1.0025,
+1.0007); with the backfill: 0.9992, 0.9988, 1.0036, 1.0020, 1.0017 (vs
+persistence 0.9969, 0.9965, 1.0013, 0.9997, 0.9993). Per symbol, all
+neurons pooled, bvar / bar1 runs from 0.984 (FIL) to 1.017 (XRP). `bvar` is
+closer than `bar1` on 49.4% of forecasts and farther on 49.5%.
+
+**Divergence** (shipped setting): the 105 final champions (21 targets × 5
+neurons) are 105 different specs. Two neurons' companion sets for the same
+target overlap by 0.081 on average (Jaccard). 30 champions read 1 companion,
+46 read 2, 29 read 3; λ1 ends at 0.05 / 0.1 / 0.2 / 0.5 in 21 / 18 / 34 / 32
+champions, λ2 at 0.25 / 0.5 / 1 in 26 / 43 / 36. Bitcoin's five champions:
+TRX + XLM (λ1 0.2, λ2 0.5), UNI + FIL (0.5, 0.5), ETH + AAVE (0.5, 0.5),
+XRP + FIL (0.5, 1), BNB + XLM (0.2, 0.5). Kept by mutation: swap 676 of
+20,682, λ1 319 of 20,615, add 273 of 13,900, drop 264 of 13,978, λ2 163 of
+20,705.
+
+**The margin.** At 2 % the neurons chased noise: 7.1% of proposals were
+kept, the λ's drifted to the loosest values (λ1 = 0.5 in 41 and λ2 = 1 in 48
+of the 105 champions), and `bvar` ran 0.27% behind `bar1` (0.35% after 30
+days). A 5 % margin keeps 1.9%, spreads the λ's, and ties `bar1`; 10 % keeps
+almost nothing (0.45%) and is no better. Scoring on 84 origins at 2 % also
+ties, at three times the CPU. So the margin is 5 % and the window stays 28.
+
+**Reading.** On liquid crypto pairs `bvar` with evolution **ties `bar1` and
+persistence**: every setting is within ±0.4% of `bar1`, and the five
+neurons scatter around it by as much. Last 12 h's ETH says no more about the
+next 24 h of BTC than BTC's own last step does, and the shrinkage and the
+fade keep each model near the random walk, so neither the companions nor
+the evolution find an edge here, and they cost nothing measurable either.
+What the evolution does deliver is the owner's other aim: every neuron ends
+with its own choice of data for every target. Where a stream does lead
+another (a thin safetrade price trailing the exchanges' price, say), the
+spec that reads the leader would win its backtest; the first unit test shows
+it on a synthetic leader. Central's streams can't be backtested here until
+its history route is live.
+
+**CPU** (`runModels`, the engine of one poll, on this 8-core box): 21
+targets on 400 days of polls, 45 ms; 83 targets with 1,000 hourly rows each
+and then a year of polls, 0.3–0.6 s in node with two backtests running
+alongside. It runs on the main thread once per poll; see the live check for
+the browser.
 
 Not measured here: the research brief's simulation of time features
 (1.4–2.5× persistence's error with few rows) was not re-run.

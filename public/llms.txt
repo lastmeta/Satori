@@ -13,8 +13,9 @@
 > driven by people and by AI agents alike.
 
 Status: steps 1–6 of the roadmap are built (two keys, central's data flow,
-the engine, Nostr, Base), a finishing pass is done, and a build installs as
-an app (PWA) (2026-10-15).
+the engine, Nostr, Base), a finishing pass is done, a build installs as
+an app (PWA), and each central stream has its own evolving multivariate
+model per neuron (`bvar`) with history from central (2026-10-16).
 
 ## Quick start (an agent)
 
@@ -58,6 +59,15 @@ Every method is below; `await satori.status()` shows everything at once.
   it. `satori.poll()` (or "Poll now") runs one at once.
 - Stream: one of central's streams, by uuid, with its name. Observations are
   stored once per (stream, whole second).
+- History: a stream seen for the first time (and, once, every stream already
+  known) gets its past from central: `GET
+  /api/v1/observations/history?stream_uuid=…&limit=1000&since=<now − 1,000 h>`
+  (an addition beyond the Docker neuron; central observes hourly, so ~41
+  days), at most 4 calls at a time, at load and in each poll before the
+  forecasts. Its rows are stored only if older than the stream's newest
+  polled row, so they never trigger a prediction; only a poll's new row does.
+  A central without the route (404, central2 today) is asked again a day
+  later; a failure never breaks the poll.
 - Prediction: made only for a stream that got a new observation, from all of
   its stored history. `t1` is 12 h ahead, `t2` 24 h ahead (the value central
   scores, against the first observation 24 h or more after it). Sent right
@@ -70,29 +80,53 @@ Every method is below; `await satori.status()` shows everything at once.
   timeout or a 5xx.
 - Model (the engine, `src/engine/`, docs/design/engine.md): after the owner's
   `namaste_club` engine. History is cut into 12 h UTC buckets (the last value
-  in each) and turned into returns r = v_k / v_(k-1) - 1.
-  - `bar1`: a Bayesian AR(1) on those returns, r_next = phi * r. phi is shrunk
-    toward 0 ("tomorrow = today") with a N(0, 0.2^2) prior: phi = sum(x*y) /
-    (sum(x*x) + sigma^2 / 0.2^2). Two 12 h steps give t1 and t2, each step's
-    return clamped to +-50%. Then t = last * (1 + weight * (growth - 1)).
-    `weight` in [0, 1] comes from a backtest on the stream's own buckets (of
-    the last 28 origins, those with three back-to-back buckets):
-    weight = clamp(2 - model error / persistence error, 0, 1), so a model that
-    trails the last value is faded toward it (1 with fewer than 5 origins).
+  in each) and turned into returns r = v_k / v_(k-1) - 1 (changes
+  v_k − v_(k-1) for a series with any value ≤ 0). A forecast predicts a
+  stream one cadence ahead: 24 h for central (t2; t1 is 12 h).
+  - `bvar` (central's streams): each target stream has its own **spec**,
+    `{ companions: 1–3 other central streams, lambda1 ∈ {0.05, 0.1, 0.2, 0.5},
+    lambda2 ∈ {0.25, 0.5, 1} }`, first drawn by an RNG seeded from the
+    identity's public key and the target's uuid, so every neuron starts with
+    its own choice of which streams to read. The model: a Bayesian VAR(1) over
+    the target and its companions (namaste_club's Minnesota prior: own lag
+    variance lambda1^2, another series' (lambda1*lambda2)^2 times their
+    variance ratio clipped to [0.01, 100]; noise from the OLS residuals), on
+    the buckets where every series has three back-to-back values, iterated two
+    12 h steps over all equations (each step clamped), then faded toward
+    persistence like bar1. Its **score** is the median error of its 24 h
+    forecast over the last 28 backtest origins (fit only on data up to each
+    origin). After each poll one **mutation** of each spec (swap, add or drop
+    a companion; move lambda1 or lambda2 one grid step), seeded by identity +
+    target + generation, is scored on the same origins and kept only if it
+    beats the champion's score by 5 %. `generation` counts the mutations
+    proposed, `accepted` the ones kept. Specs stay in this browser
+    (`model_specs`). A spec that can't fit yet (fewer than 6 + companions
+    aligned rows, or a companion with no history) falls back to `bar1`, then
+    `naive`; the prediction's `model` says which.
+  - `bar1`: a Bayesian AR(1) on the target's own returns, r_next = phi * r.
+    phi is shrunk toward 0 ("tomorrow = today") with a N(0, 0.2^2) prior:
+    phi = sum(x*y) / (sum(x*x) + sigma^2 / 0.2^2). Two 12 h steps give t1 and
+    t2, each step's return clamped to +-50%. Then t = last * (1 + weight *
+    (growth - 1)). `weight` in [0, 1] comes from a backtest on the stream's
+    own buckets (of the last 28 origins, those with three back-to-back
+    buckets): weight = clamp(2 - model error / persistence error, 0, 1), so a
+    model that trails the last value is faded toward it (1 with fewer than 5
+    origins). The model for Nostr and Base streams.
   - `naive`: t1 = t2 = the last value. Used until a stream has 6 lag pairs.
     A pair is three back-to-back 12 h buckets, each with an observation, so
-    bar1 needs an observation every 12 h (about 4 days of polls every 11 h).
-    A stream central updates once a day, or a neuron that polls once a day,
-    stays naive: gaps are not bridged.
-  - `bar1d`: the same model on changes (v_k − v_(k-1), additive steps
-    clamped to the largest change seen, absolute backtest errors) for a
-    series with any value ≤ 0, such as a named Base stream's signed counter.
-  `phi` and `weight` are stored with each prediction (null for `naive`).
-  `node scripts/backtest.mjs` measures it against persistence on real
-  history: a tie on liquid crypto pairs.
-- Changing the central URL drops the pending predictions, the stream list and
-  the last poll/submission (another central has other stream uuids); the list
-  refills with the next poll.
+    without central's history bar1 needs an observation every 12 h (about 4
+    days of polls every 11 h). A stream central updates once a day stays
+    naive: gaps are not bridged.
+  - `bar1d`: bar1 on changes (additive steps clamped to the largest change
+    seen, absolute backtest errors) for a series with any value ≤ 0, such as
+    a named Base stream's signed counter.
+  `phi` (bvar: the target's own-lag coefficient) and `weight` are stored with
+  each prediction (null for `naive`). `node scripts/backtest.mjs` measures
+  bar1, persistence and 5 simulated bvar neurons on real history: on liquid
+  crypto pairs all three tie.
+- Changing the central URL drops the pending predictions, the stream list,
+  the specs and the last poll/submission/history (another central has other
+  stream uuids); the list refills with the next poll.
 
 - Nostr key: a third key, random (not derived from the identity or the
   vault), stored unencrypted like the identity (Docker's `nostr.yaml`,
@@ -202,12 +236,16 @@ the page's JS context:
   `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
   tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
-  pending }`:
+  pending, history }`:
   - `registration`: null while registering; then
     `{ at, ok: true, peer_id, wallet_address, vault_address, message, vaultMismatch }`
     or `{ at, ok: false, error }` (central refused or is unreachable).
-  - `lastPoll`: `{ at, streams, new, predicted }` or `{ at, error }` (central's
-    error, or a local one such as a database write).
+  - `lastPoll`: `{ at, streams, new, predicted, engine_ms }` or `{ at, error }`
+    (central's error, or a local one such as a database write); `engine_ms`:
+    how long the models took (present when a stream had a new row).
+  - `history`: the last history run `{ at, url, streams, rows, left, error,
+    retryAt }` (`retryAt`: the route 404'd, asked again then) and `needed`,
+    how many streams have no history yet.
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
     `{ at, error }`; `pending`: how many predictions wait to be sent.
 
@@ -240,8 +278,15 @@ the page's JS context:
 - `await satori.streams()` → one row per stream: `uuid`, `name`, `meta`
   (central's stream meta: the parsed object when it is JSON, else its text,
   or null), `observations`, `obs_ts`, `obs_value`, and our latest `t1`, `t2`,
-  `model` (`bar1`, `bar1d` or `naive`), `phi`, `weight`, `made_at`, `status`
-  (`pending`/`sent`), `sent_at`.
+  `model` (`bvar`, `bar1`, `bar1d` or `naive`), `phi`, `weight`, `made_at`,
+  `status` (`pending`/`sent`), `sent_at`; the stream's `spec` (`{ companions:
+  [uuid], lambda1, lambda2 }` or null), `score`, `generation`, `accepted`; and
+  `history_at` (when its history came from central; null: not yet).
+- `await satori.models()` → each target's champion spec: `[{ uuid, name,
+  model, spec: { companions: [{ uuid, name }], lambda1, lambda2 }, score,
+  generation, accepted }]` (`model`: what made its latest prediction; `score`:
+  the median relative error of its 24 h forecast over its last 28 backtest
+  origins, null below 5).
 - `await satori.predictions(stream, limit = 20)` → one stream's predictions
   (by uuid or name), newest first: `[{ id, stream_uuid, name, made_at, model,
   t1, t2, phi, weight, observed_at, hash, status, sent_at }]`. `observed_at`
@@ -345,10 +390,12 @@ thrown: they are in `status().central` (for example `central 500: …`,
   quota) and **Install Satori** when the browser offers it (Safari: how to
   add it to the Dock or Home Screen); the header has Lock while unlocked and
   "Update ready, reload" when a new version waits. Setup shows Install too. **Central**: the URL,
-  Registered, Last poll, Next poll, Last submission, Pending, a vault mismatch
-  if any, "Poll now", and a collapsed "Streams: N from central" (one row per
-  stream: latest value and time, t1, t2, the model with phi and weight in its
-  hover title, Sent/Pending). **Nostr**: each relay with its state
+  Registered, Last poll, Next poll, Last submission, Pending, History (central's
+  history for our streams), a vault mismatch if any, "Poll now", and a
+  collapsed "Streams: N from central" (one row per stream: latest value and
+  time, t1, t2, the model with its spec's companions, "bvar · +eth +gold", or
+  "naive · spec +eth" while the spec waits for aligned rows, with λ1, λ2, phi,
+  weight, generation and score in its hover title, Sent/Pending). **Nostr**: each relay with its state
   ("Connected · read only"), each subscribed stream (latest value and time,
   our `_pred` value, its seq, how many relays took it, Unsubscribe).
   **Network streams** (opening it discovers): a search box and the first 50
@@ -368,7 +415,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
 - Form fields have labels; elements carrying data or actions have
   `data-test` attributes: `identity`, `identity-base`, `vault`, `vault-base`,
   `vault-state`, `nostr-pubkey`, `unlock`, `lock`, `central-url`,
-  `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`,
+  `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`, `history`,
   `mismatch`, `poll-now`, `streams` (the collapsed list) with `stream` rows
   and `obs`, `t1`, `t2`, `model`, `status` inside, `relay` (with
   `relay-state`), `sub` (a subscribed stream, with `sub-obs`, `sub-pred`,
@@ -436,11 +483,14 @@ build step beyond Vite, MIT licensed.
   (two steps by default; a forecast is one cadence ahead: 24 h for central,
   where value = t2; one cadence for a relay stream; max(24 h, cadence) on
   Base); t1 and t2 are one and two steps ahead; `{ weight }` forces the fade.
+  `bvar.js`: the Bayesian VAR(1) of a target and its companions, its backtest
+  and fallbacks; `evolve.js`: `runModels({ fresh, histories, specs, seed })`,
+  each target's identity-seeded spec, one mutation per poll, the forecasts.
 - `src/nostr/`: NIP-01 events and the Nostr key over `@noble/curves`
   (`event.js`), Satori's events and parsing (`satori.js`), one relay over a
   WebSocket with reconnect (`relay.js`).
-- `src/neuron/`: register, the cycle (poll → store → forecast → submit),
-  central's status, the schedule (`schedule.js`, shared with Base), the
+- `src/neuron/`: register, the cycle (poll → store → history → forecast →
+  submit), `history.js` (central's history for new streams), central's status, the schedule (`schedule.js`, shared with Base), the
   one-tab lock; `nostr.js`: relays, discover, subscribe, intake → `_pred`,
   reconcile; `base.js`: the daily batch and its schedule, delegate, claims,
   sends, the Base settings.
@@ -461,7 +511,8 @@ build step beyond Vite, MIT licensed.
   outside this repo; `docs/inbox/QUESTIONS.md`: open questions for the
   owner.
 - `scripts/`: parity-vector generators run against satorilib, the Docker
-  image and namaste_club (Python); `backtest.mjs` (node, read only);
+  image and namaste_club (Python; `bvar_parity.py` for bvar); `backtest.mjs`
+  (node, read only: bar1, persistence and simulated bvar neurons);
   `test-relay.mjs` (an in-memory Nostr relay: `node scripts/test-relay.mjs
   7778`) and `provider.mjs` (a throwaway stream provider for a test relay);
   `fork.mjs` (the local fork of Base Sepolia, above).

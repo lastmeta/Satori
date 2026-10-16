@@ -17,7 +17,7 @@ OPFS keeps what DuckDB has **checkpointed**; a tab may close at any moment and
 nothing runs on close. So every write that must survive is followed by
 `CHECKPOINT`: setup (the keys), each central cycle (after its submission),
 each new poll time, a Settings save, a new relay list from central, NIP-65's
-time, each outbox edit, a relay observation and its `_pred` (before the
+time, each outbox edit, each history run from central, a relay observation and its `_pred` (before the
 `_pred` is sent, as Lite commits first), a subscribe and an unsubscribe, the
 Base batch's hash as soon as it is sent and the batch after its receipt.
 
@@ -49,6 +49,14 @@ refused, not migrated.
    (`obs_*`), its latest `_pred` (`p_*`) and its observation count on its own
    row, set at insert time, so the status (read on every change) reads one
    row per stream. Filled from the existing rows when it runs.
+6. **bvar** ([engine.md](engine.md#bvar-a-model-per-central-stream-unique-to-each-neuron)):
+   `model_specs (target_uuid, spec, score, generation, accepted,
+   updated_at)`, each central target's champion spec as JSON
+   (`{companions: [uuid, …], lambda1, lambda2}`), its backtest score (null
+   below 5 origins), the mutations proposed and the ones kept; and
+   `streams.history_at`, when central's history was fetched for the stream
+   (null: not yet, so every stream is fetched once after the update;
+   [central.md](central.md#history-an-addition-beyond-lite)).
 
 Columns kept but no longer written: `relay_streams.meta` (the announcement
 at subscribe time) and `unsubscribed_at`; nothing read them. Kept and written,
@@ -69,6 +77,7 @@ Each value is JSON text.
 | `next_poll_at` | when the next poll is due, so a reload keeps the 11 h cadence ([central.md](central.md)) | each poll's schedule |
 | `central_last_poll` | the last poll: `{ at, streams, new, predicted }` or `{ at, error }` | each cycle; dropped with another central |
 | `central_last_submit` | the last predictions batch: `{ at, total_submitted, successful, failed, errors }` or `{ at, error }` | each cycle with something pending; dropped with another central |
+| `central_history` | the last history run: `{ at, url, streams, rows, left, error, retryAt }`; `retryAt` (a 404: no history route) holds off this central for a day | each history run; dropped with another central |
 | `nostr_relays` | the user's relays (Settings) | `setRelays` |
 | `nostr_central_write` | whether central's relays are written to | `setRelays` |
 | `nostr_central_relays` | central's last relay list, used while central is down | the hourly reconcile |
@@ -80,5 +89,15 @@ Each value is JSON text.
 | `base_last_batch` | the last mined batch: `{ round, at, hash, games, dropped }` | the batch, after its receipt |
 
 Another central (Settings) has other stream uuids, so changing it deletes the
-pending predictions, the `streams` rows and `central_last_poll` /
-`central_last_submit`; observations and sent predictions stay.
+pending predictions, the `streams` rows, the `model_specs` and
+`central_last_poll` / `central_last_submit` / `central_history`;
+observations and sent predictions stay.
+
+## Doubles
+
+DuckDB-WASM sends a prepared statement's parameters as JSON, and its parser
+read about 1 number in 12 one ulp off (measured: 158 of 2,000 observations,
+34 of 300 predictions). A stored t2 could then print other digits than the
+ones hashed when the prediction was made. Every DOUBLE is therefore bound as
+text, `CAST(? AS DOUBLE)` with the number's shortest JS text, which DuckDB
+parses back exactly (tested bit for bit).
