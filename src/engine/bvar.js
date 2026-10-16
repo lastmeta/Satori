@@ -61,6 +61,33 @@ export function rowsOf(S) {
   return rows;
 }
 
+export const RECENT_BUCKETS = 4; // a pool stream shares a row with the target in the target's last 4 row buckets (2 days)
+
+/**
+ * Whether another series belongs in the target's pool: it shares a row with the
+ * target within the target's last RECENT_BUCKETS row buckets (counted from the
+ * target's newest row, so a closed tab doesn't empty the pool) and `enough` rows
+ * in all. A stream that stopped long ago, or one that never has three buckets in
+ * a row (a daily stream), is out.
+ */
+export function inPool(T, s, enough) {
+  let newest = null;
+  let n = 0;
+  let recent = false;
+  for (let i = T.b.length - 1; i >= 0 && !(recent && n >= enough); i--) {
+    const k = T.b[i];
+    if (!T.pair(k)) continue;
+    newest ??= k;
+    const inWindow = k > newest - RECENT_BUCKETS;
+    if (!inWindow && !recent) return false;
+    if (s.pair(k)) {
+      n++;
+      if (inWindow) recent = true;
+    }
+  }
+  return recent && n >= enough;
+}
+
 /** How many rows the target and one other series share, counted from the newest and up to `enough`. */
 export const alignedRows = (T, s, enough = Infinity) => {
   let n = 0;

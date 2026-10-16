@@ -198,10 +198,16 @@ The λ grids are namaste_club's tuner's (`NC/models.py:589-590`). Lag stays 1.
   differently and each one reproducibly. The number of companions is drawn
   from 1–3, then the companions from the pool (sorted by uuid), then λ1 and
   λ2, each uniformly.
-- **The pool**: the other central streams with enough aligned history to
-  fit a one-companion model with the target (7 rows, below). A young neuron
-  has none, so its pool is every other central stream: the spec exists from
-  the first poll and falls back until the data arrive.
+- **The pool**: the other central streams aligned with the target
+  **recently**: a row shared with it within the target's last 4 row buckets
+  (2 days, counted from the target's newest row, so a closed tab doesn't
+  empty it), and 7 rows in all, enough for a one-companion model (below). A
+  stream that stopped long ago, or one that never has three buckets in a row
+  (a daily stream), is out: before, a stream aligned once was in for good,
+  and a spec reading it fit only its old rows while showing `bvar`. A young
+  neuron has no aligned stream, so it draws from every other central stream:
+  the spec exists from the first poll, falls back until the data arrive, and
+  is repaired then (Evolution, step 2).
 - **Mutations** are seeded from identity + target + generation, so a
   neuron's whole path is reproducible.
 
@@ -268,16 +274,24 @@ With no companions this is exactly `bar1` (tested on the parity cases).
 After each poll that brought new rows, for each target that got one:
 
 1. Read the champion spec (or draw the first one).
-2. Score it on the backtest. With fewer than 5 origins, stop here: no
+2. **Repair** it: each companion not in the pool now is replaced, in its
+   place, by one drawn from the pool (seeded by identity + target +
+   generation + "repair"), or dropped when the pool has none left. A spec
+   drawn blind before there was history, or reading a stream that stopped,
+   is fixed before it is scored. With no aligned stream at all the draw
+   stays. (Before, such specs kept their dead companions until a mutation
+   happened to swap them: in a simulation, 2–8 of 20 targets were still on
+   `bar1` after 30 days.)
+3. Score it on the backtest. With fewer than 5 origins, stop here: no
    proposal, the generation stays.
-3. Propose **one** mutation (seeded by identity + target + generation), one
+4. Propose **one** mutation (seeded by identity + target + generation), one
    of those that apply, uniformly: swap a companion for another from the
    pool, add one (fewer than 3), drop one (more than 1), or move λ1 or λ2 to
    a neighbouring grid value.
-4. Score the challenger on the same origins.
-5. Keep it only if its score beats the champion's by the margin (5 %:
+5. Score the challenger on the same origins.
+6. Keep it only if its score beats the champion's by the margin (5 %:
    challenger < champion × 0.95). generation + 1; accepted + 1 if kept.
-6. Forecast with the champion; store the spec, its score and counts.
+7. Forecast with the champion; store the spec, its score and counts.
 
 The margin keeps a neuron from swapping on noise. It started at 2 %; the
 backtest showed that chasing noise (7 % of proposals kept, the λ's drifting

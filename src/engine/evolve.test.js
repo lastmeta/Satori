@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { forecast, STEP_S, MIN_SAMPLES } from './index.js';
 import {
-  seeded, drawSpec, mutate, accepts, runModels, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
+  seeded, drawSpec, mutate, repair, accepts, runModels, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
 } from './evolve.js';
+import { prepare, inPool, RECENT_BUCKETS } from './bvar.js';
 
 const T0 = Date.UTC(2026, 8, 1) / 1000;
 const grid = (values, start = 0) => values.map((value, k) => ({ ts: T0 + (start + k + 1) * STEP_S - 1, value }));
@@ -145,16 +146,17 @@ describe('runModels: one poll', () => {
 
   test('the fallbacks: bvar, else bar1, else naive, and the model says which', () => {
     const histories = historiesOf(prices, 200);
-    histories.set('short', grid(prices.n1.slice(0, 9))); // 9 buckets: bar1's 6 pairs at the end, too few rows with others
-    const specs = new Map([['gold', { spec: { companions: ['lead'], lambda1: 0.5, lambda2: 1 }, generation: 0, accepted: 0 }],
-      ['n1', { spec: { companions: ['short'], lambda1: 0.2, lambda2: 0.5 }, generation: 0, accepted: 0 }],
-      ['n2', { spec: { companions: ['gone'], lambda1: 0.2, lambda2: 0.5 }, generation: 0, accepted: 0 }]]);
     histories.set('tiny', grid([3, 4]));
-    const { forecasts } = runModels({ fresh: ['gold', 'n1', 'n2', 'tiny'], histories, specs, seed: ID });
+    const specs = new Map([['gold', { spec: { companions: ['lead'], lambda1: 0.5, lambda2: 1 }, generation: 0, accepted: 0 }]]);
+    const { forecasts } = runModels({ fresh: ['gold', 'tiny'], histories, specs, seed: ID });
     expect(forecasts.get('gold').model).toBe('bvar');
-    const bar1 = forecast(histories.get('n2'));
-    expect(forecasts.get('n2')).toMatchObject({ model: 'bar1', t1: bar1.t1, t2: bar1.t2 }); // a companion with no history
     expect(forecasts.get('tiny')).toMatchObject({ model: 'naive', t1: 4, t2: 4 });
+    // no stream aligned with the target yet (nothing to repair from): a companion with no history leaves it on bar1
+    const alone = new Map([['n2', grid(prices.n2)], ['gone', []]]);
+    const bar1 = forecast(alone.get('n2'));
+    expect(runModels({ fresh: ['n2'], histories: alone, seed: ID,
+      specs: new Map([['n2', { spec: { companions: ['gone'], lambda1: 0.2, lambda2: 0.5 }, generation: 0, accepted: 0 }]]) })
+      .forecasts.get('n2')).toMatchObject({ model: 'bar1', t1: bar1.t1, t2: bar1.t2, repaired: false });
   });
 
   test('only the fresh targets; one proposal each, recorded with its score and generation', () => {
@@ -199,5 +201,72 @@ describe('runModels: one poll', () => {
       return JSON.stringify(specs.get('n2').spec);
     });
     expect(new Set(champions).size).toBeGreaterThan(3);
+  });
+});
+
+describe('the pool needs recent alignment; companions that leave it are replaced', () => {
+  const names = ['gold', 'lead', 'n1', 'n2', 'n3'];
+  const prices = market(120, names, 9);
+  const histories = () => {
+    const h = historiesOf(prices, 120);
+    h.set('dead', grid(prices.n1.slice(0, 80))); // stopped 40 buckets (20 days) ago, after 78 aligned rows
+    h.set('daily', grid(prices.n2).filter((_, k) => k % 2 === 0)); // every other bucket: never three in a row
+    return h;
+  };
+
+  test(`inPool: a row shared within the target's last ${RECENT_BUCKETS} row buckets and 7 in all`, () => {
+    const h = histories();
+    const T = prepare(h.get('gold'));
+    expect(inPool(T, prepare(h.get('lead')), 7)).toBe(true);
+    expect(inPool(T, prepare(h.get('dead')), 7)).toBe(false); // aligned only long ago
+    expect(inPool(T, prepare(h.get('daily')), 7)).toBe(false);
+    expect(inPool(T, prepare(grid(prices.n1.slice(0, 120 - RECENT_BUCKETS + 1))), 7)).toBe(true); // its last row just inside
+    expect(inPool(T, prepare(grid(prices.n1.slice(0, 120 - RECENT_BUCKETS))), 7)).toBe(false); // just outside
+    expect(inPool(T, prepare(grid(prices.n1.slice(110), 110)), 7)).toBe(true); // a new stream: 8 rows, all recent
+    expect(inPool(T, prepare(grid(prices.n1.slice(113), 113)), 7)).toBe(false); // 5 rows: too few
+    // a closed tab: the window is counted from the target's newest row, not from now
+    const closed = historiesOf(prices, 100);
+    expect(inPool(prepare(closed.get('gold')), prepare(closed.get('lead')), 7)).toBe(true);
+  });
+
+  test('a spec reading a stream that stopped long ago is repaired before it is scored: no frozen fit on old rows', () => {
+    const specs = new Map([['gold', { spec: { companions: ['dead'], lambda1: 0.2, lambda2: 0.5 }, generation: 3, accepted: 0 }]]);
+    const out = runModels({ fresh: ['gold'], histories: histories(), specs, seed: ID });
+    const { spec } = out.specs.get('gold');
+    expect(spec.companions).not.toContain('dead');
+    for (const c of spec.companions) expect(['lead', 'n1', 'n2', 'n3']).toContain(c);
+    expect(out.forecasts.get('gold')).toMatchObject({ model: 'bvar', repaired: true, rows: 118 }); // every row, up to now
+    expect(runModels({ fresh: ['gold'], histories: histories(), specs, seed: ID })).toEqual(out); // reproducible
+  });
+
+  test('specs drawn blind (no history yet) are repaired once history arrives: every target on bvar', () => {
+    const young = new Map([...histories()].map(([k, v]) => [k, v.slice(-1)]));
+    const targets = ['gold', 'lead', 'n1', 'n2', 'n3'];
+    for (const seed of ['idA', 'idB', 'idC', 'idD']) {
+      const first = runModels({ fresh: targets, histories: young, seed });
+      expect(targets.every((t) => first.forecasts.get(t).model === 'naive')).toBe(true);
+      const blind = targets.filter((t) => first.specs.get(t).spec.companions.some((c) => c === 'dead' || c === 'daily'));
+      const next = runModels({ fresh: targets, histories: histories(), specs: first.specs, seed });
+      expect(targets.map((t) => next.forecasts.get(t).model)).toEqual(targets.map(() => 'bvar'));
+      for (const t of targets) {
+        expect(next.specs.get(t).spec.companions.some((c) => c === 'dead' || c === 'daily')).toBe(false);
+        expect(next.forecasts.get(t).repaired).toBe(blind.includes(t));
+      }
+    }
+  });
+
+  test('repair: keeps companions in the pool and their places; draws replacements from the rest; none to draw from drops one', () => {
+    const spec = { companions: ['a', 'x', 'b'], lambda1: 0.1, lambda2: 1 };
+    const r = repair(spec, seeded(ID, 'gold', 4, 'repair'), ['a', 'b', 'c', 'd']);
+    expect(r.companions[0]).toBe('a');
+    expect(r.companions[2]).toBe('b');
+    expect(['c', 'd']).toContain(r.companions[1]);
+    expect([r.lambda1, r.lambda2]).toEqual([0.1, 1]);
+    expect(repair(spec, seeded(ID, 'gold', 4, 'repair'), ['a', 'b', 'c', 'd'])).toEqual(r);
+    expect(repair(spec, () => 0, ['a', 'b'])).toEqual({ ...spec, companions: ['a', 'b'] });
+    expect(repair({ ...spec, companions: ['x', 'y'] }, () => 0, ['a'])).toEqual({ ...spec, companions: ['a'] });
+    expect(repair(spec, () => 0, ['a', 'b', 'x'])).toBe(spec); // all in the pool: unchanged
+    expect(repair(spec, () => 0, [])).toBe(spec); // no aligned stream yet (no history): the draw stays
+    expect(repair({ ...spec, companions: [] }, () => 0, ['c'])).toEqual({ ...spec, companions: ['c'] });
   });
 });

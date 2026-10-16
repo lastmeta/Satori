@@ -7,7 +7,7 @@
 import { sha256 } from '@noble/hashes/sha2';
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { STEP_S, MIN_EXTRA_ROWS, MIN_SAMPLES, HOLDOUT, forecast as bar1, median } from './index.js';
-import { prepare, backtestOf, errorsAt, forecastSpec, alignedRows } from './bvar.js';
+import { prepare, backtestOf, errorsAt, forecastSpec, inPool } from './bvar.js';
 
 export const LAMBDA1_GRID = [0.05, 0.1, 0.2, 0.5]; // namaste_club's tuner (models.py:589)
 export const LAMBDA2_GRID = [0.25, 0.5, 1.0]; // models.py:590
@@ -68,6 +68,23 @@ export function mutate(spec, rand, pool) {
   return { spec: next, op };
 }
 
+/**
+ * Replace each companion that is not in the target's aligned pool (a stream that
+ * stopped, one that never aligns, one drawn blind before there was history) by
+ * one drawn from the pool, in its place; when the pool has none left, drop it.
+ * With no aligned stream at all (no history yet) the spec stays as drawn.
+ */
+export function repair(spec, rand, aligned) {
+  if (!aligned.length) return spec;
+  const ok = spec.companions.filter((u) => aligned.includes(u));
+  if (ok.length && ok.length === spec.companions.length) return spec;
+  const left = aligned.filter((u) => !ok.includes(u)).sort();
+  const draw = () => (left.length ? left.splice(Math.floor(rand() * left.length), 1)[0] : null);
+  const companions = spec.companions.length
+    ? spec.companions.map((u) => (aligned.includes(u) ? u : draw())).filter(Boolean) : [draw()];
+  return { ...spec, companions };
+}
+
 /** Keep the challenger only if it beats the champion by the margin. */
 export const accepts = (champion, challenger, margin = MARGIN) => challenger < champion * (1 - margin);
 
@@ -91,10 +108,12 @@ export function runModels({ fresh, histories, specs = new Map(), seed, step = ST
   for (const target of fresh) {
     const T = series(target);
     if (!T) continue;
-    let pool;
-    const poolOf = () => (pool ??= poolFor(target, T, histories, series));
-    const row = specs.get(target) ?? { spec: drawSpec(seeded(seed, target, 'draw'), poolOf()), generation: 0, accepted: 0 };
-    let { spec, generation, accepted } = row;
+    const { aligned, pool } = poolFor(target, T, histories, series);
+    const row = specs.get(target) ?? { spec: drawSpec(seeded(seed, target, 'draw'), pool), generation: 0, accepted: 0 };
+    let { generation, accepted } = row;
+    // companions out of the pool are replaced before scoring (seeded, so a neuron's path stays reproducible)
+    let spec = repair(row.spec, seeded(seed, target, generation, 'repair'), aligned);
+    const repaired = spec !== row.spec;
     const bt = backtestOf(T, window);
     const errorsOf = (s) => (s.companions.length && s.companions.every(series)
       ? errorsAt([T, ...s.companions.map(series)], s, bt) : { errors: bt.base, acc: null });
@@ -102,7 +121,7 @@ export function runModels({ fresh, histories, specs = new Map(), seed, step = ST
     let score = bt.origins.length >= MIN_SAMPLES ? median(run.errors) : null;
     let proposal = null;
     if (score !== null) {
-      const m = mutate(spec, seeded(seed, target, generation), poolOf());
+      const m = mutate(spec, seeded(seed, target, generation), pool);
       const challenger = errorsOf(m.spec);
       const s = median(challenger.errors);
       generation++;
@@ -117,15 +136,19 @@ export function runModels({ fresh, histories, specs = new Map(), seed, step = ST
     const recent = (xs) => xs.filter((_, i) => bt.origins[i].recent); // the fade: bar1's last HOLDOUT origins
     const f = forecastSpec(T, spec.companions.map(series), spec, run.acc, recent(run.errors), recent(bt.persist))
       ?? bar1(histories.get(target), { step });
-    if (f) forecasts.set(target, { ...f, proposal });
+    if (f) forecasts.set(target, { ...f, proposal, repaired });
     out.set(target, { spec, score, generation, accepted });
   }
   return { forecasts, specs: out };
 }
 
-/** The other streams with enough aligned history for a one-companion model; all the others while none has. */
+/**
+ * The target's pool: `aligned`, the other streams recently aligned with it and with
+ * enough rows for a one-companion model (inPool); `pool`, those, or every other
+ * stream while none is (a young neuron without history draws blind, repaired later).
+ */
 function poolFor(target, T, histories, series) {
   const others = [...histories.keys()].filter((u) => u !== target).sort();
-  const aligned = others.filter((u) => series(u) && alignedRows(T, series(u), MIN_ALIGNED) >= MIN_ALIGNED);
-  return aligned.length ? aligned : others;
+  const aligned = others.filter((u) => series(u) && inPool(T, series(u), MIN_ALIGNED));
+  return { aligned, pool: aligned.length ? aligned : others };
 }
