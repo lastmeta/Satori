@@ -115,6 +115,8 @@ Dismiss hides it. For agents, `satori.status().recovered` holds the file's
 new name for that page load (null otherwise). `<time>` is the ISO time with
 `:` and `.` as `-`.
 
+![Setup after a WAL DuckDB could not replay was set aside: the notice, with Dismiss](../screenshots/recovered-notice.png)
+
 **What can be lost** is only what the set-aside WAL held: writes that were
 never checkpointed. Under older versions those were the first load's
 migrations, which run again at once. On a set-up neuron, they could only be
