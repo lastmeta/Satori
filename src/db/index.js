@@ -8,7 +8,7 @@
 //   await db.needHistory() → uuids / db.addHistory(uuid, rows, at) → rows added (older than the newest polled only)
 //   await db.addPredictions(list) → ids / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
 //   await db.resetCentral()                  // the central URL changed
-//   await db.streams() / db.predictions(uuidOrName, limit)   // for the UI and agents
+//   await db.streams() / db.predictions(uuidOrName, limit) / db.sparks(n)   // for the UI and agents
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
 //   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
 //   db.addRelayObservation(o) → new? / relayHistory(uuid) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
@@ -108,6 +108,16 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       LEFT JOIN (SELECT * FROM predictions QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY id DESC) = 1) p
         ON p.stream_uuid = s.uuid
       ORDER BY s.name, s.uuid`)),
+
+    /** Each central stream's last `n` observations, oldest first: { uuid: [value] } (Home's trend lines). */
+    sparks: inOrder(async (n = 24) => {
+      const out = {};
+      for (const r of await rows(`SELECT stream_uuid, value FROM observations
+        QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC) <= ? ORDER BY stream_uuid, ts`, n)) {
+        (out[r.stream_uuid] ??= []).push(r.value);
+      }
+      return out;
+    }),
 
     /** Upsert each row's stream; insert or ignore the observation. The uuids that got a new row. */
     addObservations: inOrder(async (list) => {

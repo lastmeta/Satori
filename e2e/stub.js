@@ -38,12 +38,12 @@ async function eip191(h) {
  * @param {import('@playwright/test').BrowserContext} context
  * @param {{url?: string, relays?: string[], rpc?: {http: Function}}} [o] relays: central's relay list
  * @returns the stub: set `batch`, `vaults` (vault pubkey → central's address form for it), `otherVault`, `fail` (statuses for the next
- *   predictions batches), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
+ *   predictions batches), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
  *   `history` (stream uuid → its rows, oldest first; null: the route 404s); read `registered`, `logins`, `batches`,
  *   `merkleCalls`, `historyCalls`, `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
-  const stub = { batch: [], vaults: {}, otherVault: null, fail: [], delayMs: 0, root: null, proofs: {}, history: null,
+  const stub = { batch: [], vaults: {}, otherVault: null, fail: [], refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
     registered: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [] };
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
   await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
@@ -91,7 +91,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       case 'GET /api/v1/auth/challenge':
         return reply(route, 200, { challenge: `c-${stub.logins.length}` });
       case 'POST /api/v1/auth/login': {
-        const ok = await eip191(h);
+        const ok = !stub.refuseLogin && await eip191(h);
         stub.logins.push({ ...h, ok });
         return ok ? reply(route, 200, { access_token: `jwt-${stub.logins.length}`, expires_in: 3600 })
           : reply(route, 401, { detail: 'Invalid signature' });

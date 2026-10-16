@@ -1,0 +1,38 @@
+// Pieces the screens share.
+import { html } from '@arrow-js/core';
+import { state } from './state.js';
+
+/** A submitted form's fields, the default prevented. */
+export const form = (e) => {
+  e.preventDefault();
+  return Object.fromEntries(new FormData(e.target));
+};
+
+export const wordList = (words) => html`<ol class="words">${() => words().map((w) => html`<li>${w}</li>`)}</ol>`;
+
+export const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
+
+/** One of a key's identifiers (`value` a function), with Copy. */
+export function idRow(kind, test, value, a, title = () => '') {
+  return html`<div class="id"><span class="label">${kind}</span><code data-test="${test}" title="${title}">${value}</code><button class="small-btn" @click="${() => a.copy(test, value())}">${() => (state.copied === test ? 'Copied' : 'Copy')}</button></div>`;
+}
+
+/**
+ * The inline Unlock prompt (docs/design/health.md): shown at `slot` when an action that needs the vault was asked
+ * for while it is locked; Unlock, then the action.
+ */
+export function unlockPrompt(a, slot, verb) {
+  return html`<form class="inline-unlock" data-test="unlock-prompt" data-unlock-for="${slot}" hidden="${() => state.unlockFor !== slot}" @submit="${(e) => a.unlockThen(form(e), e.target)}"><input name="pass" type="password" aria-label="${`Vault passphrase to ${verb}`}" placeholder="Vault passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button><button type="button" @click="${a.cancelUnlock}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.unlockError}">${() => state.unlockError}</p></form>`;
+}
+
+/** A health state's mark: a colored disc with its icon (the shape from the state, in CSS). */
+export const mark = (s) => html`<span class="state" data-s="${s}"><i class="ico"></i></span>`;
+
+/** A trend line of values (oldest first) in a 70 × 20 box. */
+export function sparkPath(values = [], w = 70, h = 20) {
+  if (values.length < 2) return '';
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const y = (v) => (hi === lo ? h / 2 : h - 2 - ((v - lo) / (hi - lo)) * (h - 4));
+  return values.map((v, i) => `${i ? 'L' : 'M'}${((i / (values.length - 1)) * w).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+}

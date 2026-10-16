@@ -9,7 +9,8 @@
 // window.satori is the same surface for agents (public/llms.txt). The
 // installed app (service worker, Install, persistent storage) is src/pwa/.
 import { version } from '../package.json';
-import { state, render } from './ui/view.js';
+import { watch } from '@arrow-js/core';
+import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb } from './db/opfs.js';
 import {
@@ -22,9 +23,11 @@ import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
+import { createActivity } from './neuron/activity.js';
+import { healthOf } from './neuron/health.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
-import { shortHash, claimLine, stepText } from './ui/format.js';
+import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
 import { startPwa, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
 
 // Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
@@ -45,12 +48,17 @@ let central = null;
 let registration = null; // this page load's register result
 let poller = null;
 let base = null; // the Base flow
+let activity = null; // the activity log Home's health reads (docs/design/health.md)
+let afterUnlock = null; // the action an inline Unlock prompt was opened for
+const nowS = () => Date.now() / 1000;
 
 const centralStatus = () => statusOf({ db, central, registration, poller });
 
 async function refresh() {
   state.central = await centralStatus();
   state.streams = await db.streams();
+  state.sparks = await db.sparks();
+  if (state.streamOpen) state.streamPreds = await db.predictions(state.streamOpen, 10);
 }
 
 /**
@@ -101,8 +109,10 @@ async function registerWith(c) {
  * run after it). Never throws.
  */
 const backfill = coalesce('history', async () => {
+  const t0 = nowS();
   const r = await backfillHistory({ db, central });
   if (r?.streams) console.info('[satori] central history', r);
+  if (r?.at >= t0) await activity.history(r); // this run's, not the last one's kept result
   await refresh();
 });
 
@@ -111,6 +121,7 @@ async function runCycle() {
   const r = await cycle({ db, central, seed: identity.pubkey, backfill });
   console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
   await refresh();
+  await activity.central(r, state.central.pending);
   return r;
 }
 
@@ -119,6 +130,14 @@ async function startNeuron() {
   state.identity = identity.evmAddress;
   state.vault = vaultPublic.evmAddress;
   state.centralDefault = DEFAULT_CENTRAL;
+  state.backupAt = (await db.get('backup_at')) ?? null;
+  activity = createActivity({ db, onChange: () => { state.activityRev++; } });
+  await activity.start(); // this session, and whether a poll came due while Satori was closed
+  state.now = nowS();
+  setInterval(() => {
+    state.now = nowS();
+    activity.beat();
+  }, 30_000);
   const c = await connect();
   poller = createPoller(runCycle, { db, onChange: ({ next, running }) => {
     state.central = { ...state.central, nextPoll: next, polling: running };
@@ -126,12 +145,13 @@ async function startNeuron() {
   await poller.start();
   await refresh();
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite },
-    onChange: refreshNostr });
+    onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err) });
   await refreshNostr();
   base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
-    onChange: refreshBase });
+    onChange: refreshBase, onCheck: (r) => activity.base(r) });
   await refreshBase();
   state.screen = 'home';
+  fillSettings();
   keepStorage(); // after setup and on each load until the browser keeps it: the keys live in this storage
   registerWith(c).catch((err) => console.error('[satori] register', err));
   backfill(); // streams with no history yet (all of them after an update) get it now, not at the first poll
@@ -171,9 +191,19 @@ async function storeKeys(r) {
   record = r;
 }
 
-async function saveKeys(r) {
+/** The keys, then the neuron; backedUp: the vault's words were confirmed, given or brought (docs/design/health.md). */
+async function saveKeys(r, { backedUp = false } = {}) {
   await storeKeys(r);
+  if (backedUp) await markBackup();
   await startNeuron();
+}
+
+/** The vault's backup is confirmed (meta.backup_at): Home stops asking for it while storage is not kept. */
+async function markBackup() {
+  if (state.backupAt) return;
+  state.backupAt = nowS();
+  await db.set('backup_at', state.backupAt);
+  await db.checkpoint();
 }
 
 async function unlock(passphrase) {
@@ -184,13 +214,15 @@ async function unlock(passphrase) {
   vault?.lock();
   vault = v;
   state.unlocked = true;
+  state.unlockFor = '';
 }
 
 function lock() {
   lockCount++;
   vault?.lock();
   vault = null;
-  Object.assign(state, { unlocked: false, backup: '', backupWords: '', backupKey: '', backupHex: '' });
+  afterUnlock = null;
+  Object.assign(state, { unlocked: false, unlockFor: '', backup: '', backupWords: '', backupKey: '', backupHex: '' });
 }
 
 /** An earlier version's vault with no public key in clear: its first Unlock stores it in this app's format, then the neuron starts. */
@@ -211,6 +243,7 @@ function backupOf(which) {
     throw new Error("Name the key: 'identity', 'vault' or 'nostr' (or nothing, for all three).");
   }
   if (!vault) throw new Error('Unlock the vault first');
+  markBackup().catch((err) => console.warn('[satori] backup_at', err)); // shown: the backup is confirmed
   if (which !== undefined) return BACKUPS[which]();
   return Object.fromEntries(Object.entries(BACKUPS).map(([k, f]) => [k, f()]));
 }
@@ -240,12 +273,78 @@ async function exclusive(what, fn, slot = 'busy') {
 /** A Base action, one at a time; then the card is read again. */
 const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => void refreshBase());
 
-/** Setup, from the UI or an agent: one at a time, and only on the Setup screen. `makeRecord` → the keys, or null (not yet). */
-const setup = (makeRecord) => exclusive('setup', async () => {
+/** The vault's Base actions (Unlock), for the UI and agents alike; the activity log says what each did. */
+const vaultOps = {
+  async delegate() {
+    const r = await base.delegate();
+    if (r.steps.length) activity.wallet('delegate', 'Delegated to this neuron');
+    return r;
+  },
+  async undelegate() {
+    const r = await base.undelegate();
+    if (r.steps.length) activity.wallet('undelegate', 'Stopped delegating');
+    return r;
+  },
+  async claim() {
+    const r = await base.claim();
+    const sum = [r.rewards, r.merkle, r.airdrop].filter((x) => x?.hash).reduce((n, x) => n + Number(x.amount), 0);
+    if (sum > 0) activity.wallet('claim', `Claimed ${fmtNum(sum)} SATORI`);
+    return r;
+  },
+  async send(o = {}) {
+    const r = await base.send(o);
+    activity.wallet('send', `Sent ${o.amount} ${String(o.asset).toUpperCase()} from the vault`);
+    return r;
+  },
+};
+
+/**
+ * Setup, from the UI or an agent: one at a time, and only on the Setup screen. `makeRecord` → the keys, or null (not
+ * yet). backedUp: the vault's words were confirmed (Create), given (Restore) or brought (a Dockerized Neuron's files).
+ */
+const setup = (makeRecord, { backedUp = false } = {}) => exclusive('setup', async () => {
   if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
   const r = await makeRecord();
-  if (r) await saveKeys(r);
+  if (r) await saveKeys(r, { backedUp });
 });
+
+// ── tabs (hash routes) and the inline Unlock ──
+
+/** Show a tab (#home, #streams, #wallet, #settings) and, given one, scroll to its section (#settings-<section>). */
+function go(tab, section) {
+  if (!TABS.includes(tab)) throw new Error(`No such tab: ${tab}. One of ${TABS.join(', ')}.`);
+  if (location.hash !== `#${tab}`) history.pushState(null, '', `#${tab}`);
+  const changed = state.tab !== tab;
+  state.tab = tab;
+  if (changed) fillSettings();
+  requestAnimationFrame(() => {
+    const el = section && document.getElementById(`${tab}-${section}`);
+    if (el) el.scrollIntoView({ block: 'start' });
+    else if (changed) scrollTo(0, 0);
+  });
+  return tab;
+}
+addEventListener('popstate', () => {
+  const t = location.hash.slice(1);
+  state.tab = TABS.includes(t) ? t : 'home';
+  fillSettings();
+});
+
+/** Settings' forms show what is stored, each time the tab opens (typing there is kept until it closes). */
+function fillSettings() {
+  if (state.tab !== 'settings' || !nostr || !base) return;
+  actions.fillRelays(document.querySelector('form.relays-form'));
+  actions.fillBase(document.querySelector('form.base-rpc-form'));
+}
+
+/** Run `fn` now if the vault is open; else open the inline Unlock prompt at `slot`, and run it after Unlock. */
+function withVault(slot, fn) {
+  if (vault) return fn();
+  afterUnlock = fn;
+  Object.assign(state, { unlockFor: slot, unlockError: '' });
+  requestAnimationFrame(() => document.querySelector(`[data-unlock-for="${slot}"] input`)?.focus());
+  return undefined;
+}
 
 // ── UI actions ──────────────────────────────────────────────────────────────
 
@@ -274,7 +373,7 @@ const shownAt = (key, fn) => async (...args) => {
 
 /** A Base action from the card: its result (text, and its txs, linked) or error is shown there. */
 const baseUi = (what, fn) => shownAt('baseError', async () => {
-  Object.assign(state, { baseResult: '', baseTxs: [] });
+  Object.assign(state, { baseResult: '', baseTxs: [], baseDid: what });
   const { text, txs = [] } = await baseAction(what, fn);
   Object.assign(state, { baseResult: text, baseTxs: txs });
 })();
@@ -324,7 +423,7 @@ const actions = {
       wipePending();
       el.reset();
       return out;
-    });
+    }, { backedUp: true }); // reached only after the words were confirmed, typed in, or brought as files
   }),
   /**
    * Dockerized Neuron files: decrypted with the Docker vault password and translated into this app's
@@ -357,20 +456,52 @@ const actions = {
         : 'Choose a passphrase for this app.';
       goStep('passphrase');
       return null;
-    });
+    }, { backedUp: true });
   }),
   unlock: shownAt('vaultError', async (f, el) => {
     await exclusive('unlock', () => unlock(f.pass));
     el.reset();
   }),
+  /** The inline prompt: Unlock, then the action it was opened for. */
+  unlockThen: shownAt('unlockError', async (f, el) => {
+    await exclusive('unlock', () => unlock(f.pass));
+    el.reset();
+    const fn = afterUnlock;
+    afterUnlock = null;
+    await fn?.();
+  }),
+  cancelUnlock() {
+    afterUnlock = null;
+    Object.assign(state, { unlockFor: '', unlockError: '' });
+  },
+  go,
+  /** Streams: a stream's detail (its trend, its model, its latest predictions), or none (''). */
+  async openStream(uuid) {
+    state.streamOpen = uuid;
+    state.streamPreds = uuid ? await db.predictions(uuid, 10) : [];
+  },
+  /** Home's action card: its one button (docs/design/health.md#reasons-in-priority-order). */
+  act(a) {
+    if (!a) return;
+    if (a.do === 'reload') location.reload();
+    else if (a.do === 'poll') actions.pollNow();
+    else if (a.do === 'install') actions.install();
+    else if (a.do === 'delegate') withVault('card', actions.baseDelegate);
+    else if (a.do === 'backup') {
+      go('settings', 'backup');
+      withVault('backup', () => actions.showBackup('vault'));
+    } else if (a.do === 'go') go(a.tab, a.section);
+  },
   finishUpdate: shownAt('vaultError', async (f, el) => {
     await finishUpdate(f.pass);
     el.reset();
   }),
   lock,
   showBackup(which) {
-    const b = backupOf(which);
-    Object.assign(state, { backup: which, backupWords: b.words ?? '', backupKey: b.privateKey ?? b.nsec, backupHex: b.secret ?? '' });
+    withVault('backup', () => {
+      const b = backupOf(which);
+      Object.assign(state, { backup: which, backupWords: b.words ?? '', backupKey: b.privateKey ?? b.nsec, backupHex: b.secret ?? '' });
+    });
   },
   hideBackup() {
     Object.assign(state, { backup: '', backupWords: '', backupKey: '', backupHex: '' });
@@ -412,25 +543,27 @@ const actions = {
     actions.fillRelays(el);
   }),
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
+  /** A vault action from the UI: Unlock first (inline, at `slot`) when the vault is locked. */
+  vaultAction: (slot, name) => withVault(slot, () => actions[name]()),
   baseDelegate: () => baseUi('delegate', async () => {
-    const r = await base.delegate();
+    const r = await vaultOps.delegate();
     return { text: r.steps.length ? 'Delegated prediction power to the identity.' : 'Already delegated to the identity.',
       txs: stepTxs(r.steps) };
   }),
   baseUndelegate: () => baseUi('undelegate', async () => {
-    const r = await base.undelegate();
+    const r = await vaultOps.undelegate();
     return { text: r.steps.length ? 'Stopped delegating.' : 'Not delegated.', txs: stepTxs(r.steps) };
   }),
   baseClaim: () => baseUi('claim', async () => {
-    const r = await base.claim();
+    const r = await vaultOps.claim();
     return { text: [claimLine('Rewards', r.rewards), claimLine('Merkle', r.merkle), claimLine('Airdrop', r.airdrop)].join(' · '),
       txs: claimTxs(r) };
   }),
-  baseSend: (f, el) => baseUi('send', async () => {
-    const r = await base.send({ asset: f.asset, to: String(f.to ?? '').trim(), amount: f.amount });
+  baseSend: (f, el) => withVault('wallet', () => baseUi('send', async () => {
+    const r = await vaultOps.send({ asset: f.asset, to: String(f.to ?? '').trim(), amount: f.amount });
     el.reset();
     return { text: `Sent ${f.amount} ${f.asset}.`, txs: [{ label: `${f.asset} to ${shortHash(String(f.to).trim())}`, hash: r.hash }] };
-  }),
+  })),
   /** What is stored, not the defaults (those are the placeholders). */
   fillBase(el) {
     el.elements.rpc.value = state.base.rpcSetting;
@@ -494,9 +627,20 @@ window.satori = {
         keys.vault?.fill(0);
         keys.identity?.fill(0);
       }
-    });
+    }, { backedUp: !!vaultWords }); // given words are a backup; random ones are not until backup() shows them
     return window.satori.status();
   },
+  /**
+   * Home's answer (docs/design/health.md): { status: 'ok' | 'idle' | 'warn' | 'bad', title, line, action, days,
+   * channels: { central, base, network }, feed, reasons }, read fresh.
+   */
+  async health() {
+    ready();
+    return healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
+      nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt });
+  },
+  /** Show a tab: 'home' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL). → the tab */
+  go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
   /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit } */
   async poll() { ready(); return pollNow(); },
   /** Central's streams with the latest observation, our latest prediction and the stream's spec. */
@@ -542,24 +686,34 @@ window.satori = {
   /** Base: a fresh read of the chain (one multicall) and the last batch. */
   async base() { ready(); await base.refresh(); return base.status(); },
   /** Delegate the vault's prediction power to the identity (needs Unlock). → { steps: [{ step, by, hash }], settled } */
-  async delegate() { ready(); return baseAction('delegate', () => base.delegate()); },
+  async delegate() { ready(); return baseAction('delegate', vaultOps.delegate); },
   /** Stop delegating (needs Unlock): SATORI stays transfer-locked through the next round. */
-  async undelegate() { ready(); return baseAction('undelegate', () => base.undelegate()); },
+  async undelegate() { ready(); return baseAction('undelegate', vaultOps.undelegate); },
   /** hub.claim(), the merkle drop, the airdrop, from the vault (needs Unlock). → { rewards, merkle, airdrop } */
-  async claim() { ready(); return baseAction('claim', () => base.claim()); },
+  async claim() { ready(); return baseAction('claim', vaultOps.claim); },
   /** The identity's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
   /** From the vault (needs Unlock): { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' } → { hash } */
-  async send(o) { ready(); return baseAction('send', () => base.send(o)); },
+  async send(o) { ready(); return baseAction('send', () => vaultOps.send(o)); },
   /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
   async setBaseRpc(url) { ready(); return base.setSettings({ rpc: url }); },
   /** The unattended batch's ceiling on the max fee per gas, in gwei (null or '' = the default, 2). → base() */
   async setBaseMaxFee(gwei) { ready(); return base.setSettings({ maxFee: gwei }); },
 };
 
+/** Home's health, kept current from the log and the statuses (the UI's; agents' health() reads fresh). */
+watch(() => {
+  if (state.screen !== 'home' || !activity) return;
+  void state.activityRev; // the log changed
+  state.health = healthOf({ now: state.now, rows: activity.rows(), central: state.central, base: state.base, nostr: state.nostr,
+    storage: state.storage, app: state.app, backedUp: !!state.backupAt });
+});
+
 async function boot() {
   const root = document.getElementById('app');
   root.replaceChildren(); // index.html's "Opening…", painted before any module loads
+  const t = location.hash.slice(1);
+  if (TABS.includes(t)) state.tab = t;
   render(root, actions);
   startPwa();
   if (!(await claimTab())) return void (state.screen = 'elsewhere');

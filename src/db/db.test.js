@@ -456,3 +456,10 @@ describe('the activity log (migration 8; docs/design/health.md)', () => {
     expect(await db.activity(0)).toHaveLength(2);
   });
 });
+
+test("sparks: each central stream's last n observations, oldest first (Home's trend lines)", async () => {
+  await db.addObservations([obs({ ts: 1, value: 1 }), obs({ ts: 2, value: 2 }), obs({ ts: 3, value: 3 }),
+    obs({ stream_uuid: 'u-eth', name: 'eth', ts: 5, value: 9 })]);
+  expect(await db.sparks(2)).toEqual({ 'u-btc': [2, 3], 'u-eth': [9] });
+  expect(await db.sparks()).toEqual({ 'u-btc': [1, 2, 3], 'u-eth': [9] });
+});
