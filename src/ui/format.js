@@ -21,10 +21,10 @@ export function registrationText(r) {
 }
 
 /** Why central's vault for this identity is not ours, or ''. */
-export function mismatchText(r, vault) {
+export function mismatchText(r) {
   if (!r?.ok || !r.vaultMismatch) return '';
-  if (r.vault_address) return `Vault mismatch: central has ${r.vault_address} for this identity, not this vault (${vault}).`;
-  return `Vault mismatch: central kept no vault for this identity (${vault} may be registered to another neuron).`;
+  if (r.vaultMismatch === 'other') return 'Vault mismatch: central has another vault for this identity, not this one.';
+  return 'Vault mismatch: central kept no vault for this identity (this vault may be registered to another neuron).';
 }
 
 export function pollText(p) {

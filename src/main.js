@@ -4,7 +4,8 @@
 // subscribed Nostr streams, publishing `<stream>_pred` (docs/design/nostr.md),
 // and the identity's daily batch on Base (docs/design/base.md).
 // Unlock/Lock open and wipe the vault; the neuron never needs it (Base's
-// delegate, claims and sends do).
+// delegate, claims and sends do). The keys are one record of this app's own
+// (meta `keys`, docs/design/keys.md); Base is the only chain shown.
 // window.satori is the same surface for agents (public/llms.txt). The
 // installed app (service worker, Install, persistent storage) is src/pwa/.
 import { version } from '../package.json';
@@ -12,9 +13,9 @@ import { state, render } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb } from './db/opfs.js';
 import {
-  generateEntropy, entropyFromWords, deriveKeys, writeKeys, importDocker, loadIdentity, vaultInfo, unlockVault,
-  loadNostr, newNostrYaml, evmAddress,
+  generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockVault, passphraseOk, MIN_PASSPHRASE,
 } from './keys/index.js';
+import { nsec, nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, modelsOf } from './neuron/index.js';
 import { backfillHistory } from './neuron/history.js';
@@ -32,14 +33,14 @@ const DEFAULTS = defaultsFrom(import.meta.env, import.meta.env.DEV ? DEV_DEFAULT
 const DEFAULT_CENTRAL = DEFAULTS.central;
 
 let db;
-let files = null; // { walletYaml, vaultYaml, nostrYaml } as stored
+let record = null; // the keys as stored (meta `keys`)
 let identity = null;
 let nostrKey = null; // { secret, pubkey }: plaintext, as the identity
 let nostr = null; // the Nostr flow
-let vaultPublic = { address: null, pubkey: null }; // read from vault.yaml while locked
+let vaultPublic = { pubkey: null, evmAddress: null }; // from the record, while locked
 let vault = null; // only while unlocked
 let lockCount = 0; // a Lock during an Unlock in flight wins
-let pending = null; // setup only: { vault, identity? } entropy
+let pending = null; // setup only: { vault, identity?, nostr? } secrets
 let central = null;
 let registration = null; // this page load's register result
 let poller = null;
@@ -87,8 +88,7 @@ async function connect() {
 
 /** Register, as Lite does on every start; the result is shown, never thrown. */
 async function registerWith(c) {
-  const r = await register({ central: c, vaultPubkey: vaultPublic.pubkey, vaultAddress: vaultPublic.address,
-    nostrPubkey: nostrKey.pubkey });
+  const r = await register({ central: c, vaultPubkey: vaultPublic.pubkey, nostrPubkey: nostrKey.pubkey });
   if (c !== central) return; // the URL changed meanwhile
   registration = r;
   console[r.ok && !r.vaultMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
@@ -114,24 +114,10 @@ async function runCycle() {
   return r;
 }
 
-/** The stored Nostr key; an install from before step 5 gets one now (start.py:120-149). */
-async function nostrYamlOf() {
-  let text = await db.get('nostr_yaml');
-  if (!text) {
-    text = newNostrYaml();
-    await db.set('nostr_yaml', text);
-    await db.checkpoint();
-  }
-  return text;
-}
-
 async function startNeuron() {
-  files = { walletYaml: await db.get('wallet_yaml'), vaultYaml: await db.get('vault_yaml'), nostrYaml: await nostrYamlOf() };
-  identity = await loadIdentity(files.walletYaml);
-  vaultPublic = vaultInfo(files.vaultYaml);
-  nostrKey = loadNostr(files.nostrYaml);
-  state.identity = identity.address;
-  state.vault = vaultPublic.address ?? '';
+  ({ identity, nostr: nostrKey, vault: vaultPublic } = loadKeys(record));
+  state.identity = identity.evmAddress;
+  state.vault = vaultPublic.evmAddress;
   state.centralDefault = DEFAULT_CENTRAL;
   const c = await connect();
   poller = createPoller(runCycle, { db, onChange: ({ next, running }) => {
@@ -142,7 +128,7 @@ async function startNeuron() {
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite },
     onChange: refreshNostr });
   await refreshNostr();
-  base = createBase({ db, identity, vaultAddress: evmAddress(vaultPublic.pubkey), vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
+  base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase });
   await refreshBase();
   state.screen = 'home';
@@ -178,17 +164,22 @@ async function setCentral(raw) {
   await base.refresh(); // this central's Base config
 }
 
-async function saveKeys({ walletYaml, vaultYaml, nostrYaml }) {
-  await db.set('nostr_yaml', nostrYaml);
-  await db.set('vault_yaml', vaultYaml); // vault first: boot needs both
-  await db.set('wallet_yaml', walletYaml);
+/** The keys record, stored in one commit (each commit is checkpointed: docs/design/storage.md). */
+async function storeKeys(r) {
+  await db.set('keys', r);
   await db.checkpoint();
+  record = r;
+}
+
+async function saveKeys(r) {
+  await storeKeys(r);
   await startNeuron();
 }
 
 async function unlock(passphrase) {
   const count = lockCount;
-  const v = await unlockVault(files.vaultYaml, passphrase);
+  const { vault: v, record: upgraded } = await unlockVault(record, passphrase);
+  if (upgraded) await storeKeys(upgraded); // an earlier version's vault, now in this app's format (keys.md#migration)
   if (count !== lockCount) return void v.lock();
   vault?.lock();
   vault = v;
@@ -199,21 +190,29 @@ function lock() {
   lockCount++;
   vault?.lock();
   vault = null;
-  Object.assign(state, { unlocked: false, backup: '', backupWords: '', backupWif: '' });
+  Object.assign(state, { unlocked: false, backup: '', backupWords: '', backupKey: '', backupHex: '' });
 }
 
+/** An earlier version's vault with no public key in clear: its first Unlock stores it in this app's format, then the neuron starts. */
+async function finishUpdate(passphrase) {
+  await exclusive('unlock', () => unlock(passphrase));
+  await startNeuron();
+}
+
+const BACKUPS = {
+  identity: () => identity.backup(),
+  vault: () => vault.backup(),
+  nostr: () => ({ nsec: nsec(nostrKey.secret), secret: nostrKey.secret }),
+};
+
+/** One key's backup ({ words, privateKey }, or the Nostr key's { nsec, secret }), or all three; needs Unlock. */
 function backupOf(which) {
-  if (which !== 'identity' && which !== 'vault') throw new Error("Name the key: 'identity' or 'vault'.");
+  if (which !== undefined && !Object.hasOwn(BACKUPS, which)) {
+    throw new Error("Name the key: 'identity', 'vault' or 'nostr' (or nothing, for all three).");
+  }
   if (!vault) throw new Error('Unlock the vault first');
-  return (which === 'vault' ? vault : identity).backup();
-}
-
-const FILES = { 'wallet.yaml': 'walletYaml', 'vault.yaml': 'vaultYaml', 'nostr.yaml': 'nostrYaml' };
-
-function fileText(name) {
-  if (!Object.hasOwn(FILES, name)) throw new Error("Name the file: 'wallet.yaml', 'vault.yaml' or 'nostr.yaml'.");
-  if (!vault) throw new Error('Unlock the vault first');
-  return files[FILES[name]];
+  if (which !== undefined) return BACKUPS[which]();
+  return Object.fromEntries(Object.entries(BACKUPS).map(([k, f]) => [k, f()]));
 }
 
 /** Subscribe or unsubscribe, then the catalog's mark follows. */
@@ -241,10 +240,11 @@ async function exclusive(what, fn, slot = 'busy') {
 /** A Base action, one at a time; then the card is read again. */
 const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => void refreshBase());
 
-/** Setup, from the UI or an agent: one at a time, and only on the Setup screen. */
-const setup = (makeFiles) => exclusive('setup', async () => {
+/** Setup, from the UI or an agent: one at a time, and only on the Setup screen. `makeRecord` → the keys, or null (not yet). */
+const setup = (makeRecord) => exclusive('setup', async () => {
   if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
-  await saveKeys(await makeFiles());
+  const r = await makeRecord();
+  if (r) await saveKeys(r);
 });
 
 // ── UI actions ──────────────────────────────────────────────────────────────
@@ -254,6 +254,7 @@ function wipePending() {
   pending?.identity?.fill(0);
   pending = null;
   state.words = [];
+  state.passNote = '';
 }
 
 function goStep(step) {
@@ -286,8 +287,8 @@ const actions = {
   goStep,
   newWords() {
     wipePending();
-    pending = { vault: generateEntropy() };
-    state.words = deriveKeys(pending.vault).words.split(' ');
+    pending = { vault: generateSecret() };
+    state.words = wordsOf(pending.vault).split(' ');
     goStep('words');
   },
   toConfirm() {
@@ -303,11 +304,12 @@ const actions = {
   restoreWords(f, el) {
     wipePending();
     const words = (text, which) => {
-      try { return entropyFromWords(text); } catch { throw new Error(`The ${which} words are not 24 valid backup words.`); }
+      try { return secretFromWords(text); } catch { throw new Error(`The ${which} words are not 24 valid backup words.`); }
     };
     try {
       pending = { vault: words(f.vault, 'vault') };
       if (f.identity.trim()) pending.identity = words(f.identity, 'identity');
+      if (f.nostr.trim()) pending.nostr = nostrSecretOf(f.nostr);
     } catch (err) {
       wipePending();
       return void (state.error = err.message);
@@ -318,41 +320,60 @@ const actions = {
   createKeys: shownAt('error', async (f, el) => {
     if (f.pass1 !== f.pass2) throw new Error('The passphrases differ.');
     await setup(async () => {
-      const out = await writeKeys(pending, f.pass1);
+      const out = await newKeys(pending, f.pass1);
       wipePending();
       el.reset();
       return out;
     });
   }),
+  /**
+   * Dockerized Neuron files: decrypted with the Docker vault password and translated into this app's
+   * record. The same password becomes this app's passphrase when it meets the rule and `reuse` is ticked;
+   * otherwise the passphrase step asks for one.
+   */
   importDocker: shownAt('error', async (el) => {
     const f = new FormData(el);
     await setup(async () => {
       const n = f.get('nostr');
-      const out = await importDocker({
-        walletText: await f.get('wallet').text(), vaultText: await f.get('vault').text(), passphrase: f.get('pass'),
+      const password = String(f.get('pass') ?? '');
+      const reuse = f.get('reuse') === 'on';
+      const secrets = await readDockerFiles({
+        walletText: await f.get('wallet').text(), vaultText: await f.get('vault').text(), password,
         nostrText: n?.size ? await n.text() : undefined,
       });
       el.reset();
-      return out;
+      if (reuse && passphraseOk(password)) {
+        try {
+          return await newKeys(secrets, password);
+        } finally {
+          secrets.identity.fill(0);
+          secrets.vault.fill(0);
+        }
+      }
+      wipePending();
+      pending = secrets;
+      state.passNote = reuse
+        ? `The Dockerized Neuron's vault password is shorter than ${MIN_PASSPHRASE} characters. Choose a new passphrase for this app.`
+        : 'Choose a passphrase for this app.';
+      goStep('passphrase');
+      return null;
     });
   }),
   unlock: shownAt('vaultError', async (f, el) => {
     await exclusive('unlock', () => unlock(f.pass));
     el.reset();
   }),
+  finishUpdate: shownAt('vaultError', async (f, el) => {
+    await finishUpdate(f.pass);
+    el.reset();
+  }),
   lock,
   showBackup(which) {
-    const { words, wif } = backupOf(which);
-    Object.assign(state, { backup: which, backupWords: words, backupWif: wif });
+    const b = backupOf(which);
+    Object.assign(state, { backup: which, backupWords: b.words ?? '', backupKey: b.privateKey ?? b.nsec, backupHex: b.secret ?? '' });
   },
   hideBackup() {
-    Object.assign(state, { backup: '', backupWords: '', backupWif: '' });
-  },
-  download(name) {
-    const url = URL.createObjectURL(new Blob([fileText(name)], { type: 'application/x-yaml' }));
-    const link = Object.assign(document.createElement('a'), { href: url, download: name });
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    Object.assign(state, { backup: '', backupWords: '', backupKey: '', backupHex: '' });
   },
   async copy(key, text) {
     try {
@@ -460,14 +481,15 @@ window.satori = {
   install() { return install(); },
   /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */
   update() { return applyUpdate(); },
-  /** Create a neuron (random keys unless words are given). The vault stays locked. */
-  async setup({ passphrase, vaultWords, identityWords } = {}) {
+  /** Create a neuron (random keys unless words, or the Nostr key's nsec or hex, are given). The vault stays locked. */
+  async setup({ passphrase, vaultWords, identityWords, nostrKey } = {}) {
     await setup(async () => {
       const keys = {};
       try {
-        keys.vault = vaultWords ? entropyFromWords(vaultWords) : generateEntropy();
-        if (identityWords) keys.identity = entropyFromWords(identityWords);
-        return await writeKeys(keys, passphrase);
+        keys.vault = vaultWords ? secretFromWords(vaultWords) : generateSecret();
+        if (identityWords) keys.identity = secretFromWords(identityWords);
+        if (nostrKey) keys.nostr = nostrSecretOf(nostrKey);
+        return await newKeys(keys, passphrase);
       } finally {
         keys.vault?.fill(0);
         keys.identity?.fill(0);
@@ -485,12 +507,22 @@ window.satori = {
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
   /** Set the central URL ('' = the default) and register there. → status().central */
   async setCentral(url) { ready(); await setCentral(url); return centralStatus(); },
-  async unlock(passphrase) { ready(); await exclusive('unlock', () => unlock(passphrase)); return true; },
+  /** Unlock (on the 'finish' screen it also finishes an earlier version's update, then the neuron starts). */
+  async unlock(passphrase) {
+    if (state.screen === 'finish') {
+      await finishUpdate(passphrase);
+    } else {
+      ready();
+      await exclusive('unlock', () => unlock(passphrase));
+    }
+    return true;
+  },
   lock() { lock(); return true; },
-  /** { words, wif } of 'identity' or 'vault'; needs Unlock, as Docker's dashboard needs login. */
+  /**
+   * Needs Unlock, as Docker's dashboard needs login. 'identity' | 'vault' → { words, privateKey };
+   * 'nostr' → { nsec, secret }; nothing → { identity, vault, nostr }.
+   */
   backup(which) { ready(); return backupOf(which); },
-  /** wallet.yaml, vault.yaml or nostr.yaml text, as Docker reads it; needs Unlock. */
-  file(name) { ready(); return fileText(name); },
   /** Nostr: the key, the relays and their state, the subscribed streams with the latest observation and our `_pred`. */
   async nostr() { ready(); return nostrStatus(); },
   /** The relays' stream catalog (newest per provider and stream, no tombstones); `pred` and `subscribed` marked. */
@@ -534,8 +566,11 @@ async function boot() {
   try {
     db = await openOpfsDb();
     state.recovered = db.recovered; // a WAL DuckDB could not replay, set aside (docs/design/storage.md#recovery)
-    if ((await db.get('wallet_yaml')) && (await db.get('vault_yaml'))) return void (await startNeuron());
-    state.screen = 'setup';
+    record = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
+    if (!record) return void (state.screen = 'setup');
+    // an earlier version's vault whose public key was not in clear: the neuron needs it (register, the Base address)
+    if (!loadKeys(record).vault.pubkey) return void (state.screen = 'finish');
+    await startNeuron();
   } catch (err) {
     state.fatal = `The neuron did not start: ${err?.message ?? err}`;
     state.screen = 'fatal';

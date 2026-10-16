@@ -10,9 +10,8 @@ import { readFileSync } from 'node:fs';
 import WebSocket from 'ws';
 import { connectProvider } from '../scripts/provider.mjs';
 import { createRelay } from '../src/nostr/relay.js';
-import { verifyEvent } from '../src/nostr/event.js';
+import { verifyEvent, nostrPubkey } from '../src/nostr/event.js';
 import { relayUuid } from '../src/nostr/satori.js';
-import { readNostrYaml } from '../src/keys/docker.js';
 import { openApp, reloadApp } from './load.js';
 import { stubCentral as stubAt } from './stub.js';
 
@@ -144,10 +143,12 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   expect(last.tags).toContainEqual(['seq', '3']);
   expect(await centralRelay.fetch([{ authors: [me] }])).toEqual([]);
 
-  // The key moves as Docker's nostr.yaml (needs Unlock, as the other files).
-  await expect(page.evaluate(() => window.satori.file('nostr.yaml'))).rejects.toThrow(/Unlock/);
+  // The key's backup (needs Unlock, as the others'): nsec and hex; it is random, not from the words.
+  await expect(page.evaluate(() => window.satori.backup('nostr'))).rejects.toThrow(/Unlock/);
   await page.evaluate((p) => window.satori.unlock(p), PASS);
-  expect(readNostrYaml(await page.evaluate(() => window.satori.file('nostr.yaml'))).pubkeyHex).toBe(me);
+  const backup = await page.evaluate(() => window.satori.backup('nostr'));
+  expect(nostrPubkey(backup.secret)).toBe(me);
+  expect(backup.nsec).toMatch(/^nsec1/);
 
   expect(stub.prod).toEqual([]);
   expect(stub.blocked.every((u) => /7778|satorian/.test(u))).toBe(true);

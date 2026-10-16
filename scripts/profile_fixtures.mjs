@@ -47,6 +47,16 @@ const add = (p) => profiles.push(p);
       expect: { identity: a.entropyHex, vault: b.entropyHex, nostr: null },
     });
   }
+  // Until 2935be0 (14:00), import did not check each file's role: a plain-text vault.yaml was kept as given.
+  const { importDocker } = await at('a5bd150', 'keys/index.js');
+  const plain = await importDocker({ walletText: a.walletYaml, vaultText: b.walletYaml, passphrase: 'anything' });
+  if (plain.vaultYaml !== b.walletYaml) throw new Error('a5bd150 was expected to keep the plain vault as given');
+  add({
+    label: 'step 2 Docker import (before 2935be0): a plain-text vault.yaml, kept as given',
+    commit: 'a5bd150', schema: await migrations('a5bd150'), passphrase: 'a new passphrase',
+    meta: { wallet_yaml: plain.walletYaml, vault_yaml: plain.vaultYaml },
+    expect: { identity: a.entropyHex, vault: b.entropyHex, nostr: null },
+  });
 }
 
 // e84335f → cdce045: Latin-1 bytes as satorilib, no Nostr key yet (one is made at the next load).

@@ -11,7 +11,7 @@ vi.setConfig({ testTimeout: 60_000 });
 const BASE = 'https://central.test';
 const T = 1_792_000_000;
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-const identity = { pubkey: '02ab', sign: () => 'sig' };
+const identity = { pubkey: '02ab', signCentralLogin: () => 'sig' };
 const row = (uuid, at, value, o = {}) => ({ id: 1, stream_uuid: uuid, observed_at: String(at), value: String(value), ts: '2026-10-14T23:00:12', ...o });
 const entry = (uuid, name, at, value) => ({ ...row(uuid, at, value), stream: { uuid, name, meta: null } });
 

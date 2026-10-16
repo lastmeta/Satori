@@ -1,5 +1,9 @@
 // Ordered migrations. Never edit a shipped entry: append a new one.
-// meta.schema_version holds how many have run.
+// meta.schema_version holds how many have run. An entry is SQL, or a function
+// given the meta rows ({ get, set, remove }) for what SQL can't do; each runs
+// in its own transaction.
+import { recordFromRows } from '../keys/index.js';
+
 export const MIGRATIONS = [
   // 1 (step 1): streams fetched from a URL; times in ms.
   `CREATE TABLE streams (name VARCHAR PRIMARY KEY, url VARCHAR NOT NULL,
@@ -72,4 +76,15 @@ export const MIGRATIONS = [
   `CREATE TABLE model_specs (target_uuid VARCHAR PRIMARY KEY, spec VARCHAR NOT NULL, score DOUBLE,
      generation INTEGER NOT NULL DEFAULT 0, accepted INTEGER NOT NULL DEFAULT 0, updated_at BIGINT NOT NULL);
    ALTER TABLE streams ADD COLUMN history_at BIGINT;`,
+  // 7 (2026-10-16): the keys move from Docker's wallet.yaml / vault.yaml / nostr.yaml texts into this
+  // app's own record, meta `keys` (docs/design/keys.md#the-record). The identity and the Nostr key are
+  // translated now; the vault keeps its yaml in the record until its next Unlock re-encrypts it. Rows of
+  // a setup cut off before wallet_yaml, and the step-1 prototype's meta.vault, are left as they are.
+  async ({ get, set, remove }) => {
+    const walletYaml = await get('wallet_yaml');
+    const vaultYaml = await get('vault_yaml');
+    if (!walletYaml || !vaultYaml) return;
+    await set('keys', await recordFromRows({ walletYaml, vaultYaml, nostrYaml: await get('nostr_yaml') }));
+    await remove('wallet_yaml', 'vault_yaml', 'nostr_yaml');
+  },
 ];

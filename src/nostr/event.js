@@ -1,13 +1,13 @@
 // NIP-01 events and the Nostr key (docs/design/nostr.md), over @noble/curves'
 // BIP-340 schnorr, as nostr-sdk makes them for Satori Lite:
-//   nostrPubkey(secretHex) / generateNostrSecret() / npub(pubkeyHex)
+//   nostrPubkey(secretHex) / generateNostrSecret() / npub(pubkeyHex) / nsec(secretHex) / nostrSecretOf(nsecOrHex)
 //   signEvent({ created_at, kind, tags, content }, secretHex) → event
 //   verifyEvent(event) → id and signature check
 import { schnorr } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { bech32 } from '@scure/base';
-import { generateEntropy } from '../keys/keys.js';
+import { generateSecret } from '../keys/keys.js';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -18,10 +18,28 @@ export function nostrPubkey(secretHex) {
 }
 
 /** A random secret (64 hex), independent of the identity and the vault (start.py:136-138). */
-export const generateNostrSecret = () => bytesToHex(generateEntropy());
+export const generateNostrSecret = () => bytesToHex(generateSecret());
 
 /** NIP-19 npub of a pubkey. */
 export const npub = (pubkeyHex) => bech32.encode('npub', bech32.toWords(hexToBytes(pubkeyHex)));
+
+/** A Nostr secret (hex) from its backup: an nsec or 64 hex characters. */
+export function nostrSecretOf(text) {
+  const t = String(text ?? '').trim().toLowerCase();
+  try {
+    const hex = t.startsWith('nsec1') ? bytesToHex(bech32.fromWords(bech32.decode(t).words)) : t;
+    nostrPubkey(hex);
+    return hex;
+  } catch {
+    throw new Error('Not a Nostr key: give its nsec or 64 hex characters.');
+  }
+}
+
+/** NIP-19 nsec of a secret: the Nostr key's backup, as Nostr apps import it. */
+export function nsec(secretHex) {
+  nostrPubkey(secretHex); // a valid secret, or a throw
+  return bech32.encode('nsec', bech32.toWords(hexToBytes(secretHex)));
+}
 
 
 /** NIP-01 id: sha256 of [0, pubkey, created_at, kind, tags, content]. */

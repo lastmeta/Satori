@@ -11,7 +11,7 @@ import { MIN_PASSPHRASE } from '../keys/index.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
 
 export const state = reactive({
-  screen: 'loading', // loading | elsewhere | fatal | setup | home
+  screen: 'loading', // loading | elsewhere | fatal | setup | finish (an earlier version's vault: Unlock once) | home
   fatal: '',
   busy: '', // what is running: '' | 'setup' | 'unlock'
   error: '',
@@ -19,14 +19,16 @@ export const state = reactive({
   step: 'choose', // choose | words | confirm | restore | docker | passphrase
   words: [],
   confirmAt: [],
+  passNote: '', // the passphrase step's note (an import whose password can't be reused)
   // home
-  identity: '', // address
-  vault: '', // address
+  identity: '', // the identity's Base address
+  vault: '', // the vault's Base address (shown while locked)
   unlocked: false,
   vaultError: '',
-  backup: '', // '' | 'identity' | 'vault': which key's words are shown
-  backupWords: '',
-  backupWif: '',
+  backup: '', // '' | 'identity' | 'vault' | 'nostr': which key's backup is shown
+  backupWords: '', // identity, vault: the 24 words
+  backupKey: '', // identity, vault: the private key (0x hex); nostr: the nsec
+  backupHex: '', // nostr: the secret (hex)
   copied: '',
   central: { url: '', registration: null, lastPoll: null, nextPoll: null, polling: false, lastSubmit: null, pending: 0 },
   centralDefault: '',
@@ -75,7 +77,7 @@ const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd 
 const errorLine = () => html`<p class="error" role="alert" hidden="${() => !state.error}">${() => state.error}</p>`;
 const wordList = (words) => html`<ol class="words">${() => words().map((w) => html`<li>${w}</li>`)}</ol>`;
 const SAFARI_ADD = 'To keep your keys, add Satori to the Dock (File › Add to Dock) or Home Screen (Share › Add to Home Screen). '
-  + 'The added app starts empty: set it up there, or import your downloaded Dockerized Neuron files.';
+  + 'The added app starts empty: set it up there, or restore it from your 24 words.';
 
 /** Install Satori (Chromium's prompt), or Safari's way to add it; hidden once installed (docs/design/pwa.md). */
 const install = (a) => html`<div class="install" hidden="${() => state.app.installed || !(state.app.canInstall || state.safari)}">
@@ -133,6 +135,9 @@ function setup(a) {
       <label>Identity words (24, optional: a new identity is made if empty)
         <textarea name="identity" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
+      <label>Nostr key (nsec or hex, optional: a new one is made if empty)
+        <input name="nostr" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </label>
       ${errorLine()}
       <div class="actions">
         <button class="primary" type="submit">Continue</button>
@@ -142,11 +147,13 @@ function setup(a) {
 
     <form hidden="${showStep('docker')}" @submit="${(e) => { e.preventDefault(); a.importDocker(e.target); }}">
       <h2>Import Dockerized Neuron files</h2>
-      <p class="muted">The two files from a Dockerized Neuron’s wallet folder (unzip “Download Wallet” first).</p>
+      <p class="muted">The files from a Dockerized Neuron’s wallet folder (unzip “Download Wallet” first). Their keys
+        are read here and stored in this app’s own way; the files themselves are not kept.</p>
       <label>wallet.yaml (identity) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
       <label>vault.yaml <input name="vault" type="file" accept=".yaml,.yml" required></label>
       <label>nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
-      <label>Vault password <input name="pass" type="password" autocomplete="current-password" required></label>
+      <label>Vault password (the Dockerized Neuron’s) <input name="pass" type="password" autocomplete="current-password" required></label>
+      <label class="check"><input name="reuse" type="checkbox" checked> Use it as this app’s passphrase too (if it has at least ${MIN_PASSPHRASE} characters)</label>
       ${errorLine()}
       <div class="actions">
         <button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy ? 'Importing…' : 'Import')}</button>
@@ -156,8 +163,9 @@ function setup(a) {
 
     <form hidden="${showStep('passphrase')}" @submit="${(e) => a.createKeys(form(e), e.target)}">
       <h2>Choose a passphrase</h2>
-      <p class="muted">It encrypts the vault in this browser. At least ${MIN_PASSPHRASE} characters,
-        Latin-1 only (no emoji or €), as the Dockerized Neuron needs.</p>
+      <p class="muted" data-test="pass-note" hidden="${() => !state.passNote}">${() => state.passNote}</p>
+      <p class="muted">It encrypts the vault in this browser. At least ${MIN_PASSPHRASE} characters, in any
+        language or script; a longer phrase is stronger.</p>
       <label>Passphrase <input name="pass1" type="password" autocomplete="new-password" required></label>
       <label>Repeat passphrase <input name="pass2" type="password" autocomplete="new-password" required></label>
       ${errorLine()}
@@ -173,20 +181,18 @@ function idRow(kind, test, value, a, title = () => '') {
   return html`<div class="id"><span class="label">${kind}</span><code data-test="${test}" title="${title}">${value}</code><button class="small-btn" @click="${() => a.copy(test, value())}">${() => (state.copied === test ? 'Copied' : 'Copy')}</button></div>`;
 }
 
-/** The three keys, each with its identifiers: Evrmore and Base addresses, the Nostr pubkey. */
+/** The three keys: the identity's and the vault's Base addresses, the Nostr pubkey. */
 function keys(a) {
   return html`
   <div class="card keys">
     <div class="key">
       <h3>Identity</h3>
-      ${idRow('Evrmore', 'identity', () => state.identity, a)}
-      ${idRow('Base', 'identity-base', () => state.base.identity.address, a)}
+      ${idRow('Address', 'identity', () => state.identity, a)}
       <p class="muted small">Runs the neuron on its own: signs in to central and sends the daily Base batch. Unencrypted.</p>
     </div>
     <div class="key">
       <h3>Vault <span class="${() => (state.unlocked ? 'badge on' : 'badge')}" data-test="vault-state">${() => (state.unlocked ? 'Unlocked' : 'Locked')}</span></h3>
-      ${idRow('Evrmore', 'vault', () => state.vault, a)}
-      ${idRow('Base', 'vault-base', () => state.base.vault.address, a)}
+      ${idRow('Address', 'vault', () => state.vault, a)}
       <p class="muted small">Holds your funds. Encrypted with your passphrase.</p>
       <form class="unlock" hidden="${() => state.unlocked}" @submit="${(e) => a.unlock(form(e), e.target)}">
         <input name="pass" type="password" aria-label="Vault passphrase" placeholder="Vault passphrase" autocomplete="current-password" required>
@@ -223,7 +229,7 @@ function centralCard(a) {
       ${fact('Pending', 'pending', () => String(c().pending))}
       ${fact('History', 'history', () => historyText(c().history))}
     </dl>
-    <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration, state.vault)}">${() => mismatchText(c().registration, state.vault)}</p>
+    <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration)}">${() => mismatchText(c().registration)}</p>
     ${streams()}
   </section>`;
 }
@@ -421,23 +427,29 @@ function backup(a) {
     <summary>Backup</summary>
     <p class="muted" hidden="${() => state.unlocked}">Unlock the vault to back up your keys.</p>
     <div hidden="${() => !state.unlocked}">
-      <p class="muted">Each key is 24 words (or its private key). The files load in a Dockerized Neuron (nostr.yaml is the Nostr key).</p>
+      <p class="muted">The identity and the vault are 24 words each; Restore from words brings them back. The Nostr
+        key is random, not from the words, so it is backed up on its own.</p>
       <div class="backup-row">
         <span class="label">Show</span>
         <button class="small-btn" @click="${() => a.showBackup('identity')}">Identity words</button>
         <button class="small-btn" @click="${() => a.showBackup('vault')}">Vault words</button>
+        <button class="small-btn" @click="${() => a.showBackup('nostr')}">Nostr key</button>
       </div>
-      <div class="backup-row">
-        <span class="label">Dockerized Neuron files</span>
-        <button class="small-btn" data-test="download-wallet" @click="${() => a.download('wallet.yaml')}">Download wallet.yaml</button>
-        <button class="small-btn" data-test="download-vault" @click="${() => a.download('vault.yaml')}">Download vault.yaml</button>
-        <button class="small-btn" data-test="download-nostr" @click="${() => a.download('nostr.yaml')}">Download nostr.yaml</button>
-      </div>
-      <div class="backup" hidden="${() => !state.backupWords}">
-        <h3>${() => (state.backup === 'vault' ? 'Vault' : 'Identity')} words</h3>
-        ${wordList(() => state.backupWords.split(' ').filter(Boolean))}
-        <div class="label">Private key (WIF)</div>
-        <code class="block" data-test="wif">${() => state.backupWif}</code>
+      <div class="backup" hidden="${() => !state.backup}">
+        <div hidden="${() => state.backup === 'nostr'}">
+          <h3>${() => (state.backup === 'vault' ? 'Vault' : 'Identity')} words</h3>
+          ${wordList(() => state.backupWords.split(' ').filter(Boolean))}
+          <div class="label">Private key (imports into a Base wallet)</div>
+        </div>
+        <div hidden="${() => state.backup !== 'nostr'}">
+          <h3>Nostr key</h3>
+          <div class="label">nsec</div>
+        </div>
+        <code class="block" data-test="backup-key">${() => state.backupKey}</code>
+        <div hidden="${() => !state.backupHex}">
+          <div class="label">Secret (hex)</div>
+          <code class="block" data-test="backup-hex">${() => state.backupHex}</code>
+        </div>
         <div class="actions"><button @click="${a.hideBackup}">Hide</button></div>
       </div>
     </div>
@@ -485,6 +497,17 @@ export function render(root, a) {
         <a href="https://github.com/lastmeta/Satori/issues" target="_blank" rel="noopener">github.com/lastmeta/Satori/issues</a>.
         Meanwhile your 24 words (or the Dockerized Neuron files) can set the neuron up in another browser.</p>
       <div class="actions"><button class="primary" @click="${() => location.reload()}">Reload</button></div>
+    </section>
+    <section class="card narrow" hidden="${show('finish')}">
+      <h2>Unlock to finish the update</h2>
+      <p class="muted">An earlier version stored this vault with its public key encrypted, so its address can’t
+        be shown until it is opened once. Enter its passphrase: the vault is then stored in this app’s own format,
+        and the neuron starts.</p>
+      <form class="unlock" @submit="${(e) => a.finishUpdate(form(e), e.target)}">
+        <input name="pass" type="password" aria-label="Vault passphrase to finish the update" placeholder="Vault passphrase" autocomplete="current-password" required>
+        <button class="primary" type="submit" data-test="finish" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>
+      </form>
+      <p class="error small" role="alert" hidden="${() => !state.vaultError}">${() => state.vaultError}</p>
     </section>
     ${setup(a)}
     ${home(a)}

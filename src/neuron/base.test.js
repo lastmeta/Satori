@@ -4,7 +4,7 @@
 import { forecast } from '../engine/index.js';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { zeroAddress } from 'viem';
-import { publicKeys, evmAddress, signDigest } from '../keys/keys.js';
+import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
@@ -14,7 +14,7 @@ import {
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
-  return { evmAddress: evmAddress(publicKeys(secret).pubkey), signDigest: (h) => signDigest(secret, h) };
+  return { evmAddress: evmAddress(publicKey(secret)), signDigest: (h) => signDigest(secret, h) };
 };
 const identity = signerOf('11'.repeat(32));
 const vaultKey = signerOf('22'.repeat(32));

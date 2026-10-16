@@ -25,12 +25,14 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   const { s, rpc, central } = await setup(context);
   await openApp(page);
   await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
-  await expect(page.locator('[data-test=identity]')).toHaveText(/^E/, { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=identity]')).toHaveText(/^0x[0-9a-fA-F]{40}$/, { timeout: LOAD_TIMEOUT });
 
   // Locked: the status needs no key; both Base addresses; no gas yet.
   let base = await page.evaluate(() => window.satori.base());
   const I = base.identity.address.toLowerCase();
   const V = base.vault.address.toLowerCase();
+  await expect(page.locator('[data-test=identity]')).toHaveText(base.identity.address); // the Keys card shows the Base addresses
+  await expect(page.locator('[data-test=vault]')).toHaveText(base.vault.address);
   expect(base).toMatchObject({ rpc: ['/rpc'], config: 'bundled', round: ROUND, vault: { delegated: 'none', satori: '0' } });
   await expect(fact(page, 'identity')).toHaveText('0 ETH · about 0 daily batches'); // no warning before delegating
   await expect(fact(page, 'delegation')).toHaveText('Not delegated: Unlock, then Delegate prediction power');
@@ -49,7 +51,7 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'lock')).toHaveText('Free to send');
 
   // Unlock → Delegate prediction power: the identity's two steps, then the vault's.
-  await page.getByLabel('Vault passphrase').fill(PASS);
+  await page.getByLabel('Vault passphrase', { exact: true }).fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
   // A word list on the page first (as after a setup in the UI): ArrowJS 1.0.6 reuses its <li> for other lists.
   await page.getByText('Backup', { exact: true }).click();
@@ -146,8 +148,8 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
 test('the Base settings: the RPC (https or a path on this site; empty is the default) and the batch\'s max fee', async ({ context, page }) => {
   await setup(context);
   await openApp(page);
-  await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
-  await expect(page.locator('[data-test=identity]')).toHaveText(/^E/, { timeout: LOAD_TIMEOUT });
+  await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+  await expect(page.locator('[data-test=identity]')).toHaveText(/^0x[0-9a-fA-F]{40}$/, { timeout: LOAD_TIMEOUT });
   await expect(fact(page, 'rpc')).toHaveText('Local test chain (a fork of Base Sepolia)');
   await expect(page.evaluate(() => window.satori.setBaseRpc('http://127.0.0.1:8545'))).rejects.toThrow(/https:\/\/ URL or a path/);
   await expect(page.evaluate(() => window.satori.setBaseMaxFee('-1'))).rejects.toThrow(/positive number of gwei/);

@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  nostrPubkey, generateNostrSecret, npub, eventId, signEvent, verifyEvent,
+  nostrPubkey, generateNostrSecret, npub, nsec, nostrSecretOf, eventId, signEvent, verifyEvent,
 } from './event.js';
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
@@ -24,6 +24,19 @@ describe('the Nostr key', () => {
   test('refuses a secret that is not a key', () => {
     expect(() => nostrPubkey('00'.repeat(32))).toThrow();
     expect(() => nostrPubkey('zz')).toThrow();
+  });
+  test('nsec (NIP-19): the spec\'s own example', () => {
+    expect(nsec('67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa'))
+      .toBe('nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5');
+    expect(() => nsec('00')).toThrow();
+  });
+  test('a Nostr secret from its backup: nsec or hex, either case, spaces around', () => {
+    const hex = '67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa';
+    expect(nostrSecretOf(' nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5 ')).toBe(hex);
+    expect(nostrSecretOf(hex.toUpperCase())).toBe(hex);
+    for (const bad of ['', 'nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe6', npub(id.pubkeyHex), '00'.repeat(32), 'zz']) {
+      expect(() => nostrSecretOf(bad), bad).toThrow(/nsec or 64 hex/);
+    }
   });
   test('npub (NIP-19)', () => {
     // nostr-sdk's PublicKey.to_bech32() for the fixture key.

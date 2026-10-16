@@ -2,20 +2,25 @@
 
 [← OVERVIEW](OVERVIEW.md)
 
-The browser neuron holds Satori's two keys, made, stored and used the way the
-Docker neuron (Satori Lite, `../neuron`) and satorilib (`../satorilib`) do it,
-so a neuron moves between the two by moving two files (three with `nostr.yaml`).
+The browser neuron holds Satori's two keys, made and used as the Docker
+neuron (Satori Lite, `../neuron`) and satorilib (`../satorilib`) make and use
+them, and a random Nostr key. It stores them in a record of its own. The
+owner's direction (2026-10-16), **migrate in, never back**: what a user
+brings from the Dockerized Neuron is imported and translated into this app's
+own way; nothing is kept in Docker's formats, limits or files only so it
+could move back. This app is about Base: each key's address is its **Base
+(0x) address**, the only kind it shows.
 
-| Key | Stored as | Encrypted? | Used for |
+| Key | Stored as (meta `keys`) | Encrypted? | Used for |
 |---|---|---|---|
-| **identity** | `wallet.yaml` text in the db (`meta.wallet_yaml`) | no | everything the neuron does on its own: central register and login ([central.md](central.md)); its pubkey is the `wallet_pubkey` of our Nostr announcements; the daily Base batch ([base.md](base.md)) |
-| **vault** | `vault.yaml` text in the db (`meta.vault_yaml`) | yes, with the passphrase | holds funds; delegate, claims, sends on Base. Only while unlocked. |
-| Nostr key | `nostr.yaml` text in the db (`meta.nostr_yaml`) | no | signs the neuron's Nostr events ([nostr.md](nostr.md)); random, not one of the two keys above, as in Docker |
+| **identity** | its 32-byte secret, hex | no, on purpose | everything the neuron does on its own: central's register and login ([central.md](central.md)); its pubkey is the `wallet_pubkey` of our Nostr announcements; the daily Base batch ([base.md](base.md)) |
+| **vault** | its secret sealed with the passphrase; its public key in clear | yes | holds the funds: delegate, claims and sends on Base. Only while unlocked. |
+| Nostr key | its secret, hex | no, on purpose | signs the neuron's Nostr events ([nostr.md](nostr.md)); random, not one of the two keys above, as in Docker |
 
-The identity is unencrypted on purpose: the neuron must run after a page load
-with nobody there to type a passphrase. The vault is where the funds are, so it
-is opened only by **Unlock** (enter the passphrase) and wiped from memory by
-**Lock**.
+The identity and the Nostr key are unencrypted on purpose: the neuron must
+run after a page load with nobody there to type a passphrase. The vault holds
+the funds, so it is opened only by **Unlock** (enter the passphrase) and
+wiped from memory by **Lock**.
 
 ## What Satori Lite does (the pattern followed)
 
@@ -24,162 +29,296 @@ is opened only by **Unlock** (enter the passphrase) and wiped from memory by
 | The identity is made at startup with no user input: `EvrmoreIdentity(wallet.yaml)` loads the file, or generates and saves it when missing. No password. | `neuron/neuron-lite/start.py:75`; `satorilib/src/satorilib/wallet/identity.py:611-615`; `neuron/neuron-lite/satorineuron/init/wallet.py:94-111` ("doesn't require a password") |
 | The vault is made only when a password is given (`vault-setup`, at least 4 characters, typed twice). | `init/wallet.py:44-45,113-155`; `neuron/web/routes.py:570-619` (length rule at `:589`) |
 | Login (unlock) decrypts the vault with the password; a wrong password leaves it encrypted. Logout closes it (Lock). | `routes.py:462-568,625-634`; `init/wallet.py:219-245` |
-| The vault's address and pubkey are read from `vault.yaml` without decrypting it, so they show while locked. | `start.py:4637-4667` |
+| The vault's public key is read from `vault.yaml` without decrypting it, so it shows and registers while locked. | `start.py:4637-4667` |
 | The identity signs the daily Base batch with no vault unlock ("the vault delegated its prediction power to it"). | `start.py:1148-1165` |
 | The vault password is never saved by the web setup. | `routes.py:598` |
 | Backup: the dashboard (behind login) reveals the vault's and the identity's private key; "Download Wallet" zips `wallet.yaml` + `vault.yaml`; "Import Wallet" takes both files back. | `routes.py:1267-1291,3214-3254,2281-2420`; `web/templates/dashboard.html:2112-2160,3821-3850` |
 
-## One key, many forms (satorilib)
+## One key, one secret
 
-Each key is one 32-byte secp256k1 secret, the **entropy**, used directly as
-the Evrmore private key and as the BIP39 entropy of the 24 words. No HD path,
-no `mnemonicToSeed`.
+Each key is one 32-byte secp256k1 secret, used directly as the private key
+and as the BIP39 entropy of its 24 words: satorilib's scheme, kept so a
+neuron's words give the same keys and the same Base addresses here as in
+Docker. No HD path, no `mnemonicToSeed`, so the words do not open the same
+account in a standard wallet; whether new neurons should use BIP32 paths is
+an owner decision ([QUESTIONS](../inbox/QUESTIONS.md)). `src/keys/keys.js`:
 
 | Output | Rule | Evidence |
 |---|---|---|
 | keygen | 32 random bytes, retried until 1 ≤ k < n | `wallet/identity.py:309-317` |
-| entropy | base64, 44 characters | `wallet/identity.py:124-131,245` |
 | words | `Mnemonic('english').to_mnemonic(entropy)` (24 words) | `wallet/identity.py:319-320` |
-| privateKey | WIF: 0x80 ‖ key ‖ 0x01, base58check (52 chars) | `evrmore/identity.py:52-56` |
-| publicKey | compressed, hex (66) | `evrmore/identity.py:46-50` |
-| address | base58check(0x21 ‖ hash160(pubkey)), `E…` | `evrmore/identity.py:27-33,58-59` |
-| scripthash | sha256(`76a914‖h160‖88ac`) reversed, hex | `wallet/identity.py:290-307` |
-| sign | Evrmore signed message, base64 of 65 bytes | `evrmore/identity.py:66-67`, `evrmore/sign.py` |
-| verify | recover the key in the form the header names (31-34 compressed, 27-30 uncompressed), compare with the pubkey or address | python-evrmorelib `signmessage.py` `verifyMessage`, `core/key.py` `recover_compact` |
+| public key | compressed, hex (66) | `evrmore/identity.py:46-50` |
+| Base address | keccak256 of the uncompressed key, EIP-55 (`Account.from_key(entropy)`, satorilib's `ethAddress`) | `wallet/ethereum/wallet.py:114-121` |
+| private key (backup) | `0x` and the secret in hex: what a Base wallet's "Import account" takes | |
+| transaction signature | ECDSA over the tx hash, RFC 6979, low-S, as viem's `sign` | |
+| central's login signature | the challenge signed in the one format central's login accepts | [central.md](central.md#login-signature), `src/central/login.js` |
 
-## The files
+Central's login signature is the one place an Evrmore format survives: an
+internal protocol detail of the central client, never shown. Central also
+names a peer's keys by an address of its own form, derived from the pubkey;
+`src/central/login.js` derives it only to compare register's answer with our
+vault. Neither is a key format of this app.
 
-`wallet.yaml` and `vault.yaml` have the same fields; the vault encrypts three of
-them (`wallet/identity.py:625-651,682-692`):
+## The record
 
-```yaml
-entropy: <base64>          # vault: encrypted
-evr:
-  address: E…
-privateKey: <WIF>          # vault: encrypted
-publicKey: <hex>
-scripthash: <hex>
-words: <24 words>          # vault: encrypted
+One `meta` row, `keys`, written in one commit (so a setup is all or
+nothing):
+
+```json
+{
+  "v": 1,
+  "identity": "<64 hex>",
+  "nostr": "<64 hex>",
+  "vault": {
+    "pubkey": "02…",
+    "kdf": { "name": "PBKDF2", "hash": "SHA-256", "iterations": 600000, "salt": "<base64, 16 bytes>" },
+    "cipher": { "name": "AES-GCM", "iv": "<base64, 12 bytes>" },
+    "data": "<base64: the 32-byte secret encrypted, and GCM's 16-byte tag>"
+  }
+}
 ```
 
-A vault field is `base64(salt16 ‖ iv16 ‖ AES-256-CBC(PKCS7(utf8(value))))`,
-key = PBKDF2-HMAC-SHA1(password, salt, 1,000,000, 32 bytes)
-(`satorilib/src/satorilib/utils/secret.py:10-42`). WebCrypto does all of it.
+- `v` is the record's version. A record from a newer app is refused, not
+  guessed at; a later change adds a version and reads this one.
+- The identity and the Nostr key are their secrets in plain hex; everything
+  else about them (public keys, addresses) is derived at load.
+- The vault's public key is in clear: its Base address shows while locked,
+  and central's register needs it (`vault-pubkey`). At Unlock the decrypted
+  secret must give the same public key.
+- Each vault carries its own KDF and cipher parameters, so a later iteration
+  count still opens an older vault.
+- An earlier version's vault, until its next Unlock: `"vault": { "pubkey":
+  "02…" | null, "yaml": "<that version's vault.yaml text>" }` ([migration](#migration)).
 
-The password goes into PBKDF2 as **Latin-1** bytes, one byte per character:
-pycryptodome turns a `str` password into bytes with `tobytes(s)`, which
-encodes Latin-1 (`Crypto/Util/py3compat.py`, `Crypto/Protocol/KDF.py` PBKDF2).
-So `ä` is the byte `e4`, not UTF-8's `c3 a4`. A password with a character
-outside Latin-1 (`€`, emoji, non-Latin letters) can't be encoded: satorilib's
-`encryptWallet` swallows the error and saves the vault **unencrypted**
-(`identity.py:682-692`; vector in `test/fixtures/satorilib-edges.json`).
+## The vault encryption
 
-**Which file is which.** By its secret fields, with satorilib's length rules:
-a 44-char `entropy`, a 52-char WIF and `words` with spaces are plain text
-(`identity.py:131,152,595`); anything else there is ciphertext. A `wallet.yaml`
-has them in plain text, a `vault.yaml` encrypted. The browser reads
-`wallet.yaml` with no password and refuses it if it is encrypted, and refuses
-a `vault.yaml` that is not encrypted (Unlock refuses one too). Files put in
-each other's slots are named as swapped.
+`src/keys/vault.js`, all WebCrypto, no new dependency:
 
-**Reading** (`wallet/identity.py:115-177,662-680`): entropy first (44 chars);
-else a 52-char WIF; else watch-only, which the browser refuses (it needs the
-key). Older vaults also encrypted `publicKey`, `scripthash` and `evr.address`;
-satorilib decrypts them by length (`publicKey` if ≠ 66, `scripthash` if ≠ 64,
-`evr.address` if > 34), and so does the browser. Everything is then derived
-from the entropy and compared with the stored values. When they differ,
-satorilib logs a warning and uses the entropy's values (`identity.py:140-147`);
-the browser refuses the file.
+- **Passphrase → key:** PBKDF2-HMAC-SHA256, **600,000 iterations** (OWASP's
+  Password Storage Cheat Sheet figure for PBKDF2-HMAC-SHA256, set in 2023 to
+  match its bcrypt and scrypt costs on current GPUs), a random 16-byte salt
+  per encryption (NIST SP 800-132 asks at least 128 bits), 32 bytes of key.
+  The passphrase goes in as the **UTF-8 bytes of its NFC form**: any Unicode,
+  and an `é` typed as one code point or as `e` + a combining accent (macOS,
+  Windows and phone keyboards differ) is the same passphrase. NFC, as the
+  PRECIS OpaqueString profile for passwords (RFC 8265); NFKC would also merge
+  look-alikes (full-width letters, ligatures) that a user may mean as different.
+- **Key → ciphertext:** AES-256-GCM over the 32-byte secret, a random 12-byte
+  IV. A fresh salt means a fresh key each time, so an IV is never reused.
+- **Wrong passphrase:** GCM's tag fails, so a wrong passphrase (or any changed
+  byte) is `Wrong passphrase`, with nothing decrypted.
+- **Cost:** about 1 s per Unlock in Node on this shared box (seal 1.3 s,
+  open 1.1 s at load ~4); Chrome's WebCrypto is native too. One Unlock pays it
+  once; an attacker pays it per guess.
+- **Why not Argon2id or scrypt**, OWASP's first choices: WebCrypto has
+  neither. `@noble/hashes` (already a dependency) has both in pure JS, several
+  times slower than native, so at the same wait an attacker on native code or
+  GPUs gets cheaper guesses than PBKDF2-SHA256 at 600,000 in WebCrypto gives
+  them. Not clearly better here, so not used.
 
-**Wrong password.** satorilib swallows the decrypt error and leaves the vault
-encrypted (`identity.py:678-679`, then `routes.py:529-531`). The browser
-reports it: a wrong password fails the AES-CBC padding, or decrypts to
-something that is not the entropy of the stored address.
+## Passphrases
+
+**At least 8 characters, any Unicode, no other rule** (`MIN_PASSPHRASE`,
+`checkNewPassphrase`). Counted in code points after NFC, as NIST SP 800-63B
+counts them (each code point one character): 8 Chinese characters count 8,
+4 emoji (8 UTF-16 units) count 4.
+
+Why 8: it is NIST SP 800-63B's floor for a user-chosen secret (rev. 3
+§5.1.1.1; rev. 4 keeps 8 where the password is not the only factor and asks
+15 where it is, for logins). This passphrase is not a login: it guards a
+vault at rest against someone who already holds this browser's storage,
+behind 600,000 rounds, and the 24 words are the backup. The setup text says
+a longer phrase is stronger. The old minimum, 4, was Docker's
+(`routes.py:589`).
+
+The rule is for **new** passphrases (Create, Restore, a new one at Import).
+A passphrase an earlier version accepted keeps working: the forward
+migration re-encrypts the vault with it as it is.
 
 ## In the browser
 
-- **Setup → Create**: a new identity and a new vault (both random entropy), the
+- **Setup → Create**: a new identity and a new vault (both random), the
   vault's 24 words shown and three of them checked (it holds the funds), one
-  passphrase (≥ 4 characters as Docker counts them, Latin-1 only) for the
-  vault. The identity is stored as `wallet.yaml`, the vault as `vault.yaml`
-  encrypted with the passphrase, and a new random Nostr key as `nostr.yaml`.
-- **Setup → Import Dockerized Neuron files**: `wallet.yaml` + `vault.yaml` + the vault
-  password, and `nostr.yaml` (optional: a new Nostr key otherwise). Both are
-  read and checked as above: `wallet.yaml` must be plain text and `vault.yaml`
-  encrypted, so the funds' key is never stored in plain text. The identity is
-  stored re-written from its entropy (plaintext, current format). The vault is
-  stored as given, unless its address or public key is not in plain text (an
-  old vault); then it is re-written in the current format with the same
-  password, so every stored vault has both, read while locked (central's
-  register, the Base address).
-- **Setup → Restore from words**: the vault's 24 words (required) and the
-  identity's (optional; a new identity if left empty), then the passphrase.
+  passphrase. A new random Nostr key. One record is stored.
+- **Setup → Restore from words**: the vault's 24 words (required), the
+  identity's (optional; a new identity if left empty) and the Nostr key as
+  Backup shows it, `nsec` or hex (optional; a new one if left empty: it is
+  not in the words), then the passphrase.
+- **Setup → Import Dockerized Neuron files**: [below](#import-translate).
 - One setup runs at a time, from the UI or an agent; a second one is refused.
-- **Home**'s Keys card shows each key's identifiers at all times: the
-  identity's and the vault's Evrmore and Base addresses, and the Nostr pubkey.
-  The neuron runs from page load on the identity: it registers both public
-  keys with central and signs central's login challenge
-  ([central.md](central.md)). The vault has **Unlock** (the passphrase) in the
-  Keys card; while unlocked, **Lock** is in the header.
-- **Backup** (Docker shows it behind login, so here it needs Unlock): the
-  identity's and the vault's 24 words and private keys (WIF), and downloads of
-  `wallet.yaml`, `vault.yaml` and `nostr.yaml`, which load in Docker.
+- **Home**'s Keys card shows each key's Base address (the identity's, and the
+  vault's while locked) and the Nostr pubkey. The neuron runs from page load
+  on the identity: it registers both public keys with central and signs
+  central's login challenge. The vault has **Unlock** in the Keys card; while
+  unlocked, **Lock** is in the header.
+- **Backup** (Docker shows it behind login, so here it needs Unlock):
+  [below](#backup).
+
+## Import: translate
+
+**Import Dockerized Neuron files** takes `wallet.yaml`, `vault.yaml`, the
+Docker vault password and, optionally, `nostr.yaml`. `src/keys/docker.js`
+reads them, read only, as satorilib wrote them; the keys are then sealed in
+this app's record. The files themselves are not kept.
+
+- **The files** (`wallet/identity.py:625-651,682-692`): both have `entropy`,
+  `privateKey` (WIF), `words`, `publicKey`, `scripthash`, `evr.address`; the
+  vault encrypts the first three, each as `base64(salt16 ‖ iv16 ‖
+  AES-256-CBC(PKCS7(utf8(value))))` with key PBKDF2-HMAC-SHA1(password, salt,
+  1,000,000, 32) (`satorilib/src/satorilib/utils/secret.py:10-42`). The
+  password goes in as **Latin-1** bytes, as pycryptodome takes a `str`
+  (`Crypto/Util/py3compat.py`); a password outside Latin-1 makes satorilib
+  save the vault unencrypted (`identity.py:682-692`), which the import
+  refuses.
+- **Which file is which**: by the secret fields, with satorilib's length rules
+  (a 44-char `entropy`, a 52-char WIF and `words` with spaces are plain,
+  `identity.py:131,152,595`). `wallet.yaml` must be plain and `vault.yaml`
+  encrypted; files in each other's slots are named as swapped.
+- **Reading** (`identity.py:115-177,662-680`): the entropy first; else a
+  52-char WIF; else watch-only, refused. An old vault also encrypted its
+  `publicKey` (decrypted by length). The public key, the words and the WIF
+  are derived from the secret and compared with the stored ones; a mismatch
+  refuses the file. The Evrmore fields (`evr.address`, `scripthash`) are not
+  relied on.
+- **Wrong password**: AES-CBC's padding fails, or the text is not a 44-char
+  entropy: `vault.yaml: Wrong passphrase`.
+- **This app's passphrase**: by default the Docker vault password is reused
+  ("Use it as this app's passphrase too", ticked) when it meets the
+  [rule](#passphrases); otherwise, or unticked, the passphrase step asks for
+  a new one ("The Dockerized Neuron's vault password is shorter than 8
+  characters…").
+- `nostr.yaml` (`start.py:120-149`): `secret_hex`, checked against
+  `pubkey_hex`; none means a new Nostr key.
+
+## Migration
+
+Earlier versions stored Docker's texts: `meta.wallet_yaml`,
+`meta.vault_yaml` and (from step 5) `meta.nostr_yaml`. Profiles like that
+are live at neuron.satorinet.io and in the owner's browsers.
+`test/fixtures/profiles.json` holds what each version really stored, made by
+that version's own code (`scripts/profile_fixtures.mjs`).
+
+- **At load** (migration 7, `src/db/schema.js`, one transaction): the
+  identity and the Nostr key are plain text, so they are translated into the
+  record at once (a profile from before step 5 gets its Nostr key now, as the
+  load did before). The vault needs the passphrase: the record keeps its
+  `vault.yaml` text, and its public key when it was in clear. The three old
+  rows go in the same commit. Rows it cannot read stop the open with nothing
+  changed ("Satori could not start", nothing deleted).
+- **At the next Unlock**: the old vault is opened as its version did, sealed
+  in this app's format with the same passphrase, opened again to check, and
+  only then stored (`unlockVault` returns the record, `main.js` stores it).
+  Until then every load reads the old format. A wrong passphrase changes
+  nothing.
+- **Shapes** (each tested, in node on the migration itself and in Chrome on
+  OPFS):
+
+| Shape (versions) | At load | At the next Unlock |
+|---|---|---|
+| Steps 2–4 (2026-10-15 14:04 → 15:58): `wallet_yaml`, `vault_yaml`, Latin-1 passphrase bytes | identity translated, a new Nostr key | Latin-1, as satorilib |
+| Step 5 on: and `nostr_yaml` | identity and Nostr key translated | the same |
+| Step 2 (06:29 → 14:04): the passphrase as **UTF-8** bytes (`a5bd150`) | the same | Latin-1, then UTF-8. These vaults did not open at all before this version when the passphrase was outside ASCII |
+| Docker import kept as given (satorilib's `vault.yaml`, or an old one re-written) | the same | Latin-1 |
+| Docker import before 2935be0: a **plain-text** `vault.yaml` kept as given | the same | encrypted for the first time, with the passphrase typed then (it must meet the rule) |
+| Docker import before ecf3ae0: a `vault.yaml` with **no plain `publicKey`** | the same; the vault's address is unknown | the app opens on **Unlock to finish the update** (the neuron needs the vault's public key), then starts |
+| The step-1 prototype's sealed key, `meta.vault` (7be47fc) | not touched (never read since step 2); Setup | — |
+| A setup cut off after the vault row (no `wallet_yaml`) | not touched; Setup | — |
+
+## Backup
+
+Behind Unlock, as Docker's dashboard is behind login. **Backup → Show**:
+
+- **Identity words**, **Vault words**: the 24 words (Restore from words
+  brings the key back) and the private key in `0x` hex, which imports into a
+  Base wallet (the words don't, [above](#one-key-one-secret)).
+- **Nostr key**: its `nsec` (NIP-19) and its hex secret. It is random, so the
+  words don't bring it back; Restore from words takes either form.
+
+No files are downloaded: Docker's formats are not written any more.
+`window.satori.backup()` gives all three, `backup('identity' | 'vault' |
+'nostr')` one ([/llms.txt](../../public/llms.txt)).
 
 ## Code
 
 `src/keys/`:
 
-- `keys.js`: derivations above, `signMessage`/`verifyMessage`.
-- `docker.js`: `readWallet(text, {password})`, `writeWallet(entropy, {password})`,
-  `secrecy(text)` (plain, encrypted or mixed), `encryptField`/`decryptField`;
-  `readNostrYaml`/`writeNostrYaml` for `nostr.yaml`.
-- `index.js`: the two-key model. `writeKeys({identity?, vault}, passphrase)`
-  (create and restore) and `importDocker({walletText, vaultText, passphrase,
-  nostrText?})` return `{walletYaml, vaultYaml, nostrYaml}` to store;
-  `loadIdentity(walletYaml)`, `vaultInfo(vaultYaml)` (the address and public
-  key while locked, as Lite reads them for central's register,
-  `start.py:4637-4667`), `unlockVault(vaultYaml, passphrase)`,
-  `loadNostr(nostrYaml)`. Each signer also gives its Base address and
-  transaction signatures (`evmAddress`, `signDigest`; [base.md](base.md#keys-on-base)).
+- `keys.js`: the secret's words, public key, Base address, private key and
+  transaction signatures.
+- `vault.js`: the vault encryption and the passphrase rule.
+- `index.js`: the record. `newKeys({identity?, vault, nostr?}, passphrase)`
+  (create, restore, import), `readDockerFiles({walletText, vaultText,
+  password, nostrText?})` (import: the secrets), `recordFromRows({walletYaml,
+  vaultYaml, nostrYaml?})` (migration 7), `loadKeys(record)` (the identity's
+  signer, the Nostr key, the vault's public key and Base address),
+  `unlockVault(record, passphrase)` (→ the vault's signer, and the record to
+  store when it was upgraded). A signer: `pubkey`, `evmAddress`,
+  `signDigest`, `backup()`, `lock()`; the identity's also
+  `signCentralLogin(challenge)`.
+- `docker.js`: Docker's files, read only: `readWallet`, `secrecy`,
+  `vaultPubkey`, `decryptField`, `readNostrYaml`. Used by the import and by
+  the migration only.
+
+`src/central/login.js`: central's login signature and address form.
 
 ## Tests
 
-Parity fixtures from the Docker image (`test/fixtures/identity-parity.json`,
-made by `scripts/identity_fixtures.py` on `draft/v1-full`): words, WIF, pubkey,
-address, scripthash, `wallet.yaml`; a current and an old vault with their
-password and a wrong one; a WIF-only file; a file whose stored pubkey does not
-match. `identity-js.json` holds signatures and a vault made by this JS code that
-satorilib accepted. `satorilib-edges.json` (`scripts/satorilib_edges.py`, run
-on the satorilib source with Docker's package versions): a Latin-1 password
-vault, the unencrypted vault satorilib saves for a `€` password, and a
-signature flagged uncompressed with what python-evrmorelib verifies it
-against.
+- `keys.test.js`: words, public key and Base address against satorilib's
+  vectors (`test/fixtures/identity-parity.json`), viem for the address and
+  the transaction signature.
+- `vault.test.js`: round trips; the record's parameters; another
+  implementation (node:crypto) opening it; wrong passphrase and changed bytes;
+  non-Latin and emoji passphrases; NFC; the passphrase rule.
+- `docker.test.js`: every Docker fixture shape (current and old vaults, a
+  Latin-1 password, a WIF-only file, a mismatched file, swapped files,
+  `nostr.yaml`), and the UTF-8-era vaults.
+- `twokeys.test.js`: the record, Unlock and Lock, backup, the import's
+  translation, and every earlier profile carried forward.
+- `src/db/db.test.js`: migration 7 on every profile, then the Unlock.
+- `src/central/login.test.js`: central's login signature against satorilib's.
+- e2e: `app.spec.js` (Create with a non-Latin passphrase, reload, Unlock,
+  Backup, the stored record; Import, with a short Docker password),
+  `migrate.spec.js` (earlier profiles in Chrome: at load, at Unlock, the
+  finish screen, the step-1 row).
+
+## The compatibility audit (2026-10-16)
+
+Every constraint that existed only so things could move back to the Docker
+neuron, classified as a local format or limit (fixed per the direction) or a
+network protocol (changed only where central's and Lite's parsers provably
+accept it). The network rows' evidence is in
+[central.md](central.md#the-protocol-audit) and [nostr.md](nostr.md#the-protocol-audit).
+
+| Item | Kind | Verdict |
+|---|---|---|
+| Keys stored as Docker's `wallet.yaml` / `vault.yaml` / `nostr.yaml` texts | local | **Our record** ([above](#the-record)); migration 7 |
+| The vault sealed as satorilib does (PBKDF2-SHA1, AES-CBC per field) | local | **Our encryption** ([above](#the-vault-encryption)); Docker's read only at import and migration |
+| Passphrases Latin-1 only, at least 4 | local | **Any Unicode, at least 8** for new ones ([above](#passphrases)) |
+| Backup downloads of the three files; `window.satori.file()` | local | **Gone**: words, `0x` private keys, `nsec` |
+| The WIF in Backup | local | **`0x` hex**: Base's form |
+| Evrmore addresses in the UI and the API (`status().identity`, register's addresses) | local | **Base addresses only** |
+| Evrmore address and scripthash derivations | local | **Gone**, but central's address form for one comparison ([central.md](central.md#login-signature)) |
+| Lite's relay model uuid as the relay streams' row id | local | Kept: never sent, as good an id as any ([nostr.md](nostr.md#the-protocol-audit)) |
+| Prediction texts as Python's `str(float)` | network | **JS text**: central reads `float()` |
+| Nostr content as Python's `json.dumps` | network | **Compact JSON**: satorilib reads `json.loads`, fields by name |
+| Central's login: an Evrmore signed message | network | Kept: central's only format; EIP-191 proposed ([issue](../issues/central-login-eip191.md)) |
+| The key scheme (secret = BIP39 entropy, no HD) | both | Kept: the words of every existing key must give the same keys; new neurons are an owner decision ([QUESTIONS](../inbox/QUESTIONS.md)) |
 
 ## Deviations from Docker, and why
 
-- **Words at setup.** Docker never shows words; a browser's storage can be
-  cleared by the browser itself, so the vault's words are shown and checked at
-  setup.
-- **No zip.** Docker downloads one zip; the browser downloads the two files
-  (no zip dependency). Import takes the two files.
-- **Words import.** Docker has none; it is the browser's other way back.
-- **Wrong password is an error**, not a silently encrypted vault.
-- **A vault must be encrypted.** satorilib opens a plain-text `vault.yaml`
-  with any password and saves one when the password is outside Latin-1. The
-  browser refuses both: Unlock would protect nothing.
-- **Passphrases are Latin-1 only** at setup, because Docker can't encrypt with
-  other characters (above). Docker only asks for ≥ 4 characters.
-- **Stored fields that don't match the key are refused**, where satorilib
-  warns and goes on. The vault's address shown while locked is the stored one,
-  so a mismatch would show an address the key can't spend from.
-- **A WIF-only file reads** (from its 52-char WIF); satorilib fails on it.
-- **The identity and the vault must be different keys** (Docker never checks;
-  the same key twice would put the funds' key unencrypted on disk).
-- **Ticks run from page load with no login.** Docker's UI needs login, but its
-  neuron process also runs on `wallet.yaml` alone (`start.py:75`).
-- **Nostr key (step 5):** `nostr.yaml` `{pubkey_hex, secret_hex}`, a third,
-  random key, plaintext as Docker keeps it (`start.py:120-149`): made at setup,
-  imported with the Dockerized Neuron files (optional), downloaded under Backup; an
-  install from before step 5 gets one on its next load ([nostr.md](nostr.md)).
-- **Base (step 6):** each key's 32-byte secret is also its EVM key, as
-  satorilib's `ethAddress` ([base.md](base.md#keys-on-base)).
+| Deviation | Why |
+|---|---|
+| **Local format: our own.** One JSON record (`meta.keys`), not `wallet.yaml` / `vault.yaml` / `nostr.yaml`. | Migrate in, never back (owner, 2026-10-16). One commit for all three keys. |
+| **Vault encryption: our own.** PBKDF2-HMAC-SHA256 600,000 + AES-256-GCM over the secret, UTF-8 of NFC, not satorilib's PBKDF2-HMAC-SHA1 1,000,000 + AES-256-CBC per field with a Latin-1 password. | Current guidance; any passphrase; GCM's tag tells a wrong passphrase. Docker's scheme is read only at import. |
+| **Passphrases: any Unicode, at least 8 characters** (Docker: 4, and Latin-1 only in practice). | [Passphrases](#passphrases). |
+| **No export to Docker files.** Backup is the words, the private keys and the Nostr key. | Migrate in, never back. |
+| **Base addresses only.** No Evrmore address, WIF or scripthash is shown or stored. | This app is about Base (owner, 2026-10-16). Central's login signature stays inside `src/central/`. |
+| **Words at setup.** Docker never shows words. | A browser's storage can be cleared by the browser itself, so the vault's words are shown and checked at setup. |
+| **Words import.** Docker has none. | It is the browser's other way back. |
+| **Wrong password is an error**, not a silently encrypted vault. | |
+| **A vault must be encrypted.** satorilib opens a plain-text `vault.yaml` with any password and saves one when the password is outside Latin-1. | The import refuses both: Unlock would protect nothing. |
+| **Stored fields that don't match the key are refused**, where satorilib warns and goes on. | The vault's address shown while locked comes from its public key. |
+| **A WIF-only file reads** (satorilib fails on it). | |
+| **The identity and the vault must be different keys** (Docker never checks). | The same key twice would put the funds' key unencrypted on disk. |
+| **Ticks run from page load with no login.** Docker's UI needs login. | Its neuron process also runs on `wallet.yaml` alone (`start.py:75`). |
+| **Nostr key**: random as in Docker (`start.py:120-149`), plain text in the record, imported from `nostr.yaml`, backed up as `nsec`. | [nostr.md](nostr.md). |
+| **Base**: each key's secret is also its EVM key, as satorilib's `ethAddress`. | [base.md](base.md#keys-on-base). |

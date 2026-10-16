@@ -74,7 +74,7 @@ function mockFetch(routes) {
   return { fetch, calls };
 }
 
-const identity = { pubkey: '02ab', sign: vi.fn((message) => `sig(${message})`) };
+const identity = { pubkey: '02ab', signCentralLogin: vi.fn((message) => `sig(${message})`) };
 const login = () => ({
   'GET /api/v1/auth/challenge': () => json(200, { challenge: 'c-uuid' }),
   'POST /api/v1/auth/login': () => json(200, { access_token: 'jwt', expires_in: 3600 }),
@@ -154,7 +154,7 @@ describe('submitPredictions', () => {
     const items = [{ stream_uuid: 'u', value: '1.0' }];
     expect(await client(fetch).submitPredictions(items)).toEqual({ total_submitted: 1, successful: 1 });
     expect(paths(calls)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/auth/login', 'POST /api/v1/predictions/batch']);
-    expect(identity.sign).toHaveBeenCalledWith('c-uuid');
+    expect(identity.signCentralLogin).toHaveBeenCalledWith('c-uuid');
     expect(calls[1].headers).toEqual({ 'wallet-pubkey': '02ab', message: 'c-uuid', signature: 'sig(c-uuid)' });
     expect(calls[2].headers).toEqual({ authorization: 'Bearer jwt', 'content-type': 'application/json' });
     expect(JSON.parse(calls[2].body)).toEqual({ predictions: items });

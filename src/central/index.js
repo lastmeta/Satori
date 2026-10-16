@@ -71,7 +71,7 @@ export class CentralError extends Error {
 }
 
 /**
- * @param {{url: string, identity: {pubkey: string, sign: (msg: string) => string}, version: string, fetch?: typeof fetch}} opts
+ * @param {{url: string, identity: {pubkey: string, signCentralLogin: (msg: string) => string}, version: string, fetch?: typeof fetch}} opts
  */
 export function createCentral({ url, identity, version, fetch: fetchFn = globalThis.fetch }) {
   const base = url.replace(/\/+$/, '');
@@ -103,10 +103,10 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     }
   }
 
-  /** A fresh token: sign central's challenge with the identity (server.py:87-118 signs a timestamp). */
+  /** A fresh token: the identity signs central's challenge in central's login signature format (login.js; server.py:87-118). */
   async function login() {
     const { challenge } = await call('GET', '/api/v1/auth/challenge');
-    const signature = identity.sign(challenge);
+    const signature = identity.signCentralLogin(challenge);
     return (await call('POST', '/api/v1/auth/login', { 'wallet-pubkey': identity.pubkey, message: challenge, signature })).access_token;
   }
 
@@ -120,7 +120,7 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
       return call('POST', '/api/v1/peer/register', { ...headers, 'neuron-version': `browser-${version}` });
     },
 
-    /** Central's relays, [{relay_url, nostr_pubkey, evr_address}] (peer.py:123-163). */
+    /** Central's relays, [{relay_url, nostr_pubkey, …}] (peer.py:123-163). */
     relays: () => call('GET', '/api/v1/peer/relays'),
     /** { max_streams } (peer.py:166-173). */
     relayConfig: () => call('GET', '/api/v1/peer/relay-config'),

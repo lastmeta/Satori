@@ -85,7 +85,7 @@ test.describe.serial('a build, in a browser profile', () => {
     expect(await page.evaluate(() => window.persistCalls)).toBe(0);
 
     // Home: persistent storage asked for right after setup; the storage line and Install by the keys.
-    await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
+    await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
     await expect.poll(() => page.evaluate(() => window.persistCalls)).toBe(1);
     const s1 = await status(page);
     await expect(page.locator('[data-test=storage]')).toHaveText(s1.storage.persisted ? /^Storage: kept · \d/
@@ -162,7 +162,7 @@ test('an app window (the window an installed app opens in) and a tab: one neuron
     expect(await app.evaluate(() => matchMedia('(display-mode: standalone)').matches)).toBe(true);
     expect((await status(app)).app).toEqual({ installed: true, canInstall: false, update: false });
     await expect(app.locator('[data-test=install]').filter({ visible: true })).toHaveCount(0);
-    await app.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
+    await app.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
     await expect(app.locator('[data-test=storage]')).toBeVisible();
 
     const tab = await context.newPage();

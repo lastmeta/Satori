@@ -5,7 +5,7 @@
 // Fresh throwaway keys each run; the fork's clock moves forward.
 import { describe, expect, test } from 'vitest';
 import { http, zeroAddress } from 'viem';
-import { generateEntropy, publicKeys, evmAddress, signDigest } from '../keys/keys.js';
+import { generateSecret, publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
 import { createChain, revertName, DOWN, INDEFINITE } from './index.js';
 import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/fork.mjs';
@@ -13,8 +13,8 @@ import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/f
 const RPC = process.env.BASE_FORK;
 const E18 = 10n ** 18n;
 const signer = () => {
-  const secret = generateEntropy();
-  return { evmAddress: evmAddress(publicKeys(secret).pubkey), signDigest: (h) => signDigest(secret, h) };
+  const secret = generateSecret();
+  return { evmAddress: evmAddress(publicKey(secret)), signDigest: (h) => signDigest(secret, h) };
 };
 
 describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on a local fork of Base Sepolia', () => {

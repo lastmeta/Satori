@@ -60,11 +60,11 @@ edit, each history run from central, a relay observation and its `_pred`
 unsubscribe, the Base batch's hash as soon as it is sent and the batch after
 its receipt. Each one now finds nothing to do (about 2 ms).
 
-**The keys** are three `meta` rows, each its own commit, so each is
-checkpointed before setup returns. The e2e copies the database file alone,
-without any WAL, right after `satori.setup()` and finds all three in it. A
-reload right after setup keeps them, and so does Chrome killed (`SIGKILL`,
-every process of the profile) right after setup.
+**The keys** are one `meta` row, `keys` ([keys.md](keys.md#the-record)),
+one commit, checkpointed before setup returns. The e2e copies the database
+file alone, without any WAL, right after `satori.setup()` and finds it in
+it. A reload right after setup keeps it, and so does Chrome killed
+(`SIGKILL`, every process of the profile) right after setup.
 
 **The cost**, measured in Chrome on OPFS on this shared 8-core box (load
 about 3). The database held 83 streams × 1,001 rows (13 MB). Each figure is
@@ -135,9 +135,10 @@ on its own.
 ## Migrations
 
 `src/db/schema.js` holds an ordered list; `meta.schema_version` says how many
-have run, each in its own transaction. A shipped entry is never edited: a
-change is a new entry. A database from a newer app (a higher version) is
-refused, not migrated.
+have run, each in its own transaction. An entry is SQL, or a function given
+the `meta` rows (`get`, `set`, `remove`) for what SQL can't do. A shipped
+entry is never edited: a change is a new entry. A database from a newer app
+(a higher version) is refused, not migrated.
 
 1. **Step 1**: URL-fetched streams, their observations and signed predictions
    (times in ms). Replaced by 2.
@@ -168,6 +169,16 @@ refused, not migrated.
    `streams.history_at`, when central's history was fetched for the stream
    (null: not yet, so every stream is fetched once after the update;
    [central.md](central.md#history-an-addition-beyond-lite)).
+7. **Own key format** (2026-10-16, a function): `meta.wallet_yaml`,
+   `vault_yaml` and `nostr_yaml` (Docker's texts) become one record,
+   `meta.keys`. The identity and the Nostr key are translated at once (a new
+   Nostr key if there was none); the vault keeps its yaml in the record until
+   its next Unlock re-encrypts it; the three rows go in the same commit.
+   Without both `wallet_yaml` and `vault_yaml` (never set up, or a setup cut
+   off) nothing is written, and the rows are left; the step-1 prototype's
+   `meta.vault` is never touched. Rows it cannot read stop the open, with
+   nothing changed. Every earlier profile shape is tested
+   ([keys.md](keys.md#migration)).
 
 Columns kept but no longer written: `relay_streams.meta` (the announcement
 at subscribe time) and `unsubscribed_at`; nothing read them. Kept and written,
@@ -181,9 +192,9 @@ Each value is JSON text.
 | Key | Holds | Written by |
 |---|---|---|
 | `schema_version` | how many migrations have run | the migrations |
-| `wallet_yaml` | the identity: Docker's `wallet.yaml`, plain text ([keys.md](keys.md)) | setup |
-| `vault_yaml` | the vault: Docker's `vault.yaml`, fields encrypted; its address and public key plain | setup |
-| `nostr_yaml` | the Nostr key: Docker's `nostr.yaml`, plain text ([nostr.md](nostr.md)) | setup; the first start of an older install |
+| `keys` | the keys record, local format our own ([keys.md](keys.md#the-record)): `{ v: 1, identity, nostr, vault: { pubkey, kdf, cipher, data } }`; an earlier version's vault keeps `{ pubkey, yaml }` until its next Unlock | setup; migration 7; an Unlock that re-encrypts an earlier version's vault |
+| `wallet_yaml`, `vault_yaml`, `nostr_yaml` | gone: earlier versions' Docker texts, moved into `keys` by migration 7 (left only where a setup was cut off) | earlier versions |
+| `vault` | the step-1 prototype's sealed key; never read, never deleted | the step-1 prototype |
 | `central_url` | the Settings URL; `''` = the default | Settings, `setCentral` |
 | `next_poll_at` | when the next poll is due, so a reload keeps the 11 h cadence ([central.md](central.md)) | each poll's schedule |
 | `central_last_poll` | the last poll: `{ at, streams, new, predicted }` or `{ at, error }` | each cycle; dropped with another central |

@@ -94,7 +94,7 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     await expect.poll(async () => (await cdp.send('Page.getInstallabilityErrors')).installabilityErrors).toEqual([]);
 
     // a neuron, on this deployment's defaults: it registers with its central and opens its relays
-    await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
+    await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
     await expect(page.locator('body')).toHaveAttribute('data-screen', 'home');
     await expect.poll(() => stub.registered.length).toBe(1);
     const s = await page.evaluate(() => window.satori.status());

@@ -14,8 +14,9 @@
 
 Status: steps 1–6 of the roadmap are built (two keys, central's data flow,
 the engine, Nostr, Base), a finishing pass is done, a build installs as
-an app (PWA), and each central stream has its own evolving multivariate
-model per neuron (`bvar`) with history from central (2026-10-16).
+an app (PWA), each central stream has its own evolving multivariate
+model per neuron (`bvar`) with history from central, and the keys are in
+this app's own format, Base only (2026-10-16).
 
 Served at https://neuron.satorinet.io (https://satori.satorinet.io redirects
 there; one static image; docs/design/deploy.md).
@@ -26,8 +27,8 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 1. Wait until `document.body.dataset.screen` is not `loading` (DuckDB-WASM
    and the keys take a few seconds; it is kept current: `setup`, `home`,
-   `elsewhere`, `fatal`). Then `window.satori` is ready.
-2. On `setup`: `await satori.setup({ passphrase: 'at least 4 chars' })` → the
+   `finish`, `elsewhere`, `fatal`). Then `window.satori` is ready.
+2. On `setup`: `await satori.setup({ passphrase: 'at least 8 characters' })` → the
    status, `screen: 'home'`. The neuron now runs on its own.
 3. `await satori.poll()`: central's observations in, predictions out.
 4. `await satori.discover()`, then `await satori.subscribe(pubkey, stream_name)`
@@ -41,22 +42,58 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-16 (the keys in this app's own format; Base only)
+
+For agents written against the earlier API:
+
+- `status().identity` and `status().vault` are the keys' **Base (0x)
+  addresses** (they were Evrmore "E…" addresses). No Evrmore address is
+  shown or returned anywhere.
+- `status().central.registration` has no `wallet_address` or
+  `vault_address`; `vaultMismatch` is `false`, `'other'` (central has
+  another vault for this identity) or `'none'` (it kept none).
+- `setup()`: the passphrase is any Unicode, at least 8 characters (it was 4,
+  Latin-1 only); a new optional `nostrKey` (nsec or hex).
+- `backup('identity' | 'vault')` → `{ words, privateKey }` (`privateKey`:
+  `0x` hex; it was `{ words, wif }`); new: `backup('nostr')` → `{ nsec,
+  secret }` and `backup()` → all three.
+- `file()` is **removed**: no Docker files (`wallet.yaml`, `vault.yaml`,
+  `nostr.yaml`) are made any more. Import still reads them.
+- A new screen, `finish`: an earlier version's vault whose public key was
+  not in clear; `unlock(passphrase)` there finishes the update and starts
+  the neuron.
+- Prediction texts (`value`, `t1_value`, `observed_at`) are JS's number
+  text (`100`, not `100.0`), and Nostr content is compact JSON.
+- `data-test`: `identity` and `vault` now hold the Base addresses;
+  `identity-base`, `vault-base`, `wif` and `download-*` are gone;
+  `backup-key`, `backup-hex`, `pass-note` and `finish` are new.
+
 ## Concepts
 
-- Identity key: the neuron's own key (Evrmore address, "E…"). Stored
-  unencrypted in this browser (Docker's `wallet.yaml`) so the neuron runs from
-  page load with nobody present. It signs central's login challenge.
-- Vault key: holds funds. Stored encrypted with the passphrase (Docker's
-  `vault.yaml`). **Unlock** (enter the passphrase) decrypts it into memory;
-  **Lock** wipes it. The neuron does not need the vault to run; its public key
-  is read from `vault.yaml` while locked.
+- Base only: each key's address is its Base (0x) address, the only kind
+  shown. (Central's login takes an Evrmore-format message signature; the app
+  makes it internally and never shows it.)
+- Identity key: the neuron's own key. Stored unencrypted in this browser so
+  the neuron runs from page load with nobody present. It signs central's
+  login challenge and the daily Base batch.
+- Vault key: holds funds. Stored encrypted with the passphrase
+  (PBKDF2-SHA256, 600,000 rounds, and AES-256-GCM; any Unicode passphrase of
+  at least 8 characters). **Unlock** (enter the passphrase) decrypts it into
+  memory; **Lock** wipes it. The neuron does not need the vault to run; its
+  public key is stored in clear, so its address shows while locked.
+- The keys are one record of this app's own (`meta.keys`,
+  docs/design/keys.md). A Dockerized Neuron's `wallet.yaml`, `vault.yaml` and
+  `nostr.yaml` are imported (read and translated), never written. An earlier
+  version's stored keys are carried forward: the identity and the Nostr key
+  at load, the vault at its next Unlock.
 - Central: `https://network.satorinet.io` in a build unless the build sets
   another (`VITE_CENTRAL_URL`; neuron.satorinet.io
   uses `https://central2.satorinet.io` for now); central2 (the dev central)
   on the dev server. Changeable (https only).
 - Register: on every page load, `POST /api/v1/peer/register` with the
   identity's and the vault's public keys. Central links the vault to the
-  identity once; a different vault on central shows as a "vault mismatch".
+  identity once; a different vault on central (or none) shows as a "vault
+  mismatch".
 - Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
   each stream (under 48 h old). The first poll is 5–30 min after the page
   loads (random), then every 11 h; the next time is stored, so a reload keeps
@@ -136,9 +173,10 @@ Every method is below; `await satori.status()` shows everything at once.
   stream uuids); the list refills with the next poll.
 
 - Nostr key: a third key, random (not derived from the identity or the
-  vault), stored unencrypted like the identity (Docker's `nostr.yaml`,
-  `{pubkey_hex, secret_hex}`). It signs the neuron's Nostr events; its 64-hex
-  pubkey is sent to central on register (`nostr-pubkey`).
+  vault, so not in the 24 words), stored unencrypted like the identity. It
+  signs the neuron's Nostr events; its 64-hex pubkey is sent to central on
+  register (`nostr-pubkey`). Backup shows it as `nsec` and hex; Restore from
+  words takes either back.
 - Relays: central's list (`GET /api/v1/peer/relays`, today
   `ws://satorian.satorinet.io:7777`) plus the user's (Settings or
   `setRelays`). On the dev server central's relays are read only (requests,
@@ -161,7 +199,7 @@ Every method is below; `await satori.status()` shows everything at once.
   (the engine with the stream's `cadence_seconds`, a day when it has none,
   as its step and its horizon; a forecast is one cadence ahead, the owner's
   rule) and published
-  as `<stream>_pred` with `value` = the forecast as a string (`"82378.0"`),
+  as `<stream>_pred` with `value` = the forecast as a string (`"82378.5"`),
   `seq_num` = our last + 1. A value with no number is echoed. Relay streams
   and predictions are kept apart from central's and never sent to central.
   Unsubscribe publishes the unsubscription and deletes the `_pred`
@@ -171,8 +209,8 @@ Every method is below; `await satori.status()` shows everything at once.
 
 - Base (Base Sepolia, chain 84532, the D6 contracts; docs/design/base.md):
   each key's 32-byte secret is also its EVM key, so the identity and the
-  vault each have a Base (0x) address (the vault's is read from vault.yaml's
-  public key while locked). Addresses: bundled, with central's
+  vault each have a Base (0x) address (the vault's from its public key,
+  stored in clear, while locked). Addresses: bundled, with central's
   `/api/v1/base/config` over them (cached 1 h; prod answers 404, central2
   serves it). RPC: Settings or `setBaseRpc`; empty = the default: on the dev
   server `/rpc`, a local anvil fork (`node scripts/fork.mjs start`); in a
@@ -234,7 +272,7 @@ Every method is below; `await satori.status()` shows everything at once.
   setup and on each load until it is kept. Installing helps keep it (Chrome
   grants it to installed apps; Safari keeps a Home Screen or Dock app's data).
   A Safari web app has its own storage, apart from Safari's: set it up there
-  or import the Dockerized Neuron files. An app window and a tab share the one-tab lock.
+  or restore it from your words. An app window and a tab share the one-tab lock.
 - The database (docs/design/storage.md): every commit is checkpointed, so a
   reload or a closed tab at any moment keeps every committed write, the keys
   included. A WAL an older version left is renamed aside in OPFS (never
@@ -252,13 +290,18 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 the page's JS context:
 
 - `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base, storage, app, recovered }`.
-  `screen` is `setup` (no keys yet), `home` (running), `elsewhere` (another
-  tab has it open; only one tab runs the neuron) or `fatal`. `central` (on
+  `screen` is `setup` (no keys yet), `home` (running), `finish` (an earlier
+  version's vault whose public key was not in clear: `unlock(passphrase)`
+  once, then it runs), `elsewhere` (another tab has it open; only one tab
+  runs the neuron) or `fatal`. `identity` and `vault` are the keys' Base
+  (0x) addresses (null before setup). `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
   pending, history }`:
   - `registration`: null while registering; then
-    `{ at, ok: true, peer_id, wallet_address, vault_address, message, vaultMismatch }`
-    or `{ at, ok: false, error }` (central refused or is unreachable).
+    `{ at, ok: true, peer_id, message, vaultMismatch }` (`vaultMismatch`:
+    `false`, `'other'` when central has another vault for this identity,
+    `'none'` when it kept none) or `{ at, ok: false, error }` (central
+    refused or is unreachable).
   - `lastPoll`: `{ at, streams, new, predicted, engine_ms }` or `{ at, error }`
     (central's error, or a local one such as a database write); `engine_ms`:
     how long the models took (present when a stream had a new row).
@@ -287,10 +330,10 @@ the page's JS context:
   offered yet).
 - `satori.update()` → true, then the page reloads into the new version, when
   `status().app.update`; false when none is waiting. Never automatic.
-- `await satori.setup({ passphrase, vaultWords?, identityWords? })` → status.
-  Creates the neuron on a fresh browser (random keys unless 24 words are
-  given). Passphrase: at least 4 characters, Latin-1 only (no emoji or €), as
-  Docker's vault encryption needs. The vault starts locked. One setup runs at
+- `await satori.setup({ passphrase, vaultWords?, identityWords?, nostrKey? })` → status.
+  Creates the neuron on a fresh browser (random keys unless 24 words, or the
+  Nostr key's nsec or hex, are given). Passphrase: any Unicode, at least 8
+  characters (code points after NFC). The vault starts locked. One setup runs at
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
   and a call once set up throws `Already set up`.
 - `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
@@ -314,18 +357,25 @@ the page's JS context:
   (by uuid or name), newest first: `[{ id, stream_uuid, name, made_at, model,
   t1, t2, phi, weight, observed_at, hash, status, sent_at }]`. `observed_at`
   and `hash` are what was sent: as in Lite, `observed_at` is the time the
-  prediction was made (Python's float text of unix seconds), not the
+  prediction was made (unix seconds as JS prints them), not the
   observation's time; `hash` = sha256(value + observed_at)[:16].
 - `await satori.setCentral(url)` → `status().central`: an https URL, or `''`
   for the default; registers there at once. A different URL drops the pending
   predictions and the stream list (see Concepts).
 - `await satori.unlock(passphrase)` → true (one at a time, as the UI's:
   another while one runs throws `Busy (unlock)…`); `satori.lock()` → true.
-- While unlocked: `satori.backup('identity' | 'vault')` → `{ words, wif }`;
-  `satori.file('wallet.yaml' | 'vault.yaml' | 'nostr.yaml')` → the Docker
-  file's text. Only these exact names; anything else throws. These need
-  Unlock as Docker's dashboard needs login, `wallet.yaml` and `nostr.yaml`
-  too, although they are stored unencrypted: they are private keys.
+  An earlier version's vault is re-encrypted in this app's format at its
+  first Unlock (same passphrase). On the `finish` screen it also starts the
+  neuron.
+- While unlocked: `satori.backup('identity' | 'vault')` → `{ words,
+  privateKey }` (the 24 words; `privateKey` is `0x` and 64 hex, what a Base
+  wallet's "Import account" takes: the words follow satorilib's scheme, so a
+  standard wallet derives another account from them);
+  `satori.backup('nostr')` → `{ nsec, secret }`; `satori.backup()` → `{
+  identity, vault, nostr }`. Any other name throws. Backup needs Unlock as
+  Docker's dashboard needs login, the identity and the Nostr key too,
+  although they are stored unencrypted: they are private keys. (`file()` is
+  gone: no Docker files are made.)
 - `await satori.nostr()` (also `status().nostr`) → `{ pubkey, npub,
   maxStreams, centralWrite, userRelays, relays, subscriptions }`. `relays`:
   `[{ url, from: ['central' | 'user'], write, state, error }]`, state
@@ -401,14 +451,20 @@ thrown: they are in `status().central` (for example `central 500: …`,
 
 - Setup: "Create a new neuron" (shows the vault's 24 words, asks for three of
   them, then a passphrase), "Restore from words" (vault words, optional
-  identity words), or "Import Dockerized Neuron files" (`wallet.yaml`, `vault.yaml`,
-  optional `nostr.yaml`, the vault password). `wallet.yaml` is the unencrypted file and `vault.yaml` the
-  encrypted one; files in the wrong slots, or a vault.yaml that is not
-  encrypted, are refused with a message saying so.
-- Home, top to bottom. **Keys**: each key with its identifiers and Copy:
-  the identity (Evrmore and Base addresses), the vault (the same, its
-  Locked/Unlocked badge, the "Vault passphrase" field and Unlock), the Nostr
-  pubkey, then the storage line ("Storage: kept", or "Storage: the browser may
+  identity words, an optional Nostr key as nsec or hex), or "Import
+  Dockerized Neuron files" (`wallet.yaml`, `vault.yaml`, optional
+  `nostr.yaml`, the vault password, and "Use it as this app's passphrase
+  too", ticked: when the Docker password is shorter than 8 characters, or
+  unticked, the passphrase step asks for a new one). `wallet.yaml` is the
+  unencrypted file and `vault.yaml` the encrypted one; files in the wrong
+  slots, or a vault.yaml that is not encrypted, are refused with a message
+  saying so. The files' keys are stored in this app's own format; the files
+  are not kept.
+- "Unlock to finish the update" (screen `finish`): the vault passphrase
+  field ("Vault passphrase to finish the update") and Unlock.
+- Home, top to bottom. **Keys**: each key with Copy: the identity's Base
+  address, the vault's (with its Locked/Unlocked badge, the "Vault
+  passphrase" field and Unlock), the Nostr pubkey, then the storage line ("Storage: kept", or "Storage: the browser may
   clear it; install Satori or back up your words", with the usage of the
   quota) and **Install Satori** when the browser offers it (Safari: how to
   add it to the Dock or Home Screen); the header has Lock while unlocked and
@@ -431,13 +487,14 @@ thrown: they are in `status().central` (for example `central 500: …`,
   **Settings**: Central (URL, empty = default; Save), Nostr (relays one per
   line, "Publish to central's relays"; Save relays), Base (Base RPC, "Daily
   batch: max fee (gwei)"; Save Base settings). **Backup** (needs Unlock):
-  Identity words, Vault words, Download wallet.yaml, vault.yaml, nostr.yaml.
+  Identity words, Vault words (each with its private key in 0x hex), Nostr
+  key (nsec and hex). No downloads.
 - Every screen is built once and shown or hidden (the `hidden` attribute),
   so Setup's labels stay in the DOM on Home: query visible elements, or use
   `data-test`.
 - Form fields have labels; elements carrying data or actions have
-  `data-test` attributes: `identity`, `identity-base`, `vault`, `vault-base`,
-  `vault-state`, `nostr-pubkey`, `unlock`, `lock`, `central-url`,
+  `data-test` attributes: `identity`, `vault` (the Base addresses),
+  `vault-state`, `nostr-pubkey`, `unlock`, `lock`, `finish`, `pass-note`, `central-url`,
   `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`, `history`,
   `mismatch`, `poll-now`, `streams` (the collapsed list) with `stream` rows
   and `obs`, `t1`, `t2`, `model`, `status` inside, `relay` (with
@@ -449,8 +506,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `base-lock`, `base-claimable`, `base-last-batch`,
   `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
   `base-result`, `base-txs` (the last action's transactions),
-  `base-action-error`, under Backup `wif`, `download-wallet`,
-  `download-vault`, `download-nostr`, for the installed app `storage`,
+  `base-action-error`, under Backup `backup-key` (a private key, or the
+  nsec) and `backup-hex` (the Nostr key's hex), for the installed app `storage`,
   `install`, `install-hint` and `update`, and `notice` (the recovered
   database's, with Dismiss) and `fatal` (the error that stopped the start).
 
@@ -474,18 +531,21 @@ Recipe: `fund <identity 0x…>` (gas for the batch) and
 `fund <vault 0x…> --satori 100` (gas and the power to delegate), then
 Unlock, `delegate()`, `predictBase()`.
 
-## Docker neuron interop
+## From the Docker neuron (migrate in, never back)
 
 The keys are Satori Lite's (github.com/SatoriNetwork/satori-lite and
 github.com/SatoriNetwork/satorilib): one
 32-byte secp256k1 secret per key = the private key = the BIP39 entropy of its
-24 words. `wallet.yaml` / `vault.yaml` are read and written in Docker's format
-(vault fields: AES-256-CBC, PBKDF2-HMAC-SHA1 × 1,000,000 over the password's
-Latin-1 bytes), so a neuron moves between Docker and the browser by moving the
-two files (and `nostr.yaml` for the same Nostr key). Central sees the same
-identity either way. The Nostr events are satorilib's byte for byte (content
-serialized as Python's `json.dumps`). On Base the same secrets give the same 0x addresses as the
-Docker neuron's (`ethAddress`), so delegation and rewards follow the keys.
+24 words. A Dockerized Neuron moves here by Import (its `wallet.yaml`,
+`vault.yaml` with the vault password, and `nostr.yaml`) or by Restore from
+words; its keys are then stored in this app's own format. Nothing is written
+back in Docker's formats. Central sees the same identity either way, and on
+Base the same secrets give the same 0x addresses as the Docker neuron's
+(`ethAddress`), so delegation and rewards follow the keys. Satori Lite is the
+reference for what goes over the network: central's payload and Satori's
+Nostr events carry Lite's fields (the text as JS writes it: numbers like
+`100`, compact JSON, which central and satorilib parse; see
+docs/design/central.md and nostr.md, "The protocol audit").
 
 ## Code
 
@@ -497,12 +557,14 @@ build step beyond Vite, MIT licensed.
   defaults, the dev server's or a build's, each replaced by a `VITE_*`
   variable at build time (`VITE_CENTRAL_URL`, `VITE_NOSTR_RELAYS`,
   `VITE_NOSTR_CENTRAL_WRITE`, `VITE_BASE_RPC`); `src/util.js`: `serial()`
-  (one at a time, in order), `isHttps()` and `isRelayUrl()`; `src/py.js`:
-  Python's `str(float)` and `json.dumps` texts, byte for byte.
-- `src/keys/`: identity and vault (`index.js`), derivations and Evrmore
-  signing (`keys.js`), Docker files (`docker.js`).
+  (one at a time, in order), `isHttps()` and `isRelayUrl()`.
+- `src/keys/`: the keys record (`index.js`: create, import, migrate, load,
+  Unlock), the vault encryption and the passphrase rule (`vault.js`), a
+  key's words, public key, Base address and signatures (`keys.js`), Docker's
+  files read for import and migration (`docker.js`).
 - `src/central/`: central's API (register, observations, login, predictions
-  batch) and Python-identical payload strings.
+  batch); `login.js`: central's login signature format and address form
+  (protocol details, never shown).
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API; every
   commit checkpointed; `recover.js` sets aside a WAL an older version left.
 - `src/engine/`: `forecast(points, { step, horizon }) → { model, t1, t2, value,
@@ -544,8 +606,9 @@ build step beyond Vite, MIT licensed.
   the roadmap and what is left of each part; `docs/issues/`: open issues
   outside this repo; `docs/inbox/QUESTIONS.md`: open questions for the
   owner.
-- `scripts/`: parity-vector generators run against satorilib, the Docker
-  image and namaste_club (Python; `bvar_parity.py` for bvar); `backtest.mjs`
+- `scripts/`: parity-vector generators run against satorilib and
+  namaste_club (Python; `bvar_parity.py` for bvar), and
+  `profile_fixtures.mjs` (the keys each earlier version stored); `backtest.mjs`
   (node, read only: bar1, persistence and simulated bvar neurons);
   `test-relay.mjs` (an in-memory Nostr relay: `node scripts/test-relay.mjs
   7778`) and `provider.mjs` (a throwaway stream provider for a test relay);

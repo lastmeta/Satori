@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { memoryDb } from '../../test/memory-db.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
@@ -212,21 +213,23 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
 });
 
 describe('register', () => {
-  const res = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer already registered' };
+  // central answers with Evrmore-form addresses (its peer ids): compared with our vault's, never shown
+  const [v, other] = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url))).vectors;
+  const res = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: v.address, message: 'Peer already registered' };
   const fake = (r) => ({ register: vi.fn(async () => { if (r instanceof Error) throw r; return r; }) });
-  test('sends the vault pubkey; the result says whether central has our vault', async () => {
+  test('sends the vault pubkey; the result says whether central has our vault, with no address in it', async () => {
     const c = fake(res);
-    expect(await register({ central: c, vaultPubkey: '03cd', vaultAddress: 'Evault', nostrPubkey: 'ee', now })).toEqual({
-      at: clock, ok: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer already registered', vaultMismatch: false,
+    expect(await register({ central: c, vaultPubkey: v.pubkey, nostrPubkey: 'ee', now })).toEqual({
+      at: clock, ok: true, peer_id: 7, message: 'Peer already registered', vaultMismatch: false,
     });
-    expect(c.register).toHaveBeenCalledWith({ vaultPubkey: '03cd', nostrPubkey: 'ee' });
+    expect(c.register).toHaveBeenCalledWith({ vaultPubkey: v.pubkey, nostrPubkey: 'ee' });
   });
-  test('another vault, or none kept: a mismatch', async () => {
-    expect((await register({ central: fake({ ...res, vault_address: 'Eother' }), vaultPubkey: '03cd', vaultAddress: 'Evault', now })).vaultMismatch).toBe(true);
-    expect((await register({ central: fake({ ...res, vault_address: null }), vaultPubkey: '03cd', vaultAddress: 'Evault', now })).vaultMismatch).toBe(true);
+  test("another vault ('other'), or none kept ('none'): a mismatch", async () => {
+    expect((await register({ central: fake({ ...res, vault_address: other.address }), vaultPubkey: v.pubkey, now })).vaultMismatch).toBe('other');
+    expect((await register({ central: fake({ ...res, vault_address: null }), vaultPubkey: v.pubkey, now })).vaultMismatch).toBe('none');
   });
   test('a failure is returned, never thrown', async () => {
-    expect(await register({ central: fake(new CentralError(409, 'taken')), vaultPubkey: '03cd', vaultAddress: 'E', now }))
+    expect(await register({ central: fake(new CentralError(409, 'taken')), vaultPubkey: v.pubkey, now }))
       .toEqual({ at: clock, ok: false, error: 'central 409: taken' });
   });
 });

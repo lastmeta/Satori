@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { mkdtempSync, statSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, statSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { memoryDb, memoryConn } from '../../test/memory-db.js';
 import { MIGRATIONS } from './schema.js';
 import { openDb } from './index.js';
+import { loadKeys, unlockVault, wordsOf } from '../keys/index.js';
+import { nostrPubkey } from '../nostr/event.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -29,7 +31,7 @@ test('every commit is checkpointed at once: a database file keeps nothing in its
     const conn = await memoryConn(path);
     const fileDb = await openDb(conn); // the migrations: before, DuckDB kept them in the WAL (6 kB)
     expect(wal()).toBe(0);
-    await fileDb.set('wallet_yaml', 'w');
+    await fileDb.set('central_url', 'w');
     await fileDb.addObservations([obs()]);
     await fileDb.addPredictions([pred(), pred({ t2: 4 })]);
     expect(wal()).toBe(0);
@@ -45,16 +47,73 @@ test('a database from a newer app version is refused, not migrated', async () =>
   await expect(openDb(conn)).rejects.toThrow(/newer version/);
 });
 
-test('a step-2 database: the URL streams go, meta (the keys) stays', async () => {
+test('a step-2 database: the URL streams go, meta stays', async () => {
   const conn = await memoryConn();
   await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
   await conn.query(MIGRATIONS[0]);
-  await conn.query(`INSERT INTO meta VALUES ('schema_version', '1'), ('wallet_yaml', '"w"')`);
+  await conn.query(`INSERT INTO meta VALUES ('schema_version', '1'), ('central_url', '"w"')`);
   await conn.query(`INSERT INTO streams VALUES ('BTC-USD', 'https://x', 'data.amount', 60, 1, NULL, NULL)`);
   const up = await openDb(conn);
   expect(up.version).toBe(MIGRATIONS.length);
-  expect(await up.get('wallet_yaml')).toBe('w');
+  expect(await up.get('central_url')).toBe('w');
   expect(await up.streams()).toEqual([]);
+});
+
+/** A database as the version that made `p` left it: its migrations, its meta rows (test/fixtures/profiles.json). */
+async function profileConn(p) {
+  const conn = await memoryConn();
+  await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+  for (const m of MIGRATIONS.slice(0, p.schema)) await conn.query(m);
+  const rows = { schema_version: p.schema, ...p.meta };
+  for (const [k, v] of Object.entries(rows)) {
+    const stmt = await conn.prepare('INSERT INTO meta VALUES (?, ?)');
+    await stmt.query(k, JSON.stringify(v));
+    await stmt.close();
+  }
+  return conn;
+}
+
+describe("migration 7: the keys move into this app's own record (meta `keys`), never losing one", () => {
+  const { profiles } = JSON.parse(readFileSync(new URL('../../test/fixtures/profiles.json', import.meta.url)));
+  const hexBytes = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
+  for (const p of profiles) {
+    test(p.label, async () => {
+      const up = await openDb(await profileConn(p));
+      expect(up.version).toBe(MIGRATIONS.length);
+      const keys = await up.get('keys');
+      if (p.expect.setup) {
+        // never a neuron: Setup shows, and its rows are left as they are
+        expect(keys).toBeUndefined();
+        for (const [k, v] of Object.entries(p.meta)) expect(await up.get(k), k).toEqual(v);
+        return;
+      }
+      expect(keys).toMatchObject({ v: 1, identity: p.expect.identity, vault: { yaml: p.meta.vault_yaml } });
+      if (p.expect.nostr) expect(keys.nostr).toBe(p.expect.nostr);
+      else expect(nostrPubkey(keys.nostr)).toMatch(/^[0-9a-f]{64}$/);
+      for (const k of ['wallet_yaml', 'vault_yaml', 'nostr_yaml']) expect(await up.get(k), k).toBeUndefined();
+      expect(loadKeys(keys).identity.pubkey).toBeTruthy();
+      // the vault at its next Unlock, as main.js stores it
+      const { vault, record } = await unlockVault(keys, p.passphrase);
+      await up.set('keys', record);
+      expect(vault.backup().words).toBe(wordsOf(hexBytes(p.expect.vault)));
+      expect((await unlockVault(await up.get('keys'), p.passphrase)).record).toBe(null);
+    });
+  }
+  test("the step-1 prototype's meta.vault is never touched, next to a later neuron's keys too", async () => {
+    const step1 = profiles.find((x) => x.commit === '7be47fc');
+    const later = profiles.find((x) => x.label.startsWith('step 5 on'));
+    const up = await openDb(await profileConn({ ...later, meta: { ...later.meta, ...step1.meta } }));
+    expect(await up.get('vault')).toEqual(step1.meta.vault);
+    expect((await up.get('keys')).identity).toBe(later.expect.identity);
+  });
+  test('rows it cannot read stop the open: nothing is changed, and the version stays (the app says it could not start)', async () => {
+    const later = profiles.find((x) => x.label.startsWith('step 5 on'));
+    const conn = await profileConn({ ...later, meta: { ...later.meta, wallet_yaml: 'not: [a wallet' } });
+    await expect(openDb(conn)).rejects.toThrow();
+    const left = (await conn.query("SELECT key, value FROM meta ORDER BY key")).toArray().map((r) => r.toJSON());
+    expect(Object.fromEntries(left.map((r) => [r.key, JSON.parse(r.value)])))
+      .toEqual({ schema_version: MIGRATIONS.length - 1, ...later.meta, wallet_yaml: 'not: [a wallet' });
+  });
 });
 
 test('a step-3 database: predictions gain the engine\'s phi and weight (null on old rows)', async () => {

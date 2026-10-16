@@ -27,12 +27,12 @@ test('registrationText and mismatchText', () => {
   expect(registrationText(null)).toBe('Registering…');
   expect(registrationText({ ok: true, peer_id: 7 })).toBe('Yes · peer 7');
   expect(registrationText({ ok: false, error: 'central 409: taken' })).toBe('No: central 409: taken');
-  expect(mismatchText(null, 'Ev')).toBe('');
-  expect(mismatchText({ ok: true, vaultMismatch: false, vault_address: 'Ev' }, 'Ev')).toBe('');
-  expect(mismatchText({ ok: true, vaultMismatch: true, vault_address: 'Ex' }, 'Ev'))
-    .toBe('Vault mismatch: central has Ex for this identity, not this vault (Ev).');
-  expect(mismatchText({ ok: true, vaultMismatch: true, vault_address: null }, 'Ev'))
-    .toBe('Vault mismatch: central kept no vault for this identity (Ev may be registered to another neuron).');
+  expect(mismatchText(null)).toBe('');
+  expect(mismatchText({ ok: true, vaultMismatch: false })).toBe('');
+  expect(mismatchText({ ok: true, vaultMismatch: 'other' }))
+    .toBe('Vault mismatch: central has another vault for this identity, not this one.');
+  expect(mismatchText({ ok: true, vaultMismatch: 'none' }))
+    .toBe('Vault mismatch: central kept no vault for this identity (this vault may be registered to another neuron).');
 });
 
 test('pollText and submitText', () => {

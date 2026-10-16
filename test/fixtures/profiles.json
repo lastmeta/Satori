@@ -13,9 +13,9 @@
           "kdf": "PBKDF2-SHA256",
           "iterations": 600000,
           "cipher": "AES-256-GCM",
-          "salt": "FIaQNa/FtXVwP0veRax63A==",
-          "iv": "aszci6Q8mDd751L3",
-          "ct": "gTJHb0zBSR+WaqX4WsnfjXfvMJxRFU6IqHJmDrszaoZKT4VUCpUUnW11RgR45EY4"
+          "salt": "Ma4udjxK3eiYPIV+EOm/Dg==",
+          "iv": "nWTUhdnG/kyhFL7y",
+          "ct": "uiNdBYXX4cxYO2K0Xi+moyVeN8TAKxAErdlNapdh0MFsTx2ZyhOBEhcpVBgEkJZi"
         }
       },
       "expect": {
@@ -29,7 +29,7 @@
       "passphrase": "密码密码",
       "meta": {
         "wallet_yaml": "entropy: kxc6jBSFwXrdEU1T7xlJoIqvxfwtLAM4rfoZp/SjKSw=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: L29dqwGwrMRLHgnXS5DhBbRzWxYfEMbgBytC3EVMsEQUx3cxZS9R\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: narrow right perfect cinnamon foster runway inmate claim fault juice fame donate priority title vague pitch add shell leader crew leg face pigeon moment\n",
-        "vault_yaml": "entropy: X6k5zVGx8AhPEt0YdJ+bopGNMVnW3xRd5x0nn/xmvqmjkp6xeZvV9QgQmpkDmKrTxA1qItnTncJ2uZItjzlrDQzMqrQ7yB5ed0xz3S287qc=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: Jlc4G7qVRiClG0S/wnCrhJFL5SxmthtKS0b6I/GK9jIRD5q7xidKK39CHjzfFQroTdeJkab45zKhnhHUS06fyVu/INd8NzJGqPuVyjJYs0lDHF7v1o4rcoKRG/YginHe\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: ep3zVNcqclROFHNJ6uWrbmiWX8Gle7yXVpPB4kdx4qFfmcnj30RceQyXGIP+wT4ROA0/8Fs39dOBVeR/SORYdpwdbhxa/e3KWO/bxCJeAjJFJ49ahcPeNSlmZ2KbGe7svTl7biRw1x/QDu2NfuFBLW7MmML8wD2K5Yqi7jsb9lOCaEnANi/6DAs2uM6F2EXyXiG5hzx5z+vG5Mnh3Yrs9+YkUg0Q59H5b/M6e5wP/G0=\n"
+        "vault_yaml": "entropy: BcG2O+u+PLknjDqAm+pNSg2ROQbLTsfBh/KUjAnSSwxUZ6p6oU090OuOkdXXtc0CzGcW03Ymu0Pcox0F6tp85zaBE9/uE3KaQS5LoplTOVs=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: 0hlytWB4GAHwVOjex7dQnpjQ5DWh7nTeefJQZudta14MCRcZl1y3xr8FURY3rdlsZqnHuf4W0cd+jWZusRxr8m6ABfuOONekc1ldQYYjMm6dxA6ATc0xxCHIlkdR3b9Q\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: uiWw7RTlUlSS/VVadZMdD2jwIQRM1N+6NXkMv9PgsHgI00/d37o3LGk22FgJiMMKQVSLI5YOWpPSWGy/ls6XOiDrzgSbGFhQP+ozxjqmR1No6+44XbeXpGm/TmW3RwMPL+EIMraT46f8VGJSEvxuiS6P3/j9zJEAS7vYZaLekkgOJ+DPTTIrGpZLY4d0lFzOqijGMShA9ZTRl0DSi/hI+IZnkay3e+2F54zOFDohh5s=\n"
       },
       "expect": {
         "identity": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
@@ -44,7 +44,22 @@
       "passphrase": "pässwörd",
       "meta": {
         "wallet_yaml": "entropy: kxc6jBSFwXrdEU1T7xlJoIqvxfwtLAM4rfoZp/SjKSw=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: L29dqwGwrMRLHgnXS5DhBbRzWxYfEMbgBytC3EVMsEQUx3cxZS9R\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: narrow right perfect cinnamon foster runway inmate claim fault juice fame donate priority title vague pitch add shell leader crew leg face pigeon moment\n",
-        "vault_yaml": "entropy: N+uFShz/QSHl4Z6cbLSJb3INNf2lbAa97nn9qxYsHixObVIv2EosXa1sGcJd+kfDNTT6YnejQyuVzx7ukziHgtCUB57OVT/0UexGVt5m7c4=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: vL0xAy9aC9nQ9NqJ7dnuiLC6hZBqcx483wd+F/Z9K6o5yiIs9bIWrJnuLwpTmrCANwUGwr9Hh61amYMOXkpxzghc/wV7qmE5AS4cKH5ZWOw5Zou9Rb+nEN1oWIitUCT5\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: 7qkAfyPIpD8seh/c10NQaByTdOuaVRy2+Ukj/9ImaQBCaL/aMkTWwoeeGlT/2Pa7AoyAikZ1hBPrTRC0NqdD4HNun5syF3Vlu8nwnRp7fnzwOYt48WuGb/yLvvaMU2+gmJF58Pa4QSJg04sSjW8XJdZyEW3vsoweekwQpVilw14TGAOY+Nj8XQWSN33tWG1q1mB+fQFg+vNXGkK3s0OngvgiJgeT4SZ+vtWxgjI+O+c=\n"
+        "vault_yaml": "entropy: WphLkSjJX0E+n4uuD+J7XQ6UeWNVhjlfRon6c//qfHbwxwMM1vcgA7ZvFmWbQCpLI17aH5wMux6poIb4G8tOl6KRT4Drw1w5q8GtBNL++JE=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: 5a9iHQiFK4aPo1BMqiYfjXZ0mRuDMLj5Y5vpuo2sT6koOx/+C+N8XbloRGHaDPnlwD0vLHItUWpF7wnBqKATxI58yjLYe8+EJX18T4CPqlPzFWEdERrB8o6FfjLHPbsi\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: J/Q1ykcecYjPbuDmorFZrhnc4gM5WLJr+k5/UCbkrM8GMlatF/yFATv8EohakSW5heHkzbdx4AyAtkkGnm7s2FN5spzAtM6sVqvy6luM+9Ja9T0+AxktCzKIvoR2CVbaWKjvyxRiN8qCy6bYf5UdL4n4i4TOrKF40dTvxUjPB5YcIw96wunybz2+DK/Yu5B30gPxh8sJtcYXN+3v7RDTFiSfE5waP4PY5/GMfQSu0lE=\n"
+      },
+      "expect": {
+        "identity": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
+        "vault": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
+        "nostr": null
+      }
+    },
+    {
+      "label": "step 2 Docker import (before 2935be0): a plain-text vault.yaml, kept as given",
+      "commit": "a5bd150",
+      "schema": 1,
+      "passphrase": "a new passphrase",
+      "meta": {
+        "wallet_yaml": "entropy: kxc6jBSFwXrdEU1T7xlJoIqvxfwtLAM4rfoZp/SjKSw=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: L29dqwGwrMRLHgnXS5DhBbRzWxYfEMbgBytC3EVMsEQUx3cxZS9R\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: narrow right perfect cinnamon foster runway inmate claim fault juice fame donate priority title vague pitch add shell leader crew leg face pigeon moment\n",
+        "vault_yaml": "entropy: 7+EkKs4RRSlfWL/NhThICTN/ZEtIeiJSy/vpv6gTvFg=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: L5G1FkavGmFEft8wjqu56w7qrohrZSS8uwUm6UcSVUU5xV9Yhk3N\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: useful ankle apple order begin net latin blood snow clap bamboo bar dawn rate\n  coffee aunt car north year square whisper antenna vapor anchor\n"
       },
       "expect": {
         "identity": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
@@ -59,7 +74,7 @@
       "passphrase": "pass",
       "meta": {
         "wallet_yaml": "entropy: 6hbL9n/XNbQKAwmqZ5SwTcPQdRF03fqNaKYBlxpAq5E=\nevr:\n  address: EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF\nprivateKey: L54kRFUJtp7DjhM6LiqRZrFYTaCpARKCbgPFQmBf3eBmCBzk2YMp\npublicKey: 033e45c2e1b8f12281ce430e390182a98adabd8edad8e689bd5e14abf8f0a907c5\nscripthash: 1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac\nwords: tube rent work zero infant sure chimney gentle price device clown oppose dial dentist easy option whisper hero civil add immune cake purity chef\n",
-        "vault_yaml": "entropy: S5xBTuR3vBS01I6hzLGyry78sn/TsI7iFl3HRmBYLatWFAFhuUdS9c/pu4sMRto/fisMC0e+bPUfSAoUqfzQtkMVgo17YB0Nn5s7usP1ESo=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: 6sJLZFz3V/e8ItBwXptDFXU742n13Wm8jXjVeGc3EYKsGk0GtflhrxENcuqxMCgqTBBQUmYey8jUKIafPLOaCoQ4a7N+/MGzL/Au1+HxT8M9wwYMt1J1gEUu6a6NcZN7\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: zpwPVhoK7CI69bCnCyHWlTaT30UJVDyCAH6k5SbXvL1VUVwiTiX83AYvDT6llXZphNt/RocYjVvxcMTs3ap2LnSiwi+Zt/6xrVObeOayiHxsWQ2NpnWNBfDo7E5vCPVEjZDP9kiwqA/cWEBmbQ26ezqvr8kgG7uJ+zfIRwQK4myAE7nvAwf2TezLVsu/dgb6ukomb5gnI6hXehzVzXApcpLZQC5R2KsYoJEFk8eoEnln7MNrAGpG1GdNBnjbE/juU2d0yMoffW2Duim4cMABaQ==\n"
+        "vault_yaml": "entropy: 2Rk1uC94YgJLQbgqVjTGwkSSK6dDPgXUNnGDrtueokNnN4l3tlBel0zCeap5/IbsVIMatrTvPPYpAv2UlEYyh2uT1h/x1W9+m39qkzhvKTk=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: LqXLoJML6SmE8qAZgOccIwiJiTBb0qc9UV+ZINY4CI66U2WM3KxQM7Cg3GBMXpdLr+4K1ggmcB4Qqx5RVlLadrMgTRtKYlxZCWmLSIxz1j6568XK7gpE46KTf05wSXjR\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: FZM2auCkwXHnUydypS3hgac6U/WbzzbMdlu3NQICITXBLFWQWXJNc1VjeGPtfYgqmlSHb8poZZqz5anBIxhL4qGFJx5xobQB5UqStcLfHL/BXUlzgAK87qeot+Sx5UKOENVYJKQ2Owns0U7ZnsOrVsc1TS7fK6ytCh5/dPqudXxUg0WBpH1A6r8DA+35MkBe49emynuF4I/5twqdzH+snzbNOCfEYEH0BeUpQbwkNNy9A7vShE73G0cUNlzgf618a8z1pGBHekKhxaozsP4M+A==\n"
       },
       "expect": {
         "identity": "ea16cbf67fd735b40a0309aa6794b04dc3d0751174ddfa8d68a601971a40ab91",
@@ -74,7 +89,7 @@
       "passphrase": "pässwörd",
       "meta": {
         "wallet_yaml": "entropy: ANI0vGXY0JPM/OsLUlzByfBenZMYnyaKCiaqEVLd6+o=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: KwFJm658E95uj1m4cSVgQhTBhFwjYjHvECC9MrzmqSUVk5nBxSQE\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: absorb museum congress slight minimum enemy crop output area napkin corn negative album excite erase become charge expect meadow feature benefit humble quick earth\n",
-        "vault_yaml": "entropy: zRn2Ik9sxXKDBTYMGx69jTxeTTPvavqfDIJYdSSksOMXDiAWYlLvTDtIr2qPXJtARvyJm5aX7t36Ex8EJMGrU92GuUGUoe2X+KpsgtJXwsc=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: a2zkZ41Sg+CVbTgaknNREOaxU9NkSfJS9+H+++5LW6HEP4GzWXYvnPsZWePPBmjhgWuNeBI9S4ZsA9sUscGixpYrpa9NRefIyiccNAs/VPGXEMK7e1UdLzbVE6GP0AAo\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: 2GEbH0IVjP2QWuCb7/mvJaP7DXwhIha9lU36KlCHBbkUmlrjY4mKo/eT1ggjJRgjo28CZCKmyQOZv+H4cB8i/didoMgm9smDEr45SqKW69J5vk8saBAfDENEe7QoFrAkY2TbMcz2lD7wjj/U9U9Hk7eGbS5nwXoLoOjnWLrL1S6xJgDhhfun6c/scevM1+KJRj5e7Os3xnQjEDna+PAgQnGweebR4uy4XwwUNCa9WjQiu4Z71imbA0Q98iuVvN1+\n",
+        "vault_yaml": "entropy: KQUw5FjPXGfY+2fq1S1UFIwCYoG5S+xyEYb00OGcUhuj5l2Py5D3c2SUcAXh3qI28G8SuEe2E4ukhSB1GuInfB3fueib9KTbE65v1o8GvEA=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: eX7evf9H2MKPYR1qUYRGXZqHqMwPRpuboJWhLzTRMj4uzPDBilNZXiTFVu4w16pBT8thYqeJAMEXUIN5l2qZsJFntWMv6hTOdoRexfnfy/+n3+2gRKM2iScX7X0cg3Ik\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: qgmecY+o7GqU/GcpVAtKyvSxK0vRp1Ql+5AtionY1g7BqdHBjc/FjD7Jd5wG6qaKLXYa07tnacoC+mTNPHWOciwk4Wnx+2Si5SemjmvKvOF2+/Wd7sc0ryBGCV1HcYHeMtyftpLQmxkm8q1j4sEj7xyZUVg1sycRD9k+OZuoFIZk0HsM57s2bjwGwur/+zDydoSZ8tj0os1eohC7CGTTvol+7sn0K2oaZbgclojEMwPnaZdnHYCP0EqNKRtoD9Ta\n",
         "nostr_yaml": "pubkey_hex: 62756113cd917a659263ead50da0f538d97a5d4cbf0c573464140364f9a98cc8\nsecret_hex: dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4\n"
       },
       "expect": {
@@ -106,13 +121,13 @@
       "passphrase": "fixture-pass-1",
       "meta": {
         "wallet_yaml": "entropy: ANI0vGXY0JPM/OsLUlzByfBenZMYnyaKCiaqEVLd6+o=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: KwFJm658E95uj1m4cSVgQhTBhFwjYjHvECC9MrzmqSUVk5nBxSQE\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: absorb museum congress slight minimum enemy crop output area napkin corn negative album excite erase become charge expect meadow feature benefit humble quick earth\n",
-        "vault_yaml": "entropy: pK0ywRUld0sOyjDgfyv/UNoYLDtMGDYwSs4NFdaHVb+KZt+NfwaDD0nOEhQeFvKoELIXuqKR/gqpuJJ0zzRZQBf7pL4jgkEHbazx3BtpN98=\nevr:\n  address: EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF\nprivateKey: bF32/WSORK6wpM+qnuZTZsZ/t+0aDmVKgQBiAB1FRSyqm5ZANzLlP/ZqY09y+PNoSsYArZpr/mQqR9omh5ubj+BHhlsTxYnu4pWYrjh7sRRpUUbY9KiHbMQn1d3b+X5/\npublicKey: 033e45c2e1b8f12281ce430e390182a98adabd8edad8e689bd5e14abf8f0a907c5\nscripthash: 1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac\nwords: knDKL12lhdl0fuJ70gbgErEqF0UwdvHTLbx291ft8GW2W+RUJEX5MktDnNkSEWKMNfC9GjaYgSNuf8dI6EScFHl8aPi0DYlYMwrjR8SMGECedFUOykiDBq+/0v0KqDHSsA40kG9aKT44CDKej+gtKtBjOrkFAueSSh348cYSkVo2Z2nGgFO6DRWawVBQyk2I5eqVTqDNUrWuEjEpDLjHvprhnWBQ4ia4P5gl1jyKe4+qdjLD0MFqzwrpEjdacutr\n",
-        "nostr_yaml": "pubkey_hex: 7801e8748898c148ce398e0343773202979b718046ad5bd0fb18cba78d11a53f\nsecret_hex: 7e493aa4c6b8a9c6f1d5ee34ff7a47a1a7ad1c8494806a202abf0aea841eab0e\n"
+        "vault_yaml": "entropy: o1zKSQ3Ncs5tFbUZ/3yWRKrZk3KlyGy9BHvNPmWhKC6nAqW8rO9zW0JcKZCc0klo3+nD72B6RPT/H6H/fBx9gRxvD5/R1BO2AhJKxnNa900=\nevr:\n  address: EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF\nprivateKey: V2ZXe6WQxM/vXVTTBV8gQAlwuf2lw+0ahAVpdBYER0NK7z8V2wwSPaUwgfLDB/+xZeqQ+69qSAS51tyXc+AJqQFUCirk4tvZ+7EWsZqOp/81/4WQSaD1ZFORGgXvLZR6\npublicKey: 033e45c2e1b8f12281ce430e390182a98adabd8edad8e689bd5e14abf8f0a907c5\nscripthash: 1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac\nwords: jCXq/8YGzV+D1uPXlIyCbFAYQvgWOu/jjtcY7P9STyUw0lR+OIZMsRIK+WegLweqno3e7aQ5IxTO2aypCB0SJaxp05L6x6FSPbblfoAY8iUEycHwXoaZpFdugdnmVBBxt0jlMTYK3tY4jyq+gr3apCys4v9fP8+V8SiLlqZ9tdo7t18Xsj3D4c41Sx/dLlz1fkbCUAFiBYJaCQ3khBIkO7UnSItM8hrj03jY/BSAuXBjAaVZ1mGIWOwzfSx2ndlq\n",
+        "nostr_yaml": "pubkey_hex: a6ca44dcc5a8c6bcefcc8a3989e2a5ea59b1ee988bcb427ccc83e71fcd283c39\nsecret_hex: efe5c74046133fa5076be9cd21e221ef0661132fedd9122fe610de42708279a9\n"
       },
       "expect": {
         "identity": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
         "vault": "ea16cbf67fd735b40a0309aa6794b04dc3d0751174ddfa8d68a601971a40ab91",
-        "nostr": "7e493aa4c6b8a9c6f1d5ee34ff7a47a1a7ad1c8494806a202abf0aea841eab0e"
+        "nostr": "efe5c74046133fa5076be9cd21e221ef0661132fedd9122fe610de42708279a9"
       }
     },
     {
@@ -123,12 +138,12 @@
       "meta": {
         "wallet_yaml": "entropy: ANI0vGXY0JPM/OsLUlzByfBenZMYnyaKCiaqEVLd6+o=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: KwFJm658E95uj1m4cSVgQhTBhFwjYjHvECC9MrzmqSUVk5nBxSQE\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: absorb museum congress slight minimum enemy crop output area napkin corn negative album excite erase become charge expect meadow feature benefit humble quick earth\n",
         "vault_yaml": "entropy: QPoDNgEsUQ2sMlpSOjXB+qjNaHeArgPszWpRNNUdNt0qCYVS1sINvN+8hUs6pjkhdRywxJuzscEEMvbMwnCW0GdSNGvv9nyEXg1KOEZLh6o=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: TsxinK++aaZW+XyNptPqHqW87t0y9XTo4oc4/3TcSDNV4LRdpV4RCGm+bBa/eRH/xRrEqUWp+KFT8IhRhCGRb1zHFC36GOlaV9puopN7aP+g0stOiOQCCAexbQdbhpBx\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: XzCRH2nphaZMnuGGJn2bwWHCHXMwU0vQMXsacNwvD5qRAxOW3pvCMYx/drdOGJv9pzUZlnUk4M+aelz+9HYQ/eia42qvXpjuLAwhpuIo0G+S6uilXFdu1PwXvUIPlHUlZTBgWe91F2Iz0Ei/RrxkVC7hSqy/TXHwdJ5bfDt9QSnvhGnNAbAUpnGwl7TFU+WvHD7grKyJVFLDuv2U3GcOGkvTnNPwmedXHmEzcJtBhKk=\n",
-        "nostr_yaml": "pubkey_hex: fca8e327f7302e685cab6cb2967ccda3ba83e5e6ff4a101631ddb63436003a33\nsecret_hex: b2e4728e0b7e40ced0cf9784f97d9aa09fcbc1978da0b9366f261c5a0c1827a7\n"
+        "nostr_yaml": "pubkey_hex: c4b7477bab2212865394d2de7bc6e2ac196ba263294117f607ed491623e1c97b\nsecret_hex: d274bbe9d9d51913121661b490743321c3872c0a5f75852fd82824c8b76ddcdc\n"
       },
       "expect": {
         "identity": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
         "vault": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
-        "nostr": "b2e4728e0b7e40ced0cf9784f97d9aa09fcbc1978da0b9366f261c5a0c1827a7"
+        "nostr": "d274bbe9d9d51913121661b490743321c3872c0a5f75852fd82824c8b76ddcdc"
       }
     },
     {
@@ -137,8 +152,8 @@
       "schema": 6,
       "passphrase": "pass",
       "meta": {
-        "vault_yaml": "entropy: wHBKhkDHkSlCohneKnM5+kiVprT0UPb8e1w3YD84RTeVolcnmWZys3swd31AX78gRVLnS4Z+KOadkV/vUEGfssD01w+ayQs442bZavgoCNc=\nevr:\n  address: EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF\nprivateKey: ZTobRXsRagZF8sEfr+85mOt5gJZuxiou3b6pBK5+TAhhqVSdi/aaYHK6LCR8LbxgjpulzLWrriNGj1trHBEJ+NdVyIqOy8YBI0DCotGMSpLo3ZuNNp98H0m50Mr0aE9R\npublicKey: 033e45c2e1b8f12281ce430e390182a98adabd8edad8e689bd5e14abf8f0a907c5\nscripthash: 1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac\nwords: LBSNjS4WVPRtLVEuIa/ev6nfGJK2qNwXggx3SquTVCGRe2GqcnbTh8ukpYMKilKlJt7N2DC7WssNoyraROoivvxzOtbNNu7z9C+Qi/rvib/zgEe/RoN1BDuB3XE7SS/QODgODT044sq+QqRL3+qv0rZhC3asULPHVloWhdG8wDXnOjPCzjpwS0qP153NldLZnmK6vYeFlkBPBX7JJU3+b8Zy0u5qEjZawNS6MlyXeenT0+vy+Csv2PQEcXGePOLO\n",
-        "nostr_yaml": "pubkey_hex: 66a6d5581c404fec905373cacab10696a425bd986d074599f5854f35d0367faa\nsecret_hex: bf411193de063f403af4572bc7608194d09a5cbd750460de7c77b0909adee76a\n"
+        "vault_yaml": "entropy: jUGk4N/8rJDfPnvTuKBU1pcNvdWw3BYbYqyUmqS/YRSQE7nP2G9mCoHGbyVl0XZEKW6gP8P/qn0eaimTEgfSbPQ3gUpo7ixunK8ncmL0FbY=\nevr:\n  address: EKp9GL29zHMFxPP4VUq9eirnPUNU3moVrF\nprivateKey: AB2tFkH80cvKOJvKR4K2u61DB85YLRsvlGPfM4qMwma/LyG0Rvob4jz1hU26GM2Qzt5ADJ9v9C8z1Kw/kAG0s5AOxDmT1DQjdmM7lwTJggBU8zW0eCEofbO56FeVeids\npublicKey: 033e45c2e1b8f12281ce430e390182a98adabd8edad8e689bd5e14abf8f0a907c5\nscripthash: 1fb98dba303b2f5b6bb9c6e5688215337e6674996d54d30151ee0b8ee97622ac\nwords: hA3dpcpxI1/hqxiV3TJNR+KE+DFr0huLqB8YUG9uSNnKzDG0IO3+keV5pQQCcHh2QzVxsjCuMTMxsW9O7sWD4pUOF/ioSNlQ6IDwJ9uDAZHxh8uoGWYqn9jNCKnN7r9e5hXgK4uljESUDBq0ZxYHxR8X5/xtH3s6uhqlxoE5xl1Dk7nTy/jaKUprklhNeiQE353Mt2E88z/aUv0AvVKVXIgVH2AlC0xBIDK5Srfw8n/I2oIzmPuxeOHaeiXeloPT\n",
+        "nostr_yaml": "pubkey_hex: af54bc413200860888b51853804c1ef4eb7020af9a3ec9d47b2f8ebb2e2c002b\nsecret_hex: ccd541d8b54c82f2b20ecfafbf602e245aec026e459652c0dbf49caef3444c78\n"
       },
       "expect": {
         "setup": true

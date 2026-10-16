@@ -6,7 +6,9 @@
 // left is set aside, never deleted, with a notice.
 import { expect, test, chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { MIGRATIONS } from '../src/db/schema.js';
+import { publicKey, evmAddress } from '../src/keys/keys.js';
 import { openApp, reloadApp, loaded } from './load.js';
 import { stubCentral } from './stub.js';
 import { opfsFiles, opfsCopy } from './opfs.js';
@@ -18,9 +20,9 @@ const setAside = (files, kind = 'unreplayed') => files.filter(([f]) => f.startsW
 const recovered = (page) => page.evaluate(() => window.satori.status().then((s) => s.recovered));
 const sqlText = (v) => `'${JSON.stringify(v).replaceAll("'", "''")}'`;
 const probe = (page, args) => page.evaluate((a) => window.probe(a), args);
-/** What the app before this fix left on a first load: the migrations, committed, not checkpointed (6 kB of WAL). */
-const OLD_FIRST_LOAD = ['CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR)', ...MIGRATIONS,
-  `INSERT OR REPLACE INTO meta VALUES ('schema_version', '${MIGRATIONS.length}')`];
+/** What the app before this fix left on a first load: its 6 migrations, committed, not checkpointed (6 kB of WAL). */
+const OLD_FIRST_LOAD = ['CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR)', ...MIGRATIONS.slice(0, 6),
+  "INSERT OR REPLACE INTO meta VALUES ('schema_version', '6')"];
 
 test('a fresh profile: reloaded on the Setup screen it opens, and no WAL is left', async ({ page }) => {
   expect(await openApp(page)).toBe('setup');
@@ -64,7 +66,7 @@ test('direct: a write with no explicit CHECKPOINT survives a reload and leaves n
 test("setup's keys are in the database file itself when setup returns; a reload right after keeps them", async ({ context, page }) => {
   await stubCentral(context);
   expect(await openApp(page)).toBe('setup');
-  const { identity, vault } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
+  const { identity, vault } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   const files = await opfsFiles(page);
   await opfsCopy(page, DB, 'e2e-keys-copy.duckdb'); // the file alone, without any WAL
   await page.reload();
@@ -73,10 +75,9 @@ test("setup's keys are in the database file itself when setup returns; a reload 
   expect((await page.evaluate(() => window.satori.status())).identity).toBe(identity);
 
   await page.goto('/e2e/store/');
-  const r = await probe(page, { cmd: 'raw', path: 'opfs://e2e-keys-copy.duckdb',
-    sql: ["SELECT key FROM meta WHERE key IN ('wallet_yaml', 'vault_yaml', 'nostr_yaml') ORDER BY key"] });
-  expect(r.rows?.[0]?.map((x) => x.key), JSON.stringify(r)).toEqual(['nostr_yaml', 'vault_yaml', 'wallet_yaml']);
-  expect(vault).toMatch(/^E/);
+  const r = await probe(page, { cmd: 'raw', path: 'opfs://e2e-keys-copy.duckdb', sql: ["SELECT key, value FROM meta WHERE key = 'keys'"] });
+  expect(r.rows?.[0]?.map((x) => x.key), JSON.stringify(r)).toEqual(['keys']);
+  expect(evmAddress(JSON.parse(r.rows[0][0].value).vault.pubkey)).toBe(vault);
 });
 
 test('Chrome killed right after setup: the keys are there at the next start', async () => {
@@ -89,7 +90,7 @@ test('Chrome killed right after setup: the keys are there at the next start', as
   let { context, page } = await launch();
   await page.goto('http://localhost:5180/');
   expect(await loaded(page)).toBe('setup');
-  const { identity } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
+  const { identity } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   // no shutdown of any kind: every process of this profile, at once
   const pids = execFileSync('pgrep', ['-f', dir]).toString().trim().split('\n').map(Number);
   for (const pid of pids) try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
@@ -105,22 +106,12 @@ test('Chrome killed right after setup: the keys are there at the next start', as
   }
 });
 
-/** A neuron's three files and identity, from a setup in a profile of its own. */
-async function neuronFiles(browser) {
-  const context = await browser.newContext();
-  try {
-    await stubCentral(context);
-    const page = await context.newPage();
-    await openApp(page);
-    return await page.evaluate(async () => {
-      const { identity } = await window.satori.setup({ passphrase: 'pass' });
-      await window.satori.unlock('pass');
-      const f = (n) => window.satori.file(n);
-      return { identity, rows: [['wallet_yaml', f('wallet.yaml')], ['vault_yaml', f('vault.yaml')], ['nostr_yaml', f('nostr.yaml')]] };
-    });
-  } finally {
-    await context.close();
-  }
+/** A set-up neuron's key rows as the version before this fix stored them (test/fixtures/profiles.json), and its identity. */
+function neuronFiles() {
+  const { profiles } = JSON.parse(readFileSync(new URL('../test/fixtures/profiles.json', import.meta.url)));
+  const p = profiles.find((x) => x.label.startsWith('step 5 on'));
+  const identity = evmAddress(publicKey(Uint8Array.from(p.expect.identity.match(/../g), (b) => parseInt(b, 16))));
+  return { identity, rows: Object.entries(p.meta) };
 }
 const keyRows = (rows) => `INSERT OR REPLACE INTO meta VALUES ${rows.map(([k, v]) => `('${k}', ${sqlText(v)})`).join(', ')}`;
 
@@ -140,7 +131,7 @@ test("the owner's profile: a WAL DuckDB cannot replay is set aside, never delete
   expect(walBytes(files)).toBe(0);
 
   // It goes on as usual: setup; the notice can be dismissed, and a reload has none.
-  const { identity } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
+  const { identity } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   await notice.getByRole('button', { name: 'Dismiss' }).click();
   await expect(notice).toBeHidden();
   expect(await reloadApp(page)).toBe('home');
@@ -157,8 +148,8 @@ const OLD_PROFILES = {
   'reloaded since': () => [["INSERT OR REPLACE INTO meta VALUES ('base_max_fee_gwei', '1')", 'CHECKPOINT']],
 };
 for (const [shape, laterSessions] of Object.entries(OLD_PROFILES)) {
-  test(`an older version's set-up neuron (${shape}): its WAL is set aside once, silently; the keys and later writes stay`, async ({ browser, context, page }) => {
-    const { identity, rows } = await neuronFiles(browser);
+  test(`an older version's set-up neuron (${shape}): its WAL is set aside once, silently; the keys and later writes stay`, async ({ context, page }) => {
+    const { identity, rows } = neuronFiles();
     await stubCentral(context);
     await page.goto('/e2e/store/');
     expect(await probe(page, { cmd: 'raw', path: `opfs://${DB}`, sql: [...OLD_FIRST_LOAD, keyRows(rows), 'CHECKPOINT'] })).toHaveProperty('rows');
@@ -187,8 +178,8 @@ for (const [shape, laterSessions] of Object.entries(OLD_PROFILES)) {
   });
 }
 
-test('keys checkpointed and an unreplayable WAL on top: only the WAL\'s changes are set aside, the keys stay', async ({ browser, context, page }) => {
-  const { identity, rows } = await neuronFiles(browser);
+test('keys checkpointed and an unreplayable WAL on top: only the WAL\'s changes are set aside, the keys stay', async ({ context, page }) => {
+  const { identity, rows } = neuronFiles();
   await stubCentral(context);
   await page.goto('/e2e/store/');
   expect(await probe(page, { cmd: 'raw', path: `opfs://${DB}`, sql: [

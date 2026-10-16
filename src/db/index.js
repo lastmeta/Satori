@@ -48,10 +48,19 @@ async function migrate(conn) {
   if (version > MIGRATIONS.length) {
     throw new Error(`This database is from a newer version of the app (schema ${version}, this app knows ${MIGRATIONS.length}).`);
   }
+  const meta = {
+    get: async (key) => {
+      const [r] = toRows(await query(conn, 'SELECT value FROM meta WHERE key = ?', [key]));
+      return r ? JSON.parse(r.value) : undefined;
+    },
+    set: (key, value) => query(conn, 'INSERT OR REPLACE INTO meta VALUES (?, ?)', [key, JSON.stringify(value)]),
+    remove: (...keys) => query(conn, `DELETE FROM meta WHERE key IN (${keys.map(() => '?').join(', ')})`, keys),
+  };
   for (; version < MIGRATIONS.length; version++) {
+    const step = MIGRATIONS[version];
     await conn.query('BEGIN TRANSACTION');
     try {
-      await conn.query(MIGRATIONS[version]);
+      await (typeof step === 'function' ? step(meta) : conn.query(step));
       await conn.query(`INSERT OR REPLACE INTO meta VALUES ('schema_version', '${version + 1}')`);
       await conn.query('COMMIT');
     } catch (err) {

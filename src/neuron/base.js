@@ -146,7 +146,7 @@ export function nextCheckAt({ now, chainTime }) {
  * @param {object} o
  * @param {object} o.db the app's db
  * @param {{evmAddress: string, signDigest: Function}} o.identity
- * @param {string} o.vaultAddress the vault's Base address (from vault.yaml's public key: no Unlock needed)
+ * @param {string} o.vaultAddress the vault's Base address (from its public key, in clear in the keys record: no Unlock needed)
  * @param {() => object|null} o.vault the unlocked vault signer, or null
  * @param {() => object} o.central the current central client
  * @param {string} [o.defaultRpc] the RPC when none is saved, if the build or the dev server set one (src/config.js)

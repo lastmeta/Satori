@@ -1,99 +1,86 @@
-// Satori's two keys, as Satori Lite keeps them (docs/design/keys.md):
-//   identity — wallet.yaml, unencrypted, so the neuron signs on its own;
-//   vault    — vault.yaml, fields encrypted with the passphrase, holds funds.
+// The neuron's keys, in this app's own record, meta `keys` (docs/design/keys.md):
+//   { v: 1, identity: hex, nostr: hex, vault: { pubkey, kdf, cipher, data } }
+// identity — plain text on purpose: the neuron signs on its own (central's login, the Base batch);
+// nostr    — plain text on purpose: it signs the Nostr events on its own; random, not derived;
+// vault    — sealed with the passphrase (vault.js), holds the funds; its public key in clear,
+//            so its Base address shows and central's register has it while locked.
+// An earlier version's vault, until its next Unlock: vault: { pubkey | null, yaml } (Docker's text).
 //
-//   const { walletYaml, vaultYaml } = await writeKeys({ identity?, vault }, passphrase)  // to store
-//   const { walletYaml, vaultYaml } = await importDocker({ walletText, vaultText, passphrase })
-//   const id = await loadIdentity(walletYaml)       // id.address, id.pubkey, id.sign(msg), id.backup()
-//   vaultInfo(vaultYaml)                            // { address, pubkey } while locked (every stored vault has both)
-//   const v = await unlockVault(vaultYaml, pass)    // Unlock; throws 'Wrong passphrase'
-//   v.sign(msg), v.backup(), v.lock()               // Lock wipes the key; then both throw 'Locked'
-//   loadNostr(nostrYaml)                            // { secret, pubkey }: the Nostr key (nostr.yaml)
-//   id.evmAddress, id.signDigest(hash32)            // Base: the same secret's EVM address and tx signatures
-//   evmAddress(pubkey)                              // the vault's Base address while locked
-export {
-  generateEntropy, entropyFromWords, entropyFromWif, deriveKeys, signMessage, verifyMessage, evmAddress,
-} from './keys.js';
-import { generateEntropy, deriveKeys, publicKeys, signMessage, signDigest, evmAddress } from './keys.js';
-import { readWallet, writeWallet, parse, secrecy, readNostrYaml, writeNostrYaml } from './docker.js';
-import { generateNostrSecret } from '../nostr/event.js';
+//   const record = await newKeys({ identity?, vault, nostr? }, passphrase)   // create, restore, import
+//   const secrets = await readDockerFiles({ walletText, vaultText, password, nostrText? })  // import: translate
+//   const record = await recordFromRows({ walletYaml, vaultYaml, nostrYaml? })  // migration 7: earlier rows
+//   const { identity, nostr, vault } = loadKeys(record)   // identity: a signer; vault: { pubkey, evmAddress }
+//   const { vault, record } = await unlockVault(record, passphrase)   // record: store it (an upgrade), or null
+//   signer: pubkey, evmAddress, signDigest(hash), backup() → { words, privateKey }, lock();
+//           the identity's also signCentralLogin(challenge) (central's login signature format)
+export { generateSecret, secretFromWords, wordsOf, publicKey, evmAddress } from './keys.js';
+export { MIN_PASSPHRASE, passphraseOk } from './vault.js';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
+import { checkKey, generateSecret, publicKey, wordsOf, evmAddress, signDigest, privateKeyHex } from './keys.js';
+import { sealSecret, openSecret, checkNewPassphrase } from './vault.js';
+import { readWallet, readNostrYaml, secrecy, vaultPubkey } from './docker.js';
+import { loginSignature } from '../central/login.js';
+import { generateNostrSecret, nostrPubkey } from '../nostr/event.js';
 
-export const MIN_PASSPHRASE = 4; // Docker vault-setup (neuron/web/routes.py:589)
+export const RECORD_VERSION = 1;
+const HEX64 = /^[0-9a-f]{64}$/;
+const PUBKEY = /^0[23][0-9a-f]{64}$/;
 
-/**
- * Docker's rule (Python len ≥ 4), plus Latin-1 only: satorilib can't encrypt
- * with other characters and would save the vault unencrypted.
- */
-function checkPassphrase(p) {
-  if (typeof p !== 'string') throw new Error('No passphrase given.');
-  if (/[^\x00-\xff]/.test(p)) {
-    throw new Error('Use only Latin-1 characters (no emoji, €, or non-Latin letters): Docker can’t encrypt a vault with others.');
-  }
-  if (p.length < MIN_PASSPHRASE) throw new Error(`Use a passphrase of at least ${MIN_PASSPHRASE} characters.`);
-}
-
-const sameKey = (x, y) => x.length === y.length && x.every((b, i) => b === y[i]);
+const sameKey = (x, y) => x.length === y.length && x.every((v, i) => v === y[i]);
 const notSame = (x, y) => {
   if (sameKey(x, y)) throw new Error('The identity and the vault must not be the same key.');
 };
 
-/** A signer over a 32-byte secret; lock() wipes it. */
-function signer(secret) {
-  const { address, pubkey } = publicKeys(secret);
-  return {
-    address,
+/** A signer over a 32-byte secret; lock() wipes it. `login`: central's login signature (the identity's). */
+function signer(secret, { login = false } = {}) {
+  const pubkey = publicKey(secret);
+  const live = () => {
+    if (!secret) throw new Error('Locked');
+    return secret;
+  };
+  const s = {
     pubkey,
     evmAddress: evmAddress(pubkey), // Base (docs/design/base.md#keys-on-base)
     get locked() { return secret === null; },
-    sign(msg) {
-      if (!secret) throw new Error('Locked');
-      return signMessage(secret, msg);
-    },
     /** A Base transaction's signature: the key never leaves this closure. */
-    signDigest(hash) {
-      if (!secret) throw new Error('Locked');
-      return signDigest(secret, hash);
-    },
-    /** The 24 words and the private key (WIF), for backup. */
-    backup() {
-      if (!secret) throw new Error('Locked');
-      const { words, wif } = deriveKeys(secret);
-      return { words, wif };
-    },
+    signDigest: (hash) => signDigest(live(), hash),
+    /** The 24 words and the private key (0x hex, what a Base wallet imports), for backup. */
+    backup: () => ({ words: wordsOf(live()), privateKey: privateKeyHex(live()) }),
     lock() {
       secret?.fill(0);
       secret = null;
     },
   };
+  if (login) s.signCentralLogin = (challenge) => loginSignature(live(), challenge); // src/central/login.js
+  return s;
 }
 
-/** New files for a vault (and an identity, random when not given), and a random Nostr key. */
-export async function writeKeys({ identity = generateEntropy(), vault }, passphrase) {
-  checkPassphrase(passphrase);
-  notSame(identity, vault);
-  const [walletYaml, vaultYaml] = await Promise.all([writeWallet(identity), writeWallet(vault, { password: passphrase })]);
-  return { walletYaml, vaultYaml, nostrYaml: newNostrYaml() };
-}
+const nostrOf = (secret) => {
+  try {
+    return { secret, pubkey: nostrPubkey(secret) };
+  } catch {
+    throw new Error('Not a Nostr secret key (64 hex characters).');
+  }
+};
 
-/** nostr.yaml for a new random Nostr key (start.py:135-145). */
-export const newNostrYaml = () => writeNostrYaml(generateNostrSecret());
-
-/** The Nostr key from nostr.yaml: plaintext, as the identity, so the neuron signs on its own. */
-export function loadNostr(nostrYaml) {
-  const { secretHex, pubkeyHex } = readNostrYaml(nostrYaml);
-  return { secret: secretHex, pubkey: pubkeyHex };
+/** A new record: the vault (and an identity and a Nostr key, random when not given), sealed with a new passphrase. */
+export async function newKeys({ identity = generateSecret(), vault, nostr = generateNostrSecret() }, passphrase) {
+  checkNewPassphrase(passphrase);
+  notSame(checkKey(identity), checkKey(vault));
+  nostrOf(nostr);
+  return { v: RECORD_VERSION, identity: bytesToHex(identity), nostr,
+    vault: { pubkey: publicKey(vault), ...await sealSecret(vault, passphrase) } };
 }
 
 /**
- * Docker's two files (and nostr.yaml, optional: a new key otherwise) and the vault's passphrase → files to store. wallet.yaml
- * must be plain text and vault.yaml encrypted (files in the wrong slots are
- * named as such), so the funds' key is never stored in plain text. Refuses a
- * wrong passphrase, a watch-only file, and a file whose stored fields don't
- * match its key. The identity is re-written from its key; the vault is kept as
- * given unless its address or public key is not in plain text (an old vault),
- * so both are read while locked: central's register and the Base address.
+ * A Dockerized Neuron's files and its vault password → the secrets, to seal
+ * with this app's passphrase (newKeys). wallet.yaml must be plain text and
+ * vault.yaml encrypted (files in the wrong slots are named as such); refuses a
+ * wrong password, a watch-only file and a file whose stored public key, words
+ * or private key are not its key's. nostr.yaml is optional (undefined: none).
+ * @returns {Promise<{identity: Uint8Array, vault: Uint8Array, nostr?: string}>}
  */
-export async function importDocker({ walletText, vaultText, passphrase, nostrText }) {
+export async function readDockerFiles({ walletText, vaultText, password, nostrText }) {
   const [w, v] = [secrecy(walletText), secrecy(vaultText)];
   if (w === 'encrypted' && v === 'plain') {
     throw new Error('The files are swapped: wallet.yaml is the unencrypted one, vault.yaml the encrypted one.');
@@ -104,51 +91,84 @@ export async function importDocker({ walletText, vaultText, passphrase, nostrTex
   if (v === 'plain' || v === 'mixed') {
     throw new Error('vault.yaml: this file is not encrypted, so it is not a vault. Choose the encrypted vault.yaml.');
   }
-  const nostrYaml = nostrText ? writeNostrYaml(readNostrYaml(nostrText).secretHex) : newNostrYaml();
+  const nostr = nostrText ? readNostrYaml(nostrText).secret : undefined;
   const read = async (name, text, opts) => {
     try {
       const r = await readWallet(text, opts);
       if (r.mismatches.length) throw new Error(`stored ${r.mismatches.join(', ')} do not match its key`);
-      return r;
+      return r.secret;
     } catch (err) {
       throw new Error(`${name}: ${err.message}`);
     }
   };
-  const id = await read('wallet.yaml', walletText);
-  const vault = await read('vault.yaml', vaultText, { password: passphrase });
-  notSame(id.entropy, vault.entropy);
-  const walletYaml = await writeWallet(id.entropy);
-  const info = vaultInfo(vaultText);
-  const vaultYaml = info.address && info.pubkey ? vaultText : await writeWallet(vault.entropy, { password: passphrase });
-  return { walletYaml, vaultYaml, nostrYaml };
-}
-
-/** The identity from its unencrypted wallet.yaml. */
-export async function loadIdentity(walletYaml) {
-  return signer((await readWallet(walletYaml)).entropy);
+  const identity = await read('wallet.yaml', walletText);
+  const vault = await read('vault.yaml', vaultText, { password: String(password ?? '') });
+  notSame(identity, vault);
+  return { identity, vault, nostr };
 }
 
 /**
- * The vault's address and public key, read without the passphrase, as Lite
- * does for central's register (start.py:4637-4667); each null if encrypted or
- * missing (an old vault, re-written on import).
+ * This app's earlier rows (wallet.yaml, vault.yaml and nostr.yaml texts) → the
+ * record, at load (migration 7). The identity and the Nostr key are plain text,
+ * so they are translated now (a new Nostr key when there was none, as the load
+ * before step 5 made one); the vault needs the passphrase, so its text is kept
+ * until its next Unlock (unlockVault), its public key in clear when it had one.
  */
-export function vaultInfo(vaultYaml) {
-  const doc = parse(vaultYaml);
-  const address = doc.evr?.address;
-  const pubkey = doc.publicKey;
+export async function recordFromRows({ walletYaml, vaultYaml, nostrYaml }) {
+  const id = await readWallet(walletYaml);
+  if (id.mismatches.length) throw new Error(`The stored identity's ${id.mismatches.join(', ')} do not match its key.`);
+  return { v: RECORD_VERSION, identity: bytesToHex(id.secret),
+    nostr: nostrYaml ? readNostrYaml(nostrYaml).secret : generateNostrSecret(),
+    vault: { pubkey: vaultPubkey(vaultYaml), yaml: vaultYaml } };
+}
+
+function checkRecord(r) {
+  if (!r || typeof r !== 'object') throw new Error('No keys stored.');
+  if (r.v > RECORD_VERSION) throw new Error(`These keys were stored by a newer version of the app (record ${r.v}).`);
+  if (r.v !== RECORD_VERSION || !HEX64.test(r.identity) || !HEX64.test(r.nostr)) throw new Error('The stored keys are not readable.');
+  const v = r.vault ?? {};
+  const sealed = typeof v.data === 'string' && PUBKEY.test(v.pubkey);
+  const legacy = typeof v.yaml === 'string' && (v.pubkey === null || PUBKEY.test(v.pubkey));
+  if (!sealed && !legacy) throw new Error('The stored vault is not readable.');
+  return r;
+}
+
+/** The record's keys: the identity's signer, the Nostr key, the vault's public key and Base address (null until an old vault's Unlock). */
+export function loadKeys(record) {
+  const r = checkRecord(record);
+  const pubkey = r.vault.pubkey ?? null;
   return {
-    address: typeof address === 'string' && address.length <= 34 ? address : null,
-    pubkey: typeof pubkey === 'string' && /^0[23][0-9a-f]{64}$/.test(pubkey) ? pubkey : null,
+    identity: signer(checkKey(hexToBytes(r.identity)), { login: true }),
+    nostr: nostrOf(r.nostr),
+    vault: { pubkey, evmAddress: pubkey && evmAddress(pubkey) },
   };
 }
 
-/** Unlock: decrypt the vault into memory. A key that doesn't match the stored address is a wrong passphrase. */
-export async function unlockVault(vaultYaml, passphrase) {
-  const { entropy, mismatches } = await readWallet(vaultYaml, { password: passphrase });
-  if (mismatches.length) {
-    entropy.fill(0);
+/**
+ * Unlock: the vault's secret into memory. A wrong passphrase → 'Wrong
+ * passphrase'. A vault in an earlier version's form (Docker's vault.yaml text)
+ * is opened as that version did (the passphrase's Latin-1, else UTF-8 bytes;
+ * a plain-text one needs a new passphrase that meets the rule), sealed in this
+ * app's format with the same passphrase, and that is checked by opening it
+ * again: `record` is then the record to store, else null.
+ * @returns {Promise<{vault: ReturnType<typeof signer>, record: object | null}>}
+ */
+export async function unlockVault(record, passphrase) {
+  const r = checkRecord(record);
+  const pass = String(passphrase ?? '');
+  if (typeof r.vault.data === 'string') {
+    const secret = await openSecret(r.vault, pass);
+    if (publicKey(secret) !== r.vault.pubkey) throw new Error('The stored vault does not match its public key.');
+    return { vault: signer(secret), record: null };
+  }
+  const plain = secrecy(r.vault.yaml) === 'plain';
+  if (plain) checkNewPassphrase(pass);
+  const { secret, pubkey, mismatches } = await readWallet(r.vault.yaml, plain ? {} : { password: pass, encodings: ['latin1', 'utf8'] });
+  if (mismatches.length || (r.vault.pubkey && pubkey !== r.vault.pubkey)) {
+    secret.fill(0);
     throw new Error('Wrong passphrase');
   }
-  return signer(entropy);
+  const sealed = await sealSecret(secret, pass);
+  if (!sameKey(await openSecret(sealed, pass), secret)) throw new Error('Re-encrypting the vault failed; it was kept as it was.');
+  return { vault: signer(secret), record: { ...r, vault: { pubkey, ...sealed } } };
 }

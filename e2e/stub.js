@@ -5,7 +5,7 @@
 // `history` is set (else 404, as central2 today); anything else is a 404, as
 // prod's /base/config is. Satorian and the owner's dev relay (7778) are never
 // reached; /rpc is aborted unless a fake chain is given (e2e/base.spec.js).
-import { verifyMessage } from '../src/keys/index.js';
+import { verifyLoginSignature } from '../src/central/login.js';
 
 export const CENTRAL = 'https://central2.satorinet.io';
 
@@ -18,7 +18,7 @@ const CORS = {
 /**
  * @param {import('@playwright/test').BrowserContext} context
  * @param {{url?: string, relays?: string[], rpc?: {http: Function}}} [o] relays: central's relay list
- * @returns the stub: set `batch`, `vaults` (vault pubkey → address), `otherVault`, `fail` (statuses for the next
+ * @returns the stub: set `batch`, `vaults` (vault pubkey → central's address form for it), `otherVault`, `fail` (statuses for the next
  *   predictions batches), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
  *   `history` (stream uuid → its rows, oldest first; null: the route 404s); read `registered`, `logins`, `batches`,
  *   `merkleCalls`, `historyCalls`, `prod`, `blocked`.
@@ -72,7 +72,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       case 'GET /api/v1/auth/challenge':
         return reply(route, 200, { challenge: `c-${stub.logins.length}` });
       case 'POST /api/v1/auth/login': {
-        const ok = verifyMessage(h.message, h.signature, { pubkey: h['wallet-pubkey'] });
+        const ok = verifyLoginSignature(h.message, h.signature, { pubkey: h['wallet-pubkey'] });
         stub.logins.push({ ...h, ok });
         return ok ? reply(route, 200, { access_token: `jwt-${stub.logins.length}`, expires_in: 3600 })
           : reply(route, 401, { detail: 'Invalid signature' });
