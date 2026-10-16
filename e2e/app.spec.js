@@ -36,7 +36,8 @@ async function stubCentral(context, url) {
 
 const visible = (loc) => loc.filter({ visible: true });
 const status = (page) => page.evaluate(() => window.satori.status());
-const row = (page, name) => page.locator('[data-test=stream]').filter({ hasText: name });
+/** A stream's row by its name (another row's Model column may name it as a companion). */
+const row = (page, name) => page.locator('[data-test=stream]').filter({ has: page.locator('.sname', { hasText: new RegExp(`^${name}$`) }) });
 
 test('create, register, Poll now (observations in, predictions out), reload keeps the schedule, unlock, backup, lock, one tab', async ({ context, page }) => {
   const stub = await stubCentral(context);
@@ -335,7 +336,7 @@ test('central with history: the first Poll now backfills each stream and forecas
   }
   expect(stub.batches[0].map((x) => x.value)).toEqual(models.map((m) => pyFloatStr(out.forecasts.get(m.uuid).t2)));
   await page.locator('[data-test=streams] summary').click();
-  const gold = page.locator('[data-test=stream]').filter({ has: page.locator('.sname', { hasText: /^gold$/ }) }).locator('[data-test=model]');
+  const gold = row(page, 'gold').locator('[data-test=model]');
   const spec = models.find((m) => m.name === 'gold').spec;
   await expect(gold).toHaveText(`bvar · ${spec.companions.map((c) => `+${c.name}`).join(' ')}`);
   await expect(gold).toHaveAttribute('title', new RegExp(`^Bayesian VAR\\(1\\) on 12 h steps of this stream with .* · λ1 ${spec.lambda1} · λ2 ${spec.lambda2} · .*generation`));
