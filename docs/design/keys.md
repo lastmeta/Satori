@@ -107,9 +107,10 @@ nothing):
   IV. A fresh salt means a fresh key each time, so an IV is never reused.
 - **Wrong passphrase:** GCM's tag fails, so a wrong passphrase (or any changed
   byte) is `Wrong passphrase`, with nothing decrypted.
-- **Cost:** about 1 s per Unlock in Node on this shared box (seal 1.3 s,
-  open 1.1 s at load ~4); Chrome's WebCrypto is native too. One Unlock pays it
-  once; an attacker pays it per guess.
+- **Cost:** measured in Chrome on this shared box (dev server, 2026-10-16):
+  seal 0.29–0.30 s, open 0.26–0.30 s. One Unlock pays it once; an attacker
+  pays it per guess. (An earlier version's vault takes satorilib's
+  PBKDF2-SHA1 × 1,000,000 per field once more, at its first Unlock: 0.7–1.5 s.)
 - **Why not Argon2id or scrypt**, OWASP's first choices: WebCrypto has
   neither. `@noble/hashes` (already a dependency) has both in pure JS, several
   times slower than native, so at the same wait an attacker on native code or
@@ -117,6 +118,8 @@ nothing):
   them. Not clearly better here, so not used.
 
 ## Passphrases
+
+![Choose a passphrase: at least 8 characters, in any language or script; 密码密码 (4) refused](../screenshots/passphrase.png)
 
 **At least 8 characters, any Unicode, no other rule** (`MIN_PASSPHRASE`,
 `checkNewPassphrase`). Counted in code points after NFC, as NIST SP 800-63B
@@ -155,6 +158,8 @@ migration re-encrypts the vault with it as it is.
   [below](#backup).
 
 ## Import: translate
+
+![Import Dockerized Neuron files, with "Use it as this app's passphrase too"](../screenshots/import.png)
 
 **Import Dockerized Neuron files** takes `wallet.yaml`, `vault.yaml`, the
 Docker vault password and, optionally, `nostr.yaml`. `src/keys/docker.js`
@@ -223,6 +228,13 @@ that version's own code (`scripts/profile_fixtures.mjs`).
 | Docker import before ecf3ae0: a `vault.yaml` with **no plain `publicKey`** | the same; the vault's address is unknown | the app opens on **Unlock to finish the update** (the neuron needs the vault's public key), then starts |
 | The step-1 prototype's sealed key, `meta.vault` (7be47fc) | not touched (never read since step 2); Setup | — |
 | A setup cut off after the vault row (no `wallet_yaml`) | not touched; Setup | — |
+
+In the running app (dev server, 2026-10-16): a browser profile set up by an
+earlier version on central2 opened on Home after the update, its Base
+addresses in the Keys card, registered again (`vaultMismatch: false`, so
+central's vault is the one whose public key the record kept), its
+subscriptions and history intact; wrong passphrases left its vault as it was.
+Home: [../screenshots/home.png](../screenshots/home.png).
 
 ## Backup
 
