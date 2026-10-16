@@ -1,0 +1,199 @@
+# Deploy: satori.satorinet.io and neuron.satorinet.io
+
+The app is a static site, so a deployment is one container of files. The
+image `satori-neuron` is nginx serving `dist/`. It runs on Satori Central
+(the host of `network.satorinet.io`), behind the nginx-proxy that is already
+there. The proxy owns ports 80 and 443 and terminates TLS for both names. The
+container serves plain http on port 80, to the proxy only.
+
+```
+browser ─ https://satori.satorinet.io ─┐
+browser ─ https://neuron.satorinet.io ─┴─▶ nginx-proxy on central (:443, TLS) ─ http :80 ─▶ satori-neuron (nginx, dist/)
+
+then, from the page in the browser:  central (VITE_CENTRAL_URL) · wss:// relays · the Base RPC
+```
+
+The container only serves files. The neuron runs in each visitor's browser,
+which calls central, the relays and the Base RPC itself, so none of that
+traffic passes through this container.
+
+## The files
+
+| File | Does |
+|---|---|
+| `deploy/Dockerfile` | `nginx:1.30.5-alpine3.24`, pinned by the digest of its index (stable; the amd64 image was built 2026-09-23). Writes `/etc/nginx/csp.conf` from the `CSP` build argument (`add_header Content-Security-Policy "…" always;`) and empties the default site. Copies `deploy/nginx.conf` over `conf.d/default.conf` and `dist/` into the html root. Writes a `.gz` beside each html, js, css, wasm, txt and webmanifest file. Runs `nginx -t`. |
+| `deploy/nginx.conf` | The server ([below](#what-it-sends)). |
+| `deploy/build.env` | This deployment's [build variables](#build-variables). |
+| `scripts/deploy-image.sh` | Runs `npm ci` if `node_modules` is missing or older than the lock file. Builds `dist/` with `deploy/build.env` (a variable already set in the environment wins) and checks the bundle for those values. Builds `satori-neuron:<git short sha>` (`-dirty` with uncommitted changes) and tags it `:latest`, passing the CSP from `csp.js`. Then checks the image: `nginx -t`, its CSP line equal to `csp.js`'s, and the values in its bundle. Exits 2 if docker is not reachable; `dist/` is then built and checked, but there is no image. |
+| `.dockerignore` | The build context is the repo; only `dist/` and `deploy/nginx.conf` go in. |
+| `e2e/deploy.spec.js` | `npm run e2e:deploy`: the image (or a deployment) at `DEPLOY_URL` ([verify](#verify)). |
+
+`csp.js` is the only source of the CSP. The script reads it with node and
+passes it as a build argument, and the image writes the header line from it.
+Neither file holds a copy. The script refuses a CSP that contains `"`, `$` or
+`\`, because nginx would read those inside its string.
+
+## What it sends
+
+Every response, 404s included, carries:
+
+- `Content-Security-Policy` (`csp.js`). It sits at the server level and no
+  location has an `add_header`, because an `add_header` in a location would
+  drop the server's headers there;
+- `X-Content-Type-Options: nosniff`.
+
+| Path | Cache-Control | Content-Type |
+|---|---|---|
+| `/assets/*` (hashed) | `public, max-age=31536000, immutable` | by extension; `.wasm` is `application/wasm`, `.js` is `application/javascript; charset=utf-8` |
+| `/`, `/index.html` | `no-cache` | `text/html; charset=utf-8` |
+| `/sw.js` | `no-cache` | `application/javascript; charset=utf-8` |
+| `/manifest.webmanifest` | `no-cache` | `application/manifest+json` (set here; nginx's `mime.types` lacks it) |
+| `/llms.txt` | `no-cache` | `text/plain; charset=utf-8` |
+| the icons | `no-cache` | `image/png` |
+| any other path that is not a file | `no-cache` | the page, `index.html` (SPA) |
+| a missing `/assets/` file | none | a 404, not the page |
+
+`no-cache` means revalidate each time: nginx answers 304 on a matching ETag.
+Only 2xx and 3xx responses get a Cache-Control, so a 404 is never cached for a
+year. The `.gz` copies go to any client that accepts gzip (`gzip_static`), so
+DuckDB's 34 MB wasm is sent as 7.6 MB, with `Vary: Accept-Encoding`. Two
+settings keep this working behind a proxy: `gzip_proxied any` and
+`gzip_http_version 1.0`. The second matters because nginx's `proxy_pass`
+speaks HTTP/1.0 unless the proxy sets `proxy_http_version 1.1`.
+
+This covers what [pwa.md](pwa.md#csp-and-hosting) asks of a host, except https,
+which the proxy provides.
+
+## Build variables
+
+These set the defaults that a user can change under **Settings**. Vite bakes
+them into the bundle when the app is built (`src/config.js`), so changing one
+means a new build.
+
+| Variable | Sets | A build's default | The dev server's default | This deployment (`deploy/build.env`) |
+|---|---|---|---|---|
+| `VITE_CENTRAL_URL` | central, https only (Settings › Central URL) | `https://network.satorinet.io` | `https://central2.satorinet.io` | `https://central2.satorinet.io` |
+| `VITE_NOSTR_RELAYS` | the user's relays, a comma list of `ws://` or `wss://` URLs (Settings › Nostr relays) | none | `ws://localhost:7778` | `wss://app.satorinet.io/relay` |
+| `VITE_NOSTR_CENTRAL_WRITE` | `true` or `false`: whether central's relays are written to (Settings › Publish to central's relays) | `true` | `false` | unset (`true`) |
+| `VITE_BASE_RPC` | the Base RPC used, alone, when none is saved: `https://…` or a same-origin path (Settings › Base RPC) | none: central's `rpcUrl`, then publicnode | `/rpc` (the local fork) | unset |
+
+- An empty variable counts as unset.
+- A bad value stops `vite build`, because `vite.config.js` runs the same
+  check as the app. A bad value is an http central, a relay that is not
+  ws/wss, a `VITE_NOSTR_CENTRAL_WRITE` other than true or false, or an RPC
+  that is neither https nor a path.
+- The dev server reads these variables too, so set them only for a build.
+  `scripts/deploy-image.sh` sets them for its own run only.
+- A build has only its own defaults in the bundle: the dev server's
+  (central2, `localhost:7778`, `/rpc`) are dropped from it. That is why the
+  script's check for `central2.satorinet.io` in the bundle is a real check.
+- These are defaults. A value the user has saved in Settings wins. A user who
+  has saved nothing gets a new build's default on the next load.
+
+This deployment uses the dev central until the owner moves to the production
+one. Its relay is Satori's public relay over TLS. Central lists only
+`ws://satorian.satorinet.io:7777`, and an https page can't open `ws://`
+([issue](../issues/relays-not-wss.md)): the app shows that relay as blocked.
+
+## Two names, two origins
+
+Both names serve the same image, but each is a separate origin to the browser.
+Each has its own storage (OPFS: the keys and the database), its own service
+worker and its own installed app. A neuron set up on one name does not exist
+on the other. To move it, use Backup and then Import Docker files. Central
+answers CORS for both origins: checked 2026-10-16 with a GET of
+`/api/v1/peer/relays` from each origin on central2 and prod, and a preflight
+of `POST /api/v1/peer/register` on central2.
+
+## Verify
+
+Locally, with docker:
+
+```sh
+./scripts/deploy-image.sh                  # satori-neuron:<sha> and :latest, checked
+docker run --rm -p 8090:80 satori-neuron:latest
+npm run e2e:deploy                         # DEPLOY_URL=http://localhost:8090 by default
+curl -sI http://localhost:8090/sw.js       # CSP, nosniff, no-cache
+```
+
+`e2e/deploy.spec.js` makes two checks:
+
+1. The headers above on each kind of path, the SPA fallback, the 404 for a
+   missing asset, and the gzipped wasm.
+2. Chrome with a fresh profile, every host but the app's unresolvable. Central
+   is the stub, and the build's relays are routed to nothing. The page loads
+   under the CSP with no violation and DuckDB opens. The service worker takes
+   over, and the manifest is valid and installable. A new neuron gets this
+   deployment's central and relays: it registers with the stub and opens the
+   relay. A poll stores and forecasts a stream, and a reload comes from the
+   worker.
+
+After a deploy, run the same spec against the live site:
+`DEPLOY_URL=https://satori.satorinet.io npm run e2e:deploy`. The neuron it
+creates still talks only to the stub.
+
+Verified 2026-10-16, without docker (this box has no daemon). The image's
+own nginx 1.30.5 binary, taken from the pinned image, ran through its musl
+loader with the image's `nginx.conf` and `mime.types`. `deploy/nginx.conf`
+served as `default.conf`, changed only in `listen` (8090) and `root`.
+`csp.conf` was written by the Dockerfile's `printf`, and `dist/` was gzipped
+by the image's busybox. `npm run e2e:deploy` passed against it on
+http://localhost:8090.
+
+Screenshot below: the deploy build on that nginx, in a fresh profile, with
+its defaults in place. Central2 and the relay are answered inside the test.
+
+![The deploy build on the image's nginx: central2 and the app.satorinet.io relay by default](../screenshots/deploy.png)
+
+## Redeploy
+
+1. Commit, so the tag names the code, then run `./scripts/deploy-image.sh`.
+2. Ship the image to central:
+
+   ```sh
+   # TODO(owner): e.g. docker save satori-neuron:<sha> satori-neuron:latest | gzip -1 | ssh … 'gunzip | docker load'
+   ```
+
+3. Start or replace the container. It publishes no port and joins the network
+   nginx-proxy reaches (for the dapp that is `central-lite_default`):
+
+   ```sh
+   # TODO(owner): the compose service or docker run, its name, and the restart policy
+   ```
+
+4. Add nginx-proxy's server blocks for `satori.satorinet.io` and
+   `neuron.satorinet.io`: TLS (the certificates) and `proxy_pass` to the
+   container on port 80. Do not add a CSP or nosniff there; the container
+   sends both, and a second copy is a duplicate header.
+
+   ```nginx
+   # TODO(owner): the two server blocks, the certificates, then nginx -t and reload
+   ```
+
+5. Check: `curl -sI https://satori.satorinet.io/sw.js` (expect the CSP,
+   nosniff and `no-cache`), then
+   `DEPLOY_URL=https://satori.satorinet.io npm run e2e:deploy`. Run the same
+   for `neuron.satorinet.io`.
+
+`../contract/deploy/central/` already deploys the dapp at `app.satorinet.io`
+this way: images built locally and loaded on central, a compose file on
+`central-lite_default`, and server blocks in nginx-proxy's one `nginx.conf`.
+
+## Moving to the production central
+
+To switch, set `VITE_CENTRAL_URL=https://network.satorinet.io` in
+`deploy/build.env`, or delete the line, which gives a build's default. Then
+rebuild and redeploy.
+
+There is a fixable problem with this. A browser that never saved a central
+follows the new default on its next load, but it keeps central2's stream
+list, its specs and its pending predictions. Only a change in Settings resets
+those (`setCentral` → `db.resetCentral()`); a new default does not. So if
+that browser's queue is under 22 h old, its next submission sends central2's
+stream uuids to prod, which files an unknown uuid under its `bitcoin` stream
+([central.md](central.md#settings)).
+
+- **Fix (not built):** store which central the data belongs to (a meta key),
+  and reset at start when the central in use differs.
+- **Until then:** a tester can save the prod URL once under Settings, which
+  resets the data.

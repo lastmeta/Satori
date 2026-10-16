@@ -68,7 +68,9 @@ account).
   the dev server the default is `/rpc`, which Vite proxies to a local anvil
   fork of Base Sepolia on `127.0.0.1:8545` (`scripts/fork.mjs`), so by
   default a dev checkout does not send to a public chain, the same rule as the
-  dev central and the test relay; a saved RPC replaces the default. The card
+  dev central and the test relay; a saved RPC replaces the default. A build
+  can fix its own default with `VITE_BASE_RPC`, used alone as `/rpc` is
+  ([deploy.md](deploy.md#build-variables)). The card
   shows the active RPC as its first fact. A setting is an `https://` URL or a
   same-origin path; the page's CSP (`connect-src 'self' https:`) allows both.
 - **Chain id**: a new RPC is asked `eth_chainId` once. Another chain than

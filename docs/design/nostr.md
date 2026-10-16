@@ -76,14 +76,18 @@ with compact JSON content; satorilib's `json.dumps` puts a space after `,` and
   the CSP is asked, so such a relay shows as **blocked** and is not tried
   (`ws://localhost` and `127.0.0.1` are allowed). Central lists only
   `ws://satorian.satorinet.io:7777` today, so a deployed app needs a `wss://`
-  relay ([issue](../issues/relays-not-wss.md)). The dev server is plain
+  relay ([issue](../issues/relays-not-wss.md)): the deployment's build sets
+  `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public relay over
+  TLS, as the user's relay by default ([deploy.md](deploy.md#build-variables)). The dev server is plain
   `http://localhost:5180`, which can open any `ws://`.
 - **Publish to central's relays** (Settings, `meta.nostr_central_write`).
-  Off by default on the dev server, on in a build. When off, central's relays
+  Off by default on the dev server, on in a build (a build's default is
+  `VITE_NOSTR_CENTRAL_WRITE` when set). When off, central's relays
   are read only: the app subscribes (REQ) to them but sends them nothing, so a
   dev checkout never writes to satorian (production), the same rule as the dev
   central. User relays are always written to; on the dev server the default
-  user relay is the test relay `ws://localhost:7778`.
+  user relay is the test relay `ws://localhost:7778`, in a build none, or the
+  build's `VITE_NOSTR_RELAYS`.
 - **Relay client** (`src/nostr/relay.js`): one WebSocket per relay; `REQ`/
   `EOSE`/`CLOSE`; `fetch` (one REQ until EOSE, 10 s timeout as satorilib's
   `fetch_events`); `publish` resolves on the relay's `OK` (10 s timeout); kept

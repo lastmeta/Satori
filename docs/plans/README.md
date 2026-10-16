@@ -26,9 +26,13 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    Update ready, and persistent storage for the keys, shown on Home
    ([../design/pwa.md](../design/pwa.md)). It does not run the neuron while
    closed.
-9. **Runtime hardening**: catch-up on resume, the keys in a worker
+9. ✅ **Deploy**: one static image (nginx serving the build) behind central's
+   nginx-proxy at https://satori.satorinet.io and https://neuron.satorinet.io;
+   Settings' defaults set at build time (`VITE_*`), the CSP from `csp.js` on
+   every response ([../design/deploy.md](../design/deploy.md)).
+10. **Runtime hardening**: catch-up on resume, the keys in a worker
    ([runtime.md](runtime.md)).
-10. **Later**, in rough order of value per effort: a per-stream chart and model
+11. **Later**, in rough order of value per effort: a per-stream chart and model
    view; bounties (the predictor's side first); the gasless relay (needs a
    ruling, [issue](../issues/relayer-predict-fee.md)); Evrmore balances and
    SATORIEVR sends; paid streams and payment channels; own data sources. Also:
@@ -46,7 +50,14 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   restore-the-vault flow on Home.
 - **Keys on the main thread.** When a script runs in the page (an XSS, a
   malicious extension), it can read the identity, the Nostr key and an
-  unlocked vault. Fix: the keys and signing in a worker (step 8).
+  unlocked vault. Fix: the keys and signing in a worker (step 10).
+- **A new default central keeps the old central's data.** When a build
+  changes its default central (the deployment's planned move from central2 to
+  prod), a browser that never saved one follows it but keeps central2's
+  streams, specs and pending predictions, and its next submission sends
+  central2's uuids to prod. Only Settings resets them. Fix: remember the
+  central the data is from and reset at start when it differs
+  ([../design/deploy.md](../design/deploy.md#moving-to-the-production-central)).
 - **The token's hook starves on an estimated gas limit.** When a delegated
   vault receives SATORI (any claim, any transfer to it) in a transaction sent
   with `eth_estimateGas`'s limit, the token's try/catch hook fails silently

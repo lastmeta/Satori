@@ -165,6 +165,9 @@ the manifest; the icons are `img-src 'self'`. A host must:
 - not cache `/sw.js` or `/index.html` for long; the hashed `/assets/` can be
   cached forever.
 
+The deploy image's `deploy/nginx.conf` does all of it; https comes from
+central's nginx-proxy in front ([deploy.md](deploy.md#what-it-sends)).
+
 ## Platforms (2026-10)
 
 | Platform | Install | Storage |

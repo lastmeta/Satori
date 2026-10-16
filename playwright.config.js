@@ -6,7 +6,7 @@ import { defineConfig } from '@playwright/test';
 // on :7781 and :7782 for e2e/nostr.spec.js (not the dev relay on :7778).
 export default defineConfig({
   testDir: 'e2e',
-  testIgnore: 'pwa.spec.js', // a build's: npm run e2e:pwa (playwright.pwa.config.js)
+  testIgnore: ['pwa.spec.js', 'deploy.spec.js'], // a build's (npm run e2e:pwa) and the deploy image's (npm run e2e:deploy)
   workers: 1,
   fullyParallel: false,
   timeout: 120_000,

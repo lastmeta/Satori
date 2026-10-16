@@ -1,7 +1,7 @@
 # satori: overview
 
 This is the source of truth for what is built (steps 1–6, the finishing
-pass and the installable app). Intent: [../intent/INTENT.md](../intent/INTENT.md). The roadmap and
+pass, the installable app and the deployment). Intent: [../intent/INTENT.md](../intent/INTENT.md). The roadmap and
 what is left: [../plans/README.md](../plans/README.md). Open issues:
 [../issues/](../issues/README.md). Questions for the owner:
 [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md). For agents, and the one
@@ -9,7 +9,9 @@ reference for `window.satori`: [/llms.txt](../../public/llms.txt).
 
 Component docs: [keys.md](keys.md), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
-[storage.md](storage.md), [pwa.md](pwa.md) (the installed app).
+[storage.md](storage.md), [pwa.md](pwa.md) (the installed app),
+[deploy.md](deploy.md) (the image at satori.satorinet.io and
+neuron.satorinet.io, and the build variables).
 
 ## The flow
 
@@ -70,7 +72,8 @@ on each (re)connect and hourly: announce `<stream>_pred`; hourly: relay list, re
 On the dev server central's relays (satorian, production) are **read only**
 (REQ, never EVENT) and the user's relays default to the test relay
 `ws://localhost:7778` (`scripts/test-relay.mjs`); a build writes to central's
-relays.
+relays, and its own relays are `VITE_NOSTR_RELAYS` (none unless set; the
+deployment's: `wss://app.satorinet.io/relay`).
 
 On Base the neuron predicts as Lite does ([base.md](base.md)): the vault
 delegates its prediction power to the identity once (Unlock), and the
@@ -86,7 +89,8 @@ Unlock ─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Sen
 
 On the dev server the Base RPC is `/rpc`, which Vite proxies to a local
 anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
-(`https://sepolia.base.org`) with publicnode as a fallback.
+(`https://sepolia.base.org`) with publicnode as a fallback, or `VITE_BASE_RPC`
+alone when the build sets it.
 
 ## Parts
 
@@ -102,7 +106,9 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
 | ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (the keys with their Evrmore, Base and Nostr identifiers, Unlock/Lock, the storage line and Install Satori; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |
 | pwa | `src/pwa/`, `public/manifest.webmanifest` | The installed app ([pwa.md](pwa.md)): the manifest and the Satori icons; the service worker (`sw.js`, written to `dist/sw.js` by a build-only Vite plugin; none on the dev server): precaches the page and the hashed assets (DuckDB's wasm and worker), cache first for `/assets/`, network first for the page, nothing else touched; "Update ready, reload"; Install Satori (Chromium's prompt, Safari's Add to Dock / Home Screen); persistent storage asked for at start, shown on Home. It never runs the neuron while closed. |
 | agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page, under the same guards; `<body data-screen>` and `data-test` on what carries data or an action. [/llms.txt](../../public/llms.txt) is the one reference for both: what the app is, how to drive it, what's possible, where the code is, and that pull requests are welcome. |
-| shared | `src/util.js`, `src/py.js` | `serial()` (one at a time, in order: the db, the chain's writes, Nostr's intake and outbox), `isHttps()`; Python's `str(float)` and `json.dumps` texts, byte for byte (central's payloads, every Nostr event's content). |
+| config | `src/config.js` | Settings' defaults ([deploy.md](deploy.md#build-variables)): the dev server's (central2, the test relay, central's relays read only, `/rpc`) or a build's (prod central, no user relay, central's relays written to, central's RPC), each replaced by its `VITE_*` variable when the build sets one. `vite.config.js` runs the same check before a build, so a bad value stops it; a build's bundle holds only its own defaults. |
+| deploy | `deploy/`, `scripts/deploy-image.sh` | The static image ([deploy.md](deploy.md)): nginx serving `dist/` behind central's nginx-proxy (TLS there), the CSP from `csp.js` on every response, immutable `/assets/`, `no-cache` for the rest, gzipped copies, the SPA fallback. |
+| shared | `src/util.js`, `src/py.js` | `serial()` (one at a time, in order: the db, the chain's writes, Nostr's intake and outbox), `isHttps()`, `isRelayUrl()`; Python's `str(float)` and `json.dumps` texts, byte for byte (central's payloads, every Nostr event's content). |
 | tests | `test/`, `e2e/` | Parity fixtures and test doubles (a fake D6 behind JSON-RPC, an in-memory DuckDB); Playwright specs and their one stub central (`e2e/stub.js`). |
 
 ## Rules
@@ -118,7 +124,9 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
   dashboard needs login.
 - **Central URL** (Settings, `meta.central_url`): https only. Empty means the
   default: `https://central2.satorinet.io` on the dev server (so nobody writes
-  to prod from a dev checkout), `https://network.satorinet.io` in a build.
+  to prod from a dev checkout), `https://network.satorinet.io` in a build, or
+  the build's `VITE_CENTRAL_URL` ([deploy.md](deploy.md#build-variables); the
+  deployment: central2 for now).
   Saving registers there at once; a different URL drops the pending
   predictions and the stream list (another central has other uuids), which
   refill with the next poll.
@@ -175,7 +183,8 @@ planned): ABI encoding, multicall, transaction serialization and the RPC
 client for Base; signing stays in `src/keys` (`@noble/curves`). The
 installable app added none (no Workbox: the service worker is about 25 lines).
 `bvar` added none (plain JS k×k solves; its seeded draws use `@noble/hashes`'
-sha256, already a dependency).
+sha256, already a dependency). The deploy image added none to npm; it is
+`nginx:1.30.5-alpine3.24` (2026-09-23), pinned by digest in `deploy/Dockerfile`.
 
 ## Verify
 
@@ -216,7 +225,9 @@ sha256, already a dependency).
   the hash kept at send and waited for, persisted only after the receipt, the
   max-fee ceiling, the schedule, the config cache per central, the settings
   checked before either is saved; claims' and sends' branches); the CSP; ui
-  text; `serial()`; the service worker's routing (`src/pwa/sw.test.js`).
+  text; `serial()`; the service worker's routing (`src/pwa/sw.test.js`); the
+  build variables: unset keeps each default, set replaces it, a bad one is
+  refused (`src/config.test.js`).
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
   stub and prod blocked: create → register (headers checked) → first poll
   5–30 min out → Poll now: two streams stored, forecast and sent after an
@@ -254,6 +265,11 @@ sha256, already a dependency).
   setup; offline the page, DuckDB and the stored neuron load while central and
   Base fail and say so; a new version waits for Update; an app window and a
   tab run one neuron ([pwa.md](pwa.md#verify)).
+- `npm run e2e:deploy` (the deploy image at `DEPLOY_URL`, :8090 by default;
+  `e2e/deploy.spec.js`): the CSP and nosniff on every kind of response, the
+  cache headers and types, the SPA fallback and the gzipped wasm; then in a
+  fresh profile the page under the CSP, DuckDB, the worker, the manifest, and
+  a neuron on the deployment's central and relays ([deploy.md](deploy.md#verify)).
 - Live, in a fresh browser profile on the dev server: central2 (writes
   allowed) for register, Poll now and the batch; prod only for read-only GETs.
   Nostr: satorian read only (its full catalog discovered: 924 live of 1,061
@@ -279,3 +295,5 @@ sha256, already a dependency).
 - Dev app: `npm run dev` → http://localhost:5180; for Base, `node scripts/fork.mjs start`
   (an anvil fork on 8545, which the dev server proxies as `/rpc`). The
   installable app: `npm run build && npm run preview` → http://localhost:5181.
+  The deploy image: `./scripts/deploy-image.sh`, then
+  `docker run --rm -p 8090:80 satori-neuron:latest` → http://localhost:8090.

@@ -17,6 +17,10 @@ the engine, Nostr, Base), a finishing pass is done, a build installs as
 an app (PWA), and each central stream has its own evolving multivariate
 model per neuron (`bvar`) with history from central (2026-10-16).
 
+Served at https://satori.satorinet.io and https://neuron.satorinet.io (one
+static image; docs/design/deploy.md). They are two origins: a neuron set up
+on one has its own storage there and is not on the other.
+
 ## Quick start (an agent)
 
 In the page's JS context (Playwright's `page.evaluate`, a browser console):
@@ -47,9 +51,10 @@ Every method is below; `await satori.status()` shows everything at once.
   `vault.yaml`). **Unlock** (enter the passphrase) decrypts it into memory;
   **Lock** wipes it. The neuron does not need the vault to run; its public key
   is read from `vault.yaml` while locked.
-- Central: `https://network.satorinet.io` in a build;
-  `https://central2.satorinet.io` (the dev central) on the dev server.
-  Changeable (https only).
+- Central: `https://network.satorinet.io` in a build unless the build sets
+  another (`VITE_CENTRAL_URL`; satori.satorinet.io and neuron.satorinet.io
+  use `https://central2.satorinet.io` for now); central2 (the dev central)
+  on the dev server. Changeable (https only).
 - Register: on every page load, `POST /api/v1/peer/register` with the
   identity's and the vault's public keys. Central links the vault to the
   identity once; a different vault on central shows as a "vault mismatch".
@@ -139,7 +144,9 @@ Every method is below; `await satori.status()` shows everything at once.
   `ws://satorian.satorinet.io:7777`) plus the user's (Settings or
   `setRelays`). On the dev server central's relays are read only (requests,
   never events) and the user's relays default to the test relay
-  `ws://localhost:7778`; a build writes to central's relays too. An https page
+  `ws://localhost:7778`; a build writes to central's relays too, and its
+  user relays default to the build's `VITE_NOSTR_RELAYS` (satori.satorinet.io
+  and neuron.satorinet.io: `wss://app.satorinet.io/relay`). An https page
   cannot open `ws://` relays (shown as blocked); it needs `wss://`.
 - Network streams: the relays' catalog of stream announcements (kind 34600),
   newest per (provider pubkey, stream name), deleted ones dropped. A
@@ -170,7 +177,8 @@ Every method is below; `await satori.status()` shows everything at once.
   `/api/v1/base/config` over them (cached 1 h; prod answers 404, central2
   serves it). RPC: Settings or `setBaseRpc`; empty = the default: on the dev
   server `/rpc`, a local anvil fork (`node scripts/fork.mjs start`); in a
-  build central's (`https://sepolia.base.org`), then publicnode. An RPC on
+  build central's (`https://sepolia.base.org`), then publicnode, unless the
+  build sets `VITE_BASE_RPC`. An RPC on
   another chain than 84532 is refused (nothing is read or sent).
 - Delegate prediction power (needs Unlock): the identity sets its predictor
   fee to 0 (`rewards.setPredictorFee(0)`, set-once) and accepts only this
@@ -474,9 +482,12 @@ Repository: https://github.com/lastmeta/Satori (this app is the repository
 root; branch `main`). Plain JavaScript ES modules, no
 build step beyond Vite, MIT licensed.
 
-- `src/main.js`: app wiring and `window.satori`; `src/util.js`: `serial()`
-  (one at a time, in order) and `isHttps()`; `src/py.js`: Python's
-  `str(float)` and `json.dumps` texts, byte for byte.
+- `src/main.js`: app wiring and `window.satori`; `src/config.js`: Settings'
+  defaults, the dev server's or a build's, each replaced by a `VITE_*`
+  variable at build time (`VITE_CENTRAL_URL`, `VITE_NOSTR_RELAYS`,
+  `VITE_NOSTR_CENTRAL_WRITE`, `VITE_BASE_RPC`); `src/util.js`: `serial()`
+  (one at a time, in order), `isHttps()` and `isRelayUrl()`; `src/py.js`:
+  Python's `str(float)` and `json.dumps` texts, byte for byte.
 - `src/keys/`: identity and vault (`index.js`), derivations and Evrmore
   signing (`keys.js`), Docker files (`docker.js`).
 - `src/central/`: central's API (register, observations, login, predictions
@@ -507,11 +518,17 @@ build step beyond Vite, MIT licensed.
   it to `dist/sw.js` with the files to precache, `vite.config.js`) and
   `index.js` (register it in a build, Update, Install, persistent storage);
   `public/manifest.webmanifest` and the icons.
+- `deploy/`: the static image (nginx serving `dist/` behind central's
+  nginx-proxy, which terminates TLS): `Dockerfile`, `nginx.conf` (the CSP
+  from `csp.js` on every response, cache headers, the SPA fallback) and
+  `build.env` (the deployment's `VITE_*`); `scripts/deploy-image.sh` builds
+  and checks `satori-neuron:<git sha>`.
 - `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`,
   `central.md` with Satori Lite's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
   Lite's and satorilib's, `base.md` with Lite's, the dapp's and the
-  contracts', `storage.md`: tables, migrations, meta keys); `docs/plans/`:
+  contracts', `storage.md`: tables, migrations, meta keys, `pwa.md`: the
+  installed app, `deploy.md`: the image and the build variables); `docs/plans/`:
   the roadmap and what is left of each part; `docs/issues/`: open issues
   outside this repo; `docs/inbox/QUESTIONS.md`: open questions for the
   owner.
@@ -520,14 +537,16 @@ build step beyond Vite, MIT licensed.
   (node, read only: bar1, persistence and simulated bvar neurons);
   `test-relay.mjs` (an in-memory Nostr relay: `node scripts/test-relay.mjs
   7778`) and `provider.mjs` (a throwaway stream provider for a test relay);
-  `fork.mjs` (the local fork of Base Sepolia, above).
+  `fork.mjs` (the local fork of Base Sepolia, above); `deploy-image.sh` (the
+  deploy image).
 - `test/`: fixtures (parity vectors) and test doubles (a fake D6 behind
   JSON-RPC, an in-memory DuckDB); `e2e/`: Playwright specs and their stub
   central (`stub.js`).
 - Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub
   central, two test relays, a fake chain behind `/rpc`), `npm run e2e:pwa`
   (a build on `vite preview` :5181: the manifest, the service worker,
-  offline, Update, one neuron).
+  offline, Update, one neuron), `npm run e2e:deploy` (the deploy image at
+  `DEPLOY_URL`: headers on every response, then the app in a fresh profile).
 
 ## Contribute
 

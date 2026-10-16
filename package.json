@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run --maxWorkers=2",
     "e2e": "playwright test --workers=1",
-    "e2e:pwa": "vite build && playwright test --workers=1 -c playwright.pwa.config.js"
+    "e2e:pwa": "vite build && playwright test --workers=1 -c playwright.pwa.config.js",
+    "e2e:deploy": "playwright test --workers=1 -c playwright.deploy.config.js"
   },
   "dependencies": {
     "@arrow-js/core": "1.0.6",

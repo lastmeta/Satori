@@ -14,7 +14,7 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 
 | Issue | Where the fix goes | Blocks |
 |---|---|---|
-| [relays-not-wss.md](relays-not-wss.md) | relay hosting + central | Nostr from an https page (works on the http dev server) |
+| [relays-not-wss.md](relays-not-wss.md) | relay hosting + central | central's relays from an https page (works on the http dev server; the deployment uses `wss://app.satorinet.io/relay` by default) |
 
 ## Fixable — flaws to fix, not blocking
 

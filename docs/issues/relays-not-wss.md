@@ -1,6 +1,6 @@
 # No relay reachable from an HTTPS page
 
-**Status:** open · **Blocks:** Nostr in a deployed (https) app · **Fix in:** relay hosting and central
+**Status:** open; worked around for this repo's deployment · **Blocks:** central's relays in a deployed (https) app · **Fix in:** relay hosting and central
 
 Nostr is built (step 5, [../design/nostr.md](../design/nostr.md)) and
 works from the dev server, which is plain `http://localhost:5180`, against
@@ -47,4 +47,9 @@ traffic, and neurons won't connect to it until it is listed.
 3. Optional: sort `wss://` entries first in `/peer/relays`.
 
 Meanwhile a user can add a `wss://` relay under Settings (written to and read
-from), and the dev server reads satorian over `ws://`.
+from), and the dev server reads satorian over `ws://`. The deployment at
+satori.satorinet.io and neuron.satorinet.io does that by default: its build
+sets `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public relay
+behind TLS ([../design/deploy.md](../design/deploy.md#build-variables)).
+Central's own list still holds only the `ws://` relay, which those pages
+show as blocked.

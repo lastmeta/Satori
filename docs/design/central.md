@@ -129,9 +129,14 @@ Central stores the hash without checking it (`c/main.py:556-563`).
 only https). Empty means the default:
 
 - a production build: `https://network.satorinet.io` (satorilib's default,
-  `satorilib/src/satorilib/config/__init__.py:99`);
+  `satorilib/src/satorilib/config/__init__.py:99`), or the build's
+  `VITE_CENTRAL_URL` ([deploy.md](deploy.md#build-variables); the deployment at
+  satori.satorinet.io and neuron.satorinet.io uses central2 for now);
 - the dev server (`import.meta.env.DEV`): `https://central2.satorinet.io`, the
   dev central, so nobody writes to prod from a dev checkout.
+
+Only a change here resets what belonged to the old central; a new build with
+another default does not ([deploy.md](deploy.md#moving-to-the-production-central)).
 
 Changing it registers with the new central at once and drops what belonged to
 the old one: the pending predictions, the stream list, and the last poll and
