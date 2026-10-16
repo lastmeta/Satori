@@ -59,7 +59,7 @@ other `server.py` methods for routes central-lite does not serve.
 |---|---|---|---|
 | `POST /api/v1/peer/register` (headers `wallet-pubkey`, `vault-pubkey`, `nostr-pubkey`, `neuron-version`) → `{success, peer_id, wallet_address, vault_address, nostr_pubkey, message}` | none | `c/main.py:705-838` | every page load; again when the central URL changes |
 | `GET /api/v1/observations/batch?limit=100` → `[{id, observed_at, value, hash, stream_id, stream: {uuid, name, meta, …}, ts, stream_uuid}]` | none | `c/main.py:292-341` | each poll |
-| `GET /api/v1/observations/history?stream_uuid=<uuid>&limit=1000&since=<now − 1,000 h>` → `[{id, stream_uuid, observed_at, value, ts}]`, oldest first | none | being added to central (2026-10-15); central2 answers 404 today | once per stream ([below](#history-an-addition-beyond-lite)) |
+| `GET /api/v1/observations/history?stream_uuid=<uuid>&limit=1000&since=<now − 1,000 h>` → `[{id, stream_uuid, observed_at, value, ts}]`, oldest first | none | `central` bc043d2 (the most recent `limit` rows; 404 `Stream not found: <uuid>` for an unknown or malformed uuid, 422 for a bad limit or since); not deployed on central2 yet (404 `Not Found`) | once per stream ([below](#history-an-addition-beyond-lite)) |
 | `GET /api/v1/auth/challenge` → `{challenge}` (a UUID) | none | `c/main.py:268-281` | before each login |
 | `POST /api/v1/auth/login` (headers `wallet-pubkey`, `message`, `signature`) → `{access_token, expires_in: 3600, …}` | signature | `c/auth.py:21-86` | before each submission, once more on a 401 |
 | `POST /api/v1/predictions/batch` → `{total_submitted, successful, failed, prediction_ids, errors}` | Bearer | `c/main.py:483-602`; schema `central/src/models/schemas.py:92-113` | right after each poll, when anything is pending |
@@ -96,10 +96,15 @@ newest. `src/neuron/history.js`:
   poll's new row does, as in Lite. (A row newer than the last poll would
   otherwise be stored first, and the next poll's copy of it would not be
   new, so that stream would not be predicted for 11 h.)
-- **Failures** never break the poll. The first failure stops the run; the
-  streams not fetched wait for the next run (the next poll or load). A **404**
-  means the route is missing on this central: it is quiet (no warning) and
-  remembered for a day (`meta.central_history.retryAt`), then asked again.
+- **Failures** never break the poll. A stream central doesn't know (404
+  `Stream not found: <uuid>`, a stream deleted on central or a malformed
+  uuid; `central` bc043d2) is done with no rows, and the others go on. Any
+  other failure stops the run; the streams not fetched wait for the next run
+  (the next poll or load). A **404 with any other detail** (FastAPI's `Not
+  Found`) means the route is missing on this central: it is quiet (no
+  warning) and remembered for a day (`meta.central_history.retryAt`), then
+  asked again. (Before, one deleted stream failed first every day and held
+  all the others with it.)
 - **Shown**: Home's Central card has a History line ("Oct 16, 09:30 · 83
   streams, 81,234 rows", or "Not on this central (central 404: Not Found);
   next try …"); `status().central.history` = the last run `{at, url, streams,

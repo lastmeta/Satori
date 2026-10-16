@@ -8,16 +8,21 @@ import { normalizeObservation } from '../central/index.js';
 export const HISTORY_LIMIT = 1000; // the route's maximum
 export const HISTORY_SPAN_S = HISTORY_LIMIT * 3600; // since = 1,000 h ago: central observes hourly, so the last ~41 days
 export const HISTORY_CONCURRENCY = 4;
-export const HISTORY_RETRY_S = 86_400; // a 404 (this central has no such route): try again a day later
+export const HISTORY_RETRY_S = 86_400; // a route 404 (this central has no such route): try again a day later
+
+/** Central's 404 for one stream it does not know (deleted, or a uuid it never had), not for a missing route. */
+const streamNotFound = (err) => err?.status === 404 && /^Stream not found/i.test(String(err.detail ?? ''));
 
 const nowS = () => Date.now() / 1000;
 const errorText = (err) => String(err?.message ?? err);
 
 /**
  * Fetch the history of every central stream that has none yet (a stream first
- * seen, or every stream after an update), at most 4 calls at a time. The first
- * failure stops the run, and the rest wait for the next one; a 404 means the
- * route is missing, remembered for a day per central. Never throws.
+ * seen, or every stream after an update), at most 4 calls at a time. A stream
+ * central doesn't know (404 "Stream not found: …") is done, with no rows. Any
+ * other failure stops the run, and the rest wait for the next one; a 404 with
+ * any other detail ("Not Found") means the route is missing, remembered for a
+ * day per central. Never throws.
  * @returns {Promise<{at, url, streams, rows, left, error, retryAt} | null>} also kept in meta.central_history
  */
 export async function backfillHistory({ db, central, now = nowS }) {
@@ -43,7 +48,12 @@ export async function backfillHistory({ db, central, now = nowS }) {
           rows += added;
           streams++;
         } catch (err) {
-          failure ??= err;
+          if (!streamNotFound(err)) {
+            failure ??= err;
+            continue;
+          }
+          await db.addHistory(uuid, [], Math.floor(now())); // nothing to fetch: done, so it never blocks the others
+          streams++;
         }
       }
     };

@@ -77,7 +77,7 @@ describe('backfillHistory', () => {
     expect(f.maxInFlight).toBe(HISTORY_CONCURRENCY);
   });
 
-  test('404 (no history route on this central): quiet, no more calls, "unavailable" for a day, then tried again; another central is asked at once', async () => {
+  test('404 "Not Found" (no history route on this central): quiet, no more calls, "unavailable" for a day, then tried again; another central is asked at once', async () => {
     await polled(Array.from({ length: 9 }, (_, i) => `u-${i}`));
     const f = fakeCentral();
     const warn = vi.spyOn(console, 'warn');
@@ -97,6 +97,19 @@ describe('backfillHistory', () => {
     await backfillHistory({ db, central: f.central, now });
     expect(f.calls.length).toBe(HISTORY_CONCURRENCY + 1);
     warn.mockRestore();
+  });
+
+  test('404 "Stream not found" (a stream central deleted, or a uuid it never had): that stream is done, the rest go on, nothing is held', async () => {
+    const uuids = Array.from({ length: 12 }, (_, i) => `u-${String(i).padStart(2, '0')}`);
+    await polled(uuids);
+    const f = fakeCentral({ history: (u) => (u === 'u-01' ? json(404, { detail: `Stream not found: ${u}` }) : [row(u, T - 3600, 2)]) });
+    const r = await backfillHistory({ db, central: f.central, now });
+    expect(r).toMatchObject({ streams: 12, rows: 11, left: 0, error: null, retryAt: null });
+    expect(await db.needHistory()).toEqual([]);
+    expect(await db.history('u-01')).toEqual([{ ts: T, value: 100 }]);
+    clock += 86_401;
+    await backfillHistory({ db, central: f.central, now });
+    expect(f.calls).toHaveLength(12); // once each, the missing one included
   });
 
   test('partial: malformed rows and other streams\' rows are dropped, a short list is fine; a failure stops the run and the rest wait for the next', async () => {
