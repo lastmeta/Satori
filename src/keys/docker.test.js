@@ -16,6 +16,8 @@ const { profiles } = JSON.parse(readFileSync(new URL('../../test/fixtures/profil
 const hex = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
 const vec = (i) => fx.vectors[i];
 const { password, wrongPassword } = fx.vaults;
+/** A wallet.yaml with only the WIF, no entropy: satorilib itself fails to load one. */
+const wifOnly = (v) => v.walletYaml.replace(/^entropy: .*\n/m, '');
 
 describe('wallet.yaml (plaintext)', () => {
   test('reads every satorilib vector with no mismatch', async () => {
@@ -24,27 +26,25 @@ describe('wallet.yaml (plaintext)', () => {
       expect(r).toEqual({ secret: hex(v.entropyHex), pubkey: v.pubkey, mismatches: [] });
     }
   });
-  test('a WIF-only file (satorilib itself fails on it) reads from the WIF', async () => {
-    const r = await readWallet(fx.wifOnly.yaml);
-    expect(r.secret).toEqual(hex(vec(fx.wifOnly.vector).entropyHex));
-    expect(r.mismatches).toEqual([]);
+  test('the key is the entropy: a file without one (watch-only, or a WIF only, which satorilib cannot load either) is refused', async () => {
+    await expect(readWallet(wifOnly(vec(3)))).rejects.toThrow(/no entropy/i);
   });
-  test('a stored public key that is not the key\'s is reported (compared by public key, words and private key)', async () => {
+  test('a stored public key that is not the key\'s is reported (compared by public key and words)', async () => {
     const r = await readWallet(fx.mismatch.yaml);
     expect(r.pubkey).toBe(vec(fx.mismatch.vector).pubkey);
     expect(r.mismatches).toEqual(fx.mismatch.fields);
     const words = await readWallet(vec(0).walletYaml.replace(/^words: \w+/m, 'words: zoo'));
     expect(words.mismatches).toEqual(['words']);
   });
-  test('its Evrmore fields are not relied on: a wrong evr.address or scripthash is no mismatch', async () => {
-    const v = vec(0);
-    const text = v.walletYaml.replace(v.address, 'EOtherAddressXXXXXXXXXXXXXXXXXXXXX').replace(v.scripthash, '00'.repeat(32));
-    expect((await readWallet(text)).mismatches).toEqual([]);
+  test('its Evrmore fields are not read: a wrong evr.address, scripthash or WIF privateKey is no mismatch', async () => {
+    const text = vec(0).walletYaml.replace(/^( {2}address: ).*$/m, '$1EOtherAddressXXXXXXXXXXXXXXXXXXXXX')
+      .replace(/^(scripthash: ).*$/m, `$1${'00'.repeat(32)}`).replace(/^(privateKey: ).*$/m, `$1${vec(1).walletYaml.match(/^privateKey: (.*)$/m)[1]}`);
+    expect(text).not.toBe(vec(0).walletYaml);
+    expect(await readWallet(text)).toEqual({ secret: hex(vec(0).entropyHex), pubkey: vec(0).pubkey, mismatches: [] });
   });
   test('watch-only and empty files are refused', async () => {
-    const v = vec(0);
-    await expect(readWallet(`publicKey: ${v.pubkey}\nevr:\n  address: ${v.address}\n`)).rejects.toThrow(/no private key/i);
-    await expect(readWallet('')).rejects.toThrow(/no private key/i);
+    await expect(readWallet(`publicKey: ${vec(0).pubkey}\nevr:\n  address: E\n`)).rejects.toThrow(/no entropy/i);
+    await expect(readWallet('')).rejects.toThrow(/no entropy/i);
     await expect(readWallet('a: [')).rejects.toThrow();
   });
   test('an encrypted file without a passphrase is refused', async () => {
@@ -52,14 +52,14 @@ describe('wallet.yaml (plaintext)', () => {
   });
   test('a plain-text file read as a vault is refused, whatever the passphrase', async () => {
     await expect(readWallet(vec(0).walletYaml, { password: 'anything' })).rejects.toThrow(/not encrypted/i);
-    await expect(readWallet(fx.wifOnly.yaml, { password: 'anything' })).rejects.toThrow(/not encrypted/i);
+    await expect(readWallet(wifOnly(vec(3)), { password: 'anything' })).rejects.toThrow(/not encrypted/i);
   });
 });
 
 describe('secrecy: which a file is, by its secret fields (satorilib length rules)', () => {
   test('plain, encrypted, mixed, or no key at all', () => {
     expect(secrecy(vec(0).walletYaml)).toBe('plain');
-    expect(secrecy(fx.wifOnly.yaml)).toBe('plain');
+    expect(secrecy(wifOnly(vec(3)))).toBe('plain');
     expect(secrecy(fx.vaults.current.yaml)).toBe('encrypted');
     expect(secrecy(fx.vaults.old.yaml)).toBe('encrypted');
     expect(secrecy(`entropy: ${vec(0).entropy}\nwords: ${load(fx.vaults.current.yaml).words}\n`)).toBe('mixed');

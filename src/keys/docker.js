@@ -7,24 +7,13 @@
 // PBKDF2-HMAC-SHA1(latin1(password), salt, 1e6, 32) (satorilib utils/secret.py;
 // pycryptodome turns a str password into bytes as Latin-1).
 import { load } from 'js-yaml';
-import { base64, createBase58check } from '@scure/base';
-import { sha256 } from '@noble/hashes/sha2';
-import { concatBytes } from '@noble/hashes/utils';
+import { base64 } from '@scure/base';
 import { checkKey, publicKey, wordsOf } from './keys.js';
 import { nostrPubkey } from '../nostr/event.js';
 
 const ITERATIONS = 1_000_000;
 const SECRET_FIELDS = ['entropy', 'privateKey', 'words']; // what satorilib encrypts today (identity.py:682-692)
 const subtle = globalThis.crypto.subtle;
-const b58c = createBase58check(sha256);
-
-/** A WIF (compressed, 0x80) → the secret. Docker's files may hold the key only this way. */
-function secretFromWif(wif) {
-  const b = b58c.decode(wif.trim());
-  if (b.length !== 34 || b[0] !== 0x80 || b[33] !== 1) throw new Error('not a compressed WIF key');
-  return checkKey(b.slice(1, 33));
-}
-const wifOf = (secret) => b58c.encode(concatBytes(Uint8Array.of(0x80), secret, Uint8Array.of(1)));
 
 /**
  * A password's bytes: 'latin1', one byte per character, as pycryptodome takes a
@@ -83,12 +72,13 @@ export function vaultPubkey(text) {
 
 /**
  * Read a wallet.yaml (no password: its key must be plain text) or a vault.yaml
- * (password: its key must be encrypted). Load order as satorilib (identity.py
- * loadFromYaml): entropy → 52-char WIF → watch-only (refused: no key). An old
+ * (password: its key must be encrypted). The key is the entropy, which every
+ * file satorilib writes has (identity.py loadFromYaml); a file without one is
+ * refused (watch-only; satorilib cannot load a WIF-only file either). An old
  * vault also encrypted its publicKey (identity.py:666-676, by length). The
- * public key, the words and the WIF are derived from the secret and compared
- * with the stored ones; the Evrmore fields (evr.address, scripthash) are not
- * relied on. `encodings`: the password's byte forms to try, in order.
+ * public key and the words are derived from the secret and compared with the
+ * stored ones; the Evrmore fields (privateKey's WIF, evr.address, scripthash)
+ * are not read. `encodings`: the password's byte forms to try, in order.
  * @returns {Promise<{secret: Uint8Array, pubkey: string, mismatches: string[]}>}
  */
 export async function readWallet(text, { password, encodings = ['latin1'] } = {}) {
@@ -111,29 +101,19 @@ export async function readWallet(text, { password, encodings = ['latin1'] } = {}
     throw wrong();
   };
 
-  let secret;
   let ent = str(doc.entropy);
-  if (ent && ent.length !== 44) ent = await open(ent, 44);
-  if (ent) {
-    try { secret = checkKey(base64.decode(ent)); } catch { throw wrong(); }
-  } else {
-    let wif = str(doc.privateKey);
-    if (wif && wif.length !== 52) wif = await open(wif, 52);
-    if (!wif) throw new Error('No private key in this file (watch-only)');
-    secret = secretFromWif(wif);
-  }
+  if (!ent) throw new Error('No entropy in this file, so no key to import (watch-only)');
+  if (ent.length !== 44) ent = await open(ent, 44);
+  let secret;
+  try { secret = checkKey(base64.decode(ent)); } catch { throw wrong(); }
   const pubkey = publicKey(secret);
 
   let storedPub = str(doc.publicKey);
   if (storedPub && storedPub.length !== 66 && typeof password === 'string') {
     storedPub = await decryptField(storedPub, password, encoding ?? encodings[0]).catch(() => storedPub);
   }
-  const stored = {
-    privateKey: str(doc.privateKey).length === 52 ? doc.privateKey : '',
-    publicKey: storedPub,
-    words: str(doc.words).includes(' ') ? doc.words : '',
-  };
-  const derived = { privateKey: wifOf(secret), publicKey: pubkey, words: wordsOf(secret) };
+  const stored = { publicKey: storedPub, words: str(doc.words).includes(' ') ? doc.words : '' };
+  const derived = { publicKey: pubkey, words: wordsOf(secret) };
   const mismatches = Object.keys(stored).filter((k) => stored[k] && stored[k] !== derived[k]);
   return { secret, pubkey, mismatches };
 }

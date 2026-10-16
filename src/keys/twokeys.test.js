@@ -118,7 +118,7 @@ describe('readDockerFiles: a Dockerized Neuron\'s files, translated', () => {
     await expect(readDockerFiles({ walletText: fx.mismatch.yaml, vaultText: fx.vaults.current.yaml, password }))
       .rejects.toThrow(/wallet\.yaml: .*publicKey/);
     await expect(readDockerFiles({ walletText: `publicKey: ${a.pubkey}\n`, vaultText: fx.vaults.current.yaml, password }))
-      .rejects.toThrow(/wallet\.yaml: no private key/i);
+      .rejects.toThrow(/wallet\.yaml: no entropy/i);
   });
   test('files in the wrong slots are refused, and the message says which', async () => {
     const cur = fx.vaults.current.yaml;

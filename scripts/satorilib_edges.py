@@ -56,7 +56,7 @@ out = {
 # The vault password goes into PBKDF2 as Latin-1 (pycryptodome tobytes), not UTF-8.
 entropy, ident, text = make('satori-edges-latin1', 'latin1.yaml', 'pässwörd')
 out['latin1Vault'] = {'password': 'pässwörd', 'entropy': base64.b64encode(entropy).decode(),
-                      'address': ident.address, 'yaml': text}
+                      'yaml': text}
 
 # A password outside Latin-1 cannot be encoded: satorilib's encryptWallet swallows
 # the error and saves the vault in plain text.

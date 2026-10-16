@@ -2,12 +2,10 @@
   "about": "Made by scripts/identity-js-vectors.mjs; satorilibVerified is set by scripts/identity_crossverify.py. Throwaway keys.",
   "vault": {
     "password": "js-export-pass",
-    "address": "EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW",
     "pubkey": "02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8",
     "yaml": "entropy: zAAqT7hgTN5YcqI3Nri/WjQVwgXGXAPij74AyNNbXECHHScWD3aUghsEv/XHn93XUZ8VdIrvx527kf1/Zn2Zz5o+8gaWkKiz1EStkYofEjY=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: 63XB2xCeyxk8nLBLNwk7A1o2SmT6CCtuKKBml864Yo2yzbU+Hf1og8UOOIU+vDudm0vyG76G87lsYzvgZFtBcXDUP9aecenzDejhAuuHf58qxHn+tcyUbEO45XbUbRmK\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: sPQArkXvbj64TRN4d9znsKJiS6mV8Q4dcjpL9/tjlzelDJND/9sfLDu8DbSUXsV6GXuuq8Lyw9chJl+dpwHskeJtxVmn6I/ltg+hQrterbxliL7IkLSU5NB62k2ykLzhJMKu0fPveBeK1eoV98+0wCS4JVUgl12FSa0zBRTigQtTX03T9TDk37UChh+SX4zVJ+23wK1vfgTxT72rVU7imUI1SpS53c98v4a9sdFEHZRhJaQ7UQDar3Xc+4YnJcLS\n"
   },
   "wallet": {
-    "address": "EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW",
     "yaml": "entropy: kxc6jBSFwXrdEU1T7xlJoIqvxfwtLAM4rfoZp/SjKSw=\nevr:\n  address: EMgAMHUrCMZhSgq3t8NCST71U21AMRXLcW\nprivateKey: L29dqwGwrMRLHgnXS5DhBbRzWxYfEMbgBytC3EVMsEQUx3cxZS9R\npublicKey: 02a17105a08f115a3b9603807aaa81e40d0b3707ccc80f232b1ab5fd320a2ce9f8\nscripthash: c4af162f13a142ba3dd0f9206df648a163aad1c2370da824b0c734e5e97e7696\nwords: narrow right perfect cinnamon foster runway inmate claim fault juice fame donate priority title vague pitch add shell leader crew leg face pigeon moment\n"
   },
   "satorilibVerified": {
