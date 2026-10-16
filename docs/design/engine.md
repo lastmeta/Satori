@@ -586,6 +586,12 @@ persistence 0.9969, 0.9965, 1.0013, 0.9997, 0.9993). Per symbol, all
 neurons pooled, bvar / bar1 runs from 0.984 (FIL) to 1.017 (XRP). `bvar` is
 closer than `bar1` on 49.4% of forecasts and farther on 49.5%.
 
+Re-run at the shipped setting after the review's fixes (the pool's recent
+alignment, the repair, the transform as known at each origin), 2026-10-16:
+the same numbers to the digit. On these 21 hourly, all-positive pairs those
+rules never trigger; they matter for central's mix of hourly, daily and
+stopped streams.
+
 **Divergence** (shipped setting): the 105 final champions (21 targets × 5
 neurons) are 105 different specs. Two neurons' companion sets for the same
 target overlap by 0.081 on average (Jaccard). 30 champions read 1 companion,
