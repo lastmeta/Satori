@@ -71,9 +71,10 @@ describe('the RPC', () => {
     expect(rpcUrls({ config: DEFAULTS })).toEqual(['https://sepolia.base.org', FALLBACK_RPC]);
     expect(rpcUrls({ config: { ...DEFAULTS, rpcUrl: FALLBACK_RPC } })).toEqual([FALLBACK_RPC]);
   });
-  test('the dev server: the local fork; a setting wins over both', () => {
-    expect(rpcUrls({ config: DEFAULTS, devDefault: '/rpc' })).toEqual(['/rpc']);
-    expect(rpcUrls({ config: DEFAULTS, devDefault: '/rpc', setting: 'https://mine.example' })).toEqual(['https://mine.example']);
+  test('a fixed default (the dev server\'s local fork, a build\'s VITE_BASE_RPC) alone; a setting wins over both', () => {
+    expect(rpcUrls({ config: DEFAULTS, fixed: '/rpc' })).toEqual(['/rpc']);
+    expect(rpcUrls({ config: DEFAULTS, fixed: 'https://rpc.example' })).toEqual(['https://rpc.example']);
+    expect(rpcUrls({ config: DEFAULTS, fixed: '/rpc', setting: 'https://mine.example' })).toEqual(['https://mine.example']);
   });
   test('the setting: empty, https, or a same-origin path', () => {
     expect(checkRpcSetting('  ')).toBe('');

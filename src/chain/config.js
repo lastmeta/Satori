@@ -64,9 +64,13 @@ export function checkRpcSetting(raw) {
   return url;
 }
 
-/** The RPC URLs to use, in failover order: the setting alone; else the default (dev: the local fork). */
-export function rpcUrls({ config, setting, devDefault }) {
+/**
+ * The RPC URLs to use, in failover order: the setting alone; else the default
+ * the build or the dev server fixed (`fixed`: VITE_BASE_RPC, the dev server's local
+ * fork), alone; else central's rpcUrl, then publicnode.
+ */
+export function rpcUrls({ config, setting, fixed }) {
   if (setting) return [setting];
-  if (devDefault) return [devDefault];
+  if (fixed) return [fixed];
   return [...new Set([config.rpcUrl, FALLBACK_RPC])];
 }

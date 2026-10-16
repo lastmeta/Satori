@@ -149,10 +149,10 @@ export function nextCheckAt({ now, chainTime }) {
  * @param {string} o.vaultAddress the vault's Base address (from vault.yaml's public key: no Unlock needed)
  * @param {() => object|null} o.vault the unlocked vault signer, or null
  * @param {() => object} o.central the current central client
- * @param {string} [o.devRpc] the dev server's default RPC (the local fork)
+ * @param {string} [o.defaultRpc] the RPC when none is saved, if the build or the dev server set one (src/config.js)
  * @param {any} [o.transport] a viem transport (tests); else http to the RPC URLs
  */
-export function createBase({ db, identity, vaultAddress, vault, central, devRpc, transport, forecast = engineForecast,
+export function createBase({ db, identity, vaultAddress, vault, central, defaultRpc, transport, forecast = engineForecast,
   now = () => Date.now() / 1000, onChange = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
   origin = globalThis.location?.href }) {
   let cache = null; // central's config, 1 h
@@ -174,7 +174,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, devRpc,
     const loaded = await loadConfig({ fetchCentral: () => c.baseConfig(), url: c.url, cache, now: now() });
     cache = loaded.cache;
     const setting = (await db.get('base_rpc_url')) || '';
-    const urls = rpcUrls({ config: loaded.config, setting, devDefault: devRpc });
+    const urls = rpcUrls({ config: loaded.config, setting, fixed: defaultRpc });
     const key = JSON.stringify([loaded.config, urls]);
     if (made?.key !== key) {
       const t = transport ?? (urls.length === 1 ? http(resolve(urls[0])) : fallback(urls.map((u) => http(resolve(u)))));

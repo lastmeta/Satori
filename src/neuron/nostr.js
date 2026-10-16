@@ -12,7 +12,7 @@ import {
   catalog, parseObservation, numericValue, predValue, relayUuid,
 } from '../nostr/satori.js';
 import { forecast as engineForecast } from '../engine/index.js';
-import { serial } from '../util.js';
+import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
 
 export const MAX_STREAMS = 100; // network_db.py:14-36, until central says (relay-config)
@@ -26,9 +26,6 @@ const MAX_PAGES = 100;
 const OUTBOX_MAX = 100; // unsubscribes and tombstones waiting for a relay
 
 const HEX64 = /^[0-9a-f]{64}$/;
-const isRelayUrl = (u) => {
-  try { return ['ws:', 'wss:'].includes(new URL(u).protocol); } catch { return false; }
-};
 const isLocal = (u) => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(u).hostname);
 const safeEpoch = (t) => (Number.isFinite(t) && t > EPOCH[0] && t < EPOCH[1] ? Math.floor(t) : null);
 const parseRaw = (raw) => {

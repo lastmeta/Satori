@@ -22,19 +22,14 @@ import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { isHttps } from './util.js';
+import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
 import { shortHash, claimLine, stepText } from './ui/format.js';
 import { startPwa, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
 
-// The dev server talks to the dev central, so nobody writes to prod from a dev checkout.
-const DEFAULT_CENTRAL = import.meta.env.DEV ? 'https://central2.satorinet.io' : 'https://network.satorinet.io';
-// The same rule for Nostr: on the dev server central's relays (satorian, production)
-// are read only, and the user's relays default to the test relay (scripts/test-relay.mjs).
-const DEV_RELAY = 'ws://localhost:7778';
-const NOSTR_DEFAULTS = import.meta.env.DEV ? { relays: [DEV_RELAY], centralWrite: false } : { relays: [], centralWrite: true };
-// And for Base: the dev server's RPC is /rpc by default, which Vite proxies to a local fork on
-// 127.0.0.1:8545 (scripts/fork.mjs), so by default a dev checkout does not send to a public chain
-// (a saved RPC overrides it). A build: central's, then publicnode.
-const DEV_RPC = import.meta.env.DEV ? '/rpc' : undefined;
+// Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
+// checkout writes nothing to production) or a build's, each replaceable by a VITE_* variable.
+const DEFAULTS = defaultsFrom(import.meta.env, import.meta.env.DEV ? DEV_DEFAULTS : BUILD_DEFAULTS);
+const DEFAULT_CENTRAL = DEFAULTS.central;
 
 let db;
 let files = null; // { walletYaml, vaultYaml, nostrYaml } as stored
@@ -144,10 +139,10 @@ async function startNeuron() {
   } });
   await poller.start();
   await refresh();
-  nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: NOSTR_DEFAULTS,
+  nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite },
     onChange: refreshNostr });
   await refreshNostr();
-  base = createBase({ db, identity, vaultAddress: evmAddress(vaultPublic.pubkey), vault: () => vault, central: () => central, devRpc: DEV_RPC,
+  base = createBase({ db, identity, vaultAddress: evmAddress(vaultPublic.pubkey), vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase });
   await refreshBase();
   state.screen = 'home';

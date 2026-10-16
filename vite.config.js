@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { CSP } from './csp.js';
+import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './src/config.js';
 
 // Sends the CSP header on every dev/preview response, 304s included
 // (Vite's `server.headers` option skips 304 revalidations).
@@ -47,7 +48,7 @@ const serviceWorker = {
   },
 };
 
-export default defineConfig({
+const config = {
   plugins: [cspHeader, rawDuckdbWorker, serviceWorker],
   // /rpc: the dev server's default Base RPC, a local anvil fork of Base Sepolia (node scripts/fork.mjs start),
   // on the page's own origin, which the CSP allows ('self'); a build has no proxy and no such default.
@@ -60,4 +61,10 @@ export default defineConfig({
   // apache-arrow is, else the dev page loads it as ~125 separate modules.
   optimizeDeps: { exclude: ['@duckdb/duckdb-wasm'], include: ['@duckdb/duckdb-wasm > apache-arrow'] },
   test: { include: ['src/**/*.test.js'], maxWorkers: 2 },
+};
+
+export default defineConfig(({ command, mode }) => {
+  // The VITE_* defaults (src/config.js, docs/design/deploy.md): a bad one stops here, not in the bundle.
+  defaultsFrom(loadEnv(mode, process.cwd(), 'VITE_'), command === 'serve' ? DEV_DEFAULTS : BUILD_DEFAULTS);
+  return config;
 });
