@@ -483,7 +483,7 @@ export function render(root, a) {
       <p class="muted small">Nothing was deleted: your keys and data stay in this browser’s storage for this site.
         Reload to try again. If it keeps failing, report this message at
         <a href="https://github.com/lastmeta/Satori/issues" target="_blank" rel="noopener">github.com/lastmeta/Satori/issues</a>.
-        Meanwhile your backup (the 24 words, or the Dockerized Neuron files) can set the neuron up in another browser.</p>
+        Meanwhile your 24 words (or the Dockerized Neuron files) can set the neuron up in another browser.</p>
       <div class="actions"><button class="primary" @click="${() => location.reload()}">Reload</button></div>
     </section>
     ${setup(a)}
