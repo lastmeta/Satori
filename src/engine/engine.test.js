@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import {
-  forecast, iterate, blend, weightFromErrors, fadeWeight,
+  forecast, iterate, blend, weightFromErrors, fadeWeight, horizonSteps,
   STEP_S, LAMBDA1, MIN_SAMPLES, DEFAULT_WEIGHT, HOLDOUT,
 } from './index.js';
 
@@ -99,7 +99,8 @@ describe('the same numbers as namaste_club\'s own code (scripts/engine_parity.py
   });
   test('golden values, recomputed (zigzag; 1% compounding; a point an hour after the grid)', () => {
     expect(forecast(grid(ZIG))).toEqual({ model: 'bar1', phi: expect.closeTo(-0.705304, 6),
-      weight: 1, t1: expect.closeTo(103.56200, 5), t2: expect.closeTo(104.56234, 5) });
+      weight: 1, t1: expect.closeTo(103.56200, 5), t2: expect.closeTo(104.56234, 5), value: expect.closeTo(104.56234, 5),
+      horizon: 2 * STEP_S });
     expect(forecast(grid(Array.from({ length: 40 }, (_, k) => 100 * 1.01 ** k)))).toMatchObject({
       model: 'bar1', weight: 1, t1: expect.closeTo(148.87674, 5), t2: expect.closeTo(150.34611, 5) });
     // The first lag skips the point an hour back and uses 104, the newest ≥ 6 h older: r0 = 110/104 − 1.
@@ -157,7 +158,7 @@ describe('the model', () => {
 
 describe('minimum data and guards', () => {
   test('7 buckets → naive (6 pairs needed: lag 1 + 5, bvar.py:158); 8 → bar1', () => {
-    expect(forecast(grid(ZIG.slice(0, 7)))).toEqual({ model: 'naive', t1: 102, t2: 102 });
+    expect(forecast(grid(ZIG.slice(0, 7)))).toEqual({ model: 'naive', t1: 102, t2: 102, value: 102, horizon: 2 * STEP_S });
     expect(forecast(grid(ZIG.slice(0, 8))).model).toBe('bar1');
   });
   test('several points in a bucket count once (its last value)', () => {
@@ -166,7 +167,7 @@ describe('minimum data and guards', () => {
     expect(forecast(p.slice(0, -2)).model).toBe('naive');
   });
   test('a constant series: t1 = t2 = last, φ = 0', () => {
-    expect(forecast(grid(Array(30).fill(5)))).toEqual({ model: 'bar1', t1: 5, t2: 5, phi: 0, weight: 1 });
+    expect(forecast(grid(Array(30).fill(5)))).toEqual({ model: 'bar1', t1: 5, t2: 5, value: 5, horizon: 2 * STEP_S, phi: 0, weight: 1 });
   });
   test('a gap breaks the returns: 9 buckets around a missing one → naive', () => {
     const p = [...grid(ZIG.slice(0, 4)), ...grid(ZIG.slice(5, 10), 5)];
@@ -184,7 +185,7 @@ describe('minimum data and guards', () => {
     expect(forecast(grid([...ZIG.slice(0, 9), 0])).model).toBe('bar1d');
     expect(forecast(grid([...ZIG.slice(0, 9), -3])).model).toBe('bar1d');
     expect(forecast(grid([100, -1, ...ZIG])).model).toBe('bar1d');
-    expect(forecast(grid([5, 0]))).toEqual({ model: 'naive', t1: 0, t2: 0 }); // too short either way
+    expect(forecast(grid([5, 0]))).toEqual({ model: 'naive', t1: 0, t2: 0, value: 0, horizon: 2 * STEP_S }); // too short either way
   });
   test('bar1d: a named stream\'s counter (signed, from 0) rising steadily → t2 above the last (UP)', () => {
     const counter = Array.from({ length: 12 }, (_, k) => -10 + 2 * k); // −10 … 12, every change +2
@@ -234,7 +235,7 @@ describe('minimum data and guards', () => {
     expect(forecast(p)).toEqual(forecast(grid(ZIG)));
     expect(forecast([])).toBeNull();
     expect(forecast([{ ts: T0, value: NaN }])).toBeNull();
-    expect(forecast([{ ts: T0, value: 42 }])).toEqual({ model: 'naive', t1: 42, t2: 42 });
+    expect(forecast([{ ts: T0, value: 42 }])).toEqual({ model: 'naive', t1: 42, t2: 42, value: 42, horizon: 2 * STEP_S });
   });
   test('points in any order', () => {
     expect(forecast([...grid(ZIG)].reverse())).toEqual(forecast(grid(ZIG)));
@@ -248,7 +249,7 @@ describe('the step (a relay stream forecasts in steps of its cadence)', () => {
       const values = arPrices(60, -0.3, 0.02, seed);
       const half = forecast(at(STEP_S)(values));
       expect(half.model).toBe('bar1');
-      expect(forecast(at(900)(values), { step: 900 })).toEqual(half);
+      expect(forecast(at(900)(values), { step: 900 })).toEqual({ ...half, horizon: 2 * 900 });
     }
   });
   test('the first lag needs half a step of spacing; a step-old gap is not a lag at 12 h', () => {
@@ -257,5 +258,53 @@ describe('the step (a relay stream forecasts in steps of its cadence)', () => {
     // At the default 12 h step, 15 min points fall in a handful of buckets: naive.
     expect(forecast(pts).model).toBe('naive');
     expect(forecast(pts, { step: 900 }).model).toBe('bar1');
+  });
+});
+
+describe('the horizon: a forecast is one cadence ahead (docs/intent/engine.md)', () => {
+  const values = arPrices(90, 0.4, 0.02, 31);
+  const pts = grid(values);
+
+  test('central: 12 h steps, 24 h ahead, so the value is t2, as before', () => {
+    const f = forecast(pts);
+    expect(f).toMatchObject({ model: 'bar1', horizon: 2 * STEP_S, value: f.t2 });
+    expect(forecast(pts, { horizon: 2 * STEP_S })).toEqual(f);
+    expect(forecast(pts.slice(0, 3))).toMatchObject({ model: 'naive', value: values[2], horizon: 2 * STEP_S });
+  });
+
+  test('one step ahead (a Nostr stream at its cadence, a daily Base stream): the value is t1, faded by a one-step backtest', () => {
+    const one = forecast(pts, { horizon: STEP_S });
+    const two = forecast(pts);
+    expect(one).toMatchObject({ model: 'bar1', horizon: STEP_S, phi: two.phi });
+    expect(one.value).toBe(one.t1);
+    expect(one.value).toBe(blend(values.at(-1), iterate(one.phi, values.at(-1) / values.at(-2) - 1)[0], one.weight));
+  });
+
+  for (const n of [1, 2, 3]) {
+    test(`the backtest scores the forecast at the horizon (${n} step${n > 1 ? 's' : ''}): from each origin's history, against the value ${n} buckets on`, () => {
+      const me = [];
+      const pe = [];
+      const L = values.length - 1;
+      for (let o = Math.max(2, L - n + 1 - HOLDOUT); o + n <= L; o++) {
+        const f = forecast(pts.slice(0, o + 1), { weight: 1, horizon: n * STEP_S });
+        if (f.model !== 'bar1') continue;
+        me.push(Math.abs(f.value - values[o + n]) / values[o + n]);
+        pe.push(Math.abs(values[o] - values[o + n]) / values[o + n]);
+      }
+      expect(me).toHaveLength(HOLDOUT);
+      const f = forecast(pts, { horizon: n * STEP_S });
+      expect(f.weight).toBeCloseTo(fadeWeight(me, pe), 12);
+      expect(f.horizon).toBe(n * STEP_S);
+      const raw = forecast(pts, { horizon: n * STEP_S, weight: 1 });
+      expect(f.value).toBeCloseTo(blend(values.at(-1), raw.value / values.at(-1), f.weight), 9);
+    });
+  }
+
+  test('horizon / step: whole steps, the nearest, at least one', () => {
+    expect(horizonSteps(STEP_S, 2 * STEP_S)).toBe(2);
+    expect(horizonSteps(86_400, 86_400)).toBe(1);
+    expect(horizonSteps(18 * 3600, 86_400)).toBe(1);
+    expect(horizonSteps(60, 60)).toBe(1);
+    expect(horizonSteps(STEP_S, 3600)).toBe(1);
   });
 });

@@ -150,11 +150,12 @@ export function numericValue(v) {
 }
 
 /**
- * The published value: str(t2) as Python prints it, Lite's predictForRelay
- * returning the first row of _runForecast's second, autoregressed forecast
- * (engine.py:733-735, 1176-1186); or Lite's echo (start.py:1302-1308).
+ * The published value: the forecast one cadence ahead (`value`, the owner's
+ * rule, docs/intent/engine.md; Lite's predictForRelay sends t2, two steps ahead,
+ * engine.py:733-735, 1176-1186) as Python prints a float; or Lite's echo
+ * (start.py:1302-1308).
  */
-export const predValue = (f, value) => (f ? pyFloatStr(f.t2) : typeof value === 'string' ? value : pyJson(value));
+export const predValue = (f, value) => (f ? pyFloatStr(f.value) : typeof value === 'string' ? value : pyJson(value));
 
 const DNS = hexToBytes('6ba7b8109dad11d180b400c04fd430c8');
 

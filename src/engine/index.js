@@ -1,9 +1,12 @@
 // The engine (docs/design/engine.md): a one-stream, lag-1 cut of namaste_club's
 // Bayesian VAR (../namaste_club), in Satori Lite's interface:
-//   forecast(points) → { model, t1, t2, phi?, weight? } | null
+//   forecast(points, { step, horizon }) → { model, t1, t2, value, horizon, phi?, weight? } | null
 // points: [{ ts, value }] (ts in unix seconds), all of a stream's history.
-// options.step: the bucket and horizon in seconds: 12 h for central's streams,
-// a relay stream's cadence (docs/design/nostr.md#the-engines-step).
+// step: the bucket in seconds (12 h for central's streams, a relay stream's
+// cadence); horizon: how far ahead `value` is, one cadence of the stream
+// (docs/intent/engine.md): 24 h for central (two 12 h steps: t2, as Lite sends),
+// a relay stream's cadence, a Base stream's max(24 h, cadence). t1 and t2 are
+// one and two steps ahead.
 // `bar1`: a Bayesian AR(1) on 12 h returns, shrunk toward the random walk,
 // iterated two 12 h steps (t1, t2), each clamped, then faded toward persistence
 // by a weight from a rolling backtest. `bar1d`: the same on changes
@@ -15,7 +18,7 @@ export const STEP_S = 43_200; // 12 h buckets, UTC-aligned (features.py:22, regr
 export const LAMBDA1 = 0.2; // own-lag prior sd (bvar.py:88)
 export const SIGMA2_FLOOR = 1e-6; // bvar.py:180
 export const MIN_EXTRA_ROWS = 5; // rows ≥ features + 5 (bvar.py:158)
-export const HORIZON_STEPS = 2; // 2 × 12 h = central's 24 h (bvar.py:285)
+export const HORIZON_STEPS = 2; // the default horizon: 2 × 12 h = central's 24 h (bvar.py:285)
 export const MAX_STEP_RETURN = 0.5; // bvar.py:286
 export const MIN_SPACING_S = 6 * 3600; // the first lag's span at 12 h, half a step (pool.py:872)
 export const HOLDOUT = 28; // backtest origins, borrowed from the λ tuner's holdout (models.py:552)
@@ -30,7 +33,7 @@ export const RETURNS = {
   model: 'bar1',
   change: (a, b) => b / a - 1,
   cap: () => MAX_STEP_RETURN,
-  path: (q1, q2) => [1 + q1, (1 + q1) * (1 + q2)], // growth after one and two steps
+  path: (...q) => q.map((_, i) => q.slice(0, i + 1).reduce((g, x) => g * (1 + x), 1)), // growth after each step
   apply: (last, g, w) => blend(last, g, w),
   raw: (x, g) => x * g, // the backtest's unfaded forecast
   error: (x, a) => Math.abs(x - a) / a, // relative (calibration.py)
@@ -39,7 +42,7 @@ export const CHANGES = {
   model: 'bar1d',
   change: (a, b) => b - a,
   cap: (r) => Math.max(0, ...r.filter((x) => x !== null).map(Math.abs)), // no step larger than the largest change seen
-  path: (q1, q2) => [q1, q1 + q2], // the change after one and two steps
+  path: (...q) => q.map((_, i) => q.slice(0, i + 1).reduce((d, x) => d + x, 0)), // the change after each step
   apply: (last, d, w) => {
     const x = last + w * d;
     return Number.isFinite(x) ? x : last;
@@ -48,17 +51,22 @@ export const CHANGES = {
   error: (x, a) => Math.abs(x - a), // absolute: a level may be 0
 };
 
+/** How many steps reach the horizon: the nearest whole number, at least one. */
+export const horizonSteps = (step, horizon) => Math.max(1, Math.round(horizon / step));
+
 /**
  * @param {Iterable<{ts: number, value: number}>} points
- * @param {{lambda1?: number, weight?: number, step?: number}} [options] weight forces the fade (namaste_club's
- *   MODEL_WEIGHT); step is the bucket in seconds (t1 is one step ahead, t2 two)
+ * @param {{lambda1?: number, weight?: number, step?: number, horizon?: number}} [options] weight forces the fade
+ *   (namaste_club's MODEL_WEIGHT); step is the bucket in seconds (t1 is one step ahead, t2 two); horizon is how far
+ *   ahead `value` is (two steps by default), and what the backtest that sets the fade scores
  */
-export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S } = {}) {
+export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S, horizon = HORIZON_STEPS * step } = {}) {
   const p = Array.from(points).filter((o) => Number.isFinite(o?.ts) && Number.isFinite(o?.value))
     .sort((a, b) => a.ts - b.ts);
   if (!p.length) return null;
+  const n = horizonSteps(step, horizon);
   const last = p.at(-1).value;
-  const naive = { model: 'naive', t1: last, t2: last };
+  const naive = { model: 'naive', t1: last, t2: last, value: last, horizon: n * step };
   const m = p.every((o) => o.value > 0) ? RETURNS : CHANGES;
 
   const buckets = new Map(); // bucket → its last value (models.py:262-264)
@@ -71,9 +79,9 @@ export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S } = 
   if (pairs.length < 1 + MIN_EXTRA_ROWS) return naive;
   const phi = fitPhi(pairs, lambda1);
   const cap = m.cap(r);
-  const w = weight ?? backtestWeight(b, v, r, lambda1, m, cap);
-  const [x1, x2] = m.path(...steps(phi, firstLag(p, step, m), cap));
-  return { model: m.model, t1: m.apply(last, x1, w), t2: m.apply(last, x2, w), phi, weight: w };
+  const w = weight ?? backtestWeight(b, v, r, lambda1, m, cap, n);
+  const t = m.path(...steps(phi, firstLag(p, step, m), cap, Math.max(n, HORIZON_STEPS))).map((x) => m.apply(last, x, w));
+  return { model: m.model, t1: t[0], t2: t[1], value: t[n - 1], horizon: n * step, phi, weight: w };
 }
 
 /** (r[k−1], r[k]) for k ≤ upTo, both present: the lag-1 regression rows. */
@@ -114,10 +122,10 @@ export function firstLag(p, step, m = RETURNS) {
 }
 
 /** The next steps: each is φ × the one before, clamped to ±cap (bvar.py:316-339). */
-function steps(phi, r0, cap) {
+function steps(phi, r0, cap, count = HORIZON_STEPS) {
   const out = [];
   let r = r0;
-  for (let k = 0; k < HORIZON_STEPS; k++) {
+  for (let k = 0; k < count; k++) {
     r = clamp(finiteOr0(phi * r), -cap, cap);
     out.push(r);
   }
@@ -154,20 +162,21 @@ export function median(xs) {
 
 /**
  * The rolling backtest that sets the fade: of the last HOLDOUT origins o, those
- * with buckets o..o+2 back to back; fit on the pairs up to o, forecast two
- * steps from v[o] and score against v[o+2], as persistence (v[o]) is scored.
+ * with buckets o..o+n back to back (n steps to the horizon); fit on the pairs up
+ * to o, forecast n steps from v[o] and score against v[o+n], as persistence
+ * (v[o]) is scored.
  */
-function backtestWeight(b, v, r, lambda1, m = RETURNS, cap = MAX_STEP_RETURN) {
+function backtestWeight(b, v, r, lambda1, m = RETURNS, cap = MAX_STEP_RETURN, n = HORIZON_STEPS) {
   const me = [];
   const pe = [];
   const L = b.length - 1;
-  for (let o = Math.max(2, L - 1 - HOLDOUT); o + 2 <= L; o++) {
-    if (b[o + 2] - b[o] !== 2) continue;
+  for (let o = Math.max(2, L - n + 1 - HOLDOUT); o + n <= L; o++) {
+    if (b[o + n] - b[o] !== n) continue;
     const pairs = pairsUpTo(r, o);
     if (pairs.length < 1 + MIN_EXTRA_ROWS) continue;
-    const x2 = m.path(...steps(fitPhi(pairs, lambda1), r[o] ?? 0, cap))[1];
-    const a = v[o + 2];
-    me.push(m.error(m.raw(v[o], x2), a));
+    const x = m.path(...steps(fitPhi(pairs, lambda1), r[o] ?? 0, cap, n))[n - 1];
+    const a = v[o + n];
+    me.push(m.error(m.raw(v[o], x), a));
     pe.push(m.error(v[o], a));
   }
   return fadeWeight(me, pe);

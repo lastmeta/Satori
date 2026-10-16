@@ -114,10 +114,10 @@ Every method is below; `await satori.status()` shows everything at once.
   first observation that arrives is the relays' stored latest one (an
   observation is replaceable: a relay keeps one per stream), so it may be
   old; then each new one. Each new
-  observation (34601) of the stream is stored, forecast two cadences ahead
-  (t2 of the engine with the stream's `cadence_seconds` as its step, as Lite
-  sends) and published as `<stream>_pred` with `value` = the forecast as a
-  string (`"82378.0"`),
+  observation (34601) of the stream is stored, forecast one cadence ahead
+  (the engine with the stream's `cadence_seconds` as its step and its
+  horizon; a forecast is one cadence ahead, the owner's rule) and published
+  as `<stream>_pred` with `value` = the forecast as a string (`"82378.0"`),
   `seq_num` = our last + 1. A value with no number is echoed. Relay streams
   and predictions are kept apart from central's and never sent to central.
   Unsubscribe publishes the unsubscription and deletes the `_pred`
@@ -155,10 +155,12 @@ Every method is below; `await satori.status()` shows everything at once.
   load, after Delegate, at the round's start on the chain's clock, at least
   hourly), when the identity has delegated power and no batch this round.
   Every registry stream whose binary game has voting weight (the engine pays
-  only those) is forecast by the engine (step = max(12 h, the stream's
-  cadence); a named stream, a signed counter, as `bar1d`); direction UP
-  (payload `0x01`) if t2 > the latest value, else DOWN (`0x02`), as the
-  Docker neuron. Each game is simulated alone first (the contract's own
+  only those) is forecast by the engine one cadence ahead and at least the
+  24 h a round scores (step = max(12 h, the cadence), horizon = max(24 h, the
+  cadence): an hourly stream in two 12 h steps, the daily default stream in
+  one 24 h step; a named stream, a signed counter, as `bar1d`); direction UP
+  (payload `0x01`) if that forecast > the latest value, else DOWN (`0x02`),
+  as the Docker neuron. Each game is simulated alone first (the contract's own
   checks, named games' 24 clock hours included) and only the ones that pass
   are sent, in one `engine.predictMultipleWithPayloads`, if the max fee per
   gas is within the ceiling (`setBaseMaxFee`, 2 gwei by default; above it the
@@ -290,14 +292,15 @@ the page's JS context:
   identity: { address, eth, power, fee, allowedDelegator, batchesLeft, lowEth },
   vault: { address, eth, satori, delegate, delegated: 'identity' | 'none' | 'other',
   lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
-  lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, t2 }],
+  lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, forecast, horizon }],
   dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
   are decimal strings (ETH, SATORI); `fee` is in basis points (1000 = the
   10 % default); `direction` 1 = UP, 2 = DOWN; a game's `latest` is the
   registry's last value (an `int232` in the stream's own units: the default
   stream, id 1, is the capital deployed in predictions ÷ the supply × 1e18)
-  and `t2` the engine's forecast in the same units, rounded, both as decimal
-  strings (they pass 2^53); `lastCheck` is the last batch check:
+  and `forecast` the engine's at `horizon` seconds ahead, in the same units,
+  rounded, both as decimal strings (they pass 2^53; a batch stored before the
+  horizon rule has `t2` instead); `lastCheck` is the last batch check:
   `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
   `rpcSetting` and `maxFeeSetting` are what Settings stored (`''` and null:
   the defaults); `maxFeeGwei` is the ceiling in force. Before the first
@@ -427,9 +430,12 @@ build step beyond Vite, MIT licensed.
 - `src/central/`: central's API (register, observations, login, predictions
   batch) and Python-identical payload strings.
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API.
-- `src/engine/`: `forecast(points) → { model, t1, t2, phi?, weight? } | null`,
-  pure; `forecast(points, { weight })` forces the fade, `{ step }` sets the
-  bucket in seconds (12 h by default; a relay stream's cadence).
+- `src/engine/`: `forecast(points, { step, horizon }) → { model, t1, t2, value,
+  horizon, phi?, weight? } | null`, pure: `step` is the bucket in seconds (12 h
+  by default; a relay stream's cadence), `horizon` how far ahead `value` is
+  (two steps by default; a forecast is one cadence ahead: 24 h for central,
+  where value = t2; one cadence for a relay stream; max(24 h, cadence) on
+  Base); t1 and t2 are one and two steps ahead; `{ weight }` forces the fade.
 - `src/nostr/`: NIP-01 events and the Nostr key over `@noble/curves`
   (`event.js`), Satori's events and parsing (`satori.js`), one relay over a
   WebSocket with reconnect (`relay.js`).

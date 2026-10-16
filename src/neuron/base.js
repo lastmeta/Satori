@@ -36,6 +36,13 @@ export function checkMaxFee(raw) {
 /** The engine's step for a registry stream: 12 h, or its cadence when slower (docs/design/base.md, the daily batch). */
 export const stepFor = (cadenceMinutes) => Math.max(STEP_S, (Number(cadenceMinutes) || 0) * 60);
 
+/**
+ * How far ahead the batch forecasts a registry stream: one cadence, and at least
+ * the 24 h a round scores (docs/intent/engine.md): two 12 h steps for an hourly
+ * stream, one 24 h step for the daily default stream.
+ */
+export const horizonFor = (cadenceMinutes) => Math.max(ROUND_S, (Number(cadenceMinutes) || 0) * 60);
+
 /** Lite's direction_from (base_predict.py:141-143): UP if the forecast is above the latest value; a tie is DOWN. */
 export const directionOf = (forecast, latest) => (forecast > latest ? UP : DOWN);
 
@@ -86,13 +93,14 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
     const dropped = [];
     for (const g of await chain.streams()) {
       const history = await chain.history(g.streamId);
-      const f = history.length ? forecast(toPoints(history), { step: stepFor(g.cadenceMinutes) }) : null;
+      const f = history.length
+        ? forecast(toPoints(history), { step: stepFor(g.cadenceMinutes), horizon: horizonFor(g.cadenceMinutes) }) : null;
       const base = { streamId: g.streamId, gameId: g.gameId, named: g.named };
       if (!f) { dropped.push({ ...base, error: 'no history' }); continue; }
       const last = history.at(-1).value; // int232, in the stream's own units
       // As decimal strings, as amounts are: an int232 is often beyond 2^53 (the default stream is a ratio × 1e18).
-      const game = { ...base, direction: directionOf(f.t2, Number(last)), model: f.model, latest: last.toString(),
-        t2: BigInt(Math.round(f.t2)).toString() };
+      const game = { ...base, direction: directionOf(f.value, Number(last)), model: f.model, latest: last.toString(),
+        forecast: BigInt(Math.round(f.value)).toString(), horizon: f.horizon };
       // The contract's own checks, named games' 24 clock hours included (SatoriEngine.sol:791-810).
       const error = await chain.simulateGame(identity, game);
       if (error) dropped.push({ ...game, error });

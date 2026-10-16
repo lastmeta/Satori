@@ -8,7 +8,7 @@ import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
 import {
-  createBase, runBatch, stepFor, directionOf, nextCheckAt, toPoints, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
+  createBase, runBatch, stepFor, horizonFor, directionOf, nextCheckAt, toPoints, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
 } from './base.js';
 
 const signerOf = (hex) => {
@@ -26,7 +26,7 @@ function memDb(init = {}) {
   const m = new Map(Object.entries(init));
   return { m, get: async (k) => m.get(k), set: async (k, v) => void m.set(k, structuredClone(v)), checkpoint: vi.fn(async () => {}) };
 }
-const up = (pts) => ({ model: 'test', t1: pts.at(-1).value * 2, t2: pts.at(-1).value * 2 }); // a forecast that says UP
+const up = (pts) => ({ model: 'test', t1: pts.at(-1).value * 2, t2: pts.at(-1).value * 2, value: pts.at(-1).value * 2, horizon: 86_400 }); // UP
 
 let s, rpc, db, chainOf;
 beforeEach(async () => {
@@ -46,6 +46,12 @@ describe('rules', () => {
     expect(stepFor(720)).toBe(43_200);
     expect(stepFor(1440)).toBe(86_400);
     expect(stepFor(0)).toBe(43_200);
+  });
+  test('the horizon: one cadence ahead, at least the 24 h the round scores', () => {
+    expect(horizonFor(60)).toBe(86_400); // hourly: 12 h steps, 2 of them
+    expect(horizonFor(1440)).toBe(86_400); // daily (the default stream): 24 h steps, 1 of them
+    expect(horizonFor(2880)).toBe(172_800); // every two days: one cadence
+    expect(horizonFor(0)).toBe(86_400);
   });
   test('direction as Lite\'s direction_from: UP above the latest, else DOWN (a tie is DOWN)', () => {
     expect([directionOf(2, 1), directionOf(1, 1), directionOf(0.5, 1)]).toEqual([UP, DOWN, DOWN]);
@@ -73,8 +79,9 @@ describe('the daily batch', () => {
     const r = await runBatch({ chain: chainOf(), identity, db });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }]]);
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
-      // latest: the registry's int232, exact; t2: the engine's float forecast, as an integer (both decimal strings, as JSON keeps them)
-      games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: '59058240589371161', t2: '59058240589371160' }] };
+      // latest: the registry's int232, exact; forecast: the engine's at the horizon, as an integer (both decimal strings, as JSON keeps them)
+      games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: '59058240589371161',
+        forecast: '59058240589371160', horizon: 86_400 }] };
     expect(r).toEqual({ at: batch.at, round: ROUND, sent: batch });
     expect(db.m.get('base_last_batch')).toEqual(batch);
     expect(db.m.get('base_pending_batch')).toBe(null);
@@ -103,6 +110,19 @@ describe('the daily batch', () => {
     const r = await runBatch({ chain: chainOf(), identity, db, forecast: up });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]);
     expect(r.sent.dropped).toEqual([expect.objectContaining({ gameId: 15, named: true, error: 'DuplicatePrediction' })]);
+  });
+
+  test('each stream is forecast at its horizon: a daily one in one 24 h step, an hourly one in two 12 h steps; the direction from that value', async () => {
+    await delegated();
+    s.streams[3] = { game: 13, named: false, cadence: 60, history: [{ hour: H0 + 1, value: 10n }] };
+    s.weights[13] = E18;
+    const calls = [];
+    // t2 says UP, the value at the horizon says DOWN: the direction must follow the value
+    const fake = (pts, o) => (calls.push(o), { model: 'test', t1: 0, t2: pts.at(-1).value * 2, value: pts.at(-1).value / 2, horizon: o.horizon });
+    const r = await runBatch({ chain: chainOf(), identity, db, forecast: fake });
+    expect(calls).toEqual([{ step: 86_400, horizon: 86_400 }, { step: 43_200, horizon: 86_400 }]); // stream 1 is daily (1440 min)
+    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }, { gameId: 13, payload: '0x02' }]]);
+    expect(r.sent.games.map((g) => [g.gameId, g.forecast, g.horizon])).toEqual([[1, expect.any(String), 86_400], [13, '5', 86_400]]);
   });
 
   test('a game without voting weight (anyone\'s new stream) is not in the batch at all', async () => {

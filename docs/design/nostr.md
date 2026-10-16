@@ -15,7 +15,7 @@ page load ─▶ Nostr key (nostr.yaml; made once) ─▶ register with central 
 connect each relay ─▶ REQ follow: per provider {kinds:[34601], authors:[p], #d:[streams]}
                    └─▶ announce each `<stream>_pred` (34600)
 34601 in ─▶ subscribed? (stream_name, author) ─▶ verify ─▶ store once (event id; stream, provider, seq)
-          ─▶ forecast (step = the stream's cadence) ─▶ publish `<stream>_pred` 34601 (seq + 1) to every relay we write to
+          ─▶ forecast (one cadence ahead) ─▶ publish `<stream>_pred` 34601 (seq + 1) to every relay we write to
 hourly: refetch the relay list, reconnect, re-announce; daily: NIP-65 (10002)
 ```
 
@@ -41,7 +41,7 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 | Intake | `_networkListen` drops streams not subscribed by (stream_name, author) (START:1112-1137); empty content is a heartbeat (CLIENT:1818-1820); content is `DatastreamObservation` JSON (MODELS:105-140). `save_observation` dedupes by round, event id, then (stream, provider, seq) (NDB:597-636); only a new row runs the engine (START:621-667). | Same order: empty → skip; JSON with `stream_name, timestamp, value, seq_num`; subscribed by (stream_name, author); id and signature verified; insert or ignore on event id and (stream, provider, seq). Only a new row is forecast. |
 | Value | `_numericObservationValue` (START:1365-1410): a scalar → `float()`; a dict → `value`, else `raw` unless `unit == 'tick'`; anything else none (the prediction echoes). Timestamps outside 2000–2100 give no forecast (`_safeEpoch`, START:1413-1424). | `numericValue` (`src/nostr/satori.js`), with Python's `float()` rules for strings; checked against Lite's own function on 17 values (fixture). |
 | Model id | `uuid5(DNS, "satori-relay:<lowercase pubkey>:<stream>:")` (`satorineuron/relay_ids.py`), pinned in `neuron/tests/test_relay_ids.py:23-28`. | Same uuid keys the relay tables; the vector is Lite's pinned one. |
-| Forecast | `predictForRelay` → `str(firstPredictionOf(_runForecast(…)))` (`engine-lite/engine.py:714-739`); `_runForecast` returns the second, autoregressed forecast (the first with its value appended), falling back to the first (`:1153-1186`): t2. With little data the StarterAdapter forecasts the last value, as a float (`"82234.0"`). No model, a bad timestamp or a non-numeric value echoes the value (`json.dumps` unless a string) (START:1276-1310, 1413-1424). | `forecast(history, { step: cadence })`; value = `pyFloatStr(t2)` (Python's `str(float)`), two cadences ahead; `naive` gives the last value as a float, as Lite's starter; echo as Lite when there is no number. |
+| Forecast | `predictForRelay` → `str(firstPredictionOf(_runForecast(…)))` (`engine-lite/engine.py:714-739`); `_runForecast` returns the second, autoregressed forecast (the first with its value appended), falling back to the first (`:1153-1186`): t2. With little data the StarterAdapter forecasts the last value, as a float (`"82234.0"`). No model, a bad timestamp or a non-numeric value echoes the value (`json.dumps` unless a string) (START:1276-1310, 1413-1424). | `forecast(history, { step: cadence, horizon: cadence })`; value = `pyFloatStr(value)` (Python's `str(float)`), **one cadence ahead** (the owner's rule; Lite sends t2, two steps ahead); `naive` gives the last value as a float, as Lite's starter; echo as Lite when there is no number. |
 | Publish `_pred` | `_networkPublishObservation` (START:3549-3617): seq = `last_seq_num + 1` (NDB:835-848), content `{stream_name, timestamp: int(now), value, seq_num}` (MODELS:105-140, Python `json.dumps`), tags `[d, stream, seq, satori=observation]` (CLIENT:579-596), to every connected relay; seq advances even with none. | The same bytes (content is serialized as Python's `json.dumps`, with `", "` and `": "`), to every connected relay we write to. The observation, the seq and the prediction are checkpointed first (Lite commits `mark_published` before sending); then the event is sent beside the intake queue, and the count that answered OK is stored when they answer. |
 | Announce `_pred` | `_networkAnnouncePublications` (START:3442-3482) on each new connection (START:326-328, 4539): `DatastreamMetadata` (MODELS:14-40) with `name "Predictions for <name>"`, `description ""`, `tags []`, the source's cadence, `created_at` = when the publication was added, `metadata {source_stream_name, source_provider_pubkey, wallet_pubkey}` (the identity's compressed pubkey); tags `[d, satori=datastream, stream=satori:stream:<name>, source_stream, source_pubkey]` (CLIENT:294-356). | The same, on every connect and reconnect, on subscribe, and hourly. |
 | Unsubscribe | Soft delete (NDB:496-503), 34602 with `action=unsubscribe`, `satori=unsubscription` (CLIENT:1600-1644), and a tombstone 34600 for `_pred` (`[d, satori=datastream, status=deleted]`, content = empty metadata with `created_at 0`; START:3683-3720). | The same three steps. The row stays (inactive), so a later subscribe keeps counting `_pred` seq from where it was. The two events wait in an outbox (`meta.nostr_outbox`, kept over a reload) for every relay we write to that is not open or does not answer, and go when it opens. |
@@ -121,24 +121,27 @@ one that never answers (10 s timeout), delays nothing else.
 
 ## The engine's step
 
-`forecast(points, { step })` (default 12 h, central's) buckets history by
-`step` instead of 12 h; the first-lag spacing is `step / 2` (6 h at 12 h) and
-the rest (6 lag pairs before `bar1`, so at least one observation every step;
-28 backtest origins; two clamped steps) is
-counted in buckets, so nothing else changes. A relay stream uses its
-`cadence_seconds` (12 h when it has none), and publishes t2, two cadences
-ahead, as Lite does (the Forecast row above).
+`forecast(points, { step, horizon })` buckets history by `step` instead of
+12 h; the first-lag spacing is `step / 2` (6 h at 12 h) and the rest (6 lag
+pairs before `bar1`, so at least one observation every step; 28 backtest
+origins; the clamp) is counted in buckets, so nothing else changes. A relay
+stream uses its `cadence_seconds` (12 h when it has none) as both the step and
+the horizon: `_pred` is the forecast **one cadence ahead**
+([engine.md](engine.md#the-step-and-the-horizon)).
 
-Lite's bounty code scores a prediction against seq + 1, the next observation
-(`neuron-lite/scoring/mae.py`; START:1344-1358 submits it for `seq_num + horizon`
-with horizon 1), yet the value it sends there and on `_pred` is t2, two steps
-ahead. We follow what Lite sends. **For the owner:** one of the two is
-probably not what was meant.
+The owner's rule (2026-10-15, [../intent/engine.md](../intent/engine.md)): a
+forecast predicts a stream one cadence ahead. Lite publishes t2, two cadences
+ahead (`engine-lite/engine.py:733-735, 1176-1186`), while its bounty code
+scores a prediction against seq + 1, the next observation
+(`neuron-lite/scoring/mae.py`; START:1344-1358 submits it for `seq_num +
+horizon` with horizon 1). One cadence ahead is what that scorer expects, so
+the browser follows the rule, not Lite's t2 (a deviation, below).
 
 ## Deviations from Satori Lite, and why
 
 | Deviation | Why |
 |---|---|
+| `_pred` is the forecast one cadence ahead; Lite's is t2, two cadences ahead. | The owner's rule: a forecast is one cadence ahead ([../intent/engine.md](../intent/engine.md)); it is also what Lite's bounty scorer scores (seq + 1). |
 | Subscribing also predicts; Lite has subscribe and predict as two actions (ROUTES:2592, 2690). | The neuron's job is the prediction; one action keeps the flow and the UI small. |
 | The follow REQ is per-provider `#d` filters only, not `{authors:[…]}` plus a separate latest-per-stream fetch. | One filter set gives both the catch-up and the live events of exactly the subscribed streams. An authors-only filter would pull every stream of a big provider (e5e6… has ~400) and still hit strfry's 500-per-filter cap. |
 | Every listed relay is kept connected; Lite hunts relay by relay for inactive subscriptions, marks them stale for 24 h and drops relays carrying nothing it needs (START:4407-4547). | Central lists one relay today; with a handful, staying on all of them is the same result without the stale bookkeeping. |

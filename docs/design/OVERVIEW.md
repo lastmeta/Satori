@@ -54,7 +54,7 @@ streams are kept apart from central's: relay predictions go only to Nostr.
 
 ```
 relays = central's /peer/relays + Settings      subscribe (Network streams): 34602 + `<stream>_pred` 34600
-REQ follow {kinds:[34601], authors:[p], #d:[…]} ──▶ verify ──▶ store once ──▶ forecast (step = cadence) ──▶ `<stream>_pred` 34601, seq + 1
+REQ follow {kinds:[34601], authors:[p], #d:[…]} ──▶ verify ──▶ store once ──▶ forecast (one cadence ahead) ──▶ `<stream>_pred` 34601, seq + 1
 on each (re)connect and hourly: announce `<stream>_pred`; hourly: relay list, reconnect; daily: NIP-65
 ```
 
@@ -70,7 +70,7 @@ identity sends one batch of up/down predictions each UTC round on its own.
 ```
 status (no key): one multicall ── ETH ×2, the vault's SATORI, delegation, fee, lock, round, claimables
 Unlock ─▶ Delegate: identity setPredictorFee(0), setAllowedDelegator(vault) ─▶ vault delegatePredictionPower(identity)
-each round, first check: power > 0, no batch yet ─▶ registry streams with a game ─▶ engine (t2) vs latest: UP/DOWN
+each round, first check: power > 0, no batch yet ─▶ registry streams with a game ─▶ engine (≥ 24 h ahead) vs latest: UP/DOWN
      ─▶ simulate each game alone ─▶ predictMultipleWithPayloads(the ones that pass) ─▶ receipt ─▶ persist
 Unlock ─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH; SATORI when not transfer-locked
 ```
@@ -87,7 +87,7 @@ anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
 | central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash, with Python's float strings from `src/py.js`); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. |
 | chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
 | db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule). Times are unix seconds. |
-| engine | `src/engine/` | `forecast(points, { step }) → {model, t1, t2, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence. Pure, no dependency. |
+| engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). Pure, no dependency. |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
 | neuron | `src/neuron/` | `register`, `cycle` (poll → store → forecast → submit), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends, the Base settings. |
 | ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Docker files), Home (the keys with their Evrmore, Base and Nostr identifiers, Unlock/Lock, the storage line and Install Satori; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |

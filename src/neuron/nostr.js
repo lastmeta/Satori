@@ -1,6 +1,6 @@
 // The Nostr flow, as Satori Lite runs it (docs/design/nostr.md):
 //   relays = central's /peer/relays + the user's; each relay: REQ follow, announce `<stream>_pred`
-//   34601 in ─▶ subscribed? ─▶ verify ─▶ store once ─▶ forecast (step = cadence) ─▶ publish `<stream>_pred`
+//   34601 in ─▶ subscribed? ─▶ verify ─▶ store once ─▶ forecast (one cadence ahead) ─▶ publish `<stream>_pred`
 //   hourly: refetch the relay list, reconnect, re-announce; NIP-65 daily
 // Relay streams are apart from central's: own tables, and nothing goes to central.
 // Intake runs one event at a time; sending (which waits for each relay's OK)
@@ -232,8 +232,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const fresh = await db.addRelayObservation({ stream_uuid: uuid, seq: o.seq, ts, value,
       raw: JSON.stringify(o.value) ?? 'null', event_id: e.id, received_at: t() });
     if (!fresh) return;
-    const f = value === null ? null
-      : forecast(await db.relayHistory(uuid), { step: sub.cadence_seconds > 0 ? sub.cadence_seconds : STEP_S });
+    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : STEP_S;
+    // one cadence ahead (docs/intent/engine.md): steps of the cadence, one of them
+    const f = value === null ? null : forecast(await db.relayHistory(uuid), { step: cadence, horizon: cadence });
     const pub = predValue(f, o.value);
     const seq = await db.nextPredSeq(uuid);
     const at = t();

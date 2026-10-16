@@ -306,18 +306,37 @@ cadence is regridded to central's 12 h buckets (the same bucketing works on
 any grid), and their targets once their histories are aligned with
 central's.
 
-## The step (relay streams)
+## The step and the horizon
 
-`forecast(points, { step })` takes the bucket in seconds; the default is
-`STEP_S` (12 h), central's. Everything is counted in buckets (6 lag pairs of
-back-to-back buckets before `bar1`, 28 backtest origins, two clamped steps),
-and the first lag's minimum spacing is half a step (6 h at 12 h), so a series
-on any grid gives the same model
-(tested: the same values on a 15 min grid with `step: 900` give exactly the
-12 h result). A Nostr stream uses its `cadence_seconds` (12 h when it has
-none) and publishes t2, two cadences ahead, as Lite's `predictForRelay`
-returns the first row of `_runForecast`'s second, autoregressed forecast
-(`engine-lite/engine.py:733-735, 1176-1186`) ([nostr.md](nostr.md#the-engines-step)).
+The owner's rule (2026-10-15, [../intent/engine.md](../intent/engine.md)): **a
+forecast predicts a stream one cadence ahead**; the default cadence is a day,
+what central and the Base contract score. Lite's t2 exists only because Lite
+polls every ~11 h and predicts two of those steps, about 24 h.
+
+`forecast(points, { step, horizon })` keeps the two apart:
+
+- `step`: the bucket in seconds, the engine's internal grid. The default is
+  `STEP_S` (12 h), central's. Everything is counted in buckets (6 lag pairs of
+  back-to-back buckets before `bar1`, 28 backtest origins, the clamp), and the
+  first lag's minimum spacing is half a step (6 h at 12 h), so a series on any
+  grid gives the same model (tested: the same values on a 15 min grid with
+  `step: 900` give exactly the 12 h result).
+- `horizon`: how far ahead `value` is. The engine iterates n = horizon / step
+  steps (the nearest whole number, at least one) and returns `value`, the
+  forecast n steps ahead, and `horizon` = n × step. The backtest that sets the
+  fade scores that same forecast against the value n buckets after each origin
+  (tested against the engine forecasting each origin's history). The default
+  is two steps. `t1` and `t2` (one and two steps ahead) stay for Lite's payload.
+
+| Path | Step | Horizon | Sent |
+|---|---|---|---|
+| Central | 12 h | 24 h (2 steps) | `value` = t2, `t1_value` = t1: Lite's payload, unchanged |
+| Nostr `_pred` | the source's `cadence_seconds` (12 h when none) | one cadence (1 step) | `value`, = t1 ([nostr.md](nostr.md#the-engines-step)) |
+| Base daily batch | max(12 h, cadence) | max(24 h, cadence) | UP/DOWN from `value`: an hourly stream in two 12 h steps, the daily default stream in one 24 h step ([base.md](base.md)) |
+
+With the default horizon the numbers are the ones before the rule (the
+namaste_club parity cases are unchanged). `bvar` is central's, so it keeps
+two 12 h steps.
 
 ## Deviations, and why
 

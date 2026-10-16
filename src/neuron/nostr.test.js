@@ -228,7 +228,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await expect(nostr.subscribe(PROV_PUB, 'c')).rejects.toThrow(/limit of 2/);
   });
 
-  test('a new observation is stored, forecast two cadences ahead (t2, as Lite) and published as `_pred` (seq + 1) where we write', async () => {
+  test('a new observation is stored, forecast one cadence ahead (the owner\'s rule) and published as `_pred` (seq + 1) where we write', async () => {
     await subscribed('btc');
     const c = relays.get(CENTRAL_RELAY);
     const u = relays.get(USER_RELAY);
@@ -243,16 +243,39 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(u.published).toHaveLength(values.length);
     expect(c.published).toEqual([]);
     const lastPub = u.published.at(-1);
-    const f = forecast(values.map((value, k) => ({ ts: t0 + (k + 1) * 900, value })), { step: 900 });
-    expect(f.model).toBe('bar1');
-    expect(f.t2).not.toBe(f.t1);
-    expect(JSON.parse(lastPub.content)).toEqual({ stream_name: 'btc_pred', timestamp: clock, value: pyFloatStr(f.t2), seq_num: 10 });
+    const points = values.map((value, k) => ({ ts: t0 + (k + 1) * 900, value }));
+    const f = forecast(points, { step: 900, horizon: 900 });
+    expect(f).toMatchObject({ model: 'bar1', horizon: 900, value: f.t1 });
+    expect(f.value).not.toBe(forecast(points, { step: 900 }).t2); // not two cadences ahead (Lite's t2)
+    expect(JSON.parse(lastPub.content)).toEqual({ stream_name: 'btc_pred', timestamp: clock, value: pyFloatStr(f.value), seq_num: 10 });
     expect(lastPub.tags).toEqual([['d', 'btc_pred'], ['stream', 'btc_pred'], ['seq', '10'], ['satori', 'observation']]);
     expect(JSON.parse(u.published[0].content)).toMatchObject({ value: '100.0', seq_num: 1 }); // naive at first
     const [s] = (await nostr.status()).subscriptions;
     expect(s).toMatchObject({ observations: 10, observation: { seq: 59, value: 105, raw: '105', ts: clock },
-      prediction: { stream: 'btc_pred', seq: 10, value: pyFloatStr(f.t2), model: 'bar1', relays: 1, made_at: clock } });
+      prediction: { stream: 'btc_pred', seq: 10, value: pyFloatStr(f.value), model: 'bar1', relays: 1, made_at: clock } });
     expect(changes).toBeGreaterThan(0);
+  });
+
+  test('a 60 s stream is forecast in 60 s steps, 60 s ahead', async () => {
+    await boot();
+    openAll();
+    await settle();
+    const c = relays.get(CENTRAL_RELAY);
+    const u = relays.get(USER_RELAY);
+    c.stored.push(announce('fast', { cadence: 60 }));
+    await nostr.subscribe(PROV_PUB, 'fast');
+    u.published = [];
+    const values = [50, 51, 50, 52, 51, 53, 52, 54, 53, 55, 54];
+    const t0 = Math.floor(clock / 60) * 60 - values.length * 60;
+    for (const [k, v] of values.entries()) {
+      clock = t0 + (k + 1) * 60;
+      await c.deliver(observe('fast', String(v), k + 1, clock));
+    }
+    await settle();
+    const points = values.map((value, k) => ({ ts: t0 + (k + 1) * 60, value }));
+    const f = forecast(points, { step: 60, horizon: 60 });
+    expect(f).toMatchObject({ model: 'bar1', horizon: 60 });
+    expect(JSON.parse(u.published.at(-1).content)).toMatchObject({ stream_name: 'fast_pred', value: pyFloatStr(f.value) });
   });
 
   test('intake skips: the same event from another relay, the same seq again, unsubscribed streams, bad signatures, heartbeats', async () => {
