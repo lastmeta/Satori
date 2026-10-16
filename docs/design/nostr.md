@@ -10,7 +10,7 @@ observations and predictions have their own tables, and relay predictions go
 only to Nostr, never to central.
 
 ```
-page load ─▶ Nostr key (nostr.yaml; made once) ─▶ register with central (nostr-pubkey header)
+page load ─▶ Nostr key (the keys record; made once) ─▶ register with central (nostr-pubkey header)
          └─▶ relays = central's /peer/relays + Settings (+ ws://localhost:7778 on the dev server)
 connect each relay ─▶ REQ follow: per provider {kinds:[34601], authors:[p], #d:[streams]}
                    └─▶ announce each `<stream>_pred` (34600)
@@ -30,7 +30,7 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 
 | Step | Satori Lite | Browser (`src/nostr/`, `src/neuron/nostr.js`) |
 |---|---|---|
-| Key | `_initNostrKeys` (START:120-149): `nostr.yaml` `{pubkey_hex, secret_hex}`, a **random** key (nostr-sdk `Keys.generate()`), not derived from the identity or the vault; plaintext, so the neuron runs on its own. | The same file, kept in `meta.nostr_yaml` like `wallet.yaml`. Made at setup; an install from before step 5 gets one on its next load. Import it with the Dockerized Neuron files, download it under Backup. |
+| Key | `_initNostrKeys` (START:120-149): `nostr.yaml` `{pubkey_hex, secret_hex}`, a **random** key (nostr-sdk `Keys.generate()`), not derived from the identity or the vault; plaintext, so the neuron runs on its own. | A random key the same way, kept in plain text in the keys record (`meta.keys.nostr`, local format: our own, [keys.md](keys.md#the-record)) beside the identity. Made at setup; an install from before step 5 got one at its update (migration 7). Imported from a Dockerized Neuron's `nostr.yaml` (translated); backed up under Backup as `nsec` and hex. |
 | Register | `checkin` sends the pubkey as the `nostr-pubkey` header of `POST /peer/register` (satorilib `server.py:384-402`). | Same header (64 lowercase hex). |
 | Events | nostr-sdk 0.45 builds and signs (BIP-340 Schnorr); `CLIENT:203-219`. | Hand-rolled NIP-01 (`src/nostr/event.js`): id = sha256 of `[0,pubkey,created_at,kind,tags,content]`, signed with `@noble/curves` schnorr. Checked against events made by satorilib's own client (fixture below). |
 | Relays | Reconcile fetches `GET /peer/relays` (PEER:123-163) every pass and falls back to the relays of known subscriptions (START:4464-4476); user-added relays are used for publishing (START:304-337). | Central's list (fetched at start and hourly; the last one is kept in `meta.nostr_central_relays` and used while central is down) plus the user's relays (Settings). On the dev server the user list defaults to the test relay `ws://localhost:7778`. |
@@ -41,8 +41,8 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 | Intake | `_networkListen` drops streams not subscribed by (stream_name, author) (START:1112-1137); empty content is a heartbeat (CLIENT:1818-1820); content is `DatastreamObservation` JSON (MODELS:105-140). `save_observation` dedupes by round, event id, then (stream, provider, seq) (NDB:597-636); only a new row runs the engine (START:621-667). | Same order: empty → skip; JSON with `stream_name, timestamp, value, seq_num`; subscribed by (stream_name, author); id and signature verified; insert or ignore on event id and (stream, provider, seq). Only a new row is forecast. |
 | Value | `_numericObservationValue` (START:1365-1410): a scalar → `float()`; a dict → `value`, else `raw` unless `unit == 'tick'`; anything else none (the prediction echoes). Timestamps outside 2000–2100 give no forecast (`_safeEpoch`, START:1413-1424). | `numericValue` (`src/nostr/satori.js`), with Python's `float()` rules for strings; checked against Lite's own function on 17 values (fixture). |
 | Model id | `uuid5(DNS, "satori-relay:<lowercase pubkey>:<stream>:")` (`satorineuron/relay_ids.py`), pinned in `neuron/tests/test_relay_ids.py:23-28`. | Same uuid keys the relay tables; the vector is Lite's pinned one. |
-| Forecast | `predictForRelay` → `str(firstPredictionOf(_runForecast(…)))` (`engine-lite/engine.py:714-739`); `_runForecast` returns the second, autoregressed forecast (the first with its value appended), falling back to the first (`:1153-1186`): t2. With little data the StarterAdapter forecasts the last value, as a float (`"82234.0"`). No model, a bad timestamp or a non-numeric value echoes the value (`json.dumps` unless a string) (START:1276-1310, 1413-1424). | `forecast(history, { step: cadence, horizon: cadence })`; value = `pyFloatStr(value)` (Python's `str(float)`), **one cadence ahead** (the owner's rule; Lite sends t2, two steps ahead); `naive` gives the last value as a float, as Lite's starter; echo as Lite when there is no number. |
-| Publish `_pred` | `_networkPublishObservation` (START:3549-3617): seq = `last_seq_num + 1` (NDB:835-848), content `{stream_name, timestamp: int(now), value, seq_num}` (MODELS:105-140, Python `json.dumps`), tags `[d, stream, seq, satori=observation]` (CLIENT:579-596), to every connected relay; seq advances even with none. | The same bytes (content is serialized as Python's `json.dumps`, with `", "` and `": "`), to every connected relay we write to. The observation, the seq and the prediction are checkpointed first (Lite commits `mark_published` before sending); then the event is sent beside the intake queue, and the count that answered OK is stored when they answer. |
+| Forecast | `predictForRelay` → `str(firstPredictionOf(_runForecast(…)))` (`engine-lite/engine.py:714-739`); `_runForecast` returns the second, autoregressed forecast (the first with its value appended), falling back to the first (`:1153-1186`): t2. With little data the StarterAdapter forecasts the last value, as a float (`"82234.0"`). No model, a bad timestamp or a non-numeric value echoes the value (`json.dumps` unless a string) (START:1276-1310, 1413-1424). | `forecast(history, { step: cadence, horizon: cadence })`; value = `String(value)` (JS's text; readers take `float()` of it, [the protocol audit](#the-protocol-audit)), **one cadence ahead** (the owner's rule; Lite sends t2, two steps ahead); `naive` gives the last value; echo as Lite when there is no number (`JSON.stringify` unless a string). |
+| Publish `_pred` | `_networkPublishObservation` (START:3549-3617): seq = `last_seq_num + 1` (NDB:835-848), content `{stream_name, timestamp: int(now), value, seq_num}` (MODELS:105-140, Python `json.dumps`), tags `[d, stream, seq, satori=observation]` (CLIENT:579-596), to every connected relay; seq advances even with none. | The same fields and values, as compact JSON (`JSON.stringify`; satorilib reads it with `json.loads`, [the protocol audit](#the-protocol-audit)), to every connected relay we write to. The observation, the seq and the prediction are checkpointed first (Lite commits `mark_published` before sending); then the event is sent beside the intake queue, and the count that answered OK is stored when they answer. |
 | Announce `_pred` | `_networkAnnouncePublications` (START:3442-3482) on each new connection (START:326-328, 4539): `DatastreamMetadata` (MODELS:14-40) with `name "Predictions for <name>"`, `description ""`, `tags []`, the source's cadence, `created_at` = when the publication was added, `metadata {source_stream_name, source_provider_pubkey, wallet_pubkey}` (the identity's compressed pubkey); tags `[d, satori=datastream, stream=satori:stream:<name>, source_stream, source_pubkey]` (CLIENT:294-356). | The same, on every connect and reconnect, on subscribe, and hourly. |
 | Unsubscribe | Soft delete (NDB:496-503), 34602 with `action=unsubscribe`, `satori=unsubscription` (CLIENT:1600-1644), and a tombstone 34600 for `_pred` (`[d, satori=datastream, status=deleted]`, content = empty metadata with `created_at 0`; START:3683-3720). | The same three steps. The row stays (inactive), so a later subscribe keeps counting `_pred` seq from where it was. The two events wait in an outbox (`meta.nostr_outbox`, kept over a reload) for every relay we write to that is not open or does not answer, and go when it opens. |
 | Cadence | Hourly reconcile loop (START:200-292); NIP-65 10002 of the connected relays daily (START:288-291, 370-389, CLIENT:405-428). | Hourly reconcile; NIP-65 of the relays open at the time, when the last one is a day old (`meta.nostr_relay_list_at`), checked hourly and whenever any relay opens, sent only when a relay we write to is open. |
@@ -52,10 +52,12 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 `test/fixtures/nostr-parity.json` is made by `scripts/nostr_vectors.py`:
 satorilib's own `SatoriNostr` methods (origin/base-upgrade) build the events and
 nostr-sdk 0.45 signs them, with the metadata built as START builds it and the
-clock pinned. The unit tests rebuild every event and compare ids, tags and
-content byte for byte, and verify the signatures nostr-sdk made.
+clock pinned. The unit tests rebuild every event and compare the kind, the
+tags (in order), the time and the content's fields and values (the same keys,
+no more or fewer), check our content is compact JSON, and verify the
+signatures nostr-sdk made and ours.
 
-| Kind | Tags (in order) | Content (Python `json.dumps`) |
+| Kind | Tags (in order) | Content (JSON; satorilib's fields) |
 |---|---|---|
 | 34601 `_pred` | `d`, `stream`, `seq` (string), `satori=observation` | `{"stream_name": …, "timestamp": int, "value": "<str>", "seq_num": int}` |
 | 34600 announce | `d`, `satori=datastream`, a `t` per tag, `stream=satori:stream:<name>`, `source_stream`, `source_pubkey` | `stream_name, nostr_pubkey, name, description, encrypted, price_per_obs, created_at, cadence_seconds, tags, approval_required, metadata` |
@@ -64,10 +66,27 @@ content byte for byte, and verify the signatures nostr-sdk made.
 | 34602 unsubscribe | `d=S`, `p=P`, `stream=S`, `action=unsubscribe`, `satori=unsubscription` | same |
 | 10002 | `["r", url]…` | `""` |
 
-The brief's ids for the 34601 and 34602 (345fa77e…, 484c59ab…) come out only
-with compact JSON content; satorilib's `json.dumps` puts a space after `,` and
-`:`, so Lite's real ids for the same events are 3e82a076… and 13dc7e51…. The
-10002 id (6077ae96…) matches.
+Our content is compact JSON, so our events' ids differ from Lite's for the
+same fields (satorilib's `json.dumps` puts a space after `,` and `:`): the
+brief's ids (345fa77e…, 484c59ab…) are the compact ones, Lite's 3e82a076…
+and 13dc7e51…. An id is the hash of the content as sent, so both are valid.
+The 10002 id (6077ae96…) is the same in both.
+
+## The protocol audit
+
+The owner's direction of 2026-10-16 ("migrate in, never back"): copy what
+readers depend on, not Lite's bytes. Checked against satorilib
+(`origin/base-upgrade`), Lite and central's relay watcher:
+
+| Item | Kind | Verdict | Evidence |
+|---|---|---|---|
+| Content as Python's `json.dumps` (`", "`, `": "`, `ensure_ascii`; `pyJson`) | network | **Compact JSON** (`JSON.stringify`); `src/py.js` is gone | satorilib parses every content with `json.loads` (`satori_nostr/client.py:825,873,1460,1665,1771`) and takes fields by name: observations `from_dict` reads `stream_name, timestamp, value, seq_num` (`models.py:128-144`); announcements and subscriptions are `cls(**data)` (`models.py:36-47,164-176`), so the **key set** must be exact (it is: tested). Nothing re-serializes or hashes received content (`models.py` imports `hashlib` but never uses it); dedupe is by event id (`client.py:1615`). Lite stores its own `to_json()` re-serialization (`start.py:627`). |
+| `_pred` values as Python's `str(float)` (`"82234.0"`) | network | **JS text** (`"82234"`), still a JSON string | Lite turns values into numbers with `float()` (`_numericObservationValue`, `start.py:1365-1410`, the `float` at 1408; `scoring/mae.py:29,56`; `web/routes.py:2168-2233`); nothing compares the text. Central's relay watcher only counts events from registered neurons (`relay_watcher/watcher.py:183-188`). |
+| Event ids and signatures (NIP-01, BIP-340) | network | Kept | The standard. |
+| Kinds, tags (`d`, `stream`, `seq`, `satori`, …) | network | Kept | Lite's relay policy reads the `d` tag (`relay_manager.py:694`); satorilib's filters read the tags. |
+| Provider pubkeys lowercase hex | network | Kept | `client.py:1774` compares strings exactly. |
+| Lite's relay model uuid (`uuid5(DNS, 'satori-relay:…')`) | local | Kept as our row id | Never sent anywhere (`relay_ids.py:28,48-67`; central gets no relay-model predictions, `start.py:4707`); a deterministic id is as good as any, and changing it would need a migration for nothing. |
+| `nostr.yaml` for the key | local | **Our record** | [keys.md](keys.md#the-record). |
 
 ## Relays and the read-only flag
 
@@ -105,7 +124,7 @@ one that never answers (10 s timeout), delays nothing else.
 
 ## Storage (migration 4)
 
-- `meta.nostr_yaml` (the key), `meta.nostr_relays` (the user's relays),
+- The key in the keys record (`meta.keys.nostr`, [keys.md](keys.md#the-record)), `meta.nostr_relays` (the user's relays),
   `meta.nostr_central_write`, `meta.nostr_relay_list_at`.
 - `relay_streams` (uuid, stream_name, provider_pubkey, name, cadence_seconds,
   meta = the 34600 content, active, subscribed_at, unsubscribed_at,
@@ -155,7 +174,8 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
 | No round dedupe (bridge streams) and no paid, encrypted or approval-gated streams. | Base bridge streams are step 6; payments are later. Such streams show in the catalog but can't be subscribed. |
 | Catalog events are not signature-checked; the announcement subscribed from and every stored observation are. | A schnorr verify costs ~4 ms in JS; ~1,000 catalog events would block the tab for seconds. The relay checks signatures on the way in. |
 | The relay connection, NIP-65 and the `_pred` announcement go to relays we write to; with "Publish to central's relays" off, central's relays are read only. | A dev checkout must not write to production (satorian). |
-| A non-numeric dict echo is serialized from the parsed JSON: an integral float (`2.0`) prints as `2`. | JavaScript's JSON has no int/float distinction; only echoes of non-numeric values are affected. |
+| Content is compact JSON, and numbers are JS's text (`82234`, not `82234.0`). | Readers parse JSON and take `float()` of values ([the protocol audit](#the-protocol-audit)); Lite's byte layout is not something any reader depends on. |
+| The key is stored in this app's keys record, not as `nostr.yaml`; Backup shows it as `nsec` and hex, with no file. | Local format: our own ("migrate in, never back"); a Dockerized Neuron's `nostr.yaml` is still imported (translated). |
 | Built without nostr-tools. | Signing and verifying are ~30 lines over `@noble/curves` (already a dependency), and the relay client is specific (Satori's filters, OK counts); nostr-tools would add its own `@noble`/`@scure` versions and a general pool we don't need. |
 
 ## Test relay and demo provider (dev)
@@ -202,8 +222,9 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   description and tags, the first 50 matches; prediction streams are hidden
   and counted; paid or gated streams show but can't be subscribed.
 - **Settings**: the user's relays (one per line) and "Publish to central's
-  relays". **Backup**: Download `nostr.yaml`. **Import Dockerized Neuron files**: an
-  optional `nostr.yaml`.
+  relays". **Backup** (after Unlock): **Nostr key** shows its `nsec` and hex
+  (it is random, so the 24 words don't bring it back). **Import Dockerized
+  Neuron files**: an optional `nostr.yaml`, translated.
 - Agents: `window.satori`'s Nostr methods and their shapes are in
   [/llms.txt](../../public/llms.txt), the one reference.
 

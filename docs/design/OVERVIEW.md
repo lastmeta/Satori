@@ -26,7 +26,7 @@ first poll 5–30 min later, then every 11 h (or Poll now):
 ```
 
 1. **Register** on every page load: `wallet-pubkey` (identity), `vault-pubkey`
-   (read from `vault.yaml` while locked), `nostr-pubkey` and `neuron-version`. The result is
+   (in clear in the keys record, so it is read while locked), `nostr-pubkey` and `neuron-version`. The result is
    shown on Home, with a **vault mismatch** if central holds another vault for
    this identity.
 2. **Poll** central's observations batch (the latest observation of each
@@ -52,7 +52,8 @@ first poll 5–30 min later, then every 11 h (or Poll now):
    12 h buckets (about 4 days of 11 h polls without history); `bvar` 7–9
    aligned rows.
 6. **Submit** everything pending right after the poll, as Lite's payload
-   (`value` = t2, `t1_value`, `observed_at`, `hash`, byte-identical strings).
+   (`value` = t2, `t1_value`, `observed_at`, `hash`; numbers as JS prints
+   them, which central reads with `float()`: [the protocol audit](central.md#the-protocol-audit)).
    A batch central rejects (`successful == 0`) or a failed call keeps the
    predictions for the next poll; ones older than 2 × 11 h are dropped.
    A network error, a timeout or a 5xx is resent once.
@@ -96,32 +97,38 @@ alone when the build sets it.
 
 | Part | Folder | Does |
 |---|---|---|
-| keys | `src/keys/` | Satori's two keys ([keys.md](keys.md)): the **identity** (`wallet.yaml`, unencrypted, signs on its own) and the **vault** (`vault.yaml`, fields encrypted with the passphrase as Docker does, holds funds). Create, restore from words, import/export the Dockerized Neuron files, Unlock/Lock the vault, sign and verify Evrmore messages. Each key's Base (EVM) address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)). Also the **Nostr key** (`nostr.yaml`, random, plaintext as in Docker; [nostr.md](nostr.md)). |
-| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash, with Python's float strings from `src/py.js`); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. |
+| keys | `src/keys/` | Satori's two keys and the Nostr key in one record of this app's own, `meta.keys` ([keys.md](keys.md)): the **identity** (plain text, signs on its own), the **vault** (sealed with the passphrase: PBKDF2-SHA256 600,000 and AES-256-GCM, any Unicode passphrase of 8 or more; holds funds; its public key in clear) and the **Nostr key** (random, plain text). Create, restore from words, import a Dockerized Neuron's files (read only, translated: `docker.js`), Unlock/Lock (an earlier version's vault is re-encrypted at its next Unlock), backup. Each key's Base address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)); the identity's central login signature. |
+| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. `login.js`: central's login signature format and its address form, protocol details never shown ([central.md](central.md#login-signature)). |
 | chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
 | db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time; every commit checkpointed; a WAL an older version left set aside before the open (`recover.js`) ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule, recovery). Times are unix seconds. |
 | engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (identity-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
 | neuron | `src/neuron/` | `register`, `cycle` (poll → store → history → forecast → submit), `history.js` (central's history for new streams), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends, the Base settings. |
-| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Dockerized Neuron files), Home (the keys with their Evrmore, Base and Nostr identifiers, Unlock/Lock, the storage line and Install Satori; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |
+| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Dockerized Neuron files), Home (the keys with their Base addresses and the Nostr pubkey, Unlock/Lock, the storage line and Install Satori; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |
 | pwa | `src/pwa/`, `public/manifest.webmanifest` | The installed app ([pwa.md](pwa.md)): the manifest and the Satori icons; the service worker (`sw.js`, written to `dist/sw.js` by a build-only Vite plugin; none on the dev server): precaches the page and the hashed assets (DuckDB's wasm and worker), cache first for `/assets/`, network first for the page, nothing else touched; "Update ready, reload"; Install Satori (Chromium's prompt, Safari's Add to Dock / Home Screen); persistent storage asked for at start, shown on Home. It never runs the neuron while closed. |
 | agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page, under the same guards; `<body data-screen>` and `data-test` on what carries data or an action. [/llms.txt](../../public/llms.txt) is the one reference for both: what the app is, how to drive it, what's possible, where the code is, and that pull requests are welcome. |
 | config | `src/config.js` | Settings' defaults ([deploy.md](deploy.md#build-variables)): the dev server's (central2, the test relay, central's relays read only, `/rpc`) or a build's (prod central, no user relay, central's relays written to, central's RPC), each replaced by its `VITE_*` variable when the build sets one. `vite.config.js` runs the same check before a build, so a bad value stops it; a build's bundle holds only its own defaults. |
 | deploy | `deploy/`, `scripts/deploy-image.sh` | The static image ([deploy.md](deploy.md)): nginx serving `dist/` behind central's nginx-proxy (TLS there), the CSP from `csp.js` on every response, immutable `/assets/`, `no-cache` for the rest, gzipped copies, the SPA fallback. |
-| shared | `src/util.js`, `src/py.js` | `serial()` (one at a time, in order: the db, the chain's writes, Nostr's intake and outbox), `isHttps()`, `isRelayUrl()`; Python's `str(float)` and `json.dumps` texts, byte for byte (central's payloads, every Nostr event's content). |
+| shared | `src/util.js` | `serial()` (one at a time, in order: the db, the chain's writes, Nostr's intake and outbox), `isHttps()`, `isRelayUrl()`. |
 | tests | `test/`, `e2e/` | Parity fixtures and test doubles (a fake D6 behind JSON-RPC, an in-memory DuckDB); Playwright specs and their one stub central (`e2e/stub.js`). |
 
 ## Rules
 
+- Base only: each key's address is its Base (0x) address, the only kind
+  shown. Central's login signature (an Evrmore message format, the one
+  central accepts) stays inside `src/central/login.js`.
+- Migrate in, never back (owner, 2026-10-16): local formats are this app's
+  own; a Dockerized Neuron's files are imported and translated, nothing is
+  exported back to Docker's formats; Satori Lite is the reference for what
+  goes over the network.
 - Two keys, on purpose, as Satori Lite ([keys.md](keys.md)). The identity
   is stored unencrypted so the neuron runs from page load and signs on its
   own: central's login, its Nostr announcements' `wallet_pubkey`, the daily
   Base batch. The vault is stored encrypted and holds the funds; **Unlock**
   (the passphrase, in the Keys card) decrypts it into memory and **Lock**
   (in the header while unlocked) wipes it. The neuron never needs the vault.
-- Backup (both keys' words and private keys, the `wallet.yaml`,
-  `vault.yaml` and `nostr.yaml` downloads) needs Unlock, as Docker's
-  dashboard needs login.
+- Backup (both keys' words and private keys, the Nostr key's `nsec` and hex;
+  no files) needs Unlock, as Docker's dashboard needs login.
 - **Central URL** (Settings, `meta.central_url`): https only. Empty means the
   default: `https://central2.satorinet.io` on the dev server (so nobody writes
   to prod from a dev checkout), `https://network.satorinet.io` in a build, or
@@ -137,14 +144,14 @@ alone when the build sets it.
 - Predictions are not signed one by one: as in Lite, the login signature
   authenticates the batch.
 - A database from a newer app version is refused, not migrated. Setup writes
-  only its own rows (`meta.wallet_yaml`, `meta.vault_yaml`, `meta.nostr_yaml`)
-  and leaves any other row as it is.
+  only its own row (`meta.keys`) and leaves any other row as it is.
 - One setup runs at a time, from the UI or an agent (`window.satori.setup`):
   both take the same guard, and a second one is refused.
 - Import takes `wallet.yaml` only in plain text and `vault.yaml` only
   encrypted; files in each other's slots are refused as swapped. The vault is
-  never stored in plain text. Passphrases are Latin-1 only, as Docker's
-  encryption needs ([keys.md](keys.md#the-files)).
+  never stored in plain text. A new passphrase is any Unicode, at least 8
+  characters; the Docker vault password is reused when it meets that
+  ([keys.md](keys.md#import-translate)).
 - Only one tab opens the database. Other tabs say "Satori is open in another tab";
   an installed app's window counts as a tab ([pwa.md](pwa.md#one-neuron)).
 - The service worker exists only in a build and caches only this origin's
@@ -163,8 +170,8 @@ alone when the build sets it.
   (mixed content), so a deployed app needs `wss://` relays
   ([issue](../issues/relays-not-wss.md)).
 - The Nostr key is stored unencrypted like the identity, so the neuron signs
-  its events on its own. `nostr.yaml` downloads need Unlock, as the other
-  files: they are private keys.
+  its events on its own. Its backup needs Unlock, as the others: they are
+  private keys.
 - Base: the identity signs the daily batch on its own; the vault signs only
   after Unlock (delegate, stop, claims, sends). Transactions go only to the
   configured RPC (Settings, `meta.base_rpc_url`: https or a same-origin path);
@@ -177,8 +184,9 @@ alone when the build sets it.
 `@duckdb/duckdb-wasm` 1.32.0 (newer `latest` builds don't write to OPFS),
 `@arrow-js/core` 1.0.6, `@noble/curves` 1.9.7, `@noble/hashes` 1.8.0 (also
 the payload hash), `@scure/base` 1.2.6, `@scure/bip39` 1.6.0, `js-yaml` 5.4.2
-(step 2: reads and writes Docker's `wallet.yaml`/`vault.yaml`, whose PyYAML
-output folds long lines), `vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
+(reads a Dockerized Neuron's `wallet.yaml`/`vault.yaml`/`nostr.yaml` at
+import, and earlier versions' rows at migration 7; PyYAML folds long lines),
+`vite` 8.3.1, `vitest` 4.1.11, `@playwright/test`
 1.63.0. Steps 3 and 4 added no dependency. Step 5 added only a dev dependency,
 `ws` 8.22.0, for the test relay and the node-side scripts (the browser has
 WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-satori-lite-and-why)).
@@ -192,12 +200,16 @@ sha256, already a dependency). The deploy image added none to npm; it is
 
 ## Verify
 
-- `npm test` (vitest, `--maxWorkers=2`): keys (satorilib parity vectors,
-  Docker `wallet.yaml`/`vault.yaml` incl. old vaults, WIF-only, mismatched and
-  wrong-password files, Latin-1 passwords, uncompressed-flag signatures; files
-  in the wrong slots and plain-text vaults refused; the two-key model);
-  central (Python float strings and payload hashes against the Docker-image
-  fixture, register, login, the 401 retry, the one resend, timeouts and
+- `npm test` (vitest, `--maxWorkers=2`): keys (satorilib parity vectors for
+  words, public keys and Base addresses; the vault encryption: round trips,
+  another implementation opening it, wrong passphrases, NFC, non-Latin and
+  emoji passphrases, the rule; Docker `wallet.yaml`/`vault.yaml` read for
+  import incl. old vaults, WIF-only, mismatched and wrong-password files,
+  Latin-1 passwords; files in the wrong slots and plain-text vaults refused;
+  the record; every earlier version's stored keys carried forward, at load
+  and at Unlock, also through migration 7 on DuckDB); central (the payload
+  and its hash, the login signature against satorilib's and an
+  uncompressed-flag one, register, login, the 401 retry, the one resend, timeouts and
   network errors, with a mocked fetch); neuron (storage and dedupe,
   forecasting only new rows, the kept queue and its cap, a failed poll, a
   local failure, register and mismatch, the schedule, its jitter and a failed
@@ -240,13 +252,17 @@ sha256, already a dependency). The deploy image added none to npm; it is
   5–30 min out → Poll now: two streams stored, forecast and sent after an
   identity-signed login (payload strings and hashes checked) → second tab
   refused → reload keeps the schedule and registers again → Unlock (wrong
-  passphrase refused) → backup words and both files → Lock, polls go on; the
+  passphrase refused; created with a non-Latin passphrase) → backup words,
+  private keys and the Nostr key, and the stored record → Lock, polls go on; the
   agent API (dedupe, a failed batch kept and resent, a 401 retried, the
   central URL setting: another central drops the queue and the list, which
   refill from it, after a poll still running with the old one; one Unlock at a
   time; the engine: naive until 8 back-to-back buckets of 12 h, then bar1 with
   node's numbers; a central with history: bvar for every stream on the first
-  Poll now, with node's specs and numbers); Dockerized Neuron import with a vault mismatch and Settings
+  Poll now, with node's specs and numbers); Dockerized Neuron import with a vault mismatch and Settings,
+  and with a Docker password under 8 characters (a new passphrase asked);
+  earlier versions' profiles on OPFS (`e2e/migrate.spec.js`: the identity and
+  Nostr key at load, the vault at Unlock, the finish screen, the step-1 row)
   (https only, an unreachable central shown); restore from words; two setups
   at once (one wins) leaving other `meta` rows alone. Also an OPFS persistence
   smoke under the CSP, and reloads and crashes with no checkpoint

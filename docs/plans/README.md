@@ -11,8 +11,9 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 ## Steps
 
 1. ✅ **MVP**: keys, db, linear engine, local publish, basic UI.
-2. ✅ **Two keys + Docker import/export**: identity (unencrypted) and vault
-   (passphrase), `wallet.yaml`/`vault.yaml` ([../design/keys.md](../design/keys.md)).
+2. ✅ **Two keys**: identity (unencrypted) and vault (passphrase); a
+   Dockerized Neuron's files imported ([../design/keys.md](../design/keys.md)).
+   Since step 10 in this app's own format, with no export back.
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
 4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence; then `bvar`, each central stream's own Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved after each poll, with history from central ([../design/engine.md](../design/engine.md)); left for later: [engine.md](engine.md).
 5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [transport.md](transport.md). A deployed app needs a wss relay ([issue](../issues/relays-not-wss.md)).
@@ -30,12 +31,22 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    nginx-proxy at https://neuron.satorinet.io (satori.satorinet.io redirects there);
    Settings' defaults set at build time (`VITE_*`), the CSP from `csp.js` on
    every response ([../design/deploy.md](../design/deploy.md)).
-10. **Runtime hardening**: catch-up on resume, the keys in a worker
+10. ✅ **Migrate in, never back** (owner, 2026-10-16): the keys in one record
+   of this app's own (the vault sealed with PBKDF2-SHA256 and AES-256-GCM,
+   any Unicode passphrase of 8 or more), a Dockerized Neuron's files
+   translated on import, every earlier profile carried forward (the vault at
+   its next Unlock), Backup as words, private keys and the Nostr key, no
+   Docker export; Base addresses only; central's payload and Nostr content as
+   plain JS text, after an audit of what central, satorilib and Lite parse
+   ([../design/keys.md](../design/keys.md),
+   [../design/central.md](../design/central.md#the-protocol-audit),
+   [../design/nostr.md](../design/nostr.md#the-protocol-audit)).
+11. **Runtime hardening**: catch-up on resume, the keys in a worker
    ([runtime.md](runtime.md)).
-11. **Later**, in rough order of value per effort: a per-stream chart and model
+12. **Later**, in rough order of value per effort: a per-stream chart and model
    view; bounties (the predictor's side first); the gasless relay (needs a
-   ruling, [issue](../issues/relayer-predict-fee.md)); Evrmore balances and
-   SATORIEVR sends; paid streams and payment channels; own data sources. Also:
+   ruling, [issue](../issues/relayer-predict-fee.md)); paid streams (their
+   payment on Base, to design); own data sources. Also:
    importing a Docker neuron's keys is a move (both would predict for one
    identity; the chain refuses a second batch per round), so Import could say
    to stop the Docker neuron.
@@ -50,7 +61,15 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   restore-the-vault flow on Home.
 - **Keys on the main thread.** When a script runs in the page (an XSS, a
   malicious extension), it can read the identity, the Nostr key and an
-  unlocked vault. Fix: the keys and signing in a worker (step 10).
+  unlocked vault. Fix: the keys and signing in a worker (step 11).
+- **Evrmore code for central's login.** Every neuron must sign central's login
+  in Evrmore's message format, the one central accepts; the app keeps it in
+  `src/central/login.js`, never shown. Fix: central accepts EIP-191
+  ([issue](../issues/central-login-eip191.md)).
+- **Words that open in a standard wallet.** The 24 words are satorilib's
+  scheme (the secret as BIP39 entropy), so MetaMask derives another account
+  from them; Backup shows the private key for that. Whether new neurons use
+  BIP32 paths is an owner decision ([../inbox/QUESTIONS.md](../inbox/QUESTIONS.md)).
 - **A new default central keeps the old central's data.** When a build
   changes its default central (the deployment's planned move from central2 to
   prod), a browser that never saved one follows it but keeps central2's

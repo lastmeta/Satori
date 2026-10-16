@@ -103,7 +103,8 @@ one. Its relay is Satori's public relay over TLS. Central lists only
 Both names serve the same image, but each is a separate origin to the browser.
 Each has its own storage (OPFS: the keys and the database), its own service
 worker and its own installed app. A neuron set up on one name does not exist
-on the other. To move it, use Backup and then Import Dockerized Neuron files. Central
+on the other. To move it, use Backup on one and Restore from words on the
+other (each key's 24 words, and the Nostr key: [keys.md](keys.md#backup)). Central
 answers CORS for both origins: checked 2026-10-16 with a GET of
 `/api/v1/peer/relays` from each origin on central2 and prod, and a preflight
 of `POST /api/v1/peer/register` on central2.

@@ -1,5 +1,12 @@
 Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys.
 
+- `profiles.json`: the keys each earlier version of this app stored (its
+  `meta` rows), made by that version's own code: the step-1 sealed key,
+  `wallet.yaml`/`vault.yaml` with the passphrase as UTF-8 and as Latin-1
+  bytes, with and without `nostr.yaml`, Docker imports (kept as given, an old
+  vault re-written, a plain-text vault, one with no plain `publicKey`), and a
+  setup cut off. `scripts/profile_fixtures.mjs` (run on each commit's `src`;
+  the commands are in the script). For the forward migration.
 - `identity-parity.json`: made from satorilib (the Docker neuron's code) by
   `scripts/identity_fixtures.py` on branch `draft/v1-full`: words, WIF, pubkey,
   address, scripthash, `wallet.yaml`, Evrmore message signatures; current and
@@ -14,11 +21,6 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   turns a str password into Latin-1 bytes), the plain-text vault satorilib
   saves when the password is outside Latin-1, and a signature flagged
   uncompressed with what python-evrmorelib verifies it against.
-- `central-parity.json`: Python `str(float)` and numpy `str(np.float64)` of
-  439 floats (as raw bits) and 4 central payload hashes
-  (`sha256(value + observed_at)[:16]`), made inside the shipped Docker image
-  `satorinet/satori-lite:latest` by `scripts/central-parity.py` (offline; the
-  command is in the script).
 - `engine-parity.json`: 10 series and what namaste_club's own code makes of
   them (lag 1, one stream, no time features): φ, the first lag, g1/g2, the
   backtest weight, t1 and t2. Made by `scripts/engine_parity.py` from the
@@ -29,7 +31,7 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   time features): every equation's posterior mean, σ² and prior variances,
   and each series' growth after one and two steps. Made by
   `scripts/bvar_parity.py` the same way.
-- `nostr-parity.json`: Satori's Nostr events (`_pred` 34601, its 34600
+- `nostr-parity.json` (the fields, tags and signatures; our content is compact JSON, not these bytes): Satori's Nostr events (`_pred` 34601, its 34600
   announcement and tombstone, the 34602 subscribe and unsubscribe, a 10002)
   built by satorilib's own `SatoriNostr` methods (`origin/base-upgrade`) and
   signed by nostr-sdk 0.45 with the `nostr` key above, the clock pinned; Lite's

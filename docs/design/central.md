@@ -36,16 +36,16 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 
 | Step | Satori Lite | Browser (`src/central/`, `src/neuron/`) |
 |---|---|---|
-| Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>`. Every stored `vault.yaml` has a plain `publicKey` (import re-writes an old one), so it is always sent. The result is shown, never retried in a loop. |
-| Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_address: null`); an identity conflict is a 409 (`c/main.py:705-838`). | Compares the returned `vault_address` with ours and shows a **vault mismatch** (central has another vault, or none). |
+| Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>`. The vault's public key is in clear in the keys record ([keys.md](keys.md#the-record)), so it is always sent. The result is shown, never retried in a loop. |
+| Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_address: null`); an identity conflict is a 409 (`c/main.py:705-838`). | Compares the returned `vault_address` with our vault's and shows a **vault mismatch** (central has another vault, or none). Central names each key by an address of its own form, derived from the pubkey (satorilib's `generateAddress`); `centralAddress` (`src/central/login.js`) derives ours to compare. That address is never shown, nor passed to agents: the result is `vaultMismatch: false \| 'other' \| 'none'`. |
 | Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | Same numbers. `meta.next_poll_at` is stored, so a reload keeps the schedule (see Deviations). **Poll now** runs a cycle at once. |
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
 | Store | `value` = float; epoch = `observed_at`, falling back to `ts` (`data_helper.py:40-93`), truncated to whole seconds (`engine.py:669-673`); `INSERT OR IGNORE` on `(stream_uuid, epoch)` (`stream_store.py:48-56,150-170`); the stream's name/meta are upserted (`server.py:1334-1358`). | Same rule into `observations (stream_uuid, ts, value)`, primary key `(stream_uuid, ts)`; `streams (uuid, name, meta)`. Rows with no stream, no finite value or no time are dropped. |
 | Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Same: `addObservations` returns the streams that got a new row; only those are forecast. |
 | Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `runModels` (`src/engine/evolve.js`) for the streams with a new row, over every central stream's history: each target's own `bvar` spec (a Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved), falling back to `bar1` (a Bayesian AR(1) on 12 h returns) or `naive` ([engine.md](engine.md)): t1 is 12 h ahead, t2 24 h. |
-| Payload | `{stream_uuid, stream_name, value: str(t2), t1_value: str(t1), observed_at: str(time.time() at prediction), hash: sha256(value + observed_at)[:16]}` (`engine.py:1044-1106,1188-1206`). | Byte-identical: `pyFloatStr` mimics Python's `str(float)`; checked against a fixture made in the Docker image (below). |
+| Payload | `{stream_uuid, stream_name, value: str(t2), t1_value: str(t1), observed_at: str(time.time() at prediction), hash: sha256(value + observed_at)[:16]}` (`engine.py:1044-1106,1188-1206`). | The same fields. Numbers are text as JS prints them (`String(n)`: `100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`): central keeps the text and reads it with `float()` ([the protocol audit](#the-protocol-audit)). |
 | Queue | `collectAndSubmitPredictions` right after the poll (`start.py:4693-4736`, called at `:4870`); `flushPredictionQueue` keeps the whole queue when `successful == 0` or the call failed, and clears it otherwise (`engine.py:432-454`). | Predictions are stored with `status = 'pending'`; after every successful poll the pending ones made in the last 2 × 11 h are sent (older ones are dropped); on `successful > 0` all are marked `sent`, otherwise they stay pending for the next cycle. |
-| Submit | Log in (`POST /api/v1/auth/login`, headers `wallet-pubkey`, `message`, `signature` by the **identity**; `server.py:87-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
+| Submit | Log in (`POST /api/v1/auth/login`, headers `wallet-pubkey`, `message`, `signature` by the **identity** in [central's login signature format](#login-signature); `server.py:87-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
 
 Not used (dropped from Lite): the `checkinCheck` watchdog and restarts
 (`start.py:4883-4892`), `/auth/refresh` and its timer (`server.py:120-140`), the
@@ -110,17 +110,39 @@ newest. `src/neuron/history.js`:
   next try …"); `status().central.history` = the last run `{at, url, streams,
   rows, left, error, retryAt}` and `needed` (streams with no history yet).
 
-## Payload strings (parity verified)
+## Login signature
 
-Python's `str(float)` is not JavaScript's `String(n)` (`100.0` vs `100`,
-`1e-05` vs `0.00001`, `1e+16` vs `10000000000000000`). `pyFloatStr` uses the
-shortest round-trip digits (as both languages do) and Python's layout:
-positional for `1e-4 ≤ |x| < 1e16`, else `d.ddde±XX`; `nan`, `inf`, `-0.0`.
+Central's `/auth/login` accepts one signature format: an Evrmore signed
+message (`central/src/api/v1/endpoints/auth.py:5,45`, satorilib's
+`wallet/evrmore/verify.py:15-36`, python-evrmorelib `signmessage.py:39-87`):
+sha256d of the length-prefixed `"Evrmore Signed Message:\n"` and the UTF-8
+challenge; the signature is base64 of a header byte (27 + recovery id + 4 for
+a compressed key) and r ‖ s. So the identity signs the challenge that way.
+It is a protocol detail inside `src/central/login.js` (`loginSignature`,
+tested against satorilib's signatures), named for what it is, central's
+login signature, and never shown: the app shows Base addresses only. The
+foundation fix, central accepting EIP-191 (Ethereum `personal_sign`) so a
+neuron needs no Evrmore code at all, is proposed in
+[central-login-eip191](../issues/central-login-eip191.md).
 
-`test/fixtures/central-parity.json` is generated inside the shipped Docker
-image (`scripts/central-parity.py`, offline): 439 floats as raw bits with
-Python's and numpy's `str`, and 4 payload hashes. The tests check every one.
-Central stores the hash without checking it (`c/main.py:556-563`).
+## The protocol audit
+
+The owner's direction of 2026-10-16 ("migrate in, never back"): Satori Lite
+is the reference for how the network behaves, not for local formats. Each
+place that copied Lite's exact text was checked against the code that reads
+it (central `base-upgrade`, satorilib, Lite), and kept only where a reader
+depends on it.
+
+| Item | Kind | Verdict | Evidence |
+|---|---|---|---|
+| Prediction numbers as Python's `str(float)` (`pyFloatStr`, a 439-float parity fixture) | network | **Plain JS text** (`String(n)`); the fixture, `src/py.js` and `scripts/central-parity.py` are gone | The batch schema is `value: str`, `t1_value`, `observed_at`, `hash: Optional[str]` (`c/models/schemas.py:103-110`), stored as given in `String` columns (`c/main.py:624-631`, `c/models/prediction.py:16-19`); `value` is only read with `float()` / `astype(float)` (`c/scripts/score.py:203,504,595,893,2222,2243`, `c/services/consensus_service.py:131`, `c/scripts/consensus_snapshot.py:74-84`), `t1_value` with `pd.to_numeric` (`consensus_service.py:142`); the hash is never recomputed or compared, and a prediction's `observed_at` is never parsed (scoring orders by central's own `ts`, `score.py:345-376`). Python 3.11 and pydantic 2.5.3 read `0.00001`, `1e-7`, `100`, `-0`, `1e+21`, `1760000000` to the same numbers. They must stay JSON strings: a JSON number is a 422. |
+| The hash `sha256(value + observed_at)[:16]` | network | Kept, over the text sent | Lite's field; central stores it unread. |
+| Login: an Evrmore signed message by the identity | network | **Kept** (central's only login format today) | [Login signature](#login-signature); EIP-191 proposed. |
+| Register's `vault_address` (central's address form) | network | Kept inside, compared, never shown | `c/main.py:772-897` returns addresses only, no pubkey. |
+| Pubkeys as lowercase hex | network | Kept | Peers are found by exact string (`c/main.py:180,576`, `auth.py:53`); ours are lowercase. |
+| `neuron-version` | network | Kept (`browser-<version>`) | Stored and shown only (`c/main.py:790,841-842`). |
+
+Nostr's part of the audit is in [nostr.md](nostr.md#the-protocol-audit).
 
 ## Settings
 
@@ -178,5 +200,7 @@ relay list and Base's config are read from the new central at once.
 | The observations GET sends no token; satorilib sends one through `_makeAuthenticatedCall` (`server.py:1322`). | Central does not ask for one (`c/main.py:292-293`), and the poll then never needs a login. |
 | Register is not retried in a loop (Lite's `authWithCentral` backs off from 30 s up to 6 h, `start.py:4976-5006`). It runs again on the next load or a central URL change. | In practice Lite does not retry either: `checkin` swallows register errors (`server.py:405-414`) and `_getChallenge` falls back to a timestamp when central is down (`server.py:65-85`), so `checkin` almost never raises and the backoff almost never fires. |
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
+| Prediction numbers are sent as JS prints them (`100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`). | Central reads them with `float()`; nothing depends on the layout ([the protocol audit](#the-protocol-audit)). |
+| The register result keeps central's verdict on the vault (`vaultMismatch`), not its addresses. | This app shows Base addresses only; central's address form stays inside `src/central/` ([login signature](#login-signature)). |
 | The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the identity and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
 | Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |

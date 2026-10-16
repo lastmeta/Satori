@@ -100,8 +100,9 @@ keep a pinned desktop tab; on iPhone the neuron works only while on screen.
   cached for long ([../design/pwa.md](../design/pwa.md#csp-and-hosting)).
   Persistent storage is asked for, but a browser may refuse it: the vault's
   24 words, checked at setup, stay the way back.
-- Not planned: EIP-191 signing (no caller), ECDH peer encryption (only for
-  Docker's engine IPC), Evrmore transaction signing ([chain.md](chain.md)).
+- Not planned: ECDH peer encryption (only for Docker's engine IPC), anything
+  on Evrmore (Base only). EIP-191 signing would become central's login if
+  central accepts it ([issue](../issues/central-login-eip191.md)).
 
 ## Not done
 

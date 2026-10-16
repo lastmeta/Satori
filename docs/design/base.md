@@ -43,9 +43,11 @@ Sepolia, chain 84532).
 Each key's 32-byte secret is also its EVM private key, as satorilib makes it
 (`Account.from_key(entropy)`, satorilib `wallet/wallet.py:220-232`,
 `wallet/ethereum/wallet.py:114-121`): the Base address is keccak-256 of the
-uncompressed public key. The vault's Base address is computed from the public
-key in `vault.yaml`, so the status needs no Unlock (Lite's `vault.ethAddress`
-needs the decrypted vault). Transactions are signed inside the key's signer
+uncompressed public key. The vault's Base address is computed from its public
+key, kept in clear in the keys record ([keys.md](keys.md#the-record)), so the
+status needs no Unlock (Lite's `vault.ethAddress` needs the decrypted vault).
+Base is the only chain this app shows: each key's address in the app is its
+Base address. Transactions are signed inside the key's signer
 (`src/keys/index.js`), which Lock wipes; the private key is never handed to
 viem as a string (`src/chain/index.js` wraps the signer in a viem custom
 account).
@@ -324,14 +326,15 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's delegator earnings. |
 | The transfer lock is shown with `>=` (the token's rule); Lite's display uses `>`. | Lite shows the tokens free one round early. |
 | Words: "Delegate prediction power" / "Stop delegating" (the dapp), not Lite's "Staking". | The app's Lock/Unlock is the passphrase. |
-| The vault's Base address is computed from `vault.yaml`'s public key. | Status without Unlock; Lite needs the decrypted vault. |
+| The vault's Base address is computed from its public key, in clear in the keys record. | Status without Unlock; Lite needs the decrypted vault. |
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
 | A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
 
 ## UI and agents
 
-- Home's **Keys** card holds both Base addresses (with the Evrmore ones).
+- Home's **Keys** card holds both Base addresses, the only addresses the app
+  shows.
   The **Base** card: the round, the active RPC in plain words (the local fork
   named "Local test chain"; the URLs on hover); the identity's ETH as daily
   batches of gas (red below 7, once delegated: before that the identity has

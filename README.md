@@ -20,7 +20,7 @@ polls it, forecasts, sends its predictions back. AI agents: read
 
 ## What it does
 
-Satori's two keys (identity and vault, Docker-compatible), a DuckDB-WASM
+Satori's two keys (identity and vault; a Dockerized Neuron's import), a DuckDB-WASM
 database in the browser, central's data flow as the Docker neuron (Satori
 Lite) runs it, Lite's Nostr flow (subscribe to streams, publish
 `<stream>_pred`), and Lite's Base flow (the vault delegates its prediction
@@ -36,8 +36,11 @@ Base: Unlock ─▶ delegate ─▶ each round the identity: registry streams �
 The **identity** is stored unencrypted, so the neuron runs and signs from page
 load; the **vault** holds the funds, encrypted with your passphrase. **Unlock**
 opens the vault (needed for backup and Base's delegate, claims and sends);
-**Lock** wipes it from memory. Setup can also restore from words or import a
-Docker neuron's `wallet.yaml`, `vault.yaml` and `nostr.yaml`. Only one tab
+**Lock** wipes it from memory. The keys are stored in this app's own format
+(the vault: PBKDF2-SHA256 and AES-256-GCM, any Unicode passphrase of 8 or
+more); each key's address is its Base address. Setup can also restore from
+words or import a Docker neuron's `wallet.yaml`, `vault.yaml` and
+`nostr.yaml`, translated into that format ([keys](docs/design/keys.md)). Only one tab
 runs the neuron; others say so. The engine (`bar1`, after the owner's
 `namaste_club`) is a Bayesian AR(1) on 12 h returns, faded toward the last
 value as far as its own backtest says it trails it ([engine](docs/design/engine.md)).
@@ -137,7 +140,7 @@ npm run e2e:deploy                         # in another shell: headers, CSP, Duc
 ## Test
 
 ```sh
-npm test           # vitest (2 workers): parity with satorilib, the Docker image and namaste_club; central, the neuron, the engine, the db, Nostr, Base against a fake D6, ui text
+npm test           # vitest (2 workers): parity with satorilib and namaste_club; the keys and every earlier version's stored keys; central, the neuron, the engine, the db, Nostr, Base against a fake D6, ui text
 npm run e2e        # playwright, system Chrome: the app against a stub central, two test relays (7781/7782) and a fake chain behind /rpc
 npm run e2e:pwa    # builds, then the installed app on vite preview :5181: manifest, service worker, offline, Update, one neuron
 npm run e2e:deploy # the deploy image on :8090 (DEPLOY_URL): every response's headers, then the app in a fresh profile

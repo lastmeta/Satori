@@ -17,8 +17,9 @@ references and every deviation). This file keeps only what is still to do.
   lists only `ws://satorian.satorinet.io:7777`
   ([issue](../issues/relays-not-wss.md)). Until then Nostr works from the dev
   server (plain http) and against `ws://localhost`.
-- **Paid and encrypted streams.** Per-subscriber NIP-04 events, payment
-  channels (34603-34606), the `#p` personal filter and kind 34604 in the
+- **Paid and encrypted streams.** Per-subscriber NIP-04 events, a payment on
+  Base (to design: Lite pays over Evrmore payment channels, 34603-34606, which
+  this app does not take up), the `#p` personal filter and kind 34604 in the
   follow (origin client 1687-1745). Port the live-push decrypt path, not origin
   client's `parse_observation_event`, which returns None for paid events
   ([issue](../issues/satorilib-paid-observation-parse.md)).

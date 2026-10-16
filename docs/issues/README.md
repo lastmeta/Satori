@@ -23,6 +23,7 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | [token-hook-gas-estimate.md](token-hook-gas-estimate.md) | contracts (a rewards upgrade now; token and hub at the next redeploy) | a delegated vault receives SATORI (a claim, a transfer, from anyone: 1 wei is enough) with an estimated gas limit: it can never undelegate, and its SATORI stays locked. The browser app pads only its own writes |
 | [central-login-replayable.md](central-login-replayable.md) | central | someone sees one login header set |
 | [central-register-unauthenticated.md](central-register-unauthenticated.md) | central | someone knows a wallet pubkey (public) |
+| [central-login-eip191.md](central-login-eip191.md) | central (a foundation fix, proposed) | none: every neuron must carry Evrmore message signing to log in, though the network runs on Base |
 | [base-batch-one-bad-game-reverts-all.md](base-batch-one-bad-game-reverts-all.md) | Docker neuron (the browser simulates each game) | a game with no new value since our last prediction on it |
 | [duckdb-wasm-opfs-wal.md](duckdb-wasm-opfs-wal.md) | DuckDB (replay), DuckDB-WASM (the OPFS WAL); worked around here | a write committed without a checkpoint on OPFS: lost on reload, or (an ALTER on a table with a nextval default) the database does not open |
 
@@ -31,8 +32,6 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | Issue | Where | Needed for |
 |---|---|---|
 | [relayer-predict-fee.md](relayer-predict-fee.md) | relayer fee policy (owner ruling) | gasless predictions |
-| [mundo-no-cors.md](mundo-no-cors.md) | Mundo | EVR-less SATORIEVR sends, channel claims |
-| [electrumx-wss.md](electrumx-wss.md) | ElectrumX operators | Evrmore balances/sends with redundancy |
 | [satorilib-paid-observation-parse.md](satorilib-paid-observation-parse.md) | satorilib | fetching latest value of a paid stream |
 
 Housekeeping, not blocking: nginx answers central `/health` without CORS

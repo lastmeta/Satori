@@ -24,3 +24,28 @@ today, so nothing waits on an answer.
    an https page can't open, so a deployed app has no Nostr until a `wss://`
    relay is listed (TLS in front of satorian, and central listing it). Who
    sets it up, and where? ([../issues/relays-not-wss.md](../issues/relays-not-wss.md))
+5. **Central login: accept EIP-191 (Ethereum `personal_sign`) as well, so
+   neurons need no Evrmore code.** Central's `/auth/login` verifies only
+   Evrmore signed messages (`central/src/api/v1/endpoints/auth.py:5,45`), so
+   the browser neuron keeps that one format, inside `src/central/login.js`,
+   to log in; everything it shows is Base. Accepting EIP-191 keyed by the same
+   `wallet-pubkey` is a small central change (`eth-account` is already in its
+   requirements) and keeps Docker neurons working. Make it?
+   ([../issues/central-login-eip191.md](../issues/central-login-eip191.md))
+6. **Key derivation for new neurons.** Today one 32-byte secret is at once
+   the private key and the BIP39 entropy of the 24 words, with no HD path
+   (satorilib's scheme). A neuron moving from Docker keeps the same keys and
+   Base addresses from its words, so this stays for every existing key. The
+   open question is whether **new** neurons should use the standard BIP39
+   seed → BIP32 path (`m/44'/60'/0'/0/0` for the vault), so the vault's words
+   open the same account in MetaMask or any Ethereum wallet. Today a user
+   gets there with the private key Backup shows (`0x…`, "Import account").
+   - *For:* the words alone recover the vault in any wallet; it is what users
+     of Base wallets expect.
+   - *Against:* two schemes forever: the record must say which one each key
+     uses, and Restore from words must ask (the same words give different
+     addresses under each, and nothing tells them apart); a new neuron's
+     words would not open in the Dockerized Neuron (fine under "migrate in,
+     never back"); one more dependency (`@scure/bip32`, from the
+     `@noble`/`@scure` author already used here).
+   - *Today:* the old scheme for all keys; nothing changes until you decide.
