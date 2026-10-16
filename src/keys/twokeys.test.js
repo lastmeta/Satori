@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import {
   newKeys, readDockerFiles, recordFromRows, loadKeys, unlockVault, publicKey, wordsOf, evmAddress,
 } from './index.js';
-import { verifyLoginSignature } from '../central/login.js';
+import { verifyMessage } from 'viem';
 import { nostrPubkey } from '../nostr/event.js';
 
 vi.setConfig({ testTimeout: 180_000 });
@@ -57,7 +57,7 @@ describe('loadKeys and Unlock', () => {
     const r = await newKeys({ identity: hex(a.entropyHex), vault: hex(b.entropyHex), nostr: fx.nostr.secretHex }, PASS);
     const k = loadKeys(r);
     expect(k.identity).toMatchObject({ pubkey: a.pubkey, evmAddress: a.ethAddress });
-    expect(verifyLoginSignature('c-0', k.identity.signCentralLogin('c-0'), { pubkey: a.pubkey })).toBe(true);
+    expect(await verifyMessage({ address: a.ethAddress, message: 'c-0', signature: k.identity.signCentralLogin('c-0') })).toBe(true); // EIP-191
     expect(k.identity.backup()).toEqual({ words: a.words, privateKey: `0x${a.entropyHex}` });
     expect(k.nostr).toEqual({ secret: fx.nostr.secretHex, pubkey: fx.nostr.pubkeyHex });
     expect(k.vault).toEqual({ pubkey: b.pubkey, evmAddress: b.ethAddress });

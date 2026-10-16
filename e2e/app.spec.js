@@ -8,7 +8,8 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { secretFromWords, publicKey, evmAddress, wordsOf } from '../src/keys/keys.js';
-import { verifyLoginSignature, centralAddress } from '../src/central/login.js';
+import { verifyMessage } from 'viem';
+import { centralAddress } from '../src/central/index.js';
 import { nostrPubkey, nsec } from '../src/nostr/event.js';
 import { forecast, STEP_S } from '../src/engine/index.js';
 import { runModels } from '../src/engine/evolve.js';
@@ -114,7 +115,8 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   await expect(btc.locator('[data-test=status]')).toHaveText('Sent');
   expect(stub.logins).toHaveLength(1);
   expect(stub.logins[0]).toMatchObject({ ok: true, message: 'c-0', 'wallet-pubkey': reg['wallet-pubkey'] });
-  expect(verifyLoginSignature(stub.logins[0].message, stub.logins[0].signature, { pubkey: reg['wallet-pubkey'] })).toBe(true);
+  expect(stub.logins[0].signature).toMatch(/^0x[0-9a-f]{128}1[bc]$/); // EIP-191: r ‖ s ‖ v, v 27/28
+  expect(await verifyMessage({ address: identity, message: 'c-0', signature: stub.logins[0].signature })).toBe(true);
   const [items] = stub.batches;
   expect(items.map((i) => [i.stream_uuid, i.stream_name, i.value, i.t1_value]))
     .toEqual([['u-btc', 'bitcoin', '67000.5', '67000.5'], ['u-eth', 'eth', '2500', '2500']]);

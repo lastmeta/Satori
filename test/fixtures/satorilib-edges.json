@@ -19,19 +19,5 @@
   "password": "p€ss",
   "encryptError": "UnicodeEncodeError: 'latin-1' codec can't encode character '\\u20ac' in position 1: ordinal not in range(256)",
   "savedYaml": "entropy: bVYl7x7iB6opqVYHtFCleqB2DszbBKumolCbpEWYqQ0=\nevr:\n  address: EUMbu9axgbEkAtYFt8Z2sYKp7otCcjMhQ7\nprivateKey: KztFGRhPs5q5MXuiF42CqWq7ZdES9E4M7xycaXtoCNZqSZddixfp\npublicKey: 0335a07bc7f945940b5790021345b388c6f446e4ef0a0e1fa6e3f87a0a399f6abd\nscripthash: 9522f310f5b034ff39987ed38e405ca357ef5dad85b37693e9ffdfe13de336b2\nwords: hood raise knock differ call steak pluck client amateur penalty citizen vocal\n  alter alter cricket gauge produce crush neither dance dust slush picnic sail\n"
- },
- "uncompressedSignature": {
-  "message": "hello",
-  "signature": "G8FYagVS9JXuTXdPAYbYGRWaHQfqkFGS5J7k18NSGolXPzEyDxb35qDKYQXjKc4YFuogPW+YFU0itFyvDNab2Ps=",
-  "pubkey": "034680d65a7c963f0f9da856f94e1a30e45a8039d5a98051631b278b127589f302",
-  "pubkeyUncompressed": "044680d65a7c963f0f9da856f94e1a30e45a8039d5a98051631b278b127589f302468df432f3ad33adb727dbde2de1b83eaec6a538a4c6e394619997053bc586b5",
-  "address": "Eg8Js3e4KECxjXBBPjMdDoJ7fuqgoWciEP",
-  "addressUncompressed": "EY2yoJotLfcYJeis2RFmGLxihC5nX6Mayv",
-  "verifies": {
-   "pubkey": false,
-   "pubkeyUncompressed": true,
-   "address": false,
-   "addressUncompressed": true
-  }
  }
 }

@@ -29,9 +29,6 @@ for _ in range(40):
         sys.modules[e.name].__path__ = []
 from satorilib.wallet.identity import IdentityBase
 from satorilib.utils import secret
-from evrmore import SelectParams
-from evrmore.wallet import CEvrmoreSecret, P2PKHEvrmoreAddress
-from evrmore.signmessage import signMessage, verifyMessage, EvrmoreMessage
 
 tmp = tempfile.mkdtemp()
 
@@ -71,24 +68,4 @@ except Exception as e:
 _, _, text = make('satori-edges-euro', 'euro.yaml', 'p€ss')
 out['nonLatin1Password'] = {'password': 'p€ss', 'encryptError': error, 'savedYaml': text}
 
-# A signature flagged uncompressed (header 27-30) recovers the uncompressed key:
-# it matches the uncompressed pubkey and address only.
-SelectParams('mainnet')
-key = CEvrmoreSecret.from_secret_bytes(entropy, compressed=False)
-keyC = CEvrmoreSecret.from_secret_bytes(entropy, compressed=True)
-msg = 'hello'
-sig = signMessage(key, EvrmoreMessage(msg)).decode()
-check = lambda **kw: verifyMessage(EvrmoreMessage(msg), sig, **kw)
-out['uncompressedSignature'] = {
-    'message': msg, 'signature': sig,
-    'pubkey': keyC.pub.hex(), 'pubkeyUncompressed': key.pub.hex(),
-    'address': str(P2PKHEvrmoreAddress.from_pubkey(keyC.pub)),
-    'addressUncompressed': str(P2PKHEvrmoreAddress.from_pubkey(key.pub)),
-    'verifies': {
-        'pubkey': check(pubkey=keyC.pub.hex()),
-        'pubkeyUncompressed': check(pubkey=key.pub.hex()),
-        'address': check(address=str(P2PKHEvrmoreAddress.from_pubkey(keyC.pub))),
-        'addressUncompressed': check(address=str(P2PKHEvrmoreAddress.from_pubkey(key.pub))),
-    },
-}
 print(json.dumps(out, indent=1, ensure_ascii=False))

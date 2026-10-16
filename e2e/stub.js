@@ -1,11 +1,14 @@
 // The e2e's central: the dev server's default, central2, routed to a stub
 // (prod is aborted and recorded). It answers register, the observations batch,
-// the login and the predictions batch (checking the identity's signature), the
+// the login and the predictions batch (checking the identity's signature as
+// central does: EIP-191 only, anything else is a 401), the
 // relay list and config, the merkle proof, and a stream's history when
 // `history` is set (else 404, as central2 today); anything else is a 404, as
 // prod's /base/config is. Satorian and the owner's dev relay (7778) are never
 // reached; /rpc is aborted unless a fake chain is given (e2e/base.spec.js).
-import { verifyLoginSignature } from '../src/central/login.js';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { verifyMessage } from 'viem';
+import { evmAddress } from '../src/keys/keys.js';
 
 export const CENTRAL = 'https://central2.satorinet.io';
 
@@ -14,6 +17,22 @@ const CORS = {
   'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'authorization, content-type, wallet-pubkey, vault-pubkey, nostr-pubkey, neuron-version, message, signature',
 };
+
+/**
+ * Central's login check (base-upgrade f4d72f5, src/utils/auth.py verify_wallet_signature), EIP-191 only:
+ * 0x + r ‖ s ‖ v in 130 hex, v 27/28 or 0/1, low s, recovering the Ethereum address of `wallet-pubkey`.
+ * Anything else (an Evrmore signature, a high s, garbage) is refused.
+ */
+async function eip191(h) {
+  const sig = h.signature ?? '';
+  if (!/^0x[0-9a-fA-F]{130}$/.test(sig) || !['1b', '1c', '00', '01'].includes(sig.slice(-2).toLowerCase())) return false;
+  if (BigInt(`0x${sig.slice(66, 130)}`) > secp256k1.CURVE.n / 2n) return false;
+  try {
+    return await verifyMessage({ address: evmAddress(h['wallet-pubkey']), message: h.message, signature: sig });
+  } catch {
+    return false;
+  }
+}
 
 /**
  * @param {import('@playwright/test').BrowserContext} context
@@ -72,7 +91,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       case 'GET /api/v1/auth/challenge':
         return reply(route, 200, { challenge: `c-${stub.logins.length}` });
       case 'POST /api/v1/auth/login': {
-        const ok = verifyLoginSignature(h.message, h.signature, { pubkey: h['wallet-pubkey'] });
+        const ok = await eip191(h);
         stub.logins.push({ ...h, ok });
         return ok ? reply(route, 200, { access_token: `jwt-${stub.logins.length}`, expires_in: 3600 })
           : reply(route, 401, { detail: 'Invalid signature' });

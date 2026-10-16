@@ -12,7 +12,7 @@
 //   const { identity, nostr, vault } = loadKeys(record)   // identity: a signer; vault: { pubkey, evmAddress }
 //   const { vault, record } = await unlockVault(record, passphrase)   // record: store it (an upgrade), or null
 //   signer: pubkey, evmAddress, signDigest(hash), backup() → { words, privateKey }, lock();
-//           the identity's also signCentralLogin(challenge) (central's login signature format)
+//           the identity's also signCentralLogin(challenge) (EIP-191, central's login: src/central/login.js)
 export { generateSecret, secretFromWords, wordsOf, publicKey, evmAddress } from './keys.js';
 export { MIN_PASSPHRASE, passphraseOk } from './vault.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
@@ -31,7 +31,7 @@ const notSame = (x, y) => {
   if (sameKey(x, y)) throw new Error('The identity and the vault must not be the same key.');
 };
 
-/** A signer over a 32-byte secret; lock() wipes it. `login`: central's login signature (the identity's). */
+/** A signer over a 32-byte secret; lock() wipes it. `login`: central's login signature, EIP-191 (the identity's). */
 function signer(secret, { login = false } = {}) {
   const pubkey = publicKey(secret);
   const live = () => {

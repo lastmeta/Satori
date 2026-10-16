@@ -1,7 +1,8 @@
 import { describe, test, expect, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import {
-  predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS,
+  predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS, centralAddress,
 } from './index.js';
 
 describe('predictionItem', () => {
@@ -81,6 +82,12 @@ const login = () => ({
 });
 const client = (fetch, url = BASE) => createCentral({ url, fetch, identity, version: '0.1.0' });
 const paths = (calls) => calls.map((c) => `${c.method} ${c.path}`);
+
+test("centralAddress: the name central gives a key in register's answer, satorilib's generateAddress", () => {
+  const { vectors } = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
+  for (const v of vectors) expect(centralAddress(v.pubkey)).toBe(v.address); // made by satorilib
+  expect(() => centralAddress('nope')).toThrow();
+});
 
 describe('register', () => {
   test('identity and vault pubkeys and our version as headers; no login, no token, no body', async () => {

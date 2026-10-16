@@ -2,8 +2,7 @@
 //   page load → register with central; first poll 5–30 min later, then every 11 h:
 //   poll ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams with a new row ─▶ send everything pending
 // The forecasts: each target's own bvar spec, evolved after each poll (docs/design/engine.md).
-import { normalizeObservation, predictionItem } from '../central/index.js';
-import { centralAddress } from '../central/login.js';
+import { centralAddress, normalizeObservation, predictionItem } from '../central/index.js';
 import { runModels } from '../engine/evolve.js';
 import { createSchedule } from './schedule.js';
 import { backfillHistory } from './history.js';
@@ -20,8 +19,8 @@ const errorText = (err) => String(err?.message ?? err);
  * Register with central (on every start). Never throws: the result says what
  * happened, and whether central's vault for this identity is ours:
  * vaultMismatch false, 'other' (central has another vault) or 'none' (it kept
- * none). Central names the vault by its own address form, compared here and
- * never passed on (src/central/login.js).
+ * none). Central names the vault only in its own address form, compared here
+ * and never passed on (centralAddress, src/central/index.js).
  */
 export async function register({ central, vaultPubkey, nostrPubkey, now = nowS }) {
   const at = now();

@@ -213,7 +213,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
 });
 
 describe('register', () => {
-  // central answers with Evrmore-form addresses (its peer ids): compared with our vault's, never shown
+  // central names the vault in its own address form (satorilib's, the fixture's): compared with ours, never shown
   const [v, other] = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url))).vectors;
   const res = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: v.address, message: 'Peer already registered' };
   const fake = (r) => ({ register: vi.fn(async () => { if (r instanceof Error) throw r; return r; }) });
