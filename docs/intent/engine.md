@@ -41,6 +41,8 @@ a stream to:
 - Focus on the streams that pay: those from central, and those from the Base
   contract (relayed over Nostr). That is why people run a neuron. Other Nostr
   streams, which may or may not carry a reward, come later.
+- For the MVP the neuron predicts everything it sees. Stream roles and user or
+  agent pins wait.
 
 - Start with one algorithm, multivariate. Each target reads 1–3 random
   companion streams, and the priors are randomised a little. Both improve over
