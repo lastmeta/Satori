@@ -19,7 +19,7 @@ export const PRIORITY = ['db-error', 'login-refused', 'central-failing', 'centra
   'central-failed', 'backup', 'vault-mismatch', 'not-registered', 'delegate', 'gas-low', 'base-skipped', 'base-unreachable',
   'relay-down', 'asleep', 'starting'];
 const RANK = { ok: 0, idle: 1, warn: 2, bad: 3 };
-const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
+export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
 
 // ── times in a few words ──
 const M = 60;
