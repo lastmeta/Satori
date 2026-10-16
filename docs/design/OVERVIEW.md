@@ -97,8 +97,8 @@ alone when the build sets it.
 
 | Part | Folder | Does |
 |---|---|---|
-| keys | `src/keys/` | Satori's two keys and the Nostr key in one record of this app's own, `meta.keys` ([keys.md](keys.md)): the **identity** (plain text, signs on its own), the **vault** (sealed with the passphrase: PBKDF2-SHA256 600,000 and AES-256-GCM, any Unicode passphrase of 8 or more; holds funds; its public key in clear) and the **Nostr key** (random, plain text). Create, restore from words, import a Dockerized Neuron's files (read only, translated: `docker.js`), Unlock/Lock (an earlier version's vault is re-encrypted at its next Unlock), backup. Each key's Base address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)); the identity's central login signature. |
-| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. `login.js`: central's login signature format and its address form, protocol details never shown ([central.md](central.md#login-signature)). |
+| keys | `src/keys/` | Satori's two keys and the Nostr key in one record of this app's own, `meta.keys` ([keys.md](keys.md)): the **identity** (plain text, signs on its own), the **vault** (sealed with the passphrase: PBKDF2-SHA256 600,000 and AES-256-GCM, any Unicode passphrase of 8 or more; holds funds; its public key in clear) and the **Nostr key** (random, plain text). Create, restore from words, import a Dockerized Neuron's files (read only, translated: `docker.js`), Unlock/Lock (an earlier version's vault is re-encrypted at its next Unlock), backup. Each key's Base address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)); the identity's central login signature (EIP-191). |
+| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. `login.js`: central's login signature, EIP-191 by the identity ([central.md](central.md#login-signature)); `centralAddress`: central's Evrmore name for our vault in register's answer, only compared, never shown ([central.md](central.md#the-vault-in-registers-answer)). |
 | chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
 | db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time; every commit checkpointed; a WAL an older version left set aside before the open (`recover.js`) ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule, recovery). Times are unix seconds. |
 | engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (identity-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
@@ -115,8 +115,10 @@ alone when the build sets it.
 ## Rules
 
 - Base only: each key's address is its Base (0x) address, the only kind
-  shown. Central's login signature (an Evrmore message format, the one
-  central accepts) stays inside `src/central/login.js`.
+  shown. Central's login is EIP-191 (`personal_sign`) by the identity. There
+  is no Evrmore anywhere in the app, except one helper that derives
+  central's name for our vault in register's answer, to compare it
+  ([central.md](central.md#the-vault-in-registers-answer)).
 - Migrate in, never back (owner, 2026-10-16): local formats are this app's
   own; a Dockerized Neuron's files are imported and translated, nothing is
   exported back to Docker's formats; Satori Lite is the reference for what
@@ -204,12 +206,12 @@ sha256, already a dependency). The deploy image added none to npm; it is
   words, public keys and Base addresses; the vault encryption: round trips,
   another implementation opening it, wrong passphrases, NFC, non-Latin and
   emoji passphrases, the rule; Docker `wallet.yaml`/`vault.yaml` read for
-  import incl. old vaults, WIF-only, mismatched and wrong-password files,
+  import incl. old vaults, no-entropy, mismatched and wrong-password files,
   Latin-1 passwords; files in the wrong slots and plain-text vaults refused;
   the record; every earlier version's stored keys carried forward, at load
   and at Unlock, also through migration 7 on DuckDB); central (the payload
-  and its hash, the login signature against satorilib's and an
-  uncompressed-flag one, register, login, the 401 retry, the one resend, timeouts and
+  and its hash, the EIP-191 login signature against central's vector and
+  viem's `verifyMessage`, register, login, the 401 retry, the one resend, timeouts and
   network errors, with a mocked fetch); neuron (storage and dedupe,
   forecasting only new rows, the kept queue and its cap, a failed poll, a
   local failure, register and mismatch, the schedule, its jitter and a failed
@@ -250,7 +252,8 @@ sha256, already a dependency). The deploy image added none to npm; it is
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
   stub and prod blocked: create → register (headers checked) → first poll
   5–30 min out → Poll now: two streams stored, forecast and sent after an
-  identity-signed login (payload strings and hashes checked) → second tab
+  identity-signed EIP-191 login (the stub verifies EIP-191 only; payload
+  strings and hashes checked) → second tab
   refused → reload keeps the schedule and registers again → Unlock (wrong
   passphrase refused; created with a non-Latin passphrase) → backup words,
   private keys and the Nostr key, and the stored record → Lock, polls go on; the

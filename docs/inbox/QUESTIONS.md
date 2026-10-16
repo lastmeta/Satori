@@ -24,15 +24,7 @@ today, so nothing waits on an answer.
    an https page can't open, so a deployed app has no Nostr until a `wss://`
    relay is listed (TLS in front of satorian, and central listing it). Who
    sets it up, and where? ([../issues/relays-not-wss.md](../issues/relays-not-wss.md))
-5. **Central login: accept EIP-191 (Ethereum `personal_sign`) as well, so
-   neurons need no Evrmore code.** Central's `/auth/login` verifies only
-   Evrmore signed messages (`central/src/api/v1/endpoints/auth.py:5,45`), so
-   the browser neuron keeps that one format, inside `src/central/login.js`,
-   to log in; everything it shows is Base. Accepting EIP-191 keyed by the same
-   `wallet-pubkey` is a small central change (`eth-account` is already in its
-   requirements) and keeps Docker neurons working. Make it?
-   ([../issues/central-login-eip191.md](../issues/central-login-eip191.md))
-6. **Key derivation for new neurons.** Today one 32-byte secret is at once
+5. **Key derivation for new neurons.** Today one 32-byte secret is at once
    the private key and the BIP39 entropy of the 24 words, with no HD path
    (satorilib's scheme). A neuron moving from Docker keeps the same keys and
    Base addresses from its words, so this stays for every existing key. The
@@ -49,3 +41,12 @@ today, so nothing waits on an answer.
      never back"); one more dependency (`@scure/bip32`, from the
      `@noble`/`@scure` author already used here).
    - *Today:* the old scheme for all keys; nothing changes until you decide.
+
+## Resolved
+
+- **Central login accepts EIP-191** (was item 5). Done 2026-10-16: central
+  `base-upgrade` f4d72f5 verifies EIP-191 (`personal_sign`) at
+  `/auth/login`, Satori Lite signs only EIP-191 since satorilib 5028913, and
+  this app signs only EIP-191 (842d491) and has no Evrmore code but one
+  helper for register's answer (72d6784;
+  [../issues/central-register-vault-base.md](../issues/central-register-vault-base.md)).

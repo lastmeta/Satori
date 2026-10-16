@@ -51,13 +51,15 @@ an owner decision ([QUESTIONS](../inbox/QUESTIONS.md)). `src/keys/keys.js`:
 | Base address | keccak256 of the uncompressed key, EIP-55 (`Account.from_key(entropy)`, satorilib's `ethAddress`) | `wallet/ethereum/wallet.py:114-121` |
 | private key (backup) | `0x` and the secret in hex: what a Base wallet's "Import account" takes | |
 | transaction signature | ECDSA over the tx hash, RFC 6979, low-S, as viem's `sign` | |
-| central's login signature | the challenge signed in the one format central's login accepts | [central.md](central.md#login-signature), `src/central/login.js` |
+| central's login signature | EIP-191 (`personal_sign`) of the challenge by the identity: `0x` + r ‖ s ‖ v, RFC 6979, low-S, v 27/28 | [central.md](central.md#login-signature), `src/central/login.js`; satorilib's `ethSign` (`wallet/identity.py:706-715`) |
 
-Central's login signature is the one place an Evrmore format survives: an
-internal protocol detail of the central client, never shown. Central also
-names a peer's keys by an address of its own form, derived from the pubkey;
-`src/central/login.js` derives it only to compare register's answer with our
-vault. Neither is a key format of this app.
+There is no Evrmore anywhere in the app: no Evrmore address, WIF, scripthash
+or message signature is made, read or shown. One trace is left, because
+central names a peer's vault in register's answer only by its Evrmore
+address: `centralAddress` (`src/central/index.js`) derives that form of our
+vault's pubkey to compare, and nothing else
+([central.md](central.md#the-vault-in-registers-answer)). It is not a key
+format of this app.
 
 ## The record
 
@@ -176,15 +178,16 @@ this app's record. The files themselves are not kept.
   save the vault unencrypted (`identity.py:682-692`), which the import
   refuses.
 - **Which file is which**: by the secret fields, with satorilib's length rules
-  (a 44-char `entropy`, a 52-char WIF and `words` with spaces are plain,
-  `identity.py:131,152,595`). `wallet.yaml` must be plain and `vault.yaml`
+  (a 44-char `entropy`, a 52-character `privateKey` and `words` with spaces
+  are plain, `identity.py:131,152,595`). `wallet.yaml` must be plain and `vault.yaml`
   encrypted; files in each other's slots are named as swapped.
-- **Reading** (`identity.py:115-177,662-680`): the entropy first; else a
-  52-char WIF; else watch-only, refused. An old vault also encrypted its
-  `publicKey` (decrypted by length). The public key, the words and the WIF
-  are derived from the secret and compared with the stored ones; a mismatch
-  refuses the file. The Evrmore fields (`evr.address`, `scripthash`) are not
-  relied on.
+- **Reading** (`identity.py:115-177,662-680`): the key is the `entropy`,
+  which every file satorilib writes has; a file without one is refused
+  (watch-only; satorilib cannot load a WIF-only file either). An old vault
+  also encrypted its `publicKey` (decrypted by length). The public key and
+  the words are derived from the secret and compared with the stored ones; a
+  mismatch refuses the file. The Evrmore fields (`privateKey`'s WIF,
+  `evr.address`, `scripthash`) are not read.
 - **Wrong password**: AES-CBC's padding fails, or the text is not a 44-char
   entropy: `vault.yaml: Wrong passphrase`.
 - **This app's passphrase**: by default the Docker vault password is reused
@@ -270,7 +273,7 @@ No files are downloaded: Docker's formats are not written any more.
   `vaultPubkey`, `decryptField`, `readNostrYaml`. Used by the import and by
   the migration only.
 
-`src/central/login.js`: central's login signature and address form.
+`src/central/login.js`: central's login signature (EIP-191).
 
 ## Tests
 
@@ -281,12 +284,14 @@ No files are downloaded: Docker's formats are not written any more.
   implementation (node:crypto) opening it; wrong passphrase and changed bytes;
   non-Latin and emoji passphrases; NFC; the passphrase rule.
 - `docker.test.js`: every Docker fixture shape (current and old vaults, a
-  Latin-1 password, a WIF-only file, a mismatched file, swapped files,
-  `nostr.yaml`), and the UTF-8-era vaults.
+  Latin-1 password, a file with no entropy, a mismatched file, wrong Evrmore
+  fields that are not read, swapped files, `nostr.yaml`), and the UTF-8-era
+  vaults.
 - `twokeys.test.js`: the record, Unlock and Lock, backup, the import's
   translation, and every earlier profile carried forward.
 - `src/db/db.test.js`: migration 7 on every profile, then the Unlock.
-- `src/central/login.test.js`: central's login signature against satorilib's.
+- `src/central/login.test.js`: central's EIP-191 vector, and a login checked
+  by viem's `verifyMessage`.
 - e2e: `app.spec.js` (Create with a non-Latin passphrase, reload, Unlock,
   Backup, the stored record; Import, with a short Docker password),
   `migrate.spec.js` (earlier profiles in Chrome: at load, at Unlock, the
@@ -308,11 +313,11 @@ accept it). The network rows' evidence is in
 | Backup downloads of the three files; `window.satori.file()` | local | **Gone**: words, `0x` private keys, `nsec` |
 | The WIF in Backup | local | **`0x` hex**: Base's form |
 | Evrmore addresses in the UI and the API (`status().identity`, register's addresses) | local | **Base addresses only** |
-| Evrmore address and scripthash derivations | local | **Gone**, but central's address form for one comparison ([central.md](central.md#login-signature)) |
+| Evrmore address, WIF and scripthash derivations | local | **Gone**, but central's address form for one comparison ([central.md](central.md#the-vault-in-registers-answer)) |
 | Lite's relay model uuid as the relay streams' row id | local | Kept: never sent, as good an id as any ([nostr.md](nostr.md#the-protocol-audit)) |
 | Prediction texts as Python's `str(float)` | network | **JS text**: central reads `float()` |
 | Nostr content as Python's `json.dumps` | network | **Compact JSON**: satorilib reads `json.loads`, fields by name |
-| Central's login: an Evrmore signed message | network | Kept: central's only format; EIP-191 proposed ([issue](../issues/central-login-eip191.md)) |
+| Central's login: an Evrmore signed message | network | **EIP-191** (2026-10-16): central's format since base-upgrade f4d72f5, Lite's since satorilib 5028913 ([central.md](central.md#login-signature)) |
 | The key scheme (secret = BIP39 entropy, no HD) | both | Kept: the words of every existing key must give the same keys; new neurons are an owner decision ([QUESTIONS](../inbox/QUESTIONS.md)) |
 
 ## Deviations from Docker, and why
@@ -323,13 +328,13 @@ accept it). The network rows' evidence is in
 | **Vault encryption: our own.** PBKDF2-HMAC-SHA256 600,000 + AES-256-GCM over the secret, UTF-8 of NFC, not satorilib's PBKDF2-HMAC-SHA1 1,000,000 + AES-256-CBC per field with a Latin-1 password. | Current guidance; any passphrase; GCM's tag tells a wrong passphrase. Docker's scheme is read only at import. |
 | **Passphrases: any Unicode, at least 8 characters** (Docker: 4, and Latin-1 only in practice). | [Passphrases](#passphrases). |
 | **No export to Docker files.** Backup is the words, the private keys and the Nostr key. | Migrate in, never back. |
-| **Base addresses only.** No Evrmore address, WIF or scripthash is shown or stored. | This app is about Base (owner, 2026-10-16). Central's login signature stays inside `src/central/`. |
+| **Base only.** No Evrmore address, WIF, scripthash or message signature is shown, stored, read or made. | This app is about Base (owner, 2026-10-16). Central's login is EIP-191; register's Evrmore name for the vault is only compared, inside `src/central/`. |
 | **Words at setup.** Docker never shows words. | A browser's storage can be cleared by the browser itself, so the vault's words are shown and checked at setup. |
 | **Words import.** Docker has none. | It is the browser's other way back. |
 | **Wrong password is an error**, not a silently encrypted vault. | |
 | **A vault must be encrypted.** satorilib opens a plain-text `vault.yaml` with any password and saves one when the password is outside Latin-1. | The import refuses both: Unlock would protect nothing. |
 | **Stored fields that don't match the key are refused**, where satorilib warns and goes on. | The vault's address shown while locked comes from its public key. |
-| **A WIF-only file reads** (satorilib fails on it). | |
+| **A file with no entropy is refused**, even with a WIF. | satorilib fails on a WIF-only file too, so no Dockerized Neuron runs on one; reading it would take Evrmore's base58check. |
 | **The identity and the vault must be different keys** (Docker never checks). | The same key twice would put the funds' key unencrypted on disk. |
 | **Ticks run from page load with no login.** Docker's UI needs login. | Its neuron process also runs on `wallet.yaml` alone (`start.py:75`). |
 | **Nostr key**: random as in Docker (`start.py:120-149`), plain text in the record, imported from `nostr.yaml`, backed up as `nsec`. | [nostr.md](nostr.md). |

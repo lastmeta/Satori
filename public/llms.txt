@@ -64,6 +64,10 @@ For agents written against the earlier API:
   the neuron.
 - Prediction texts (`value`, `t1_value`, `observed_at`) are JS's number
   text (`100`, not `100.0`), and Nostr content is compact JSON.
+- Central's login is signed with EIP-191 (Ethereum `personal_sign`) by the
+  identity, as central (base-upgrade f4d72f5) and Satori Lite (satorilib
+  5028913) now do; it was an Evrmore signed message. There is no Evrmore
+  anywhere in the app.
 - `data-test`: `identity` and `vault` now hold the Base addresses;
   `identity-base`, `vault-base`, `wif` and `download-*` are gone;
   `backup-key`, `backup-hex`, `pass-note` and `finish` are new.
@@ -71,11 +75,14 @@ For agents written against the earlier API:
 ## Concepts
 
 - Base only: each key's address is its Base (0x) address, the only kind
-  shown. (Central's login takes an Evrmore-format message signature; the app
-  makes it internally and never shows it.)
+  shown. There is no Evrmore anywhere in the app: central's login is an
+  EIP-191 (`personal_sign`) signature by the identity, `0x` + r ‖ s ‖ v,
+  which recovers to the identity's Base address. (Central's register answer
+  names the vault only by an Evrmore address; the app derives that form of
+  its vault's pubkey to compare, and never shows or returns it.)
 - Identity key: the neuron's own key. Stored unencrypted in this browser so
   the neuron runs from page load with nobody present. It signs central's
-  login challenge and the daily Base batch.
+  login challenge (EIP-191) and the daily Base batch.
 - Vault key: holds funds. Stored encrypted with the passphrase
   (PBKDF2-SHA256, 600,000 rounds, and AES-256-GCM; any Unicode passphrase of
   at least 8 characters). **Unlock** (enter the passphrase) decrypts it into
@@ -114,7 +121,7 @@ For agents written against the earlier API:
   scores, against the first observation 24 h or more after it). Sent right
   after the poll in one batch (`POST /api/v1/predictions/batch`, after a
   login signed by the identity) as `{stream_uuid, stream_name, value: t2,
-  t1_value: t1, observed_at, hash}`, with Python's float formatting. Status
+  t1_value: t1, observed_at, hash}`, the numbers as JS prints them. Status
   `pending` until central accepts the batch; a rejected or failed batch is
   resent with the next poll. Pending predictions older than 22 h (2 × 11 h)
   are dropped. Every call to central is resent once on a network error, a
@@ -563,8 +570,9 @@ build step beyond Vite, MIT licensed.
   key's words, public key, Base address and signatures (`keys.js`), Docker's
   files read for import and migration (`docker.js`).
 - `src/central/`: central's API (register, observations, login, predictions
-  batch); `login.js`: central's login signature format and address form
-  (protocol details, never shown).
+  batch) and `centralAddress` (central's name for our vault in register's
+  answer, only compared); `login.js`: central's login signature, EIP-191 by
+  the identity.
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API; every
   commit checkpointed; `recover.js` sets aside a WAL an older version left.
 - `src/engine/`: `forecast(points, { step, horizon }) → { model, t1, t2, value,

@@ -101,8 +101,8 @@ keep a pinned desktop tab; on iPhone the neuron works only while on screen.
   Persistent storage is asked for, but a browser may refuse it: the vault's
   24 words, checked at setup, stay the way back.
 - Not planned: ECDH peer encryption (only for Docker's engine IPC), anything
-  on Evrmore (Base only). EIP-191 signing would become central's login if
-  central accepts it ([issue](../issues/central-login-eip191.md)).
+  on Evrmore (Base only). Central's login is EIP-191 since 2026-10-16
+  ([../design/central.md](../design/central.md#login-signature)).
 
 ## Not done
 

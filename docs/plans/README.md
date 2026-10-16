@@ -40,7 +40,9 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    plain JS text, after an audit of what central, satorilib and Lite parse
    ([../design/keys.md](../design/keys.md),
    [../design/central.md](../design/central.md#the-protocol-audit),
-   [../design/nostr.md](../design/nostr.md#the-protocol-audit)).
+   [../design/nostr.md](../design/nostr.md#the-protocol-audit)). Then
+   central's login as EIP-191, as central and Lite now sign it, and the
+   Evrmore code gone ([../design/central.md](../design/central.md#login-signature)).
 11. **Runtime hardening**: catch-up on resume, the keys in a worker
    ([runtime.md](runtime.md)).
 12. **Later**, in rough order of value per effort: a per-stream chart and model
@@ -62,10 +64,11 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 - **Keys on the main thread.** When a script runs in the page (an XSS, a
   malicious extension), it can read the identity, the Nostr key and an
   unlocked vault. Fix: the keys and signing in a worker (step 11).
-- **Evrmore code for central's login.** Every neuron must sign central's login
-  in Evrmore's message format, the one central accepts; the app keeps it in
-  `src/central/login.js`, never shown. Fix: central accepts EIP-191
-  ([issue](../issues/central-login-eip191.md)).
+- **Central's Evrmore name for the vault.** Register's answer names the vault
+  only by its Evrmore address, so `centralAddress` (`src/central/index.js`)
+  derives that form to compare: the app's last Evrmore code (the login is
+  EIP-191 since 2026-10-16). Fix: central also returns the vault's pubkey or
+  Base address ([issue](../issues/central-register-vault-base.md)).
 - **Words that open in a standard wallet.** The 24 words are satorilib's
   scheme (the secret as BIP39 entropy), so MetaMask derives another account
   from them; Backup shows the private key for that. Whether new neurons use
