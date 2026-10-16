@@ -98,7 +98,7 @@ most one card. Its button does the thing, or goes to the place it is done.
 | 2 | `login-refused` | bad | central | the last cycle's login was refused (after its one retry) | Open Settings (central) |
 | 3 | `central-failing` | bad | central | the last 2 cycles failed | Try again (a poll) |
 | 4 | `central-overdue` | bad | central | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
-| 5 | `base-failing` | bad | base | the batch check failed twice in a row, and a batch was sent before | Open Settings (Base) |
+| 5 | `base-failing` | bad | base | the batch check failed twice in a row while Base is in use (delegated, or a batch sent before) | Open Settings (Base) |
 | 6 | `relays-down` | bad | network | streams are subscribed and every relay is down | Open Settings (relays) |
 | 7 | `central-failed` | warn | central | the last cycle failed (once) | Try again |
 | 8 | `backup` | warn | – | storage is not persistent and no backup is confirmed | Back up |
