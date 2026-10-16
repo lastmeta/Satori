@@ -40,6 +40,12 @@ Set by the owner; quoted where these are the owner's own words.
   protocols and payloads, simplified, not new flows. Any deviation is written
   down with its reason in the design docs. For the finishing pass: "Simplify
   refactor essentialism but follow what we already made".
+- **Migrate in, never back (owner, 2026-10-16).** "This is a new repo. This
+  is a new day." Do things the most correct way. Import what users bring from
+  the Dockerized Neuron and translate it into this app's own way. Don't keep
+  old formats, limits or exports only so things can move back. Satori Lite is
+  the reference for how the network behaves (protocols central and peers
+  rely on), not a compatibility target for local formats.
 - **The order of steps:** keys → central's data flow → an engine inspired by
   `namaste_club` → Nostr → Base last, integrating what the dapp
   (`contract/satori-ui`) does → a finishing pass.
