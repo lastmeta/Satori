@@ -228,6 +228,7 @@ describe('createBase', () => {
   let base;
   const at = { t: 1_000_000 };
   const timers = [];
+  const checks = []; // onCheck: each batch check's result (Home's activity log)
   beforeEach(() => {
     vault = null;
     central = {
@@ -243,9 +244,10 @@ describe('createBase', () => {
       },
     };
     timers.length = 0;
+    checks.length = 0;
     base = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
       transport: rpc.transport, now: () => at.t, setTimeout: (fn, ms) => (timers.push({ fn, ms }), timers.length),
-      clearTimeout: () => {} });
+      clearTimeout: () => {}, onCheck: (r) => checks.push(r) });
   });
 
   test('status: amounts as decimal strings, the delegation, the lock, batches of gas left', async () => {
@@ -302,6 +304,7 @@ describe('createBase', () => {
     expect(v.lastCheck).toMatchObject({ round: ROUND, sent: { games: [{ gameId: 1, direction: DOWN }] } });
     expect(v.nextCheck).toBe(at.t + CHECK_EVERY_S); // 09:00 on the chain: an hour (the round starts in 15 h)
     expect(await base.predict()).toMatchObject({ skipped: 'already predicted this round' });
+    expect(checks).toMatchObject([{ round: ROUND, sent: { round: ROUND } }, { skipped: 'already predicted this round' }]);
 
     await base.undelegate();
     v = await base.status();

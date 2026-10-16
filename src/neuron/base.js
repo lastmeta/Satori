@@ -151,9 +151,10 @@ export function nextCheckAt({ now, chainTime }) {
  * @param {() => object} o.central the current central client
  * @param {string} [o.defaultRpc] the RPC when none is saved, if the build or the dev server set one (src/config.js)
  * @param {any} [o.transport] a viem transport (tests); else http to the RPC URLs
+ * @param {(result: object) => void} [o.onCheck] each batch check's result (Home's activity log)
  */
 export function createBase({ db, identity, vaultAddress, vault, central, defaultRpc, transport, forecast = engineForecast,
-  now = () => Date.now() / 1000, onChange = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
+  now = () => Date.now() / 1000, onChange = () => {}, onCheck = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
   origin = globalThis.location?.href }) {
   let cache = null; // central's config, 1 h
   let made = null; // { key, chain, rpc }
@@ -252,6 +253,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       result = { at: null, error: errorText(err) };
     }
     lastCheck = result;
+    onCheck(result); // Home's activity log
     await refresh();
     return result;
   }

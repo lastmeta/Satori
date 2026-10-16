@@ -36,13 +36,15 @@ const parseRaw = (raw) => {
  * @param {object} o
  * @param {object} o.db the app's db
  * @param {{secret: string, pubkey: string}} o.key the Nostr key
+ * (onPublished(relays): a `_pred` the relays took; onError(err): an intake that failed: both for Home's activity log)
  * @param {string} o.walletPubkey the identity's compressed pubkey (the announcement's wallet_pubkey)
  * @param {() => object} o.central the current central client (relays(), relayConfig())
  * @param {{relays: string[], centralWrite: boolean}} o.defaults Settings before the user changes them
  */
 export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay,
   forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:',
-  onChange = () => {}, setInterval: si = setInterval, clearInterval: ci = clearInterval, openWaitMs = 10_000 }) {
+  onChange = () => {}, onPublished = () => {}, onError = () => {}, setInterval: si = setInterval, clearInterval: ci = clearInterval,
+  openWaitMs = 10_000 }) {
   let maxStreams = MAX_STREAMS;
   let userRelays = defaults.relays;
   let centralWrite = defaults.centralWrite;
@@ -53,8 +55,11 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   const sending = new Set();
   const log = (err) => console.error('[satori] nostr', err);
 
-  /** Intake runs one event at a time, in order. */
-  const work = (fn) => intakeLine(fn).catch(log);
+  /** Intake runs one event at a time, in order; one that fails (the database, the engine) is reported (onError). */
+  const work = (fn) => intakeLine(fn).catch((err) => {
+    log(err);
+    onError(err);
+  });
   /** Sends run beside the intake queue: a relay that is slow to say OK (or never does) holds nothing up. */
   function background(p) {
     const q = Promise.resolve(p).catch(log).finally(() => sending.delete(q));
@@ -243,6 +248,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     onChange();
     background(publish(ev).then(async (n) => {
       if (!n) return;
+      onPublished(n); // Home's activity log
       await db.setPredictionRelays(uuid, seq, n);
       onChange();
     }));

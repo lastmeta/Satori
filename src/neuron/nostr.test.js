@@ -82,13 +82,18 @@ let relays;
 let central;
 let nostr;
 let changes;
-async function boot({ https = false, centralWrite = false, user = [USER_RELAY] } = {}) {
+let published; // onPublished: each `_pred` a relay took (Home's activity log)
+let failures; // onError: an intake that failed (the database, the engine)
+async function boot({ https = false, centralWrite = false, user = [USER_RELAY], dbOf = (d) => d } = {}) {
   db = await memoryDb();
   relays = fakeRelays();
   central = fakeCentral();
   changes = 0;
-  nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+  published = [];
+  failures = [];
+  nostr = createNostr({ db: dbOf(db), key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
     makeRelay: relays.make, now, https, defaults: { relays: user, centralWrite }, onChange: () => changes++,
+    onPublished: (n) => published.push(n), onError: (err) => failures.push(err.message),
     setInterval: () => 0, clearInterval: () => {}, openWaitMs: 0 });
   await nostr.start();
 }
@@ -338,6 +343,24 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await relays.get(CENTRAL_RELAY).deliver(observe('btc', '101', 2));
     await settle();
     expect((await db.relayPredictions(relayUuid(PROV_PUB, 'btc'))).map((p) => [p.seq, p.relays])).toEqual([[2, 1], [1, 0]]);
+    expect(published).toEqual([1]); // only the one a relay took
+  });
+
+  test('an intake that fails (the database) is reported, and the next one goes on', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let broken = true;
+    await subscribed('btc', { dbOf: (d) => ({ ...d, addRelayObservation: async (o) => {
+      if (broken) throw new Error('IO Error: Could not write file');
+      return d.addRelayObservation(o);
+    } }) });
+    await relays.get(CENTRAL_RELAY).deliver(observe('btc', '100', 1));
+    await settle();
+    expect(failures).toEqual(['IO Error: Could not write file']);
+    broken = false;
+    await relays.get(CENTRAL_RELAY).deliver(observe('btc', '101', 2));
+    await settle();
+    expect(published).toEqual([1]);
+    error.mockRestore();
   });
 
   test('announce on every (re)connect where we write; reconcile re-announces, refetches the relay list and reconnects', async () => {
