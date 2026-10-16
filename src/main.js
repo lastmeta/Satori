@@ -16,7 +16,8 @@ import {
   loadNostr, newNostrYaml, evmAddress,
 } from './keys/index.js';
 import { createCentral } from './central/index.js';
-import { cycle, register, createPoller, centralStatus as statusOf, claimTab } from './neuron/index.js';
+import { cycle, register, createPoller, centralStatus as statusOf, claimTab, modelsOf } from './neuron/index.js';
+import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
@@ -99,8 +100,20 @@ async function registerWith(c) {
   await refresh();
 }
 
+/**
+ * Central's history for the streams that have none (src/neuron/history.js): at
+ * load and in each poll, one run at a time (a call during a run gets one more
+ * run after it). Never throws.
+ */
+const backfill = coalesce('history', async () => {
+  const r = await backfillHistory({ db, central });
+  if (r?.streams) console.info('[satori] central history', r);
+  await refresh();
+});
+
 async function runCycle() {
-  const r = await cycle({ db, central }); // never throws: errors are in r and in the status
+  // never throws: errors are in r and in the status; seed: the identity draws each target's spec
+  const r = await cycle({ db, central, seed: identity.pubkey, backfill });
   console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
   await refresh();
   return r;
@@ -140,6 +153,7 @@ async function startNeuron() {
   state.screen = 'home';
   keepStorage(); // after setup and on each load until the browser keeps it: the keys live in this storage
   registerWith(c).catch((err) => console.error('[satori] register', err));
+  backfill(); // streams with no history yet (all of them after an update) get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
 }
@@ -466,8 +480,10 @@ window.satori = {
   },
   /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit } */
   async poll() { ready(); return pollNow(); },
-  /** Central's streams with the latest observation and our latest prediction. */
-  async streams() { ready(); return (await db.streams()).map((r) => ({ ...r, meta: parseMeta(r.meta) })); },
+  /** Central's streams with the latest observation, our latest prediction and the stream's spec. */
+  async streams() { ready(); return (await db.streams()).map((r) => ({ ...r, meta: parseMeta(r.meta), spec: parseMeta(r.spec) })); },
+  /** Each target's champion spec (bvar): companions by uuid and name, λ1, λ2, score, generation, accepted; and its latest model. */
+  async models() { ready(); return modelsOf(await db.streams()); },
   /** One stream's predictions (uuid or name), newest first. */
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
   /** Set the central URL ('' = the default) and register there. → status().central */

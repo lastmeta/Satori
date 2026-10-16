@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { memoryDb } from '../../test/memory-db.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
-  cycle, register, firstPollAt, startJitter, createPoller, centralStatus, claimTab, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
+  cycle, register, firstPollAt, startJitter, createPoller, centralStatus, claimTab, modelsOf, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
 } from './index.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
 const T = 1_792_000_000; // seconds
+const ID = '02a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9a'; // the identity's pubkey: the specs' seed
 const entry = (uuid, name, observedAt, value) => ({
   id: 1, observed_at: String(observedAt), value: String(value), hash: '', stream_id: 1,
   stream: { id: 1, uuid, name, meta: null }, ts: '2026-10-14T23:00:12.756973', stream_uuid: uuid,
@@ -24,6 +25,7 @@ function fakeCentral() {
       expect(limit).toBe(BATCH_LIMIT);
       return c.batch;
     }),
+    history: vi.fn(async () => { throw new CentralError(404, 'Not Found'); }), // central2 today: no history route
     submitPredictions: vi.fn(async (items) => {
       c.sent.push(items);
       const r = c.results.length ? c.results.shift() : { total_submitted: items.length, successful: items.length, failed: 0, prediction_ids: [], errors: null };
@@ -43,13 +45,16 @@ beforeEach(async () => {
   central = fakeCentral();
   clock = T + 0.25;
 });
-const run = (o) => cycle({ db, central, now, ...o });
+const run = (o) => cycle({ db, central, now, seed: ID, ...o });
+/** An engine that forecasts each fresh stream with `fn(history)` and keeps no specs. */
+const perStream = (fn) => vi.fn(({ fresh, histories }) => ({
+  forecasts: new Map(fresh.map((u) => [u, fn(histories.get(u))]).filter(([, f]) => f)), specs: new Map() }));
 
 describe('cycle: poll → store → forecast new rows → submit', () => {
   test('stores the batch, forecasts each stream, and sends Lite\'s payload items', async () => {
     central.batch = [entry('u-btc', 'bitcoin', T - 100.7, '100.0'), entry('u-eth', 'eth', T - 50, '5')];
     const r = await run();
-    expect(r.poll).toEqual({ at: T + 0.25, streams: 2, new: 2, predicted: 2 });
+    expect(r.poll).toEqual({ at: T + 0.25, streams: 2, new: 2, predicted: 2, engine_ms: expect.any(Number) });
     expect(r.submit).toMatchObject({ at: T + 0.25, total_submitted: 2, successful: 2, failed: 0 });
     expect(await db.history('u-btc')).toEqual([{ ts: T - 101, value: 100 }]);
     const [items] = central.sent;
@@ -73,22 +78,24 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect(await db.history('u-btc')).toHaveLength(1);
   });
 
-  test('only streams that got a new row are forecast, on their whole history', async () => {
-    const forecast = vi.fn((points) => ({ model: 'm', t1: points.length, t2: points.length + 0.5 }));
+  test('only streams that got a new row are forecast, on their whole history (every central stream\'s history is the pool)', async () => {
+    const engine = perStream((points) => ({ model: 'm', t1: points.length, t2: points.length + 0.5 }));
     central.batch = [entry('u-a', 'a', T, 1), entry('u-b', 'b', T, 2)];
-    await run({ forecast });
+    await run({ engine });
     central.batch = [entry('u-a', 'a', T + 3600, 3), entry('u-b', 'b', T, 2)];
     clock += 3600;
-    const r = await run({ forecast });
+    const r = await run({ engine });
     expect(r.poll).toMatchObject({ new: 1, predicted: 1 });
-    expect(forecast).toHaveBeenLastCalledWith([{ ts: T, value: 1 }, { ts: T + 3600, value: 3 }]);
+    const [{ fresh, histories, seed }] = engine.mock.lastCall;
+    expect([fresh, seed]).toEqual([['u-a'], ID]);
+    expect(histories).toEqual(new Map([['u-a', [{ ts: T, value: 1 }, { ts: T + 3600, value: 3 }]], ['u-b', [{ ts: T, value: 2 }]]]));
     expect(central.sent[1]).toEqual([expect.objectContaining({ stream_uuid: 'u-a', value: '2.5', t1_value: '2.0' })]);
   });
 
   test("the engine's phi and weight are stored with the prediction; the payload stays Lite's (value = t2, t1_value = t1)", async () => {
-    const forecast = () => ({ model: 'bar1', t1: 101, t2: 102.5, phi: -0.2, weight: 0.6 });
+    const engine = perStream(() => ({ model: 'bar1', t1: 101, t2: 102.5, phi: -0.2, weight: 0.6 }));
     central.batch = [entry('u-a', 'a', T, 100)];
-    await run({ forecast });
+    await run({ engine });
     expect(await db.predictions('a')).toMatchObject([{ model: 'bar1', t1: 101, t2: 102.5, phi: -0.2, weight: 0.6 }]);
     expect(central.sent[0]).toEqual([predictionItem({ streamUuid: 'u-a', streamName: 'a', t1: 101, t2: 102.5, now: T + 0.25 })]);
     expect(central.sent[0][0]).toMatchObject({ value: '102.5', t1_value: '101.0' });
@@ -96,8 +103,8 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
 
   test('no forecast (null) → no prediction; unusable rows are dropped', async () => {
     central.batch = [entry('u-a', 'a', T, 'abc'), { ...entry('u-b', 'b', T, 1), stream: null, stream_uuid: null }, entry('u-c', 'c', T, 1)];
-    const r = await run({ forecast: () => null });
-    expect(r).toEqual({ poll: { at: clock, streams: 1, new: 1, predicted: 0 }, submit: null });
+    const r = await run({ engine: perStream(() => null) });
+    expect(r).toEqual({ poll: { at: clock, streams: 1, new: 1, predicted: 0, engine_ms: expect.any(Number) }, submit: null });
   });
 
   test('kept queue: successful == 0 or an error keeps every prediction; the next poll resends them with its own', async () => {
@@ -165,6 +172,37 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect(r.submit.successful).toBe(1);
     expect(await db.pendingCount()).toBe(0);
     expect((await db.predictions('b'))).toEqual([]);
+  });
+
+  test('the engine: each target\'s spec drawn from the identity, stored, evolved; the prediction says which model made it', async () => {
+    const names = ['gold', 'btc', 'eth', 'oil'];
+    const price = (n, k) => 100 * (1 + 0.01 * Math.sin(k * (names.indexOf(n) + 1)) + 0.002 * k);
+    let r;
+    for (let k = 0; k < 40; k++) { // a poll every 12 h: aligned buckets for every stream
+      central.batch = names.map((n) => entry(`u-${n}`, n, T + k * 43_200, price(n, k)));
+      clock = T + k * 43_200 + 60;
+      r = await run();
+    }
+    expect(r.poll).toMatchObject({ new: 4, predicted: 4, engine_ms: expect.any(Number) });
+    const specs = await db.specs();
+    expect([...specs.keys()].sort()).toEqual(names.map((n) => `u-${n}`).sort());
+    for (const [u, row] of specs) {
+      expect(row.spec.companions.length).toBeGreaterThanOrEqual(1);
+      expect(row.spec.companions).not.toContain(u);
+      expect(row.generation).toBeGreaterThan(10); // one proposal per poll once the backtest has 5 origins
+      expect(row.score).toBeGreaterThan(0);
+    }
+    expect((await db.predictions('gold', 1))[0]).toMatchObject({ model: 'bvar', phi: expect.any(Number), weight: expect.any(Number) });
+    expect((await db.predictions('gold', 40)).at(-1).model).toBe('naive'); // the first poll: one observation
+    // the first draw: the same identity draws the same specs, another identity others
+    const first = async (seed) => {
+      const fresh = await memoryDb();
+      central.batch = names.map((n) => entry(`u-${n}`, n, T, price(n, 0)));
+      await cycle({ db: fresh, central, now, seed });
+      return JSON.stringify([...(await fresh.specs())].map(([u, x]) => [u, x.spec]).sort());
+    };
+    expect(await first(ID)).toBe(await first(ID));
+    expect(await first('another identity')).not.toBe(await first(ID));
   });
 
   test('a batch that is not a list is a failed poll', async () => {
@@ -315,7 +353,7 @@ describe('createPoller', () => {
   });
 });
 
-test('centralStatus: the URL, the register result, the last poll and submission, the schedule, the queue', async () => {
+test('centralStatus: the URL, the register result, the last poll and submission, the schedule, the queue, the history', async () => {
   central.url = 'https://central2.example';
   central.results.push({ total_submitted: 1, successful: 0, failed: 1, errors: ['no'] });
   central.batch = [entry('u-btc', 'btc', T, 1)];
@@ -323,8 +361,19 @@ test('centralStatus: the URL, the register result, the last poll and submission,
   const registration = { at: T, ok: true, peer_id: 7 };
   expect(await centralStatus({ db, central, registration, poller: { next: T + 60, running: false } })).toEqual({
     url: 'https://central2.example', registration, lastPoll: r.poll, nextPoll: T + 60, polling: false, lastSubmit: r.submit, pending: 1,
+    history: { at: clock, url: 'https://central2.example', streams: 0, rows: 0, left: 1, error: 'central 404: Not Found',
+      retryAt: clock + 86_400, needed: 1 },
   });
   expect(await centralStatus({ db })).toMatchObject({ url: null, nextPoll: null, polling: false });
+});
+
+test('modelsOf: each target\'s spec with its companions\' names, for agents (window.satori.models())', () => {
+  const spec = (c) => JSON.stringify({ companions: c, lambda1: 0.1, lambda2: 1 });
+  expect(modelsOf([
+    { uuid: 'u-a', name: 'a', model: 'bvar', spec: spec(['u-b', 'u-x']), score: 0.01, generation: 4, accepted: 1 },
+    { uuid: 'u-b', name: 'b', model: null, spec: null },
+  ])).toEqual([{ uuid: 'u-a', name: 'a', model: 'bvar', spec: { companions: [{ uuid: 'u-b', name: 'b' }, { uuid: 'u-x', name: null }],
+    lambda1: 0.1, lambda2: 1 }, score: 0.01, generation: 4, accepted: 1 }]);
 });
 
 test('claimTab: the first claim wins, a second gets false', async () => {

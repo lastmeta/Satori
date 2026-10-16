@@ -3,7 +3,7 @@
 // re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, reactive, watch } from '@arrow-js/core';
 import {
-  fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle,
+  fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
   fmtCadence, shortKey, relayText, obsText, rawText, catalogMatch, predText,
   amountText, delegationText, lockText, gasText, batchText, checkText, claimLine, shortHash, rpcText, rpcTitle, storageText, playNote,
 } from './format.js';
@@ -216,17 +216,18 @@ function centralCard(a) {
       ${fact('Next poll', 'next-poll', () => fmtWhen(c().nextPoll))}
       ${fact('Last submission', 'last-submit', () => submitText(c().lastSubmit))}
       ${fact('Pending', 'pending', () => String(c().pending))}
+      ${fact('History', 'history', () => historyText(c().history))}
     </dl>
     <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration, state.vault)}">${() => mismatchText(c().registration, state.vault)}</p>
     ${streams()}
   </section>`;
 }
 
-function streamRow(r) {
+function streamRow(r, names) {
   // One root node, no whitespace around it: ArrowJS 1.0.6 breaks a keyed list
   // of multi-node items once it goes empty and back.
   const sent = r.status === 'sent';
-  return html`<div class="row srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="model" data-label="Model" data-test="model" title="${modelTitle(r)}">${r.model ?? '–'}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
+  return html`<div class="row srow" data-test="stream"><span class="sname" title="${r.uuid}">${r.name}</span><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="model" data-label="Model" data-test="model" title="${modelTitle(r, names)}">${modelText(r, names)}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
 }
 
 /** Central's streams with our t1 and t2: collapsed in the Central card (central2 has ~80). */
@@ -237,7 +238,10 @@ function streams() {
       <summary>${() => `Streams: ${state.streams.length} from central, with our forecasts`}</summary>
       <div class="srows">
         <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
-        <div>${() => state.streams.map((r) => streamRow(r).key(r.uuid))}</div>
+        <div>${() => {
+          const names = new Map(state.streams.map((r) => [r.uuid, r.name]));
+          return state.streams.map((r) => streamRow(r, names).key(r.uuid));
+        }}</div>
       </div>
     </details>`;
 }

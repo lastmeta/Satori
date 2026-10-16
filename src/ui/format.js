@@ -42,12 +42,50 @@ export function submitText(s) {
 
 const short = (x, digits) => String(Number(x.toFixed(digits))).replace('-', '−');
 
-/** The engine model of a prediction in a few words (docs/design/engine.md). */
-export function modelTitle(p) {
-  if (p.model === 'bar1') return `Bayesian AR(1) on 12 h returns · φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)}`;
-  if (p.model === 'bar1d') return `Bayesian AR(1) on 12 h changes (a series with values ≤ 0) · φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)}`;
-  if (p.model === 'naive') return 'the last value: bar1 needs an observation every 12 h (6 lag pairs of back-to-back 12 h buckets)';
-  return p.model ?? '';
+/** A stream row's spec (JSON text, as stored), or null. */
+const specOf = (r) => {
+  try { return r?.spec ? JSON.parse(r.spec) : null; } catch { return null; }
+};
+const nameOf = (names, u) => names?.get(u) ?? u;
+
+/** The Model column: the model, and its spec's companions by name (docs/design/engine.md). */
+export function modelText(r, names) {
+  if (!r.model) return '–';
+  const spec = specOf(r);
+  if (!spec?.companions?.length) return r.model;
+  const plus = spec.companions.map((u) => `+${nameOf(names, u)}`).join(' ');
+  return r.model === 'bvar' ? `bvar · ${plus}` : `${r.model} · spec ${plus}`;
+}
+
+/** The engine model of a prediction in a few words (docs/design/engine.md), with its stream's spec. */
+export function modelTitle(p, names) {
+  const spec = specOf(p);
+  const with_ = spec?.companions?.map((u) => nameOf(names, u)).join(', ');
+  if (p.model === 'bvar') {
+    return `Bayesian VAR(1) on 12 h steps of this stream with ${with_} · λ1 ${spec.lambda1} · λ2 ${spec.lambda2}`
+      + ` · own φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)} · generation ${p.generation}, ${p.accepted} kept`
+      + ` · score ${p.score == null ? '–' : `${short(p.score * 100, 2)}%`} (median 24 h error, last 28 origins)`;
+  }
+  let t = p.model ?? '';
+  if (p.model === 'bar1') t = `Bayesian AR(1) on 12 h returns · φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)}`;
+  if (p.model === 'bar1d') t = `Bayesian AR(1) on 12 h changes (a series with values ≤ 0) · φ ${short(p.phi, 3)} · weight ${short(p.weight, 2)}`;
+  if (p.model === 'naive') t = 'the last value: bar1 needs an observation every 12 h (6 lag pairs of back-to-back 12 h buckets)';
+  if (p.model && spec?.companions?.length) {
+    t += ` · its spec: bvar with ${with_}, λ1 ${spec.lambda1}, λ2 ${spec.lambda2}, generation ${p.generation},`
+      + ` until it has ${spec.companions.length + 6} aligned 12 h rows`;
+  }
+  return t;
+}
+
+/** Central's history for our streams (neuron/history.js) in a few words: status().central.history. */
+export function historyText(h) {
+  if (!h) return 'Not yet';
+  const wait = h.needed ? `${h.needed} streams wait for the next poll` : '';
+  if (h.at == null) return wait || 'Not yet';
+  if (h.retryAt) return `Not on this central (${h.error}); next try ${fmtWhen(h.retryAt)}`;
+  const done = `${fmtWhen(h.at)} · ${h.streams} streams, ${h.rows.toLocaleString('en-US')} rows`;
+  if (h.error) return `${done} · failed: ${h.error}${wait ? `; ${wait}` : ''}`;
+  return wait ? `${done} · ${wait}` : done;
 }
 
 /** n distinct sorted random indexes in [0, max). */

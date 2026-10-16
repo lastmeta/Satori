@@ -1,9 +1,11 @@
 // The neuron's flow, as Satori Lite runs it (docs/design/central.md):
 //   page load → register with central; first poll 5–30 min later, then every 11 h:
-//   poll ─▶ store (insert or ignore) ─▶ forecast streams with a new row ─▶ send everything pending
+//   poll ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams with a new row ─▶ send everything pending
+// The forecasts: each target's own bvar spec, evolved after each poll (docs/design/engine.md).
 import { normalizeObservation, predictionItem } from '../central/index.js';
-import { forecast as engineForecast } from '../engine/index.js';
+import { runModels } from '../engine/evolve.js';
 import { createSchedule } from './schedule.js';
+import { backfillHistory } from './history.js';
 
 export const POLL_EVERY_S = 11 * 3600; // start.py:4785-4876
 export const FIRST_POLL_S = [5 * 60, 30 * 60]; // start.py:4777
@@ -54,7 +56,7 @@ async function submit(db, central, now) {
   return result;
 }
 
-async function pollAndSubmit(db, central, forecast, now, at) {
+async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
   let batch;
   try {
     batch = await central.observations(BATCH_LIMIT);
@@ -66,17 +68,25 @@ async function pollAndSubmit(db, central, forecast, now, at) {
   }
   const rows = batch.map(normalizeObservation).filter(Boolean);
   const fresh = await db.addObservations(rows);
-  let predicted = 0;
-  for (const uuid of fresh) {
-    const f = forecast(await db.history(uuid));
-    if (!f) continue;
-    const made_at = now();
-    const { observed_at, hash } = predictionItem({ t1: f.t1, t2: f.t2, now: made_at });
-    await db.addPrediction({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight,
-      observed_at, hash });
-    predicted++;
+  await backfill(); // a stream first seen gets its past now (never throws; its rows are never new)
+  const poll = { at, streams: rows.length, new: fresh.length, predicted: 0 };
+  if (fresh.length) {
+    const histories = await db.centralHistories();
+    const specs = await db.specs();
+    const t0 = performance.now();
+    const out = await engine({ fresh, histories, specs, seed });
+    poll.engine_ms = Math.round(performance.now() - t0);
+    await db.saveSpecs(out.specs, Math.floor(now()));
+    for (const uuid of fresh) {
+      const f = out.forecasts.get(uuid);
+      if (!f) continue;
+      const made_at = now();
+      const { observed_at, hash } = predictionItem({ t1: f.t1, t2: f.t2, now: made_at });
+      await db.addPrediction({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight,
+        observed_at, hash });
+      poll.predicted++;
+    }
   }
-  const poll = { at, streams: rows.length, new: fresh.length, predicted };
   await db.set('central_last_poll', poll);
   const sent = await submit(db, central, now);
   await db.checkpoint();
@@ -84,15 +94,18 @@ async function pollAndSubmit(db, central, forecast, now, at) {
 }
 
 /**
- * One cycle: poll → store → forecast new rows → submit. Never throws: a failed
- * poll or a local failure (the database) is the poll's error; a failed
- * submission keeps the queue.
+ * One cycle: poll → store → history for new streams → forecast new rows →
+ * submit. Never throws: a failed poll or a local failure (the database) is the
+ * poll's error; a failed submission keeps the queue.
+ * @param {{db, central, now?: () => number, seed?: string, engine?: typeof runModels, backfill?: () => Promise}} o
+ *   seed: the identity's public key (the specs' RNG); engine: one poll's models (src/engine/evolve.js)
  * @returns {Promise<{poll: object, submit: object | null}>}
  */
-export async function cycle({ db, central, forecast = engineForecast, now = nowS }) {
+export async function cycle({ db, central, now = nowS, seed = '', engine = runModels,
+  backfill = () => backfillHistory({ db, central, now }) }) {
   const at = now();
   try {
-    return await pollAndSubmit(db, central, forecast, now, at);
+    return await pollAndSubmit({ db, central, engine, now, at, seed, backfill });
   } catch (err) {
     console.error('[satori] cycle failed', err);
     const poll = { at, error: errorText(err) };
@@ -143,6 +156,20 @@ export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeo
   };
 }
 
+/**
+ * Each target's champion spec for agents (window.satori.models()), from db.streams() rows:
+ * [{ uuid, name, model, spec: { companions: [{ uuid, name }], lambda1, lambda2 }, score, generation, accepted }].
+ */
+export function modelsOf(rows) {
+  const names = new Map(rows.map((r) => [r.uuid, r.name]));
+  return rows.filter((r) => r.spec).map((r) => {
+    const { companions, lambda1, lambda2 } = JSON.parse(r.spec);
+    return { uuid: r.uuid, name: r.name, model: r.model ?? null,
+      spec: { companions: companions.map((u) => ({ uuid: u, name: names.get(u) ?? null })), lambda1, lambda2 },
+      score: r.score, generation: r.generation, accepted: r.accepted };
+  });
+}
+
 /** Central's state for the UI and agents (window.satori.status().central): plain values. */
 export async function centralStatus({ db, central, registration, poller }) {
   return {
@@ -153,6 +180,8 @@ export async function centralStatus({ db, central, registration, poller }) {
     polling: !!poller?.running,
     lastSubmit: (await db.get('central_last_submit')) ?? null,
     pending: await db.pendingCount(),
+    // central's history (history.js): the last backfill, and how many streams still have none
+    history: { ...((await db.get('central_history')) ?? {}), needed: (await db.needHistory()).length },
   };
 }
 

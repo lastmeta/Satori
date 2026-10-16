@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { verifyMessage, deriveKeys, entropyFromWords } from '../src/keys/index.js';
 import { readWallet } from '../src/keys/docker.js';
 import { forecast, STEP_S } from '../src/engine/index.js';
+import { runModels } from '../src/engine/evolve.js';
 import { pyFloatStr } from '../src/py.js';
 import { openApp, reloadApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral as stubAt, CENTRAL } from './stub.js';
@@ -176,7 +177,7 @@ test('create, register, Poll now (observations in, predictions out), reload keep
   await expect(page.locator('[data-test=last-poll]')).toContainText('2 streams, 1 new, 1 predicted');
   await expect(btc.locator('[data-test=t1]')).toHaveText('67,100.50'); // two observations: naive, the last value
   await expect(btc.locator('[data-test=t2]')).toHaveText('67,100.50');
-  await expect(btc.locator('[data-test=model]')).toHaveText('naive');
+  await expect(btc.locator('[data-test=model]')).toHaveText('naive · spec +eth'); // its bvar spec waits for aligned history
   expect(stub.batches).toHaveLength(2);
 
   expect(stub.prod).toEqual([]);
@@ -238,7 +239,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   for (const [k, value] of ZIG.entries()) {
     stub.batch = [entry('u-btc', 'bitcoin', T0 + (k + 1) * STEP_S, String(value)), BATCH[1]];
     expect((await poll()).poll).toMatchObject({ new: 1, predicted: 1 });
-    if (k === 0) await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveText('naive');
+    if (k === 0) await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveText('naive · spec +eth');
   }
   const [bar1] = await page.evaluate(() => window.satori.predictions('bitcoin', 1));
   const history = [[T0, 67000.5], [T0 + 60, 67001.5], ...ZIG.map((v, k) => [T0 + (k + 1) * STEP_S, v])];
@@ -246,7 +247,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(bar1).toMatchObject({ model: 'bar1', t1: expected.t1, t2: expected.t2, phi: expected.phi, weight: expected.weight });
   expect(bar1.t2).not.toBe(67400.5);
   expect(stub.batches.at(-1)).toEqual([expect.objectContaining({ value: pyFloatStr(expected.t2), t1_value: pyFloatStr(expected.t1) })]);
-  await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveText('bar1');
+  await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveText('bar1 · spec +eth'); // eth has one row: bar1
   await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveAttribute('title', /^Bayesian AR\(1\) on 12 h returns · φ /);
 
   // The central URL: https only; a new one registers at once. Its uuids differ, so the
@@ -299,6 +300,46 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+  expect(stub.prod).toEqual([]);
+});
+
+test('central with history: the first Poll now backfills each stream and forecasts it with bvar (its spec from the identity)', async ({ context, page }) => {
+  const stub = await stubAt(context);
+  const names = ['bitcoin', 'eth', 'gold'];
+  const at = T0 - 3600; // the poll's rows; history ends an hour before
+  const price = (i, k) => 100 * (i + 1) * (1 + 0.02 * Math.sin(k / (3 + i)) + 0.0002 * k);
+  stub.history = Object.fromEntries(names.map((n, i) => [`u-${n}`,
+    Array.from({ length: 600 }, (_, k) => ({ id: k, stream_uuid: `u-${n}`, observed_at: `${at - (600 - k) * 3600}.25`, value: String(price(i, k)),
+      ts: '' }))]));
+  stub.batch = names.map((n, i) => entry(`u-${n}`, n, at, String(price(i, 600))));
+  await openApp(page);
+  await page.evaluate(() => window.satori.setup({ passphrase: 'pass' }));
+  await expect.poll(() => stub.registered.length).toBe(1);
+  const r = await page.evaluate(() => window.satori.poll());
+  expect(r.poll).toMatchObject({ streams: 3, new: 3, predicted: 3, engine_ms: expect.any(Number) });
+  expect(stub.historyCalls.map((q) => [q.stream_uuid, q.limit])).toEqual(names.map((n) => [`u-${n}`, '1000']));
+  const models = await page.evaluate(() => window.satori.models());
+  expect(models.map((m) => [m.name, m.model])).toEqual(names.map((n) => [n, 'bvar']));
+  // node, from the same history and the identity's pubkey (the specs' seed), makes the same specs and numbers
+  const seed = stub.registered[0]['wallet-pubkey'];
+  const histories = new Map(names.map((n, i) => [`u-${n}`, [...stub.history[`u-${n}`].map((o) => ({ ts: Math.floor(Number(o.observed_at)), value: Number(o.value) })),
+    { ts: at, value: price(i, 600) }]]));
+  const out = runModels({ fresh: names.map((n) => `u-${n}`), histories, seed });
+  for (const m of models) {
+    const want = out.specs.get(m.uuid);
+    expect(m.spec).toEqual({ ...want.spec, companions: want.spec.companions.map((u) => ({ uuid: u, name: u.slice(2) })) });
+    expect([m.score, m.generation, m.accepted]).toEqual([want.score, want.generation, want.accepted]);
+    const [p] = await page.evaluate((u) => window.satori.predictions(u, 1), m.uuid);
+    const f = out.forecasts.get(m.uuid);
+    expect(p).toMatchObject({ model: 'bvar', t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight });
+  }
+  expect(stub.batches[0].map((x) => x.value)).toEqual(models.map((m) => pyFloatStr(out.forecasts.get(m.uuid).t2)));
+  await page.locator('[data-test=streams] summary').click();
+  const gold = page.locator('[data-test=stream]').filter({ has: page.locator('.sname', { hasText: /^gold$/ }) }).locator('[data-test=model]');
+  const spec = models.find((m) => m.name === 'gold').spec;
+  await expect(gold).toHaveText(`bvar · ${spec.companions.map((c) => `+${c.name}`).join(' ')}`);
+  await expect(gold).toHaveAttribute('title', new RegExp(`^Bayesian VAR\\(1\\) on 12 h steps of this stream with .* · λ1 ${spec.lambda1} · λ2 ${spec.lambda2} · .*generation`));
+  await expect(page.locator('[data-test=history]')).toContainText('3 streams, 1,800 rows');
   expect(stub.prod).toEqual([]);
 });
 

@@ -1,7 +1,8 @@
 // The e2e's central: the dev server's default, central2, routed to a stub
 // (prod is aborted and recorded). It answers register, the observations batch,
 // the login and the predictions batch (checking the identity's signature), the
-// relay list and config, and the merkle proof; anything else is a 404, as
+// relay list and config, the merkle proof, and a stream's history when
+// `history` is set (else 404, as central2 today); anything else is a 404, as
 // prod's /base/config is. Satorian and the owner's dev relay (7778) are never
 // reached; /rpc is aborted unless a fake chain is given (e2e/base.spec.js).
 import { verifyMessage } from '../src/keys/index.js';
@@ -18,12 +19,13 @@ const CORS = {
  * @param {import('@playwright/test').BrowserContext} context
  * @param {{url?: string, relays?: string[], rpc?: {http: Function}}} [o] relays: central's relay list
  * @returns the stub: set `batch`, `vaults` (vault pubkey → address), `otherVault`, `fail` (statuses for the next
- *   predictions batches), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof);
- *   read `registered`, `logins`, `batches`, `merkleCalls`, `prod`, `blocked`.
+ *   predictions batches), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
+ *   `history` (stream uuid → its rows, oldest first; null: the route 404s); read `registered`, `logins`, `batches`,
+ *   `merkleCalls`, `historyCalls`, `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
-  const stub = { batch: [], vaults: {}, otherVault: null, fail: [], delayMs: 0, root: null, proofs: {},
-    registered: [], logins: [], batches: [], merkleCalls: [], prod: [], blocked: [] };
+  const stub = { batch: [], vaults: {}, otherVault: null, fail: [], delayMs: 0, root: null, proofs: {}, history: null,
+    registered: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [] };
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
   await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
     stub.blocked.push(ws.url());
@@ -45,6 +47,13 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       if (!stub.root) return reply(route, 404, { detail: 'no reward drop has been published yet' });
       const p = stub.proofs[pathname.split('/').pop().toLowerCase()];
       return p ? reply(route, 200, p) : reply(route, 404, { detail: 'not in the current drop' });
+    }
+    if (req.method() === 'GET' && pathname === '/api/v1/observations/history') {
+      const q = Object.fromEntries(new URL(req.url()).searchParams);
+      stub.historyCalls.push(q);
+      if (!stub.history) return reply(route, 404, { detail: 'Not Found' });
+      const since = Number(q.since ?? -Infinity);
+      return reply(route, 200, (stub.history[q.stream_uuid] ?? []).filter((o) => Number(o.observed_at) > since).slice(-Number(q.limit ?? 500)));
     }
     switch (`${req.method()} ${pathname}${search}`) {
       case 'POST /api/v1/peer/register':

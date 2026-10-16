@@ -136,6 +136,16 @@ test("Base: the config and the merkle proof, central's GETs; both 404 kinds keep
   expect(await client(none.fetch).merkleProof('0xV').catch((e) => e)).toMatchObject({ status: 404, detail: 'no reward drop has been published yet' });
 });
 
+test('history: GET one stream\'s past with a limit and since, no token; a 404 is a CentralError', async () => {
+  const path = '/api/v1/observations/history?stream_uuid=u%2F1&limit=1000&since=1788400000';
+  const { fetch, calls } = mockFetch({ [`GET ${path}`]: json(200, [{ id: 1 }]) });
+  expect(await client(fetch).history('u/1', { limit: 1000, since: 1788400000 })).toEqual([{ id: 1 }]);
+  expect(calls).toMatchObject([{ method: 'GET', path, headers: {} }]);
+  const { fetch: plain, calls: c2 } = mockFetch({});
+  await expect(client(plain).history('u1')).rejects.toMatchObject({ status: 404, detail: 'Not Found' });
+  expect(c2[0].path).toBe('/api/v1/observations/history?stream_uuid=u1&limit=500'); // the route's default, no since
+});
+
 test('observations: GET the batch with a limit, no token', async () => {
   const { fetch, calls } = mockFetch({ 'GET /api/v1/observations/batch?limit=100': json(200, [{ id: 1 }]) });
   expect(await client(fetch).observations()).toEqual([{ id: 1 }]);

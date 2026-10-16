@@ -3,7 +3,7 @@ import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
-  storageText, playNote,
+  storageText, playNote, modelText, historyText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -172,4 +172,37 @@ test('playNote: the neuron plays on-chain automatically, Satori Daily by hand, n
   expect(text('none')).toBe('Delegate to let the neuron predict every round, or play Satori Daily by hand.');
   expect(playNote('other')).toBe(null); // delegated elsewhere: the Delegation line says to whom
   expect(playNote(null)).toBe(null); // before the first chain read
+});
+
+const SPEC = JSON.stringify({ companions: ['u-eth', 'u-gold'], lambda1: 0.2, lambda2: 0.5 });
+const NAMES = new Map([['u-btc', 'bitcoin'], ['u-eth', 'eth'], ['u-gold', 'gold']]);
+
+test('modelText: the model and its spec\'s companions (the Streams table\'s Model column)', () => {
+  expect(modelText({ model: 'bvar', spec: SPEC }, NAMES)).toBe('bvar · +eth +gold');
+  expect(modelText({ model: 'naive', spec: SPEC }, NAMES)).toBe('naive · spec +eth +gold'); // the spec waits for aligned rows
+  expect(modelText({ model: 'bar1', spec: JSON.stringify({ companions: ['u-gone'], lambda1: 0.2, lambda2: 0.5 }) }, NAMES))
+    .toBe('bar1 · spec +u-gone');
+  expect(modelText({ model: 'bar1', spec: null }, NAMES)).toBe('bar1');
+  expect(modelText({ model: null, spec: SPEC }, NAMES)).toBe('–');
+});
+
+test('modelTitle: bvar with its spec, score and generation; a fallback says what its spec waits for', () => {
+  expect(modelTitle({ model: 'bvar', spec: SPEC, phi: 0.031, weight: 0.97, score: 0.012345, generation: 14, accepted: 3 }, NAMES))
+    .toBe('Bayesian VAR(1) on 12 h steps of this stream with eth, gold · λ1 0.2 · λ2 0.5 · own φ 0.031 · weight 0.97'
+      + ' · generation 14, 3 kept · score 1.23% (median 24 h error, last 28 origins)');
+  expect(modelTitle({ model: 'naive', spec: SPEC, score: null, generation: 0, accepted: 0 }, NAMES))
+    .toBe('the last value: bar1 needs an observation every 12 h (6 lag pairs of back-to-back 12 h buckets)'
+      + ' · its spec: bvar with eth, gold, λ1 0.2, λ2 0.5, generation 0, until it has 8 aligned 12 h rows');
+});
+
+test('historyText: central\'s history for our streams (the Central card)', () => {
+  const at = Date.UTC(2026, 9, 16, 9, 30) / 1000;
+  expect(historyText(null)).toBe('Not yet');
+  expect(historyText({ at, streams: 83, rows: 81234, left: 0, error: null, retryAt: null, needed: 0 }))
+    .toBe(`${fmtWhen(at)} · 83 streams, 81,234 rows`);
+  expect(historyText({ at, streams: 0, rows: 0, left: 83, error: 'central 404: Not Found', retryAt: at + 86400, needed: 83 }))
+    .toBe(`Not on this central (central 404: Not Found); next try ${fmtWhen(at + 86400)}`);
+  expect(historyText({ at, streams: 2, rows: 10, left: 3, error: 'central 500: boom', retryAt: null, needed: 3 }))
+    .toBe(`${fmtWhen(at)} · 2 streams, 10 rows · failed: central 500: boom; 3 streams wait for the next poll`);
+  expect(historyText({ needed: 5 })).toBe('5 streams wait for the next poll');
 });

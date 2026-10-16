@@ -127,13 +127,13 @@ details.streams > summary { color: var(--text); }
 .srows { margin-top: 8px; }
 /* A table row: central's streams (.srow) and the subscribed relay streams (.nrow). */
 .row { display: grid; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.92rem; }
-.srow { grid-template-columns: minmax(0, 1.4fr) 1fr max-content 1fr 1fr 44px 70px; }
+.srow { grid-template-columns: minmax(0, 1.4fr) 1fr max-content 1fr 1fr minmax(0, 1.5fr) 70px; }
 .nrow { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) max-content minmax(0, 1fr) 36px 52px max-content; }
 .row.head { border-top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .row .sname { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .num { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .row .badge { justify-self: end; margin: 0; }
-.row .model { color: var(--muted); font-size: 0.85rem; }
+.row .model { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row > .muted.small { white-space: nowrap; }
 .row > :last-child { justify-self: end; }
 

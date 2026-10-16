@@ -3,6 +3,7 @@
 //   await c.register({ vaultPubkey, nostrPubkey })   // POST /peer/register
 //   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
+//   await c.history(uuid, { limit, since })  // GET /observations/history: one stream's past (beyond Lite; may 404)
 //   await c.submitPredictions(items)         // login (identity) → POST /predictions/batch; one retry on 401
 //   await c.baseConfig() / c.merkleProof(address)   // Base (docs/design/base.md); 404 is a CentralError
 // Errors are CentralError: status 0 for a timeout or a network failure. A
@@ -124,6 +125,13 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     relayConfig: () => call('GET', '/api/v1/peer/relay-config'),
 
     observations: (limit = 100) => call('GET', `/api/v1/observations/batch?limit=${limit}`),
+    /**
+     * One stream's past, oldest first: [{id, stream_uuid, observed_at, value, ts}] (limit 1..1000, the route's
+     * default 500; since: unix seconds, exclusive). An addition beyond Lite (docs/design/central.md); a central
+     * without the route answers 404.
+     */
+    history: (uuid, { limit = 500, since } = {}) => call('GET', `/api/v1/observations/history?stream_uuid=${
+      encodeURIComponent(uuid)}&limit=${limit}${since == null ? '' : `&since=${since}`}`),
 
     /** Base's addresses (base.py:15-19); prod answers 404 (docs/issues/central-prod-missing-base-routes.md). */
     baseConfig: () => call('GET', '/api/v1/base/config'),
