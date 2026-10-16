@@ -12,6 +12,7 @@
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
 //   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
 //   db.addRelayObservation(o) → new? / relayHistory(uuid) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
+//   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / pruneActivity(before)
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
 import { MIGRATIONS } from './schema.js';
@@ -293,6 +294,31 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     }),
     relayPredictions: inOrder((uuid, limit = 20) =>
       rows('SELECT * FROM relay_predictions WHERE stream_uuid = ? ORDER BY seq DESC LIMIT ?', uuid, limit)),
+
+    // ── the activity log (docs/design/health.md) ──
+    /** One event: { at, kind, level, data, until?, mkey? } → its id. */
+    addActivity: inOrder(async ({ at, kind, level, data, until = null, mkey = null }) =>
+      (await rows(`INSERT INTO activity (ts, last_ts, kind, level, data, mkey) VALUES (${D}, ${D}, ?, ?, ?, ?) RETURNING id`,
+        dbl(at), dbl(until), kind, level, JSON.stringify(data ?? null), mkey))[0].id),
+    /** A merged row's change: any of until, level, data, count. */
+    updateActivity: inOrder(async (id, fields) => {
+      const COLUMN = { until: `last_ts = ${D}`, level: 'level = ?', data: 'data = ?', count: 'count = ?' };
+      const set = [];
+      const args = [];
+      for (const [k, v] of Object.entries(fields)) {
+        if (!COLUMN[k]) throw new Error(`activity has no ${k} to update`);
+        set.push(COLUMN[k]);
+        args.push(k === 'until' ? dbl(v) : k === 'data' ? JSON.stringify(v) : v);
+      }
+      if (set.length) await run(`UPDATE activity SET ${set.join(', ')} WHERE id = ?`, ...args, id);
+    }),
+    /** The rows that started or last changed at or after `since`, oldest first, data parsed. */
+    activity: inOrder(async (since) => (await rows(`SELECT id, ts, last_ts, kind, level, data, count, mkey FROM activity
+      WHERE greatest(ts, coalesce(last_ts, ts)) >= ${D} ORDER BY ts, id`, dbl(since)))
+      .map(({ ts, last_ts: until, data, ...r }) => ({ id: r.id, at: ts, until, kind: r.kind, level: r.level,
+        data: JSON.parse(data), count: r.count, mkey: r.mkey }))),
+    /** The 90-day bound: rows that ended before `before` go. */
+    pruneActivity: inOrder((before) => run(`DELETE FROM activity WHERE greatest(ts, coalesce(last_ts, ts)) < ${D}`, dbl(before))),
 
     checkpoint: inOrder(() => run('CHECKPOINT')),
     close: inOrder(async () => {

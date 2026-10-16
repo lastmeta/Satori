@@ -87,4 +87,11 @@ export const MIGRATIONS = [
     await set('keys', await recordFromRows({ walletYaml, vaultYaml, nostrYaml: await get('nostr_yaml') }));
     await remove('wallet_yaml', 'vault_yaml', 'nostr_yaml');
   },
+  // 8 (2026-10-16): the activity log Home's health is read from (docs/design/health.md#the-activity-log).
+  // ts: when (the API's `at`); last_ts: a merged row's last change (`until`: a session's heartbeat, a repeated
+  // failure); level: ok | warn | bad | idle; data: JSON; count and mkey: how many identical events a merged row
+  // stands for, and its key. (`at` and `until` are DuckDB keywords.)
+  `CREATE SEQUENCE activity_ids;
+   CREATE TABLE activity (id INTEGER PRIMARY KEY DEFAULT nextval('activity_ids'), ts DOUBLE NOT NULL, last_ts DOUBLE,
+     kind VARCHAR NOT NULL, level VARCHAR NOT NULL, data VARCHAR, count INTEGER NOT NULL DEFAULT 1, mkey VARCHAR);`,
 ];

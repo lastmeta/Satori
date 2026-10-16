@@ -112,7 +112,7 @@ describe("migration 7: the keys move into this app's own record (meta `keys`), n
     await expect(openDb(conn)).rejects.toThrow();
     const left = (await conn.query("SELECT key, value FROM meta ORDER BY key")).toArray().map((r) => r.toJSON());
     expect(Object.fromEntries(left.map((r) => [r.key, JSON.parse(r.value)])))
-      .toEqual({ schema_version: MIGRATIONS.length - 1, ...later.meta, wallet_yaml: 'not: [a wallet' });
+      .toEqual({ schema_version: later.schema, ...later.meta, wallet_yaml: 'not: [a wallet' });
   });
 });
 
@@ -414,5 +414,45 @@ describe('relay streams (Nostr), apart from central', () => {
     expect((await db.relayStreams()).find((r) => r.uuid === 'r-1')).toMatchObject({ p_seq: 2, p_relays: 3 });
     await db.unsubscribeRelay('r-2', 3000);
     expect((await db.relayStreams({ active: true })).map((r) => r.uuid)).toEqual(['r-1']);
+  });
+});
+
+describe('the activity log (migration 8; docs/design/health.md)', () => {
+  test('a step-7 database gains the activity table, empty; nothing else changes', async () => {
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 6)) await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '7'), ('central_url', '"w"')`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    expect(await up.get('central_url')).toBe('w');
+    expect(await up.activity(0)).toEqual([]);
+  });
+
+  test('add, read back oldest first with data parsed, update a row, since a time', async () => {
+    const a = await db.addActivity({ at: 100.5, kind: 'open', level: 'ok', data: { gap: null, missed: false }, until: 100.5 });
+    const b = await db.addActivity({ at: 200, kind: 'central', level: 'bad', data: { error: 'central 500: boom', sent: 2 } });
+    expect(b).toBeGreaterThan(a);
+    expect(await db.activity(0)).toEqual([
+      { id: a, at: 100.5, until: 100.5, kind: 'open', level: 'ok', data: { gap: null, missed: false }, count: 1, mkey: null },
+      { id: b, at: 200, until: null, kind: 'central', level: 'bad', data: { error: 'central 500: boom', sent: 2 }, count: 1, mkey: null },
+    ]);
+    await db.updateActivity(a, { until: 400.25 });
+    await db.updateActivity(b, { count: 3, data: { error: 'x' }, level: 'warn', until: 500 });
+    const [ra, rb] = await db.activity(0);
+    expect(ra).toMatchObject({ id: a, until: 400.25, data: { gap: null, missed: false }, count: 1 });
+    expect(rb).toMatchObject({ id: b, until: 500, data: { error: 'x' }, level: 'warn', count: 3 });
+    expect((await db.activity(150)).map((r) => r.id)).toEqual([a, b]); // started, or last changed, since then
+    expect((await db.activity(450)).map((r) => r.id)).toEqual([b]);
+  });
+
+  test('prune: rows that ended before the cutoff go; resetCentral keeps the log (it is this neuron\'s)', async () => {
+    await db.addActivity({ at: 10, kind: 'open', level: 'ok', data: {}, until: 20 });
+    await db.addActivity({ at: 10, kind: 'base', level: 'bad', data: {}, until: 90, mkey: 'e' });
+    await db.addActivity({ at: 50, kind: 'central', level: 'ok', data: {} });
+    await db.pruneActivity(30);
+    expect((await db.activity(0)).map((r) => [r.kind, r.mkey])).toEqual([['base', 'e'], ['central', null]]);
+    await db.resetCentral();
+    expect(await db.activity(0)).toHaveLength(2);
   });
 });

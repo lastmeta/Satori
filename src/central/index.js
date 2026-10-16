@@ -116,11 +116,19 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     }
   }
 
-  /** A fresh token: the identity signs central's challenge, EIP-191 (login.js; satorilib server.py:87-118). */
+  /**
+   * A fresh token: the identity signs central's challenge, EIP-191 (login.js; satorilib server.py:87-118).
+   * Central refusing it is a CentralError with `login: true` (Home's health tells it from a refused batch).
+   */
   async function login() {
     const { challenge } = await call('GET', '/api/v1/auth/challenge');
     const signature = identity.signCentralLogin(challenge);
-    return (await call('POST', '/api/v1/auth/login', { 'wallet-pubkey': identity.pubkey, message: challenge, signature })).access_token;
+    try {
+      return (await call('POST', '/api/v1/auth/login', { 'wallet-pubkey': identity.pubkey, message: challenge, signature })).access_token;
+    } catch (err) {
+      if (err instanceof CentralError && err.status > 0) err.login = true;
+      throw err;
+    }
   }
 
   return {

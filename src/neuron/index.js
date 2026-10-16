@@ -53,7 +53,8 @@ async function submit(db, central, now) {
       failed: r?.failed ?? 0, errors: r?.errors ?? null };
     if (result.successful > 0) await db.markSent(pending.map((p) => p.id), result.at);
   } catch (err) {
-    result = { at: now(), error: errorText(err) };
+    // how many it tried to send, and whether central refused the login (docs/design/health.md)
+    result = { at: now(), error: errorText(err), total_submitted: pending.length, ...(err?.login ? { login: true } : {}) };
   }
   await db.set('central_last_submit', result);
   return result;
@@ -112,7 +113,7 @@ export async function cycle({ db, central, now = nowS, seed = '', engine = runMo
     return await pollAndSubmit({ db, central, engine, now, at, seed, backfill });
   } catch (err) {
     console.error('[satori] cycle failed', err);
-    const poll = { at, error: errorText(err) };
+    const poll = { at, error: errorText(err), local: true }; // not central's: the database or the engine
     await db.set('central_last_poll', poll).catch(() => {});
     return { poll, submit: null };
   }

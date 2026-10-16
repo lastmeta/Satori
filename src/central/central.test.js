@@ -176,7 +176,9 @@ describe('submitPredictions', () => {
   });
   test('a second 401 throws; there is no third try', async () => {
     const { fetch, calls } = mockFetch({ ...login(), 'POST /api/v1/predictions/batch': () => json(401, { detail: 'no' }) });
-    await expect(client(fetch).submitPredictions([])).rejects.toMatchObject({ status: 401 });
+    const err = await client(fetch).submitPredictions([]).catch((e) => e);
+    expect(err).toMatchObject({ status: 401 });
+    expect(err.login).toBeUndefined(); // the batch's 401, not the login's
     expect(calls.filter((c) => c.path === '/api/v1/predictions/batch')).toHaveLength(2);
   });
   test('a 5xx is resent once with the same token; a second 5xx throws', async () => {
@@ -191,9 +193,11 @@ describe('submitPredictions', () => {
     expect(calls.filter((c) => c.path === '/api/v1/predictions/batch')).toHaveLength(1);
   });
   test('a failed login is the error (signature refused)', async () => {
-    const { fetch, calls } = mockFetch({ ...login(), 'POST /api/v1/auth/login': json(401, { detail: 'Invalid signature' }) });
+    const { fetch, calls } = mockFetch({ ...login(), 'POST /api/v1/auth/login': () => json(401, { detail: 'Invalid signature' }) });
     await expect(client(fetch).submitPredictions([])).rejects.toThrow('central 401: Invalid signature');
-    expect(paths(calls)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/auth/login']);
+    await expect(client(fetch).submitPredictions([])).rejects.toMatchObject({ status: 401, login: true }); // health: login refused
+    expect(paths(calls).slice(0, 2)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/auth/login']);
+    expect(calls.filter((c) => c.path === '/api/v1/predictions/batch')).toHaveLength(0);
   });
 });
 

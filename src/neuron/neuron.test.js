@@ -116,14 +116,18 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
 
     central.batch = [entry('u-a', 'a', T + 1, 2)];
     central.results = [new CentralError(0, 'network', 'central unreachable: Failed to fetch')];
-    expect((await run()).submit).toEqual({ at: clock, error: 'central unreachable: Failed to fetch' });
+    expect((await run()).submit).toEqual({ at: clock, error: 'central unreachable: Failed to fetch', total_submitted: 2 });
+    expect(await db.pendingCount()).toBe(2);
+    const refused = Object.assign(new CentralError(401, 'Invalid signature'), { login: true });
+    central.results = [refused];
+    expect((await run()).submit).toEqual({ at: clock, error: 'central 401: Invalid signature', total_submitted: 2, login: true });
     expect(await db.pendingCount()).toBe(2);
 
     central.batch = [entry('u-a', 'a', T + 2, 3)];
     clock += 10;
     const r = await run(); // the default result accepts all
-    expect(central.sent.map((s) => s.length)).toEqual([1, 2, 3]);
-    expect(central.sent[2].map((i) => i.t1_value)).toEqual(['1', '2', '3']); // naive: the last value
+    expect(central.sent.map((s) => s.length)).toEqual([1, 2, 2, 3]);
+    expect(central.sent[3].map((i) => i.t1_value)).toEqual(['1', '2', '3']); // naive: the last value
     expect(r.submit.successful).toBe(3);
     expect(await db.pendingCount()).toBe(0);
   });
@@ -155,7 +159,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     central.batch = [entry('u-a', 'a', T, 1)];
     const broken = { ...db, addObservations: async () => { throw new Error('IO Error: Could not write file'); } };
     const r = await cycle({ db: broken, central, now });
-    expect(r).toEqual({ poll: { at: clock, error: 'IO Error: Could not write file' }, submit: null });
+    expect(r).toEqual({ poll: { at: clock, error: 'IO Error: Could not write file', local: true }, submit: null }); // health: db-error
     expect(await db.get('central_last_poll')).toEqual(r.poll);
     expect(error).toHaveBeenCalledWith('[satori] cycle failed', expect.any(Error));
     error.mockRestore();
