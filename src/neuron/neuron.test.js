@@ -62,7 +62,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
       predictionItem({ streamUuid: 'u-btc', streamName: 'bitcoin', t1: 100, t2: 100, now: T + 0.25 }),
       predictionItem({ streamUuid: 'u-eth', streamName: 'eth', t1: 5, t2: 5, now: T + 0.25 }),
     ]);
-    expect(items[0]).toMatchObject({ value: '100.0', t1_value: '100.0', observed_at: '1792000000.25' });
+    expect(items[0]).toMatchObject({ value: '100', t1_value: '100', observed_at: '1792000000.25' });
     expect(await db.pendingCount()).toBe(0);
     expect(await db.predictions('bitcoin')).toMatchObject([{ status: 'sent', sent_at: T + 0.25, model: 'naive', phi: null, weight: null }]);
     expect(await db.get('central_last_poll')).toEqual(r.poll);
@@ -89,7 +89,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     const [{ fresh, histories, seed }] = engine.mock.lastCall;
     expect([fresh, seed]).toEqual([['u-a'], ID]);
     expect(histories).toEqual(new Map([['u-a', [{ ts: T, value: 1 }, { ts: T + 3600, value: 3 }]], ['u-b', [{ ts: T, value: 2 }]]]));
-    expect(central.sent[1]).toEqual([expect.objectContaining({ stream_uuid: 'u-a', value: '2.5', t1_value: '2.0' })]);
+    expect(central.sent[1]).toEqual([expect.objectContaining({ stream_uuid: 'u-a', value: '2.5', t1_value: '2' })]);
   });
 
   test("the engine's phi and weight are stored with the prediction; the payload stays Lite's (value = t2, t1_value = t1)", async () => {
@@ -98,7 +98,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     await run({ engine });
     expect(await db.predictions('a')).toMatchObject([{ model: 'bar1', t1: 101, t2: 102.5, phi: -0.2, weight: 0.6 }]);
     expect(central.sent[0]).toEqual([predictionItem({ streamUuid: 'u-a', streamName: 'a', t1: 101, t2: 102.5, now: T + 0.25 })]);
-    expect(central.sent[0][0]).toMatchObject({ value: '102.5', t1_value: '101.0' });
+    expect(central.sent[0][0]).toMatchObject({ value: '102.5', t1_value: '101' });
   });
 
   test('no forecast (null) → no prediction; unusable rows are dropped', async () => {
@@ -122,7 +122,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     clock += 10;
     const r = await run(); // the default result accepts all
     expect(central.sent.map((s) => s.length)).toEqual([1, 2, 3]);
-    expect(central.sent[2].map((i) => i.t1_value)).toEqual(['1.0', '2.0', '3.0']); // naive: the last value
+    expect(central.sent[2].map((i) => i.t1_value)).toEqual(['1', '2', '3']); // naive: the last value
     expect(r.submit.successful).toBe(3);
     expect(await db.pendingCount()).toBe(0);
   });

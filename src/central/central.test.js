@@ -1,34 +1,28 @@
 import { describe, test, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
   predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS,
 } from './index.js';
-import { pyFloatStr } from '../py.js';
-
-const parity = JSON.parse(readFileSync(new URL('../../test/fixtures/central-parity.json', import.meta.url)));
-const fromBits = (hex) => new DataView(Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16)).buffer).getFloat64(0);
-
-describe('pyFloatStr (parity with the Docker image)', () => {
-  test('the fixture is non-trivial', () => expect(parity.floats.length).toBeGreaterThan(400));
-  test.each(parity.floats.map((f) => [f.np, f.bits]))('%s', (np, bits) => {
-    expect(pyFloatStr(fromBits(bits))).toBe(np);
-  });
-});
 
 describe('predictionItem', () => {
-  test.each(parity.hashes)('hash of $value + $observed_at', (h) => {
-    const item = predictionItem({
-      streamUuid: 'u1', streamName: 'btc', t2: fromBits(h.value_bits), t1: 1.5, now: fromBits(h.observed_at_bits),
-    });
+  // Central keeps the text as given and reads it with float() (docs/design/central.md#the-protocol-audit),
+  // so a number is sent as JS prints it: shortest round-trip digits, as Python's, laid out JS's way.
+  test.each([
+    [80100.5, 1.5, 1792000000.25], [100, 99, 1792000000], [1e-7, -0, 1792000000.5], [1e21, 2 / 3, 1792000001.125],
+  ])('t2 %s, t1 %s at %s', (t2, t1, now) => {
+    const item = predictionItem({ streamUuid: 'u1', streamName: 'btc', t2, t1, now });
+    const [value, observed] = [String(t2), String(now)];
     expect(item).toEqual({
-      stream_uuid: 'u1', stream_name: 'btc', value: h.value, t1_value: '1.5', observed_at: h.observed_at, hash: h.hash,
+      stream_uuid: 'u1', stream_name: 'btc', value, t1_value: String(t1), observed_at: observed,
+      hash: createHash('sha256').update(value + observed).digest('hex').slice(0, 16),
     });
+    expect(Number(item.value)).toBe(t2); // what central's float() reads back
   });
   test('observed_at defaults to the wall clock in seconds', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1760000000123);
-    const item = predictionItem({ streamUuid: 'u', streamName: 'n', t1: 99, t2: 100 });
+    const item = predictionItem({ streamUuid: 'u', streamName: 'n', t1: 99, t2: 100.5 });
     vi.restoreAllMocks();
-    expect(item).toMatchObject({ value: '100.0', t1_value: '99.0', observed_at: '1760000000.123' });
+    expect(item).toMatchObject({ value: '100.5', t1_value: '99', observed_at: '1760000000.123' });
   });
 });
 

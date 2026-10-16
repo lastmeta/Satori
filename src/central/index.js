@@ -10,24 +10,25 @@
 // network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
-import { pyFloatStr } from '../py.js';
 
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)
 
 /**
- * One `/predictions/batch` item as Lite's engine makes it (engine.py:1044-1106,
- * 1188-1206): value = str(t2), t1_value = str(t1), observed_at = str(unix
- * seconds at prediction), hash = sha256(value + observed_at)[:16].
+ * One `/predictions/batch` item with Lite's fields (engine.py:1044-1106,
+ * 1188-1206): value = t2, t1_value = t1, observed_at = unix seconds at
+ * prediction, each as text (central's schema has strings and reads them with
+ * float(); the text is JS's, not Python's: docs/design/central.md#the-protocol-audit),
+ * hash = sha256(value + observed_at)[:16].
  * @param {{streamUuid: string, streamName: string, t1: number, t2: number, now?: number}} p
  */
 export function predictionItem({ streamUuid, streamName, t1, t2, now = Date.now() / 1000 }) {
-  const value = pyFloatStr(t2);
-  const observedAt = pyFloatStr(now);
+  const value = String(t2);
+  const observedAt = String(now);
   return {
     stream_uuid: streamUuid,
     stream_name: streamName,
     value,
-    t1_value: pyFloatStr(t1),
+    t1_value: String(t1),
     observed_at: observedAt,
     hash: bytesToHex(sha256(utf8ToBytes(value + observedAt))).slice(0, 16),
   };

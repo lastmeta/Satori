@@ -6,7 +6,6 @@ import { memoryDb } from '../../test/memory-db.js';
 import { signEvent, verifyEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../nostr/satori.js';
 import { forecast } from '../engine/index.js';
-import { pyFloatStr } from '../py.js';
 import { createNostr, FOLLOW_ID, MAX_STREAMS } from './nostr.js';
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -247,12 +246,12 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const f = forecast(points, { step: 900, horizon: 900 });
     expect(f).toMatchObject({ model: 'bar1', horizon: 900, value: f.t1 });
     expect(f.value).not.toBe(forecast(points, { step: 900 }).t2); // not two cadences ahead (Lite's t2)
-    expect(JSON.parse(lastPub.content)).toEqual({ stream_name: 'btc_pred', timestamp: clock, value: pyFloatStr(f.value), seq_num: 10 });
+    expect(JSON.parse(lastPub.content)).toEqual({ stream_name: 'btc_pred', timestamp: clock, value: String(f.value), seq_num: 10 });
     expect(lastPub.tags).toEqual([['d', 'btc_pred'], ['stream', 'btc_pred'], ['seq', '10'], ['satori', 'observation']]);
-    expect(JSON.parse(u.published[0].content)).toMatchObject({ value: '100.0', seq_num: 1 }); // naive at first
+    expect(JSON.parse(u.published[0].content)).toMatchObject({ value: '100', seq_num: 1 }); // naive at first
     const [s] = (await nostr.status()).subscriptions;
     expect(s).toMatchObject({ observations: 10, observation: { seq: 59, value: 105, raw: '105', ts: clock },
-      prediction: { stream: 'btc_pred', seq: 10, value: pyFloatStr(f.value), model: 'bar1', relays: 1, made_at: clock } });
+      prediction: { stream: 'btc_pred', seq: 10, value: String(f.value), model: 'bar1', relays: 1, made_at: clock } });
     expect(changes).toBeGreaterThan(0);
   });
 
@@ -273,7 +272,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const f = forecast(points, { step: 86_400, horizon: 86_400 });
     expect(f).toMatchObject({ model: 'bar1', horizon: 86_400 });
     expect(f.value).not.toBe(forecast(points, { step: 43_200, horizon: 43_200 }).value);
-    expect(JSON.parse(u.published.at(-1).content)).toMatchObject({ stream_name: 'slow_pred', value: pyFloatStr(f.value) });
+    expect(JSON.parse(u.published.at(-1).content)).toMatchObject({ stream_name: 'slow_pred', value: String(f.value) });
   });
 
   test('a 60 s stream is forecast in 60 s steps, 60 s ahead', async () => {
@@ -295,7 +294,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const points = values.map((value, k) => ({ ts: t0 + (k + 1) * 60, value }));
     const f = forecast(points, { step: 60, horizon: 60 });
     expect(f).toMatchObject({ model: 'bar1', horizon: 60 });
-    expect(JSON.parse(u.published.at(-1).content)).toMatchObject({ stream_name: 'fast_pred', value: pyFloatStr(f.value) });
+    expect(JSON.parse(u.published.at(-1).content)).toMatchObject({ stream_name: 'fast_pred', value: String(f.value) });
   });
 
   test('intake skips: the same event from another relay, the same seq again, unsubscribed streams, bad signatures, heartbeats', async () => {
@@ -313,7 +312,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await c.deliver(signEvent(observationEvent({ stream: 'btc', value: '7', seq: 4, timestamp: clock }), ME)); // another author
     await settle();
     expect(kinds(u)).toEqual([[34601, 'btc_pred']]);
-    expect((await db.relayPredictions(relayUuid(PROV_PUB, 'btc'))).map((p) => [p.seq, p.value, p.obs_seq])).toEqual([[1, '100.0', 1]]);
+    expect((await db.relayPredictions(relayUuid(PROV_PUB, 'btc'))).map((p) => [p.seq, p.value, p.obs_seq])).toEqual([[1, '100', 1]]);
   });
 
   test("a value with no number is echoed as Lite does; Lite's dict values are unwrapped", async () => {
@@ -326,7 +325,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await c.deliver(observe('mix', { chainId: 1, raw: '42', unit: 'raw' }, 3));
     await c.deliver(observe('mix', '5', 4, 100)); // a time before 2000: no forecast
     await settle();
-    expect(u.published.map((e) => JSON.parse(e.content).value)).toEqual(['abc', '{"raw": "213397", "unit": "tick"}', '42.0', '5']);
+    expect(u.published.map((e) => JSON.parse(e.content).value)).toEqual(['abc', '{"raw":"213397","unit":"tick"}', '42', '5']);
     expect((await db.relayPredictions(relayUuid(PROV_PUB, 'mix'))).map((p) => p.model)).toEqual(['echo', 'naive', 'echo', 'echo']);
   });
 

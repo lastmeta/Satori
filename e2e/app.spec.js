@@ -10,7 +10,6 @@ import { verifyMessage, deriveKeys, entropyFromWords } from '../src/keys/index.j
 import { readWallet } from '../src/keys/docker.js';
 import { forecast, STEP_S } from '../src/engine/index.js';
 import { runModels } from '../src/engine/evolve.js';
-import { pyFloatStr } from '../src/py.js';
 import { openApp, reloadApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral as stubAt, CENTRAL } from './stub.js';
 
@@ -110,7 +109,7 @@ test('create, register, Poll now (observations in, predictions out), reload keep
   expect(verifyMessage(stub.logins[0].message, stub.logins[0].signature, { address: identity })).toBe(true);
   const [items] = stub.batches;
   expect(items.map((i) => [i.stream_uuid, i.stream_name, i.value, i.t1_value]))
-    .toEqual([['u-btc', 'bitcoin', '67000.5', '67000.5'], ['u-eth', 'eth', '2500.0', '2500.0']]);
+    .toEqual([['u-btc', 'bitcoin', '67000.5', '67000.5'], ['u-eth', 'eth', '2500', '2500']]);
   for (const i of items) {
     expect(Math.abs(Number(i.observed_at) - Date.now() / 1000)).toBeLessThan(60);
     expect(i.hash).toBe(createHash('sha256').update(i.value + i.observed_at).digest('hex').slice(0, 16));
@@ -247,7 +246,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   const expected = forecast(history.map(([ts, value]) => ({ ts, value })));
   expect(bar1).toMatchObject({ model: 'bar1', t1: expected.t1, t2: expected.t2, phi: expected.phi, weight: expected.weight });
   expect(bar1.t2).not.toBe(67400.5);
-  expect(stub.batches.at(-1)).toEqual([expect.objectContaining({ value: pyFloatStr(expected.t2), t1_value: pyFloatStr(expected.t1) })]);
+  expect(stub.batches.at(-1)).toEqual([expect.objectContaining({ value: String(expected.t2), t1_value: String(expected.t1) })]);
   await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveText('bar1 · spec +eth'); // eth has one row: bar1
   await expect(row(page, 'bitcoin').locator('[data-test=model]')).toHaveAttribute('title', /^Bayesian AR\(1\) on 12 h returns · φ /);
 
@@ -334,7 +333,7 @@ test('central with history: the first Poll now backfills each stream and forecas
     const f = out.forecasts.get(m.uuid);
     expect(p).toMatchObject({ model: 'bvar', t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight });
   }
-  expect(stub.batches[0].map((x) => x.value)).toEqual(models.map((m) => pyFloatStr(out.forecasts.get(m.uuid).t2)));
+  expect(stub.batches[0].map((x) => x.value)).toEqual(models.map((m) => String(out.forecasts.get(m.uuid).t2)));
   await page.locator('[data-test=streams] summary').click();
   const gold = row(page, 'gold').locator('[data-test=model]');
   const spec = models.find((m) => m.name === 'gold').spec;

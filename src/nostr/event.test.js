@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import {
   nostrPubkey, generateNostrSecret, npub, eventId, signEvent, verifyEvent,
 } from './event.js';
-import { pyJson } from '../py.js';
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
 const live = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-live.json', import.meta.url)));
@@ -29,17 +28,6 @@ describe('the Nostr key', () => {
   test('npub (NIP-19)', () => {
     // nostr-sdk's PublicKey.to_bech32() for the fixture key.
     expect(npub(id.pubkeyHex)).toBe('npub1vf6kzy7dj9axtynrat2smg848rvh5h2vhux9wdryzspkf7df3nyqk599tm');
-  });
-});
-
-describe("Python's json.dumps", () => {
-  test('separators, escapes, numbers', () => {
-    expect(pyJson({ a: 1, b: 'x', c: null, d: true, e: [], f: {} })).toBe('{"a": 1, "b": "x", "c": null, "d": true, "e": [], "f": {}}');
-    expect(pyJson([1, 2.5, 'é', '"q"\n'])).toBe('[1, 2.5, "\\u00e9", "\\"q\\"\\n"]');
-    expect(pyJson('😀')).toBe('"\\ud83d\\ude00"');
-    expect(pyJson('\x7f\x1f\u2028')).toBe('"\\u007f\\u001f\\u2028"'); // python3: json.dumps('\x7f\x1f\u2028')
-    expect(pyJson(1e21)).toBe('1e+21');
-    expect(pyJson(-0.5)).toBe('-0.5');
   });
 });
 

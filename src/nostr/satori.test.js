@@ -1,5 +1,7 @@
-// Satori's events and parsing, byte for byte against satorilib's client
-// (test/fixtures/nostr-parity.json) and Lite's own value unwrapping.
+// Satori's events and parsing against satorilib's client (test/fixtures/nostr-parity.json)
+// and Lite's own value unwrapping. The content is compact JSON (JSON.stringify), not
+// Python's json.dumps text: satorilib reads it with json.loads and takes the fields by
+// name (docs/design/nostr.md#the-protocol-audit), so the same fields and values are what count.
 import { describe, expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { signEvent, verifyEvent } from './event.js';
@@ -7,7 +9,6 @@ import {
   KIND, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
   catalog, parseObservation, numericValue, pyFloat, relayUuid, predValue,
 } from './satori.js';
-import { pyFloatStr } from '../py.js';
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
 const live = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-live.json', import.meta.url)));
@@ -19,9 +20,11 @@ const sign = (t) => signEvent(t, fx.secretHex);
 const same = (made, want) => {
   expect(made.kind).toBe(want.kind);
   expect(made.tags).toEqual(want.tags);
-  expect(made.content).toBe(want.content);
+  const parsed = (e) => (e.content === '' ? '' : JSON.parse(e.content));
+  expect(parsed(made)).toStrictEqual(parsed(want)); // the same fields, no more or fewer, the same values
+  if (made.content) expect(made.content).toBe(JSON.stringify(JSON.parse(made.content))); // compact
   expect(made.created_at).toBe(want.created_at);
-  expect(made.id).toBe(want.id);
+  expect(verifyEvent(made)).toBe(true);
 };
 
 describe("the events, as satorilib's client makes them", () => {
@@ -56,8 +59,7 @@ describe("the events, as satorilib's client makes them", () => {
 describe("the value: Lite's _numericObservationValue", () => {
   test('every case Lite ran (start.py)', () => {
     for (const { value, float } of fx.numericValue) {
-      const got = numericValue(value);
-      expect(got === null ? null : pyFloatStr(got), JSON.stringify(value)).toBe(float);
+      expect(numericValue(value), JSON.stringify(value)).toBe(float === null ? null : pyFloat(float));
     }
   });
   test("Python's float() of a string", () => {
@@ -70,11 +72,11 @@ describe("the value: Lite's _numericObservationValue", () => {
     expect(pyFloat('nan')).toBeNaN();
     for (const bad of ['', ' ', '0x10', '1__0', '_1', '1e', 'e5', '.', '1,5', '12abc']) expect(pyFloat(bad), bad).toBeNull();
   });
-  test('the published value: the forecast one cadence ahead as Python prints it (not Lite\'s t2), else an echo as Lite', () => {
+  test('the published value: the forecast one cadence ahead as text (not Lite\'s t2), else an echo as Lite', () => {
     expect(predValue({ t1: 80050.5, t2: 80100.5, value: 80050.5 }, '80000')).toBe('80050.5');
-    expect(predValue({ t1: 82234, t2: 82234, value: 82234 }, '82234')).toBe('82234.0'); // Lite's StarterAdapter: the last value as a float
+    expect(predValue({ t1: 82234, t2: 82234, value: 82234 }, '82234')).toBe('82234'); // Lite prints 82234.0; float() reads both
     expect(predValue(null, 'abc')).toBe('abc');
-    expect(predValue(null, { raw: '1', unit: 'tick' })).toBe('{"raw": "1", "unit": "tick"}');
+    expect(predValue(null, { raw: '1', unit: 'tick' })).toBe('{"raw":"1","unit":"tick"}');
     expect(predValue(null, 7)).toBe('7');
     expect(predValue(null, null)).toBe('null');
   });

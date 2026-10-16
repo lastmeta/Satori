@@ -3,7 +3,6 @@
 // observation parsing, Lite's value unwrapping and the relay model uuid.
 import { sha1 } from '@noble/hashes/legacy';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { pyJson, pyFloatStr } from '../py.js';
 
 export const KIND = { ANNOUNCE: 34600, OBSERVATION: 34601, SUBSCRIPTION: 34602, RELAY_LIST: 10002 }; // models.py:512-514
 export const PRED = '_pred';
@@ -18,12 +17,12 @@ export function observationEvent({ stream, value, seq, timestamp, now = timestam
   return {
     created_at: now, kind: KIND.OBSERVATION,
     tags: [['d', stream], ['stream', stream], ['seq', String(seq)], ['satori', 'observation']],
-    content: pyJson({ stream_name: stream, timestamp, value, seq_num: seq }),
+    content: JSON.stringify({ stream_name: stream, timestamp, value, seq_num: seq }),
   };
 }
 
-/** DatastreamMetadata.to_json(): every field, in the dataclass's order (models.py:14-40). */
-const metadataJson = (m) => pyJson({
+/** DatastreamMetadata's fields, every one: satorilib reads them with cls(**data), so none more or fewer (models.py:14-47). */
+const metadataJson = (m) => JSON.stringify({
   stream_name: m.stream_name, nostr_pubkey: m.nostr_pubkey, name: m.name ?? '', description: m.description ?? '',
   encrypted: !!m.encrypted, price_per_obs: m.price_per_obs ?? 0, created_at: m.created_at ?? 0,
   cadence_seconds: m.cadence_seconds ?? null, tags: m.tags ?? [], approval_required: !!m.approval_required,
@@ -64,7 +63,7 @@ export function subscriptionEvent({ stream, provider, subscriber, now, unsubscri
   tags.push(...(unsubscribe ? [['action', 'unsubscribe'], ['satori', 'unsubscription']] : [['satori', 'subscription']]));
   return {
     created_at: now, kind: KIND.SUBSCRIPTION, tags,
-    content: pyJson({ subscriber_pubkey: subscriber, stream_name: stream, nostr_pubkey: provider, timestamp: now,
+    content: JSON.stringify({ subscriber_pubkey: subscriber, stream_name: stream, nostr_pubkey: provider, timestamp: now,
       payment_channel: null }),
   };
 }
@@ -150,12 +149,11 @@ export function numericValue(v) {
 }
 
 /**
- * The published value: the forecast one cadence ahead (`value`, the owner's
- * rule, docs/intent/engine.md; Lite's predictForRelay sends t2, two steps ahead,
- * engine.py:733-735, 1176-1186) as Python prints a float; or Lite's echo
- * (start.py:1302-1308).
+ * The published value, as text (Lite publishes str; readers take float() of it): the forecast one
+ * cadence ahead (`value`, the owner's rule, docs/intent/engine.md; Lite's predictForRelay sends t2,
+ * two steps ahead, engine.py:733-735, 1176-1186); or Lite's echo (start.py:1302-1308).
  */
-export const predValue = (f, value) => (f ? pyFloatStr(f.value) : typeof value === 'string' ? value : pyJson(value));
+export const predValue = (f, value) => (f ? String(f.value) : typeof value === 'string' ? value : JSON.stringify(value));
 
 const DNS = hexToBytes('6ba7b8109dad11d180b400c04fd430c8');
 
