@@ -1,7 +1,7 @@
 // The app in Chrome against a stub central (the dev server's default,
 // central2, routed here; prod is blocked): create (identity + vault) →
 // register → Poll now: observations in, predictions out → reload keeps the
-// schedule → Unlock/Lock, backup words and Docker files; Docker import (a
+// schedule → Unlock/Lock, backup words and Dockerized Neuron files; their import (a
 // vault mismatch); words restore; the agent API.
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -344,7 +344,7 @@ test('central with history: the first Poll now backfills each stream and forecas
   expect(stub.prod).toEqual([]);
 });
 
-test('import Docker files; central has another vault for this identity: a mismatch is shown; Settings', async ({ context, page }) => {
+test('import Dockerized Neuron files; central has another vault for this identity: a mismatch is shown; Settings', async ({ context, page }) => {
   const stub = await stubCentral(context);
   stub.otherVault = 'EOtherVau1tAddressXXXXXXXXXXXXXXXX';
   const wallet = fx.vectors[0];
@@ -352,7 +352,7 @@ test('import Docker files; central has another vault for this identity: a mismat
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
 
   await openApp(page);
-  await page.getByRole('button', { name: 'Import Docker files' }).click();
+  await page.getByRole('button', { name: 'Import Dockerized Neuron files' }).click();
   // In the wrong slots: refused, and the message says so.
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('wallet.yaml', wallet.walletYaml));

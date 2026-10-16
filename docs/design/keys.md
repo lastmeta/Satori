@@ -103,7 +103,7 @@ something that is not the entropy of the stored address.
   passphrase (≥ 4 characters as Docker counts them, Latin-1 only) for the
   vault. The identity is stored as `wallet.yaml`, the vault as `vault.yaml`
   encrypted with the passphrase, and a new random Nostr key as `nostr.yaml`.
-- **Setup → Import Docker files**: `wallet.yaml` + `vault.yaml` + the vault
+- **Setup → Import Dockerized Neuron files**: `wallet.yaml` + `vault.yaml` + the vault
   password, and `nostr.yaml` (optional: a new Nostr key otherwise). Both are
   read and checked as above: `wallet.yaml` must be plain text and `vault.yaml`
   encrypted, so the funds' key is never stored in plain text. The identity is
@@ -179,7 +179,7 @@ against.
   neuron process also runs on `wallet.yaml` alone (`start.py:75`).
 - **Nostr key (step 5):** `nostr.yaml` `{pubkey_hex, secret_hex}`, a third,
   random key, plaintext as Docker keeps it (`start.py:120-149`): made at setup,
-  imported with the Docker files (optional), downloaded under Backup; an
+  imported with the Dockerized Neuron files (optional), downloaded under Backup; an
   install from before step 5 gets one on its next load ([nostr.md](nostr.md)).
 - **Base (step 6):** each key's 32-byte secret is also its EVM key, as
   satorilib's `ethAddress` ([base.md](base.md#keys-on-base)).

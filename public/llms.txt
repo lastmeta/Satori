@@ -234,7 +234,7 @@ Every method is below; `await satori.status()` shows everything at once.
   setup and on each load until it is kept. Installing helps keep it (Chrome
   grants it to installed apps; Safari keeps a Home Screen or Dock app's data).
   A Safari web app has its own storage, apart from Safari's: set it up there
-  or import the Docker files. An app window and a tab share the one-tab lock.
+  or import the Dockerized Neuron files. An app window and a tab share the one-tab lock.
 - The database (docs/design/storage.md): every commit is checkpointed, so a
   reload or a closed tab at any moment keeps every committed write, the keys
   included. A WAL an older version left is renamed aside in OPFS (never
@@ -401,7 +401,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
 
 - Setup: "Create a new neuron" (shows the vault's 24 words, asks for three of
   them, then a passphrase), "Restore from words" (vault words, optional
-  identity words), or "Import Docker files" (`wallet.yaml`, `vault.yaml`,
+  identity words), or "Import Dockerized Neuron files" (`wallet.yaml`, `vault.yaml`,
   optional `nostr.yaml`, the vault password). `wallet.yaml` is the unencrypted file and `vault.yaml` the
   encrypted one; files in the wrong slots, or a vault.yaml that is not
   encrypted, are refused with a message saying so.

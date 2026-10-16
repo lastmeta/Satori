@@ -30,7 +30,7 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 
 | Step | Satori Lite | Browser (`src/nostr/`, `src/neuron/nostr.js`) |
 |---|---|---|
-| Key | `_initNostrKeys` (START:120-149): `nostr.yaml` `{pubkey_hex, secret_hex}`, a **random** key (nostr-sdk `Keys.generate()`), not derived from the identity or the vault; plaintext, so the neuron runs on its own. | The same file, kept in `meta.nostr_yaml` like `wallet.yaml`. Made at setup; an install from before step 5 gets one on its next load. Import it with the Docker files, download it under Backup. |
+| Key | `_initNostrKeys` (START:120-149): `nostr.yaml` `{pubkey_hex, secret_hex}`, a **random** key (nostr-sdk `Keys.generate()`), not derived from the identity or the vault; plaintext, so the neuron runs on its own. | The same file, kept in `meta.nostr_yaml` like `wallet.yaml`. Made at setup; an install from before step 5 gets one on its next load. Import it with the Dockerized Neuron files, download it under Backup. |
 | Register | `checkin` sends the pubkey as the `nostr-pubkey` header of `POST /peer/register` (satorilib `server.py:384-402`). | Same header (64 lowercase hex). |
 | Events | nostr-sdk 0.45 builds and signs (BIP-340 Schnorr); `CLIENT:203-219`. | Hand-rolled NIP-01 (`src/nostr/event.js`): id = sha256 of `[0,pubkey,created_at,kind,tags,content]`, signed with `@noble/curves` schnorr. Checked against events made by satorilib's own client (fixture below). |
 | Relays | Reconcile fetches `GET /peer/relays` (PEER:123-163) every pass and falls back to the relays of known subscriptions (START:4464-4476); user-added relays are used for publishing (START:304-337). | Central's list (fetched at start and hourly; the last one is kept in `meta.nostr_central_relays` and used while central is down) plus the user's relays (Settings). On the dev server the user list defaults to the test relay `ws://localhost:7778`. |
@@ -202,7 +202,7 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   description and tags, the first 50 matches; prediction streams are hidden
   and counted; paid or gated streams show but can't be subscribed.
 - **Settings**: the user's relays (one per line) and "Publish to central's
-  relays". **Backup**: Download `nostr.yaml`. **Import Docker files**: an
+  relays". **Backup**: Download `nostr.yaml`. **Import Dockerized Neuron files**: an
   optional `nostr.yaml`.
 - Agents: `window.satori`'s Nostr methods and their shapes are in
   [/llms.txt](../../public/llms.txt), the one reference.

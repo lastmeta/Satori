@@ -156,12 +156,12 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   centralRelay.close();
 });
 
-test('Docker import with nostr.yaml keeps the Docker Nostr key; refused subscriptions are explained', async ({ context, page }) => {
+test('Dockerized Neuron import with nostr.yaml keeps its Nostr key; refused subscriptions are explained', async ({ context, page }) => {
   const stub = await stubCentral(context);
   const wallet = fx.vectors[0];
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
-  await page.getByRole('button', { name: 'Import Docker files' }).click();
+  await page.getByRole('button', { name: 'Import Dockerized Neuron files' }).click();
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel(/nostr.yaml/).setInputFiles(file('nostr.yaml', fx.nostr.yaml));

@@ -75,7 +75,7 @@ const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd 
 const errorLine = () => html`<p class="error" role="alert" hidden="${() => !state.error}">${() => state.error}</p>`;
 const wordList = (words) => html`<ol class="words">${() => words().map((w) => html`<li>${w}</li>`)}</ol>`;
 const SAFARI_ADD = 'To keep your keys, add Satori to the Dock (File › Add to Dock) or Home Screen (Share › Add to Home Screen). '
-  + 'The added app starts empty: set it up there, or import your downloaded Docker files.';
+  + 'The added app starts empty: set it up there, or import your downloaded Dockerized Neuron files.';
 
 /** Install Satori (Chromium's prompt), or Safari's way to add it; hidden once installed (docs/design/pwa.md). */
 const install = (a) => html`<div class="install" hidden="${() => state.app.installed || !(state.app.canInstall || state.safari)}">
@@ -94,7 +94,7 @@ function setup(a) {
       <div class="actions">
         <button class="primary" @click="${a.newWords}">Create a new neuron</button>
         <button @click="${() => a.goStep('restore')}">Restore from words</button>
-        <button @click="${() => a.goStep('docker')}">Import Docker files</button>
+        <button @click="${() => a.goStep('docker')}">Import Dockerized Neuron files</button>
       </div>
       ${install(a)}
     </div>
@@ -141,8 +141,8 @@ function setup(a) {
     </form>
 
     <form hidden="${showStep('docker')}" @submit="${(e) => { e.preventDefault(); a.importDocker(e.target); }}">
-      <h2>Import Docker files</h2>
-      <p class="muted">The two files from a Docker neuron’s wallet folder (unzip “Download Wallet” first).</p>
+      <h2>Import Dockerized Neuron files</h2>
+      <p class="muted">The two files from a Dockerized Neuron’s wallet folder (unzip “Download Wallet” first).</p>
       <label>wallet.yaml (identity) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
       <label>vault.yaml <input name="vault" type="file" accept=".yaml,.yml" required></label>
       <label>nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
@@ -157,7 +157,7 @@ function setup(a) {
     <form hidden="${showStep('passphrase')}" @submit="${(e) => a.createKeys(form(e), e.target)}">
       <h2>Choose a passphrase</h2>
       <p class="muted">It encrypts the vault in this browser. At least ${MIN_PASSPHRASE} characters,
-        Latin-1 only (no emoji or €), as Docker needs.</p>
+        Latin-1 only (no emoji or €), as the Dockerized Neuron needs.</p>
       <label>Passphrase <input name="pass1" type="password" autocomplete="new-password" required></label>
       <label>Repeat passphrase <input name="pass2" type="password" autocomplete="new-password" required></label>
       ${errorLine()}
@@ -421,14 +421,14 @@ function backup(a) {
     <summary>Backup</summary>
     <p class="muted" hidden="${() => state.unlocked}">Unlock the vault to back up your keys.</p>
     <div hidden="${() => !state.unlocked}">
-      <p class="muted">Each key is 24 words (or its private key). The files load in a Docker neuron (nostr.yaml is the Nostr key).</p>
+      <p class="muted">Each key is 24 words (or its private key). The files load in a Dockerized Neuron (nostr.yaml is the Nostr key).</p>
       <div class="backup-row">
         <span class="label">Show</span>
         <button class="small-btn" @click="${() => a.showBackup('identity')}">Identity words</button>
         <button class="small-btn" @click="${() => a.showBackup('vault')}">Vault words</button>
       </div>
       <div class="backup-row">
-        <span class="label">Docker files</span>
+        <span class="label">Dockerized Neuron files</span>
         <button class="small-btn" data-test="download-wallet" @click="${() => a.download('wallet.yaml')}">Download wallet.yaml</button>
         <button class="small-btn" data-test="download-vault" @click="${() => a.download('vault.yaml')}">Download vault.yaml</button>
         <button class="small-btn" data-test="download-nostr" @click="${() => a.download('nostr.yaml')}">Download nostr.yaml</button>
