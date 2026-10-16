@@ -64,4 +64,12 @@ export const MIGRATIONS = [
    FROM (SELECT stream_uuid, max(seq) AS seq, arg_max(value, seq) AS value, arg_max(model, seq) AS model,
      arg_max(made_at, seq) AS made_at, arg_max(relays, seq) AS relays FROM relay_predictions GROUP BY stream_uuid) x
    WHERE x.stream_uuid = relay_streams.uuid;`,
+  // 6 (bvar): each central target's champion spec, drawn from the identity and
+  // evolved after each poll (docs/design/engine.md#bvar-a-model-per-central-stream-unique-to-each-neuron):
+  // spec = JSON {companions, lambda1, lambda2}; score = its backtest error (null
+  // until 5 origins); generation = mutations proposed; accepted = mutations kept.
+  // streams.history_at: when central's history was fetched for the stream (null = not yet).
+  `CREATE TABLE model_specs (target_uuid VARCHAR PRIMARY KEY, spec VARCHAR NOT NULL, score DOUBLE,
+     generation INTEGER NOT NULL DEFAULT 0, accepted INTEGER NOT NULL DEFAULT 0, updated_at BIGINT NOT NULL);
+   ALTER TABLE streams ADD COLUMN history_at BIGINT;`,
 ];

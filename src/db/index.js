@@ -4,6 +4,8 @@
 //   const db = await openDb(conn, close?)    // runs migrations
 //   await db.get(key) / db.set(key, value)   // meta, JSON values
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
+//   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.specs() / db.saveSpecs(map, at) / db.models()
+//   await db.needHistory() → uuids / db.addHistory(uuid, rows, at) → rows added (older than the newest polled only)
 //   await db.addPrediction(p) → id / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
 //   await db.resetCentral()                  // the central URL changed
 //   await db.streams() / db.predictions(uuidOrName, limit)   // for the UI and agents
@@ -16,6 +18,13 @@ import { MIGRATIONS } from './schema.js';
 import { serial } from '../util.js';
 
 const plain = (v) => (typeof v === 'bigint' ? Number(v) : v);
+/**
+ * A DOUBLE parameter, sent as text for `CAST(? AS DOUBLE)`: DuckDB-WASM sends
+ * parameters as JSON, and its parser reads about 1 number in 12 one ulp off;
+ * a JS number's shortest text parses back exactly.
+ */
+const dbl = (x) => (x == null ? null : String(x));
+const D = 'CAST(? AS DOUBLE)';
 const toRows = (table) => table.toArray().map((r) => {
   const o = r.toJSON();
   for (const k in o) o[k] = plain(o[k]);
@@ -75,8 +84,10 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       SELECT s.uuid, s.name, s.meta,
         (SELECT count(*) FROM observations x WHERE x.stream_uuid = s.uuid) AS observations,
         o.ts AS obs_ts, o.value AS obs_value,
-        p.model, p.t1, p.t2, p.phi, p.weight, p.made_at, p.status, p.sent_at
+        p.model, p.t1, p.t2, p.phi, p.weight, p.made_at, p.status, p.sent_at,
+        m.spec, m.score, m.generation, m.accepted, s.history_at
       FROM streams s
+      LEFT JOIN model_specs m ON m.target_uuid = s.uuid
       LEFT JOIN (SELECT * FROM observations QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC) = 1) o
         ON o.stream_uuid = s.uuid
       LEFT JOIN (SELECT * FROM predictions QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY id DESC) = 1) p
@@ -89,10 +100,10 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       await run('BEGIN TRANSACTION');
       try {
         for (const o of list) {
-          await run(`INSERT INTO streams VALUES (?, ?, ?)
+          await run(`INSERT INTO streams (uuid, name, meta) VALUES (?, ?, ?)
             ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, meta = excluded.meta`, o.stream_uuid, o.name, o.meta);
-          const added = await rows('INSERT OR IGNORE INTO observations VALUES (?, ?, ?) RETURNING stream_uuid',
-            o.stream_uuid, o.ts, o.value);
+          const added = await rows(`INSERT OR IGNORE INTO observations VALUES (?, ?, ${D}) RETURNING stream_uuid`,
+            o.stream_uuid, o.ts, dbl(o.value));
           if (added.length) fresh.add(o.stream_uuid);
         }
         await run('COMMIT');
@@ -104,25 +115,86 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     }),
     /** A stream's observations, oldest first: [{ts, value}]. */
     history: inOrder((uuid) => rows('SELECT ts, value FROM observations WHERE stream_uuid = ? ORDER BY ts', uuid)),
+    /** Every central stream's observations, oldest first, in one read: Map(uuid → [{ts, value}]). */
+    centralHistories: inOrder(async () => {
+      const t = await query(conn, `SELECT o.stream_uuid, o.ts::DOUBLE AS ts, o.value FROM observations o
+        JOIN streams s ON s.uuid = o.stream_uuid ORDER BY o.stream_uuid, o.ts`);
+      const uuids = t.getChild('stream_uuid').toArray();
+      const ts = t.getChild('ts').toArray();
+      const values = t.getChild('value').toArray();
+      const out = new Map();
+      let list;
+      for (let i = 0; i < t.numRows; i++) {
+        if (i === 0 || uuids[i] !== uuids[i - 1]) out.set(uuids[i], (list = []));
+        list.push({ ts: ts[i], value: values[i] });
+      }
+      return out;
+    }),
+    /** Central streams whose history has not been fetched yet. */
+    needHistory: inOrder(async () => (await rows('SELECT uuid FROM streams WHERE history_at IS NULL ORDER BY uuid')).map((r) => r.uuid)),
+    /**
+     * A stream's history from central: insert or ignore the rows older than its
+     * newest stored (polled) one, so a backfill never pre-empts a poll's new row;
+     * mark the stream fetched. → how many rows were added
+     */
+    addHistory: inOrder(async (uuid, list, at) => {
+      const [{ newest }] = await rows('SELECT max(ts) AS newest FROM observations WHERE stream_uuid = ?', uuid);
+      const keep = newest == null ? [] : list.filter((o) => o.ts < newest);
+      let added = 0;
+      await run('BEGIN TRANSACTION');
+      try {
+        for (let i = 0; i < keep.length; i += 250) {
+          const chunk = keep.slice(i, i + 250);
+          added += (await rows(`INSERT OR IGNORE INTO observations VALUES ${chunk.map(() => `(?, ?, ${D})`).join(', ')} RETURNING ts`,
+            ...chunk.flatMap((o) => [uuid, o.ts, dbl(o.value)]))).length;
+        }
+        await run('UPDATE streams SET history_at = ? WHERE uuid = ?', at, uuid);
+        await run('COMMIT');
+      } catch (err) {
+        await run('ROLLBACK');
+        throw err;
+      }
+      return added;
+    }),
+    /** Each target's champion spec: Map(uuid → {spec, score, generation, accepted, updated_at}). */
+    specs: inOrder(async () => new Map((await rows('SELECT * FROM model_specs')).map((r) =>
+      [r.target_uuid, { spec: JSON.parse(r.spec), score: r.score, generation: r.generation, accepted: r.accepted, updated_at: r.updated_at }]))),
+    /** Store the specs a poll touched: Map(uuid → {spec, score, generation, accepted}). */
+    saveSpecs: inOrder(async (specs, at) => {
+      if (!specs.size) return;
+      await run('BEGIN TRANSACTION');
+      try {
+        for (const [uuid, r] of specs) {
+          await run(`INSERT INTO model_specs VALUES (?, ?, ${D}, ?, ?, ?) ON CONFLICT (target_uuid) DO UPDATE SET
+            spec = excluded.spec, score = excluded.score, generation = excluded.generation, accepted = excluded.accepted,
+            updated_at = excluded.updated_at`, uuid, JSON.stringify(r.spec), dbl(r.score), r.generation, r.accepted, at);
+        }
+        await run('COMMIT');
+      } catch (err) {
+        await run('ROLLBACK');
+        throw err;
+      }
+    }),
 
     addPrediction: inOrder(async (p) => (await rows(
       `INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-      p.stream_uuid, p.made_at, p.model, p.t1, p.t2, p.phi ?? null, p.weight ?? null, p.observed_at, p.hash))[0].id),
+       VALUES (?, ${D}, ?, ${D}, ${D}, ${D}, ${D}, ?, ?) RETURNING id`,
+      p.stream_uuid, dbl(p.made_at), p.model, dbl(p.t1), dbl(p.t2), dbl(p.phi), dbl(p.weight), p.observed_at, p.hash))[0].id),
     /** The kept queue: every pending prediction, oldest first, with its stream's name. */
     pending: inOrder(() => rows(`SELECT p.*, s.name FROM predictions p JOIN streams s ON s.uuid = p.stream_uuid
       WHERE p.status = 'pending' ORDER BY p.id`)),
     pendingCount: inOrder(async () => (await rows("SELECT count(*) AS n FROM predictions WHERE status = 'pending'"))[0].n),
     markSent: inOrder(async (ids, at) => {
-      if (ids.length) await run(`UPDATE predictions SET status = 'sent', sent_at = ? WHERE id IN (${ids.map(() => '?').join(', ')})`, at, ...ids);
+      if (ids.length) await run(`UPDATE predictions SET status = 'sent', sent_at = ${D} WHERE id IN (${ids.map(() => '?').join(', ')})`, dbl(at), ...ids);
     }),
     /** The cap on the kept queue: pending predictions made before `before` are deleted. */
     dropPending: inOrder((before) => run("DELETE FROM predictions WHERE status = 'pending' AND made_at < ?", before)),
-    /** Another central: its uuids differ, so the pending queue, the stream list and the last poll/submission go. */
+    /** Another central: its uuids differ, so the pending queue, the stream list, the specs and the last poll/submission/history go. */
     resetCentral: inOrder(async () => {
       await run("DELETE FROM predictions WHERE status = 'pending'");
       await run('DELETE FROM streams');
-      await run("DELETE FROM meta WHERE key IN ('central_last_poll', 'central_last_submit')");
+      await run('DELETE FROM model_specs');
+      await run("DELETE FROM meta WHERE key IN ('central_last_poll', 'central_last_submit', 'central_history')");
     }),
     /** A stream's predictions (by uuid or name), newest first. */
     predictions: inOrder((stream, limit = 20) => rows(`SELECT p.*, s.name FROM predictions p
@@ -157,13 +229,13 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     addRelayObservation: inOrder(async (o) => {
       await run('BEGIN TRANSACTION');
       try {
-        const fresh = (await rows('INSERT OR IGNORE INTO relay_observations VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING seq',
-          o.stream_uuid, o.seq, o.ts ?? null, o.value ?? null, o.raw ?? null, o.event_id, o.received_at)).length > 0;
+        const fresh = (await rows(`INSERT OR IGNORE INTO relay_observations VALUES (?, ?, ?, ${D}, ?, ?, ?) RETURNING seq`,
+          o.stream_uuid, o.seq, o.ts ?? null, dbl(o.value), o.raw ?? null, o.event_id, o.received_at)).length > 0;
         if (fresh) {
           await run('UPDATE relay_streams SET observations = observations + 1 WHERE uuid = ?', o.stream_uuid);
-          await run(`UPDATE relay_streams SET obs_seq = ?, obs_ts = ?, obs_value = ?, obs_raw = ?, obs_received_at = ?
+          await run(`UPDATE relay_streams SET obs_seq = ?, obs_ts = ?, obs_value = ${D}, obs_raw = ?, obs_received_at = ?
             WHERE uuid = ? AND (obs_seq IS NULL OR obs_seq < ?)`,
-          o.seq, o.ts ?? null, o.value ?? null, o.raw ?? null, o.received_at, o.stream_uuid, o.seq);
+          o.seq, o.ts ?? null, dbl(o.value), o.raw ?? null, o.received_at, o.stream_uuid, o.seq);
         }
         await run('COMMIT');
         return fresh;

@@ -52,6 +52,25 @@ test('a step-3 database: predictions gain the engine\'s phi and weight (null on 
     .toEqual([['naive', null, null], ['bar1', -0.25, 0.75], ['ols-20', null, null]]);
 });
 
+test('doubles come back bit for bit (DuckDB-WASM sends parameters as JSON, which it parses 1 ulp off now and then)', async () => {
+  const xs = Array.from({ length: 400 }, (_, i) => 0.1 + i * 1e-7 + 1 / 3); // 17 significant digits: 1 in 12 was off
+  await db.addObservations(xs.map((value, i) => obs({ ts: 1000 + i, value })));
+  expect((await db.history('u-btc')).map((o) => o.value)).toEqual(xs);
+  await db.addObservations([obs({ ts: 100_000 })]);
+  await db.addHistory('u-btc', xs.map((value, i) => ({ ts: 50_000 + i, value })), 1);
+  expect((await db.history('u-btc')).slice(400, 800).map((o) => o.value)).toEqual(xs);
+  for (const x of xs.slice(0, 120)) {
+    await db.addPrediction(pred({ made_at: 1792000000 + x, t1: x, t2: x * 1000.123, phi: x / 7, weight: x / 3 }));
+  }
+  const ps = (await db.predictions('u-btc', 200)).reverse();
+  expect(ps.map((p) => [p.made_at, p.t1, p.t2, p.phi, p.weight]))
+    .toEqual(xs.slice(0, 120).map((x) => [1792000000 + x, x, x * 1000.123, x / 7, x / 3]));
+  await db.markSent([ps[0].id], 1792000000 + xs[5]);
+  expect((await db.predictions('u-btc', 200)).at(-1).sent_at).toBe(1792000000 + xs[5]);
+  await db.saveSpecs(new Map([['u-btc', { spec: {}, score: xs[7], generation: 1, accepted: 0 }]]), 1);
+  expect((await db.specs()).get('u-btc').score).toBe(xs[7]);
+});
+
 test('meta holds JSON values', async () => {
   expect(await db.get('next_poll_at')).toBeUndefined();
   await db.set('x', { v: 1, ct: 'abc' });
@@ -145,6 +164,70 @@ test('streams: one row per stream with its latest observation and prediction', a
   expect(btc).toMatchObject({ uuid: 'u-btc', name: 'bitcoin', observations: 2, obs_ts: 2000, obs_value: 2,
     t1: 6, t2: 7, model: 'bar1', phi: -0.25, weight: 0.75, made_at: 2100, status: 'sent', sent_at: 2200 });
   expect(eth).toMatchObject({ uuid: 'u-eth', name: 'eth', observations: 1, t1: null, t2: null, status: null });
+});
+
+describe('bvar: specs and central history (migration 6)', () => {
+  test('a step-6 database: streams gain history_at (null: not fetched yet), and model_specs starts empty', async () => {
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 5)) await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '5')`);
+    await conn.query(`INSERT INTO streams VALUES ('u-btc', 'bitcoin', NULL)`);
+    await conn.query(`INSERT INTO observations VALUES ('u-btc', 1000, 1)`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    expect(await up.needHistory()).toEqual(['u-btc']);
+    expect(await up.specs()).toEqual(new Map());
+    expect(await up.streams()).toMatchObject([{ uuid: 'u-btc', observations: 1, spec: null, history_at: null }]);
+  });
+
+  test('centralHistories: every central stream\'s observations in one read, oldest first; another central\'s left out', async () => {
+    await db.addObservations([obs({ ts: 2000, value: 2 }), obs({ ts: 1000, value: 1.5 }), obs({ stream_uuid: 'u-eth', name: 'eth', value: 5 })]);
+    await db.addObservations([obs({ stream_uuid: 'u-old', name: 'old' })]);
+    await db.resetCentral();
+    await db.addObservations([obs({ ts: 3000, value: 3 }), obs({ stream_uuid: 'u-eth', name: 'eth', ts: 1500, value: 6 })]);
+    expect(await db.centralHistories()).toEqual(new Map([
+      ['u-btc', [{ ts: 1000, value: 1.5 }, { ts: 2000, value: 2 }, { ts: 3000, value: 3 }]],
+      ['u-eth', [{ ts: 1000, value: 5 }, { ts: 1500, value: 6 }]],
+    ]));
+    expect(await db.centralHistories()).toBeInstanceOf(Map);
+  });
+
+  test('addHistory: only rows older than the newest polled one (a poll\'s new row stays new), insert or ignore; marks the stream', async () => {
+    await db.addObservations([obs({ ts: 5000, value: 50 }), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
+    const rows = [{ ts: 3000, value: 30 }, { ts: 4000, value: 40 }, { ts: 5000, value: 99 }, { ts: 6000, value: 60 }];
+    expect(await db.addHistory('u-btc', rows, 7000)).toBe(2);
+    expect(await db.history('u-btc')).toEqual([{ ts: 3000, value: 30 }, { ts: 4000, value: 40 }, { ts: 5000, value: 50 }]);
+    expect(await db.needHistory()).toEqual(['u-eth']);
+    expect(await db.addHistory('u-btc', rows, 7001)).toBe(0); // again: ignored
+    // the next poll brings 6000: new, so it is forecast
+    expect(await db.addObservations([obs({ ts: 6000, value: 60 })])).toEqual(['u-btc']);
+    expect((await db.streams())[0]).toMatchObject({ uuid: 'u-btc', history_at: 7001, observations: 4 });
+  });
+
+  test('addHistory: many rows (chunked), floats exactly as given', async () => {
+    await db.addObservations([obs({ ts: 10_000_000 })]);
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ ts: 1000 + i * 3600, value: 0.1 + i * 1e-7 + 1 / 3 }));
+    expect(await db.addHistory('u-btc', rows, 1)).toBe(1000);
+    expect((await db.history('u-btc')).slice(0, 1000)).toEqual(rows);
+  });
+
+  test('specs: saved and read back; resetCentral drops them (another central\'s uuids)', async () => {
+    await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
+    const spec = { companions: ['u-eth'], lambda1: 0.2, lambda2: 0.5 };
+    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0123, generation: 3, accepted: 1 }],
+      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, generation: 0, accepted: 0 }]]), 4000);
+    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0122, generation: 4, accepted: 1 }]]), 4100);
+    expect(await db.specs()).toEqual(new Map([
+      ['u-btc', { spec, score: 0.0122, generation: 4, accepted: 1, updated_at: 4100 }],
+      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, generation: 0, accepted: 0, updated_at: 4000 }],
+    ]));
+    expect((await db.streams())[0]).toMatchObject({ spec: JSON.stringify(spec), score: 0.0122, generation: 4, accepted: 1 });
+    await db.set('central_history', { at: 1 });
+    await db.resetCentral();
+    expect(await db.specs()).toEqual(new Map());
+    expect(await db.get('central_history')).toBeUndefined();
+  });
 });
 
 test('calls run in order even when not awaited', async () => {
