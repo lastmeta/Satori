@@ -33,15 +33,23 @@ export function checkMaxFee(raw) {
   return gwei;
 }
 
-/** The engine's step for a registry stream: 12 h, or its cadence when slower (docs/design/base.md, the daily batch). */
-export const stepFor = (cadenceMinutes) => Math.max(STEP_S, (Number(cadenceMinutes) || 0) * 60);
-
 /**
  * How far ahead the batch forecasts a registry stream: one cadence, and at least
  * the 24 h a round scores (docs/intent/engine.md): two 12 h steps for an hourly
  * stream, one 24 h step for the daily default stream.
  */
 export const horizonFor = (cadenceMinutes) => Math.max(ROUND_S, (Number(cadenceMinutes) || 0) * 60);
+
+/**
+ * The engine's step for a registry stream (docs/design/base.md, the daily batch): the
+ * horizon cut into n = max(1, floor(horizon / max(12 h, cadence))) equal steps, so the
+ * forecast lands exactly on the horizon: 12 h for a stream that updates at least that
+ * often, else one step of the horizon (a 13 h or an 18 h cadence: one 24 h step).
+ */
+export function stepFor(cadenceMinutes) {
+  const horizon = horizonFor(cadenceMinutes);
+  return horizon / Math.max(1, Math.floor(horizon / Math.max(STEP_S, (Number(cadenceMinutes) || 0) * 60)));
+}
 
 /** Lite's direction_from (base_predict.py:141-143): UP if the forecast is above the latest value; a tie is DOWN. */
 export const directionOf = (forecast, latest) => (forecast > latest ? UP : DOWN);

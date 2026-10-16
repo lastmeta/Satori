@@ -1,6 +1,7 @@
 // The Base flow (docs/design/base.md): the daily batch's rules, the schedule,
 // delegate, claims and sends, against test/fake-satori.js (viem over a custom
 // transport) and a Map for the database.
+import { forecast } from '../engine/index.js';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { zeroAddress } from 'viem';
 import { publicKeys, evmAddress, signDigest } from '../keys/keys.js';
@@ -46,6 +47,16 @@ describe('rules', () => {
     expect(stepFor(720)).toBe(43_200);
     expect(stepFor(1440)).toBe(86_400);
     expect(stepFor(0)).toBe(43_200);
+  });
+  test('the step divides the horizon: n = max(1, floor(horizon / max(12 h, cadence))), step = horizon / n', () => {
+    const h = 3600;
+    for (const [minutes, step, horizon] of [[90, 12 * h, 24 * h], [13 * 60, 24 * h, 24 * h], [18 * 60, 24 * h, 24 * h],
+      [24 * 60, 24 * h, 24 * h], [48 * 60, 48 * h, 48 * h], [60, 12 * h, 24 * h], [12 * 60, 12 * h, 24 * h]]) {
+      expect([stepFor(minutes), horizonFor(minutes)], `${minutes} min`).toEqual([step, horizon]);
+      // the engine then forecasts exactly at the horizon (13 h gave 26 h, 15 h 30 h, 18 h 18 h)
+      const pts = Array.from({ length: 300 }, (_, i) => ({ ts: 1_750_000_000 + i * minutes * 60, value: 100 + Math.sin(i) }));
+      expect(forecast(pts, { step: stepFor(minutes), horizon: horizonFor(minutes) }).horizon, `${minutes} min`).toBe(horizon);
+    }
   });
   test('the horizon: one cadence ahead, at least the 24 h the round scores', () => {
     expect(horizonFor(60)).toBe(86_400); // hourly: 12 h steps, 2 of them

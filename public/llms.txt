@@ -190,9 +190,10 @@ Every method is below; `await satori.status()` shows everything at once.
   hourly), when the identity has delegated power and no batch this round.
   Every registry stream whose binary game has voting weight (the engine pays
   only those) is forecast by the engine one cadence ahead and at least the
-  24 h a round scores (step = max(12 h, the cadence), horizon = max(24 h, the
-  cadence): an hourly stream in two 12 h steps, the daily default stream in
-  one 24 h step; a named stream, a signed counter, as `bar1d`); direction UP
+  24 h a round scores (horizon = max(24 h, the cadence), in n = max(1,
+  floor(horizon / max(12 h, cadence))) equal steps: an hourly stream in two
+  12 h steps, a 13–24 h cadence and the daily default stream in one 24 h
+  step; a named stream, a signed counter, as `bar1d`); direction UP
   (payload `0x01`) if that forecast > the latest value, else DOWN (`0x02`),
   as the Docker neuron. Each game is simulated alone first (the contract's own
   checks, named games' 24 clock hours included) and only the ones that pass

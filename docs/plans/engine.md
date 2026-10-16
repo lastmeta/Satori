@@ -47,7 +47,7 @@ Left for later:
 | Sink | Value | Docker evidence |
 |---|---|---|
 | central-lite batch (built) | `value` = t2, `t1_value` = t1 | `engine.py:1052-1058,1097-1106` |
-| Base daily batch (built, step 6) | UP if the forecast at the horizon > the latest value, else DOWN, as Lite; step max(12 h, cadence), horizon max(24 h, cadence) | `base_predict.py:141-143`; [../design/base.md](../design/base.md) |
+| Base daily batch (built, step 6) | UP if the forecast at the horizon > the latest value, else DOWN, as Lite; horizon max(24 h, cadence) in n = max(1, floor(horizon / max(12 h, cadence))) equal steps | `base_predict.py:141-143`; [../design/base.md](../design/base.md) |
 | `_pred` on Nostr (built, step 5) | the forecast one cadence ahead (the owner's rule; Lite sends t2, two cadences ahead), as a string | `engine.py:714-739,1153-1186`; `start.py:1300,1322-1323`; [../design/nostr.md](../design/nostr.md) |
 
 The owner's rule (2026-10-15, [../intent/engine.md](../intent/engine.md)): a

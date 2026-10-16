@@ -338,7 +338,8 @@ polls every ~11 h and predicts two of those steps, about 24 h.
   grid gives the same model (tested: the same values on a 15 min grid with
   `step: 900` give exactly the 12 h result).
 - `horizon`: how far ahead `value` is. The engine iterates n = horizon / step
-  steps (the nearest whole number, at least one) and returns `value`, the
+  steps (the nearest whole number, at least one; callers pick a step that
+  divides the horizon) and returns `value`, the
   forecast n steps ahead, and `horizon` = n × step. The backtest that sets the
   fade scores that same forecast against the value n buckets after each origin
   (tested against the engine forecasting each origin's history). The default
@@ -348,7 +349,7 @@ polls every ~11 h and predicts two of those steps, about 24 h.
 |---|---|---|---|
 | Central | 12 h | 24 h (2 steps) | `value` = t2, `t1_value` = t1: Lite's payload, unchanged |
 | Nostr `_pred` | the source's `cadence_seconds` (12 h when none) | one cadence (1 step) | `value`, = t1 ([nostr.md](nostr.md#the-engines-step)) |
-| Base daily batch | max(12 h, cadence) | max(24 h, cadence) | UP/DOWN from `value`: an hourly stream in two 12 h steps, the daily default stream in one 24 h step ([base.md](base.md)) |
+| Base daily batch | horizon / n, n = max(1, floor(horizon / max(12 h, cadence))) | max(24 h, cadence) | UP/DOWN from `value`: an hourly stream in two 12 h steps, the daily default stream in one 24 h step ([base.md](base.md)) |
 
 With the default horizon the numbers are the ones before the rule (the
 namaste_club parity cases are unchanged). `bvar` is central's, so it keeps

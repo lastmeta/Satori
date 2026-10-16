@@ -184,13 +184,17 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 4. **Forecast** with the engine (`src/engine/`) one cadence ahead, and at
    least the 24 h a round scores (the owner's rule,
    [../intent/engine.md](../intent/engine.md);
-   [engine.md](engine.md#the-step-and-the-horizon)): step = max(12 h, the
-   stream's cadence), horizon = max(24 h, the cadence). A stream that
-   updates at least every 12 h is forecast in two 12 h steps, 24 h ahead, the
-   game's daily target (`targetMinutes` 1440) and central's horizon; a
-   slower one in steps of its cadence, else `bar1` never sees back-to-back
-   buckets. D6's one stream, the default stream, is daily (1440 min): one
-   24 h step. (Until the rule it took t2 there, two days ahead.)
+   [engine.md](engine.md#the-step-and-the-horizon)): horizon = max(24 h, the
+   cadence), cut into n = max(1, floor(horizon / max(12 h, cadence))) equal
+   steps, step = horizon / n, so the forecast lands exactly on the horizon. A
+   stream that updates at least every 12 h is forecast in two 12 h steps,
+   24 h ahead, the game's daily target (`targetMinutes` 1440) and central's
+   horizon; a 13–24 h cadence in one 24 h step (a step shorter than the
+   cadence would leave `bar1` no back-to-back buckets); a slower one in one
+   step of its cadence. D6's one stream, the default stream, is daily
+   (1440 min): one 24 h step. (Until the rule it took t2 there, two days
+   ahead; and until the review a 13 h cadence went 26 h ahead, an 18 h one
+   18 h.)
 5. **Direction**: UP (`0x01`) if the forecast at the horizon > the latest
    value, else DOWN (`0x02`); payload = the one byte
    (`solidityPacked(['uint8'])`). This is Lite's
@@ -308,7 +312,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | Deviation | Why |
 |---|---|
 | Base streams come from the registry (`getAllDataStreams`, `binaryGameByStream`, `getHistoryPage`), not from the bridge's Nostr streams `satori-84532-1…32` (START:457-517); only games with voting weight > 0 are kept. | No relay needed, and the same values the engine anchors on; the dapp reads the registry too. The weight test replaces the bridge's choice: anyone can add streams for a tiny burn, and an unweighted game earns nothing (SatoriEngine.sol:828). |
-| The forecast is made at batch time from the registry's history, step max(12 h, cadence), horizon max(24 h, cadence); Lite reads its latest relay `_pred` (t2 at the stream's cadence). | Lite's step = cadence gives a 2 h horizon on an hourly stream for a 24 h game, and two days on a daily one; the owner's rule is one cadence, and the round scores 24 h. |
+| The forecast is made at batch time from the registry's history, horizon max(24 h, cadence) in n = max(1, floor(horizon / max(12 h, cadence))) equal steps; Lite reads its latest relay `_pred` (t2 at the stream's cadence). | Lite's step = cadence gives a 2 h horizon on an hourly stream for a 24 h game, and two days on a daily one; the owner's rule is one cadence, and the round scores 24 h. |
 | Due once per UTC round at the first check, not every 24 h from the last submit (START:1256-1274). | A tab is open part of the day ([when in the round](#when-in-the-round)). |
 | Each game is simulated alone and only passing games are sent; Lite sends all. Lite's named-game wait (24 h since its last submit) and its resend without named games are not kept. | One stale game no longer sinks the batch. Lite needs the wait and the resend because it does not simulate; the simulate applies the contract's own named rule. |
 | The hash is kept when the batch is sent and the batch stored after its receipt; Lite stores its time before sending. | A reverted send no longer loses the day, and a tab closed before the receipt never sends twice. |
