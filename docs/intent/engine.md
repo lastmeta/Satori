@@ -22,7 +22,25 @@ the time, but highly predictive in certain situations".
 How the models are cut is open. There could be one per stream, or one combined
 model per neuron that predicts all its streams.
 
+A neuron tries to make the best predictions it can.
+- **It reads more than it predicts.** It can consume a stream only because
+  the stream helps it predict others.
+- **It only predicts where it can do well.** It doesn't have to predict, or
+  broadcast, every stream it sees.
+
+**Automatic first, user control second.** The neuron runs on its own. It looks
+for new streams, evaluates them, drops the ones that don't help, and keeps
+cycling. A user, or the user's agent, can still take full control by pinning
+a stream to:
+- always consume it;
+- use it for predicting a particular stream;
+- predict it.
+
 ## Direction now
+
+- Focus on the streams that pay: those from central, and those from the Base
+  contract (relayed over Nostr). That is why people run a neuron. Other Nostr
+  streams, which may or may not carry a reward, come later.
 
 - Start with one algorithm, multivariate. Each target reads 1–3 random
   companion streams, and the priors are randomised a little. Both improve over
