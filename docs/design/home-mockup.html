@@ -1,0 +1,297 @@
+<title>Neuron Home Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a state switcher, then the phone Home beside the desktop dashboard (stacked on narrow screens).
+   Tokens follow the app's own style.css (system UI type, blue accent, cool grey ground) plus semantic health colors. */
+:root {
+  --bg: #eef1f5; --card: #ffffff; --text: #1c2430; --muted: #6b7686; --line: #e3e7ed;
+  --accent: #3a5bd9; --accent-soft: #e9eefc;
+  --ok: #1f8a4c; --ok-soft: #e4f4ea; --warn: #b26a00; --warn-soft: #fbf0dc;
+  --bad: #b42318; --bad-soft: #fbe6e4; --idle: #5b6b85; --idle-soft: #e7ebf2;
+  --cell-off: #e3e7ed; --frame: #1c2430;
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --num: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1116; --card: #1a1f27; --text: #e6e9ee; --muted: #8d97a6; --line: #2a313c;
+  --accent: #8ea6ff; --accent-soft: #232c45;
+  --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
+  --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #232a36;
+  --cell-off: #2a313c; --frame: #3a4352; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1116; --card: #1a1f27; --text: #e6e9ee; --muted: #8d97a6; --line: #2a313c;
+  --accent: #8ea6ff; --accent-soft: #232c45;
+  --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
+  --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #232a36;
+  --cell-off: #2a313c; --frame: #3a4352; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 15px/1.45 var(--ui); }
+.page { max-width: 1240px; margin: 0 auto; padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 18px; }
+header.intro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+header.intro h1 { font-size: 1.3rem; margin: 0; text-wrap: balance; }
+header.intro p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+.switch { display: flex; flex-wrap: wrap; gap: 6px; }
+.switch button { font: inherit; font-size: .85rem; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.switch button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.switch button:focus-visible, .tab:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+.stage { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 980px) { .stage { grid-template-columns: minmax(0, 1fr); } .phone { margin: 0 auto; } }
+.label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+
+/* phone frame */
+.phone { width: 100%; max-width: 380px; border: 10px solid var(--frame); border-radius: 38px; background: var(--bg);
+  overflow: hidden; display: flex; flex-direction: column; min-height: 720px; }
+.p-top { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 6px; }
+.brand { font-weight: 700; letter-spacing: .01em; }
+.brand span { color: var(--muted); font-weight: 400; }
+.gear { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); background: var(--card); }
+.p-body { padding: 4px 14px 14px; display: grid; gap: 12px; flex: 1; align-content: start; }
+
+/* health hero */
+.hero { border-radius: 20px; padding: 18px; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+  background: var(--soft); border: 1px solid color-mix(in srgb, var(--tone) 25%, transparent); }
+.ring { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--card);
+  box-shadow: inset 0 0 0 5px var(--tone); color: var(--tone); }
+.ring svg { width: 28px; height: 28px; }
+.hero h2 { margin: 0; font-size: 1.35rem; line-height: 1.15; color: var(--tone); }
+.hero p { margin: 3px 0 0; color: var(--text); font-size: .9rem; }
+.hero .when { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* action card (only when the neuron needs the person) */
+.action { border-radius: 16px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line);
+  border-left: 4px solid var(--tone); display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.action p { margin: 0; font-size: .9rem; }
+.btn { font: inherit; font-size: .85rem; font-weight: 600; padding: 8px 14px; border-radius: 10px; border: 0; cursor: pointer;
+  background: var(--accent); color: var(--card); white-space: nowrap; }
+.btn.ghost { background: var(--accent-soft); color: var(--accent); }
+
+/* streak */
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+.tile-h { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 10px; }
+.tile-h b { font-size: .95rem; }
+.tile-h span { color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.streak { display: grid; grid-template-columns: repeat(var(--days), 1fr); gap: 4px; }
+.cell { aspect-ratio: 1 / 1.6; border-radius: 4px; background: var(--cell-off); max-width: 100%; }
+.cell.full { background: var(--ok); }
+.cell.part { background: linear-gradient(to top, var(--ok) 50%, var(--cell-off) 50%); }
+.cell.err { background: var(--bad); }
+.cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
+.legend { display: flex; gap: 12px; margin-top: 8px; color: var(--muted); font-size: .75rem; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+/* channels */
+.chans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.chan { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 4px; }
+.chan .row { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: .85rem; }
+.chan .sub { color: var(--muted); font-size: .76rem; font-variant-numeric: tabular-nums; }
+.state { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; color: var(--card); flex: none; }
+.state svg { width: 10px; height: 10px; }
+
+/* earnings */
+.earn { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.earn .big { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.earn .big small { font-size: .8rem; color: var(--muted); font-weight: 500; margin-left: 4px; }
+.earn .sub { color: var(--muted); font-size: .8rem; }
+
+/* tab bar */
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--card);
+  padding: 8px 4px 10px; }
+.tab { display: grid; justify-items: center; gap: 2px; font-size: .7rem; color: var(--muted); background: none; border: 0; font-family: inherit; cursor: pointer; }
+.tab svg { width: 22px; height: 22px; }
+.tab.on { color: var(--accent); font-weight: 600; }
+
+/* desktop frame */
+.desk { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); overflow: hidden; min-width: 0; }
+.d-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; background: var(--card); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.d-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.d-nav a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 10px; border-radius: 8px; }
+.d-nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.d-grid { padding: 16px; display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.span-5 { grid-column: span 5; } .span-7 { grid-column: span 7; } .span-4 { grid-column: span 4; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
+@media (max-width: 1180px) { .span-5, .span-7, .span-4, .span-8 { grid-column: span 12; } }
+.d-grid .hero { height: 100%; }
+.feed { display: grid; gap: 0; }
+.feed div { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: .85rem; }
+.feed div:first-child { border-top: 0; }
+.feed time { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .85rem; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; padding: 0 8px 6px 0; }
+td { padding: 7px 8px 7px 0; border-top: 1px solid var(--line); white-space: nowrap; }
+td.r, th.r { text-align: right; }
+.chip { font-size: .72rem; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.chip.n { background: var(--idle-soft); color: var(--idle); }
+.spark { width: 70px; height: 20px; }
+.spark path { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.wallet { display: grid; gap: 10px; }
+.wallet .line { display: flex; justify-content: space-between; gap: 12px; font-size: .88rem; }
+.wallet .line span:last-child { text-align: right; }
+.wallet .line span:first-child { color: var(--muted); }
+.example { font-size: .75rem; color: var(--muted); }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.notes div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: .88rem; }
+.notes b { display: block; margin-bottom: 2px; }
+@media (prefers-reduced-motion: no-preference) { .ring { transition: box-shadow .25s, color .25s; } }
+</style>
+
+<div class="page">
+  <header class="intro">
+    <div>
+      <h1>Neuron Home: is my neuron working?</h1>
+      <p>Mockup with example data. Tap a state to see how Home answers it.</p>
+    </div>
+    <div class="switch" role="group" aria-label="Neuron state">
+      <button data-s="ok" aria-pressed="true"><span class="dot" style="background:var(--ok)"></span>All good</button>
+      <button data-s="idle" aria-pressed="false"><span class="dot" style="background:var(--idle)"></span>Was closed</button>
+      <button data-s="warn" aria-pressed="false"><span class="dot" style="background:var(--warn)"></span>Needs you</button>
+      <button data-s="bad" aria-pressed="false"><span class="dot" style="background:var(--bad)"></span>Problem</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div>
+      <p class="label">Phone · first screen</p>
+      <div class="phone" id="phone">
+        <div class="p-top"><div class="brand">Satori <span>neuron</span></div>
+          <div class="gear" aria-label="Settings"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+        </div>
+        <div class="p-body">
+          <section class="hero" data-hero>
+            <div class="ring" data-icon></div>
+            <div><h2 data-title></h2><p data-line></p></div>
+          </section>
+          <div class="action" data-action hidden><p data-action-text></p><button class="btn" type="button" data-action-btn></button></div>
+          <section class="tile">
+            <div class="tile-h"><b>Last 14 days</b><span data-days-sum></span></div>
+            <div class="streak" style="--days:14" data-streak="14"></div>
+          </section>
+          <section class="chans" data-chans></section>
+          <section class="tile earn">
+            <div><div class="sub">Claimable rewards</div><div class="big" data-claim></div><div class="sub" data-vault></div></div>
+            <button class="btn ghost" type="button">Claim</button>
+          </section>
+        </div>
+        <nav class="tabs" aria-label="Sections">
+          <button class="tab on" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+          <button class="tab" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-6 4 4 8-9"/></svg>Streams</button>
+          <button class="tab" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M16 12h2"/></svg>Wallet</button>
+          <button class="tab" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Settings</button>
+        </nav>
+      </div>
+    </div>
+
+    <div style="min-width:0">
+      <p class="label">Computer · dashboard</p>
+      <div class="desk">
+        <div class="d-bar"><div class="brand">Satori <span>neuron</span></div>
+          <nav class="d-nav"><a class="on" href="#home">Home</a><a href="#streams">Streams</a><a href="#wallet">Wallet</a><a href="#settings">Settings</a></nav></div>
+        <div class="d-grid">
+          <section class="hero span-5" data-hero>
+            <div class="ring" data-icon></div>
+            <div><h2 data-title></h2><p data-line></p></div>
+          </section>
+          <section class="tile span-7">
+            <div class="tile-h"><b>Last 30 days</b><span data-days-sum30></span></div>
+            <div class="streak" style="--days:30" data-streak="30"></div>
+            <div class="legend"><span><i style="background:var(--ok)"></i>Predicted</span><span><i style="background:linear-gradient(to top,var(--ok) 50%,var(--cell-off) 50%)"></i>Part of the day</span><span><i style="background:var(--cell-off)"></i>App closed</span><span><i style="background:var(--bad)"></i>Error</span></div>
+          </section>
+          <div class="action span-12" data-action hidden><p data-action-text></p><button class="btn" type="button" data-action-btn></button></div>
+          <section class="chans span-12" data-chans></section>
+          <section class="tile span-8">
+            <div class="tile-h"><b>Streams</b><span>83 predicted · 82 on bvar</span></div>
+            <div class="tbl-wrap"><table>
+              <thead><tr><th>Stream</th><th class="r">Latest</th><th class="r">Forecast 24 h</th><th>Model</th><th>Trend</th></tr></thead>
+              <tbody>
+                <tr><td>bitcoin</td><td class="r">81,569.95</td><td class="r">81,702.10</td><td><span class="chip">bvar · +eth +gold</span></td><td><svg class="spark" viewBox="0 0 70 20"><path d="M0 14 L10 12 L20 13 L30 9 L40 10 L50 6 L60 7 L70 4"/></svg></td></tr>
+                <tr><td>eth</td><td class="r">3,412.08</td><td class="r">3,398.40</td><td><span class="chip">bvar · +sol</span></td><td><svg class="spark" viewBox="0 0 70 20"><path d="M0 6 L10 8 L20 7 L30 11 L40 10 L50 13 L60 12 L70 14"/></svg></td></tr>
+                <tr><td>gold</td><td class="r">2,684.30</td><td class="r">2,686.95</td><td><span class="chip">bvar · +dxy +oil +btc</span></td><td><svg class="spark" viewBox="0 0 70 20"><path d="M0 12 L10 11 L20 11 L30 10 L40 10 L50 9 L60 9 L70 8"/></svg></td></tr>
+                <tr><td>fear &amp; greed</td><td class="r">54</td><td class="r">54</td><td><span class="chip n">naive · daily</span></td><td><svg class="spark" viewBox="0 0 70 20"><path d="M0 10 L23 14 L46 8 L70 10"/></svg></td></tr>
+              </tbody></table></div>
+          </section>
+          <section class="tile span-4 wallet">
+            <div class="tile-h" style="margin:0"><b>Wallet</b><span>Base</span></div>
+            <div class="earn"><div><div class="sub">Claimable</div><div class="big" data-claim></div></div><button class="btn ghost" type="button">Claim</button></div>
+            <div class="line"><span>Vault</span><span data-vault-d>100 SATORI · delegated</span></div>
+            <div class="line"><span>Gas for daily batch</span><span data-gas>33 days left</span></div>
+          </section>
+          <section class="tile span-12">
+            <div class="tile-h"><b>Activity</b><span>newest first</span></div>
+            <div class="feed" data-feed></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><b>Home answers one question</b>Is my neuron predicting every day, and is anything broken? Words appear only when something is wrong.</div>
+    <div><b>Streams</b>Each stream, its forecast, its model and companions, its history.</div>
+    <div><b>Wallet</b>Vault, delegation, claims, sending, gas.</div>
+    <div><b>Settings</b>Keys and backup, central, relays, Base RPC, storage, install.</div>
+  </div>
+</div>
+
+<script>
+const icons = {
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  idle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 6v8"/><circle cx="12" cy="18.5" r="0.6"/></svg>',
+  bad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
+};
+const small = { ok: icons.ok, warn: icons.warn, bad: icons.bad, idle: icons.idle };
+const tone = { ok: ['--ok','--ok-soft'], idle: ['--idle','--idle-soft'], warn: ['--warn','--warn-soft'], bad: ['--bad','--bad-soft'] };
+
+// Example data per state. Day codes: f = predicted all day's channels, p = part, o = app closed, e = error.
+const S = {
+  ok:   { title: 'Predicting', line: 'Sent 83 predictions <span class="when">2 h ago</span> · next <span class="when">in 9 h</span>',
+          days: 'ffffffffofffff', days30: 'fffffffffoffffffffffffffofffff', claim: '12.4', vault: '100 SATORI delegated', gas: '33 days left',
+          chans: [['ok','Central','83 sent today'],['ok','Base','Round 20742 sent'],['ok','Network','2 relays']],
+          feed: [['ok','Sent 83 predictions to central','2 h ago'],['ok','Base batch for round 20742: 1 game','5 h ago'],['ok','Published 3 forecasts to the network','6 h ago'],['ok','History loaded for 83 streams','1 d ago']] },
+  idle: { title: 'Was asleep', line: 'Closed for <span class="when">2 days</span>. Caught up just now.',
+          days: 'fffffffffffoop', days30: 'fffffffffffffffffffffffffffoop', claim: '12.4', vault: '100 SATORI delegated', gas: '33 days left',
+          action: ['The neuron only runs while Satori is open. Install it so it stays open in its own window.', 'Install'],
+          chans: [['ok','Central','83 sent just now'],['ok','Base','Round 20744 sent'],['ok','Network','2 relays']],
+          feed: [['ok','Caught up: sent 83 predictions','just now'],['idle','Satori was closed','2 d'],['ok','Base batch for round 20742','2 d ago']] },
+  warn: { title: 'Predicting', line: 'Central is fine. Base needs one step from you.',
+          days: 'ffffffffpppppp', days30: 'ffffffffffffffffffffffffpppppp', claim: '0', vault: '100 SATORI · not delegated', gas: '0 ETH',
+          action: ['Base predictions are off. Delegate your vault’s prediction power to this neuron.', 'Delegate'],
+          chans: [['ok','Central','83 sent today'],['warn','Base','Not delegated'],['ok','Network','2 relays']],
+          feed: [['ok','Sent 83 predictions to central','2 h ago'],['warn','Base batch skipped: no prediction power','5 h ago'],['ok','Published 3 forecasts to the network','6 h ago']] },
+  bad:  { title: 'Not predicting', line: 'Central refused the last <span class="when">2</span> batches.',
+          days: 'ffffffffffffee', days30: 'ffffffffffffffffffffffffffffee', claim: '12.4', vault: '100 SATORI delegated', gas: '33 days left',
+          action: ['Central rejects this neuron’s login. Check the central address in Settings.', 'Open details'],
+          chans: [['bad','Central','Login refused'],['ok','Base','Round 20742 sent'],['ok','Network','2 relays']],
+          feed: [['bad','Central refused the batch: login 401','2 h ago'],['bad','Central refused the batch: login 401','13 h ago'],['ok','Base batch for round 20742','1 d ago']] },
+};
+function cells(code) { return [...code].map((c, i, a) => `<div class="cell ${{f:'full',p:'part',o:'',e:'err'}[c]}${i === a.length-1 ? ' today' : ''}" title="${{f:'Predicted',p:'Part of the day',o:'App closed',e:'Error'}[c]}"></div>`).join(''); }
+function render(k) {
+  const s = S[k];
+  document.querySelectorAll('[data-hero], [data-action]').forEach(el => { el.style.setProperty('--tone', `var(${tone[k][0]})`); el.style.setProperty('--soft', `var(${tone[k][1]})`); });
+  document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icons[k]);
+  document.querySelectorAll('[data-title]').forEach(el => el.textContent = s.title);
+  document.querySelectorAll('[data-line]').forEach(el => el.innerHTML = s.line);
+  document.querySelectorAll('[data-streak="14"]').forEach(el => el.innerHTML = cells(s.days));
+  document.querySelectorAll('[data-streak="30"]').forEach(el => el.innerHTML = cells(s.days30.slice(0,30)));
+  const n14 = [...s.days].filter(c => c === 'f').length, n30 = [...s.days30.slice(0,30)].filter(c => c === 'f').length;
+  document.querySelector('[data-days-sum]').textContent = `${n14} of 14 full days`;
+  document.querySelector('[data-days-sum30]').textContent = `${n30} of 30 full days`;
+  document.querySelectorAll('[data-chans]').forEach(el => el.innerHTML = s.chans.map(([t, name, sub]) =>
+    `<div class="chan"><div class="row"><span class="state" style="background:var(${tone[t][0]})">${small[t]}</span>${name}</div><div class="sub">${sub}</div></div>`).join(''));
+  document.querySelectorAll('[data-claim]').forEach(el => el.innerHTML = `${s.claim}<small>SATORI</small>`);
+  document.querySelector('[data-vault]').textContent = s.vault;
+  document.querySelector('[data-vault-d]').textContent = s.vault;
+  document.querySelector('[data-gas]').textContent = s.gas;
+  document.querySelectorAll('[data-action]').forEach(el => { el.hidden = !s.action; if (s.action) { el.querySelector('[data-action-text]').textContent = s.action[0]; el.querySelector('[data-action-btn]').textContent = s.action[1]; } });
+  document.querySelector('[data-feed]').innerHTML = s.feed.map(([t, text, when]) =>
+    `<div><span class="state" style="background:var(${tone[t][0]})">${small[t]}</span><span>${text}</span><time>${when}</time></div>`).join('');
+  document.querySelectorAll('.switch button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === k)));
+}
+document.querySelectorAll('.switch button').forEach(b => b.addEventListener('click', () => render(b.dataset.s)));
+render('ok');
+</script>
