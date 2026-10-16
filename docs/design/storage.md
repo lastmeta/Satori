@@ -100,4 +100,7 @@ read about 1 number in 12 one ulp off (measured: 158 of 2,000 observations,
 34 of 300 predictions). A stored t2 could then print other digits than the
 ones hashed when the prediction was made. Every DOUBLE is therefore bound as
 text, `CAST(? AS DOUBLE)` with the number's shortest JS text, which DuckDB
-parses back exactly (tested bit for bit).
+parses back exactly (tested bit for bit). A stream's history (up to 1,000
+rows) goes in one statement: its times and values as two comma-joined text
+parameters, split and cast in SQL (~20 ms a stream; 200 ms as one row per
+parameter triple).

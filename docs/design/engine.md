@@ -472,14 +472,29 @@ From Satori Lite:
   forecasts each with `bvar`, with the same specs, scores and numbers as node
   running `runModels` with the identity's pubkey; the Model column shows
   "bvar · +eth +gold" and the History line "3 streams, 1,800 rows".
-- Live, on the dev server against central2, in a fresh profile with throwaway
-  keys: Poll now stored 83 streams and central accepted 83 of 83 predictions.
-  Every stream was `naive`, with t1 = t2 = its latest value: a new neuron has
-  one observation per stream. `bar1` starts once a stream has an observation
-  in 8 back-to-back 12 h buckets, about 4 days of polls every 11 h. A daily
-  stream, or a neuron that polls once a day, stays `naive`.
+- Live, on the dev server against central2 (2026-10-16), in a fresh profile
+  with throwaway keys: Poll now stored 83 streams; each got its own spec,
+  drawn from the identity (31 with 1 companion, 28 with 2, 24 with 3; a
+  second fresh profile drew others); central accepted 83 of 83 predictions.
+  Central2 has no history route yet: the first 4 calls (in flight together)
+  answered 404, the rest were not asked, and the History line says "Not on
+  this central (central 404: Not Found); next try Oct 17, 00:35". So every
+  stream was `naive` (one observation each) and its Model column reads
+  "naive · spec +safetrade_soq +safetrade_noid +safetrade_arrr", the spec
+  waiting for aligned rows. `engine_ms` 22.
 
-![Home after Poll now: the Model column](../screenshots/engine.png)
+![Home after Poll now on central2: each stream's spec, waiting for history](../screenshots/engine.png)
+
+- The same, with central2's history route and predictions batch answered in
+  the browser by a script (Playwright routes: synthetic hourly random walks,
+  1,000 rows per stream ending an hour before its latest observation; the
+  predictions answered there, none sent to central2): the first Poll now
+  fetched 83 streams' history (83,000 rows) and forecast all 83 with `bvar`.
+  **The engine took 204–209 ms in Chrome for the 83 targets** (`engine_ms`);
+  the whole poll 10 s, once, almost all of it the 83 history fetches and
+  inserts (17 s before the insert became one statement per stream).
+
+![The same app once central serves history: bvar with each stream's companions (synthetic history, a stub answer for the batch)](../screenshots/engine-history.png)
 
 ## Measured
 
@@ -570,10 +585,12 @@ it on a synthetic leader. Central's streams can't be backtested here until
 its history route is live.
 
 **CPU** (`runModels`, the engine of one poll, on this 8-core box): 21
-targets on 400 days of polls, 45 ms; 83 targets with 1,000 hourly rows each
-and then a year of polls, 0.3–0.6 s in node with two backtests running
-alongside. It runs on the main thread once per poll; see the live check for
-the browser.
+targets on 400 days of polls, 45 ms in node; 83 targets with 1,000 hourly
+rows each, **~205 ms in Chrome** (the live check above), and 0.3–0.6 s in
+node with a year of polls on top and two backtests running alongside. It
+runs on the main thread once per poll, well under a second, so it stays
+there. Reading the 83 histories (83,000 rows) takes ~0.6 s, in DuckDB's
+worker.
 
 Not measured here: the research brief's simulation of time features
 (1.4–2.5× persistence's error with few rows) was not re-run.

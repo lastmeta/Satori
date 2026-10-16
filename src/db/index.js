@@ -143,10 +143,12 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       let added = 0;
       await run('BEGIN TRANSACTION');
       try {
-        for (let i = 0; i < keep.length; i += 250) {
-          const chunk = keep.slice(i, i + 250);
-          added += (await rows(`INSERT OR IGNORE INTO observations VALUES ${chunk.map(() => `(?, ?, ${D})`).join(', ')} RETURNING ts`,
-            ...chunk.flatMap((o) => [uuid, o.ts, dbl(o.value)]))).length;
+        if (keep.length) {
+          // one statement, times and values as comma-joined text (exact doubles, see dbl), split in SQL
+          // (INSERT's Count is the rows inserted, the ignored ones not counted; RETURNING made it 3× slower)
+          [{ Count: added }] = await rows(`INSERT OR IGNORE INTO observations SELECT ?, t::BIGINT, v::DOUBLE
+            FROM (SELECT unnest(string_split(?, ',')) AS t, unnest(string_split(?, ',')) AS v)`,
+          uuid, keep.map((o) => o.ts).join(','), keep.map((o) => dbl(o.value)).join(','));
         }
         await run('UPDATE streams SET history_at = ? WHERE uuid = ?', at, uuid);
         await run('COMMIT');
