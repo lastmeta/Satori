@@ -77,7 +77,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   const sub = page.locator('[data-test=sub]').filter({ hasText: 'E2E walk' });
   await expect(sub.locator('[data-test=sub-obs]')).toHaveText('100');
   await expect(sub.locator('[data-test=sub-pred]')).toHaveText('100');
-  await expect(sub.locator('[data-test=sub-pred]')).toHaveAttribute('title', `${stream}_pred · naive · sent as "100.0"`);
+  await expect(sub.locator('[data-test=sub-pred]')).toHaveAttribute('title', `${stream}_pred · naive · sent as "100"`);
   await expect(sub.locator('[data-test=sub-seq]')).toHaveText('1');
   await expect(sub.locator('[data-test=sub-relays]')).toHaveText('1 relay');
 
@@ -93,7 +93,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
     prediction: { stream: `${stream}_pred`, seq: 2, value: '101.5', model: 'naive', relays: 1 } }]);
 
   const history = await page.evaluate(([p, s]) => window.satori.relayPredictions(p, s), [provider.pubkey, stream]);
-  expect(history.map((h) => [h.seq, h.value, h.obs_seq, h.relays])).toEqual([[2, '101.5', 2, 1], [1, '100.0', 1, 1]]);
+  expect(history.map((h) => [h.seq, h.value, h.obs_seq, h.relays])).toEqual([[2, '101.5', 2, 1], [1, '100', 1, 1]]);
   expect(history[0].event_id).toMatch(/^[0-9a-f]{64}$/);
 
   // What the user's relay holds from us, read back and checked.
@@ -102,7 +102,8 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   const [obs] = await user.fetch([{ kinds: [34601], authors: [me], '#d': [pred] }]);
   expect(verifyEvent(obs)).toBe(true);
   expect(obs.tags).toEqual([['d', pred], ['stream', pred], ['seq', '2'], ['satori', 'observation']]);
-  expect(obs.content).toBe(`{"stream_name": "${pred}", "timestamp": ${obs.created_at}, "value": "101.5", "seq_num": 2}`);
+  // compact JSON with satorilib's fields (docs/design/nostr.md#the-protocol-audit)
+  expect(obs.content).toBe(JSON.stringify({ stream_name: pred, timestamp: obs.created_at, value: '101.5', seq_num: 2 }));
   const [ann] = await user.fetch([{ kinds: [34600], authors: [me], '#d': [pred] }]);
   expect(verifyEvent(ann)).toBe(true);
   expect(ann.tags).toEqual([['d', pred], ['satori', 'datastream'], ['stream', `satori:stream:${pred}`],
