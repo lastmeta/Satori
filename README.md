@@ -122,8 +122,8 @@ variables, when set and not empty, replaces one; a bad value stops the build
 | `VITE_NOSTR_CENTRAL_WRITE` | `true` | whether central's relays are written to |
 | `VITE_BASE_RPC` | central's RPC, then publicnode | the Base RPC (https, or a path on the site) |
 
-The app is served at https://satori.satorinet.io and
-https://neuron.satorinet.io: one static image, `satori-neuron` (nginx), behind
+The app is served at https://neuron.satorinet.io (https://satori.satorinet.io
+redirects there): one static image, `satori-neuron` (nginx), behind
 the nginx-proxy on Satori's central server, which terminates TLS. Its build
 uses `deploy/build.env` (the dev central and `wss://app.satorinet.io/relay`
 for now):

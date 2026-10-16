@@ -1,14 +1,17 @@
-# Deploy: satori.satorinet.io and neuron.satorinet.io
+# Deploy: neuron.satorinet.io
 
 The app is a static site, so a deployment is one container of files. The
 image `satori-neuron` is nginx serving `dist/`. It runs on Satori Central
 (the host of `network.satorinet.io`), behind the nginx-proxy that is already
-there. The proxy owns ports 80 and 443 and terminates TLS for both names. The
-container serves plain http on port 80, to the proxy only.
+there. The proxy owns ports 80 and 443 and terminates TLS. The container
+serves plain http on port 80, to the proxy only. The app lives at
+`neuron.satorinet.io`. `satori.satorinet.io` only redirects there (301, path
+kept), because each origin is a separate browser storage: one name means one
+neuron per browser (owner, 2026-10-16).
 
 ```
-browser ─ https://satori.satorinet.io ─┐
-browser ─ https://neuron.satorinet.io ─┴─▶ nginx-proxy on central (:443, TLS) ─ http :80 ─▶ satori-neuron (nginx, dist/)
+browser ─ https://satori.satorinet.io ─ 301 ─▶ https://neuron.satorinet.io
+browser ─ https://neuron.satorinet.io ─▶ nginx-proxy on central (:443, TLS) ─ http :80 ─▶ satori-neuron (nginx, dist/)
 
 then, from the page in the browser:  central (VITE_CENTRAL_URL) · wss:// relays · the Base RPC
 ```
@@ -129,7 +132,7 @@ curl -sI http://localhost:8090/sw.js       # CSP, nosniff, no-cache
    worker.
 
 After a deploy, run the same spec against the live site:
-`DEPLOY_URL=https://satori.satorinet.io npm run e2e:deploy`. The neuron it
+`DEPLOY_URL=https://neuron.satorinet.io npm run e2e:deploy`. The neuron it
 creates still talks only to the stub.
 
 Verified 2026-10-16, without docker (this box has no daemon). The image's
@@ -147,37 +150,59 @@ its defaults in place. Central2 and the relay are answered inside the test.
 
 ## Redeploy
 
-1. Commit, so the tag names the code, then run `./scripts/deploy-image.sh`.
-2. Ship the image to central:
+Central has a docker daemon and this box does not, so the image is built on
+central. The build only copies files: no npm runs next to the production
+database. `S` means `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175`
+(central; access in `../central/CLAUDE.md`).
+
+1. Commit, then build `dist/` with this deployment's defaults:
+   `./scripts/deploy-image.sh`. It exits 2 at the docker step on a box without
+   docker, after `dist/` is built and checked.
+2. Ship the build context and build the image on central:
 
    ```sh
-   # TODO(owner): e.g. docker save satori-neuron:<sha> satori-neuron:latest | gzip -1 | ssh … 'gunzip | docker load'
+   tar -czf /tmp/ctx.tgz dist deploy/Dockerfile deploy/nginx.conf
+   CSP=$(node --input-type=module -e "import { CSP } from './csp.js'; process.stdout.write(CSP)")
+   SHA=$(git rev-parse --short HEAD)
+   $S 'mkdir -p /root/satori-neuron/ctx && rm -rf /root/satori-neuron/ctx/*'
+   scp -i ~/.ssh/id_ed25519 -P 2222 /tmp/ctx.tgz root@157.180.104.175:/root/satori-neuron/
+   $S "cd /root/satori-neuron/ctx && tar -xzf ../ctx.tgz && docker build -q -f deploy/Dockerfile --build-arg CSP=\"$CSP\" -t satori-neuron:$SHA -t satori-neuron:latest ."
    ```
 
-3. Start or replace the container. It publishes no port and joins the network
-   nginx-proxy reaches (for the dapp that is `central-lite_default`):
+3. Replace the container. It publishes no port and sits on the network
+   nginx-proxy reaches:
 
    ```sh
-   # TODO(owner): the compose service or docker run, its name, and the restart policy
+   $S "docker rm -f satori-neuron; docker run -d --name satori-neuron --network central-lite_default --restart unless-stopped satori-neuron:$SHA"
    ```
 
-4. Add nginx-proxy's server blocks for `satori.satorinet.io` and
-   `neuron.satorinet.io`: TLS (the certificates) and `proxy_pass` to the
-   container on port 80. Do not add a CSP or nosniff there; the container
-   sends both, and a second copy is a duplicate header.
+   nginx-proxy resolves `satori-neuron` per request, so it needs no reload.
 
-   ```nginx
-   # TODO(owner): the two server blocks, the certificates, then nginx -t and reload
-   ```
+4. nginx-proxy (one-time, done 2026-10-16). Its one `nginx.conf`
+   (`/root/nginx/nginx.conf`, a single-file bind mount) has three server
+   blocks:
+   - port 80 for both names: the ACME webroot, everything else to https;
+   - 443 `neuron.satorinet.io`: `proxy_pass http://$satori_neuron:80`;
+   - 443 `satori.satorinet.io`: `return 301 https://neuron.satorinet.io$request_uri`.
 
-5. Check: `curl -sI https://satori.satorinet.io/sw.js` (expect the CSP,
+   The copies on central are `/root/nginx/satori-neuron.80.conf` and
+   `satori-neuron.443.conf`. They were inserted before the `http` block's
+   closing brace, after a backup (`nginx.conf.bak-satori-neuron*`), and loaded
+   only after `nginx -t` passed. Don't add a CSP or nosniff there; the
+   container sends both. One certificate covers both names:
+   `certbot certonly --webroot -w /var/www/certbot -d neuron.satorinet.io -d satori.satorinet.io --cert-name neuron.satorinet.io --key-type ecdsa`.
+   It renews with certbot's timer, and the deploy hook reloads nginx-proxy.
+   DNS: two A records to `157.180.104.175` in Cloudflare, proxy off, as for
+   `app` and `coined`.
+
+5. Check: `curl -sI https://neuron.satorinet.io/sw.js` (expect the CSP,
    nosniff and `no-cache`), then
-   `DEPLOY_URL=https://satori.satorinet.io npm run e2e:deploy`. Run the same
-   for `neuron.satorinet.io`.
+   `DEPLOY_URL=https://neuron.satorinet.io npm run e2e:deploy`.
 
-`../contract/deploy/central/` already deploys the dapp at `app.satorinet.io`
-this way: images built locally and loaded on central, a compose file on
-`central-lite_default`, and server blocks in nginx-proxy's one `nginx.conf`.
+Live since 2026-10-16. The check passed then, and a real smoke test also
+passed: a fresh profile registered with central2, which accepted 83 of 83
+predictions, and the relay was open. Central2 has no history route yet, so
+it shows "Not on this central".
 
 ## Moving to the production central
 

@@ -10,8 +10,8 @@ reference for `window.satori`: [/llms.txt](../../public/llms.txt).
 Component docs: [keys.md](keys.md), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
 [storage.md](storage.md), [pwa.md](pwa.md) (the installed app),
-[deploy.md](deploy.md) (the image at satori.satorinet.io and
-neuron.satorinet.io, and the build variables).
+[deploy.md](deploy.md) (the image at neuron.satorinet.io, and the build
+variables).
 
 ## The flow
 

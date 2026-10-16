@@ -48,7 +48,7 @@ traffic, and neurons won't connect to it until it is listed.
 
 Meanwhile a user can add a `wss://` relay under Settings (written to and read
 from), and the dev server reads satorian over `ws://`. The deployment at
-satori.satorinet.io and neuron.satorinet.io does that by default: its build
+neuron.satorinet.io does that by default: its build
 sets `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public relay
 behind TLS ([../design/deploy.md](../design/deploy.md#build-variables)).
 Central's own list still holds only the `ws://` relay, which those pages

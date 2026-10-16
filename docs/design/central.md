@@ -131,7 +131,7 @@ only https). Empty means the default:
 - a production build: `https://network.satorinet.io` (satorilib's default,
   `satorilib/src/satorilib/config/__init__.py:99`), or the build's
   `VITE_CENTRAL_URL` ([deploy.md](deploy.md#build-variables); the deployment at
-  satori.satorinet.io and neuron.satorinet.io uses central2 for now);
+  neuron.satorinet.io uses central2 for now);
 - the dev server (`import.meta.env.DEV`): `https://central2.satorinet.io`, the
   dev central, so nobody writes to prod from a dev checkout.
 

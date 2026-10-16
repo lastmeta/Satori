@@ -17,9 +17,8 @@ the engine, Nostr, Base), a finishing pass is done, a build installs as
 an app (PWA), and each central stream has its own evolving multivariate
 model per neuron (`bvar`) with history from central (2026-10-16).
 
-Served at https://satori.satorinet.io and https://neuron.satorinet.io (one
-static image; docs/design/deploy.md). They are two origins: a neuron set up
-on one has its own storage there and is not on the other.
+Served at https://neuron.satorinet.io (https://satori.satorinet.io redirects
+there; one static image; docs/design/deploy.md).
 
 ## Quick start (an agent)
 
@@ -52,8 +51,8 @@ Every method is below; `await satori.status()` shows everything at once.
   **Lock** wipes it. The neuron does not need the vault to run; its public key
   is read from `vault.yaml` while locked.
 - Central: `https://network.satorinet.io` in a build unless the build sets
-  another (`VITE_CENTRAL_URL`; satori.satorinet.io and neuron.satorinet.io
-  use `https://central2.satorinet.io` for now); central2 (the dev central)
+  another (`VITE_CENTRAL_URL`; neuron.satorinet.io
+  uses `https://central2.satorinet.io` for now); central2 (the dev central)
   on the dev server. Changeable (https only).
 - Register: on every page load, `POST /api/v1/peer/register` with the
   identity's and the vault's public keys. Central links the vault to the
@@ -145,8 +144,8 @@ Every method is below; `await satori.status()` shows everything at once.
   `setRelays`). On the dev server central's relays are read only (requests,
   never events) and the user's relays default to the test relay
   `ws://localhost:7778`; a build writes to central's relays too, and its
-  user relays default to the build's `VITE_NOSTR_RELAYS` (satori.satorinet.io
-  and neuron.satorinet.io: `wss://app.satorinet.io/relay`). An https page
+  user relays default to the build's `VITE_NOSTR_RELAYS` (neuron.satorinet.io:
+  `wss://app.satorinet.io/relay`). An https page
   cannot open `ws://` relays (shown as blocked); it needs `wss://`.
 - Network streams: the relays' catalog of stream announcements (kind 34600),
   newest per (provider pubkey, stream name), deleted ones dropped. A
