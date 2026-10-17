@@ -185,6 +185,17 @@ session that missed nothing is not shown.
 - `e2e/home.spec.js`: the four states in Chrome with the stub central and a
   fake chain (idle from a seeded log), and the screenshots below.
 
+## Live
+
+2026-10-17, the dev server on :5180 against central2, a fresh browser
+profile, no stubs: Create (the words confirmed) → Home *Starting* ("First
+predictions in 18 min", every chip idle) → Poll now: 82 streams, central's
+history for all 82 (81 on bvar), 82 of 82 accepted → *Predicting*, "Sent 82
+predictions just now · next in 11 h"; Base idle (a new vault, no SATORI),
+Network idle (nothing subscribed); nothing sent to prod.
+
+![Home live on central2 after the first poll](../screenshots/home-live-central2.png)
+
 ## Screenshots
 
 From `e2e/home.spec.js` (`SHOTS=1 npx playwright test e2e/home.spec.js`):
