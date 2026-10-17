@@ -19,3 +19,7 @@ it in walls of text.
   connections. Technical detail (keys, addresses, endpoints, relays) moves
   behind settings or account. It is not the main screen.
 - This is not a game. Manual play lives in Satori Daily.
+- Never a silent wait. When the neuron is doing something significant, one
+  moving indicator shows it, never several. A short status says what it is
+  doing and changes step by step, slowly enough to read, so nobody waits on
+  the same words for more than a few seconds.
