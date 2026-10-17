@@ -6,7 +6,7 @@ import {
   cycle, register, firstPollAt, startJitter, createPoller, centralStatus, claimTab, modelsOf, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
 } from './index.js';
 
-vi.setConfig({ testTimeout: 60_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
 
 const T = 1_792_000_000; // seconds
 const ID = '02a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9a'; // the identity's pubkey: the specs' seed
