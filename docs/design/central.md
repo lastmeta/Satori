@@ -87,8 +87,15 @@ newest. `src/neuron/history.js`:
   gets one more run after it.
 - **The call**: `limit=1000&since=<now − 1,000 h>`. Central observes hourly
   (`central/scheduler.py:76`), so that is the last ~41 days whether the route
-  counts `limit` from `since` forward or back from now. At most 4 calls at a
-  time.
+  counts `limit` from `since` forward or back from now. At most 8 calls at a
+  time: a call takes about 0.3 s on central2, so about 25 calls a second,
+  under central's nginx limit (50 r/s per address, burst 100,
+  `central/nginx.conf`). It was 4.
+- **The writes**: one writer stores what has arrived each time its last
+  commit ends, up to 20 streams a commit, about 10,000 rows a statement
+  (every commit is a checkpoint, and every statement a round trip to
+  DuckDB's worker: [storage.md](storage.md#the-checkpoint-rule)). It was a
+  commit per stream.
 - **The rows**: normalized exactly as poll rows (`observed_at`, else `ts`, in
   whole seconds; rows with no finite value, no time or another stream are
   dropped), then **insert or ignore, only rows older than the stream's

@@ -43,6 +43,18 @@ const texts = (xs) => xs.map((x) => (x == null ? '-' : b64(x))).join(',');
 const rowsOf = (n) => `(SELECT ${Array.from({ length: n }, (_, i) => `unnest(string_split(?, ',')) AS c${i}`).join(', ')})`;
 const NUM = (c, type) => `CAST(NULLIF(${c}, '') AS ${type})`;
 const TXT = (c) => `CASE WHEN ${c} = '-' THEN NULL ELSE decode(from_base64(${c})) END`;
+const HISTORY_ROWS = 10_000; // rows per statement at most (one of 10,000: 80–160 ms; storage.md)
+/** Whole streams ([{ rows }]) in groups of about `max` rows (a stream alone may have more). */
+function byRows(list, max) {
+  const out = [];
+  let n = Infinity;
+  for (const x of list) {
+    if (n + x.rows.length > max) out.push([]), (n = 0);
+    out.at(-1).push(x);
+    n += x.rows.length;
+  }
+  return out;
+}
 const toRows = (table) => table.toArray().map((r) => {
   const o = r.toJSON();
   for (const k in o) o[k] = plain(o[k]);
@@ -189,14 +201,15 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       let added = 0;
       await run('BEGIN TRANSACTION');
       try {
-        for (const { uuid, rows: xs } of list) {
-          if (!xs.length) continue;
-          // one statement per stream (at most 1,000 rows: 83,000 in one stops the wasm, storage.md); INSERT's Count is
-          // the rows inserted, the ignored ones not counted (RETURNING made it 3× slower)
-          const [{ Count }] = await rows(`INSERT OR IGNORE INTO observations SELECT ?, t, v FROM
-            (SELECT ${NUM('c0', 'BIGINT')} AS t, ${NUM('c1', 'DOUBLE')} AS v FROM ${rowsOf(2)})
-            WHERE t < (SELECT max(ts) FROM observations WHERE stream_uuid = ?)`,
-          uuid, nums(xs.map((o) => o.ts)), nums(xs.map((o) => o.value)), uuid);
+        // a statement per ~10,000 rows (83,000 in one stops the wasm: storage.md), whole streams; INSERT's Count is
+        // the rows inserted, the ignored ones not counted (RETURNING made it 3× slower)
+        for (const part of byRows(list.filter((x) => x.rows.length), HISTORY_ROWS)) {
+          const [{ Count }] = await rows(`INSERT OR IGNORE INTO observations SELECT x.u, x.t, x.v FROM
+            (SELECT ${TXT('c0')} AS u, ${NUM('c1', 'BIGINT')} AS t, ${NUM('c2', 'DOUBLE')} AS v FROM ${rowsOf(3)}) x
+            JOIN (SELECT stream_uuid, max(ts) AS newest FROM observations GROUP BY stream_uuid) n ON n.stream_uuid = x.u
+            WHERE x.t < n.newest`,
+          part.map(({ uuid, rows: xs }) => Array(xs.length).fill(b64(uuid)).join(',')).join(','),
+          part.map(({ rows: xs }) => nums(xs.map((o) => o.ts))).join(','), part.map(({ rows: xs }) => nums(xs.map((o) => o.value))).join(','));
           added += Number(Count);
         }
         await run(`UPDATE streams SET history_at = ? WHERE uuid IN (SELECT ${TXT('c0')} FROM ${rowsOf(1)})`, at, texts(list.map((x) => x.uuid)));

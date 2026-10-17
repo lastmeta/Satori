@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { memoryDb } from '../../test/memory-db.js';
 import { createCentral } from '../central/index.js';
-import { backfillHistory, HISTORY_LIMIT, HISTORY_SPAN_S, HISTORY_CONCURRENCY, HISTORY_RETRY_S } from './history.js';
+import { backfillHistory, HISTORY_LIMIT, HISTORY_SPAN_S, HISTORY_CONCURRENCY, HISTORY_RETRY_S, HISTORY_BATCH } from './history.js';
 import { cycle } from './index.js';
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -75,6 +75,40 @@ describe('backfillHistory', () => {
     const slow = { ...db, addHistories: async (...a) => { await new Promise((r) => setTimeout(r, 30)); return db.addHistories(...a); } };
     expect(await backfillHistory({ db: slow, central: f.central, now })).toMatchObject({ streams: 11, rows: 11 }); // counted across overlapping calls
     expect(f.maxInFlight).toBe(HISTORY_CONCURRENCY);
+  });
+
+  test(`few commits: what arrives while one is written goes in the next, at most ${HISTORY_BATCH} streams each; every stream lands`, async () => {
+    const uuids = Array.from({ length: 50 }, (_, i) => `u-${String(i).padStart(2, '0')}`);
+    await polled(uuids);
+    const f = fakeCentral({ history: (u) => [row(u, T - 3600, 1), row(u, T - 7200, 2)], delayMs: 5 });
+    const commits = [];
+    const slow = { ...db, addHistories: async (list, at) => { commits.push(list.map((x) => x.uuid)); await new Promise((r) => setTimeout(r, 40)); return db.addHistories(list, at); } };
+    expect(await backfillHistory({ db: slow, central: f.central, now })).toMatchObject({ streams: 50, rows: 100, left: 0, error: null });
+    expect(commits.length).toBeLessThan(15);
+    expect(Math.max(...commits.map((c) => c.length))).toBeLessThanOrEqual(HISTORY_BATCH);
+    expect(commits.flat().sort()).toEqual(uuids);
+    expect(await db.needHistory()).toEqual([]);
+  });
+
+  test('onProgress: 0 of n at the start, then each stream in hand, up to n of n', async () => {
+    await polled(['u-a', 'u-b', 'u-c']);
+    const f = fakeCentral({ history: (u) => (u === 'u-b' ? json(404, { detail: `Stream not found: ${u}` }) : [row(u, T - 3600, 1)]) });
+    const seen = [];
+    await backfillHistory({ db, central: f.central, now, onProgress: (done, total) => seen.push([done, total]) });
+    expect(seen).toEqual([[0, 3], [1, 3], [2, 3], [3, 3]]);
+    seen.length = 0;
+    await backfillHistory({ db, central: f.central, now, onProgress: (done, total) => seen.push([done, total]) });
+    expect(seen).toEqual([]); // nothing to fetch: no progress
+  });
+
+  test('a failed write stops the run: the error is returned, the streams not written wait for the next run', async () => {
+    await polled(Array.from({ length: 20 }, (_, i) => `u-${String(i).padStart(2, '0')}`));
+    const f = fakeCentral({ history: (u) => [row(u, T - 3600, 1)], delayMs: 5 });
+    const broken = { ...db, addHistories: async () => { throw new Error('IO Error'); } };
+    const r = await backfillHistory({ db: broken, central: f.central, now });
+    expect(r).toMatchObject({ streams: 0, rows: 0, left: 20, error: 'IO Error', retryAt: null });
+    expect(f.calls.length).toBeLessThan(20);
+    expect(await db.needHistory()).toHaveLength(20);
   });
 
   test('404 "Not Found" (no history route on this central): quiet, no more calls, "unavailable" for a day, then tried again; another central is asked at once', async () => {

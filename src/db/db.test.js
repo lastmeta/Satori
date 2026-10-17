@@ -344,6 +344,13 @@ describe('bvar: specs and central history (migration 6)', () => {
     expect(await db.addHistories([], 9001)).toBe(0);
   });
 
+  test('addHistories: 12,000 rows of 3 streams (more than one statement) all land', async () => {
+    await db.addObservations(['u-a', 'u-b', 'u-c'].map((u) => obs({ stream_uuid: u, name: u, ts: 1e8 })));
+    const rows = Array.from({ length: 4000 }, (_, i) => ({ ts: 1000 + i, value: i / 7 }));
+    expect(await db.addHistories(['u-a', 'u-b', 'u-c'].map((uuid) => ({ uuid, rows })), 1)).toBe(12_000);
+    expect((await db.history('u-c')).slice(0, 4000)).toEqual(rows);
+  });
+
   test('addHistories: many rows (one statement), floats exactly as given', async () => {
     await db.addObservations([obs({ ts: 10_000_000 })]);
     const rows = Array.from({ length: 1000 }, (_, i) => ({ ts: 1000 + i * 3600, value: 0.1 + i * 1e-7 + 1 / 3 }));

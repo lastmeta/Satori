@@ -80,9 +80,9 @@ two runs, under DuckDB's default and with every commit checkpointed:
 | `CHECKPOINT` with nothing to do | 1–2 ms | 1–2 ms |
 | The database file afterwards | 12.9 MB | 12.6 MB |
 
-The history run is the only real cost, about +55 ms per stream, so about
-+5 s for 83 streams. It runs once per stream, in the background, and its
-fetches overlap the writes. One
+The history run was the only real cost, about +55 ms per stream, so about
++5 s for 83 streams. Its writes now go in a few commits (whatever has arrived
+when the last one ends, up to 20 streams) and its fetches overlap them. One
 statement of 83,000 rows (83 k comma-joined values) stops
 the wasm with "memory access out of bounds" under either setting. The
 history never sends one: it is at most 1,000 rows per stream, one stream per
@@ -100,6 +100,7 @@ streams (2026-10-17, a fresh profile on OPFS):
 |---|---|---|
 | The poll's batch (`addObservations`: 82 streams upserted, 82 rows) | 1.9–2.1 s | 0.11 s |
 | The specs and the predictions (`saveSpecs`, `addPredictions`: 82 each, the streams' `predicted_ts`) | 1.8–2.3 s | 0.11 s |
+| History, 82 streams × ~1,000 rows (`addHistories`), fetched 8 at a time | a commit per stream: 7.1–10.4 s for the run | 7 commits of up to 20 streams: 3.4 s for the run, 0.5 s of it after the last fetch |
 
 ## Recovery
 

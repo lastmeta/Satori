@@ -109,14 +109,14 @@ async function registerWith(c) {
 /**
  * Central's history for the streams that have none (src/neuron/history.js): at
  * load and in each poll, one run at a time (a call during a run gets one more
- * run after it). Never throws.
+ * run after it). Never throws. The screen is read again by the caller (the
+ * cycle does at its end), not here: the poll waits for this.
  */
 const backfill = coalesce('history', async () => {
   const t0 = nowS();
   const r = await backfillHistory({ db, central });
   if (r?.streams) console.info('[satori] central history', r);
   if (r?.at >= t0) await activity.history(r); // this run's, not the last one's kept result
-  await refresh();
 });
 
 async function runCycle() {
@@ -158,7 +158,7 @@ async function startNeuron() {
   // register, as Lite does, then the schedule: a new neuron or a due poll polls at once, a time still ahead is kept
   registerWith(c).catch((err) => console.error('[satori] register', err))
     .then(() => poller.start()).catch((err) => console.error('[satori] poll schedule', err));
-  backfill(); // streams with no history yet (all of them after an update) get it now, not at the first poll
+  backfill().then(refresh).catch((err) => console.error('[satori] history', err)); // streams with no history yet get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
 }
