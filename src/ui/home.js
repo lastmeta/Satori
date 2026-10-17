@@ -8,8 +8,9 @@ import { mark, sparkPath, unlockPrompt } from './parts.js';
 import { fmtNum, modelText, amountText, daysText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
-const EMPTY = { status: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
-  channels: { central: { state: 'idle', text: '–' }, base: { state: 'idle', text: '–' }, network: { state: 'idle', text: '–' } } };
+const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
+  channels: { central: { state: 'idle', tone: 'idle', text: '–' }, base: { state: 'idle', tone: 'idle', text: '–' },
+    network: { state: 'idle', tone: 'idle', text: '–' } } };
 const h = () => state.health ?? EMPTY;
 /** The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). */
 const hero = () => state.hero ?? { ...h(), key: 'idle', working: false };
@@ -29,7 +30,7 @@ const cell = (d) => html`<div class="${d.today ? 'cell today' : 'cell'}" data-te
 
 function chip(a, key, name) {
   const c = () => h().channels[key];
-  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" @click="${(e) => { e.preventDefault(); a.go(CHANNEL_TAB[key]); }}"><span class="row1"><span class="state" data-s="${() => c().state}"><i class="ico"></i></span>${name}</span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
+  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" @click="${(e) => { e.preventDefault(); a.go(CHANNEL_TAB[key]); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}</span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
 }
 
 /** The claimable rewards (the hub's and the vested airdrop; the merkle drop is known only when claimed). */
@@ -68,19 +69,22 @@ function streamsSummary() {
 
 const feedRow = (f) => html`<div class="feed-row" data-test="feed-item" data-level="${f.level}">${mark(f.level)}<span>${f.text}</span><time title="${new Date(f.at * 1000).toLocaleString()}">${fmtAgo(state.now - f.at)}</time></div>`;
 
-/** The action card's tone: its own reason's status. */
-const actionTone = () => h().reasons.find((r) => r.id === h().action?.id)?.status ?? h().status;
+/** The action card's tone: its own reason's status (warn, bad; a calm one, the install suggestion, sky). */
+const actionTone = () => {
+  const s = h().reasons.find((r) => r.id === h().action?.id)?.status ?? h().status;
+  return s === 'warn' || s === 'bad' ? s : 'idle';
+};
 
 export function home(a) {
   return html`
   <section class="dash" data-test="home" hidden="${() => state.tab !== 'home'}">
-    <section class="hero" data-test="health" data-s="${() => hero().status}" data-work="${() => (hero().working ? hero().key : false)}" aria-busy="${() => (hero().working ? 'true' : false)}">
+    <section class="hero" data-test="health" data-s="${() => hero().status}" data-tone="${() => hero().tone}" data-fade="${() => !!hero().fade && ''}" data-work="${() => (hero().working ? hero().key : false)}" aria-busy="${() => (hero().working ? 'true' : false)}">
       <div class="ring" aria-hidden="true"><i class="ico"></i></div>
       <div><h2 data-test="health-title">${() => hero().title}</h2><p data-test="health-line">${() => hero().line}</p></div>
     </section>
 
-    <div class="action" data-test="action" data-action="${() => h().action?.id ?? false}" data-s="${actionTone}" hidden="${() => !h().action}">
-      <p data-test="action-text">${() => (h().action?.do === 'delegate' && state.baseDid === 'delegate' && state.actionLine) || (h().action?.text ?? '')}</p>
+    <div class="action" data-test="action" data-action="${() => h().action?.id ?? false}" data-tone="${actionTone}" hidden="${() => !h().action}">
+      <p data-test="action-text">${() => h().action?.text ?? ''}</p>
       <button class="primary" data-test="action-button" disabled="${() => !!state.baseBusy}" @click="${() => a.act(h().action)}">${() => (h().action?.do === 'delegate' && state.baseBusy === 'delegate' ? 'Delegating…' : h().action?.button ?? '')}</button>
       ${unlockPrompt(a, 'card', 'delegate')}
       <p class="error small" role="alert" hidden="${() => !(state.baseDid === 'delegate' && state.baseError)}">${() => state.baseError}</p>
@@ -113,7 +117,7 @@ export function home(a) {
         <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy}" @click="${() => a.vaultAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
       </div>
       ${unlockPrompt(a, 'claim', 'claim')}
-      <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.actionLine || state.baseResult || state.baseError))}">${() => state.actionLine || state.baseResult || state.baseError}</p>
+      <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
       <div class="line desk-only"><span>Vault</span><span data-test="home-vault">${vaultLine}</span></div>
       <div class="line desk-only"><span>Gas for daily batch</span><span data-test="home-gas">${gasLine}</span></div>
     </section>

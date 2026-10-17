@@ -2,6 +2,7 @@
 // anything broken?" (docs/design/health.md): the activity log and the current
 // state in, one object out. Pure: the UI and window.satori.health() draw the same.
 import { POLL_EVERY_S } from './index.js';
+import { leading, workText, HERO } from './work.js';
 
 export const CADENCE_S = POLL_EVERY_S; // 11 h, Lite's
 export const GRACE_S = 3600;
@@ -221,12 +222,25 @@ function networkReasons({ nostr }) {
   return out;
 }
 
+// ── the tone: the colour Home shows (docs/design/health.md#the-tone) ──
+
+/**
+ * warn and bad win; else green: 'critical' (vivid: closing now would lose work), 'working' (regular), or 'idle' (sky:
+ * all good, waiting for the next cycle). Never gray: starting and catching up are working. ('off', gray, is only a
+ * channel deliberately not used.)
+ */
+export const toneOf = (status, work) => (status === 'warn' || status === 'bad' ? status
+  : work ? (work.critical ? 'critical' : 'working') : 'idle');
+
+/** Each channel's work: central's poll; Base's batch and the vault's actions; the network's discover and subscribe. */
+const CHANNEL_WORK = { central: ['central'], base: ['base', 'delegate', 'undelegate', 'claim', 'send'], network: ['discover', 'subscribe'] };
+
 // ── the channels (chips) ──
 
 /** The last good cycle in a few words: what central took, or, with nothing to send, up to date (never "0 sent"). */
 const sentText = (lg, now, next) => (lg.data.accepted > 0 ? `${lg.data.accepted} sent ${fmtAgo(now - lg.at)}` : `Up to date · next ${next}`);
 
-function chips({ now, next, reasons, lastGood, base, nostr, traffic }) {
+function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }) {
   const top = (channel) => reasons.find((r) => r.channel === channel && r.chip);
   const sent = lastGood ? sentText(lastGood, now, next) : '–';
   const c = top('central');
@@ -235,19 +249,25 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic }) {
   const b = top('base');
   let baseChip;
   if (b) baseChip = { state: b.status, text: b.chip };
-  else if (!base?.config) baseChip = { state: 'idle', text: 'Connecting…' };
-  else if (base.vault?.delegated === 'other') baseChip = { state: 'idle', text: 'Delegated elsewhere' };
-  else if (base.vault?.delegated !== 'identity') baseChip = { state: 'idle', text: 'Not delegated' };
-  else if (!(Number(base.identity?.power) > 0)) baseChip = { state: 'idle', text: 'No SATORI delegated' };
+  else if (!base?.config) baseChip = { state: 'idle', text: 'Connecting…', busy: true };
+  else if (base.vault?.delegated === 'other') baseChip = { state: 'idle', text: 'Delegated elsewhere', off: true };
+  else if (base.vault?.delegated !== 'identity') baseChip = { state: 'idle', text: 'Not delegated', off: true };
+  else if (!(Number(base.identity?.power) > 0)) baseChip = { state: 'idle', text: 'No SATORI delegated', off: true };
   else if (base.lastBatch?.round === base.round) baseChip = { state: 'ok', text: `Round ${base.round} sent` };
   else baseChip = { state: 'ok', text: base.checking ? 'Sending…' : `Round ${base.round} due` };
 
   const n = top('network');
   const network = n ? { state: n.status, text: n.chip }
     : nostr?.subscriptions?.length ? { state: 'ok', text: `${(nostr.relays ?? []).length} relay${(nostr.relays ?? []).length === 1 ? '' : 's'}` }
-      : { state: 'idle', text: 'No streams' };
-  const live = (key, chip) => (traffic ? { ...chip, lastTraffic: traffic[key] ?? null } : chip); // ms; the glow's
-  return { central: live('central', central), base: live('base', baseChip), network: live('network', network) };
+      : { state: 'idle', text: 'No streams', off: true };
+  // the tone: warn and bad as they are; working (its channel has work in progress, or is connecting); off (deliberately
+  // not used: Base not delegated here, no stream subscribed); else idle (sky: healthy, waiting)
+  const toned = (key, { off, busy, ...chip }) => {
+    const working = busy || CHANNEL_WORK[key].some((t) => work[t]);
+    const tone = chip.state === 'warn' || chip.state === 'bad' ? chip.state : working ? 'working' : off ? 'off' : 'idle';
+    return { state: chip.state, tone, text: chip.text, ...(traffic ? { lastTraffic: traffic[key] ?? null } : {}) }; // ms; the glow's
+  };
+  return { central: toned('central', central), base: toned('base', baseChip), network: toned('network', network) };
 }
 
 // ── the day strip ──
@@ -345,9 +365,10 @@ export function feedOf(rows, n = FEED) {
  * @param {boolean} o.backedUp the vault's words confirmed (meta.backup_at)
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
  * @param {{central, base, network}} [o.traffic] each channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
- * @returns {{status, title, line, action, days, channels, feed, reasons}}
+ * @param {Object<string, object>} [o.work] the work in progress, { [task]: entry } (src/neuron/work.js): the tones, `work`
+ * @returns {{status, tone, title, line, action, days, channels, feed, reasons, work}}
  */
-export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, since = null, traffic }) {
+export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, since = null, traffic, work = {} }) {
   const sessions = sessionsOf(rows, now);
   const c = centralReasons({ now, rows, sessions, central, app });
   const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr })];
@@ -376,11 +397,13 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
 
   const a = reasons.find((r) => r.act);
   const action = a ? { id: a.id, text: a.text, button: a.button, ...a.act } : null;
+  const doing = leading(work);
   return {
-    status, title, line, action,
+    status, tone: toneOf(status, leading(work, HERO)), title, line, action,
     days: daysOf(rows, now, since),
-    channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic }),
+    channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic, work }),
     feed: feedOf(rows),
     reasons: reasons.map((r) => ({ id: r.id, status: r.status, channel: r.channel, text: r.text ?? r.line })),
+    work: doing && { ...doing, text: workText(doing) },
   };
 }

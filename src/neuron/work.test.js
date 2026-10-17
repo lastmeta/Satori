@@ -1,6 +1,6 @@
 // What the neuron is doing now (docs/design/health.md#work): the work state's transitions and its words.
 import { describe, expect, test, vi } from 'vitest';
-import { createWork, workText, ORDER } from './work.js';
+import { createWork, workText, leading, ORDER, HERO } from './work.js';
 
 const clock = (t = 1000) => {
   const c = () => c.t;
@@ -23,12 +23,12 @@ describe('createWork', () => {
     const job = w.start('central');
     expect(w.of('central')).toBeNull(); // no step yet: nothing to show
     job.step('register');
-    expect(w.current()).toEqual({ task: 'central', step: 'register', done: null, total: null, since: 1000 });
+    expect(w.current()).toEqual({ task: 'central', step: 'register', done: null, total: null, since: 1000, critical: false });
     now.t = 1500;
     job.step('history', 0, 82);
     now.t = 1700;
     job.step('history', 34, 82);
-    expect(w.current()).toEqual({ task: 'central', step: 'history', done: 34, total: 82, since: 1500 });
+    expect(w.current()).toEqual({ task: 'central', step: 'history', done: 34, total: 82, since: 1500, critical: false });
     expect(w.all()).toEqual({ central: w.current() });
     job.end();
     expect(w.current()).toBeNull();
@@ -70,14 +70,41 @@ describe('createWork', () => {
     expect(w.of('claim')).toBeNull();
   });
 
-  test(`current(): the first task in progress in ${ORDER.join(', ')} order`, () => {
+  test(`current(): a critical task first (closing now would lose work), else the first in ${ORDER.join(', ')} order`, () => {
     const w = createWork();
-    w.start('claim').step('rewards');
-    expect(w.current()).toMatchObject({ task: 'claim' });
-    w.start('base').step('check');
+    w.start('discover').step('ask', 0, 2);
+    expect(w.current()).toMatchObject({ task: 'discover' });
+    const claim = w.start('claim');
+    claim.step('rewards');
+    expect(w.current()).toMatchObject({ task: 'claim', critical: true });
+    const base = w.start('base');
+    base.step('check');
+    expect(w.current()).toMatchObject({ task: 'claim' }); // critical wins
+    claim.end();
     expect(w.current()).toMatchObject({ task: 'base' });
     w.start('central').step('observations');
     expect(w.current()).toMatchObject({ task: 'central' });
+    base.step('send');
+    expect(w.current()).toMatchObject({ task: 'base', step: 'send', critical: true });
+  });
+
+  test('critical: sending predictions, the Base batch sent and confirming, and every step of the vault\'s actions', () => {
+    const w = createWork();
+    const crit = (task, step) => { const j = w.start(task); j.step(step); const c = w.of(task).critical; j.end(); return c; };
+    expect(['register', 'observations', 'history', 'models', 'send'].map((st) => crit('central', st))).toEqual([false, false, false, false, true]);
+    expect(['check', 'send', 'confirm'].map((st) => crit('base', st))).toEqual([false, true, true]);
+    expect([['delegate', 'send'], ['delegate', 'settle'], ['undelegate', 'confirm'], ['claim', 'drop'], ['send', 'send']]
+      .map(([t, st]) => crit(t, st))).toEqual([true, true, true, true, true]);
+    expect([crit('discover', 'ask'), crit('subscribe', 'find')]).toEqual([false, false]);
+    expect(crit('keys', 'save')).toBe(true); // the keys written (an earlier version's record, upgraded at Unlock)
+  });
+
+  test(`leading(all, tasks): the hero's task among ${HERO.join(', ')}: a critical one first, else the first; the network's never`, () => {
+    const e = (task, step, critical = false) => ({ task, step, done: null, total: null, since: 0, critical });
+    expect(leading({}, HERO)).toBeNull();
+    expect(leading({ discover: e('discover', 'ask') }, HERO)).toBeNull();
+    expect(leading({ base: e('base', 'check'), central: e('central', 'history') }, HERO)).toMatchObject({ task: 'central' });
+    expect(leading({ claim: e('claim', 'confirm', true), central: e('central', 'history') }, HERO)).toMatchObject({ task: 'claim' });
   });
 });
 
@@ -104,8 +131,13 @@ describe('workText: plain words, from the person\'s side', () => {
     [e('claim', 'confirm'), 'Waiting for Base to confirm…'],
     [e('discover', 'ask', 1, 2), 'Asking the relays · 1 of 2'],
     [e('subscribe', 'find'), 'Finding the stream on the relays…'],
+    [e('keys', 'save'), 'Saving your keys…'],
   ])('%o → %s', (entry, text) => {
     expect(workText(entry)).toBe(text);
+  });
+  test('a critical step says to keep Satori open, briefly', () => {
+    expect(workText({ ...e('central', 'send', null, 82), critical: true })).toBe('Keep Satori open · Sending 82 predictions…');
+    expect(workText({ ...e('delegate', 'confirm', 2, 3), critical: true })).toBe('Keep Satori open · Step 2 of 3: waiting for Base to confirm…');
   });
   test('null and unknown steps', () => {
     expect(workText(null)).toBe('');

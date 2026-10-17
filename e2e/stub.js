@@ -40,14 +40,16 @@ async function eip191(h) {
  * @returns the stub: set `batch`, `vaults` (vault pubkey → register's `vault_base_address` for it, else null), `otherVault` (the
  *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
  *   predictions batches), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
- *   `history` (stream uuid → its rows, oldest first; null: the route 404s); hold(what) keeps the observations batch
- *   (what 'batch', the default: a poll, seen while it runs) or register's answer ('register': nothing the neuron does
- *   after it, the poll schedule's write included) until the function it returns is called; read `registered`, `polls` (per observations
+ *   `history` (stream uuid → its rows, oldest first; null: the route 404s), `historyDelayMs` (the n-th history call answers
+ *   after n × that: the streams come in one by one); hold(what) keeps the observations batch
+ *   (what 'batch', the default: a poll, seen while it runs), register's answer ('register': nothing the neuron does
+ *   after it, the poll schedule's write included) or the predictions batch ('submit') until the function it returns is called; read `registered`, `polls` (per observations
  *   batch: how many registers came before it), `logins`, `batches`, `merkleCalls`, `historyCalls`, `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
-  const held = { batch: null, register: null };
+  const held = { batch: null, register: null, submit: null };
   const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
+    historyDelayMs: 0,
     registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [],
     hold(what = 'batch') {
       let release;
@@ -79,6 +81,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
     if (req.method() === 'GET' && pathname === '/api/v1/observations/history') {
       const q = Object.fromEntries(new URL(req.url()).searchParams);
       stub.historyCalls.push(q);
+      if (stub.historyDelayMs) await new Promise((r) => setTimeout(r, stub.historyDelayMs * stub.historyCalls.length));
       if (!stub.history) return reply(route, 404, { detail: 'Not Found' });
       const since = Number(q.since ?? -Infinity);
       return reply(route, 200, (stub.history[q.stream_uuid] ?? []).filter((o) => Number(o.observed_at) > since).slice(-Number(q.limit ?? 500)));
@@ -112,6 +115,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
           : reply(route, 401, { detail: 'Invalid signature' });
       }
       case 'POST /api/v1/predictions/batch': {
+        await held.submit;
         if (h.authorization !== `Bearer jwt-${stub.logins.length}`) return reply(route, 401, { detail: 'bad token' });
         const status = stub.fail.shift();
         if (status) return reply(route, status, { detail: 'boom' });

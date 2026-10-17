@@ -10,6 +10,17 @@
   --accent-soft: #e9eefc;
   --on-accent: #ffffff;
   --ok: #1f8a4c; --ok-soft: #e4f4ea;
+  /* The three greens, one scale (docs/design/health.md#the-tone), worked out in OKLCH from --ok (oklch(0.560 0.134 152.5)):
+     · sky (all good, at rest): as sky blue is to blue. Blue oklch(0.55 0.20 260) → sky blue oklch(0.80 0.10 235):
+       lightness × 0.80/0.55 = 1.4545, chroma × 0.10/0.20 = 0.5, at our hue: oklch(0.814 0.067 152.5). Its fill: --ok-soft's
+       lightness, chroma × 0.5. Its ink (text, the ring's icon): sky's chroma at --ok's lightness, oklch(0.560 0.067 152.5),
+       since sky itself is too light to read on a light page; an icon on a sky disc is --text.
+     · vivid (busy, don't close me): brighter along chroma, not lighter: --ok's lightness, as much more chroma as sRGB
+       holds up to the inverse of sky's ratio (× 2). sRGB has almost none left at our hue (0.146 of 0.134), so the hue
+       leans 6.5° toward the green primary: oklch(0.560 0.166 146.0), chroma × 1.24. Its fill: --ok-soft's, chroma × 1.24.
+     · working: --ok itself. */
+  --sky: #a2cfae; --sky-soft: #eaf1ec; --sky-ink: #568061; --sky-on: #1c2430;
+  --vivid: #0f8c2f; --vivid-soft: #e5f4e5;
   --warn: #b26a00; --warn-soft: #fbf0dc;
   --bad: #b42318; --bad-soft: #fbe6e4;
   --idle: #5b6b85; --idle-soft: #e7ebf2;
@@ -30,6 +41,7 @@
     --bg: #12151b; --card: #1a1f27; --text: #e6e9ee; --muted: #8d97a6; --line: #2a313c;
     --accent: #8ea6ff; --accent-soft: #232c45; --on-accent: #10131a;
     --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
+    --sky: #b9edcb; --sky-soft: #243028; --sky-ink: #b9edcb; --sky-on: #1a1f27; --vivid: #1ed964; --vivid-soft: #10351a;
     --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #232a36;
     --cell-off: #2a313c; color-scheme: dark;
     --live: #56634a; --live-glow: rgb(118 138 98 / 0.30); --live-tint: rgb(118 138 98 / 0.10);
@@ -39,6 +51,9 @@
   --bg: #12151b; --card: #1a1f27; --text: #e6e9ee; --muted: #8d97a6; --line: #2a313c;
   --accent: #8ea6ff; --accent-soft: #232c45; --on-accent: #10131a;
   --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
+  /* dark (--ok oklch(0.775 0.140 155.8)): sky takes the same step toward white, 0.25/0.45 of the way, oklch(0.900 0.070
+     155.8), a calm light-on-dark tint, readable as itself; vivid oklch(0.775 0.211 149.3), chroma × 1.50 (the same 6.5°) */
+  --sky: #b9edcb; --sky-soft: #243028; --sky-ink: #b9edcb; --sky-on: #1a1f27; --vivid: #1ed964; --vivid-soft: #10351a;
   --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #232a36;
   --cell-off: #2a313c; color-scheme: dark;
   --live: #56634a; --live-glow: rgb(118 138 98 / 0.30); --live-tint: rgb(118 138 98 / 0.10);
@@ -131,11 +146,24 @@ details.card > summary { color: var(--text); font-weight: 600; }
 /* ── health icons: one element, its state picks the shape (CSS masks; the color is currentColor) ── */
 .ico { display: inline-block; width: 1em; height: 1em; background: currentColor; flex: none;
   -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
-[data-s="ok"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); --tone: var(--ok); --soft: var(--ok-soft); }
-[data-s="idle"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z'/%3E%3C/svg%3E"); --tone: var(--idle); --soft: var(--idle-soft); }
-[data-s="warn"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 5.5v9'/%3E%3Ccircle cx='12' cy='19' r='0.8'/%3E%3C/svg%3E"); --tone: var(--warn); --soft: var(--warn-soft); }
-[data-s="bad"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E"); --tone: var(--bad); --soft: var(--bad-soft); }
-.state { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--tone); color: var(--card); flex: none; }
+:root { --i-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); --i-moon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z'/%3E%3C/svg%3E");
+  --i-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 5.5v9'/%3E%3Ccircle cx='12' cy='19' r='0.8'/%3E%3C/svg%3E"); --i-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E");
+  --i-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2.3'/%3E%3Ccircle cx='12' cy='12' r='2.3'/%3E%3Ccircle cx='19' cy='12' r='2.3'/%3E%3C/svg%3E"); }
+[data-s="ok"] { --i: var(--i-check); --tone: var(--ok); --soft: var(--ok-soft); }
+[data-s="idle"] { --i: var(--i-moon); --tone: var(--idle); --soft: var(--idle-soft); }
+[data-s="warn"] { --i: var(--i-mark); --tone: var(--warn); --soft: var(--warn-soft); }
+[data-s="bad"] { --i: var(--i-cross); --tone: var(--bad); --soft: var(--bad-soft); }
+/* the tone (docs/design/health.md#the-tone), over the status's colours where both are set: green while all is well
+   (sky at rest, regular while working, vivid while closing would lose work), gray only for what is deliberately off.
+   --ink: text and the ring's icon; --on: an icon on a --tone disc. */
+[data-tone] { --ink: var(--tone); --on: var(--card); }
+[data-tone="idle"] { --i: var(--i-check); --tone: var(--sky); --soft: var(--sky-soft); --ink: var(--sky-ink); --on: var(--sky-on); }
+[data-tone="working"] { --i: var(--i-dots); --tone: var(--ok); --soft: var(--ok-soft); }
+[data-tone="critical"] { --i: var(--i-dots); --tone: var(--vivid); --soft: var(--vivid-soft); }
+[data-tone="warn"] { --i: var(--i-mark); --tone: var(--warn); --soft: var(--warn-soft); }
+[data-tone="bad"] { --i: var(--i-cross); --tone: var(--bad); --soft: var(--bad-soft); }
+[data-tone="off"] { --i: var(--i-moon); --tone: var(--idle); --soft: var(--idle-soft); }
+.state { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--tone); color: var(--on, var(--card)); flex: none; }
 .state .ico { width: 11px; height: 11px; }
 
 /* ── Home ── */
@@ -146,13 +174,23 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .tile-h span { color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
 .tile-h a { font-size: 0.85rem; }
 
+/* The hero's colours are registered so they can move: back to green within 300 ms when work starts (vivid when it is
+   critical), but from work to rest (sky) over 2.5 min, barely seen (data-fade: main.js sets it for that long,
+   REST_FADE_MS). */
+@property --hero-tone { syntax: "<color>"; inherits: true; initial-value: #a2cfae; }
+@property --hero-soft { syntax: "<color>"; inherits: true; initial-value: #eaf1ec; }
+@property --hero-ink { syntax: "<color>"; inherits: true; initial-value: #568061; }
 .hero { border-radius: 20px; padding: 18px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center;
-  background: var(--soft); border: 1px solid color-mix(in srgb, var(--tone) 25%, transparent); }
+  --hero-tone: var(--tone); --hero-soft: var(--soft); --hero-ink: var(--ink, var(--tone));
+  background: var(--hero-soft); border: 1px solid color-mix(in srgb, var(--hero-tone) 25%, transparent);
+  transition: --hero-tone 300ms ease-out, --hero-soft 300ms ease-out, --hero-ink 300ms ease-out; }
+.hero[data-fade] { transition-duration: 150s; transition-timing-function: linear; }
 .ring { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--card);
-  box-shadow: inset 0 0 0 5px var(--tone); color: var(--tone); position: relative; }
+  box-shadow: inset 0 0 0 5px var(--hero-tone); color: var(--hero-ink); position: relative; }
 .ring .ico { width: 28px; height: 28px; }
 /* working (src/ui/hold.js sets data-work): a short arc of light turns around the ring, calm, the one moving thing on
-   the screen; only its transform changes. Reduced motion: no turn, a still "working" mark (three dots) in the ring. */
+   the screen; only its transform changes. The ring's icon is then the "working" mark (three dots, by the tone). Reduced
+   motion: no turn, the still mark (also while a warning's colour leads). */
 .hero[data-work] .ring::after { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
   background: conic-gradient(transparent 0 58%, color-mix(in srgb, var(--card) 90%, transparent) 100%);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4.5px));
@@ -161,9 +199,9 @@ details.card > summary { color: var(--text); font-weight: 600; }
 @keyframes ring-turn { to { transform: rotate(1turn); } }
 @media (prefers-reduced-motion: reduce) {
   .hero[data-work] .ring::after { content: none; animation: none; }
-  .hero[data-work] .ring .ico { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2.3'/%3E%3Ccircle cx='12' cy='12' r='2.3'/%3E%3Ccircle cx='19' cy='12' r='2.3'/%3E%3C/svg%3E"); }
+  .hero[data-work] .ring .ico { --i: var(--i-dots); }
 }
-.hero h2 { margin: 0; font-size: 1.35rem; line-height: 1.15; color: var(--tone); }
+.hero h2 { margin: 0; font-size: 1.35rem; line-height: 1.15; color: var(--hero-ink); }
 .hero p { margin: 3px 0 0; font-size: 0.92rem; overflow-wrap: anywhere; }
 
 .action { border-radius: 16px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line);

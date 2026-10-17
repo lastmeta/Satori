@@ -24,8 +24,8 @@ import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { createActivity } from './neuron/activity.js';
-import { healthOf } from './neuron/health.js';
-import { createWork, workText } from './neuron/work.js';
+import { healthOf, toneOf } from './neuron/health.js';
+import { createWork, workText, leading, HERO } from './neuron/work.js';
 import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
@@ -202,12 +202,13 @@ async function setCentral(raw) {
   await base.refresh(); // this central's Base config
 }
 
-/** The keys record, stored in one commit (each commit is checkpointed: docs/design/storage.md). */
-async function storeKeys(r) {
+/** The keys record, stored in one commit (each commit is checkpointed: docs/design/storage.md); critical work. */
+const storeKeys = (r) => work.run('keys', async (step) => {
+  step('save');
   await db.set('keys', r);
   await db.checkpoint();
   record = r;
-}
+});
 
 /** The keys, then the neuron; backedUp: the vault's words were confirmed, given or brought (docs/design/health.md). */
 async function saveKeys(r, { backedUp = false } = {}) {
@@ -654,10 +655,9 @@ window.satori = {
    */
   async health() {
     ready();
-    const w = work.current();
-    return { ...healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
+    return healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
       nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since(),
-      traffic: lastTraffic() }), work: w && { ...w, text: workText(w) } };
+      traffic: lastTraffic(), work: work.all() });
   },
   /** Show a tab: 'home' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL). → the tab */
   go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
@@ -731,22 +731,38 @@ watch(() => {
   if (state.screen !== 'home' || !activity) return;
   void state.activityRev; // the log changed
   state.health = healthOf({ now: state.now, rows: activity.rows(), central: state.central, base: state.base, nostr: state.nostr,
-    storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since() });
+    storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since(), work: state.work });
 });
 
 /**
  * What the neuron is doing, at a pace a person can read (src/ui/hold.js; docs/design/health.md#work): the hero (central's
- * poll, else the Base batch: its ring turns, its line says the step), the vault's actions (their card's line) and the
- * network's (the Network streams line, only once one lasts a second).
+ * poll, the Base batch, the vault's actions, a critical one first: its ring turns, its line says the step, its tone is
+ * green, vivid while closing would lose work), the Wallet card's line (the vault's actions, there) and the network's
+ * (the Network streams line, only once one lasts a second). After work the hero fades to sky green over 2.5 min
+ * (data-fade); back to work, at once.
  */
 const VAULT_TASKS = ['delegate', 'undelegate', 'claim', 'send'];
-const heroHold = createHold({ show: (v) => { state.hero = v; } });
+const REST_FADE_MS = 150_000; // the fade from work to rest: style.css's .hero[data-fade]
+const busy = (tone) => tone === 'working' || tone === 'critical';
+let heroWas = null; // the hero's view shown last (not read from state: the watch below would depend on what it writes)
+let restAt = 0; // when the fade to rest ends (ms)
+let restTimer = null;
+const heroHold = createHold({ show: (v) => {
+  const was = heroWas;
+  if (v.tone === 'idle' && busy(was?.tone)) { // the work just ended: fade to sky
+    restAt = Date.now() + REST_FADE_MS;
+    clearTimeout(restTimer);
+    restTimer = setTimeout(() => { if (heroWas.fade) state.hero = heroWas = { ...heroWas, fade: false }; }, REST_FADE_MS);
+  }
+  heroWas = { ...v, fade: v.tone === 'idle' && Date.now() < restAt && (busy(was?.tone) || !!was?.fade) };
+  state.hero = heroWas;
+} });
 watch(() => {
   const h = state.health;
   if (!h) return;
-  const w = state.work.central ?? state.work.base;
-  heroHold(w ? { key: `${w.task}:${w.step}`, working: true, status: h.status, title: h.title, line: workText(w) }
-    : { key: 'idle', working: false, status: h.status, title: h.title, line: h.line });
+  const w = leading(state.work, HERO);
+  const view = { status: h.status, tone: toneOf(h.status, w), title: h.title };
+  heroHold(w ? { ...view, key: `${w.task}:${w.step}`, working: true, line: workText(w) } : { ...view, key: 'idle', working: false, line: h.line });
 });
 const lineOf = (tasks, hold) => () => {
   const w = tasks.map((t) => state.work[t]).find(Boolean);
