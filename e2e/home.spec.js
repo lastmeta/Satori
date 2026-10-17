@@ -291,7 +291,7 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   await expect(before.first()).toHaveAttribute('title', /^\w+ \d+: Before this neuron$/);
   await expect(page.locator('[data-test=days-summary]')).toHaveText('0 full days');
   release();
-  await expect(hero(page)).toHaveAttribute('data-s', 'ok');
+  await expect(hero(page)).toHaveAttribute('data-s', 'ok', { timeout: LOAD_TIMEOUT }); // history, bvar
   await expect(page.locator('[data-test=health-line]')).toHaveText('Sent 8 predictions just now · next in 11 h');
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=days-summary]')).toHaveText('1 full day');
@@ -316,9 +316,10 @@ test('starting with a vault mismatch: the title says Starting; the mismatch lead
   // The first poll: predicting, the mismatch still there.
   centralAt(central, nowS() - 60);
   release();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT }); // history, bvar
   h = await health(page);
   expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'vault-mismatch' } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
   expect(central.prod).toEqual([]);
 });
+
