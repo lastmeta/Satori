@@ -192,6 +192,21 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   const texts = h.feed.map((f) => f.text);
   expect(texts.indexOf(`Base batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Delegated to this neuron')); // newest first
 
+  // Base's RPC goes down while central is fine: the batch check fails twice, Base is red, and the neuron predicts
+  // only in part (it read a red "Predicting"); Home and health() say the same
+  await page.route('**/rpc', (route) => route.abort());
+  await page.evaluate(() => window.satori.predictBase());
+  await page.evaluate(() => window.satori.predictBase());
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Partly predicting');
+  await expect(hero(page)).toHaveAttribute('data-s', 'bad');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('Central is fine. The Base batch failed 2 times.');
+  h = await health(page);
+  expect(h).toMatchObject({ status: 'bad', title: 'Partly predicting', action: { id: 'base-failing' },
+    channels: { central: { state: 'ok' }, base: { state: 'bad', text: 'Failed 2 times' } } });
+  await shots(page, 'partly');
+  await page.unroute('**/rpc');
+  await page.evaluate(() => window.satori.base());
+
   // A chip goes to its tab; tabs are hash routes, kept over a reload.
   await chip('base').click();
   await expect(page).toHaveURL(/#wallet$/);

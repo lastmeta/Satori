@@ -109,7 +109,8 @@ For agents written against the earlier UI and API:
   kept. `status().central.nextPoll` is null until register answers. The
   health windows: 12 h of open time (was 12.5 h), the first poll within 1 h.
 - `health().title` is one of `'Not predicting'`, `'Starting'`,
-  `'Was asleep'`, `'Predicting'`, read from the log whichever reason leads:
+  `'Was asleep'`, `'Predicting'` (and `'Partly predicting'`, below), read
+  from the log whichever reason leads:
   a new neuron with a vault mismatch said "Predicting" and now says
   "Starting". "Retrying", "Base is failing" and "Network is down" are gone
   (`status`, `line` and `action` say so), and "Was asleep" ends once it
@@ -133,6 +134,9 @@ For agents written against the earlier UI and API:
   9 h" (the Central chip and `health().line`; it said "0 sent just now" and
   "Polled central …, nothing new"), and "Polled central: up to date" /
   "Caught up: up to date" in the feed. "0 sent" no longer appears.
+- `health().title` may be `'Partly predicting'`: central predicts, but
+  Base, delegated, is red (it read a red "Predicting"). "Not predicting"
+  (central) still wins; Nostr never changes the title.
 
 ## Changed 2026-10-16 (the keys in this app's own format; Base only)
 
@@ -440,12 +444,15 @@ the page's JS context:
     so until the next normal cycle; never red for being closed), `'warn'`
     (predicting, but something needs the person) or `'bad'` (predictions are
     failing).
-  - `title`: the truth about central's predictions, whichever reason leads
-    the status and the action; the first that holds: `'Not predicting'` (a
-    bad central reason: `db-error`, `login-refused`, `central-failing`,
-    `central-overdue`), `'Starting'` (no good cycle in the log yet),
+  - `title`: is the neuron predicting on the channels that pay (central,
+    and Base when it should be), whichever reason leads the status and the
+    action; the first that holds: `'Not predicting'` (a bad central reason:
+    `db-error`, `login-refused`, `central-failing`, `central-overdue`),
+    `'Partly predicting'` (central predicts, but Base has a red reason,
+    `base-failing`, while it is delegated to this identity, or not read
+    after a batch went out), `'Starting'` (no good cycle in the log yet),
     `'Was asleep'` (a session missed work and has not caught up), else
-    `'Predicting'`.
+    `'Predicting'`. Nostr never changes it.
   - `line`: the top reason's words, or with none "Sent 83 predictions 2 h
     ago · next in 9 h" ("Up to date · next in 9 h" when the last poll had
     nothing to send).

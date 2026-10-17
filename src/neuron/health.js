@@ -157,7 +157,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
     out.push(reason('starting', 'idle', 'central', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
       chip: atOnce ? 'First poll now…' : `First poll ${next}` }));
   }
-  // the title: the truth about central's predictions, from the log, whichever reason leads (failing: a bad one above)
+  // central's part of the title, from the log, whichever reason leads (failing: a bad one above); healthOf adds Base's
   const title = out.some((r) => r.status === 'bad') ? 'Not predicting' : !lastGood ? 'Starting'
     : woke && !after.length ? 'Was asleep' : 'Predicting';
   return { out, lastGood, title };
@@ -357,6 +357,11 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   }
   reasons.sort((a, b) => PRIORITY.indexOf(a.id) - PRIORITY.indexOf(b.id));
   const status = reasons.reduce((s, r) => (RANK[r.status] > RANK[s] ? r.status : s), 'ok');
+  // The title: is the neuron predicting on the channels that pay? Central (Not predicting wins), and Base when it should
+  // be predicting: delegated to this identity, or not read (its RPC down) after a batch went out. Nostr never moves it.
+  const d = base?.vault?.delegated;
+  const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.channel === 'base' && r.status === 'bad');
+  const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting' : c.title;
   const top = reasons[0];
   const centralTop = reasons.find((r) => r.channel === 'central');
 
@@ -372,7 +377,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const a = reasons.find((r) => r.act);
   const action = a ? { id: a.id, text: a.text, button: a.button, ...a.act } : null;
   return {
-    status, title: c.title, line, action,
+    status, title, line, action,
     days: daysOf(rows, now, since),
     channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic }),
     feed: feedOf(rows),

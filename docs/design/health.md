@@ -124,25 +124,31 @@ action.
 
 ### Title and line
 
-The title is the truth about central's predictions, read from the log,
+The title answers "is my neuron predicting?" across the channels that pay:
+central (read from the log), and Base when it should be predicting. It holds
 whichever reason leads the status, the line and the card. The first that
 holds:
 
 | Title | When |
 |---|---|
-| *Not predicting* | predictions are failing: a bad central reason (`db-error`, `login-refused`, `central-failing`, `central-overdue`) |
+| *Not predicting* | central's predictions are failing: a bad central reason (`db-error`, `login-refused`, `central-failing`, `central-overdue`) |
+| *Partly predicting* | central predicts (a good cycle in the log, no bad central reason; one failed poll still counts, as for *Predicting*), but Base, which should be predicting, has a red reason (`base-failing`). Base should be predicting when the vault is delegated to this identity, or when the delegation is not read (its RPC down since the page loaded) and a batch went out before |
 | *Starting* | no good cycle in the log yet (the rows this session read) |
 | *Was asleep* | a session missed work and has not caught up: no good cycle since it began |
 | *Predicting* | otherwise |
 
-So a new neuron with a vault mismatch is *Starting*: amber, with the
-mismatch's line and card (it was *Predicting*, from the mismatch, a central
-reason above `starting`). A first poll that failed once is still *Starting*;
-a later one that failed once is still *Predicting*, as are a failing Base
-batch and relays that are down: the colour, the line and the card say what
-is wrong. Once caught up after being asleep it is *Predicting*, still grey
-until the next normal cycle. `src/neuron/health.test.js` checks every one of
-these states with every reason (a table).
+Nostr never changes the title: relays that are down are red or amber, and
+the title stays central's and Base's. So a new neuron with a vault mismatch
+is *Starting*: amber, with the mismatch's line and card (it was
+*Predicting*, from the mismatch, a central reason above `starting`). A first
+poll that failed once is still *Starting*; a later one that failed once is
+still *Predicting*. A failing Base batch while delegated is *Partly
+predicting* (it read a red *Predicting*), also while catching up after
+being asleep; not delegated, a red Base leaves the title to central. Once
+caught up after being asleep it is *Predicting*, still grey until the next
+normal cycle. `src/neuron/health.test.js` checks every one of these states
+(starting, asleep, caught up, predicting, retrying after one failed poll,
+failing) with every reason (a table).
 
 The line is the top reason's short text, after "Central is fine." when
 central has no reason. With no reason it is "Sent 83 predictions 2 h ago ·
@@ -238,8 +244,8 @@ session that missed nothing is not shown.
 
 - `src/neuron/health.test.js`: every status and every reason from
   fabricated logs, the action priority, the title for every title-defining
-  state (starting, asleep, caught up, predicting, failing) with every
-  reason, open time and missed work, the day codes, the chips and the feed.
+  state (starting, asleep, caught up, predicting, retrying, failing) with
+  every reason, *Partly predicting* (Base delegated, or not read, and red), open time and missed work, the day codes, the chips and the feed.
 - `src/traffic.test.js` and `src/ui/glow.test.js`: the emitter, a traced
   transport, a burst as one update, the hold after the last message, cards
   apart, reduced motion; central's, the relay's and Base's emits in their
@@ -297,6 +303,12 @@ for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 <img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: central refused two batches" width="240">
 
 ![ok on a computer](../screenshots/home-ok-desktop-light.png)
+
+*Partly predicting* (the e2e's fake chain with its RPC aborted after
+delegating: the batch check failed twice while central is fine; it read a
+red *Predicting*):
+
+<img src="../screenshots/home-partly-phone-light.png" alt="Partly predicting: Base failed 2 times" width="240"> <img src="../screenshots/home-partly-phone-dark.png" alt="Partly predicting, dark" width="240">
 
 A new neuron after its first poll: the days before it are empty outlines,
 not closed days.

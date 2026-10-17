@@ -163,7 +163,7 @@ describe('bad: predictions are failing', () => {
   test("Base failing: delegated, the check's same error twice in a row", () => {
     const err = row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' });
     const h = health({ rows: [...running(), err], base: delegated({ lastCheck: { at: NOW - H, error: 'HTTP request failed' } }) });
-    expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'Central is fine. The Base batch failed 2 times.' });
+    expect(h).toMatchObject({ status: 'bad', title: 'Partly predicting', line: 'Central is fine. The Base batch failed 2 times.' });
     expect(h.action).toMatchObject({ id: 'base-failing', do: 'go', tab: 'settings', section: 'base' });
     expect(h.channels.base).toEqual({ state: 'bad', text: 'Failed 2 times' });
   });
@@ -273,9 +273,30 @@ test("each channel's last traffic (ms) for agents, when given: null before any",
   expect(health().channels.central).not.toHaveProperty('lastTraffic'); // not given
 });
 
-describe("the title: the truth about central's predictions, whichever reason leads the status, the line and the card", () => {
+describe("the title: is my neuron predicting, on the channels that pay (central, and Base when delegated), whichever reason leads", () => {
   const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
   const mismatch = { ok: true, peer_id: 7, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' };
+
+  test('partly predicting: central predicts, but Base, a paying channel that should be predicting, is red', () => {
+    const err = row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' });
+    const check = { lastCheck: { at: NOW - H, error: 'HTTP request failed' } };
+    const failing = (b, rows = running()) => health({ rows: [...rows, err], base: b });
+    // the bug: red, and the title said Predicting
+    expect(failing(delegated(check))).toMatchObject({ status: 'bad', title: 'Partly predicting', line: 'Central is fine. The Base batch failed 2 times.',
+      action: { id: 'base-failing' }, channels: { central: { state: 'ok' }, base: { state: 'bad' } } });
+    // its RPC down since this page loaded: the delegation is not read, and a batch went out before: still Base's job
+    const unread = base({ ...check, error: 'HTTP request failed', lastBatch: { round: 20741 }, vault: { satori: null, eth: null, delegated: null } });
+    expect(failing(unread).title).toBe('Partly predicting');
+    // not delegated (any more): Base should not be predicting, so the title is central's
+    expect(failing(base({ ...check, lastBatch: { round: 20741 } }))).toMatchObject({ status: 'bad', title: 'Predicting' });
+    // central's last poll failed once: still predicting, so partly
+    expect(failing(delegated(check), [...running(), failed(NOW - 30 * M)])).toMatchObject({ status: 'bad', title: 'Partly predicting' });
+    // central failing wins; a new neuron with no good cycle yet is starting; Nostr never moves the title
+    expect(failing(delegated(check), [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)]).title).toBe('Not predicting');
+    expect(failing(delegated(check), [open(NOW - 10 * M)]).title).toBe('Starting');
+    const down = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }] });
+    expect(health({ nostr: down })).toMatchObject({ status: 'bad', title: 'Predicting' });
+  });
 
   test('the bug: a new neuron with a vault mismatch is Starting, not Predicting; the mismatch keeps the status, the line and the card', () => {
     const h = health({ rows: [open(NOW - 10 * M)], central: central({ nextPoll: NOW + 12 * M, registration: mismatch }) });
@@ -291,6 +312,7 @@ describe("the title: the truth about central's predictions, whichever reason lea
     asleep: () => slept, // a session missed work and has not caught up
     caughtUp: () => [...slept, good(NOW - 5 * M, 83, { caughtUp: 3 * D })], // …and has: the asleep reason stays, predicting
     predicting: running,
+    retrying: () => [...running(), failed(NOW - H)], // central-failed: one failed poll, still predicting
     failing: () => [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)], // central-failing
   };
   // Each reason added to a state's input; asleep and starting come only from the states' logs.
@@ -316,14 +338,16 @@ describe("the title: the truth about central's predictions, whichever reason lea
     asleep: (i) => i,
     starting: (i) => i,
   };
-  const [S, A, P, N, X] = ['Starting', 'Was asleep', 'Predicting', 'Not predicting', '(cannot meet)'];
-  // One column per reason, in PRIORITY order. A bad central reason is "predictions failing"; no other reason moves the title.
+  const [S, A, P, B, N, X] = ['Starting', 'Was asleep', 'Predicting', 'Partly predicting', 'Not predicting', '(cannot meet)'];
+  // One column per reason, in PRIORITY order. A bad central reason is "predictions failing"; a red Base while it is
+  // delegated is "partly" once central predicts (a good cycle); no other reason moves the title (Nostr never does).
   const TABLE = {
     //          db-err login fail'g overdue b-fail relays c-fail backup vault  notreg deleg  gas    skip   unreach relay  asleep start
     starting:   [N,    N,    N,     N,      S,     S,     S,     S,     S,     S,     S,     S,     S,     S,      S,     X,     S],
-    asleep:     [N,    N,    N,     N,      A,     A,     A,     A,     A,     A,     A,     A,     A,     A,      A,     A,     X],
-    caughtUp:   [N,    N,    N,     N,      P,     P,     P,     P,     P,     P,     P,     P,     P,     P,      P,     P,     X],
-    predicting: [N,    N,    N,     N,      P,     P,     P,     P,     P,     P,     P,     P,     P,     P,      P,     X,     X],
+    asleep:     [N,    N,    N,     N,      B,     A,     A,     A,     A,     A,     A,     A,     A,     A,      A,     A,     X],
+    caughtUp:   [N,    N,    N,     N,      B,     P,     P,     P,     P,     P,     P,     P,     P,     P,      P,     P,     X],
+    predicting: [N,    N,    N,     N,      B,     P,     P,     P,     P,     P,     P,     P,     P,     P,      P,     X,     X],
+    retrying:   [N,    N,    N,     N,      B,     P,     X,     P,     P,     P,     P,     P,     P,     P,      P,     X,     X],
     failing:    [N,    N,    N,     N,      N,     N,     X,     N,     N,     N,     N,     N,     N,     N,      N,     X,     X],
   };
   const cells = Object.entries(TABLE).flatMap(([state, titles]) => PRIORITY.map((id, k) => [state, id, titles[k]]));
