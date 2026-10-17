@@ -214,7 +214,7 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   expect(h.days.slice(-3).map((d) => [d.code, d.ran])).toEqual([['full', true], ['closed', false], ['closed', true]]);
 
   release(); // no Poll now
-  await expect(page.locator('[data-test=health-line]')).toHaveText('Closed for 2 days. Caught up just now.');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('Closed for 2 days. Caught up just now.', { timeout: LOAD_TIMEOUT }); // history, bvar
   await expect(hero(page)).toHaveAttribute('data-s', 'idle'); // until the next normal cycle
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting'); // caught up
   await expect(page.locator('[data-test=chip][data-channel=central]')).toHaveAttribute('data-state', 'ok');

@@ -64,11 +64,13 @@ test('direct: a write with no explicit CHECKPOINT survives a reload and leaves n
 });
 
 test("setup's keys are in the database file itself when setup returns; a reload right after keeps them", async ({ context, page }) => {
-  await stubCentral(context);
+  const stub = await stubCentral(context);
+  const release = stub.hold('register'); // after it the poll schedule is saved and the first poll runs: later writes
   expect(await openApp(page)).toBe('setup');
   const { identity, vault } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   const files = await opfsFiles(page);
   await opfsCopy(page, DB, 'e2e-keys-copy.duckdb'); // the file alone, without any WAL
+  release();
   await page.reload();
   expect(walBytes(files)).toBe(0);
   expect(await loaded(page)).toBe('home');

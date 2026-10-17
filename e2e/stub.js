@@ -40,18 +40,19 @@ async function eip191(h) {
  * @returns the stub: set `batch`, `vaults` (vault pubkey → register's `vault_base_address` for it, else null), `otherVault` (the
  *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
  *   predictions batches), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
- *   `history` (stream uuid → its rows, oldest first; null: the route 404s); hold() keeps the observations batch (a
- *   poll, seen while it runs) until the function it returns is called; read `registered`, `polls` (per observations
+ *   `history` (stream uuid → its rows, oldest first; null: the route 404s); hold(what) keeps the observations batch
+ *   (what 'batch', the default: a poll, seen while it runs) or register's answer ('register': nothing the neuron does
+ *   after it, the poll schedule's write included) until the function it returns is called; read `registered`, `polls` (per observations
  *   batch: how many registers came before it), `logins`, `batches`, `merkleCalls`, `historyCalls`, `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
-  let held = null;
+  const held = { batch: null, register: null };
   const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
     registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [],
-    hold() {
+    hold(what = 'batch') {
       let release;
-      held = new Promise((r) => { release = r; });
-      return () => { held = null; release(); };
+      held[what] = new Promise((r) => { release = r; });
+      return () => { held[what] = null; release(); };
     } };
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
   await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
@@ -85,6 +86,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
     switch (`${req.method()} ${pathname}${search}`) {
       case 'POST /api/v1/peer/register': {
         stub.registered.push(h);
+        await held.register;
         // central base-upgrade d8a2085's answer; wallet_address and vault_address are its other forms, never read
         const answer = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer registered successfully' };
         if (!stub.noVaultBase) answer.vault_base_address = stub.otherVault ?? stub.vaults[h['vault-pubkey']] ?? null;
@@ -96,7 +98,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
         return reply(route, 200, { max_streams: 60 });
       case 'GET /api/v1/observations/batch?limit=100': {
         stub.polls.push(stub.registered.length);
-        await held;
+        await held.batch;
         const { batch } = stub;
         if (stub.delayMs) await new Promise((r) => setTimeout(r, stub.delayMs));
         return reply(route, 200, batch);
