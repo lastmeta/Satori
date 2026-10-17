@@ -211,10 +211,23 @@ describe('warn: predicting, but something needs you', () => {
     expect(health({ storage: { persisted: true }, backedUp: false }).status).toBe('ok');
     expect(health({ storage: null, backedUp: false }).status).toBe('ok'); // not read yet
   });
-  test('central: a vault mismatch; not registered', () => {
-    let h = health({ central: central({ registration: { ok: true, vaultMismatch: 'other' } }) });
-    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Central has another vault for this neuron.' });
+  test("central: a vault mismatch, by register's vault_base_address; unknown is none; not registered", () => {
+    const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
+    const reg = (vault_base_address, vaultMismatch) => central({ registration: { ok: true, peer_id: 7, vault: ours, vault_base_address, vaultMismatch } });
+    let h = health({ central: reg(theirs, 'other') });
+    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "Central pays this vault's rewards to another address." });
+    expect(h.action).toEqual({ id: 'vault-mismatch', do: 'go', tab: 'settings', section: 'keys', button: 'Open Settings',
+      text: `Central pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}. Check the keys in Settings.` });
     expect(h.channels.central).toEqual({ state: 'warn', text: 'Vault mismatch' });
+    h = health({ central: reg(null, 'none') });
+    expect(h).toMatchObject({ status: 'warn', line: 'Central has no vault for this neuron.' });
+    expect(h.action).toMatchObject({ id: 'vault-mismatch', text: "Central kept no vault for this identity, so it has no Base address to pay this "
+      + "neuron's rewards to (the vault may be registered to another neuron). Check the keys in Settings." });
+    // a match, or a central that does not say (no vault_base_address: prod on main): no reason
+    for (const r of [reg(ours, false), reg(null, null)]) {
+      h = health({ central: r });
+      expect([h.status, ids(h), h.channels.central.state]).toEqual(['ok', [], 'ok']);
+    }
     h = health({ central: central({ registration: { ok: false, error: 'central unreachable: Failed to fetch' } }) });
     expect(h.action).toMatchObject({ id: 'not-registered', do: 'reload' });
     expect(h.channels.central).toEqual({ state: 'warn', text: 'Not registered' });

@@ -21,7 +21,7 @@ const CORS = {
 /**
  * Central's login check (base-upgrade f4d72f5, src/utils/auth.py verify_wallet_signature), EIP-191 only:
  * 0x + r ‖ s ‖ v in 130 hex, v 27/28 or 0/1, low s, recovering the Ethereum address of `wallet-pubkey`.
- * Anything else (an Evrmore signature, a high s, garbage) is refused.
+ * Anything else (another scheme's signature, a high s, garbage) is refused.
  */
 async function eip191(h) {
   const sig = h.signature ?? '';
@@ -37,13 +37,14 @@ async function eip191(h) {
 /**
  * @param {import('@playwright/test').BrowserContext} context
  * @param {{url?: string, relays?: string[], rpc?: {http: Function}}} [o] relays: central's relay list
- * @returns the stub: set `batch`, `vaults` (vault pubkey → central's address form for it), `otherVault`, `fail` (statuses for the next
+ * @returns the stub: set `batch`, `vaults` (vault pubkey → register's `vault_base_address` for it, else null), `otherVault` (the
+ *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
  *   predictions batches), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
  *   `history` (stream uuid → its rows, oldest first; null: the route 404s); read `registered`, `logins`, `batches`,
  *   `merkleCalls`, `historyCalls`, `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
-  const stub = { batch: [], vaults: {}, otherVault: null, fail: [], refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
+  const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
     registered: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [] };
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
   await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
@@ -75,12 +76,15 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       return reply(route, 200, (stub.history[q.stream_uuid] ?? []).filter((o) => Number(o.observed_at) > since).slice(-Number(q.limit ?? 500)));
     }
     switch (`${req.method()} ${pathname}${search}`) {
-      case 'POST /api/v1/peer/register':
+      case 'POST /api/v1/peer/register': {
         stub.registered.push(h);
-        return reply(route, 200, { success: true, peer_id: 7, wallet_address: 'Eid', message: 'Peer registered successfully',
-          vault_address: stub.otherVault ?? stub.vaults[h['vault-pubkey']] ?? null });
+        // central base-upgrade d8a2085's answer; wallet_address and vault_address are its other forms, never read
+        const answer = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer registered successfully' };
+        if (!stub.noVaultBase) answer.vault_base_address = stub.otherVault ?? stub.vaults[h['vault-pubkey']] ?? null;
+        return reply(route, 200, answer);
+      }
       case 'GET /api/v1/peer/relays':
-        return reply(route, 200, relays.map((r) => ({ relay_url: r, nostr_pubkey: 'x', evr_address: 'E' })));
+        return reply(route, 200, relays.map((r) => ({ relay_url: r, nostr_pubkey: 'x' })));
       case 'GET /api/v1/peer/relay-config':
         return reply(route, 200, { max_streams: 60 });
       case 'GET /api/v1/observations/batch?limit=100': {

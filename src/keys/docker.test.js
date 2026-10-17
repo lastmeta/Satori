@@ -36,14 +36,14 @@ describe('wallet.yaml (plaintext)', () => {
     const words = await readWallet(vec(0).walletYaml.replace(/^words: \w+/m, 'words: zoo'));
     expect(words.mismatches).toEqual(['words']);
   });
-  test('its Evrmore fields are not read: a wrong evr.address, scripthash or WIF privateKey is no mismatch', async () => {
+  test("Docker's other fields are not read: a wrong nested address, scripthash or WIF privateKey is no mismatch", async () => {
     const text = vec(0).walletYaml.replace(/^( {2}address: ).*$/m, '$1EOtherAddressXXXXXXXXXXXXXXXXXXXXX')
       .replace(/^(scripthash: ).*$/m, `$1${'00'.repeat(32)}`).replace(/^(privateKey: ).*$/m, `$1${vec(1).walletYaml.match(/^privateKey: (.*)$/m)[1]}`);
     expect(text).not.toBe(vec(0).walletYaml);
     expect(await readWallet(text)).toEqual({ secret: hex(vec(0).entropyHex), pubkey: vec(0).pubkey, mismatches: [] });
   });
   test('watch-only and empty files are refused', async () => {
-    await expect(readWallet(`publicKey: ${vec(0).pubkey}\nevr:\n  address: E\n`)).rejects.toThrow(/no entropy/i);
+    await expect(readWallet(`publicKey: ${vec(0).pubkey}\nscripthash: ${'00'.repeat(32)}\n`)).rejects.toThrow(/no entropy/i);
     await expect(readWallet('')).rejects.toThrow(/no entropy/i);
     await expect(readWallet('a: [')).rejects.toThrow();
   });

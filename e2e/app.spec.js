@@ -9,7 +9,6 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { secretFromWords, publicKey, evmAddress, wordsOf } from '../src/keys/keys.js';
 import { verifyMessage } from 'viem';
-import { centralAddress } from '../src/central/index.js';
 import { nostrPubkey, nsec } from '../src/nostr/event.js';
 import { forecast, STEP_S } from '../src/engine/index.js';
 import { runModels } from '../src/engine/evolve.js';
@@ -59,7 +58,7 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   expect(words).toHaveLength(24);
   const vaultPub = publicKey(secretFromWords(words.join(' ')));
   const vaultAddress = evmAddress(vaultPub);
-  stub.vaults[vaultPub] = centralAddress(vaultPub); // central keeps our vault (named in its own address form)
+  stub.vaults[vaultPub] = vaultAddress; // central pays this vault: its vault_base_address
   await page.getByRole('button', { name: 'I wrote them down' }).click();
   for (const input of await visible(page.getByLabel(/^Word #\d+/)).all()) {
     const n = Number((await input.evaluate((el) => el.closest('label').textContent)).match(/#(\d+)/)[1]);
@@ -75,7 +74,7 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   await page.getByLabel('Repeat passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-  // Home: two Base addresses (no other kind anywhere), the vault locked, registered with central2 (headers only, no token).
+  // Home: two Base addresses, the vault locked, registered with central2 (headers only, no token).
   const idAddr = page.locator('[data-test=identity]');
   const vaultAddr = page.locator('[data-test=vault]');
   await expect(idAddr).toHaveText(ADDRESS, { timeout: LOAD_TIMEOUT }); // the vault's encryption, then the neuron starts
@@ -83,7 +82,6 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   await expect(vaultAddr).toHaveText(vaultAddress);
   const identity = await idAddr.textContent();
   expect(identity).not.toBe(vaultAddress);
-  expect(await page.locator('main').innerText()).not.toMatch(/Evrmore|\bE[1-9A-HJ-NP-Za-km-z]{33}\b/);
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
   await expect(page.locator('[data-test=central-url]')).toHaveText(CENTRAL);
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
@@ -217,7 +215,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   const stub = await stubCentral(context);
   const elsewhere = await stubCentral(context, 'https://central.test');
   const v = fx.vectors[2];
-  stub.vaults[v.pubkey] = v.address; // central names a vault in its own address form (the fixture's)
+  stub.vaults[v.pubkey] = v.ethAddress; // central pays this vault: its vault_base_address
   await openApp(page);
   await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
   await expect(page.evaluate(() => window.satori.poll())).rejects.toThrow(/Set up first/);
@@ -230,8 +228,8 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(s0.central).toMatchObject({ url: CENTRAL, pending: 0, lastPoll: null, lastSubmit: null });
   await expect.poll(async () => (await status(page)).central.registration?.ok).toBe(true);
   const registration = (await status(page)).central.registration;
-  expect(registration).toMatchObject({ peer_id: 7, vaultMismatch: false });
-  expect(registration).not.toHaveProperty('vault_address'); // central's address form stays inside
+  expect(registration).toMatchObject({ peer_id: 7, vault: v.ethAddress, vault_base_address: v.ethAddress, vaultMismatch: false });
+  expect(registration).not.toHaveProperty('vault_address'); // central's other address forms are not passed on
   expect(registration).not.toHaveProperty('wallet_address');
   await expect(page.evaluate(() => window.satori.setup({ passphrase: 'short' }))).rejects.toThrow(/already set up/i);
 
@@ -291,8 +289,12 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   await expect(page.evaluate(() => window.satori.setCentral('http://central.test'))).rejects.toThrow(/https:\/\//);
   expect((await status(page)).central.pending).toBe(1); // a refused URL changes nothing
   elsewhere.batch = [{ ...entry('u-btc-2', 'bitcoin', T0 + 120, '67005.5'), stream: { uuid: 'u-btc-2', name: 'bitcoin', meta: '{"unit":"USD"}' } }];
+  elsewhere.noVaultBase = true; // a central without vault_base_address (prod, on main): unknown, no mismatch
   const c = await page.evaluate(() => window.satori.setCentral('https://central.test/'));
-  expect(c).toMatchObject({ url: 'https://central.test', registration: { ok: true, peer_id: 7 }, pending: 0, lastPoll: null, lastSubmit: null });
+  expect(c).toMatchObject({ url: 'https://central.test', registration: { ok: true, peer_id: 7, vault: v.ethAddress, vault_base_address: null,
+    vaultMismatch: null }, pending: 0, lastPoll: null, lastSubmit: null });
+  expect((await page.evaluate(() => window.satori.health())).reasons.map((r) => r.id)).not.toContain('vault-mismatch');
+  await expect(page.locator('[data-test=mismatch]')).toHaveText('');
   expect(elsewhere.registered).toHaveLength(1);
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://central.test');
   expect(await page.evaluate(() => window.satori.streams())).toEqual([]);
@@ -381,9 +383,9 @@ test('central with history: the first Poll now backfills each stream and forecas
   expect(stub.prod).toEqual([]);
 });
 
-test('import Dockerized Neuron files; central has another vault for this identity: a mismatch is shown; Settings', async ({ context, page }) => {
+test("import Dockerized Neuron files; central pays this vault's rewards to another Base address: a mismatch shows both; Settings", async ({ context, page }) => {
   const stub = await stubCentral(context);
-  stub.otherVault = 'EOtherVau1tAddressXXXXXXXXXXXXXXXX';
+  stub.otherVault = fx.vectors[3].ethAddress; // central pays this vault's rewards to another Base address
   const wallet = fx.vectors[0];
   const vault = fx.vectors[fx.vaults.current.vector];
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
@@ -407,11 +409,13 @@ test('import Dockerized Neuron files; central has another vault for this identit
   await expect(page.locator('[data-test=identity]')).toHaveText(wallet.ethAddress, { timeout: 30_000 });
   await expect(page.locator('[data-test=vault]')).toHaveText(vault.ethAddress);
 
-  // Registered with Docker's keys; central answers with another vault.
+  // Registered with Docker's keys; central pays this vault's rewards to another Base address.
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered[0]).toMatchObject({ 'wallet-pubkey': wallet.pubkey, 'vault-pubkey': vault.pubkey });
-  await expect(page.locator('[data-test=mismatch]'))
-    .toHaveText('Vault mismatch: central has another vault for this identity, not this one.');
+  await expect(page.locator('[data-test=mismatch]')).toHaveText(
+    `Vault mismatch: central pays this vault's rewards to a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`);
+  expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'vault-mismatch',
+    text: expect.stringContaining(`a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`) });
 
   // Settings: https only; an unreachable central is shown, not thrown.
   await go(page, 'settings');

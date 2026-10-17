@@ -1,8 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import {
-  predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS, centralAddress,
+  predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS,
 } from './index.js';
 
 describe('predictionItem', () => {
@@ -83,15 +82,11 @@ const login = () => ({
 const client = (fetch, url = BASE) => createCentral({ url, fetch, identity, version: '0.1.0' });
 const paths = (calls) => calls.map((c) => `${c.method} ${c.path}`);
 
-test("centralAddress: the name central gives a key in register's answer, satorilib's generateAddress", () => {
-  const { vectors } = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
-  for (const v of vectors) expect(centralAddress(v.pubkey)).toBe(v.address); // made by satorilib
-  expect(() => centralAddress('nope')).toThrow();
-});
-
 describe('register', () => {
   test('identity and vault pubkeys and our version as headers; no login, no token, no body', async () => {
-    const res = { success: true, peer_id: 7, wallet_address: 'Ea', vault_address: 'Eb', message: 'Peer registered successfully' };
+    // central base-upgrade d8a2085's answer (PeerRegisterResponse); its other address forms are not read
+    const res = { success: true, peer_id: 7, wallet_address: 'w', vault_address: 'v',
+      vault_base_address: '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', nostr_pubkey: null, message: 'Peer registered successfully' };
     const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, res) });
     expect(await client(fetch).register({ vaultPubkey: '03cd' })).toEqual(res);
     expect(paths(calls)).toEqual(['POST /api/v1/peer/register']);
@@ -113,7 +108,7 @@ describe('register', () => {
 });
 
 test("relays and relay-config: central's GETs, no token (peer.py:123-173)", async () => {
-  const relays = [{ relay_url: 'ws://satorian.satorinet.io:7777', nostr_pubkey: 'e5', evr_address: 'EM' }];
+  const relays = [{ relay_url: 'ws://satorian.satorinet.io:7777', nostr_pubkey: 'e5' }];
   const { fetch, calls } = mockFetch({ 'GET /api/v1/peer/relays': json(200, relays),
     'GET /api/v1/peer/relay-config': json(200, { max_streams: 60 }) });
   expect(await client(fetch).relays()).toEqual(relays);

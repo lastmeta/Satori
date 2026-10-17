@@ -77,8 +77,8 @@ export function vaultPubkey(text) {
  * refused (watch-only; satorilib cannot load a WIF-only file either). An old
  * vault also encrypted its publicKey (identity.py:666-676, by length). The
  * public key and the words are derived from the secret and compared with the
- * stored ones; the Evrmore fields (privateKey's WIF, evr.address, scripthash)
- * are not read. `encodings`: the password's byte forms to try, in order.
+ * stored ones; the other fields (privateKey's WIF, the nested address,
+ * scripthash) are not read. `encodings`: the password's byte forms to try, in order.
  * @returns {Promise<{secret: Uint8Array, pubkey: string, mismatches: string[]}>}
  */
 export async function readWallet(text, { password, encodings = ['latin1'] } = {}) {

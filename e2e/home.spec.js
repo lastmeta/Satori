@@ -31,7 +31,7 @@ function centralAt(stub, t, k = 600) {
 async function setup(context) {
   const chain = fakeSatori({ round: ROUND, hour: 9 });
   const central = await stubCentral(context, { rpc: chain.rpc });
-  central.vaults[v.pubkey] = v.address; // central keeps our vault: no mismatch
+  central.vaults[v.pubkey] = v.ethAddress; // central pays this vault: no mismatch
   return { ...chain, central };
 }
 

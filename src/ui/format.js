@@ -31,11 +31,14 @@ export function registrationText(r) {
   return `No: ${r.error}`;
 }
 
-/** Why central's vault for this identity is not ours, or ''. */
+/** Why central does not pay this vault (register's vault_base_address), or '' (it does, or this central does not say). */
 export function mismatchText(r) {
   if (!r?.ok || !r.vaultMismatch) return '';
-  if (r.vaultMismatch === 'other') return 'Vault mismatch: central has another vault for this identity, not this one.';
-  return 'Vault mismatch: central kept no vault for this identity (this vault may be registered to another neuron).';
+  if (r.vaultMismatch === 'other') {
+    return `Vault mismatch: central pays this vault's rewards to a different Base address, ${r.vault_base_address}, not this vault's ${r.vault}.`;
+  }
+  return "Vault mismatch: central kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
+    + ' (this vault may be registered to another neuron).';
 }
 
 export function pollText(p) {

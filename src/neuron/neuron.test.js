@@ -217,20 +217,35 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
 });
 
 describe('register', () => {
-  // central names the vault in its own address form (satorilib's, the fixture's): compared with ours, never shown
+  // central's vault_base_address (base-upgrade d8a2085): the Base address it pays this vault's rewards to
   const [v, other] = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url))).vectors;
-  const res = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: v.address, message: 'Peer already registered' };
+  const res = { success: true, peer_id: 7, wallet_address: 'w', vault_address: 'v', vault_base_address: v.ethAddress,
+    message: 'Peer already registered' };
   const fake = (r) => ({ register: vi.fn(async () => { if (r instanceof Error) throw r; return r; }) });
-  test('sends the vault pubkey; the result says whether central has our vault, with no address in it', async () => {
+  const mismatch = async (r) => (await register({ central: fake(r), vaultPubkey: v.pubkey, now })).vaultMismatch;
+  test("sends the vault pubkey; central pays this vault: no mismatch; both Base addresses, none of central's other forms", async () => {
     const c = fake(res);
     expect(await register({ central: c, vaultPubkey: v.pubkey, nostrPubkey: 'ee', now })).toEqual({
-      at: clock, ok: true, peer_id: 7, message: 'Peer already registered', vaultMismatch: false,
+      at: clock, ok: true, peer_id: 7, message: 'Peer already registered',
+      vault: v.ethAddress, vault_base_address: v.ethAddress, vaultMismatch: false,
     });
     expect(c.register).toHaveBeenCalledWith({ vaultPubkey: v.pubkey, nostrPubkey: 'ee' });
   });
-  test("another vault ('other'), or none kept ('none'): a mismatch", async () => {
-    expect((await register({ central: fake({ ...res, vault_address: other.address }), vaultPubkey: v.pubkey, now })).vaultMismatch).toBe('other');
-    expect((await register({ central: fake({ ...res, vault_address: null }), vaultPubkey: v.pubkey, now })).vaultMismatch).toBe('none');
+  test('the addresses are compared case-insensitively', async () => {
+    expect(await mismatch({ ...res, vault_base_address: v.ethAddress.toLowerCase() })).toBe(false);
+    expect(await mismatch({ ...res, vault_base_address: `0x${v.ethAddress.slice(2).toUpperCase()}` })).toBe(false);
+  });
+  test("another Base address ('other'), or none (null: 'none'): a mismatch", async () => {
+    const r = await register({ central: fake({ ...res, vault_base_address: other.ethAddress }), vaultPubkey: v.pubkey, now });
+    expect(r).toMatchObject({ vault: v.ethAddress, vault_base_address: other.ethAddress, vaultMismatch: 'other' });
+    expect(await mismatch({ ...res, vault_base_address: null })).toBe('none');
+  });
+  test('a central without the field (prod, on main): unknown (null), not a mismatch', async () => {
+    const { vault_base_address: _, ...old } = res;
+    expect(await register({ central: fake(old), vaultPubkey: v.pubkey, now })).toEqual({
+      at: clock, ok: true, peer_id: 7, message: 'Peer already registered', vault: v.ethAddress, vault_base_address: null, vaultMismatch: null,
+    });
+    expect(await mismatch('not json')).toBeNull();
   });
   test('a failure is returned, never thrown', async () => {
     expect(await register({ central: fake(new CentralError(409, 'taken')), vaultPubkey: v.pubkey, now }))

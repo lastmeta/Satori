@@ -28,7 +28,7 @@ describe('newKeys: the record', () => {
         cipher: expect.objectContaining({ name: 'AES-GCM' }), data: expect.any(String) },
     });
     expect(Math.abs(r.created - Date.now() / 1000)).toBeLessThan(60); // when these keys were made: Home's first day
-    expect(JSON.stringify(r)).not.toMatch(/yaml|evr|wif|scripthash|words/i);
+    expect(JSON.stringify(r)).not.toMatch(/yaml|address|wif|scripthash|words/i);
     expect(JSON.stringify(r)).not.toContain(b.entropyHex);
   });
   test('a new random identity and Nostr key when not given', async () => {

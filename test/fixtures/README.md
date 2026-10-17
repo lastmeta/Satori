@@ -9,11 +9,9 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   the commands are in the script). For the forward migration.
 - `identity-parity.json`: made from satorilib (the Docker neuron's code) by
   `scripts/identity_fixtures.py` on branch `draft/v1-full`: words, pubkey,
-  Base address, address (central's name for a key in register's answer),
-  `wallet.yaml`; current and old vaults with their password and a wrong one;
-  a mismatched file; a Nostr key (for step 5). Its Evrmore message
-  signatures, WIFs, scripthashes and WIF-only file were dropped with the
-  app's Evrmore code (2026-10-16).
+  Base address, `wallet.yaml`; current and old vaults with their password
+  and a wrong one; a mismatched file; a Nostr key (for step 5). Fields only
+  the app's former Evrmore code used were dropped with it (2026-10-16/17).
 - `identity-js.json`: a `wallet.yaml` and a `vault.yaml` made by this JS
   code (earlier versions wrote Docker's format), which satorilib accepted
   (`scripts/identity_crossverify.py` on `draft/v1-full`).

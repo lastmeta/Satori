@@ -1,6 +1,6 @@
 // Central's API as Satori Lite uses it (docs/design/central.md):
 //   const c = createCentral({ url, identity, version })
-//   await c.register({ vaultPubkey, nostrPubkey })   // POST /peer/register
+//   await c.register({ vaultPubkey, nostrPubkey })   // POST /peer/register (its vault_base_address: neuron register())
 //   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.history(uuid, { limit, since })  // GET /observations/history: one stream's past (beyond Lite; may 404)
@@ -9,9 +9,7 @@
 // Errors are CentralError: status 0 for a timeout or a network failure. A
 // network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
-import { ripemd160 } from '@noble/hashes/legacy';
-import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { createBase58check } from '@scure/base';
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)
 
@@ -35,17 +33,6 @@ export function predictionItem({ streamUuid, streamName, t1, t2, now = Date.now(
     hash: bytesToHex(sha256(utf8ToBytes(value + observedAt))).slice(0, 16),
   };
 }
-
-/**
- * The name central gives a key in register's answer (`vault_address`): satorilib's
- * generateAddress of the pubkey (hex), base58check(0x21 ‖ ripemd160(sha256(pubkey))),
- * an Evrmore address. Central returns the vault in no other form (main.py:771-900),
- * so this is how the neuron sees whether central kept its vault; it is compared
- * and never shown. It goes when central returns the vault's pubkey or Base
- * address (docs/issues/central-register-vault-base.md).
- */
-export const centralAddress = (pubkeyHex) =>
-  createBase58check(sha256).encode(concatBytes(Uint8Array.of(0x21), ripemd160(sha256(hexToBytes(pubkeyHex)))));
 
 /** Unix seconds Lite takes as a time: 2000–2100, exclusive (data_helper.py:_parse_epoch; start.py:1413-1424 for relays). */
 export const EPOCH = [946_684_800, 4_102_444_800];

@@ -28,11 +28,14 @@ test('registrationText and mismatchText', () => {
   expect(registrationText({ ok: true, peer_id: 7 })).toBe('Yes · peer 7');
   expect(registrationText({ ok: false, error: 'central 409: taken' })).toBe('No: central 409: taken');
   expect(mismatchText(null)).toBe('');
-  expect(mismatchText({ ok: true, vaultMismatch: false })).toBe('');
-  expect(mismatchText({ ok: true, vaultMismatch: 'other' }))
-    .toBe('Vault mismatch: central has another vault for this identity, not this one.');
-  expect(mismatchText({ ok: true, vaultMismatch: 'none' }))
-    .toBe('Vault mismatch: central kept no vault for this identity (this vault may be registered to another neuron).');
+  const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
+  expect(mismatchText({ ok: true, vault: ours, vault_base_address: ours, vaultMismatch: false })).toBe('');
+  expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: null })).toBe(''); // central does not say: unknown
+  expect(mismatchText({ ok: true, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' }))
+    .toBe(`Vault mismatch: central pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}.`);
+  expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: 'none' }))
+    .toBe("Vault mismatch: central kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
+      + ' (this vault may be registered to another neuron).');
 });
 
 test('pollText and submitText', () => {

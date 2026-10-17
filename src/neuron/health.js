@@ -124,11 +124,15 @@ function centralReasons({ now, rows, sessions, central, app }) {
       text: `No predictions went out for ${fmtDur(ran)} while Satori was open. Try a poll now.`, button: 'Poll now', act: { do: 'poll' } }));
   }
 
+  // register's vault_base_address: 'other' or 'none'; false (it pays this vault) and null (this central does not say) are fine
   const reg = central?.registration;
   if (reg?.ok && reg.vaultMismatch) {
-    out.push(reason('vault-mismatch', 'warn', 'central', { line: 'Central has another vault for this neuron.', chip: 'Vault mismatch',
-      text: reg.vaultMismatch === 'other' ? 'Central links this identity to another vault, not this one. Check the keys in Settings.'
-        : 'Central kept no vault for this identity (the vault may be registered to another neuron). Check the keys in Settings.',
+    const other = reg.vaultMismatch === 'other';
+    out.push(reason('vault-mismatch', 'warn', 'central', { chip: 'Vault mismatch',
+      line: other ? "Central pays this vault's rewards to another address." : 'Central has no vault for this neuron.',
+      text: `${other ? `Central pays this vault's rewards to a different Base address, ${reg.vault_base_address}, not this vault's ${reg.vault}.`
+        : "Central kept no vault for this identity, so it has no Base address to pay this neuron's rewards to (the vault may be registered to another neuron)."
+      } Check the keys in Settings.`,
       button: 'Open Settings', act: go('settings', 'keys') }));
   }
   if (reg && !reg.ok) {
