@@ -414,8 +414,8 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   expect(stub.registered[0]).toMatchObject({ 'wallet-pubkey': wallet.pubkey, 'vault-pubkey': vault.pubkey });
   await expect(page.locator('[data-test=mismatch]')).toHaveText(
     `Vault mismatch: central pays this vault's rewards to a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`);
-  expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'vault-mismatch',
-    text: expect.stringContaining(`a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`) });
+  expect(await page.evaluate(() => window.satori.health())).toMatchObject({ title: 'Starting', action: { id: 'vault-mismatch', // nothing polled yet
+    text: expect.stringContaining(`a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`) } });
 
   // Settings: https only; an unreachable central is shown, not thrown.
   await go(page, 'settings');

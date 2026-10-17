@@ -97,6 +97,12 @@ For agents written against the earlier UI and API:
 
 ## Changed 2026-10-17
 
+- `health().title` is one of `'Not predicting'`, `'Starting'`,
+  `'Was asleep'`, `'Predicting'`, read from the log whichever reason leads:
+  a new neuron with a vault mismatch said "Predicting" and now says
+  "Starting". "Retrying", "Base is failing" and "Network is down" are gone
+  (`status`, `line` and `action` say so), and "Was asleep" ends once it
+  caught up.
 - `health().days[].code` may be `'before'`: a day before this neuron began
   (a new neuron's strip was 13 grey "closed" days). Its cell has
   `data-code="before"` and the title "<date>: Before this neuron".
@@ -410,8 +416,14 @@ the page's JS context:
     so until the next normal cycle; never red for being closed), `'warn'`
     (predicting, but something needs the person) or `'bad'` (predictions are
     failing).
-  - `title`, `line`: Home's words ("Predicting", "Sent 83 predictions 2 h ago
-    · next in 9 h").
+  - `title`: the truth about central's predictions, whichever reason leads
+    the status and the action; the first that holds: `'Not predicting'` (a
+    bad central reason: `db-error`, `login-refused`, `central-failing`,
+    `central-overdue`), `'Starting'` (no good cycle in the log yet),
+    `'Was asleep'` (a session missed work and has not caught up), else
+    `'Predicting'`.
+  - `line`: the top reason's words, or with none "Sent 83 predictions 2 h
+    ago · next in 9 h".
   - `action`: null, or the one thing to do: `{ id, text, button, do, tab?,
     section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `delegate`
     (`unlock()` then `delegate()`), `backup` (`unlock()` then

@@ -158,7 +158,10 @@ function centralReasons({ now, rows, sessions, central, app }) {
     out.push(reason('starting', 'idle', 'central', { line: polling ? 'First predictions now…' : `First predictions ${next}.`,
       chip: polling ? 'First poll now…' : `First poll ${next}` }));
   }
-  return { out, lastGood };
+  // the title: the truth about central's predictions, from the log, whichever reason leads (failing: a bad one above)
+  const title = out.some((r) => r.status === 'bad') ? 'Not predicting' : !lastGood ? 'Starting'
+    : woke && !after.length ? 'Was asleep' : 'Predicting';
+  return { out, lastGood, title };
 }
 
 function baseReasons({ rows, base }) {
@@ -353,10 +356,6 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const top = reasons[0];
   const centralTop = reasons.find((r) => r.channel === 'central');
 
-  const centralWord = { 'central-failed': 'Retrying', asleep: 'Was asleep', starting: 'Starting' }[centralTop?.id] ?? 'Predicting';
-  let title = centralWord;
-  if (status === 'bad') title = { central: 'Not predicting', base: 'Base is failing', network: 'Network is down' }[top.channel];
-
   let line;
   const lg = c.lastGood;
   if (!top) {
@@ -370,7 +369,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const a = reasons.find((r) => r.act);
   const action = a ? { id: a.id, text: a.text, button: a.button, ...a.act } : null;
   return {
-    status, title, line, action,
+    status, title: c.title, line, action,
     days: daysOf(rows, now, since),
     channels: chips({ now, reasons, lastGood: lg, base, nostr }),
     feed: feedOf(rows),

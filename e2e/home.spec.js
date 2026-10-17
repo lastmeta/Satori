@@ -208,6 +208,7 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   await start(page);
   let h = await health(page);
   expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', action: null });
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Was asleep');
   expect(h.line).toMatch(/^Closed for 2 days\. Catching up in \d+ min\.$/);
   expect(h.channels.central.text).toMatch(/^Catching up in \d+ min$/);
   expect(h.feed).toContainEqual(expect.objectContaining({ level: 'idle', text: 'Satori was closed for 2 d' }));
@@ -216,8 +217,8 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   centralAt(central, nowS() - 60);
   await page.evaluate(() => window.satori.poll());
   await expect(page.locator('[data-test=health-line]')).toHaveText('Closed for 2 days. Caught up just now.');
-  await expect(hero(page)).toHaveAttribute('data-s', 'idle');
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Was asleep');
+  await expect(hero(page)).toHaveAttribute('data-s', 'idle'); // until the next normal cycle
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting'); // caught up
   await expect(page.locator('[data-test=chip][data-channel=central]')).toHaveAttribute('data-state', 'ok');
   h = await health(page);
   expect(h.feed).toContainEqual(expect.objectContaining({ level: 'ok', text: 'Caught up: sent 8 predictions' }));
@@ -240,12 +241,12 @@ test('bad: central refuses two batches in a row, then the login; the card goes t
   await page.evaluate(() => window.satori.poll());
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
 
-  // Once: retrying (warn). Twice in a row: not predicting (bad).
+  // Once: retrying (warn), still predicting. Twice in a row: not predicting (bad).
   centralAt(central, nowS() - 2 * H, 601);
   central.fail.push(500, 500); // a 5xx is resent once
   await page.evaluate(() => window.satori.poll());
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Retrying', action: { id: 'central-failed', button: 'Try again', do: 'poll' } });
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'central-failed', button: 'Try again', do: 'poll' } });
   expect(h.line).toMatch(/^The last poll failed; next try in 11 h\.$/);
   centralAt(central, nowS() - H, 602);
   central.fail.push(500, 500);
@@ -294,5 +295,28 @@ test('starting: a new neuron is calm before its first poll, then predicting; the
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=days-summary]')).toHaveText('1 full day');
   await shots(page, 'new');
+  expect(central.prod).toEqual([]);
+});
+
+test('starting with a vault mismatch: the title says Starting; the mismatch leads the status, the line and the card', async ({ context, page }) => {
+  const { central } = await setup(context);
+  central.otherVault = fx.vectors[3].ethAddress; // central pays this vault's rewards to another Base address
+  await start(page);
+  await expect(hero(page)).toHaveAttribute('data-s', 'warn'); // registered: the mismatch
+  let h = await health(page);
+  expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "Central pays this vault's rewards to another address.",
+    action: { id: 'vault-mismatch', button: 'Open Settings', do: 'go', tab: 'settings', section: 'keys' } });
+  expect(h.reasons.map((r) => r.id)).toEqual(['vault-mismatch', 'starting']);
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');
+  await expect(page.locator('[data-test=health-line]')).toHaveText(h.line);
+  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'vault-mismatch');
+
+  // The first poll: predicting, the mismatch still there.
+  centralAt(central, nowS() - 60);
+  await page.evaluate(() => window.satori.poll());
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
+  h = await health(page);
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'vault-mismatch' } });
+  await expect(hero(page)).toHaveAttribute('data-s', 'warn');
   expect(central.prod).toEqual([]);
 });

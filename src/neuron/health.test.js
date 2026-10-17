@@ -79,7 +79,7 @@ describe('idle: calm, never red for being closed', () => {
 
     const caught = good(NOW - 20, 83, { caughtUp: woke.data.gap });
     h = health({ rows: [...before, woke, caught] });
-    expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', line: 'Closed for 3 days. Caught up just now.' });
+    expect(h).toMatchObject({ status: 'idle', title: 'Predicting', line: 'Closed for 3 days. Caught up just now.' }); // caught up: predicting
     expect(h.channels.central).toEqual({ state: 'ok', text: '83 sent just now' });
 
     // a reload after catching up keeps it; the next normal cycle ends it
@@ -118,9 +118,9 @@ describe('bad: predictions are failing', () => {
     expect(health({ rows: [open(NOW - FIRST_S - M)] }).reasons[0].id).toBe('central-overdue');
   });
 
-  test('a failed cycle: once is warn (retrying), twice in a row is bad', () => {
+  test('a failed cycle: once is warn (retrying, still predicting), twice in a row is bad', () => {
     let h = health({ rows: [...running(), failed(NOW - H)] });
-    expect(h).toMatchObject({ status: 'warn', title: 'Retrying', line: 'The last poll failed; next try in 9 h.' });
+    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The last poll failed; next try in 9 h.' });
     expect(h.action).toEqual({ id: 'central-failed', text: 'central 500: boom. It tries again on its own; try now if something was fixed.',
       button: 'Try again', do: 'poll' });
     expect(h.channels.central).toEqual({ state: 'warn', text: 'Last poll failed' });
@@ -149,7 +149,7 @@ describe('bad: predictions are failing', () => {
   test("Base failing: delegated, the check's same error twice in a row", () => {
     const err = row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' });
     const h = health({ rows: [...running(), err], base: delegated({ lastCheck: { at: NOW - H, error: 'HTTP request failed' } }) });
-    expect(h).toMatchObject({ status: 'bad', title: 'Base is failing', line: 'Central is fine. The Base batch failed 2 times.' });
+    expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'Central is fine. The Base batch failed 2 times.' });
     expect(h.action).toMatchObject({ id: 'base-failing', do: 'go', tab: 'settings', section: 'base' });
     expect(h.channels.base).toEqual({ state: 'bad', text: 'Failed 2 times' });
   });
@@ -157,7 +157,7 @@ describe('bad: predictions are failing', () => {
   test('every relay down with a stream subscribed', () => {
     const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }, { url: 'ws://b', state: 'blocked' }] });
     const h = health({ nostr: n });
-    expect(h).toMatchObject({ status: 'bad', title: 'Network is down', line: 'Central is fine. Every relay is down.' });
+    expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'Central is fine. Every relay is down.' });
     expect(h.channels.network).toEqual({ state: 'bad', text: 'Relays down' });
     expect(health({ nostr: nostr({ subscriptions: [sub], relays: [] }) }).channels.network.state).toBe('bad');
     expect(health({ nostr: nostr({ relays: [{ url: 'wss://a', state: 'closed' }] }) }).status).toBe('ok'); // nothing subscribed
@@ -251,6 +251,77 @@ test('the action priority: the worst status; one card, the highest reason that h
   h = health({ rows, base: base({ vault: { satori: '5', delegated: 'none' } }) });
   expect([h.status, h.title, h.action.id]).toEqual(['warn', 'Was asleep', 'delegate']);
   expect(h.line).toBe('Base needs one step from you.'); // central is not "fine" while it catches up
+});
+
+describe("the title: the truth about central's predictions, whichever reason leads the status, the line and the card", () => {
+  const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
+  const mismatch = { ok: true, peer_id: 7, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' };
+
+  test('the bug: a new neuron with a vault mismatch is Starting, not Predicting; the mismatch keeps the status, the line and the card', () => {
+    const h = health({ rows: [open(NOW - 10 * M)], central: central({ nextPoll: NOW + 12 * M, registration: mismatch }) });
+    expect(ids(h)).toEqual(['vault-mismatch', 'starting']);
+    expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "Central pays this vault's rewards to another address.",
+      action: { id: 'vault-mismatch', button: 'Open Settings' } });
+  });
+
+  // The title-defining states, from the log.
+  const slept = [open(NOW - 3 * D, NOW - 3 * D + 2 * H), good(NOW - 3 * D + H), open(NOW - 10 * M, NOW, { gap: 3 * D, missed: true })];
+  const STATES = {
+    starting: () => [open(NOW - 10 * M)], // no good cycle in the log yet
+    asleep: () => slept, // a session missed work and has not caught up
+    caughtUp: () => [...slept, good(NOW - 5 * M, 83, { caughtUp: 3 * D })], // …and has: the asleep reason stays, predicting
+    predicting: running,
+    failing: () => [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)], // central-failing
+  };
+  // Each reason added to a state's input; asleep and starting come only from the states' logs.
+  const rows = (...more) => (i) => ({ ...i, rows: [...i.rows, ...more] });
+  const reg = (registration) => (i) => ({ ...i, central: { ...i.central, registration } });
+  const ADD = {
+    'db-error': rows(failed(NOW - 10, 'IO Error: Could not write file', { local: true, sent: 0 })),
+    'login-refused': rows(failed(NOW - 10, 'central 401: Invalid signature', { login: true })),
+    'central-failing': rows(failed(NOW - 20), failed(NOW - 10)),
+    'central-overdue': (i) => ({ ...i, now: NOW + WINDOW_S }), // open WINDOW_S more with nothing sent
+    'base-failing': (i) => ({ ...rows(row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' }))(i),
+      base: delegated({ lastCheck: { at: NOW - H, error: 'HTTP request failed' } }) }),
+    'relays-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }] }) }),
+    'central-failed': rows(failed(NOW - 10)),
+    backup: (i) => ({ ...i, storage: { persisted: false }, backedUp: false }),
+    'vault-mismatch': reg(mismatch),
+    'not-registered': reg({ ok: false, error: 'central unreachable: Failed to fetch' }),
+    delegate: (i) => ({ ...i, base: base({ vault: { satori: '100', delegated: 'none' } }) }),
+    'gas-low': (i) => ({ ...i, base: delegated({ identity: { power: '100', lowEth: true, batchesLeft: 3, eth: '0.00001' } }) }),
+    'base-skipped': (i) => ({ ...i, base: delegated({ lastCheck: { at: NOW, round: 20742, skipped: 'gas above the ceiling: 3 gwei > 2 gwei' } }) }),
+    'base-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null }) }),
+    'relay-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] }) }),
+    asleep: (i) => i,
+    starting: (i) => i,
+  };
+  const [S, A, P, N, X] = ['Starting', 'Was asleep', 'Predicting', 'Not predicting', '(cannot meet)'];
+  // One column per reason, in PRIORITY order. A bad central reason is "predictions failing"; no other reason moves the title.
+  const TABLE = {
+    //          db-err login fail'g overdue b-fail relays c-fail backup vault  notreg deleg  gas    skip   unreach relay  asleep start
+    starting:   [N,    N,    N,     N,      S,     S,     S,     S,     S,     S,     S,     S,     S,     S,      S,     X,     S],
+    asleep:     [N,    N,    N,     N,      A,     A,     A,     A,     A,     A,     A,     A,     A,     A,      A,     A,     X],
+    caughtUp:   [N,    N,    N,     N,      P,     P,     P,     P,     P,     P,     P,     P,     P,     P,      P,     P,     X],
+    predicting: [N,    N,    N,     N,      P,     P,     P,     P,     P,     P,     P,     P,     P,     P,      P,     X,     X],
+    failing:    [N,    N,    N,     N,      N,     N,     X,     N,     N,     N,     N,     N,     N,     N,      N,     X,     X],
+  };
+  const cells = Object.entries(TABLE).flatMap(([state, titles]) => PRIORITY.map((id, k) => [state, id, titles[k]]));
+
+  test('the table has a cell for every state and every reason', () => {
+    expect(Object.keys(ADD)).toEqual(PRIORITY);
+    expect(Object.keys(TABLE)).toEqual(Object.keys(STATES));
+    for (const titles of Object.values(TABLE)) expect(titles).toHaveLength(PRIORITY.length);
+  });
+
+  test.each(cells)('%s + %s → %s', (state, id, title) => {
+    const h = healthOf(ADD[id]({ now: NOW, rows: STATES[state](), central: central(), base: base(), nostr: nostr(),
+      storage: { persisted: true }, app: { installed: false, canInstall: false }, backedUp: true }));
+    if (title === X) return expect(ids(h)).not.toContain(id); // e.g. a third failure is still central-failing, not central-failed
+    expect(ids(h)).toContain(id);
+    expect(h.title).toBe(title);
+    expect(h.status).toBe(h.reasons[0].status); // the status: still the highest reason's
+  });
 });
 
 describe('the day strip: local days', () => {

@@ -82,7 +82,8 @@ the worst one: `bad` > `warn` > `idle` > `ok`.
   red.
   - *Was asleep*: a session missed work. It catches up on open (Lite's 5–30
     min jitter) and shows until the next normal cycle, which is the second
-    good cycle after that session.
+    good cycle after that session (the title says *Predicting* once it
+    caught up).
   - *Starting*: a new neuron before its first good cycle, within `FIRST_S`.
 - **warn** (needs you): predictions go out, but something needs the person.
 - **bad** (problem): predictions are failing.
@@ -123,13 +124,29 @@ action.
 
 ### Title and line
 
-The title is the central channel's word: *Predicting* (ok, or warn outside
-central), *Retrying* (`central-failed`), *Starting*, *Was asleep*, *Not
-predicting* (central bad). When Base or the network is the bad one, it is
-*Base is failing* or *Network is down*. The line is the top reason's short
-text, after "Central is fine." when central is fine. With no reason it is
-"Sent 83 predictions 2 h ago · next in 9 h". Words appear only when
-something needs them.
+The title is the truth about central's predictions, read from the log,
+whichever reason leads the status, the line and the card. The first that
+holds:
+
+| Title | When |
+|---|---|
+| *Not predicting* | predictions are failing: a bad central reason (`db-error`, `login-refused`, `central-failing`, `central-overdue`) |
+| *Starting* | no good cycle in the log yet (the rows this session read) |
+| *Was asleep* | a session missed work and has not caught up: no good cycle since it began |
+| *Predicting* | otherwise |
+
+So a new neuron with a vault mismatch is *Starting*: amber, with the
+mismatch's line and card (it was *Predicting*, from the mismatch, a central
+reason above `starting`). A first poll that failed once is still *Starting*;
+a later one that failed once is still *Predicting*, as are a failing Base
+batch and relays that are down: the colour, the line and the card say what
+is wrong. Once caught up after being asleep it is *Predicting*, still grey
+until the next normal cycle. `src/neuron/health.test.js` checks every one of
+these states with every reason (a table).
+
+The line is the top reason's short text, after "Central is fine." when
+central has no reason. With no reason it is "Sent 83 predictions 2 h ago ·
+next in 9 h". Words appear only when something needs them.
 
 ## The channels (chips)
 
@@ -187,15 +204,18 @@ session that missed nothing is not shown.
 ## Verify
 
 - `src/neuron/health.test.js`: every status and every reason from
-  fabricated logs, the action priority, open time and missed work, the day
-  codes, the chips and the feed.
+  fabricated logs, the action priority, the title for every title-defining
+  state (starting, asleep, caught up, predicting, failing) with every
+  reason, open time and missed work, the day codes, the chips and the feed.
 - `src/neuron/activity.test.js`: sessions and their heartbeat, a wake after
   sleep, merges, the 90-day prune, caught up, the log's first session.
   `src/db/db.test.js`: the table. `src/ui/format.test.js`: the strip's
   summary.
 - `e2e/home.spec.js`: the four states in Chrome with the stub central and a
   fake chain (idle from a seeded log); a new neuron (29 days before it,
-  "0 full days", then "1 full day"); and the screenshots below.
+  "0 full days", then "1 full day"); a new neuron with a vault mismatch
+  (*Starting* in `health()` and on Home, the mismatch's card; *Predicting*
+  after the first poll); and the screenshots below.
 
 ## Live
 
@@ -213,6 +233,14 @@ today full, "1 full day" on the phone and the computer; nothing sent to prod.
 
 ![Home live on central2 after the first poll](../screenshots/home-live-central2.png)
 
+The title with a reason above `starting` (2026-10-17 14:40, two fresh
+profiles on central2 sharing one new vault): the second registers with
+`vault_base_address` null, so before its first poll Home is amber with the
+mismatch's card and reads *Starting*, "Central has no vault for this
+neuron." (it read *Predicting*); `health()` says the same.
+
+<img src="../screenshots/home-starting-mismatch-phone-light.png" alt="Starting with a vault mismatch" width="240"> <img src="../screenshots/home-starting-mismatch-phone-dark.png" alt="Starting with a vault mismatch, dark" width="240">
+
 ## Screenshots
 
 From `e2e/home.spec.js` (`SHOTS=1 npx playwright test e2e/home.spec.js`):
@@ -220,7 +248,7 @@ each state on a phone (390 × 844, the first screen) and a computer (1280
 wide), light and dark, `docs/screenshots/home-<state>-<phone|desktop>-<light|dark>.png`
 for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 
-<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: was asleep, caught up" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: central refused two batches" width="240">
+<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: central refused two batches" width="240">
 
 ![ok on a computer](../screenshots/home-ok-desktop-light.png)
 
