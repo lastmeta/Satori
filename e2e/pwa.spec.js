@@ -94,6 +94,9 @@ test.describe.serial('a build, in a browser profile', () => {
     await expect(page.locator('#settings-device [data-test=install]')).toBeVisible();
     await expect(page.locator('#settings-device [data-test=install-hint]')).toHaveText('Keeps your keys, and runs in its own window.');
 
+    // The first poll runs at once after setup: central's stream stored and forecast.
+    expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 });
+
     // A reload is the worker's: the page comes from it, and asks for storage again unless it is kept.
     const res = await page.reload();
     expect(res.fromServiceWorker()).toBe(true);
@@ -105,7 +108,7 @@ test.describe.serial('a build, in a browser profile', () => {
   });
 
   test('offline: the page, DuckDB and the stored neuron load from the cache; central, Base and /llms.txt fail and say so', async () => {
-    expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 }); // the first poll, at once after setup
+    expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 }); // the reload kept the schedule
     const { identity, vault } = await status(page);
 
     await context.unroute(`${PROD}/**`); // central is now only the network, which is gone
