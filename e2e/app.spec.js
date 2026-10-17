@@ -40,6 +40,8 @@ async function stubCentral(context, url) {
 
 const visible = (loc) => loc.filter({ visible: true });
 const status = (page) => page.evaluate(() => window.satori.status());
+/** Show a tab (Home · Streams · Wallet · Settings), as the nav does. */
+const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
 /** A stream's row by its name (another row's Model column may name it as a companion). */
 const row = (page, name) => page.locator('[data-test=stream]').filter({ has: page.locator('.sname', { hasText: new RegExp(`^${name}$`) }) });
 
@@ -94,7 +96,11 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   expect(reg['neuron-version']).toBe(`browser-${version}`);
   expect(reg.authorization).toBeUndefined();
 
-  // The first poll is Lite's 5–30 min after start; nothing has been polled yet.
+  // The first poll is Lite's 5–30 min after start; nothing has been polled yet. Home: starting.
+  await expect(page.locator('[data-test=health]')).toHaveAttribute('data-s', 'idle');
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');
+  await go(page, 'streams');
+  await expect(page).toHaveURL(/#streams$/);
   const before = await status(page);
   const now = Date.now() / 1000;
   expect(before.central.nextPoll).toBeGreaterThan(now + 290);
@@ -133,8 +139,9 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   await expect(other.getByText('Satori is open in another tab')).toBeVisible();
   await other.close();
 
-  // Reload: running at once with no passphrase; registered again; the schedule and the data are kept.
+  // Reload: running at once with no passphrase; registered again; the schedule and the data are kept; the tab too.
   await reloadApp(page);
+  await expect(page.locator('[data-test=streams-tab]')).toBeVisible();
   await expect(idAddr).toHaveText(identity);
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered).toHaveLength(2);
@@ -144,7 +151,8 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
   await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
 
-  // Unlock: wrong passphrase refused, then the vault opens.
+  // Unlock (Settings, Keys): wrong passphrase refused, then the vault opens.
+  await go(page, 'settings');
   const pass = page.getByLabel('Vault passphrase', { exact: true });
   await pass.fill('wrong passphrase');
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
@@ -155,7 +163,6 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
 
   // Backup: the vault's words are the ones from setup; the identity's are its own; each private key is its
   // address's; the Nostr key (random, not from the words) as nsec and hex. Nothing to download.
-  await page.getByText('Backup').click();
   await expect(page.getByRole('button', { name: /^Download/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Vault words' }).click();
   await expect(visible(page.locator('ol.words li'))).toHaveText(words);
@@ -175,18 +182,25 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   const nostrHex = await page.locator('[data-test=backup-hex]').textContent();
   expect(nostrPubkey(nostrHex)).toBe(reg['nostr-pubkey']);
 
-  // Lock: the vault and the backup are gone; the neuron still polls and submits.
+  // Lock: the vault and the backup are gone (showing it again asks for the passphrase, in place); the neuron
+  // still polls and submits.
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
-  await expect(page.getByText('Unlock the vault to back up your keys.')).toBeVisible();
+  await page.getByRole('button', { name: 'Vault words' }).click();
+  await expect(page.getByLabel('Vault passphrase to back up')).toBeVisible();
+  await page.locator('[data-unlock-for=backup]').getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByLabel('Vault passphrase to back up')).toBeHidden();
   stub.batch = [entry('u-btc', 'bitcoin', T0 + 3600, '67100.5'), BATCH[1]];
+  await go(page, 'streams');
   await page.getByRole('button', { name: 'Poll now' }).click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('2 streams, 1 new, 1 predicted');
   await expect(btc.locator('[data-test=t1]')).toHaveText('67,100.50'); // two observations: naive, the last value
   await expect(btc.locator('[data-test=t2]')).toHaveText('67,100.50');
   await expect(btc.locator('[data-test=model]')).toHaveText('naive · spec +eth'); // its bvar spec waits for aligned history
   expect(stub.batches).toHaveLength(2);
+  await go(page, 'home');
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
 
   expect(stub.prod).toEqual([]);
   expect(await page.evaluate(() => window.violations)).toEqual([]);
@@ -354,12 +368,16 @@ test('central with history: the first Poll now backfills each stream and forecas
     expect(p).toMatchObject({ model: 'bvar', t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight });
   }
   expect(stub.batches[0].map((x) => x.value)).toEqual(models.map((m) => String(out.forecasts.get(m.uuid).t2)));
-  await page.locator('[data-test=streams] summary').click();
+  await go(page, 'streams');
   const gold = row(page, 'gold').locator('[data-test=model]');
   const spec = models.find((m) => m.name === 'gold').spec;
   await expect(gold).toHaveText(`bvar · ${spec.companions.map((c) => `+${c.name}`).join(' ')}`);
   await expect(gold).toHaveAttribute('title', new RegExp(`^Bayesian VAR\\(1\\) on 12 h steps of this stream with .* · λ1 ${spec.lambda1} · λ2 ${spec.lambda2} · .*generation`));
   await expect(page.locator('[data-test=history]')).toContainText('3 streams, 1,800 rows');
+  // a stream's detail: its model in words and its latest prediction
+  await row(page, 'gold').locator('.sname').click();
+  await expect(page.locator('[data-test=stream-detail]')).toContainText('Bayesian VAR(1)');
+  await expect(page.locator('[data-test=stream-prediction]')).toHaveCount(1);
   expect(stub.prod).toEqual([]);
 });
 
@@ -396,7 +414,7 @@ test('import Dockerized Neuron files; central has another vault for this identit
     .toHaveText('Vault mismatch: central has another vault for this identity, not this one.');
 
   // Settings: https only; an unreachable central is shown, not thrown.
-  await page.locator('summary', { hasText: 'Settings' }).click();
+  await go(page, 'settings');
   const url = page.getByLabel('Central URL');
   await url.fill('http://central.test');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -406,8 +424,10 @@ test('import Dockerized Neuron files; central has another vault for this identit
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://down.test');
   await expect(page.locator('[data-test=registered]')).toHaveText(/^No: central unreachable: /);
+  await go(page, 'streams');
   await page.getByRole('button', { name: 'Poll now' }).click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('failed: central unreachable');
+  await go(page, 'settings');
   await url.fill('');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.locator('[data-test=central-url]')).toHaveText(CENTRAL);
@@ -415,7 +435,7 @@ test('import Dockerized Neuron files; central has another vault for this identit
   // The imported vault unlocks with the Docker password (reused: 8 characters or more) and shows the same words.
   await page.getByLabel('Vault passphrase', { exact: true }).fill(fx.vaults.password);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await page.getByText('Backup').click();
+  await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
   await page.getByRole('button', { name: 'Vault words' }).click();
   await expect(visible(page.locator('ol.words li'))).toHaveText(vault.words.split(' '));
 });

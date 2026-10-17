@@ -1,9 +1,9 @@
 // Loading the app takes seconds (DuckDB-WASM's 34 MB wasm, then OPFS), more on
 // a busy box: every spec opens and reloads it through these, which wait until
-// the page has left "Opening…" (<body data-screen>, kept current), up to 30 s.
+// the page has left "Opening…" (<body data-screen>, kept current), up to 60 s.
 import { expect } from '@playwright/test';
 
-export const LOAD_TIMEOUT = 30_000;
+export const LOAD_TIMEOUT = 60_000; // seconds normally; 10–30 s while the shared box is busy
 
 const screen = (page) => page.evaluate(() => document.body.dataset.screen ?? 'loading')
   .catch(() => 'loading'); // the page is navigating

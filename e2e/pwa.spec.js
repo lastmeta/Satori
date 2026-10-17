@@ -90,8 +90,9 @@ test.describe.serial('a build, in a browser profile', () => {
     const s1 = await status(page);
     await expect(page.locator('[data-test=storage]')).toHaveText(s1.storage.persisted ? /^Storage: kept · \d/
       : /^Storage: the browser may clear it; install Satori or back up your words · [\d.]+ MB of [\d.]+ GB used$/);
-    await expect(page.locator('.keys [data-test=install]')).toBeVisible();
-    await expect(page.locator('.keys [data-test=install-hint]')).toHaveText('Keeps your keys, and runs in its own window.');
+    await page.evaluate(() => window.satori.go('settings'));
+    await expect(page.locator('#settings-device [data-test=install]')).toBeVisible();
+    await expect(page.locator('#settings-device [data-test=install-hint]')).toHaveText('Keeps your keys, and runs in its own window.');
 
     // A reload is the worker's: the page comes from it, and asks for storage again unless it is kept.
     const res = await page.reload();
@@ -117,7 +118,7 @@ test.describe.serial('a build, in a browser profile', () => {
       expect(await loaded(page)).toBe('home'); // DuckDB's worker and wasm from the cache, the keys from OPFS
       await expect(page.locator('[data-test=identity]')).toHaveText(identity);
       await expect(page.locator('[data-test=vault]')).toHaveText(vault);
-      await expect(page.locator('[data-test=streams] summary')).toHaveText('Streams: 1 from central, with our forecasts');
+      await expect(page.locator('[data-test=streams-count]')).toHaveText('1 from central, with our forecasts');
       await expect(page.locator('[data-test=last-poll]')).toContainText('1 streams, 1 new, 1 predicted');
       await expect(page.locator('[data-test=registered]')).toHaveText(/^No: central unreachable/);
       await expect(page.locator('[data-test=base-error]')).toContainText('The chain did not answer');
@@ -163,6 +164,7 @@ test('an app window (the window an installed app opens in) and a tab: one neuron
     expect((await status(app)).app).toEqual({ installed: true, canInstall: false, update: false });
     await expect(app.locator('[data-test=install]').filter({ visible: true })).toHaveCount(0);
     await app.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+    await app.evaluate(() => window.satori.go('settings'));
     await expect(app.locator('[data-test=storage]')).toBeVisible();
 
     const tab = await context.newPage();

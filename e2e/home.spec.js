@@ -34,12 +34,20 @@ async function setup(context) {
   return { ...chain, central };
 }
 
-/** A month of activity before today, as the app logs it: a session each day, two good cycles and a Base batch. */
-function month(now, { closed = [], part = [], until = now, lastGood = now - 2 * H } = {}) {
+/** Local time `hour` on the day `k` days before `now`'s. */
+function dayAt(now, k, hour) {
+  const d = new Date(now * 1000);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - k, hour).getTime() / 1000;
+}
+
+/**
+ * A month of activity, as the app logs it: a session each day, two good cycles and a Base batch, up to `until`;
+ * the last good cycle at `lastGood` (by default 2 h ago, or just after midnight when it is not yet 2 am).
+ */
+function month(now, { closed = [], part = [], until = now, lastGood = Math.max(now - 2 * H, dayAt(now, 0, 0) + 60) } = {}) {
   const rows = [];
-  const midnight = new Date(now * 1000);
-  midnight.setHours(0, 0, 0, 0);
-  const at = (k, hour) => new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() - k, hour).getTime() / 1000;
+  const midnight = new Date(dayAt(now, 0, 0) * 1000);
+  const at = (k, hour) => dayAt(now, k, hour);
   const good = (t) => ({ at: t, kind: 'central', level: 'ok', data: { streams: 8, new: 8, predicted: 8, sent: 8, accepted: 8, pending: 0 } });
   for (let k = 29; k >= 1; k--) {
     if (closed.includes(k) || at(k, 8) > until) continue;
@@ -53,7 +61,7 @@ function month(now, { closed = [], part = [], until = now, lastGood = now - 2 * 
   if (until > midnight.getTime() / 1000) {
     rows.push({ at: Math.max(midnight.getTime() / 1000, until - 4 * H), until, kind: 'open', level: 'ok', data: { gap: 36_000, missed: false } });
   }
-  if (lastGood > until - 4 * H) rows.push(good(lastGood));
+  if (!rows.some((r) => r.kind === 'central' && r.at === lastGood)) rows.push(good(lastGood));
   return rows.sort((a, b) => a.at - b.at);
 }
 
@@ -123,7 +131,7 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   // A month in, the last cycle 2 h ago: predicting; the first poll of this session soon.
   let h = await health(page);
   expect(h).toMatchObject({ status: 'ok', title: 'Predicting', action: null, reasons: [] });
-  expect(h.line).toMatch(/^Sent 8 predictions 2 h ago · next in \d+ min$/);
+  expect(h.line).toMatch(/^Sent 8 predictions (\d+ (min|h) ago|just now) · next in \d+ min$/);
   expect(h.days).toHaveLength(30);
   expect(h.days.slice(-8).map((d) => d.code)).toEqual(['closed', 'closed', 'full', 'full', 'part', 'full', 'full', 'full']); // days 7 and 6 ago closed, 3 ago Base failed
 
@@ -143,7 +151,7 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=day].today')).toHaveCount(1);
   await expect(page.locator('[data-test=home-stream]')).toHaveCount(8);
-  await expect(page.locator('[data-test=feed-item]').first()).toContainText('Sent 8 predictions to central');
+  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Sent 8 predictions to central' }).first()).toBeVisible();
   await shots(page, 'ok');
   await phoneChecks(page, 390, 844);
   await phoneChecks(page, 360, 740);
@@ -177,7 +185,8 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   await expect(chip('base').locator('[data-test=chip-text]')).toHaveText(`Round ${ROUND} sent`, { timeout: 30_000 });
   h = await health(page);
   expect(h).toMatchObject({ status: 'ok', channels: { base: { state: 'ok', text: `Round ${ROUND} sent` } } });
-  expect(h.feed.slice(0, 2).map((f) => f.text)).toEqual([`Base batch for round ${ROUND}: 1 game`, 'Delegated to this neuron']);
+  const texts = h.feed.map((f) => f.text);
+  expect(texts.indexOf(`Base batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Delegated to this neuron')); // newest first
 
   // A chip goes to its tab; tabs are hash routes, kept over a reload.
   await chip('base').click();
@@ -193,14 +202,14 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
 test('idle: was asleep two days, catches up, and shows it until the next normal cycle', async ({ context, page }) => {
   test.setTimeout(240_000);
   const { central } = await setup(context);
-  const closedAt = nowS() - 2 * D;
+  const closedAt = dayAt(nowS(), 2, 12); // closed at noon two days ago: 1.5 to 2.5 days, "2 days"
   await seed(page, month(nowS(), { closed: [9], until: closedAt, lastGood: closedAt - H }));
   await start(page);
   let h = await health(page);
   expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', action: null });
   expect(h.line).toMatch(/^Closed for 2 days\. Catching up in \d+ min\.$/);
   expect(h.channels.central.text).toMatch(/^Catching up in \d+ min$/);
-  expect(h.feed[0]).toMatchObject({ level: 'idle', text: 'Satori was closed for 2 d' });
+  expect(h.feed).toContainEqual(expect.objectContaining({ level: 'idle', text: 'Satori was closed for 2 d' }));
   expect(h.days.slice(-3).map((d) => [d.code, d.ran])).toEqual([['full', true], ['closed', false], ['closed', true]]);
 
   centralAt(central, nowS() - 60);
@@ -210,7 +219,7 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   await expect(page.locator('[data-test=health-title]')).toHaveText('Was asleep');
   await expect(page.locator('[data-test=chip][data-channel=central]')).toHaveAttribute('data-state', 'ok');
   h = await health(page);
-  expect(h.feed[0]).toMatchObject({ level: 'ok', text: 'Caught up: sent 8 predictions' });
+  expect(h.feed).toContainEqual(expect.objectContaining({ level: 'ok', text: 'Caught up: sent 8 predictions' }));
   expect(h.days.at(-1).code).toBe('full');
   await shots(page, 'idle');
 

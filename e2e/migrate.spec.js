@@ -54,8 +54,8 @@ for (const p of SHAPES) {
     expect(before).toMatchObject({ v: 1, identity: p.expect.identity, vault: { pubkey: vaultPub, yaml: p.meta.vault_yaml } });
     for (const k of ['wallet_yaml', 'vault_yaml', 'nostr_yaml']) expect(await appMeta(page, k), k).toBeUndefined();
 
-    // Unlock: a wrong passphrase changes nothing; the right one opens it and stores it in this app's format.
-    expect(await openApp(page)).toBe('home');
+    // Unlock (Settings): a wrong passphrase changes nothing; the right one opens it and stores it in this app's format.
+    expect(await openApp(page, '/#settings')).toBe('home');
     const pass = page.getByLabel('Vault passphrase', { exact: true });
     await pass.fill('not the passphrase');
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();

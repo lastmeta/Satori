@@ -9,7 +9,7 @@ export default defineConfig({
   testIgnore: ['pwa.spec.js', 'deploy.spec.js'], // a build's (npm run e2e:pwa) and the deploy image's (npm run e2e:deploy)
   workers: 1,
   fullyParallel: false,
-  timeout: 120_000,
+  timeout: 240_000, // DuckDB-WASM's start is seconds, and 10–20 s when the shared box is busy; the WAL and migration specs load it a dozen times
   use: { baseURL: 'http://localhost:5180', channel: 'chrome', headless: true },
   webServer: [
     { command: 'npm run dev', url: 'http://localhost:5180', reuseExistingServer: true },

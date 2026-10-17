@@ -18,6 +18,8 @@ async function setup(context) {
 }
 
 const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
+const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
+const ASKS = "Delegate, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.";
 const sent = (rpc) => rpc.sent.map((t) => t.functionName);
 
 test('the Base card: delegate, the batch on its own, claims, stop, the lock, sends', async ({ context, page }) => {
@@ -34,13 +36,14 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(page.locator('[data-test=identity]')).toHaveText(base.identity.address); // the Keys card shows the Base addresses
   await expect(page.locator('[data-test=vault]')).toHaveText(base.vault.address);
   expect(base).toMatchObject({ rpc: ['/rpc'], config: 'bundled', round: ROUND, vault: { delegated: 'none', satori: '0' } });
+  await go(page, 'wallet');
   await expect(fact(page, 'identity')).toHaveText('0 ETH · about 0 daily batches'); // no warning before delegating
-  await expect(fact(page, 'delegation')).toHaveText('Not delegated: Unlock, then Delegate prediction power');
+  await expect(fact(page, 'delegation')).toHaveText('Not delegated: Delegate prediction power, below');
   const CHOICE = 'Delegate to let the neuron predict every round, or play Satori Daily by hand.';
   await expect(fact(page, 'play')).toHaveText(CHOICE);
   await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://app.satorinet.io');
   await expect(fact(page, 'check')).toContainText('Waits for delegation');
-  await expect(page.getByText('Unlock the vault to delegate, claim or send.')).toBeVisible();
+  await expect(page.getByText(ASKS)).toBeVisible();
 
   rpc.eth[I] = 10n ** 17n;
   rpc.eth[V] = 10n ** 17n;
@@ -51,12 +54,14 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'lock')).toHaveText('Free to send');
 
   // Unlock → Delegate prediction power: the identity's two steps, then the vault's.
+  await go(page, 'settings');
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
   // A word list on the page first (as after a setup in the UI): ArrowJS 1.0.6 reuses its <li> for other lists.
-  await page.getByText('Backup', { exact: true }).click();
   await page.getByRole('button', { name: 'Identity words' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();
+  await go(page, 'wallet');
   await page.getByRole('button', { name: 'Delegate prediction power' }).click();
   await expect(fact(page, 'result')).toHaveText('Delegated prediction power to the identity.', { timeout: 30_000 });
   expect(rpc.sent.map((t) => [t.from, t.functionName])).toEqual([
@@ -137,9 +142,15 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   // ETH, from the agent API; then Lock: the vault's actions go, the status stays.
   expect(await page.evaluate((t) => window.satori.send({ asset: 'ETH', to: t, amount: '0.01' }), to)).toMatchObject({ hash: expect.any(String) });
   expect(rpc.eth[to]).toBe(10n ** 16n);
-  await page.getByRole('button', { name: 'Lock' }).click();
-  await expect(page.getByText('Unlock the vault to delegate, claim or send.')).toBeVisible();
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByText(ASKS)).toBeVisible();
   await expect(page.evaluate(() => window.satori.claim())).rejects.toThrow('Unlock the vault first');
+  // Claim while locked asks for the passphrase in place, then claims
+  await page.getByRole('button', { name: 'Claim' }).click();
+  await page.getByLabel('Vault passphrase to use the vault').fill(PASS);
+  await page.locator('[data-unlock-for=wallet]').getByRole('button', { name: 'Unlock' }).click();
+  await expect(fact(page, 'result')).toContainText('Rewards: nothing to claim on-chain', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
   base = (await page.evaluate(() => window.satori.status())).base;
   expect(base).toMatchObject({ vault: { delegated: 'none', satori: '114' }, lastBatch: { round: ROUND + 1 } });
   expect(sent(rpc).filter((f) => f === 'predictMultipleWithPayloads')).toHaveLength(2);
@@ -153,7 +164,7 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   await expect(fact(page, 'rpc')).toHaveText('Local test chain (a fork of Base Sepolia)');
   await expect(page.evaluate(() => window.satori.setBaseRpc('http://127.0.0.1:8545'))).rejects.toThrow(/https:\/\/ URL or a path/);
   await expect(page.evaluate(() => window.satori.setBaseMaxFee('-1'))).rejects.toThrow(/positive number of gwei/);
-  await page.locator('summary', { hasText: 'Settings' }).click();
+  await go(page, 'settings');
   await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue(''); // only what is stored: the default is the placeholder
   await page.getByLabel('Base RPC').fill('https://rpc.example');
   await page.getByLabel('Daily batch: max fee (gwei)').fill('0');

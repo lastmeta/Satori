@@ -269,6 +269,7 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 
 /* ── the phone ── */
 @media (max-width: 520px) {
+  .setup .actions > button { flex: 1 1 100%; }
   .id { grid-template-columns: minmax(0, 1fr) max-content; gap: 0 10px; padding: 4px 0; }
   .id .label { grid-column: 1 / -1; }
   .relay { flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 0; }

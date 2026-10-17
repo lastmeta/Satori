@@ -47,9 +47,12 @@ function vaultLine() {
   return `${amountText(v.satori, 'SATORI')}${d ? ` · ${d}` : ''}`;
 }
 
+/** The identity's gas as days of daily batches (one a day). */
 const gasLine = () => {
   const n = state.base.identity.batchesLeft;
-  return n == null ? '–' : `${n >= 1000 ? '1,000+' : n} day${n === 1 ? '' : 's'} left`;
+  if (n == null) return '–';
+  if (n === 0) return 'No ETH on the identity';
+  return `${n >= 1000 ? '1,000+' : n} day${n === 1 ? '' : 's'} left`;
 };
 
 function homeRow(r, names) {

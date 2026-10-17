@@ -307,3 +307,8 @@ test('times in a few words', () => {
   expect([fmtDur(45 * M), fmtDur(13 * H), fmtDur(D + 2 * H), fmtDur(3 * D - 4 * H)]).toEqual(['45 min', '13 h', '1 day', '3 days']);
   expect(fmtDur(3 * D - 4 * H, true)).toBe('3 d');
 });
+
+test('the feed is by time: a cycle logged when it ends sits at its start, after what happened meanwhile', () => {
+  const rows = [open(NOW - H), row('base', NOW - 50 * M, 'idle', { skipped: 'no streams with a game' }), good(NOW - 55 * M)];
+  expect(health({ rows }).feed.map((f) => f.text)).toEqual(['Base batch skipped: no streams with a game', 'Sent 83 predictions to central']);
+});

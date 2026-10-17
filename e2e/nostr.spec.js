@@ -62,7 +62,8 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await expect.poll(async () => (await nostr(page)).relays.map((r) => r.state)).toEqual(['open', 'open']);
   await expect(page.locator('[data-test=relay]').filter({ hasText: CENTRAL_RELAY })).toContainText('Connected · read only');
 
-  // Network streams: discover, search, subscribe from the UI.
+  // Network streams (on Streams): discover, search, subscribe from the UI.
+  await page.evaluate(() => window.satori.go('streams'));
   await page.getByText('Network streams', { exact: true }).click();
   await page.getByLabel('Search streams').fill(stream);
   const row = page.locator('[data-test=catalog-row]').filter({ hasText: stream });

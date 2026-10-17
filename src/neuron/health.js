@@ -305,11 +305,14 @@ function feedText(r) {
   }
 }
 
+/** The log, newest first (by when each happened: a cycle is logged when it ends, at its start), `n` rows. */
 export function feedOf(rows, n = FEED) {
   const out = [];
-  for (let i = rows.length - 1; i >= 0 && out.length < n; i--) {
-    const text = feedText(rows[i]);
-    if (text) out.push({ at: rows[i].at, level: rows[i].level, text });
+  const sorted = rows.map((r, i) => [r, i]).sort(([a, i], [b, j]) => b.at - a.at || j - i).map(([r]) => r);
+  for (const r of sorted) {
+    if (out.length >= n) break;
+    const text = feedText(r);
+    if (text) out.push({ at: r.at, level: r.level, text });
   }
   return out;
 }

@@ -15,8 +15,10 @@
 Status: steps 1–6 of the roadmap are built (two keys, central's data flow,
 the engine, Nostr, Base), a finishing pass is done, a build installs as
 an app (PWA), each central stream has its own evolving multivariate
-model per neuron (`bvar`) with history from central, and the keys are in
-this app's own format, Base only (2026-10-16).
+model per neuron (`bvar`) with history from central, the keys are in
+this app's own format, Base only, and Home answers "is my neuron predicting
+every day on its own, and is anything broken?" from an activity log, on four
+tabs, phone first (2026-10-16).
 
 Served at https://neuron.satorinet.io (https://satori.satorinet.io redirects
 there; one static image; docs/design/deploy.md).
@@ -39,8 +41,59 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
    `node scripts/fork.mjs fund <vault 0x…> --satori 100`), then
    `await satori.unlock(passphrase)`, `await satori.delegate()`,
    `await satori.predictBase()`.
+6. `await satori.health()`: is it predicting, and is anything broken? Its
+   `action` is the one thing to do, if any.
 
 Every method is below; `await satori.status()` shows everything at once.
+
+## Changed 2026-10-16 (Home answers "is it predicting?"; four tabs)
+
+For agents written against the earlier UI and API:
+
+- New: `await satori.health()` → `{ status, title, line, action, days,
+  channels, feed, reasons }` (below) and `satori.go(tab)`, `tab` one of
+  `home`, `streams`, `wallet`, `settings` (also the URL's `#home` …
+  `#settings`; `<body data-tab>` says which is shown). Every other method is
+  unchanged.
+- The page is four tabs. What moved where: the Keys card (addresses, Unlock,
+  Lock), the storage line, Install and Backup → **Settings**; the Central
+  card and the stream list → **Streams** (the list is open there: its
+  `<details>` summary is gone, `streams-count` says how many); Nostr and
+  Network streams → **Streams**; the Base card → **Wallet**; the Settings
+  `<details>` → the **Settings** tab, its forms always open. Elements of a
+  tab not shown are in the DOM but hidden: `go(tab)` first, or query visible
+  elements.
+- Unlock: Settings › Keys keeps "Vault passphrase" and `unlock`. Delegate,
+  Claim, Send and Backup, asked for while locked, open one inline prompt in
+  place (`unlock-prompt`, `data-unlock-for` = `card` | `claim` | `wallet` |
+  `backup`, labelled "Vault passphrase to delegate", "… to claim", "… to use
+  the vault", "… to back up"), then do the action. The Wallet's buttons are
+  shown while locked (they were hidden until Unlock); "Unlock the vault to
+  delegate, claim or send." and "Unlock the vault to back up your keys." are
+  gone. The header's Lock stays (`lock`); Settings adds "Lock the vault"
+  (`lock-vault`). `base-delegation` while not delegated says "Not delegated:
+  Delegate prediction power, below" (it said "Unlock, then …").
+- `status().central.lastPoll` may carry `local: true` (the database or the
+  engine failed, not central); a failed `lastSubmit` is `{ at, error,
+  total_submitted, login? }` (`login: true`: central refused the login).
+- A stream row's name (`.sname`) is a button: it opens the stream's detail
+  (`stream-detail`, its latest predictions as `stream-prediction`).
+- `data-test` new: `home`, `health` (`data-s`: the status), `health-title`,
+  `health-line`, `action` (`data-action`: the reason), `action-text`,
+  `action-button`, `days` with `day` cells (`data-date`, `data-code`),
+  `days-summary`, `channels` with `chip` (`data-channel`, `data-state`) and
+  `chip-text`, `claimable`, `claimable-amount`, `claim`, `claim-result`,
+  `home-vault`, `home-gas`, `home-stream`, `activity`, `feed`, `feed-item`
+  (`data-level`), `nav-<tab>` (the computer's top nav) and `tab-<tab>` (the
+  phone's tab bar), `streams-tab`, `wallet-tab`, `settings-tab`,
+  `streams-count`, `stream-detail`, `stream-prediction`, `unlock-prompt`,
+  `lock-vault`, `update-settings`. None removed: every earlier `data-test`
+  keeps its name and meaning (`streams` is now the Streams card itself).
+- Settings' sections have ids: `#settings-keys`, `#settings-backup`,
+  `#settings-central`, `#settings-relays`, `#settings-base`,
+  `#settings-device`.
+- The database has an activity log (migration 8) and `meta.backup_at` (the
+  vault's backup confirmed); docs/design/storage.md.
 
 ## Changed 2026-10-16 (the keys in this app's own format; Base only)
 
@@ -310,13 +363,15 @@ the page's JS context:
     `'none'` when it kept none) or `{ at, ok: false, error }` (central
     refused or is unreachable).
   - `lastPoll`: `{ at, streams, new, predicted, engine_ms }` or `{ at, error }`
-    (central's error, or a local one such as a database write); `engine_ms`:
-    how long the models took (present when a stream had a new row).
+    (central's error, or a local one such as a database write, then with
+    `local: true`); `engine_ms`: how long the models took (present when a
+    stream had a new row).
   - `history`: the last history run `{ at, url, streams, rows, left, error,
     retryAt }` (`retryAt`: the route 404'd, asked again then) and `needed`,
     how many streams have no history yet.
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
-    `{ at, error }`; `pending`: how many predictions wait to be sent.
+    `{ at, error, total_submitted }` (with `login: true` when central refused
+    the login); `pending`: how many predictions wait to be sent.
 
   `storage` and `app` are there on every screen. `storage`: `{ persisted,
   usage, quota }` (`persisted`: the browser keeps this origin's data, the keys
@@ -329,6 +384,39 @@ the page's JS context:
   (`satori-mvp.duckdb.wal.unreplayed-<time>`; its changes are not in the
   database; the keys are, as setup checkpoints them). `fatal`: the screen
   shows the error; nothing was deleted, and a reload tries again.
+- `await satori.health()` → Home's answer, read fresh (docs/design/health.md):
+  - `status`: `'ok'` (predicting: central took predictions within 12.5 h of
+    open time, and if delegated Base has this round's batch or its check has
+    not run yet), `'idle'` (calm: *Starting* before the first poll, or *Was
+    asleep*: a poll came due while Satori was closed; it catches up and says
+    so until the next normal cycle; never red for being closed), `'warn'`
+    (predicting, but something needs the person) or `'bad'` (predictions are
+    failing).
+  - `title`, `line`: Home's words ("Predicting", "Sent 83 predictions 2 h ago
+    · next in 9 h").
+  - `action`: null, or the one thing to do: `{ id, text, button, do, tab?,
+    section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `delegate`
+    (`unlock()` then `delegate()`), `backup` (`unlock()` then
+    `backup('vault')`), `install` (`install()`), `go` (`go(tab)`; the fix is
+    at `#<tab>-<section>`).
+  - `reasons`: every reason, highest first: `[{ id, status, channel, text }]`.
+    The order: `db-error`, `login-refused`, `central-failing` (2 cycles
+    failed), `central-overdue`, `base-failing`, `relays-down`,
+    `central-failed` (1 cycle), `backup` (storage not kept, no backup
+    confirmed), `vault-mismatch`, `not-registered`, `delegate` (the vault
+    holds SATORI, not delegated), `gas-low`, `base-skipped`,
+    `base-unreachable`, `relay-down`, `asleep`, `starting`.
+  - `days`: the last 30 local days, oldest first: `{ date: 'YYYY-MM-DD',
+    code: 'full' | 'part' | 'error' | 'closed', ran, today }` (full:
+    predictions went out on every channel active that day; part: some; error:
+    only failures; closed: nothing went out and nothing failed, `ran` says
+    whether the app ran). The phone shows the last 14.
+  - `channels`: `{ central, base, network }`, each `{ state: 'ok' | 'warn' |
+    'bad' | 'idle', text }` ("83 sent 2 h ago", "Round 20742 sent", "No
+    streams").
+  - `feed`: the activity log, newest first, 20: `{ at, level, text }`.
+- `satori.go(tab)` → the tab: shows `home`, `streams`, `wallet` or `settings`
+  (a leading `#` is fine), as the nav does. Anything else throws.
 - `await satori.install()` → `'accepted' | 'dismissed' | 'unavailable'`: the
   browser's install prompt when `status().app.canInstall` (Chromium only; it
   needs a user gesture, which Playwright's `page.evaluate` provides; a person
@@ -469,54 +557,87 @@ thrown: they are in `status().central` (for example `central 500: …`,
   are not kept.
 - "Unlock to finish the update" (screen `finish`): the vault passphrase
   field ("Vault passphrase to finish the update") and Unlock.
-- Home, top to bottom. **Keys**: each key with Copy: the identity's Base
-  address, the vault's (with its Locked/Unlocked badge, the "Vault
-  passphrase" field and Unlock), the Nostr pubkey, then the storage line ("Storage: kept", or "Storage: the browser may
-  clear it; install Satori or back up your words", with the usage of the
-  quota) and **Install Satori** when the browser offers it (Safari: how to
-  add it to the Dock or Home Screen); the header has Lock while unlocked and
-  "Update ready, reload" when a new version waits. Setup shows Install too. **Central**: the URL,
-  Registered, Last poll, Next poll, Last submission, Pending, History (central's
-  history for our streams), a vault mismatch if any, "Poll now", and a
-  collapsed "Streams: N from central" (one row per stream: latest value and
-  time, t1, t2, the model with its spec's companions, "bvar · +eth +gold", or
-  "naive · spec +eth" while the spec waits for aligned rows, with λ1, λ2, phi,
-  weight, generation and score in its hover title, Sent/Pending). **Nostr**: each relay with its state
-  ("Connected · read only"), each subscribed stream (latest value and time,
-  our `_pred` value, its seq, how many relays took it, Unsubscribe).
+- Four tabs once set up: a tab bar at the bottom on a phone, a top nav on a
+  computer (1024 px and wider); the URL's `#home`, `#streams`, `#wallet`,
+  `#settings` open them (a link or a reload keeps the tab). The header has
+  Lock while unlocked and "Update ready, reload" when a new version waits.
+- **Home** answers "is my neuron predicting every day on its own, and is
+  anything broken?" at a glance (`health()`'s object, drawn): the health (an
+  icon and a color: ok green, idle grey, warn amber, bad red; the title and
+  one line), at most one action card (its text and one button that does the
+  thing or goes there; when it needs the vault, the passphrase is asked in
+  place), the last 14 days (30 on a computer, with a legend: full, part of
+  the day, closed, error; today outlined), the Central, Base and Network
+  chips (each opens its tab), and the claimable rewards with Claim (the
+  vault's SATORI and its delegation under it). On a computer it is a
+  dashboard: also the first 8 streams (latest, forecast 24 h, model with its
+  companions, a trend line of the last 24 observations) with a link to all,
+  the wallet (claimable, the vault, the identity's gas in days) and the
+  activity feed (open; a tap away on a phone).
+- **Streams**: the **Central** card (the URL, Registered, Last poll, Next
+  poll, Last submission, Pending, History, a vault mismatch if any, "Poll
+  now"); the **Streams** card ("N from central, with our forecasts"; one row
+  per stream: latest value and time, t1, t2, the model with its spec's
+  companions, "bvar · +eth +gold", or "naive · spec +eth" while the spec waits
+  for aligned rows, with λ1, λ2, phi, weight, generation and score in its
+  hover title, Sent/Pending; a tap on the name opens its detail: the trend,
+  the model in words, its latest predictions); **Nostr** (each relay with its
+  state, "Connected · read only"; each subscribed stream: latest value and
+  time, our `_pred` value, its seq, how many relays took it, Unsubscribe);
   **Network streams** (opening it discovers): a search box and the first 50
-  matching streams with Subscribe/Unsubscribe. **Base**: the round, the RPC,
-  the identity's ETH (as daily batches of gas; a low warning once
-  delegated), the vault's SATORI and ETH, Delegation (until delegated: what
-  to do), Transfers (the lock), Claimable, Last batch, Batch check, and after
-  Unlock "Delegate prediction power" or "Stop delegating", "Claim", and a
-  send form (asset, Amount, "To (0x address)", "Send from the vault").
-  **Settings**: Central (URL, empty = default; Save), Nostr (relays one per
-  line, "Publish to central's relays"; Save relays), Base (Base RPC, "Daily
-  batch: max fee (gwei)"; Save Base settings). **Backup** (needs Unlock):
-  Identity words, Vault words (each with its private key in 0x hex), Nostr
-  key (nsec and hex). No downloads.
-- Every screen is built once and shown or hidden (the `hidden` attribute),
-  so Setup's labels stay in the DOM on Home: query visible elements, or use
-  `data-test`.
+  matching streams with Subscribe/Unsubscribe.
+- **Wallet**: the **Base** card: the round, the vault's SATORI and ETH,
+  Claimable, Delegation, Transfers (the lock), the identity's ETH as daily
+  batches of gas (a low warning once delegated), Last batch, Batch check,
+  the RPC, who plays (this neuron, or Satori Daily by hand, linked), then
+  "Delegate prediction power" or "Stop delegating", "Claim", and a send form
+  (asset, Amount, "To (0x address)", "Send from the vault"); while locked
+  each asks for the passphrase in place ("Vault passphrase to use the
+  vault"), then does it.
+- **Settings**: **Keys** (each key with Copy: the identity's Base address,
+  the vault's with its Locked/Unlocked badge, the "Vault passphrase" field
+  and Unlock, or "Lock the vault"; the Nostr pubkey), **Backup** (Identity
+  words, Vault words, each with its private key in 0x hex; Nostr key, nsec
+  and hex; asked for while locked, the passphrase in place; no downloads),
+  **Central** (URL, empty = default; Save), **Nostr relays** (one per line,
+  "Publish to central's relays"; Save relays), **Base** (Base RPC, "Daily
+  batch: max fee (gwei)"; Save Base settings), **This device** (the storage
+  line, "Storage: kept", or "Storage: the browser may clear it; install
+  Satori or back up your words", with the usage of the quota; **Install
+  Satori** when the browser offers it, or Safari's way to add it; the
+  version, and "Update ready, reload" when one waits). Setup shows Install
+  too.
+- Every screen and tab is built once and shown or hidden (the `hidden`
+  attribute), so Setup's labels and other tabs' elements stay in the DOM:
+  query visible elements, use `data-test`, or `go(tab)` first.
 - Form fields have labels; elements carrying data or actions have
-  `data-test` attributes: `identity`, `vault` (the Base addresses),
-  `vault-state`, `nostr-pubkey`, `unlock`, `lock`, `finish`, `pass-note`, `central-url`,
-  `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`, `history`,
-  `mismatch`, `poll-now`, `streams` (the collapsed list) with `stream` rows
-  and `obs`, `t1`, `t2`, `model`, `status` inside, `relay` (with
+  `data-test` attributes. Home: `home`, `health` (`data-s` = the status),
+  `health-title`, `health-line`, `action` (`data-action` = the reason),
+  `action-text`, `action-button`, `days` with `day` (`data-date`,
+  `data-code`), `days-summary`, `channels` with `chip` (`data-channel`,
+  `data-state`) and `chip-text`, `claimable` with `claimable-amount`, `claim`
+  and `claim-result`, `home-vault`, `home-gas`, `home-stream`, `activity`,
+  `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`, `tab-<tab>`,
+  `streams-tab`, `wallet-tab`, `settings-tab`. Streams: `central-url`,
+  `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`,
+  `history`, `mismatch`, `poll-now`, `streams` (the card) with
+  `streams-count` and `stream` rows (`obs`, `t1`, `t2`, `model`, `status`
+  inside), `stream-detail` with `stream-prediction`, `relay` (with
   `relay-state`), `sub` (a subscribed stream, with `sub-obs`, `sub-pred`,
   `sub-seq`, `sub-relays`, `unsubscribe`), `network`, `catalog-summary` and
-  `catalog-row` (with `catalog-action`: Subscribe or Unsubscribe), on the Base
-  card `base-refresh`, `base-rpc`, `base-error`, `base-identity`, `base-vault`,
+  `catalog-row` (with `catalog-action`: Subscribe or Unsubscribe). Wallet:
+  `base-refresh`, `base-rpc`, `base-error`, `base-identity`, `base-vault`,
   `base-delegation`, `base-play` (who plays: this neuron or Satori Daily),
-  `base-lock`, `base-claimable`, `base-last-batch`,
-  `base-check`, `base-delegate`, `base-undelegate`, `base-claim`,
-  `base-result`, `base-txs` (the last action's transactions),
-  `base-action-error`, under Backup `backup-key` (a private key, or the
-  nsec) and `backup-hex` (the Nostr key's hex), for the installed app `storage`,
-  `install`, `install-hint` and `update`, and `notice` (the recovered
-  database's, with Dismiss) and `fatal` (the error that stopped the start).
+  `base-lock`, `base-claimable`, `base-last-batch`, `base-check`,
+  `base-delegate`, `base-undelegate`, `base-claim`, `base-result`,
+  `base-txs` (the last action's transactions), `base-action-error`.
+  Settings: `identity`, `vault` (the Base addresses), `vault-state`,
+  `nostr-pubkey`, `unlock`, `lock-vault`, `backup-key` (a private key, or
+  the nsec), `backup-hex` (the Nostr key's hex), `storage`, `install`,
+  `install-hint`, `update-settings`. The inline prompt: `unlock-prompt`
+  (`data-unlock-for`). Elsewhere: `lock`, `update` (the header), `finish`,
+  `pass-note`, `notice` (the recovered database's, with Dismiss) and `fatal`
+  (the error that stopped the start).
 
 ## Base on the dev server: the local fork
 
@@ -591,11 +712,16 @@ build step beyond Vite, MIT licensed.
   submit), `history.js` (central's history for new streams), central's status, the schedule (`schedule.js`, shared with Base), the
   one-tab lock; `nostr.js`: relays, discover, subscribe, intake → `_pred`,
   reconcile; `base.js`: the daily batch and its schedule, delegate, claims,
-  sends, the Base settings.
+  sends, the Base settings; `activity.js`: the activity log (sessions,
+  cycles, checks, publishes; 90 days); `health.js`: Home's answer from it,
+  pure (`health()`).
 - `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
   `index.js` (`createChain`: status multicall, delegate, the batch's pieces,
   claims, sends).
-- `src/ui/`: ArrowJS screens.
+- `src/ui/`: ArrowJS: `view.js` (the shell, the tabs, Setup and the screens
+  before Home), `home.js`, `streams.js`, `wallet.js`, `settings.js`,
+  `parts.js` (the inline Unlock, shared pieces), `state.js`, `format.js`;
+  `src/style.css` (the tokens, light and dark).
 - `src/pwa/`: the installed app: `sw.js` (the service worker; a build writes
   it to `dist/sw.js` with the files to precache, `vite.config.js`) and
   `index.js` (register it in a build, Update, Install, persistent storage);
@@ -605,7 +731,9 @@ build step beyond Vite, MIT licensed.
   from `csp.js` on every response, cache headers, the SPA fallback) and
   `build.env` (the deployment's `VITE_*`); `scripts/deploy-image.sh` builds
   and checks `satori-neuron:<git sha>`.
-- `docs/design/`: what is built and why (`OVERVIEW.md`, `keys.md`,
+- `docs/design/`: what is built and why (`OVERVIEW.md`, `health.md` (Home's
+  rules: thresholds and the action priority; `home-mockup.html` the approved
+  design), `keys.md`,
   `central.md` with Satori Lite's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
   Lite's and satorilib's, `base.md` with Lite's, the dapp's and the

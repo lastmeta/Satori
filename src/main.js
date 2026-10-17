@@ -458,18 +458,17 @@ const actions = {
       return null;
     }, { backedUp: true });
   }),
-  unlock: shownAt('vaultError', async (f, el) => {
-    await exclusive('unlock', () => unlock(f.pass));
-    el.reset();
-  }),
+  /** Settings' Unlock; an action asked for meanwhile (its inline prompt open) runs after it. */
+  unlock: shownAt('vaultError', async (f, el) => actions.unlockAndRun(f, el)),
   /** The inline prompt: Unlock, then the action it was opened for. */
-  unlockThen: shownAt('unlockError', async (f, el) => {
+  unlockThen: shownAt('unlockError', async (f, el) => actions.unlockAndRun(f, el)),
+  async unlockAndRun(f, el) {
     await exclusive('unlock', () => unlock(f.pass));
     el.reset();
     const fn = afterUnlock;
     afterUnlock = null;
     await fn?.();
-  }),
+  },
   cancelUnlock() {
     afterUnlock = null;
     Object.assign(state, { unlockFor: '', unlockError: '' });
