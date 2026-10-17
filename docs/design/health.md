@@ -225,7 +225,9 @@ While it runs, a short arc of light turns around the ring (1.8 s a turn,
 only its transform changes), the ring's icon is three dots, and the line
 says the step. It is the only animation on the screen (the chips' glow is a
 transition, [Traffic](#traffic)). `src/ui/hold.js` paces it: a step stays at
-least 1 s; at most two wait, the next in order (so a short step that began
+least 1 s on screen, counted from its paint (the frame that draws it, then a
+task after it), not from when it was set: Home's first frame is late on a
+busy page, and "Signing in to central…" read 930–946 ms; at most two wait, the next in order (so a short step that began
 meanwhile still shows) and the latest (later ones take its place), so the
 screen is at most about two seconds behind; the same step with a new count
 shows at once; the end waits at least 0.3 s and gives way to work that
@@ -385,8 +387,9 @@ session that missed nothing is not shown.
 
 - `src/neuron/work.test.js` and `src/ui/hold.test.js` (fake timers): the
   work state's transitions (holders, steps, counts, critical, the leading
-  entry) and its words; the pace (a step held 1 s, counts at once, the next
-  in order and the latest, the end's grace, the network's delay).
+  entry) and its words; the pace (a step held 1 s from its paint, counts at
+  once, the next in order and the latest, the end's grace, the network's
+  delay).
   `src/neuron/health.test.js`: the chips' tones (the hero's: the table
   below);
   `src/style.test.js`: the greens' derivation and contrast.

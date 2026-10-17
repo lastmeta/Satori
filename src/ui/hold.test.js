@@ -33,6 +33,29 @@ describe('createHold', () => {
     expect(shown).toEqual(['register', 'observations']);
   });
 
+  test('a step\'s second begins once it is painted, not when it was set (Home\'s first frame, late on a busy page)', () => {
+    const frames = [];
+    const out = [];
+    const late = createHold({ show: (v) => out.push(v.line), now: () => Date.now(), painted: (fn) => frames.push(fn) });
+    late(step('register'));
+    vi.advanceTimersByTime(60);
+    frames.splice(0).forEach((f) => f()); // painted 60 ms after it was set
+    late(step('observations'));
+    vi.advanceTimersByTime(HOLD_MS - 1);
+    expect(out).toEqual(['register']);
+    vi.advanceTimersByTime(1);
+    expect(out).toEqual(['register', 'observations']);
+    // no frame (a hidden tab): a second from when it was set; a frame that comes after the step gave way changes nothing
+    late(step('history'));
+    vi.advanceTimersByTime(HOLD_MS);
+    expect(out.at(-1)).toBe('history');
+    late(step('models'));
+    vi.advanceTimersByTime(HOLD_MS / 2);
+    frames.shift()(); // observations' frame, late
+    vi.advanceTimersByTime(HOLD_MS / 2);
+    expect(out.at(-1)).toBe('models');
+  });
+
   test('a step shown long enough is replaced at once', () => {
     set(step('history'));
     vi.advanceTimersByTime(HOLD_MS + 500);
