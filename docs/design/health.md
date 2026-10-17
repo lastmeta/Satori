@@ -73,8 +73,9 @@ and before this one (`missedBy`). The open row records it (`missed`, and
 
 ## The status
 
-There is exactly one status. Each problem is a **reason**, and the status is
-the worst one: `bad` > `warn` > `idle` > `ok`.
+There is exactly one status. Each thing worth saying is a **reason**, at one
+of four levels, and the status is the worst `bad`, `warn` or `idle` one:
+`bad` > `warn` > `idle` > `ok`. An `advice` reason never moves it.
 
 - **ok** (predicting): central took predictions within `WINDOW_S` of open
   time. If the vault is delegated, Base has this round's batch or its
@@ -88,33 +89,58 @@ the worst one: `bad` > `warn` > `idle` > `ok`.
     caught up).
   - *Starting*: a new neuron before its first good cycle, within `FIRST_S`:
     "Getting its first predictions…" (it polls at once, after register).
-- **warn** (needs you): predictions go out, but something needs the person.
-- **bad** (problem): predictions are failing.
+- **warn** (needs you, amber): predictions go out, but something is wrong or
+  needs fixing for predicting or earning.
+- **bad** (problem, red): predictions are failing.
+
+**Advice** is a reason's level, not a status: nothing is wrong with the
+neuron, but there is a good thing to do (back up the keys; install). It
+never changes the status, the tone, the title or the line, so the hero
+stays regular, vivid or sky green. It is offered as the action card when no
+warn or bad reason has a button, and it may give its channel's chip its
+words (in a green tone).
+
+Advice is never in the hero's line, which is the cleaner of the two
+options: while the neuron works the line says the step, and at rest it says
+"Sent 82 predictions just now · next in 11 h", the answer to "is it
+predicting?". The card right under the hero carries the suggestion. A
+gentle line ("Back up your keys when you can") would repeat the card and
+push out the neuron's own news.
 
 ### Reasons, in priority order
 
 The action card shows the highest one that has an action, so there is at
 most one card. Its button does the thing, or goes to the place it is done.
+The order is by level (`LEVEL` in `src/neuron/health.js`), so advice owns
+the card only when no warn or bad reason is present (each of those has a
+button).
 
-| # | Reason | Status | Channel | When | Button |
-|---|---|---|---|---|---|
-| 1 | `db-error` | bad | central | the last cycle failed locally (the database or the engine) | Reload |
-| 2 | `login-refused` | bad | central | the last cycle's login was refused (after its one retry) | Open Settings (central) |
-| 3 | `central-failing` | bad | central | the last 2 cycles failed | Try again (a poll) |
-| 4 | `central-overdue` | bad | central | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
-| 5 | `base-failing` | bad | base | the batch check failed twice in a row while Base is in use (delegated, or a batch sent before) | Open Settings (Base) |
-| 6 | `relays-down` | bad | network | streams are subscribed and every relay is down | Open Settings (relays) |
-| 7 | `central-failed` | warn | central | the last cycle failed (once) | Try again |
-| 8 | `backup` | warn | – | storage is not persistent and no backup is confirmed | Back up |
-| 9 | `vault-mismatch` | warn | central | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
-| 10 | `not-registered` | warn | central | registering failed | Reload |
-| 11 | `delegate` | warn | base | not delegated, and the vault holds SATORI | Delegate |
-| 12 | `gas-low` | warn | base | delegated, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
-| 13 | `base-skipped` | warn | base | delegated, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
-| 14 | `base-unreachable` | warn | base | the chain did not answer | Open Settings (Base) |
-| 15 | `relay-down` | warn | network | streams are subscribed and a relay is down | Open Settings (relays) |
-| 16 | `asleep` | idle | central | *Was asleep* (above) | Install, only when the browser offers it |
-| 17 | `starting` | idle | central | *Starting* (above) | none |
+| # | Reason | Level | Why this level | Channel | When | Button |
+|---|---|---|---|---|---|---|
+| 1 | `db-error` | bad | nothing is stored or forecast, so nothing goes out | central | the last cycle failed locally (the database or the engine) | Reload |
+| 2 | `login-refused` | bad | central takes nothing from this neuron until it is fixed | central | the last cycle's login was refused (after its one retry) | Open Settings (central) |
+| 3 | `central-failing` | bad | two cycles in a row sent nothing: predictions are failing | central | the last 2 cycles failed | Try again (a poll) |
+| 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | central | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
+| 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | base | the batch check failed twice in a row while Base is in use (delegated, or a batch sent before) | Open Settings (Base) |
+| 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | network | streams are subscribed and every relay is down | Open Settings (relays) |
+| 7 | `central-failed` | warn | one cycle sent nothing; it retries on its own, but something may need fixing | central | the last cycle failed (once) | Try again |
+| 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | central | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
+| 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | central | registering failed | Reload |
+| 10 | `delegate` | warn | the vault's SATORI earns nothing on Base until it is delegated (with no SATORI there is no reason: the Base chip is off, grey) | base | not delegated, and the vault holds SATORI | Delegate |
+| 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | base | delegated, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
+| 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | base | delegated, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
+| 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | base | the chain did not answer | Open Settings (Base) |
+| 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | central | *Was asleep* (above) | none |
+| 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | central | *Starting* (above) | none |
+| 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the vault | – | storage is not persistent and no backup is confirmed | Back up |
+| 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | *Was asleep*, and the browser offers Install | Install |
+| 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | network | streams are subscribed and some relay, not all, is down | Open Settings (relays) |
+
+`asleep` and `starting` are neither warn nor advice: they are the calm
+states the title names (*Was asleep*, *Starting*), their line says what the
+neuron is doing, and they have no button. They keep the status `idle`,
+green on Home. The Install suggestion that `asleep` carried is its own
+advice reason now, `install`, so each reason has one level.
 
 **Backup confirmed** (`meta.backup_at`) is set when the vault's words are
 confirmed in Create, given at Restore (also `setup({ vaultWords })`), brought
@@ -140,8 +166,8 @@ holds:
 | *Was asleep* | a session missed work and has not caught up: no good cycle since it began |
 | *Predicting* | otherwise |
 
-Nostr never changes the title: relays that are down are red or amber, and
-the title stays central's and Base's. So a new neuron with a vault mismatch
+Nostr never changes the title: every relay down is red, one down is
+advice, and the title stays central's and Base's. So a new neuron with a vault mismatch
 is *Starting*: amber, with the mismatch's line and card (it was
 *Predicting*, from the mismatch, a central reason above `starting`). A first
 poll that failed once is still *Starting*; a later one that failed once is
@@ -153,9 +179,9 @@ until the next normal cycle (sky green on Home, not grey). `src/neuron/health.te
 (starting, asleep, caught up, predicting, retrying after one failed poll,
 failing) with every reason (a table).
 
-The line is the top reason's short text, after "Central is fine." when
-central has no reason. With no reason it is "Sent 83 predictions 2 h ago ·
-next in 9 h", or "Up to date · next in 9 h" when the last poll had nothing
+The line is the top reason's short text (advice has none), after "Central
+is fine." when central has no reason. With no reason, or only advice, it is
+"Sent 83 predictions 2 h ago · next in 9 h", or "Up to date · next in 9 h" when the last poll had nothing
 new to predict and nothing to send. Words appear only when something needs
 them.
 
@@ -221,12 +247,12 @@ what is deliberately off. `health().tone` and each `channels[x].tone`:
 | `working` | regular green (`--ok`) | working as expected: signing in, fetching, history, models; starting and catching up are working |
 | `critical` | vivid green (`--vivid`), "Keep Satori open · …" | closing now would lose work (the critical steps above) |
 | `idle` | sky green (`--sky`) | all good, nothing to do, waiting for the next cycle |
-| `warn`, `bad` | amber, red | as before; they win over every green |
+| `warn`, `bad` | amber, red | something is wrong for predicting or earning; they win over every green (advice never does: it is not a status) |
 | `off` | grey | a channel deliberately not used (Base not delegated here, no stream subscribed), and the strip's closed days; never the hero |
 
 `toneOf(status, work)`: `warn` and `bad` from the status; else `critical`
 or `working` while the hero's task runs; else `idle`. A chip: its state's
-`warn` or `bad`; `working` while its channel has work in progress (central's
+`warn` or `bad` (an `advice` state is green); `working` while its channel has work in progress (central's
 poll; Base's batch and the vault's actions; the network's discover and
 subscribe) or is connecting; `off` as above; else `idle`.
 
@@ -253,8 +279,9 @@ minutes by `main.js`). Warn and bad come and go in 300 ms.
 
 ## The channels (chips)
 
-Each is `{ state: ok | warn | bad | idle, tone, text }`, the state from the
-reasons above, the tone from [the tone](#the-tone-three-greens) (the chip's
+Each is `{ state: ok | warn | bad | idle | advice, tone, text }`, the state
+from the reasons above (a channel's top reason with chip words, at its
+level), the tone from [the tone](#the-tone-three-greens) (the chip's
 colour and icon: a check on sky, three dots while working, a moon when
 off).
 
@@ -266,9 +293,9 @@ off).
 - **Base**: ok "Round 20742 sent", "Round 20742 due"; idle "Not delegated"
   (no SATORI), "Delegated elsewhere", "Connecting…"; warn "Not delegated",
   "Gas: 3 batches", "Skipped: …", "Unreachable"; bad "Failed 3 times".
-- **Network**: idle "No streams" (nothing subscribed); ok "2 relays"; warn
-  "1 of 2 relays down"; bad "Relays down". A relay that is connecting
-  counts as up.
+- **Network**: idle "No streams" (nothing subscribed); ok "2 relays"; advice
+  "1 of 2 relays down" (sky, or green while working); bad "Relays down". A
+  relay that is connecting counts as up.
 
 ## Traffic
 
@@ -343,18 +370,23 @@ session that missed nothing is not shown.
   work state's transitions (holders, steps, counts, critical, the leading
   entry) and its words; the pace (a step held 1 s, counts at once, the next
   in order and the latest, the end's grace, the network's delay).
-  `src/neuron/health.test.js`: the tone for every reason with no work,
-  working and critical work, and the chips' tones;
+  `src/neuron/health.test.js`: the chips' tones (the hero's: the table
+  below);
   `src/style.test.js`: the greens' derivation and contrast.
 - `e2e/work.spec.js`: a new neuron against the stub central: the turning
   ring as the only animation, at least three steps in order, each at least a
   second on screen, the history count ticking, working green, vivid while
   sending, then Predicting in sky green fading over 2.5 min; Poll now back to
-  green; reduced motion: no animation, the dots.
+  green; reduced motion: no animation, the dots; random keys with storage
+  not kept (the backup is advice): working, vivid, then sky, never amber,
+  with the Back up card (it read amber from the start).
 - `src/neuron/health.test.js`: every status and every reason from
-  fabricated logs, the action priority, the title for every title-defining
-  state (starting, asleep, caught up, predicting, retrying, failing) with
-  every reason, *Partly predicting* (Base delegated, or not read, and red), open time and missed work, the day codes, the chips and the feed.
+  fabricated logs, each reason's level (`LEVEL`), the action priority, and
+  a table of every title-defining state (starting, asleep, caught up,
+  predicting, retrying, failing) with every reason → the title, the status,
+  the tone (with no work, working and critical) and the card; an advice
+  reason leaves the title, the status, the tone and the line as they were.
+  Also *Partly predicting* (Base delegated, or not read, and red), open time and missed work, the day codes, the chips and the feed.
 - `src/traffic.test.js` and `src/ui/glow.test.js`: the emitter, a traced
   transport, a burst as one update, the hold after the last message, cards
   apart, reduced motion; central's, the relay's and Base's emits in their
@@ -420,6 +452,27 @@ batch 2.0 s → 0.1 s, history 7–10 s (+ 1 s of screen refresh) → 3.8–4.4 
 the specs and predictions 1.9–2.3 s → 0.1 s ([storage.md](storage.md#the-checkpoint-rule)).
 
 <img src="../screenshots/home-live-work-central2.png" alt="live on central2, 1.5 s after the first poll: Predicting, still green, fading to sky" width="240">
+
+The backup reminder as advice (2026-10-17 21:42 UTC, the dev server on
+:5180 restarted, a fresh Chrome profile on disk, central2's 82 streams, no
+stubs): `satori.setup()` with random words (no backup confirmed) and
+storage not kept (`persisted: false`). The hero, sampled every 250 ms (it
+read amber, `warn`, "Central is fine. Back up your keys.", from the first
+step to rest):
+
+| s | title | tone | line | card |
+|---|---|---|---|---|
+| 0.5 | *Starting* | working | Signing in to central… | Back up (from 0.75 s) |
+| 1.8 | *Starting* | working | Fetching today's observations… | Back up |
+| 2.8 | *Starting* | working | Loading history · 4 of 82 streams, ticking to 82 of 82 at 5.8 | Back up |
+| 6.0 | *Starting* | working | Building models · 0 of 82, 82 of 82 at 6.8 | Back up |
+| 7.0 | *Starting* | critical | Keep Satori open · Sending 82 predictions… | Back up |
+| 9.3 | *Predicting* | idle (fading to sky) | Sent 82 predictions just now · next in 11 h | Back up |
+
+82 of 82 accepted; `health()`: `ok`, `idle`, reasons `backup:advice`;
+nothing sent to prod.
+
+<img src="../screenshots/home-advice-backup-live.png" alt="live on central2 at rest: Predicting in green, the Back up card under it" width="240">
 
 ## Screenshots
 

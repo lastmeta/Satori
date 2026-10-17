@@ -112,9 +112,10 @@ yes, then reads `estimate()`. Settings › This device shows it:
 each with what is used of the quota (`41 MB of 11 GB used`; the precache
 counts). `status().storage` is `{ persisted, usage, quota }` (bytes). After
 `appinstalled` it asks again, since an installed app's request is granted.
-Storage that is not kept, with no backup of the vault confirmed, is one of
-Home's reasons to ask for the person ([health.md](health.md)); a neuron that
-was asleep offers Install on Home when the browser offers it.
+Storage that is not kept, with no backup of the vault confirmed, is advice
+on Home: the Back up card, while the hero stays green ([health.md](health.md));
+a neuron that was asleep offers Install the same way when the browser offers
+it.
 
 ## Install
 
