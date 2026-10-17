@@ -95,6 +95,39 @@ For agents written against the earlier UI and API:
 - The database has an activity log (migration 8) and `meta.backup_at` (the
   vault's backup confirmed); docs/design/storage.md.
 
+## Changed 2026-10-17 (later: what it is doing; three greens)
+
+- `health().work`: what the neuron is doing now, or null when idle:
+  `{ task, step, done, total, since, critical, text }`. `task`: `central`
+  (steps `register`, `observations`, `history` with done/total streams,
+  `models` with done/total targets, `send` with total predictions), `base`
+  (`check`, `send`, `confirm`), `delegate` / `undelegate` / `send` (`send`,
+  `confirm` with k of n, `settle`), `claim` (`rewards`, `drop`, `airdrop`,
+  `confirm`), `keys` (`save`), `discover` (`ask`, relays answered), `subscribe`
+  (`find`). `since`: when the step began (ms). `critical: true`: closing Satori
+  now would lose work (sending predictions, a Base batch or transaction not yet
+  confirmed, the keys being written); its `text` begins "Keep Satori open · ".
+  `text`: the words Home shows ("Loading history · 34 of 82 streams"). The
+  entry that leads is shown: a critical one first, else central, base, the
+  vault's actions, keys, discover, subscribe.
+- `health().tone`: the colour Home shows, alongside `status`: `'working'`
+  (regular green: working as expected; starting and catching up are working),
+  `'critical'` (vivid green: closing would lose work), `'idle'` (sky green:
+  all good, waiting for the next cycle), `'warn'`, `'bad'` (they win), `'off'`
+  (grey: only a channel deliberately not used; never the hero). Each
+  `health().channels[x]` has a `tone` too (`working` while its channel has
+  work in progress; `off`: Base not delegated here, or no stream subscribed).
+- Home's hero (`data-test=health`): `data-tone`, `data-work` (the step it
+  shows, `central:history`) and `aria-busy="true"` while working, `data-fade`
+  while it fades to sky green after work (2.5 min). Its line
+  (`health-line`) says the step while working, then the health's line. One
+  short arc turns around its ring while working, the only animation on the
+  page (none with reduced motion). Chips have `data-tone`; the action card
+  has `data-tone` (it had `data-s`).
+- A new neuron's first poll took 17–19 s on central2 (82 streams); now about
+  8 s: the poll's writes are a few set statements, central's history is
+  fetched 8 at a time and written in a few commits.
+
 ## Changed 2026-10-17
 
 - Settings → Appearance: System (default), Light, Dark, and
@@ -437,6 +470,12 @@ the page's JS context:
   database; the keys are, as setup checkpoints them). `fatal`: the screen
   shows the error; nothing was deleted, and a reload tries again.
 - `await satori.health()` → Home's answer, read fresh (docs/design/health.md):
+  `{ status, tone, title, line, action, days, channels, feed, reasons, work }`.
+  - `tone`: `'idle'` (sky green, all good at rest), `'working'`,
+    `'critical'` (keep Satori open), `'warn'`, `'bad'`; `'off'` only for a
+    channel (below).
+  - `work`: null, or what the neuron is doing now: `{ task, step, done,
+    total, since, critical, text }` (the changelog above lists the steps).
   - `status`: `'ok'` (predicting: central took predictions within 12 h of
     open time, and if delegated Base has this round's batch or its check has
     not run yet), `'idle'` (calm: *Starting* before the first poll, or *Was
@@ -477,7 +516,8 @@ the page's JS context:
     not counted in `days-summary`, "1 full day", "2 of 3 full days"). The
     phone shows the last 14.
   - `channels`: `{ central, base, network }`, each `{ state: 'ok' | 'warn' |
-    'bad' | 'idle', text, lastTraffic }` ("83 sent 2 h ago", "Up to date ·
+    'bad' | 'idle', tone, text, lastTraffic }` (`tone`: `working`, `idle`,
+    `off`, `warn`, `bad`) ("83 sent 2 h ago", "Up to date ·
     next in 9 h" (nothing to send), "Round 20742
     sent", "No streams"); `lastTraffic`: when that channel last had real
     traffic (a request to central or its answer, a Base RPC call or its
@@ -685,7 +725,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   attribute), so Setup's labels and other tabs' elements stay in the DOM:
   query visible elements, use `data-test`, or `go(tab)` first.
 - Form fields have labels; elements carrying data or actions have
-  `data-test` attributes. Home: `home`, `health` (`data-s` = the status),
+  `data-test` attributes. Home: `home`, `health` (`data-s` = the status,
+  `data-tone`, `data-work` and `aria-busy` while working, `data-fade`),
   `health-title`, `health-line`, `action` (`data-action` = the reason),
   `action-text`, `action-button`, `days` with `day` (`data-date`,
   `data-code`), `days-summary`, `channels` with `chip` (`data-channel`,
@@ -791,14 +832,16 @@ build step beyond Vite, MIT licensed.
   reconcile; `base.js`: the daily batch and its schedule, delegate, claims,
   sends, the Base settings; `activity.js`: the activity log (sessions,
   cycles, checks, publishes; 90 days); `health.js`: Home's answer from it,
-  pure (`health()`).
+  pure (`health()`), with its tone; `work.js`: what it is doing now
+  (`health().work`).
 - `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
   `index.js` (`createChain`: status multicall, delegate, the batch's pieces,
   claims, sends).
 - `src/ui/`: ArrowJS: `view.js` (the shell, the tabs, Setup and the screens
   before Home), `home.js`, `streams.js`, `wallet.js`, `settings.js`,
   `parts.js` (the inline Unlock, shared pieces), `state.js`, `format.js`,
-  `glow.js` (the chips' traffic glow), `theme.js` (Appearance;
+  `glow.js` (the chips' traffic glow), `hold.js` (the pace of the hero's
+  steps), `theme.js` (Appearance;
   `public/theme.js` applies it before the first paint); `src/style.css` (the
   tokens: light, dark by the system, dark when chosen).
 - `src/pwa/`: the installed app: `sw.js` (the service worker; a build writes

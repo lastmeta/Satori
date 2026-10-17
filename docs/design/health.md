@@ -13,8 +13,10 @@ built from two things:
   storage and the install state, as the rest of the app already reads them.
 
 `src/neuron/health.js` turns both into one object (pure, unit-tested with
-fabricated logs). Home draws it, and agents read the same object:
-`window.satori.health()` → `{ status, title, line, action, days, channels, feed, reasons }`.
+fabricated logs), with what the neuron is doing right now
+([Work](#work-what-it-is-doing-now)) and the colour it shows
+([the tone](#the-tone-three-greens)). Home draws it, and agents read the same object:
+`window.satori.health()` → `{ status, tone, title, line, action, days, channels, feed, reasons, work }`.
 
 This is local to the browser. Nothing new goes over the network, and Satori
 Lite has no counterpart to follow: its dashboard shows raw state. The rules
@@ -77,8 +79,9 @@ the worst one: `bad` > `warn` > `idle` > `ok`.
 - **ok** (predicting): central took predictions within `WINDOW_S` of open
   time. If the vault is delegated, Base has this round's batch or its
   check has not run yet. No channel is in error.
-- **idle**: not predicting right now, for a calm reason. It is grey and never
-  red.
+- **idle**: not predicting right now, for a calm reason. It is never red,
+  and on Home never grey either: it is green, by [the tone](#the-tone-three-greens)
+  (working while it starts or catches up, sky at rest).
   - *Was asleep*: a session missed work. It catches up at once on open
     ("Catching up now…") and shows until the next normal cycle, which is the second
     good cycle after that session (the title says *Predicting* once it
@@ -145,8 +148,8 @@ poll that failed once is still *Starting*; a later one that failed once is
 still *Predicting*. A failing Base batch while delegated is *Partly
 predicting* (it read a red *Predicting*), also while catching up after
 being asleep; not delegated, a red Base leaves the title to central. Once
-caught up after being asleep it is *Predicting*, still grey until the next
-normal cycle. `src/neuron/health.test.js` checks every one of these states
+caught up after being asleep it is *Predicting*, its status still `idle`
+until the next normal cycle (sky green on Home, not grey). `src/neuron/health.test.js` checks every one of these states
 (starting, asleep, caught up, predicting, retrying after one failed poll,
 failing) with every reason (a table).
 
@@ -156,10 +159,104 @@ next in 9 h", or "Up to date · next in 9 h" when the last poll had nothing
 new to predict and nothing to send. Words appear only when something needs
 them.
 
+## Work: what it is doing now
+
+A wait is never silent ([../intent/ui.md](../intent/ui.md)). `src/neuron/work.js`
+keeps one entry per task in progress, `{ task, step, done, total, since,
+critical }` (`since`: when the step began, ms; a count ticking keeps it),
+set by the code doing the work; nothing polls:
+
+| task | step | words (Home) | critical |
+|---|---|---|---|
+| `central` | `register` | Signing in to central… (only when a poll follows at once: a new neuron, or one reopened with a poll due) | |
+| | `observations` | Fetching today's observations… (the batch, stored) | |
+| | `history` | Loading history · 34 of 82 streams (the streams in hand; [central.md](central.md#history-an-addition-beyond-lite)) | |
+| | `models` | Building models · 40 of 82 (the engine yields to the page between targets: the same results) | |
+| | `send` | Keep Satori open · Sending 82 predictions… (the login and the batch) | yes |
+| `base` | `check` | Checking today's Base games… (only once a batch is due: a check with nothing to do shows nothing) | |
+| | `send`, `confirm` | Sending the Base batch…, Waiting for Base to confirm… (also for a batch sent before) | yes |
+| `delegate`, `undelegate`, `send` | `send`, `confirm` (k of n), `settle` | Step 1 of 3: sending…, Step 1 of 3: waiting for Base to confirm…, Checking it on Base… | yes |
+| `claim` | `rewards`, `drop`, `airdrop`, `confirm` | Claiming rewards…, Claiming the reward drop…, Claiming the airdrop…, Waiting for Base to confirm… | yes |
+| `keys` | `save` | Saving your keys… (an earlier version's record, rewritten at Unlock) | yes |
+| `discover` | `ask` (relays answered) | Asking the relays · 1 of 2 | |
+| `subscribe` | `find` | Finding the stream on the relays… | |
+
+**Critical** means closing Satori now would lose work; its words begin
+"Keep Satori open · ". The load-time history and a poll can both hold
+`central`: it ends with the last.
+
+**Home's hero** shows the hero's task: the first critical one among
+`central`, `base`, the vault's actions and `keys`, else the first of them.
+While it runs, a short arc of light turns around the ring (1.8 s a turn,
+only its transform changes), the ring's icon is three dots, and the line
+says the step. It is the only animation on the screen (the chips' glow is a
+transition, [Traffic](#traffic)). `src/ui/hold.js` paces it: a step stays at
+least 1 s; at most two wait, the next in order (so a short step that began
+meanwhile still shows) and the latest (later ones take its place), so the
+screen is at most about two seconds behind; the same step with a new count
+shows at once; the end waits at least 0.3 s and gives way to work that
+comes meanwhile (register, then the poll, read as one). The hero keeps its
+title and status from the health.
+
+Elsewhere: the Wallet card's line says the vault's action step (the hero is
+on Home only); Home's Delegate and Claim buttons say "Delegating…",
+"Claiming…". The Network streams line says discover's or subscribe's step,
+only once it has lasted 1 s.
+
+**Reduced motion**: nothing turns; the three dots stay in the ring, and the
+words change.
+
+**Agents**: `health().work` is the entry that leads (a critical one, else
+the first of central, base, the vault's actions, keys, discover, subscribe)
+with its `text`, or null; the hero has `data-work` (`central:history`) and
+`aria-busy` while it shows a step.
+
+## The tone: three greens
+
+The colour Home shows. Green while all is well, on one scale; grey only for
+what is deliberately off. `health().tone` and each `channels[x].tone`:
+
+| tone | colour | when |
+|---|---|---|
+| `working` | regular green (`--ok`) | working as expected: signing in, fetching, history, models; starting and catching up are working |
+| `critical` | vivid green (`--vivid`), "Keep Satori open · …" | closing now would lose work (the critical steps above) |
+| `idle` | sky green (`--sky`) | all good, nothing to do, waiting for the next cycle |
+| `warn`, `bad` | amber, red | as before; they win over every green |
+| `off` | grey | a channel deliberately not used (Base not delegated here, no stream subscribed), and the strip's closed days; never the hero |
+
+`toneOf(status, work)`: `warn` and `bad` from the status; else `critical`
+or `working` while the hero's task runs; else `idle`. A chip: its state's
+`warn` or `bad`; `working` while its channel has work in progress (central's
+poll; Base's batch and the vault's actions; the network's discover and
+subscribe) or is connecting; `off` as above; else `idle`.
+
+**The greens**, worked out in OKLCH from `--ok` (the comment in
+`src/style.css`): **sky** is to `--ok` as sky blue is to blue (oklch(0.55
+0.20 260) → oklch(0.80 0.10 235)): lightness × 0.80/0.55, chroma × 0.5, the
+hue kept: oklch(0.814 0.067 152.5); in dark mode the same step toward white
+(0.25/0.45 of the way), oklch(0.900 0.070 155.8), a calm light-on-dark
+tint. **Vivid** is brighter along chroma, not lighter: `--ok`'s lightness,
+as much chroma as sRGB holds up to the inverse of sky's ratio. sRGB has
+almost none left at our hue and lightness (0.146 against 0.134), so the hue
+leans 6.5° toward the green primary: oklch(0.560 0.166 146.0), chroma ×
+1.24; dark oklch(0.775 0.211 149.3), × 1.50. Each has its fill; sky, too
+light to read on a light page, has an ink for text and the ring's icon
+(sky's chroma at `--ok`'s lightness) and dark icons on its discs.
+`src/style.test.js` checks the derivation and 3:1 for each title on its
+fill and on a card, and each icon on its disc, light and dark.
+
+**The fade**: the hero's colours are registered (`@property --hero-tone`,
+`--hero-soft`, `--hero-ink`), so they move: to green within 300 ms when work
+starts (vivid when it is critical), and from work to rest, sky, over
+2.5 min, linear, barely seen while watching (`data-fade`, set for those 2.5
+minutes by `main.js`). Warn and bad come and go in 300 ms.
+
 ## The channels (chips)
 
-Each is `{ state: ok | warn | bad | idle, text }`, the state from the
-reasons above.
+Each is `{ state: ok | warn | bad | idle, tone, text }`, the state from the
+reasons above, the tone from [the tone](#the-tone-three-greens) (the chip's
+colour and icon: a check on sky, three dots while working, a moon when
+off).
 
 - **Central**: ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
   the last poll had nothing to send (never "0 sent"); idle "First poll now…",
@@ -242,6 +339,18 @@ session that missed nothing is not shown.
 
 ## Verify
 
+- `src/neuron/work.test.js` and `src/ui/hold.test.js` (fake timers): the
+  work state's transitions (holders, steps, counts, critical, the leading
+  entry) and its words; the pace (a step held 1 s, counts at once, the next
+  in order and the latest, the end's grace, the network's delay).
+  `src/neuron/health.test.js`: the tone for every reason with no work,
+  working and critical work, and the chips' tones;
+  `src/style.test.js`: the greens' derivation and contrast.
+- `e2e/work.spec.js`: a new neuron against the stub central: the turning
+  ring as the only animation, at least three steps in order, each at least a
+  second on screen, the history count ticking, working green, vivid while
+  sending, then Predicting in sky green fading over 2.5 min; Poll now back to
+  green; reduced motion: no animation, the dots.
 - `src/neuron/health.test.js`: every status and every reason from
   fabricated logs, the action priority, the title for every title-defining
   state (starting, asleep, caught up, predicting, retrying, failing) with
@@ -294,6 +403,14 @@ to date".
 <img src="../screenshots/home-up-to-date-live.png" alt="Up to date · next in 11 h" width="240">
 
 ## Screenshots
+
+What it is doing, and the three greens (`e2e/work.spec.js`, `SHOTS=1`): working
+(Loading history), critical (Keep Satori open · Sending), at rest (sky),
+light and dark:
+
+<img src="../screenshots/working-phone-light.png" alt="working: Loading history · 5 of 8 streams" width="200"> <img src="../screenshots/tone-critical-phone-light.png" alt="critical: Keep Satori open · Sending 8 predictions" width="200"> <img src="../screenshots/tone-idle-phone-light.png" alt="at rest: sky green, Predicting" width="200">
+
+<img src="../screenshots/working-phone-dark.png" alt="working, dark" width="200"> <img src="../screenshots/tone-critical-phone-dark.png" alt="critical, dark" width="200"> <img src="../screenshots/tone-idle-phone-dark.png" alt="at rest, dark" width="200">
 
 From `e2e/home.spec.js` (`SHOTS=1 npx playwright test e2e/home.spec.js`):
 each state on a phone (390 × 844, the first screen) and a computer (1280
