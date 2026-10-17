@@ -164,6 +164,35 @@ reasons above.
   "1 of 2 relays down"; bad "Relays down". A relay that is connecting
   counts as up.
 
+## Traffic
+
+Each chip also glows, faintly, while its channel has real traffic: a
+request to central or its answer (`src/central`'s fetch), a Base RPC call or
+its answer (base.js traces its viem transport) or a relay message sent or
+received (`src/nostr/relay.js`). They call one emitter (`src/traffic.js`),
+which Home subscribes to; nothing polls. `health().channels[x].lastTraffic`
+is that channel's last traffic in ms, or null.
+
+- **Colour:** `--live` and `--live-glow`, a low-saturation earth green:
+  faint on light, dark and subtle on dark, apart from `--ok`. The status's colour and icon never
+  change with it, and it is never a call to act.
+- **Motion** (`src/ui/glow.js`): a burst is one style update in the next
+  frame (one per card at most), then the glow holds until 1.5 s after the
+  last message (one timer that re-arms itself) and fades out in 600 ms; it
+  fades in over 150 ms. Only an overlay's opacity changes (`.chan::after`),
+  so nothing is laid out again.
+- **`prefers-reduced-motion`:** no fades: a still, faint tint while traffic
+  was within the last 3 s.
+- Only the three chips glow: on a computer the Streams and Wallet tiles do
+  not map one to one (Network has no tile, and Streams holds central's and
+  the relays').
+
+<img src="../screenshots/glow-phone-light.png" alt="The Central chip glowing during a poll, light" width="240"> <img src="../screenshots/glow-phone-dark.png" alt="The Central chip glowing, dark" width="240">
+
+Close up (live on central2, a poll):
+
+<img src="../screenshots/glow-chip-light.png" alt="the Central chip glowing, light" width="160"> <img src="../screenshots/glow-chip-dark.png" alt="the Central chip glowing, dark" width="160">
+
 ## The day strip
 
 Local days, newest last: 14 on the phone, 30 on a computer (`health().days`
@@ -207,6 +236,10 @@ session that missed nothing is not shown.
   fabricated logs, the action priority, the title for every title-defining
   state (starting, asleep, caught up, predicting, failing) with every
   reason, open time and missed work, the day codes, the chips and the feed.
+- `src/traffic.test.js` and `src/ui/glow.test.js`: the emitter, a traced
+  transport, a burst as one update, the hold after the last message, cards
+  apart, reduced motion; central's, the relay's and Base's emits in their
+  tests.
 - `src/neuron/activity.test.js`: sessions and their heartbeat, a wake after
   sleep, merges, the 90-day prune, caught up, the log's first session.
   `src/db/db.test.js`: the table. `src/ui/format.test.js`: the strip's
@@ -215,7 +248,8 @@ session that missed nothing is not shown.
   fake chain (idle from a seeded log); a new neuron (29 days before it,
   "0 full days", then "1 full day"); a new neuron with a vault mismatch
   (*Starting* in `health()` and on Home, the mismatch's card; *Predicting*
-  after the first poll); and the screenshots below.
+  after the first poll); a chip glowing while central's stub serves a poll
+  and fading after, `lastTraffic`, reduced motion still; and the screenshots below.
 
 ## Live
 

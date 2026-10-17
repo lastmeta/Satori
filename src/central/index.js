@@ -10,6 +10,7 @@
 // network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
+import { emit } from '../traffic.js';
 
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)
 
@@ -71,17 +72,20 @@ export class CentralError extends Error {
 }
 
 /**
- * @param {{url: string, identity: {pubkey: string, signCentralLogin: (msg: string) => string}, version: string, fetch?: typeof fetch}} opts
+ * @param {{url: string, identity: {pubkey: string, signCentralLogin: (msg: string) => string}, version: string, fetch?: typeof fetch,
+ *   onTraffic?: () => void}} opts onTraffic: each request and each answer (Home's glow, src/traffic.js)
  */
-export function createCentral({ url, identity, version, fetch: fetchFn = globalThis.fetch }) {
+export function createCentral({ url, identity, version, fetch: fetchFn = globalThis.fetch, onTraffic = () => emit('central') }) {
   const base = url.replace(/\/+$/, '');
 
   async function once(method, path, headers, body) {
     let res;
     let text;
     try {
+      onTraffic();
       res = await fetchFn(base + path, { method, headers, body, signal: AbortSignal.timeout(TIMEOUT_MS) });
       text = await res.text();
+      onTraffic();
     } catch (err) {
       if (err?.name === 'TimeoutError') throw new CentralError(0, 'timeout', `central timed out (${TIMEOUT_MS / 1000} s)`);
       // nginx's 429/502 pages have no CORS header: the browser shows them as this TypeError too.

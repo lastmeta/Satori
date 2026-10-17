@@ -257,6 +257,12 @@ test('the action priority: the worst status; one card, the highest reason that h
   expect(h.line).toBe('Base needs one step from you.'); // central is not "fine" while it catches up
 });
 
+test("each channel's last traffic (ms) for agents, when given: null before any", () => {
+  const h = health({ traffic: { central: 1_792_250_000_000, base: null, network: null } });
+  expect([h.channels.central.lastTraffic, h.channels.base.lastTraffic, h.channels.network.lastTraffic]).toEqual([1_792_250_000_000, null, null]);
+  expect(health().channels.central).not.toHaveProperty('lastTraffic'); // not given
+});
+
 describe("the title: the truth about central's predictions, whichever reason leads the status, the line and the card", () => {
   const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
   const mismatch = { ok: true, peer_id: 7, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' };

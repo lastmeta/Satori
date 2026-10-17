@@ -97,6 +97,10 @@ For agents written against the earlier UI and API:
 
 ## Changed 2026-10-17
 
+- `health().channels[x].lastTraffic`: the channel's last real traffic (ms),
+  or null. Home's Central, Base and Network chips glow, faintly, while their
+  channel talks (`data-live` on the chip); the status's colour and icon are
+  untouched.
 - No start delay: a new neuron polls central at once, right after register
   (Home: *Starting*, "Getting its first predictions…"), and so does one
   reopened with a poll due ("Catching up now…"); a poll still ahead is
@@ -451,8 +455,11 @@ the page's JS context:
     not counted in `days-summary`, "1 full day", "2 of 3 full days"). The
     phone shows the last 14.
   - `channels`: `{ central, base, network }`, each `{ state: 'ok' | 'warn' |
-    'bad' | 'idle', text }` ("83 sent 2 h ago", "Round 20742 sent", "No
-    streams").
+    'bad' | 'idle', text, lastTraffic }` ("83 sent 2 h ago", "Round 20742
+    sent", "No streams"); `lastTraffic`: when that channel last had real
+    traffic (a request to central or its answer, a Base RPC call or its
+    answer, a relay message sent or received), ms since the epoch, or null.
+    Home's chip glows while it is recent (`data-live`).
   - `feed`: the activity log, newest first, 20: `{ at, level, text }`.
 - `satori.go(tab)` → the tab: shows `home`, `streams`, `wallet` or `settings`
   (a leading `#` is fine), as the nav does. Anything else throws.
@@ -654,7 +661,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `health-title`, `health-line`, `action` (`data-action` = the reason),
   `action-text`, `action-button`, `days` with `day` (`data-date`,
   `data-code`), `days-summary`, `channels` with `chip` (`data-channel`,
-  `data-state`) and `chip-text`, `claimable` with `claimable-amount`, `claim`
+  `data-state`, and `data-live` while its channel has traffic: until 1.5 s
+  after the last, 3 s with reduced motion) and `chip-text`, `claimable` with `claimable-amount`, `claim`
   and `claim-result`, `home-vault`, `home-gas`, `home-stream`, `activity`,
   `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`, `tab-<tab>`,
   `streams-tab`, `wallet-tab`, `settings-tab`. Streams: `central-url`,
@@ -745,6 +753,9 @@ build step beyond Vite, MIT licensed.
 - `src/nostr/`: NIP-01 events and the Nostr key over `@noble/curves`
   (`event.js`), Satori's events and parsing (`satori.js`), one relay over a
   WebSocket with reconnect (`relay.js`).
+- `src/traffic.js`: `emit(channel)` on every request and answer (central's
+  fetch, Base's RPC transport, each relay message) and `subscribe(fn)`:
+  Home's glow (`src/ui/glow.js`) and `lastTraffic`.
 - `src/neuron/`: register, the cycle (poll → store → history → forecast →
   submit), `history.js` (central's history for new streams), central's status, the schedule (`schedule.js`, shared with Base), the
   one-tab lock; `nostr.js`: relays, discover, subscribe, intake → `_pred`,

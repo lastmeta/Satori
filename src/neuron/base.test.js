@@ -250,6 +250,15 @@ describe('createBase', () => {
       clearTimeout: () => {}, onCheck: (r) => checks.push(r) });
   });
 
+  test("traffic: every RPC call and its answer is the Base channel's", async () => {
+    const fired = [];
+    const traced = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+      transport: rpc.transport, now: () => at.t, setTimeout: () => 0, clearTimeout: () => {}, onTraffic: () => fired.push(1) });
+    await traced.refresh();
+    expect(fired.length).toBeGreaterThanOrEqual(2);
+    expect(fired.length % 2).toBe(0); // a request, its answer
+  });
+
   test('status: amounts as decimal strings, the delegation, the lock, batches of gas left', async () => {
     s.airdrop[V] = 6n * E18;
     const v = await base.refresh();

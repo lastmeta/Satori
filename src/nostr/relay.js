@@ -7,6 +7,9 @@
 //   await r.publish(event)         // → { ok, message } from the relay's OK
 // state: 'connecting' | 'open' | 'closed'. Events are passed on unchecked.
 // The backoff starts over only once a connection has worked (an EOSE, or 30 s open).
+// onTraffic(): each message sent or received (Home's glow, src/traffic.js).
+import { emit } from '../traffic.js';
+
 export const TIMEOUT_MS = 10_000; // satorilib's fetch_events (client.py:847)
 const BACKOFF_MIN_MS = 1000;
 const BACKOFF_MAX_MS = 300_000;
@@ -17,7 +20,7 @@ export const backoffMs = (n, random = Math.random) =>
   Math.round(Math.min(BACKOFF_MIN_MS * 2 ** n, BACKOFF_MAX_MS) * (0.8 + 0.4 * random()));
 
 export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = () => {}, onOpen = () => {},
-  onState = () => {}, random = Math.random } = {}) {
+  onState = () => {}, random = Math.random, onTraffic = () => emit('network') } = {}) {
   let ws = null;
   let state = 'closed';
   let error = '';
@@ -40,6 +43,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
     if (state !== 'open') return false;
     try {
       ws.send(JSON.stringify(msg));
+      onTraffic();
       return true;
     } catch {
       return false;
@@ -106,7 +110,11 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
       for (const [id, filters] of kept) send(['REQ', id, ...filters]);
       onOpen(relay);
     };
-    sock.onmessage = (e) => ws === sock && onMessage(e);
+    sock.onmessage = (e) => {
+      if (ws !== sock) return;
+      onTraffic();
+      onMessage(e);
+    };
     sock.onclose = (e) => ws === sock && lost(e?.code && e.code !== 1000 ? `closed (${e.code})` : '');
     sock.onerror = () => {}; // a close follows
   }

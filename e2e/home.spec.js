@@ -323,3 +323,35 @@ test('starting with a vault mismatch: the title says Starting; the mismatch lead
   expect(central.prod).toEqual([]);
 });
 
+test("traffic: a chip glows while its channel talks and fades after; the status is untouched; reduced motion is still", async ({ context, page }) => {
+  const { central } = await setup(context);
+  centralAt(central, nowS() - 60);
+  await start(page);
+  await polled(page);
+  const chip = (c) => page.locator(`[data-test=chip][data-channel=${c}]`);
+  await expect(chip('central')).not.toHaveAttribute('data-live', { timeout: 15_000 }); // quiet after the first poll
+
+  // A poll: central's stub serves it (held here), so the Central chip glows; its status stays ok.
+  const release = central.hold();
+  const before = Date.now();
+  await page.evaluate(() => void window.satori.poll());
+  await expect(chip('central')).toHaveAttribute('data-live', '');
+  await expect(chip('central')).toHaveAttribute('data-state', 'ok');
+  const h = await health(page);
+  expect(h.channels.central.lastTraffic).toBeGreaterThanOrEqual(before);
+  expect(h.channels.central.lastTraffic).toBeLessThanOrEqual(Date.now());
+  expect(await chip('central').evaluate((el) => getComputedStyle(el, '::after').opacity)).not.toBe('0'); // fading in or in
+  release();
+  await expect.poll(async () => (await health(page)).channels.central.lastTraffic).toBeGreaterThan(h.channels.central.lastTraffic);
+  await expect(chip('central')).not.toHaveAttribute('data-live', { timeout: 10_000 }); // 1.5 s after the last, then the fade
+  await expect.poll(() => chip('central').evaluate((el) => getComputedStyle(el, '::after').opacity)).toBe('0');
+
+  // Base's RPC (the fake chain behind /rpc) glows the Base chip.
+  await page.evaluate(() => window.satori.base());
+  expect((await health(page)).channels.base.lastTraffic).toBeGreaterThanOrEqual(before);
+
+  // prefers-reduced-motion: no fades, a still tint.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await chip('central').evaluate((el) => getComputedStyle(el, '::after').transitionDuration)).toBe('0s');
+  expect(central.prod).toEqual([]);
+});

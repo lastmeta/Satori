@@ -25,6 +25,8 @@ import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf } from './neuron/health.js';
+import { subscribe, lastTraffic } from './traffic.js';
+import { createGlow } from './ui/glow.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
@@ -637,7 +639,8 @@ window.satori = {
   async health() {
     ready();
     return healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
-      nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since() });
+      nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since(),
+      traffic: lastTraffic() });
   },
   /** Show a tab: 'home' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL). → the tab */
   go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
@@ -712,12 +715,20 @@ watch(() => {
     storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since() });
 });
 
+/** Home's chips glow while their channel has real traffic (src/traffic.js, src/ui/glow.js): data-live on the chip. */
+function glowChips() {
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  subscribe(createGlow({ reduced: () => motion.matches,
+    apply: (channel, on) => document.querySelector(`[data-test=chip][data-channel=${channel}]`)?.toggleAttribute('data-live', on) }));
+}
+
 async function boot() {
   const root = document.getElementById('app');
   root.replaceChildren(); // index.html's "Opening…", painted before any module loads
   const t = location.hash.slice(1);
   if (TABS.includes(t)) state.tab = t;
   render(root, actions);
+  glowChips();
   startPwa();
   if (!(await claimTab())) return void (state.screen = 'elsewhere');
   try {

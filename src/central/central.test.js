@@ -82,6 +82,17 @@ const login = () => ({
 const client = (fetch, url = BASE) => createCentral({ url, fetch, identity, version: '0.1.0' });
 const paths = (calls) => calls.map((c) => `${c.method} ${c.path}`);
 
+test('traffic: each request to central and each answer', async () => {
+  const fired = [];
+  const { fetch } = mockFetch({ 'GET /api/v1/observations/batch?limit=100': json(200, []) });
+  await createCentral({ url: BASE, fetch, identity, version: '0.1.0', onTraffic: () => fired.push(1) }).observations();
+  expect(fired).toHaveLength(2);
+  const down = async () => { throw new TypeError('Failed to fetch'); };
+  await expect(createCentral({ url: BASE, fetch: down, identity, version: '0.1.0', onTraffic: () => fired.push(1) }).observations())
+    .rejects.toThrow('central unreachable');
+  expect(fired).toHaveLength(4); // two tries, no answer
+});
+
 describe('register', () => {
   test('identity and vault pubkeys and our version as headers; no login, no token, no body', async () => {
     // central base-upgrade d8a2085's answer (PeerRegisterResponse); its other address forms are not read

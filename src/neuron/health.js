@@ -223,7 +223,7 @@ function networkReasons({ nostr }) {
 
 // ── the channels (chips) ──
 
-function chips({ now, reasons, lastGood, base, nostr }) {
+function chips({ now, reasons, lastGood, base, nostr, traffic }) {
   const top = (channel) => reasons.find((r) => r.channel === channel && r.chip);
   const sent = lastGood ? `${lastGood.data.accepted ?? 0} sent ${fmtAgo(now - lastGood.at)}` : '–';
   const c = top('central');
@@ -243,7 +243,8 @@ function chips({ now, reasons, lastGood, base, nostr }) {
   const network = n ? { state: n.status, text: n.chip }
     : nostr?.subscriptions?.length ? { state: 'ok', text: `${(nostr.relays ?? []).length} relay${(nostr.relays ?? []).length === 1 ? '' : 's'}` }
       : { state: 'idle', text: 'No streams' };
-  return { central, base: baseChip, network };
+  const live = (key, chip) => (traffic ? { ...chip, lastTraffic: traffic[key] ?? null } : chip); // ms; the glow's
+  return { central: live('central', central), base: live('base', baseChip), network: live('network', network) };
 }
 
 // ── the day strip ──
@@ -340,9 +341,10 @@ export function feedOf(rows, n = FEED) {
  * @param {{installed: boolean, canInstall: boolean}} o.app
  * @param {boolean} o.backedUp the vault's words confirmed (meta.backup_at)
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
+ * @param {{central, base, network}} [o.traffic] each channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
  * @returns {{status, title, line, action, days, channels, feed, reasons}}
  */
-export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, since = null }) {
+export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, since = null, traffic }) {
   const sessions = sessionsOf(rows, now);
   const c = centralReasons({ now, rows, sessions, central, app });
   const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr })];
@@ -370,7 +372,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   return {
     status, title: c.title, line, action,
     days: daysOf(rows, now, since),
-    channels: chips({ now, reasons, lastGood: lg, base, nostr }),
+    channels: chips({ now, reasons, lastGood: lg, base, nostr, traffic }),
     feed: feedOf(rows),
     reasons: reasons.map((r) => ({ id: r.id, status: r.status, channel: r.channel, text: r.text ?? r.line })),
   };

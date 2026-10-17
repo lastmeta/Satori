@@ -39,6 +39,19 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('relay', () => {
+  test('traffic: every message sent and every one received', () => {
+    const fired = [];
+    const r = make({ onTraffic: () => fired.push(1) });
+    r.sub('follow', [{ kinds: [34601] }]);
+    r.connect();
+    expect(fired).toHaveLength(0); // nothing sent before the socket is open
+    last().open(); // the kept REQ
+    expect(fired).toHaveLength(1);
+    last().msg(['EOSE', 'follow']);
+    last().msg(['NOTICE', 'hi']);
+    expect(fired).toHaveLength(3);
+  });
+
   test('connect; kept subscriptions are sent on open, replaced, closed; their events are passed on', () => {
     const r = make();
     r.sub('follow', [{ kinds: [34601] }]);

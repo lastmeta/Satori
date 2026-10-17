@@ -116,6 +116,7 @@ alone when the build sets it.
 | config | `src/config.js` | Settings' defaults ([deploy.md](deploy.md#build-variables)): the dev server's (central2, the test relay, central's relays read only, `/rpc`) or a build's (prod central, no user relay, central's relays written to, central's RPC), each replaced by its `VITE_*` variable when the build sets one. `vite.config.js` runs the same check before a build, so a bad value stops it; a build's bundle holds only its own defaults. |
 | deploy | `deploy/`, `scripts/deploy-image.sh` | The static image ([deploy.md](deploy.md)): nginx serving `dist/` behind central's nginx-proxy (TLS there), the CSP from `csp.js` on every response, immutable `/assets/`, `no-cache` for the rest, gzipped copies, the SPA fallback. |
 | shared | `src/util.js` | `serial()` (one at a time, in order: the db, the chain's writes, Nostr's intake and outbox), `isHttps()`, `isRelayUrl()`. |
+| traffic | `src/traffic.js`, `src/ui/glow.js` | One emitter: `emit('central' \| 'base' \| 'network')` from central's `fetch`, Base's viem transport (traced) and each relay message sent or received; Home subscribes, and its chips glow while their channel talks ([health.md](health.md#traffic)); `health().channels[x].lastTraffic`. No polling. |
 | tests | `test/`, `e2e/` | Parity fixtures and test doubles (a fake D6 behind JSON-RPC, an in-memory DuckDB); Playwright specs and their one stub central (`e2e/stub.js`). |
 
 ## Rules

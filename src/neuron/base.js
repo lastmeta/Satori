@@ -9,6 +9,7 @@ import { createChain, errorText, lockText, same, DOWN, UP, ROUND_S } from '../ch
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
+import { emit, traced } from '../traffic.js';
 
 export const FIRST_CHECK_S = 10;
 export const CHECK_EVERY_S = 3600;
@@ -151,11 +152,12 @@ export function nextCheckAt({ now, chainTime }) {
  * @param {() => object} o.central the current central client
  * @param {string} [o.defaultRpc] the RPC when none is saved, if the build or the dev server set one (src/config.js)
  * @param {any} [o.transport] a viem transport (tests); else http to the RPC URLs
+ * @param {() => void} [o.onTraffic] each RPC request and its answer (Home's glow, src/traffic.js)
  * @param {(result: object) => void} [o.onCheck] each batch check's result (Home's activity log)
  */
 export function createBase({ db, identity, vaultAddress, vault, central, defaultRpc, transport, forecast = engineForecast,
   now = () => Date.now() / 1000, onChange = () => {}, onCheck = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
-  origin = globalThis.location?.href }) {
+  origin = globalThis.location?.href, onTraffic = () => emit('base') }) {
   let cache = null; // central's config, 1 h
   let made = null; // { key, chain, rpc }
   let status = null; // the last status read
@@ -178,7 +180,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     const urls = rpcUrls({ config: loaded.config, setting, fixed: defaultRpc });
     const key = JSON.stringify([loaded.config, urls]);
     if (made?.key !== key) {
-      const t = transport ?? (urls.length === 1 ? http(resolve(urls[0])) : fallback(urls.map((u) => http(resolve(u)))));
+      const t = traced(transport ?? (urls.length === 1 ? http(resolve(urls[0])) : fallback(urls.map((u) => http(resolve(u))))), onTraffic);
       made = { key, rpc: urls, config: loaded.config, chainId: null,
         local: urls.every((u) => u.startsWith('/')), chain: createChain({ config: loaded.config, transport: t }) };
     }
