@@ -69,7 +69,7 @@ function streamsSummary() {
 
 const feedRow = (f) => html`<div class="feed-row" data-test="feed-item" data-level="${f.level}">${mark(f.level)}<span>${f.text}</span><time title="${new Date(f.at * 1000).toLocaleString()}">${fmtAgo(state.now - f.at)}</time></div>`;
 
-/** The action card's tone: its own reason's status (warn, bad; a calm one, the install suggestion, sky). */
+/** The action card's tone: its own reason's level (warn, bad; advice, nothing wrong: sky). */
 const actionTone = () => {
   const s = h().reasons.find((r) => r.id === h().action?.id)?.status ?? h().status;
   return s === 'warn' || s === 'bad' ? s : 'idle';

@@ -95,6 +95,25 @@ For agents written against the earlier UI and API:
 - The database has an activity log (migration 8) and `meta.backup_at` (the
   vault's backup confirmed); docs/design/storage.md.
 
+## Changed 2026-10-17 (latest: advice; the hero stays green)
+
+- A reason's level (`health().reasons[].status`) may be `'advice'`: nothing
+  is wrong with the neuron, but there is a good thing to do. Advice never
+  changes `status`, `tone`, `title` or `line`. It is `action` only when no
+  warn or bad reason is present, and it may give its channel's chip its
+  words, with `state: 'advice'` and a green `tone`.
+- The advice reasons: `backup` (it was `warn`: a new neuron whose storage is
+  not kept and whose words were not confirmed read amber, "Central is fine.
+  Back up your keys.", all through its first poll; now it is green, and the
+  card offers Back up), `install` (new: the Install suggestion while *Was
+  asleep*, which was `asleep`'s action; `asleep` has no action now) and
+  `relay-down` (it was `warn`; the Network chip says "1 of 2 relays down",
+  `state: 'advice'`).
+- `reasons` are ordered by level, then as before: bad, warn, idle, advice.
+  `backup` moved from after `central-failed` to after `starting`.
+- `status` keeps its four values, `'ok' | 'idle' | 'warn' | 'bad'`. The
+  action card's `data-tone` is `idle` (sky) for advice.
+
 ## Changed 2026-10-17 (later: what it is doing; three greens)
 
 - `health().work`: what the neuron is doing now, or null when idle:
@@ -492,21 +511,28 @@ the page's JS context:
     after a batch went out), `'Starting'` (no good cycle in the log yet),
     `'Was asleep'` (a session missed work and has not caught up), else
     `'Predicting'`. Nostr never changes it.
-  - `line`: the top reason's words, or with none "Sent 83 predictions 2 h
-    ago · next in 9 h" ("Up to date · next in 9 h" when the last poll had
-    nothing to send).
-  - `action`: null, or the one thing to do: `{ id, text, button, do, tab?,
-    section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `delegate`
+  - `line`: the top reason's words (advice has none), or with none "Sent 83
+    predictions 2 h ago · next in 9 h" ("Up to date · next in 9 h" when the
+    last poll had nothing to send).
+  - `action`: null, or the one thing to do, the highest reason with a
+    button (so advice only when no warn or bad reason is present): `{ id,
+    text, button, do, tab?, section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `delegate`
     (`unlock()` then `delegate()`), `backup` (`unlock()` then
     `backup('vault')`), `install` (`install()`), `go` (`go(tab)`; the fix is
     at `#<tab>-<section>`).
-  - `reasons`: every reason, highest first: `[{ id, status, channel, text }]`.
-    The order: `db-error`, `login-refused`, `central-failing` (2 cycles
-    failed), `central-overdue`, `base-failing`, `relays-down`,
-    `central-failed` (1 cycle), `backup` (storage not kept, no backup
-    confirmed), `vault-mismatch`, `not-registered`, `delegate` (the vault
-    holds SATORI, not delegated), `gas-low`, `base-skipped`,
-    `base-unreachable`, `relay-down`, `asleep`, `starting`.
+  - `reasons`: every reason, highest first: `[{ id, status, channel, text }]`,
+    `status` the reason's level: `'bad'`, `'warn'` (something is wrong for
+    predicting or earning), `'idle'` (a calm state) or `'advice'` (nothing
+    is wrong: a suggestion, the card only; it never moves `status`, `tone`,
+    `title` or `line`). The order, by level: bad `db-error`,
+    `login-refused`, `central-failing` (2 cycles failed), `central-overdue`,
+    `base-failing`, `relays-down`; warn `central-failed` (1 cycle),
+    `vault-mismatch`, `not-registered`, `delegate` (the vault holds SATORI,
+    not delegated), `gas-low`, `base-skipped`, `base-unreachable`; idle
+    `asleep`, `starting`; advice `backup` (storage not kept, no backup
+    confirmed), `install` (was asleep, and the browser offers Install),
+    `relay-down` (some relay down, not all). docs/design/health.md says why
+    each has its level.
   - `days`: the last 30 local days, oldest first: `{ date: 'YYYY-MM-DD',
     code: 'full' | 'part' | 'error' | 'closed' | 'before', ran, today }`
     (full: predictions went out on every channel active that day; part:
@@ -516,7 +542,7 @@ the page's JS context:
     not counted in `days-summary`, "1 full day", "2 of 3 full days"). The
     phone shows the last 14.
   - `channels`: `{ central, base, network }`, each `{ state: 'ok' | 'warn' |
-    'bad' | 'idle', tone, text, lastTraffic }` (`tone`: `working`, `idle`,
+    'bad' | 'idle' | 'advice', tone, text, lastTraffic }` (`tone`: `working`, `idle`,
     `off`, `warn`, `bad`) ("83 sent 2 h ago", "Up to date ·
     next in 9 h" (nothing to send), "Round 20742
     sent", "No streams"); `lastTraffic`: when that channel last had real
@@ -677,10 +703,11 @@ thrown: they are in `status().central` (for example `central 500: …`,
   Lock while unlocked and "Update ready, reload" when a new version waits.
 - **Home** answers "is my neuron predicting every day on its own, and is
   anything broken?" at a glance (`health()`'s object, drawn): the health (an
-  icon and a color: ok green, idle grey, warn amber, bad red; the title and
-  one line), at most one action card (its text and one button that does the
-  thing or goes there; when it needs the vault, the passphrase is asked in
-  place), the last 14 days (30 on a computer, with a legend: full, part of
+  icon and a color: green while all is well, sky at rest, regular while
+  working, vivid while it must stay open; amber for warn, red for bad; the
+  title and one line), at most one action card (its text and one button that
+  does the thing or goes there, amber or red for a problem, sky for advice;
+  when it needs the vault, the passphrase is asked in place), the last 14 days (30 on a computer, with a legend: full, part of
   the day, closed, error; today outlined), the Central, Base and Network
   chips (each opens its tab), and the claimable rewards with Claim (the
   vault's SATORI and its delegation under it). On a computer it is a

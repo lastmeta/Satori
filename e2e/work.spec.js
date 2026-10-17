@@ -2,7 +2,7 @@
 // new neuron's hero turns one short arc around its ring and says each step, in order, each long enough to read, then
 // Predicting; its tone is working green, vivid while sending (Keep Satori open), then sky green, fading in slowly. No
 // other animation on the screen; reduced motion has none. SHOTS=1 writes docs/screenshots/working-phone-*.png and
-// tone-*-phone-*.png (else to the test's output).
+// tone-*-phone-*.png (else to the test's output). A new neuron whose keys are not backed up is green too: the backup is advice.
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fakeSatori } from '../test/fake-satori.js';
@@ -155,5 +155,37 @@ test('reduced motion: nothing turns; a still working mark, and the words change'
   release();
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
   expect(await animations(page)).toEqual([]);
+  expect(central.prod).toEqual([]);
+});
+
+test('the backup reminder is advice: a new neuron with random keys and storage not kept stays green, the Back up card under it', async ({ context, page }) => {
+  test.setTimeout(240_000);
+  const central = await setup(context);
+  central.noVaultBase = true; // random keys: central says nothing of the vault (as prod on main), so no mismatch
+  streams(central);
+  const send = central.hold('submit');
+  await page.addInitScript(() => { StorageManager.prototype.persisted = async () => false; StorageManager.prototype.persist = async () => false; });
+  await page.addInitScript(RECORD);
+  await openApp(page);
+  await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS); // random words, not backed up
+
+  await expect(hero(page)).toHaveAttribute('data-tone', 'critical', { timeout: LOAD_TIMEOUT });
+  expect(await page.evaluate(() => window.satori.health())).toMatchObject({ status: 'idle', tone: 'critical', title: 'Starting', action: { id: 'backup' } });
+  send();
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(line(page)).toHaveText('Sent 8 predictions just now · next in 11 h');
+  await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
+  await expect(hero(page)).toHaveAttribute('data-s', 'ok');
+  const action = page.locator('[data-test=action]');
+  await expect(action).toHaveAttribute('data-action', 'backup');
+  await expect(action).toHaveAttribute('data-tone', 'idle');
+  await expect(page.locator('[data-test=action-button]')).toHaveText('Back up');
+  const h = await page.evaluate(() => window.satori.health());
+  expect(h).toMatchObject({ status: 'ok', tone: 'idle', action: { id: 'backup', do: 'backup' } });
+  expect(h.reasons.map((r) => [r.id, r.status])).toEqual([['backup', 'advice']]);
+  // from setup to rest: green only (working, vivid while sending, sky), never amber
+  const tones = [...new Set((await page.evaluate(() => window.__hero)).map((r) => r.tone))];
+  expect(tones).toEqual(expect.arrayContaining(['working', 'critical', 'idle']));
+  expect(tones.every((t) => ['working', 'critical', 'idle'].includes(t)), tones.join()).toBe(true);
   expect(central.prod).toEqual([]);
 });

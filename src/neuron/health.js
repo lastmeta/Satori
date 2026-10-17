@@ -14,11 +14,20 @@ export const KEEP_S = 90 * 86400;
 export const DAYS = 30;
 export const FEED = 20;
 
-/** The reasons, highest first: the status is the worst, the card the first with an action. */
-export const PRIORITY = ['db-error', 'login-refused', 'central-failing', 'central-overdue', 'base-failing', 'relays-down',
-  'central-failed', 'backup', 'vault-mismatch', 'not-registered', 'delegate', 'gas-low', 'base-skipped', 'base-unreachable',
-  'relay-down', 'asleep', 'starting'];
-const RANK = { ok: 0, idle: 1, warn: 2, bad: 3 };
+/**
+ * Each reason's level, highest first (docs/design/health.md#reasons-in-priority-order). bad and warn: something is
+ * wrong for predicting or earning (red, amber); idle: a calm state (starting, catching up), green on Home; advice:
+ * nothing is wrong, a suggestion for the card only, never the status, the tone or the line. The status is the worst
+ * bad, warn or idle; the card is the first with an action, so advice only when no warn or bad has one.
+ */
+export const LEVEL = {
+  'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad', 'relays-down': 'bad',
+  'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', delegate: 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
+  'base-unreachable': 'warn',
+  asleep: 'idle', starting: 'idle',
+  backup: 'advice', install: 'advice', 'relay-down': 'advice',
+};
+export const PRIORITY = Object.keys(LEVEL);
 export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
 
 // ── times in a few words ──
@@ -83,7 +92,7 @@ export function missedBy(rows, at) {
 // ── the reasons (docs/design/health.md#reasons-in-priority-order) ──
 
 const go = (tab, section) => (section ? { do: 'go', tab, section } : { do: 'go', tab });
-const reason = (id, status, channel, o) => ({ id, status, channel, ...o });
+const reason = (id, channel, o) => ({ id, status: LEVEL[id], channel, ...o });
 
 function centralReasons({ now, rows, sessions, central, app }) {
   const out = [];
@@ -99,18 +108,18 @@ function centralReasons({ now, rows, sessions, central, app }) {
     const err = last.data.error ?? `central took none of ${last.data.sent} predictions`;
     const batches = last.data.sent > 0;
     if (last.data.local) {
-      out.push(reason('db-error', 'bad', 'central', { line: 'The database failed.', chip: 'Database error',
+      out.push(reason('db-error', 'central', { line: 'The database failed.', chip: 'Database error',
         text: `Saving or forecasting failed: ${err}. Reload Satori; your keys are safe.`, button: 'Reload', act: { do: 'reload' } }));
     } else if (last.data.login) {
-      out.push(reason('login-refused', 'bad', 'central', { line: "Central refused this neuron's login.", chip: 'Login refused',
+      out.push(reason('login-refused', 'central', { line: "Central refused this neuron's login.", chip: 'Login refused',
         text: "Central rejects this neuron's login. Check the central address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
     } else if (failures >= 2) {
-      out.push(reason('central-failing', 'bad', 'central', {
+      out.push(reason('central-failing', 'central', {
         line: batches ? `Central refused the last ${failures} batches.` : `The last ${failures} polls failed.`,
         chip: `${failures} failed in a row`, text: `${err}. Try again now, or check the central address in Settings.`,
         button: 'Try again', act: { do: 'poll' } }));
     } else {
-      out.push(reason('central-failed', 'warn', 'central', { line: `The last poll failed; next try ${next}.`,
+      out.push(reason('central-failed', 'central', { line: `The last poll failed; next try ${next}.`,
         chip: 'Last poll failed', text: `${err}. It tries again on its own; try now if something was fixed.`,
         button: 'Try again', act: { do: 'poll' } }));
     }
@@ -120,7 +129,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
   const ran = since == null ? 0 : openTime(sessions, since, now);
   const overdue = ran > (lastGood ? WINDOW_S : FIRST_S);
   if (overdue) {
-    out.push(reason('central-overdue', 'bad', 'central', { line: `Nothing sent for ${fmtDur(ran)}.`, chip: `Nothing sent for ${fmtDur(ran)}`,
+    out.push(reason('central-overdue', 'central', { line: `Nothing sent for ${fmtDur(ran)}.`, chip: `Nothing sent for ${fmtDur(ran)}`,
       text: `No predictions went out for ${fmtDur(ran)} while Satori was open. Try a poll now.`, button: 'Poll now', act: { do: 'poll' } }));
   }
 
@@ -128,7 +137,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
   const reg = central?.registration;
   if (reg?.ok && reg.vaultMismatch) {
     const other = reg.vaultMismatch === 'other';
-    out.push(reason('vault-mismatch', 'warn', 'central', { chip: 'Vault mismatch',
+    out.push(reason('vault-mismatch', 'central', { chip: 'Vault mismatch',
       line: other ? "Central pays this vault's rewards to another address." : 'Central has no vault for this neuron.',
       text: `${other ? `Central pays this vault's rewards to a different Base address, ${reg.vault_base_address}, not this vault's ${reg.vault}.`
         : "Central kept no vault for this identity, so it has no Base address to pay this neuron's rewards to (the vault may be registered to another neuron)."
@@ -136,7 +145,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
       button: 'Open Settings', act: go('settings', 'keys') }));
   }
   if (reg && !reg.ok) {
-    out.push(reason('not-registered', 'warn', 'central', { line: "Central didn't register this neuron.", chip: 'Not registered',
+    out.push(reason('not-registered', 'central', { line: "Central didn't register this neuron.", chip: 'Not registered',
       text: `Registering with central failed: ${reg.error}. It registers again on the next load.`, button: 'Reload', act: { do: 'reload' } }));
   }
 
@@ -148,14 +157,16 @@ function centralReasons({ now, rows, sessions, central, app }) {
     const caught = after[0];
     const install = app?.canInstall && !app?.installed;
     const catching = atOnce ? 'Catching up now…' : `Catching up ${next}`;
-    out.push(reason('asleep', 'idle', 'central', {
+    out.push(reason('asleep', 'central', {
       line: caught ? `${closed} Caught up ${fmtAgo(now - caught.at)}.` : `${closed} ${catching}${atOnce ? '' : '.'}`,
-      chip: caught ? null : catching,
-      ...(install ? { text: 'The neuron only runs while Satori is open. Install it so it stays open in its own window.',
-        button: 'Install', act: { do: 'install' } } : {}) }));
+      chip: caught ? null : catching }));
+    if (install) {
+      out.push(reason('install', null, { text: 'The neuron only runs while Satori is open. Install it so it stays open in its own window.',
+        button: 'Install', act: { do: 'install' } }));
+    }
   }
   if (!lastGood && !failures && !overdue) {
-    out.push(reason('starting', 'idle', 'central', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
+    out.push(reason('starting', 'central', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
       chip: atOnce ? 'First poll now…' : `First poll ${next}` }));
   }
   // central's part of the title, from the log, whichever reason leads (failing: a bad one above); healthOf adds Base's
@@ -175,29 +186,29 @@ function baseReasons({ rows, base }) {
   const failingErr = base.error || check?.error;
   if (failingErr) {
     if (inUse && repeated) {
-      out.push(reason('base-failing', 'bad', 'base', { line: `The Base batch failed ${lastRow.count} times.`, chip: `Failed ${lastRow.count} times`,
+      out.push(reason('base-failing', 'base', { line: `The Base batch failed ${lastRow.count} times.`, chip: `Failed ${lastRow.count} times`,
         text: `${failingErr}. Check the Base RPC in Settings.`, button: 'Open Settings', act: go('settings', 'base') }));
     } else {
-      out.push(reason('base-unreachable', 'warn', 'base', { line: base.error ? "Can't reach Base." : 'The Base batch failed.',
+      out.push(reason('base-unreachable', 'base', { line: base.error ? "Can't reach Base." : 'The Base batch failed.',
         chip: base.error ? 'Unreachable' : 'Batch failed', text: `${failingErr}. Check the Base RPC in Settings.`,
         button: 'Open Settings', act: go('settings', 'base') }));
     }
   }
   if (base.error || !base.config) return out;
   if (d === 'none' && Number(base.vault.satori) > 0) {
-    out.push(reason('delegate', 'warn', 'base', { line: 'Base needs one step from you.', chip: 'Not delegated',
+    out.push(reason('delegate', 'base', { line: 'Base needs one step from you.', chip: 'Not delegated',
       text: 'Base predictions are off. Delegate your vault’s prediction power to this neuron.', button: 'Delegate', act: { do: 'delegate' } }));
   }
   if (d === 'identity' && base.identity?.lowEth) {
     const n = base.identity.batchesLeft;
-    out.push(reason('gas-low', 'warn', 'base', { line: "The identity's gas is running low.", chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
+    out.push(reason('gas-low', 'base', { line: "The identity's gas is running low.", chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
       text: `The identity has gas for about ${n} daily batch${n === 1 ? '' : 'es'}. Send it a little Base ETH.`,
       button: 'Add gas', act: go('wallet') }));
   }
   if (d === 'identity' && check?.skipped && FIXABLE_SKIPS.test(check.skipped) && (check.round == null || check.round === base.round)) {
     const why = check.skipped.split(':')[0];
     const gas = why.startsWith('gas');
-    out.push(reason('base-skipped', 'warn', 'base', { line: 'The Base batch was skipped.', chip: `Skipped: ${why}`,
+    out.push(reason('base-skipped', 'base', { line: 'The Base batch was skipped.', chip: `Skipped: ${why}`,
       text: `Base batch skipped: ${check.skipped}.`, button: gas ? 'Open Settings' : 'Open Wallet',
       act: gas ? go('settings', 'base') : go('wallet') }));
   }
@@ -210,12 +221,11 @@ function networkReasons({ nostr }) {
   const relays = nostr.relays ?? [];
   const down = relays.filter((r) => r.state === 'closed' || r.state === 'blocked');
   if (!relays.length || down.length === relays.length) {
-    out.push(reason('relays-down', 'bad', 'network', { line: 'Every relay is down.', chip: 'Relays down',
+    out.push(reason('relays-down', 'network', { line: 'Every relay is down.', chip: 'Relays down',
       text: "No relay is connected, so subscribed streams aren't predicted. Check the relays in Settings.",
       button: 'Open Settings', act: go('settings', 'relays') }));
   } else if (down.length) {
-    out.push(reason('relay-down', 'warn', 'network', { line: `${down.length} of ${relays.length} relays down.`,
-      chip: `${down.length} of ${relays.length} relays down`,
+    out.push(reason('relay-down', 'network', { chip: `${down.length} of ${relays.length} relays down`,
       text: `${down.map((r) => r.url).join(', ')} not connected; it keeps retrying. Check the relays in Settings.`,
       button: 'Open Settings', act: go('settings', 'relays') }));
   }
@@ -261,7 +271,8 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
     : nostr?.subscriptions?.length ? { state: 'ok', text: `${(nostr.relays ?? []).length} relay${(nostr.relays ?? []).length === 1 ? '' : 's'}` }
       : { state: 'idle', text: 'No streams', off: true };
   // the tone: warn and bad as they are; working (its channel has work in progress, or is connecting); off (deliberately
-  // not used: Base not delegated here, no stream subscribed); else idle (sky: healthy, waiting)
+  // not used: Base not delegated here, no stream subscribed); else idle (sky: healthy, waiting). Advice is calm: its
+  // words, a green tone.
   const toned = (key, { off, busy, ...chip }) => {
     const working = busy || CHANNEL_WORK[key].some((t) => work[t]);
     const tone = chip.state === 'warn' || chip.state === 'bad' ? chip.state : working ? 'working' : off ? 'off' : 'idle';
@@ -373,23 +384,24 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const c = centralReasons({ now, rows, sessions, central, app });
   const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr })];
   if (storage && storage.persisted === false && !backedUp) {
-    reasons.push(reason('backup', 'warn', null, { line: 'Back up your keys.',
+    reasons.push(reason('backup', null, {
       text: 'This browser may clear Satori’s storage, your keys with it. Back up your vault’s 24 words.', button: 'Back up', act: { do: 'backup' } }));
   }
   reasons.sort((a, b) => PRIORITY.indexOf(a.id) - PRIORITY.indexOf(b.id));
-  const status = reasons.reduce((s, r) => (RANK[r.status] > RANK[s] ? r.status : s), 'ok');
+  const told = reasons.filter((r) => r.status !== 'advice'); // what the hero says: advice is the card's only
+  const status = told[0]?.status ?? 'ok'; // the worst: PRIORITY is by level
   // The title: is the neuron predicting on the channels that pay? Central (Not predicting wins), and Base when it should
   // be predicting: delegated to this identity, or not read (its RPC down) after a batch went out. Nostr never moves it.
   const d = base?.vault?.delegated;
   const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.channel === 'base' && r.status === 'bad');
   const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting' : c.title;
-  const top = reasons[0];
-  const centralTop = reasons.find((r) => r.channel === 'central');
+  const top = told[0];
+  const centralTop = told.find((r) => r.channel === 'central');
 
   let line;
   const lg = c.lastGood;
   const next = central?.polling ? 'now…' : fmtIn((central?.nextPoll ?? now) - now);
-  if (!top) { // no reason: a good cycle is in the log
+  if (!top) { // no reason but advice: a good cycle is in the log
     line = lg.data.accepted > 0 ? `Sent ${lg.data.accepted} predictions ${fmtAgo(now - lg.at)} · next ${next}` : sentText(lg, now, next);
   } else {
     line = top.channel === 'central' || centralTop ? top.line : `Central is fine. ${top.line}`;

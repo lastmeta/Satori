@@ -650,8 +650,8 @@ window.satori = {
     return window.satori.status();
   },
   /**
-   * Home's answer (docs/design/health.md): { status: 'ok' | 'idle' | 'warn' | 'bad', title, line, action, days,
-   * channels: { central, base, network }, feed, reasons }, read fresh.
+   * Home's answer (docs/design/health.md): { status: 'ok' | 'idle' | 'warn' | 'bad', tone, title, line, action, days,
+   * channels: { central, base, network }, feed, reasons (each bad, warn, idle or advice: the card only), work }, read fresh.
    */
   async health() {
     ready();
