@@ -184,3 +184,14 @@ session that missed nothing is not shown.
   sleep, merges, the 90-day prune, caught up. `src/db/db.test.js`: the table.
 - `e2e/home.spec.js`: the four states in Chrome with the stub central and a
   fake chain (idle from a seeded log), and the screenshots below.
+
+## Screenshots
+
+From `e2e/home.spec.js` (`SHOTS=1 npx playwright test e2e/home.spec.js`):
+each state on a phone (390 × 844, the first screen) and a computer (1280
+wide), light and dark, `docs/screenshots/home-<state>-<phone|desktop>-<light|dark>.png`
+for `ok`, `idle`, `warn` and `bad`.
+
+<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: was asleep, caught up" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: central refused two batches" width="240">
+
+![ok on a computer](../screenshots/home-ok-desktop-light.png)

@@ -7,7 +7,8 @@ what is left: [../plans/README.md](../plans/README.md). Open issues:
 [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md). For agents, and the one
 reference for `window.satori`: [/llms.txt](../../public/llms.txt).
 
-Component docs: [keys.md](keys.md), [central.md](central.md),
+Component docs: [health.md](health.md) (Home: is the neuron predicting, is
+anything broken), [keys.md](keys.md), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
 [storage.md](storage.md), [pwa.md](pwa.md) (the installed app),
 [deploy.md](deploy.md) (the image at neuron.satorinet.io, and the build
@@ -27,8 +28,8 @@ first poll 5–30 min later, then every 11 h (or Poll now):
 
 1. **Register** on every page load: `wallet-pubkey` (identity), `vault-pubkey`
    (in clear in the keys record, so it is read while locked), `nostr-pubkey` and `neuron-version`. The result is
-   shown on Home, with a **vault mismatch** if central holds another vault for
-   this identity.
+   shown on Streams, and on Home as a **vault mismatch** if central holds
+   another vault for this identity.
 2. **Poll** central's observations batch (the latest observation of each
    stream, under 48 h old). The next poll time is stored, so a reload keeps
    the 11 h cadence; a due one waits Lite's 5–30 min start jitter.
@@ -100,13 +101,14 @@ alone when the build sets it.
 | keys | `src/keys/` | Satori's two keys and the Nostr key in one record of this app's own, `meta.keys` ([keys.md](keys.md)): the **identity** (plain text, signs on its own), the **vault** (sealed with the passphrase: PBKDF2-SHA256 600,000 and AES-256-GCM, any Unicode passphrase of 8 or more; holds funds; its public key in clear) and the **Nostr key** (random, plain text). Create, restore from words, import a Dockerized Neuron's files (read only, translated: `docker.js`), Unlock/Lock (an earlier version's vault is re-encrypted at its next Unlock), backup. Each key's Base address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)); the identity's central login signature (EIP-191). |
 | central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. `login.js`: central's login signature, EIP-191 by the identity ([central.md](central.md#login-signature)); `centralAddress`: central's Evrmore name for our vault in register's answer, only compared, never shown ([central.md](central.md#the-vault-in-registers-answer)). |
 | chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, delegate/stop, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
-| db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`; ordered migrations; every call one at a time; every commit checkpointed; a WAL an older version left set aside before the open (`recover.js`) ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule, recovery). Times are unix seconds. |
+| db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`, and `activity` (Home's log, [health.md](health.md)); ordered migrations; every call one at a time; every commit checkpointed; a WAL an older version left set aside before the open (`recover.js`) ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule, recovery). Times are unix seconds. |
 | engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (identity-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
 | neuron | `src/neuron/` | `register`, `cycle` (poll → store → history → forecast → submit), `history.js` (central's history for new streams), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a Web Lock); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile; `base.js`: the daily batch and its schedule, delegate, claims, sends, the Base settings. |
-| ui | `src/ui/` | ArrowJS screens: Setup (create / restore from words / import Dockerized Neuron files), Home (the keys with their Base addresses and the Nostr pubkey, Unlock/Lock, the storage line and Install Satori; Central with Poll now and the collapsed streams; Nostr; Network streams; Base; Settings; Backup). `format.js`: display text. |
-| pwa | `src/pwa/`, `public/manifest.webmanifest` | The installed app ([pwa.md](pwa.md)): the manifest and the Satori icons; the service worker (`sw.js`, written to `dist/sw.js` by a build-only Vite plugin; none on the dev server): precaches the page and the hashed assets (DuckDB's wasm and worker), cache first for `/assets/`, network first for the page, nothing else touched; "Update ready, reload"; Install Satori (Chromium's prompt, Safari's Add to Dock / Home Screen); persistent storage asked for at start, shown on Home. It never runs the neuron while closed. |
-| agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page, under the same guards; `<body data-screen>` and `data-test` on what carries data or an action. [/llms.txt](../../public/llms.txt) is the one reference for both: what the app is, how to drive it, what's possible, where the code is, and that pull requests are welcome. |
+| health | `src/neuron/health.js`, `src/neuron/activity.js` | Home's answer ([health.md](health.md)): `activity.js` writes the activity log (migration 8: sessions with a heartbeat, central cycles, Base checks, Nostr publishes, history runs, wallet actions, errors; 90 days); `health.js` turns it and the current statuses into one status (`ok`, `idle`, `warn`, `bad`), its title and line, at most one action (the reasons in priority order), the day strip, the three chips and the feed. Pure. |
+| ui | `src/ui/` | ArrowJS, phone first: four tabs, a tab bar on a phone and a top nav on a computer (≥ 1024 px), hash routes `#home` `#streams` `#wallet` `#settings` (`view.js`, the shell, with Setup and the screens before Home). **Home** (`home.js`): the health, the one action card, the day strip (14 days; 30 on a computer), the Central/Base/Network chips, claimable rewards with Claim; on a computer also a streams table with trend lines, the wallet and the activity feed, as the approved mockup ([home-mockup.html](home-mockup.html)). **Streams** (`streams.js`): central's facts and Poll now, each stream (forecast, model, companions; its history on a tap), the Nostr subscriptions, Network streams. **Wallet** (`wallet.js`): Base. **Settings** (`settings.js`): the keys with Unlock/Lock, Backup, central URL, relays, Base RPC and max fee, this device (storage, Install, Update). The inline Unlock (`parts.js`) wherever an action needs the vault. `state.js`: the one reactive state; `format.js`: display text. The tokens, light and dark, with the semantic ok/warn/idle/bad colors: `src/style.css`. |
+| pwa | `src/pwa/`, `public/manifest.webmanifest` | The installed app ([pwa.md](pwa.md)): the manifest and the Satori icons; the service worker (`sw.js`, written to `dist/sw.js` by a build-only Vite plugin; none on the dev server): precaches the page and the hashed assets (DuckDB's wasm and worker), cache first for `/assets/`, network first for the page, nothing else touched; "Update ready, reload"; Install Satori (Chromium's prompt, Safari's Add to Dock / Home Screen); persistent storage asked for at start, shown in Settings. It never runs the neuron while closed. |
+| agents | `src/main.js`, `public/llms.txt` | `window.satori`: the same actions as the UI for an AI agent in the page, under the same guards, with `health()` (Home's answer) and `go(tab)`; `<body data-screen>` (and `data-tab`) and `data-test` on what carries data or an action. [/llms.txt](../../public/llms.txt) is the one reference for both: what the app is, how to drive it, what's possible, where the code is, and that pull requests are welcome. |
 | config | `src/config.js` | Settings' defaults ([deploy.md](deploy.md#build-variables)): the dev server's (central2, the test relay, central's relays read only, `/rpc`) or a build's (prod central, no user relay, central's relays written to, central's RPC), each replaced by its `VITE_*` variable when the build sets one. `vite.config.js` runs the same check before a build, so a bad value stops it; a build's bundle holds only its own defaults. |
 | deploy | `deploy/`, `scripts/deploy-image.sh` | The static image ([deploy.md](deploy.md)): nginx serving `dist/` behind central's nginx-proxy (TLS there), the CSP from `csp.js` on every response, immutable `/assets/`, `no-cache` for the rest, gzipped copies, the SPA fallback. |
 | shared | `src/util.js` | `serial()` (one at a time, in order: the db, the chain's writes, Nostr's intake and outbox), `isHttps()`, `isRelayUrl()`. |
@@ -127,10 +129,17 @@ alone when the build sets it.
   is stored unencrypted so the neuron runs from page load and signs on its
   own: central's login, its Nostr announcements' `wallet_pubkey`, the daily
   Base batch. The vault is stored encrypted and holds the funds; **Unlock**
-  (the passphrase, in the Keys card) decrypts it into memory and **Lock**
+  (the passphrase, in Settings › Keys, or in place where an action needs it) decrypts it into memory and **Lock**
   (in the header while unlocked) wipes it. The neuron never needs the vault.
 - Backup (both keys' words and private keys, the Nostr key's `nsec` and hex;
-  no files) needs Unlock, as Docker's dashboard needs login.
+  no files) needs Unlock, as Docker's dashboard needs login. Every action that
+  needs the vault (Delegate, Claim, Send, Backup) asks for the passphrase in
+  place, as one inline prompt, then does the action.
+- Home answers one question, "is my neuron predicting every day on its own,
+  and is anything broken?", from the activity log and the statuses
+  ([health.md](health.md)): exactly one status, at most one action card (the
+  highest-priority fixable reason), the day strip, three chips, the feed.
+  Being closed is never an error: a browser neuron runs only while open.
 - **Central URL** (Settings, `meta.central_url`): https only. Empty means the
   default: `https://central2.satorinet.io` on the dev server (so nobody writes
   to prod from a dev checkout), `https://network.satorinet.io` in a build, or
@@ -197,12 +206,16 @@ planned): ABI encoding, multicall, transaction serialization and the RPC
 client for Base; signing stays in `src/keys` (`@noble/curves`). The
 installable app added none (no Workbox: the service worker is about 25 lines).
 `bvar` added none (plain JS k×k solves; its seeded draws use `@noble/hashes`'
-sha256, already a dependency). The deploy image added none to npm; it is
+sha256, already a dependency). Home's health and the tabs added none (icons are inline SVG and CSS masks).
+The deploy image added none to npm; it is
 `nginx:1.30.5-alpine3.24` (2026-09-23), pinned by digest in `deploy/Dockerfile`.
 
 ## Verify
 
-- `npm test` (vitest, `--maxWorkers=2`): keys (satorilib parity vectors for
+- `npm test` (vitest, `--maxWorkers=2`): health (every status and reason
+  from fabricated logs, the action priority, open time and missed work, the
+  day codes, the chips, the feed; the activity log's sessions, heartbeat,
+  wake, merges, prune and caught up); keys (satorilib parity vectors for
   words, public keys and Base addresses; the vault encryption: round trips,
   another implementation opening it, wrong passphrases, NFC, non-Latin and
   emoji passphrases, the rule; Docker `wallet.yaml`/`vault.yaml` read for
@@ -286,9 +299,17 @@ sha256, already a dependency). The deploy image added none to npm; it is
   round N, sends, Lock, the low-ETH warning only once delegated; the Base
   settings (nothing half-saved); the other specs keep off `/rpc`. Every spec
   uses the one stub central (`e2e/stub.js`) and opens and reloads the app
-  through `e2e/load.js`, which waits up to 30 s for `<body data-screen>` to
+  through `e2e/load.js`, which waits up to 60 s for `<body data-screen>` to
   leave `loading` (DuckDB-WASM takes seconds to start on a busy box). The dev
   server registers no service worker and removes one left on its origin.
+- Home (`e2e/home.spec.js`, the stub central and a fake chain): ok after a
+  month of seeded activity and a poll; warn when the vault gets SATORI
+  (Delegate from the card, the inline Unlock, a wrong passphrase refused, the
+  batch on its own, ok again); idle after two days closed (catching up, caught
+  up, ok at the next cycle); bad after two refused batches, then a refused
+  login whose card opens Settings; starting on a fresh neuron. At 390 × 844
+  and 360 × 740 the answer is on the first screen, every tap target is 44 px
+  and no tab scrolls sideways. `SHOTS=1` writes the screenshots below.
 - `npm run e2e:pwa` (a build on `vite preview` :5181, `e2e/pwa.spec.js`, each
   test in its own Chrome profile with every host but localhost unresolvable):
   the manifest valid and installable, the worker served with the CSP and

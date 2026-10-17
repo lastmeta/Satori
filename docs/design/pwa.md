@@ -103,7 +103,7 @@ code.
 
 `keepStorage()` runs when the neuron starts: right after setup, and on each
 load. It asks `navigator.storage.persist()` unless `persisted()` already says
-yes, then reads `estimate()`. Home shows it under the keys:
+yes, then reads `estimate()`. Settings › This device shows it:
 
 - **Storage: kept** (persistent), or
 - **Storage: the browser may clear it; install Satori or back up your words**,
@@ -111,16 +111,19 @@ yes, then reads `estimate()`. Home shows it under the keys:
 each with what is used of the quota (`41 MB of 11 GB used`; the precache
 counts). `status().storage` is `{ persisted, usage, quota }` (bytes). After
 `appinstalled` it asks again, since an installed app's request is granted.
+Storage that is not kept, with no backup of the vault confirmed, is one of
+Home's reasons to ask for the person ([health.md](health.md)); a neuron that
+was asleep offers Install on Home when the browser offers it.
 
 ## Install
 
 - **Chromium** (Chrome, Edge, Android): the page keeps `beforeinstallprompt`
   and shows **Install Satori** with "Keeps your keys, and runs in its own
-  window." on Setup and on Home (under the storage line). It calls the
+  window." on Setup and in Settings › This device (under the storage line). It calls the
   browser's prompt, which needs a user gesture (a click; Playwright's
   `page.evaluate` counts: the prompt opens).
   The browser's own install menu works as well.
-- **Safari** has no prompt, so Setup and Home show how: File › Add to Dock
+- **Safari** has no prompt, so Setup and Settings show how: File › Add to Dock
   (macOS) or Share › Add to Home Screen (iOS, iPadOS), and that the added app
   starts empty.
 - **Firefox** offers neither, and nothing is shown; the storage line still
@@ -192,7 +195,7 @@ mode too (one colour per manifest).
   test in its own Chrome profile, every host but localhost unresolvable, a
   build's central routed to the stub): the manifest valid and installable
   (Chrome's own checks over CDP); `/sw.js` served with the CSP; the page and
-  DuckDB's eh files precached, the mvp not; Install on Setup and Home;
+  DuckDB's eh files precached, the mvp not; Install on Setup and in Settings;
   `persist()` asked after setup and again on a reload while not kept; a
   reload served by the worker; **offline** (the worker's own network gone
   too) the page, DuckDB and the stored keys and streams load, while central

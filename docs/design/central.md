@@ -105,7 +105,7 @@ newest. `src/neuron/history.js`:
   warning) and remembered for a day (`meta.central_history.retryAt`), then
   asked again. (Before, one deleted stream failed first every day and held
   all the others with it.)
-- **Shown**: Home's Central card has a History line ("Oct 16, 09:30 · 83
+- **Shown**: the Streams tab's Central card has a History line ("Oct 16, 09:30 · 83
   streams, 81,234 rows", or "Not on this central (central 404: Not Found);
   next try …"); `status().central.history` = the last run `{at, url, streams,
   rows, left, error, retryAt}` and `needed` (streams with no history yet).
@@ -176,7 +176,7 @@ Nostr's part of the audit is in [nostr.md](nostr.md#the-protocol-audit).
 
 ## Settings
 
-`meta.central_url`, set under **Settings** on Home or by
+`meta.central_url`, set under **Settings** or by
 `window.satori.setCentral(url)`. It must be `https://` (the page's CSP allows
 only https). Empty means the default:
 
@@ -209,7 +209,8 @@ relay list and Base's config are read from the new central at once.
   unreachable" with the browser's message.
 - Central's own errors carry `{detail}` and are shown as `central <status>: <detail>`.
 - Register, poll and submit failures are logged to the console, stored in the
-  status (last poll, last submission) and shown on Home. A local failure in a
+  status (last poll, last submission), logged in the activity log and shown on
+  Home ([health.md](health.md)) and on Streams. A local failure in a
   cycle (a database write) is logged with `console.error` and shown as the last
   poll's error. Nothing throws out of the schedule: the next timer is set
   before `next_poll_at` is saved, and a failed save is only logged.
@@ -219,7 +220,7 @@ relay list and Base's config are read from the new central at once.
 | Deviation | Why |
 |---|---|
 | `meta.next_poll_at` is stored; on load a future time is kept, and a due (or missing, or more than 11 h ahead) one gets Lite's 5–30 min start jitter. | A tab reloads far more often than a Docker container restarts. Lite's "jitter after every start" would make each reload push the poll back (never polling if reloaded every few minutes); storing the time keeps the 11 h cadence. |
-| **Poll now** (Home) and `window.satori.poll()` run a cycle at once; the next poll is then 11 h later. A second call while one runs returns the same run. | The owner reviews in the running app and agents drive it: neither should wait up to 30 min, or 11 h, to see a cycle. |
+| **Poll now** (Streams) and `window.satori.poll()` run a cycle at once; the next poll is then 11 h later. A second call while one runs returns the same run. | The owner reviews in the running app and agents drive it: neither should wait up to 30 min, or 11 h, to see a cycle. |
 | Pending predictions live in the `predictions` table, so they survive a reload; Lite's queue is in memory. | The browser has no long-lived process; a queue lost on every reload would rarely be resent. |
 | Pending predictions older than 2 × 11 h are dropped before a submission; Lite's queue has no cap. | Lite's queue is emptied by every restart; ours is not, so a central that refused every batch would grow it without end. Two polls' worth is enough to ride out one failed cycle. |
 | Changing the central URL drops the pending queue and the stream list (see Settings). | Lite has one central per install; uuids differ between centrals. |

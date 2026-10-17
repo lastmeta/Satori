@@ -45,9 +45,16 @@ runs the neuron; others say so. The engine (`bar1`, after the owner's
 `namaste_club`) is a Bayesian AR(1) on 12 h returns, faded toward the last
 value as far as its own backtest says it trails it ([engine](docs/design/engine.md)).
 
-![Home on a desktop](docs/screenshots/home.png)
+**Home** answers one question at a glance: is the neuron predicting every
+day on its own, and is anything broken? One status (predicting, was asleep,
+needs you, problem), at most one thing to do, the last 14 days, and the
+Central, Base and Network connections; on a computer it is a dashboard with
+the streams, the wallet and the activity ([health](docs/design/health.md)).
+Streams, Wallet and Settings hold the rest.
 
-<img src="docs/screenshots/home-phone.png" alt="Home on a phone" width="320">
+<img src="docs/screenshots/home-ok-phone-light.png" alt="Home on a phone: predicting" width="320"> <img src="docs/screenshots/home-warn-phone-dark.png" alt="Home on a phone, dark: Base needs one step" width="320">
+
+![Home on a computer](docs/screenshots/home-ok-desktop-light.png)
 
 ![The Nostr card, subscribed to the demo stream](docs/screenshots/nostr.png)
 

@@ -333,22 +333,23 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 
 ## UI and agents
 
-- Home's **Keys** card holds both Base addresses, the only addresses the app
-  shows.
-  The **Base** card: the round, the active RPC in plain words (the local fork
+- **Settings › Keys** holds both Base addresses, the only addresses the app
+  shows. Home has the claimable rewards with Claim, and on a computer the
+  vault and the gas in days ([health.md](health.md)).
+  The **Wallet** tab's **Base** card: the round, the active RPC in plain words (the local fork
   named "Local test chain"; the URLs on hover); the identity's ETH as daily
   batches of gas (red below 7, once delegated: before that the identity has
   no batch to pay for); the vault's SATORI and ETH; the delegation (until
-  delegated: "Unlock, then Delegate prediction power"); the transfer lock;
+  delegated: "Delegate prediction power, below"); the transfer lock;
   what is claimable; the last batch (round, time, each game's direction, what
   was left out, the tx); the last check and the next ("Waits for delegation"
   until then); under them, who plays (`base-play`): while delegated "Your
   vault's prediction power is with this neuron, so the vault can't also play
   Satori Daily by hand. Stop delegating to play manually.", while not
   "Delegate to let the neuron predict every round, or play Satori Daily by
-  hand.", with Satori Daily linked. After Unlock: Delegate prediction
-  power or Stop delegating,
-  Claim, and Send from the vault (SATORI or ETH); each action lists its
+  hand.", with Satori Daily linked. Delegate prediction power or Stop
+  delegating, Claim, and Send from the vault (SATORI or ETH), each asking
+  for the passphrase in place while the vault is locked; each action lists its
   transactions in plain words ("Identity: fee to 0"; the call on hover). Tx
   hashes link to the explorer, except on a local fork. **Settings**: Base
   RPC and the batch's max fee (gwei), prefilled with what is stored, both

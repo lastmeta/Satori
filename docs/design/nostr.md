@@ -212,7 +212,7 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
 
 ## UI and agents
 
-- Home's **Keys** card: the Nostr pubkey (npub on hover). The **Nostr** card:
+- **Settings › Keys**: the Nostr pubkey (npub on hover). On **Streams**, the **Nostr** card:
   each relay with its state (Connected, Connecting, Disconnected and
   retrying, Blocked) and "read only", and each subscribed stream with its
   latest observation (formatted as our `_pred` is; what the provider sent on
@@ -222,7 +222,7 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   description and tags, the first 50 matches; prediction streams are hidden
   and counted; paid or gated streams show but can't be subscribed.
 - **Settings**: the user's relays (one per line) and "Publish to central's
-  relays". **Backup** (after Unlock): **Nostr key** shows its `nsec` and hex
+  relays". **Backup** (after the passphrase): **Nostr key** shows its `nsec` and hex
   (it is random, so the 24 words don't bring it back). **Import Dockerized
   Neuron files**: an optional `nostr.yaml`, translated.
 - Agents: `window.satori`'s Nostr methods and their shapes are in

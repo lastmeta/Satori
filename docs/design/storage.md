@@ -179,6 +179,12 @@ entry is never edited: a change is a new entry. A database from a newer app
    `meta.vault` is never touched. Rows it cannot read stop the open, with
    nothing changed. Every earlier profile shape is tested
    ([keys.md](keys.md#migration)).
+8. **The activity log** (2026-10-16, [health.md](health.md#the-activity-log)):
+   `activity (id, ts, last_ts, kind, level, data, count, mkey)`: what the
+   neuron did (sessions, central cycles, Base checks, Nostr publishes,
+   history runs, wallet actions, errors), for Home's health. `ts` and
+   `last_ts` are the API's `at` and `until` (both are DuckDB keywords).
+   Kept 90 days: pruned at start and once a day. Another central keeps it.
 
 Columns kept but no longer written: `relay_streams.meta` (the announcement
 at subscribe time) and `unsubscribed_at`; nothing read them. Kept and written,
@@ -197,8 +203,9 @@ Each value is JSON text.
 | `vault` | the step-1 prototype's sealed key; never read, never deleted | the step-1 prototype |
 | `central_url` | the Settings URL; `''` = the default | Settings, `setCentral` |
 | `next_poll_at` | when the next poll is due, so a reload keeps the 11 h cadence ([central.md](central.md)) | each poll's schedule |
-| `central_last_poll` | the last poll: `{ at, streams, new, predicted }` or `{ at, error }` | each cycle; dropped with another central |
-| `central_last_submit` | the last predictions batch: `{ at, total_submitted, successful, failed, errors }` or `{ at, error }` | each cycle with something pending; dropped with another central |
+| `central_last_poll` | the last poll: `{ at, streams, new, predicted }` or `{ at, error }` (`local: true`: the database or the engine failed, not central) | each cycle; dropped with another central |
+| `central_last_submit` | the last predictions batch: `{ at, total_submitted, successful, failed, errors }` or `{ at, error, total_submitted }` (`login: true`: central refused the login) | each cycle with something pending; dropped with another central |
+| `backup_at` | when the vault's backup was confirmed (its words confirmed at Create, given at Restore, or shown under Backup; a Dockerized Neuron's files): Home stops asking for a backup while storage is not kept ([health.md](health.md)) | setup; Backup |
 | `central_history` | the last history run: `{ at, url, streams, rows, left, error, retryAt }`; `retryAt` (a 404: no history route) holds off this central for a day | each history run; dropped with another central |
 | `nostr_relays` | the user's relays (Settings) | `setRelays` |
 | `nostr_central_write` | whether central's relays are written to | `setRelays` |

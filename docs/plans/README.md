@@ -43,9 +43,16 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    [../design/nostr.md](../design/nostr.md#the-protocol-audit)). Then
    central's login as EIP-191, as central and Lite now sign it, and the
    Evrmore code gone ([../design/central.md](../design/central.md#login-signature)).
-11. **Runtime hardening**: catch-up on resume, the keys in a worker
+11. ✅ **Home: is it predicting, is anything broken?** (owner, 2026-10-16:
+   [../intent/ui.md](../intent/ui.md), the approved
+   [mockup](../design/home-mockup.html)): an activity log, one health status
+   with at most one action card, the day strip, the Central/Base/Network
+   chips; four tabs, phone first, a dashboard on a computer; the inline
+   Unlock; `window.satori.health()` and `go()`
+   ([../design/health.md](../design/health.md)).
+12. **Runtime hardening**: catch-up on resume, the keys in a worker
    ([runtime.md](runtime.md)).
-12. **Later**, in rough order of value per effort: a per-stream chart and model
+13. **Later**, in rough order of value per effort: a per-stream chart and model
    view; bounties (the predictor's side first); the gasless relay (needs a
    ruling, [issue](../issues/relayer-predict-fee.md)); paid streams (their
    payment on Base, to design); own data sources. Also:

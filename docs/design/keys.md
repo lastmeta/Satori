@@ -151,11 +151,14 @@ migration re-encrypts the vault with it as it is.
   not in the words), then the passphrase.
 - **Setup → Import Dockerized Neuron files**: [below](#import-translate).
 - One setup runs at a time, from the UI or an agent; a second one is refused.
-- **Home**'s Keys card shows each key's Base address (the identity's, and the
+- **Settings › Keys** shows each key's Base address (the identity's, and the
   vault's while locked) and the Nostr pubkey. The neuron runs from page load
   on the identity: it registers both public keys with central and signs
-  central's login challenge. The vault has **Unlock** in the Keys card; while
-  unlocked, **Lock** is in the header.
+  central's login challenge. The vault has **Unlock** there; while
+  unlocked, **Lock** is in the header (and "Lock the vault" there). An action
+  that needs the vault (Delegate, Claim, Send, Backup) asks for the
+  passphrase in place when it is locked: one inline prompt, then the action
+  ([health.md](health.md)).
 - **Backup** (Docker shows it behind login, so here it needs Unlock):
   [below](#backup).
 
