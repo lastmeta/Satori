@@ -223,9 +223,12 @@ function networkReasons({ nostr }) {
 
 // ── the channels (chips) ──
 
-function chips({ now, reasons, lastGood, base, nostr, traffic }) {
+/** The last good cycle in a few words: what central took, or, with nothing to send, up to date (never "0 sent"). */
+const sentText = (lg, now, next) => (lg.data.accepted > 0 ? `${lg.data.accepted} sent ${fmtAgo(now - lg.at)}` : `Up to date · next ${next}`);
+
+function chips({ now, next, reasons, lastGood, base, nostr, traffic }) {
   const top = (channel) => reasons.find((r) => r.channel === channel && r.chip);
-  const sent = lastGood ? `${lastGood.data.accepted ?? 0} sent ${fmtAgo(now - lastGood.at)}` : '–';
+  const sent = lastGood ? sentText(lastGood, now, next) : '–';
   const c = top('central');
   const central = c ? { state: c.status, text: c.chip } : { state: lastGood ? 'ok' : 'idle', text: sent };
 
@@ -304,8 +307,8 @@ function feedText(r) {
       if (d.login) return `Central refused the login: ${d.error}`;
       if (d.error) return `${d.sent > 0 ? 'Central refused the batch' : 'The poll failed'}: ${d.error}`;
       if (d.sent > 0 && !(d.accepted > 0)) return `Central took none of ${d.sent} predictions`;
-      if (d.caughtUp != null) return `Caught up: sent ${d.accepted ?? 0} predictions`;
-      return d.accepted > 0 ? `Sent ${d.accepted} predictions to central` : 'Polled central: nothing new';
+      if (d.caughtUp != null) return d.accepted > 0 ? `Caught up: sent ${d.accepted} predictions` : 'Caught up: up to date';
+      return d.accepted > 0 ? `Sent ${d.accepted} predictions to central` : 'Polled central: up to date';
     case 'history': return d.error ? `History not loaded: ${d.error}` : `History loaded for ${d.streams} streams`;
     case 'base':
       if (d.error) return `Base batch failed: ${d.error}${times(r)}`;
@@ -359,10 +362,9 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
 
   let line;
   const lg = c.lastGood;
-  if (!top) {
-    const next = central?.polling ? 'now…' : fmtIn((central?.nextPoll ?? now) - now);
-    line = lg?.data.accepted > 0 ? `Sent ${lg.data.accepted} predictions ${fmtAgo(now - lg.at)} · next ${next}`
-      : `Polled central ${fmtAgo(now - (lg?.at ?? now))}, nothing new · next ${next}`;
+  const next = central?.polling ? 'now…' : fmtIn((central?.nextPoll ?? now) - now);
+  if (!top) { // no reason: a good cycle is in the log
+    line = lg.data.accepted > 0 ? `Sent ${lg.data.accepted} predictions ${fmtAgo(now - lg.at)} · next ${next}` : sentText(lg, now, next);
   } else {
     line = top.channel === 'central' || centralTop ? top.line : `Central is fine. ${top.line}`;
   }
@@ -372,7 +374,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   return {
     status, title: c.title, line, action,
     days: daysOf(rows, now, since),
-    channels: chips({ now, reasons, lastGood: lg, base, nostr, traffic }),
+    channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic }),
     feed: feedOf(rows),
     reasons: reasons.map((r) => ({ id: r.id, status: r.status, channel: r.channel, text: r.text ?? r.line })),
   };

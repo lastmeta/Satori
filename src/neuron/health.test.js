@@ -47,12 +47,22 @@ describe('ok: predicting', () => {
     const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'connecting' }] });
     expect(health({ nostr: n })).toMatchObject({ status: 'ok', channels: { network: { state: 'ok', text: '2 relays' } } });
   });
-  test('a poll with nothing to send is a good cycle', () => {
+  test('a poll with nothing to send is a good cycle: up to date, never "0 sent" (the chip, the line, the feed)', () => {
     expect(isGood(good(NOW, 0))).toBe(true);
     expect(isGood(failed(NOW))).toBe(false);
     expect(isGood(row('central', NOW, 'bad', { sent: 3, accepted: 0 }))).toBe(false); // central took none
-    const h = health({ rows: [open(NOW - 3 * H), good(NOW - H, 0)] });
-    expect(h).toMatchObject({ status: 'ok', line: 'Polled central 1 h ago, nothing new · next in 9 h' });
+    const h = health({ rows: [open(NOW - 3 * H), good(NOW - 2 * H), good(NOW - H, 0)] });
+    expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 9 h' });
+    expect(h.channels.central).toEqual({ state: 'ok', text: 'Up to date · next in 9 h' });
+    expect(h.feed.map((f) => f.text)).toEqual(['Polled central: up to date', 'Sent 83 predictions to central']);
+    const polling = health({ rows: [open(NOW - 3 * H), good(NOW - H, 0)], central: central({ polling: true }) });
+    expect([polling.line, polling.channels.central.text]).toEqual(['Up to date · next now…', 'Up to date · next now…']);
+    // caught up after being asleep, with nothing to send
+    const slept = [open(NOW - 3 * D, NOW - 3 * D + 2 * H), good(NOW - 3 * D + H), open(NOW - 10 * M, NOW, { gap: 3 * D, missed: true })];
+    const caught = health({ rows: [...slept, good(NOW - 5 * M, 0, { caughtUp: 3 * D })] });
+    expect(caught.feed[0].text).toBe('Caught up: up to date');
+    expect(caught.channels.central.text).toBe('Up to date · next in 9 h');
+    for (const x of [h, polling, caught]) expect(JSON.stringify(x)).not.toMatch(/\b0 (sent|predictions)|sent 0|nothing new/);
   });
 });
 

@@ -129,6 +129,10 @@ For agents written against the earlier UI and API:
   mid-poll (rows stored, not yet forecast) is made up by the next poll, even
   with nothing new (`lastPoll.new` 0, `predicted` > 0). An observation is
   still predicted once. Migration 9 adds `streams.predicted_ts`.
+- A poll with nothing new and nothing to send reads "Up to date · next in
+  9 h" (the Central chip and `health().line`; it said "0 sent just now" and
+  "Polled central …, nothing new"), and "Polled central: up to date" /
+  "Caught up: up to date" in the feed. "0 sent" no longer appears.
 
 ## Changed 2026-10-16 (the keys in this app's own format; Base only)
 
@@ -443,7 +447,8 @@ the page's JS context:
     `'Was asleep'` (a session missed work and has not caught up), else
     `'Predicting'`.
   - `line`: the top reason's words, or with none "Sent 83 predictions 2 h
-    ago · next in 9 h".
+    ago · next in 9 h" ("Up to date · next in 9 h" when the last poll had
+    nothing to send).
   - `action`: null, or the one thing to do: `{ id, text, button, do, tab?,
     section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `delegate`
     (`unlock()` then `delegate()`), `backup` (`unlock()` then
@@ -465,7 +470,8 @@ the page's JS context:
     not counted in `days-summary`, "1 full day", "2 of 3 full days"). The
     phone shows the last 14.
   - `channels`: `{ central, base, network }`, each `{ state: 'ok' | 'warn' |
-    'bad' | 'idle', text, lastTraffic }` ("83 sent 2 h ago", "Round 20742
+    'bad' | 'idle', text, lastTraffic }` ("83 sent 2 h ago", "Up to date ·
+    next in 9 h" (nothing to send), "Round 20742
     sent", "No streams"); `lastTraffic`: when that channel last had real
     traffic (a request to central or its answer, a Base RPC call or its
     answer, a relay message sent or received), ms since the epoch, or null.

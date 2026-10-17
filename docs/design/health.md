@@ -146,14 +146,17 @@ these states with every reason (a table).
 
 The line is the top reason's short text, after "Central is fine." when
 central has no reason. With no reason it is "Sent 83 predictions 2 h ago ·
-next in 9 h". Words appear only when something needs them.
+next in 9 h", or "Up to date · next in 9 h" when the last poll had nothing
+new to predict and nothing to send. Words appear only when something needs
+them.
 
 ## The channels (chips)
 
 Each is `{ state: ok | warn | bad | idle, text }`, the state from the
 reasons above.
 
-- **Central**: ok "83 sent 2 h ago"; idle "First poll now…",
+- **Central**: ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
+  the last poll had nothing to send (never "0 sent"); idle "First poll now…",
   "Catching up now…" ("… in 2 h" when a poll is still ahead); warn "Last poll failed", "Vault mismatch",
   "Not registered"; bad "Database error", "Login refused", "2 failed in a
   row", "Nothing sent for 14 h".
@@ -224,7 +227,8 @@ days". The legend shows "Before this neuron" only while such a day is shown.
 ## The feed
 
 The log, newest first, 20 rows: `{ at, level, text }`. "Sent 83 predictions
-to central", "Caught up: sent 83 predictions", "Central refused the batch:
+to central", "Polled central: up to date" (nothing to send), "Caught up:
+sent 83 predictions" ("Caught up: up to date"), "Central refused the batch:
 central 401: Invalid signature", "Base batch for round 20742: 1 game", "Base
 batch skipped: gas above the ceiling (×3)", "Published 3 forecasts to the
 network", "Satori was closed for 2 d", "Delegated to this neuron". A
@@ -274,6 +278,14 @@ mismatch's card and reads *Starting*, "Central has no vault for this
 neuron." (it read *Predicting*); `health()` says the same.
 
 <img src="../screenshots/home-starting-mismatch-phone-light.png" alt="Starting with a vault mismatch" width="240"> <img src="../screenshots/home-starting-mismatch-phone-dark.png" alt="Starting with a vault mismatch, dark" width="240">
+
+Nothing to send (2026-10-17 16:59, a fresh profile on central2): after the
+first poll (82 of 82 accepted), Poll now with nothing new: the line and the
+Central chip read "Up to date · next in 11 h" (they read "0 sent just now"
+and "Polled central just now, nothing new"), the feed "Polled central: up
+to date".
+
+<img src="../screenshots/home-up-to-date-live.png" alt="Up to date · next in 11 h" width="240">
 
 ## Screenshots
 

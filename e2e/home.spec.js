@@ -154,6 +154,11 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   await shots(page, 'ok');
   await phoneChecks(page, 390, 844);
   await phoneChecks(page, 360, 740);
+  // Poll now with nothing new: nothing to predict or send, so up to date, never "0 sent"
+  expect(await page.evaluate(() => window.satori.poll())).toMatchObject({ poll: { new: 0, predicted: 0 }, submit: null });
+  await expect(chip('central').locator('[data-test=chip-text]')).toHaveText('Up to date · next in 11 h');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('Up to date · next in 11 h');
+  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Polled central: up to date' })).toHaveCount(1);
   await page.setViewportSize({ width: 1280, height: 900 });
 
   // The vault gets SATORI: Base needs one step from the person. One card, one button.
