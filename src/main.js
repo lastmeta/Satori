@@ -27,6 +27,7 @@ import { createActivity } from './neuron/activity.js';
 import { healthOf } from './neuron/health.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
+import { setTheme, applyTheme } from './ui/theme.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
@@ -387,6 +388,7 @@ const claimTxs = (r) => [['Rewards', r.rewards], ['Merkle', r.merkle], ['Airdrop
 
 const actions = {
   goStep,
+  setTheme(t) { state.theme = setTheme(t); },
   newWords() {
     wipePending();
     pending = { vault: generateSecret() };
@@ -644,6 +646,8 @@ window.satori = {
   },
   /** Show a tab: 'home' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL). → the tab */
   go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
+  /** Settings → Appearance: 'system' (the default: the device's light or dark), 'light' or 'dark'; kept on this device. → it */
+  setTheme(theme) { state.theme = setTheme(theme); return state.theme; },
   /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit } */
   async poll() { ready(); return pollNow(); },
   /** Central's streams with the latest observation, our latest prediction and the stream's spec. */
@@ -728,6 +732,7 @@ async function boot() {
   const t = location.hash.slice(1);
   if (TABS.includes(t)) state.tab = t;
   render(root, actions);
+  applyTheme(state.theme); // public/theme.js set data-theme before the first paint; this, the browser bar's color too
   glowChips();
   startPwa();
   if (!(await claimTab())) return void (state.screen = 'elsewhere');

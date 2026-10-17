@@ -10,6 +10,7 @@ test("the build's hashed files are 'asset' (cache first): the app's code, DuckDB
   expect(route(get('/assets/index-DJctAwZA.css', 'no-cors'), O)).toBe('asset');
   expect(route(get('/assets/duckdb-eh-9ubY-jlA.wasm'), O)).toBe('asset');
   expect(route(get('/assets/duckdb-browser-eh.worker-hQa-dcAV.js', 'same-origin'), O)).toBe('asset');
+  expect(route(get('/theme.js', 'no-cors'), O)).toBe('asset'); // index.html's pre-paint theme script: offline too
 });
 
 test("opening the app is 'page' (network first, the cached shell offline)", () => {

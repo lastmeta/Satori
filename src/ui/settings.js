@@ -1,6 +1,7 @@
 // Settings: the technical detail, behind Home (docs/intent/ui.md): the keys and their addresses with Unlock and Lock,
-// the backup, central's URL, the Nostr relays, the Base RPC and the batch's max fee, and this device (storage, install,
-// update). Each section has an id (#settings-<name>) Home's action card scrolls to.
+// the backup, central's URL, the Nostr relays, the Base RPC and the batch's max fee, the appearance (System, Light,
+// Dark: src/ui/theme.js), and this device (storage, install, update). Each section has an id (#settings-<name>) Home's
+// action card scrolls to.
 import { html } from '@arrow-js/core';
 import { version } from '../../package.json';
 import { state } from './state.js';
@@ -129,6 +130,17 @@ function baseForm(a) {
   </section>`;
 }
 
+const THEME_WORDS = { system: 'System', light: 'Light', dark: 'Dark' };
+
+function appearance(a) {
+  return html`
+  <section class="card settings-section" id="settings-appearance">
+    <h2>Appearance</h2>
+    <div class="segmented" role="group" aria-label="Theme">${Object.entries(THEME_WORDS).map(([t, word]) => html`<button class="small-btn" data-test="${`theme-${t}`}" aria-pressed="${() => String(state.theme === t)}" @click="${() => a.setTheme(t)}">${word}</button>`)}</div>
+    <p class="muted small">System follows this device's light or dark setting. Kept on this device only.</p>
+  </section>`;
+}
+
 function device(a) {
   return html`
   <section class="card settings-section" id="settings-device">
@@ -148,6 +160,7 @@ export function settingsTab(a) {
     ${centralForm(a)}
     ${relaysForm(a)}
     ${baseForm(a)}
+    ${appearance(a)}
     ${device(a)}
   </section>`;
 }

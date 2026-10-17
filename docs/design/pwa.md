@@ -63,17 +63,18 @@ lines of code.
 | Request | Rule |
 |---|---|
 | `/assets/*`: the build's hashed files (the app's JS and CSS, DuckDB's wasm and worker) | **Cache first.** A hashed name never changes content, so a cached copy is always right. A miss goes to the network (not stored). |
+| `/theme.js`: the page's pre-paint theme script (Settings → Appearance, `public/theme.js`) | **Cache first** too, so the page has it offline; it is not hashed, so each version's precache fetches it fresh and the cache's name covers its content. |
 | A navigation to `/` or `/index.html` | **Network first**, so a new version shows on the next load; offline, the cached page. |
 | Everything else: other origins (central, the RPCs, the relays, Coinbase), `/rpc`, `/llms.txt`, the manifest, the icons, `/sw.js`, any POST | **Not touched**: the browser fetches it as if there were no worker. `/llms.txt` is always fresh, and offline a navigation to it fails rather than turning into the app. |
 
 - **Precache.** The build's file list, put into `dist/sw.js` by the plugin:
-  `/` and every file under `assets/` except DuckDB's mvp bundle (39 MB, only
+  `/`, `/theme.js` and every file under `assets/` except DuckDB's mvp bundle (39 MB, only
   for browsers without wasm exceptions, which every browser with OPFS has;
   fetched from the network if ever picked). About 36 MB, almost
   all of it DuckDB's eh wasm. Every file is fetched with `cache: 'no-cache'`
   (revalidated, so a host's cached `index.html` is never precached stale).
-- **One cache per version**, named `satori-` + a hash of the file list and
-  the page. On install a hashed file that an older cache already holds is
+- **One cache per version**, named `satori-` + a hash of the file list,
+  the page and `theme.js`. On install a hashed file that an older cache already holds is
   copied rather than downloaded again: a new version with the same DuckDB
   does not fetch its 34 MB wasm twice.
 - **On activate** every other cache is deleted.

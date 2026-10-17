@@ -533,3 +533,50 @@ test('the dev server has no service worker, and removes one left on its origin; 
   expect(await page.evaluate(() => window.satori.install())).toBe('unavailable');
   expect(await page.evaluate(() => window.satori.update())).toBe(false);
 });
+
+test('Settings → Appearance: System, Light, Dark; kept on this device over a reload, set before the first paint; setTheme()', async ({ context, page }) => {
+  await stubCentral(context);
+  // what <html data-theme> is when the parser makes <body>: before the first paint, before the app's modules run
+  await context.addInitScript(() => {
+    new MutationObserver((_, o) => {
+      if (!document.body) return;
+      window.themeAtBody = document.documentElement.dataset.theme ?? null;
+      o.disconnect();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  const LIGHT = 'rgb(246, 247, 249)';
+  const DARK = 'rgb(18, 21, 27)';
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openApp(page);
+  await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+  expect(await bg()).toBe(LIGHT);
+  await go(page, 'settings');
+  const button = (name) => page.locator('#settings-appearance').getByRole('button', { name, exact: true });
+  await expect(button('System')).toHaveAttribute('aria-pressed', 'true');
+  await button('Dark').click();
+  await expect.poll(bg).toBe(DARK);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(button('Dark')).toHaveAttribute('aria-pressed', 'true');
+  await expect(button('System')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('meta[name=theme-color][content="#12151b"]')).toHaveAttribute('media', 'all'); // the browser's bar
+
+  // A reload: dark from the first paint on a light system, and still chosen.
+  await reloadApp(page);
+  expect(await page.evaluate(() => window.themeAtBody)).toBe('dark');
+  expect(await bg()).toBe(DARK);
+  await expect(button('Dark')).toHaveAttribute('aria-pressed', 'true');
+
+  // Light on a dark system; then System follows the system. The API does the same; anything else is refused.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  expect(await page.evaluate(() => window.satori.setTheme('light'))).toBe('light');
+  await expect.poll(bg).toBe(LIGHT);
+  await expect(button('Light')).toHaveAttribute('aria-pressed', 'true');
+  await button('System').click();
+  await expect.poll(bg).toBe(DARK);
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme');
+  await reloadApp(page);
+  expect(await page.evaluate(() => window.themeAtBody)).toBe(null);
+  expect(await bg()).toBe(DARK);
+  await expect(page.evaluate(() => window.satori.setTheme('blue'))).rejects.toThrow(/'system', 'light' or 'dark'/);
+});

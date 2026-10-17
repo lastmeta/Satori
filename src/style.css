@@ -4,7 +4,7 @@
   --bg: #f6f7f9;
   --card: #ffffff;
   --text: #1c2430;
-  --muted: #6b7686;
+  --muted: #677282; /* 4.5:1 on --bg (src/style.test.js) */
   --line: #e3e7ed;
   --accent: #3a5bd9;
   --accent-soft: #e9eefc;
@@ -240,6 +240,8 @@ details.tile[open] > summary { margin-bottom: 0; }
 .backup { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .backup .label { margin-top: 12px; }
 .settings-section h2 { margin-bottom: 4px; }
+.segmented { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 8px; }
+.segmented button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .settings-section form.fields > label:first-of-type { margin-top: 4px; }
 
 /* ── Streams ── */

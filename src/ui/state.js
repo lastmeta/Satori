@@ -1,5 +1,6 @@
 // The UI's one reactive state (ArrowJS). main.js and src/pwa/ write it; the screens read it.
 import { reactive } from '@arrow-js/core';
+import { themeOf } from './theme.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | setup | finish (an earlier version's vault: Unlock once) | home
@@ -62,6 +63,7 @@ export const state = reactive({
   app: { installed: false, canInstall: false, update: false },
   safari: false,
   storage: null, // { persisted, usage, quota }
+  theme: themeOf(), // Settings → Appearance: 'system' | 'light' | 'dark', this device's (src/ui/theme.js)
   // the database (docs/design/storage.md#recovery): the name a WAL DuckDB could not replay was set aside under
   recovered: null,
   noticeDismissed: false,

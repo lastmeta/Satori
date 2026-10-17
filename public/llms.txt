@@ -97,6 +97,8 @@ For agents written against the earlier UI and API:
 
 ## Changed 2026-10-17
 
+- Settings → Appearance: System (default), Light, Dark, and
+  `satori.setTheme(theme)`; `<html data-theme>` when not System.
 - `health().channels[x].lastTraffic`: the channel's last real traffic (ms),
   or null. Home's Central, Base and Network chips glow, faintly, while their
   channel talks (`data-live` on the chip); the status's colour and icon are
@@ -461,6 +463,10 @@ the page's JS context:
     answer, a relay message sent or received), ms since the epoch, or null.
     Home's chip glows while it is recent (`data-live`).
   - `feed`: the activity log, newest first, 20: `{ at, level, text }`.
+- `satori.setTheme(theme)` → the theme: `'system'` (the default: the
+  device's light or dark), `'light'` or `'dark'`, as Settings → Appearance;
+  kept on this device (localStorage, read before the first paint) and set as
+  `<html data-theme>` (none for System). Anything else throws.
 - `satori.go(tab)` → the tab: shows `home`, `streams`, `wallet` or `settings`
   (a leading `#` is fine), as the nav does. Anything else throws.
 - `await satori.install()` → `'accepted' | 'dismissed' | 'unavailable'`: the
@@ -680,8 +686,9 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `base-txs` (the last action's transactions), `base-action-error`.
   Settings: `identity`, `vault` (the Base addresses), `vault-state`,
   `nostr-pubkey`, `unlock`, `lock-vault`, `backup-key` (a private key, or
-  the nsec), `backup-hex` (the Nostr key's hex), `storage`, `install`,
-  `install-hint`, `update-settings`. The inline prompt: `unlock-prompt`
+  the nsec), `backup-hex` (the Nostr key's hex), `theme-system`,
+  `theme-light`, `theme-dark` (Appearance, `aria-pressed` on the chosen
+  one), `storage`, `install`, `install-hint`, `update-settings`. The inline prompt: `unlock-prompt`
   (`data-unlock-for`). Elsewhere: `lock`, `update` (the header), `finish`,
   `pass-note`, `notice` (the recovered database's, with Dismiss) and `fatal`
   (the error that stopped the start).
@@ -768,8 +775,10 @@ build step beyond Vite, MIT licensed.
   claims, sends).
 - `src/ui/`: ArrowJS: `view.js` (the shell, the tabs, Setup and the screens
   before Home), `home.js`, `streams.js`, `wallet.js`, `settings.js`,
-  `parts.js` (the inline Unlock, shared pieces), `state.js`, `format.js`;
-  `src/style.css` (the tokens, light and dark).
+  `parts.js` (the inline Unlock, shared pieces), `state.js`, `format.js`,
+  `glow.js` (the chips' traffic glow), `theme.js` (Appearance;
+  `public/theme.js` applies it before the first paint); `src/style.css` (the
+  tokens: light, dark by the system, dark when chosen).
 - `src/pwa/`: the installed app: `sw.js` (the service worker; a build writes
   it to `dist/sw.js` with the files to precache, `vite.config.js`) and
   `index.js` (register it in a build, Update, Install, persistent storage);

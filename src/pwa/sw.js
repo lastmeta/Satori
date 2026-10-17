@@ -11,7 +11,7 @@
 export function route({ method, url, mode }, origin) {
   const u = new URL(url);
   if (method !== 'GET' || u.origin !== origin) return null;
-  if (u.pathname.startsWith('/assets/')) return 'asset';
+  if (u.pathname.startsWith('/assets/') || u.pathname === '/theme.js') return 'asset'; // theme.js: index.html's, before paint
   return mode === 'navigate' && (u.pathname === '/' || u.pathname === '/index.html') ? 'page' : null;
 }
 
@@ -33,7 +33,7 @@ export function start(sw, files, name) {
 async function precache(files, name) {
   const cache = await caches.open(name);
   await Promise.all(files.map(async (f) => {
-    const old = f !== '/' && (await caches.match(f));
+    const old = f.startsWith('/assets/') && (await caches.match(f)); // the page and /theme.js are not hashed: fetched
     await (old ? cache.put(f, old) : cache.add(new Request(f, { cache: 'no-cache' })));
   }));
 }
