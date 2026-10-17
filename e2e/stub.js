@@ -40,12 +40,19 @@ async function eip191(h) {
  * @returns the stub: set `batch`, `vaults` (vault pubkey → register's `vault_base_address` for it, else null), `otherVault` (the
  *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
  *   predictions batches), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
- *   `history` (stream uuid → its rows, oldest first; null: the route 404s); read `registered`, `logins`, `batches`,
- *   `merkleCalls`, `historyCalls`, `prod`, `blocked`.
+ *   `history` (stream uuid → its rows, oldest first; null: the route 404s); hold() keeps the observations batch (a
+ *   poll, seen while it runs) until the function it returns is called; read `registered`, `polls` (per observations
+ *   batch: how many registers came before it), `logins`, `batches`, `merkleCalls`, `historyCalls`, `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
+  let held = null;
   const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
-    registered: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [] };
+    registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [],
+    hold() {
+      let release;
+      held = new Promise((r) => { release = r; });
+      return () => { held = null; release(); };
+    } };
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
   await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
     stub.blocked.push(ws.url());
@@ -88,6 +95,8 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       case 'GET /api/v1/peer/relay-config':
         return reply(route, 200, { max_streams: 60 });
       case 'GET /api/v1/observations/batch?limit=100': {
+        stub.polls.push(stub.registered.length);
+        await held;
         const { batch } = stub;
         if (stub.delayMs) await new Promise((r) => setTimeout(r, stub.delayMs));
         return reply(route, 200, batch);

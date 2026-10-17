@@ -9,7 +9,7 @@
 // routed to nothing, so the neuron it creates talks to nothing real.
 import { expect, test, chromium } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { loaded } from './load.js';
+import { loaded, polled } from './load.js';
 import { stubCentral } from './stub.js';
 import { CSP } from '../csp.js';
 import { BUILD_DEFAULTS, defaultsFrom } from '../src/config.js';
@@ -94,6 +94,7 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     await expect.poll(async () => (await cdp.send('Page.getInstallabilityErrors')).installabilityErrors).toEqual([]);
 
     // a neuron, on this deployment's defaults: it registers with its central and opens its relays
+    stub.batch = BATCH;
     await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
     await expect(page.locator('body')).toHaveAttribute('data-screen', 'home');
     await expect.poll(() => stub.registered.length).toBe(1);
@@ -102,9 +103,8 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     expect([s.nostr.userRelays, s.nostr.centralWrite]).toEqual([WANT.relays, WANT.centralWrite]);
     await expect.poll(() => [...new Set(opened)].sort()).toEqual([...WANT.relays].sort());
 
-    // DuckDB writes: a poll stores central's stream and forecasts it
-    stub.batch = BATCH;
-    expect((await page.evaluate(() => window.satori.poll())).poll).toMatchObject({ streams: 1, new: 1, predicted: 1 });
+    // DuckDB writes: the first poll, at once after register, stores central's stream and forecasts it
+    expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 });
 
     // the worker now serves the page
     const again = await page.reload();

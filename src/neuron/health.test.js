@@ -57,19 +57,23 @@ describe('ok: predicting', () => {
 });
 
 describe('idle: calm, never red for being closed', () => {
-  test('starting: a new neuron before its first good cycle', () => {
-    const h = health({ rows: [open(NOW - 10 * M)], central: central({ nextPoll: NOW + 12 * M }) });
-    expect(h).toMatchObject({ status: 'idle', title: 'Starting', line: 'First predictions in 12 min.', action: null });
-    expect(h.channels.central).toEqual({ state: 'idle', text: 'First poll in 12 min' });
-    expect(health({ rows: [open(NOW - 10 * M)], central: central({ polling: true }) }).line).toBe('First predictions now…');
+  test('starting: a new neuron before its first good cycle, getting its first predictions at once', () => {
+    for (const c of [central({ polling: true }), central({ nextPoll: NOW }), central({ nextPoll: null })]) { // polling, due, not armed yet
+      const h = health({ rows: [open(NOW - M)], central: c });
+      expect(h).toMatchObject({ status: 'idle', title: 'Starting', line: 'Getting its first predictions…', action: null });
+      expect(h.channels.central).toEqual({ state: 'idle', text: 'First poll now…' });
+    }
+    // a stored time still ahead (none for a new neuron): says when
+    expect(health({ rows: [open(NOW - 10 * M)], central: central({ nextPoll: NOW + 12 * M }) }).line).toBe('First predictions in 12 min.');
   });
 
   test('asleep: closed while a poll came due; catching up, then caught up until the next normal cycle', () => {
     const before = [open(NOW - 3 * D, NOW - 3 * D + 2 * H), good(NOW - 3 * D + H)];
     const woke = open(NOW - 10 * M, NOW - M, { gap: 3 * D - 2 * H - 10 * M, missed: true });
-    let h = health({ rows: [...before, woke], central: central({ nextPoll: NOW + 12 * M }) });
-    expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', line: 'Closed for 3 days. Catching up in 12 min.', action: null });
-    expect(h.channels.central).toEqual({ state: 'idle', text: 'Catching up in 12 min' });
+    let h = health({ rows: [...before, woke], central: central({ polling: true }) }); // the overdue poll runs at once
+    expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', line: 'Closed for 3 days. Catching up now…', action: null });
+    expect(h.channels.central).toEqual({ state: 'idle', text: 'Catching up now…' });
+    expect(health({ rows: [...before, woke], central: central({ nextPoll: NOW + 12 * M }) }).line).toBe('Closed for 3 days. Catching up in 12 min.');
     // it never counts the closed time: three days closed is not overdue
     expect(ids(h)).toEqual(['asleep']);
 
@@ -112,7 +116,7 @@ describe('bad: predictions are failing', () => {
     expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: 'Nothing sent for 13 h.' });
     expect(h.action).toMatchObject({ id: 'central-overdue', button: 'Poll now', do: 'poll' });
     expect(h.channels.central).toEqual({ state: 'bad', text: 'Nothing sent for 13 h' });
-    expect(WINDOW_S).toBe(12.5 * H);
+    expect([WINDOW_S, FIRST_S]).toEqual([12 * H, H]); // 11 h + 1 h of grace; the first poll is at once, + 1 h
     // the same 13 h with 4 of them closed is fine
     expect(health({ rows: [open(NOW - 14 * H, NOW - 10 * H), good(NOW - 13 * H), open(NOW - 6 * H, NOW)] }).status).toBe('ok');
     expect(health({ rows: [open(NOW - FIRST_S - M)] }).reasons[0].id).toBe('central-overdue');

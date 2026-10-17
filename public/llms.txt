@@ -97,6 +97,11 @@ For agents written against the earlier UI and API:
 
 ## Changed 2026-10-17
 
+- No start delay: a new neuron polls central at once, right after register
+  (Home: *Starting*, "Getting its first predictions…"), and so does one
+  reopened with a poll due ("Catching up now…"); a poll still ahead is
+  kept. `status().central.nextPoll` is null until register answers. The
+  health windows: 12 h of open time (was 12.5 h), the first poll within 1 h.
 - `health().title` is one of `'Not predicting'`, `'Starting'`,
   `'Was asleep'`, `'Predicting'`, read from the log whichever reason leads:
   a new neuron with a vault mismatch said "Predicting" and now says
@@ -175,9 +180,10 @@ For agents written against the earlier API:
   as a "vault mismatch" with both addresses; a central without that field
   shows none.
 - Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
-  each stream (under 48 h old). The first poll is 5–30 min after the page
-  loads (random), then every 11 h; the next time is stored, so a reload keeps
-  it. `satori.poll()` (or "Poll now") runs one at once.
+  each stream (under 48 h old). The first poll runs at once, right after
+  register (a new neuron, or one reopened with a poll due; no random wait),
+  then every 11 h; the next time is stored, so a reload keeps it.
+  `satori.poll()` (or "Poll now") runs one at once.
 - Stream: one of central's streams, by uuid, with its name. Observations are
   stored once per (stream, whole second).
 - History: a stream seen for the first time (and, once, every stream already
@@ -409,7 +415,7 @@ the page's JS context:
   database; the keys are, as setup checkpoints them). `fatal`: the screen
   shows the error; nothing was deleted, and a reload tries again.
 - `await satori.health()` → Home's answer, read fresh (docs/design/health.md):
-  - `status`: `'ok'` (predicting: central took predictions within 12.5 h of
+  - `status`: `'ok'` (predicting: central took predictions within 12 h of
     open time, and if delegated Base has this round's batch or its check has
     not run yet), `'idle'` (calm: *Starting* before the first poll, or *Was
     asleep*: a poll came due while Satori was closed; it catches up and says

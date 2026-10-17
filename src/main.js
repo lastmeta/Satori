@@ -142,7 +142,6 @@ async function startNeuron() {
   poller = createPoller(runCycle, { db, onChange: ({ next, running }) => {
     state.central = { ...state.central, nextPoll: next, polling: running };
   } });
-  await poller.start();
   await refresh();
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite },
     onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err) });
@@ -153,7 +152,9 @@ async function startNeuron() {
   state.screen = 'home';
   fillSettings();
   keepStorage(); // after setup and on each load until the browser keeps it: the keys live in this storage
-  registerWith(c).catch((err) => console.error('[satori] register', err));
+  // register, as Lite does, then the schedule: a new neuron or a due poll polls at once, a time still ahead is kept
+  registerWith(c).catch((err) => console.error('[satori] register', err))
+    .then(() => poller.start()).catch((err) => console.error('[satori] poll schedule', err));
   backfill(); // streams with no history yet (all of them after an update) get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();

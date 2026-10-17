@@ -6,7 +6,7 @@
 // build's central (prod) is routed to the stub, so nothing leaves this box.
 import { expect, test, chromium } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { loaded, reloadApp, LOAD_TIMEOUT } from './load.js';
+import { loaded, reloadApp, polled, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 import { CSP } from '../csp.js';
 
@@ -105,8 +105,7 @@ test.describe.serial('a build, in a browser profile', () => {
   });
 
   test('offline: the page, DuckDB and the stored neuron load from the cache; central, Base and /llms.txt fail and say so', async () => {
-    const poll = await page.evaluate(() => window.satori.poll());
-    expect(poll.poll).toMatchObject({ streams: 1, new: 1, predicted: 1 });
+    expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 }); // the first poll, at once after setup
     const { identity, vault } = await status(page);
 
     await context.unroute(`${PROD}/**`); // central is now only the network, which is gone

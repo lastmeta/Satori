@@ -6,7 +6,7 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
-import { openApp, LOAD_TIMEOUT } from './load.js';
+import { openApp, polled, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
 const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
@@ -123,22 +123,20 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   test.setTimeout(240_000);
   const { s, rpc, central } = await setup(context);
   await seed(page, month(nowS(), { closed: [6, 7], part: [3] }));
+  centralAt(central, nowS() - 60);
   await start(page);
   const st = await page.evaluate(() => window.satori.base());
   rpc.eth[st.identity.address.toLowerCase()] = 10n ** 17n;
   rpc.eth[st.vault.address.toLowerCase()] = 10n ** 17n;
   await page.evaluate(() => window.satori.base());
 
-  // A month in, the last cycle 2 h ago: predicting; the first poll of this session soon.
+  // A month in: this session's first poll runs at once, central's 8 streams with their history, each forecast
+  // (bvar), sent. Predicting.
+  expect((await polled(page)).lastSubmit).toMatchObject({ successful: 8 });
   let h = await health(page);
   expect(h).toMatchObject({ status: 'ok', title: 'Predicting', action: null, reasons: [] });
-  expect(h.line).toMatch(/^Sent 8 predictions (\d+ (min|h) ago|just now) · next in \d+ min$/);
   expect(h.days).toHaveLength(30);
   expect(h.days.slice(-8).map((d) => d.code)).toEqual(['closed', 'closed', 'full', 'full', 'part', 'full', 'full', 'full']); // days 7 and 6 ago closed, 3 ago Base failed
-
-  // Poll now: central's 8 streams with their history, each forecast (bvar), sent.
-  centralAt(central, nowS() - 60);
-  expect((await page.evaluate(() => window.satori.poll())).submit).toMatchObject({ successful: 8 });
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
   await expect(page.locator('[data-test=health-line]')).toHaveText(/^Sent 8 predictions just now · next in 11 h$/);
@@ -205,17 +203,17 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   const { central } = await setup(context);
   const closedAt = dayAt(nowS(), 2, 12); // closed at noon two days ago: 1.5 to 2.5 days, "2 days"
   await seed(page, month(nowS(), { closed: [9], until: closedAt, lastGood: closedAt - H }));
+  centralAt(central, nowS() - 60);
+  const release = central.hold(); // the catch-up poll runs at once; held here to see it
   await start(page);
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', action: null });
+  expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', action: null, line: 'Closed for 2 days. Catching up now…' });
   await expect(page.locator('[data-test=health-title]')).toHaveText('Was asleep');
-  expect(h.line).toMatch(/^Closed for 2 days\. Catching up in \d+ min\.$/);
-  expect(h.channels.central.text).toMatch(/^Catching up in \d+ min$/);
+  expect(h.channels.central.text).toBe('Catching up now…');
   expect(h.feed).toContainEqual(expect.objectContaining({ level: 'idle', text: 'Satori was closed for 2 d' }));
   expect(h.days.slice(-3).map((d) => [d.code, d.ran])).toEqual([['full', true], ['closed', false], ['closed', true]]);
 
-  centralAt(central, nowS() - 60);
-  await page.evaluate(() => window.satori.poll());
+  release(); // no Poll now
   await expect(page.locator('[data-test=health-line]')).toHaveText('Closed for 2 days. Caught up just now.');
   await expect(hero(page)).toHaveAttribute('data-s', 'idle'); // until the next normal cycle
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting'); // caught up
@@ -236,9 +234,9 @@ test('bad: central refuses two batches in a row, then the login; the card goes t
   test.setTimeout(240_000);
   const { central } = await setup(context);
   await seed(page, month(nowS(), { closed: [12], part: [5] }));
-  await start(page);
   centralAt(central, nowS() - 3 * H);
-  await page.evaluate(() => window.satori.poll());
+  await start(page);
+  await polled(page); // the first poll, at once
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
 
   // Once: retrying (warn), still predicting. Twice in a row: not predicting (bad).
@@ -275,21 +273,24 @@ test('bad: central refuses two batches in a row, then the login; the card goes t
   expect(central.prod).toEqual([]);
 });
 
-test('starting: a new neuron is calm before its first poll, then predicting; the days before it are not closed days', async ({ context, page }) => {
+test('starting: a new neuron polls at once, calm while it gets its first predictions, then predicting with no Poll now; the days before it are not closed days', async ({ context, page }) => {
   const { central } = await setup(context);
+  centralAt(central, nowS() - 60);
+  const release = central.hold(); // the first poll runs at once after register; held here to see it
   await openApp(page);
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
   const h = await health(page);
-  expect(h).toMatchObject({ status: 'idle', title: 'Starting', action: null });
-  expect(h.line).toMatch(/^First predictions in \d+ min\.$/);
+  expect(h).toMatchObject({ status: 'idle', title: 'Starting', line: 'Getting its first predictions…', action: null });
+  expect(h.channels.central.text).toBe('First poll now…');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('Getting its first predictions…');
+  await expect.poll(() => central.polls).toEqual([1]); // after the register
   expect(h.days.at(-1)).toMatchObject({ code: 'closed', ran: true, today: true });
   expect(h.days.slice(0, -1).every((d) => d.code === 'before' && !d.ran)).toBe(true);
   const before = page.locator('[data-test=day][data-code=before]');
   await expect(before).toHaveCount(29);
   await expect(before.first()).toHaveAttribute('title', /^\w+ \d+: Before this neuron$/);
   await expect(page.locator('[data-test=days-summary]')).toHaveText('0 full days');
-  centralAt(central, nowS() - 60);
-  await page.evaluate(() => window.satori.poll());
+  release();
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
   await expect(page.locator('[data-test=health-line]')).toHaveText('Sent 8 predictions just now · next in 11 h');
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
@@ -301,6 +302,7 @@ test('starting: a new neuron is calm before its first poll, then predicting; the
 test('starting with a vault mismatch: the title says Starting; the mismatch leads the status, the line and the card', async ({ context, page }) => {
   const { central } = await setup(context);
   central.otherVault = fx.vectors[3].ethAddress; // central pays this vault's rewards to another Base address
+  const release = central.hold(); // the first poll runs at once after register; held here to see the title before it
   await start(page);
   await expect(hero(page)).toHaveAttribute('data-s', 'warn'); // registered: the mismatch
   let h = await health(page);
@@ -313,7 +315,7 @@ test('starting with a vault mismatch: the title says Starting; the mismatch lead
 
   // The first poll: predicting, the mismatch still there.
   centralAt(central, nowS() - 60);
-  await page.evaluate(() => window.satori.poll());
+  release();
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
   h = await health(page);
   expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'vault-mismatch' } });

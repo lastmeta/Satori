@@ -18,8 +18,8 @@ fabricated logs). Home draws it, and agents read the same object:
 
 This is local to the browser. Nothing new goes over the network, and Satori
 Lite has no counterpart to follow: its dashboard shows raw state. The rules
-reuse Lite's own cadence (an 11 h poll, a 5–30 min start jitter) for their
-thresholds.
+reuse Lite's 11 h poll for their thresholds. The first poll runs at once
+(no start jitter, [central.md](central.md#deviations-from-satori-lite-and-why)).
 
 ## The activity log
 
@@ -50,10 +50,9 @@ Times, in `src/neuron/health.js`:
 | Name | Value | Meaning |
 |---|---|---|
 | `CADENCE_S` | 11 h | Lite's poll interval |
-| `JITTER_S` | 30 min | the most Lite's start jitter waits |
 | `GRACE_S` | 1 h | slack for a slow cycle or a throttled tab |
-| `WINDOW_S` | 12.5 h | `CADENCE_S + JITTER_S + GRACE_S`: the open time a good cycle may take after the last one |
-| `FIRST_S` | 1.5 h | `JITTER_S + GRACE_S`: the open time the first good cycle may take |
+| `WINDOW_S` | 12 h | `CADENCE_S + GRACE_S`: the open time a good cycle may take after the last one |
+| `FIRST_S` | 1 h | `GRACE_S`: the open time the first good cycle may take (it polls at once) |
 | `HEARTBEAT_S` | 5 min | how often a session's `until` moves |
 | `SLEEP_S` | 15 min | a heartbeat this late means the page did not run: a new session |
 
@@ -80,11 +79,12 @@ the worst one: `bad` > `warn` > `idle` > `ok`.
   check has not run yet. No channel is in error.
 - **idle**: not predicting right now, for a calm reason. It is grey and never
   red.
-  - *Was asleep*: a session missed work. It catches up on open (Lite's 5–30
-    min jitter) and shows until the next normal cycle, which is the second
+  - *Was asleep*: a session missed work. It catches up at once on open
+    ("Catching up now…") and shows until the next normal cycle, which is the second
     good cycle after that session (the title says *Predicting* once it
     caught up).
-  - *Starting*: a new neuron before its first good cycle, within `FIRST_S`.
+  - *Starting*: a new neuron before its first good cycle, within `FIRST_S`:
+    "Getting its first predictions…" (it polls at once, after register).
 - **warn** (needs you): predictions go out, but something needs the person.
 - **bad** (problem): predictions are failing.
 
@@ -153,8 +153,8 @@ next in 9 h". Words appear only when something needs them.
 Each is `{ state: ok | warn | bad | idle, text }`, the state from the
 reasons above.
 
-- **Central**: ok "83 sent 2 h ago"; idle "First poll in 12 min",
-  "Catching up in 12 min"; warn "Last poll failed", "Vault mismatch",
+- **Central**: ok "83 sent 2 h ago"; idle "First poll now…",
+  "Catching up now…" ("… in 2 h" when a poll is still ahead); warn "Last poll failed", "Vault mismatch",
   "Not registered"; bad "Database error", "Login refused", "2 failed in a
   row", "Nothing sent for 14 h".
 - **Base**: ok "Round 20742 sent", "Round 20742 due"; idle "Not delegated"

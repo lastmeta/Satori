@@ -23,3 +23,10 @@ export async function reloadApp(page) {
   await page.reload();
   return loaded(page);
 }
+
+/** Wait until a poll has finished (a new neuron's first runs at once, after register); → status().central. */
+export async function polled(page) {
+  const central = () => page.evaluate(async () => (await window.satori.status()).central).catch(() => null);
+  await expect.poll(async () => { const c = await central(); return !!c?.lastPoll && !c.polling; }, { timeout: LOAD_TIMEOUT }).toBe(true);
+  return central();
+}

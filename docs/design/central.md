@@ -10,7 +10,7 @@ at `:65`).
 
 ```
 page load ─▶ register (wallet-pubkey, vault-pubkey)            once per start
-         └─▶ schedule: first poll 5–30 min later, then every 11 h
+         └─▶ schedule: first poll at once (a stored time still ahead is kept), then every 11 h
 poll ─▶ GET observations/batch ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams with a new row
      ─▶ queue {value: t2, t1_value: t1, observed_at, hash} ─▶ login (identity) ─▶ POST predictions/batch
 ```
@@ -38,7 +38,7 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 |---|---|---|
 | Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>`. The vault's public key is in clear in the keys record ([keys.md](keys.md#the-record)), so it is always sent. The result is shown, never retried in a loop. |
 | Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_base_address: null`); an identity conflict is a 409 (`c/main.py:772-907`). | Compares the returned `vault_base_address` (the Base address central pays this vault's rewards to) with our vault's Base address, case-insensitively, and shows a **vault mismatch** with both addresses when they differ, or when central has none ([below](#the-vault-in-registers-answer)). The result is `vaultMismatch: false \| 'other' \| 'none' \| null` (null: a central without the field, unknown). |
-| Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | Same numbers. `meta.next_poll_at` is stored, so a reload keeps the schedule (see Deviations). **Poll now** runs a cycle at once. |
+| Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), on every start, then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | The first poll right after register, with no random wait: a new neuron at once, a reopened one at once when a poll came due while it was closed; then 11 h after every poll, as Lite. `meta.next_poll_at` is stored, so a reload keeps a time still ahead (see Deviations). **Poll now** runs a cycle at once. |
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
 | Store | `value` = float; epoch = `observed_at`, falling back to `ts` (`data_helper.py:40-93`), truncated to whole seconds (`engine.py:669-673`); `INSERT OR IGNORE` on `(stream_uuid, epoch)` (`stream_store.py:48-56,150-170`); the stream's name/meta are upserted (`server.py:1334-1358`). | Same rule into `observations (stream_uuid, ts, value)`, primary key `(stream_uuid, ts)`; `streams (uuid, name, meta)`. Rows with no stream, no finite value or no time are dropped. |
 | Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Same: `addObservations` returns the streams that got a new row; only those are forecast. |
@@ -238,8 +238,9 @@ relay list and Base's config are read from the new central at once.
 
 | Deviation | Why |
 |---|---|
-| `meta.next_poll_at` is stored; on load a future time is kept, and a due (or missing, or more than 11 h ahead) one gets Lite's 5–30 min start jitter. | A tab reloads far more often than a Docker container restarts. Lite's "jitter after every start" would make each reload push the poll back (never polling if reloaded every few minutes); storing the time keeps the 11 h cadence. |
-| **Poll now** (Streams) and `window.satori.poll()` run a cycle at once; the next poll is then 11 h later. A second call while one runs returns the same run. | The owner reviews in the running app and agents drive it: neither should wait up to 30 min, or 11 h, to see a cycle. |
+| No start delay: Lite waits a random 5–30 min on every start; we poll at once, right after register, when the poll is due (a new neuron: none stored; a reopened one: `next_poll_at` passed while it was closed). | Lite's jitter spreads a fleet of containers that restart together (an update, a reboot); browser opens are not synchronized, so there is no herd to spread, and the person who just opened Satori sees it get to work. |
+| `meta.next_poll_at` is stored; on load a time still ahead (by at most 11 h) is kept; a due, missing or too-far one means poll now. | A tab reloads far more often than a Docker container restarts. Polling on every load would poll on every reload; storing the time keeps the 11 h cadence. |
+| **Poll now** (Streams) and `window.satori.poll()` run a cycle at once; the next poll is then 11 h later. A second call while one runs returns the same run. | The owner reviews in the running app and agents drive it: neither should wait up to 11 h to see a cycle. |
 | Pending predictions live in the `predictions` table, so they survive a reload; Lite's queue is in memory. | The browser has no long-lived process; a queue lost on every reload would rarely be resent. |
 | Pending predictions older than 2 × 11 h are dropped before a submission; Lite's queue has no cap. | Lite's queue is emptied by every restart; ours is not, so a central that refused every batch would grow it without end. Two polls' worth is enough to ride out one failed cycle. |
 | Changing the central URL drops the pending queue and the stream list (see Settings). | Lite has one central per install; uuids differ between centrals. |
@@ -254,3 +255,14 @@ relay list and Base's config are read from the new central at once.
 | The register result checks the vault (`vaultMismatch`, with both Base addresses); Lite ignores register's answer (`server.py:402-405`). | Central keeps the first vault registered for an identity and pays that vault's Base address: a mismatch means this vault is not paid ([the vault in register's answer](#the-vault-in-registers-answer)). |
 | The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the identity and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
 | Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |
+
+## Live: the first poll at once
+
+2026-10-17 15:15, the dev server on :5180 against central2, a fresh browser
+profile, new random keys, no stubs and no Poll now: `setup()` returned in
+0.8 s; register, then the first poll began about 1.5 s later: 82 streams,
+82 new, 82 forecast, and central accepted 82 of 82 16.2 s after setup.
+Home read *Starting* until then, then *Predicting*. Nothing was sent to
+prod.
+
+<img src="../screenshots/home-live-first-poll.png" alt="Home 16 s after setup: 82 sent, no Poll now" width="240">

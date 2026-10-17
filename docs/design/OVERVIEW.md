@@ -21,7 +21,7 @@ does ([central.md](central.md)):
 
 ```
 page load ──▶ register with central (identity + vault public keys)
-first poll 5–30 min later, then every 11 h (or Poll now):
+first poll at once (unless one is still ahead), then every 11 h (or Poll now):
   GET observations ──▶ store (DuckDB) ──▶ history for new streams ──▶ forecast streams with a new row ──▶ queue ──▶ login (identity) ──▶ POST predictions
                        insert or ignore    once per stream (central)    each one's bvar spec, evolved      pending      signs the challenge    batch; kept on failure
 ```
@@ -33,8 +33,10 @@ first poll 5–30 min later, then every 11 h (or Poll now):
    or has no vault for this identity (register's `vault_base_address`).
    A central that does not send that field leaves it unknown: no mismatch.
 2. **Poll** central's observations batch (the latest observation of each
-   stream, under 48 h old). The next poll time is stored, so a reload keeps
-   the 11 h cadence; a due one waits Lite's 5–30 min start jitter.
+   stream, under 48 h old), right after register: a new neuron, or one
+   reopened with a poll due, polls at once (Lite waits a random 5–30 min;
+   browser opens are not synchronized). The next poll time is stored, so a
+   reload keeps the 11 h cadence.
 3. **Store** each observation once per (stream, whole second).
 4. **History**: a stream seen for the first time gets its past from central
    (`/observations/history`, an addition beyond Lite; up to 1,000 hourly rows),
@@ -229,8 +231,8 @@ The deploy image added none to npm; it is
   viem's `verifyMessage`, register, login, the 401 retry, the one resend, timeouts and
   network errors, with a mocked fetch); neuron (storage and dedupe,
   forecasting only new rows, the kept queue and its cap, a failed poll, a
-  local failure, register and mismatch, the schedule, its jitter and a failed
-  save); engine (namaste_club's own tests ported, recovery and shrinkage,
+  local failure, register and mismatch, the schedule (at once when due) and
+  a failed save); engine (namaste_club's own tests ported, recovery and shrinkage,
   minimum data, gaps, a random-walk guard, and parity with namaste_club's code:
   `scripts/engine_parity.py`; the step: the same series on any grid gives the
   same model; the horizon in 1, 2 and 3 steps); bvar (every equation's
@@ -265,8 +267,8 @@ The deploy image added none to npm; it is
   build variables: unset keeps each default, set replaces it, a bad one is
   refused (`src/config.test.js`).
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
-  stub and prod blocked: create → register (headers checked) → first poll
-  5–30 min out → Poll now: two streams stored, forecast and sent after an
+  stub and prod blocked: create → register (headers checked) → the first
+  poll at once, after register, no Poll now: two streams stored, forecast and sent after an
   identity-signed EIP-191 login (the stub verifies EIP-191 only; payload
   strings and hashes checked) → second tab
   refused → reload keeps the schedule and registers again → Unlock (wrong

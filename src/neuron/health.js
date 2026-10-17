@@ -1,13 +1,12 @@
 // Home's answer to "is my neuron predicting every day on its own, and is
 // anything broken?" (docs/design/health.md): the activity log and the current
 // state in, one object out. Pure: the UI and window.satori.health() draw the same.
-import { POLL_EVERY_S, FIRST_POLL_S } from './index.js';
+import { POLL_EVERY_S } from './index.js';
 
 export const CADENCE_S = POLL_EVERY_S; // 11 h, Lite's
-export const JITTER_S = FIRST_POLL_S[1]; // Lite's start jitter waits at most 30 min
 export const GRACE_S = 3600;
-export const WINDOW_S = CADENCE_S + JITTER_S + GRACE_S; // open time a good cycle may take after the last one
-export const FIRST_S = JITTER_S + GRACE_S; // … and the first one
+export const WINDOW_S = CADENCE_S + GRACE_S; // open time a good cycle may take after the last one
+export const FIRST_S = GRACE_S; // … and the first one (it polls at once)
 export const HEARTBEAT_S = 300;
 export const SLEEP_S = 900; // a heartbeat this late: the page did not run (closed, asleep, frozen)
 export const KEEP_S = 90 * 86400;
@@ -93,7 +92,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
   let failures = 0;
   for (let i = cycles.length - 1; i >= 0 && isFailed(cycles[i]); i--) failures++;
   const next = fmtIn((central?.nextPoll ?? now) - now);
-  const polling = !!central?.polling;
+  const atOnce = !!central?.polling || !(central?.nextPoll > now); // polling, due, or not armed yet (registering first)
 
   if (failures) {
     const err = last.data.error ?? `central took none of ${last.data.sent} predictions`;
@@ -147,16 +146,16 @@ function centralReasons({ now, rows, sessions, central, app }) {
     const closed = `Closed for ${fmtDur(woke.data.gap ?? 0)}.`;
     const caught = after[0];
     const install = app?.canInstall && !app?.installed;
-    const catching = polling ? 'Catching up now…' : `Catching up ${next}`;
+    const catching = atOnce ? 'Catching up now…' : `Catching up ${next}`;
     out.push(reason('asleep', 'idle', 'central', {
-      line: caught ? `${closed} Caught up ${fmtAgo(now - caught.at)}.` : `${closed} ${catching}${polling ? '' : '.'}`,
+      line: caught ? `${closed} Caught up ${fmtAgo(now - caught.at)}.` : `${closed} ${catching}${atOnce ? '' : '.'}`,
       chip: caught ? null : catching,
       ...(install ? { text: 'The neuron only runs while Satori is open. Install it so it stays open in its own window.',
         button: 'Install', act: { do: 'install' } } : {}) }));
   }
   if (!lastGood && !failures && !overdue) {
-    out.push(reason('starting', 'idle', 'central', { line: polling ? 'First predictions now…' : `First predictions ${next}.`,
-      chip: polling ? 'First poll now…' : `First poll ${next}` }));
+    out.push(reason('starting', 'idle', 'central', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
+      chip: atOnce ? 'First poll now…' : `First poll ${next}` }));
   }
   // the title: the truth about central's predictions, from the log, whichever reason leads (failing: a bad one above)
   const title = out.some((r) => r.status === 'bad') ? 'Not predicting' : !lastGood ? 'Starting'

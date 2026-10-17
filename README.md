@@ -28,7 +28,7 @@ power to the identity, which sends a batch of up/down predictions every UTC
 round on its own):
 
 ```
-register ─▶ poll central (5–30 min after start, then every 11 h) ─▶ store ─▶ forecast new rows ─▶ submit the batch
+register ─▶ poll central (at once when due, then every 11 h) ─▶ store ─▶ forecast new rows ─▶ submit the batch
 relays ─▶ subscribed stream's observation (34601) ─▶ store ─▶ forecast two cadences ahead (t2) ─▶ publish <stream>_pred (34601)
 Base: Unlock ─▶ delegate ─▶ each round the identity: registry streams ─▶ forecast ─▶ UP/DOWN ─▶ one batch tx; claims, sends
 ```

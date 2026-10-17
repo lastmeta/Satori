@@ -1,5 +1,5 @@
 // The neuron's flow, as Satori Lite runs it (docs/design/central.md):
-//   page load → register with central; first poll 5–30 min later, then every 11 h:
+//   page load → register with central, then poll at once (a stored time still ahead is kept), then every 11 h:
 //   poll ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams with a new row ─▶ send everything pending
 // The forecasts: each target's own bvar spec, evolved after each poll (docs/design/engine.md).
 import { normalizeObservation, predictionItem } from '../central/index.js';
@@ -9,7 +9,6 @@ import { createSchedule } from './schedule.js';
 import { backfillHistory } from './history.js';
 
 export const POLL_EVERY_S = 11 * 3600; // start.py:4785-4876
-export const FIRST_POLL_S = [5 * 60, 30 * 60]; // start.py:4777
 export const BATCH_LIMIT = 100;
 export const KEEP_PENDING_S = 2 * POLL_EVERY_S; // the cap on the kept queue (Lite's in-memory queue has none)
 
@@ -123,17 +122,15 @@ export async function cycle({ db, central, now = nowS, seed = '', engine = runMo
   }
 }
 
-/** Lite's start delay: uniform whole seconds in 5–30 min. */
-export const startJitter = (rand = Math.random) =>
-  FIRST_POLL_S[0] + Math.floor(rand() * (FIRST_POLL_S[1] - FIRST_POLL_S[0] + 1));
-
 /**
  * When the first poll after a (re)load is due: a stored time still ahead (by
- * at most 11 h) is kept, so a reload doesn't reset the schedule; otherwise now
- * plus Lite's start jitter.
+ * at most 11 h) is kept, so a reload doesn't reset the schedule; otherwise
+ * (a new neuron, a poll that came due while closed) now. Lite waits a random
+ * 5–30 min on every start; browser opens are not synchronized, so this has no
+ * herd to spread (docs/design/central.md#deviations).
  */
-export function firstPollAt(stored, now, rand) {
-  return typeof stored === 'number' && stored > now && stored <= now + POLL_EVERY_S ? stored : now + startJitter(rand);
+export function firstPollAt(stored, now) {
+  return typeof stored === 'number' && stored > now && stored <= now + POLL_EVERY_S ? stored : now;
 }
 
 /**
@@ -143,7 +140,7 @@ export function firstPollAt(stored, now, rand) {
  * it; idle() waits for it without starting one. onChange({ next, running })
  * follows both.
  */
-export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeout, clearTimeout, onChange = () => {} }) {
+export function createPoller(run, { db, now = nowS, setTimeout, clearTimeout, onChange = () => {} }) {
   const s = createSchedule(run, {
     now, setTimeout, clearTimeout, name: 'poll', after: () => now() + POLL_EVERY_S,
     onChange: () => onChange({ next: s.next, running: s.running }),
@@ -157,7 +154,7 @@ export function createPoller(run, { db, now = nowS, rand = Math.random, setTimeo
     },
   });
   return {
-    start: async () => s.start(firstPollAt(await db.get('next_poll_at'), now(), rand)),
+    start: async () => s.start(firstPollAt(await db.get('next_poll_at'), now())),
     poll: s.run,
     idle: s.idle,
     get next() { return s.next; },

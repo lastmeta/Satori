@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { memoryDb } from '../../test/memory-db.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
-  cycle, register, firstPollAt, startJitter, createPoller, centralStatus, claimTab, modelsOf, POLL_EVERY_S, FIRST_POLL_S, BATCH_LIMIT,
+  cycle, register, firstPollAt, createPoller, centralStatus, claimTab, modelsOf, POLL_EVERY_S, BATCH_LIMIT,
 } from './index.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
@@ -254,22 +254,12 @@ describe('register', () => {
 });
 
 describe('schedule', () => {
-  test("the start jitter is Lite's uniform 5–30 min", () => {
-    expect(FIRST_POLL_S).toEqual([300, 1800]);
+  test('no start delay: a new neuron (none stored) or a due poll is now; a stored time still ahead (by at most 11 h) is kept', () => {
     expect(POLL_EVERY_S).toBe(11 * 3600);
-    expect(startJitter(() => 0)).toBe(300);
-    expect(startJitter(() => 0.999999)).toBe(1800);
-    for (let i = 0; i < 200; i++) {
-      const j = startJitter();
-      expect(Number.isInteger(j) && j >= 300 && j <= 1800).toBe(true);
-    }
-  });
-  test('a stored time still ahead is kept; due, missing or too far ahead → now + jitter', () => {
-    const half = () => 0.5;
-    expect(firstPollAt(T + 100, T, half)).toBe(T + 100);
-    expect(firstPollAt(T + POLL_EVERY_S, T, half)).toBe(T + POLL_EVERY_S);
+    expect(firstPollAt(T + 100, T)).toBe(T + 100);
+    expect(firstPollAt(T + POLL_EVERY_S, T)).toBe(T + POLL_EVERY_S);
     for (const stored of [undefined, null, T, T - 5000, T + POLL_EVERY_S + 1, 'x']) {
-      expect(firstPollAt(stored, T, half)).toBe(T + 1050);
+      expect(firstPollAt(stored, T)).toBe(T);
     }
   });
 });
@@ -280,7 +270,7 @@ describe('createPoller', () => {
     const ran = [];
     const changes = [];
     const poller = createPoller(async () => { ran.push(clock); return runImpl?.(); }, {
-      db: store, now, rand: () => 0,
+      db: store, now,
       setTimeout: (fn, ms) => timers.push({ fn, ms, live: true }) - 1,
       clearTimeout: (id) => { if (timers[id]) timers[id].live = false; },
       onChange: (c) => changes.push(c),
@@ -289,15 +279,14 @@ describe('createPoller', () => {
     return { poller, timers, live, ran, changes };
   }
 
-  test('start: due → 5–30 min, persisted; the timer runs a cycle, then every 11 h', async () => {
+  test('start: a new neuron polls at once (persisted); the timer runs a cycle, then every 11 h', async () => {
     const h = harness();
     const t0 = clock;
     await h.poller.start();
-    expect(await db.get('next_poll_at')).toBe(clock + 300);
-    expect(h.poller.next).toBe(clock + 300);
+    expect(await db.get('next_poll_at')).toBe(clock);
+    expect(h.poller.next).toBe(clock);
     expect(h.live()).toHaveLength(1);
-    expect(h.live()[0].ms).toBe(300_000);
-    clock += 300;
+    expect(h.live()[0].ms).toBe(0);
     h.live()[0].fn();
     await vi.waitFor(() => expect(h.timers.length).toBe(2));
     expect(h.ran).toEqual([clock]);
@@ -305,8 +294,16 @@ describe('createPoller', () => {
     expect(h.live().map((t) => t.ms)).toEqual([POLL_EVERY_S * 1000]);
     // One flag, the poller's: onChange tells the UI when it runs and what is next.
     expect(h.changes).toEqual([
-      { next: t0 + 300, running: false }, { next: t0 + 300, running: true }, { next: clock + POLL_EVERY_S, running: false },
+      { next: t0, running: false }, { next: t0, running: true }, { next: clock + POLL_EVERY_S, running: false },
     ]);
+  });
+
+  test('reopened with a poll overdue: at once', async () => {
+    await db.set('next_poll_at', clock - 3 * 86400);
+    const h = harness();
+    await h.poller.start();
+    expect(h.poller.next).toBe(clock);
+    expect(h.live().map((t) => t.ms)).toEqual([0]);
   });
 
   test('a reload keeps a stored time that is still ahead', async () => {

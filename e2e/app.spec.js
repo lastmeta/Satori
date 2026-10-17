@@ -12,7 +12,7 @@ import { verifyMessage } from 'viem';
 import { nostrPubkey, nsec } from '../src/nostr/event.js';
 import { forecast, STEP_S } from '../src/engine/index.js';
 import { runModels } from '../src/engine/evolve.js';
-import { openApp, reloadApp, LOAD_TIMEOUT } from './load.js';
+import { openApp, reloadApp, polled, LOAD_TIMEOUT } from './load.js';
 import { stubCentral as stubAt, CENTRAL } from './stub.js';
 
 const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
@@ -44,7 +44,7 @@ const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
 /** A stream's row by its name (another row's Model column may name it as a companion). */
 const row = (page, name) => page.locator('[data-test=stream]').filter({ has: page.locator('.sname', { hasText: new RegExp(`^${name}$`) }) });
 
-test('create (a non-Latin passphrase), register, Poll now, reload keeps the schedule, unlock, backup, lock, one tab', async ({ context, page }) => {
+test('create (a non-Latin passphrase), register, the first poll at once, reload keeps the schedule, unlock, backup, lock, one tab', async ({ context, page }) => {
   const stub = await stubCentral(context);
   await context.addInitScript(() => {
     window.violations = [];
@@ -94,21 +94,12 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   expect(reg['neuron-version']).toBe(`browser-${version}`);
   expect(reg.authorization).toBeUndefined();
 
-  // The first poll is Lite's 5–30 min after start; nothing has been polled yet. Home: starting.
-  await expect(page.locator('[data-test=health]')).toHaveAttribute('data-s', 'idle');
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');
+  // The first poll runs at once, right after register (no 5–30 min wait, no Poll now): two streams stored,
+  // forecast, sent after an identity-signed login.
   await go(page, 'streams');
   await expect(page).toHaveURL(/#streams$/);
-  const before = await status(page);
-  const now = Date.now() / 1000;
-  expect(before.central.nextPoll).toBeGreaterThan(now + 290);
-  expect(before.central.nextPoll).toBeLessThan(now + 1810);
-  await expect(page.locator('[data-test=last-poll]')).toHaveText('Not yet');
-  await expect(page.getByText('Streams: none yet. They arrive with the first poll.')).toBeVisible();
-
-  // Poll now: two streams stored, forecast, sent after an identity-signed login.
-  await page.getByRole('button', { name: 'Poll now' }).click();
   await expect(page.locator('[data-test=last-submit]')).toContainText('2 of 2 accepted');
+  expect(stub.polls).toEqual([1]); // one poll, after the register
   await expect(page.locator('[data-test=last-poll]')).toContainText('2 streams, 2 new, 2 predicted');
   await expect(page.locator('[data-test=pending]')).toHaveText('0');
   await expect(page.locator('[data-test=stream]')).toHaveCount(2);
@@ -143,7 +134,8 @@ test('create (a non-Latin passphrase), register, Poll now, reload keeps the sche
   await expect(idAddr).toHaveText(identity);
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered).toHaveLength(2);
-  expect((await status(page)).central.nextPoll).toBe(after.central.nextPoll);
+  await expect.poll(async () => (await status(page)).central.nextPoll).toBe(after.central.nextPoll);
+  expect(stub.polls).toEqual([1]); // not due yet: it waits
   await expect(page.locator('[data-test=stream]')).toHaveCount(2);
   await expect(page.locator('[data-test=last-submit]')).toContainText('2 of 2 accepted');
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
@@ -225,7 +217,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   }, v.words);
   expect(s0).toMatchObject({ screen: 'home', vault: v.ethAddress, unlocked: false });
   expect(s0.identity).toMatch(ADDRESS);
-  expect(s0.central).toMatchObject({ url: CENTRAL, pending: 0, lastPoll: null, lastSubmit: null });
+  expect(s0.central).toMatchObject({ url: CENTRAL });
   await expect.poll(async () => (await status(page)).central.registration?.ok).toBe(true);
   const registration = (await status(page)).central.registration;
   expect(registration).toMatchObject({ peer_id: 7, vault: v.ethAddress, vault_base_address: v.ethAddress, vaultMismatch: false });
@@ -234,9 +226,9 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   await expect(page.evaluate(() => window.satori.setup({ passphrase: 'short' }))).rejects.toThrow(/already set up/i);
 
   const poll = () => page.evaluate(() => window.satori.poll());
-  const r1 = await poll();
-  expect(r1.poll).toMatchObject({ streams: 2, new: 2, predicted: 2 });
-  expect(r1.submit).toMatchObject({ total_submitted: 2, successful: 2 });
+  const first = await polled(page); // at once after register
+  expect(first.lastPoll).toMatchObject({ streams: 2, new: 2, predicted: 2 });
+  expect(first.lastSubmit).toMatchObject({ total_submitted: 2, successful: 2 });
   // The same batch again: nothing new, nothing sent.
   expect(await poll()).toMatchObject({ poll: { streams: 2, new: 0, predicted: 0 }, submit: null });
   expect(stub.batches).toHaveLength(1);
@@ -339,7 +331,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(stub.prod).toEqual([]);
 });
 
-test('central with history: the first Poll now backfills each stream and forecasts it with bvar (its spec from the identity)', async ({ context, page }) => {
+test('central with history: the first poll backfills each stream and forecasts it with bvar (its spec from the identity)', async ({ context, page }) => {
   const stub = await stubAt(context);
   const names = ['bitcoin', 'eth', 'gold'];
   const at = T0 - 3600; // the poll's rows; history ends an hour before
@@ -350,9 +342,9 @@ test('central with history: the first Poll now backfills each stream and forecas
   stub.batch = names.map((n, i) => entry(`u-${n}`, n, at, String(price(i, 600))));
   await openApp(page);
   await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
-  await expect.poll(() => stub.registered.length).toBe(1);
-  const r = await page.evaluate(() => window.satori.poll());
-  expect(r.poll).toMatchObject({ streams: 3, new: 3, predicted: 3, engine_ms: expect.any(Number) });
+  const { lastPoll } = await polled(page); // at once after register
+  expect(stub.polls).toEqual([1]);
+  expect(lastPoll).toMatchObject({ streams: 3, new: 3, predicted: 3, engine_ms: expect.any(Number) });
   expect(stub.historyCalls.map((q) => [q.stream_uuid, q.limit])).toEqual(names.map((n) => [`u-${n}`, '1000']));
   const models = await page.evaluate(() => window.satori.models());
   expect(models.map((m) => [m.name, m.model])).toEqual(names.map((n) => [n, 'bvar']));
@@ -414,8 +406,8 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   expect(stub.registered[0]).toMatchObject({ 'wallet-pubkey': wallet.pubkey, 'vault-pubkey': vault.pubkey });
   await expect(page.locator('[data-test=mismatch]')).toHaveText(
     `Vault mismatch: central pays this vault's rewards to a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`);
-  expect(await page.evaluate(() => window.satori.health())).toMatchObject({ title: 'Starting', action: { id: 'vault-mismatch', // nothing polled yet
-    text: expect.stringContaining(`a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`) } });
+  expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'vault-mismatch',
+    text: expect.stringContaining(`a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`) });
 
   // Settings: https only; an unreachable central is shown, not thrown.
   await go(page, 'settings');
