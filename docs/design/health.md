@@ -402,6 +402,25 @@ to date".
 
 <img src="../screenshots/home-up-to-date-live.png" alt="Up to date · next in 11 h" width="240">
 
+Never a silent wait (2026-10-17 21:09 UTC, the dev server on :5180
+restarted, a fresh Chrome profile on OPFS, central2's 82 streams, no
+stubs), the hero from `satori.setup()`:
+
+| s | hero | tone |
+|---|---|---|
+| 0.5 | Signing in to central… | working |
+| 1.5 | Fetching today's observations… | working |
+| 2.5 | Loading history · 14 of 82 streams, ticking to 82 of 82 at 5.0 | working |
+| 5.4 | Building models · 0 of 82, 82 of 82 at 6.0 | working |
+| 6.3 | Keep Satori open · Sending 82 predictions… | critical |
+| 8.1 | *Predicting* · Sent 82 predictions just now · next in 11 h | idle (fading to sky) |
+
+It took 17–19 s on this box before (the owner saw about 30 s): storing the
+batch 2.0 s → 0.1 s, history 7–10 s (+ 1 s of screen refresh) → 3.8–4.4 s,
+the specs and predictions 1.9–2.3 s → 0.1 s ([storage.md](storage.md#the-checkpoint-rule)).
+
+<img src="../screenshots/home-live-work-central2.png" alt="live on central2, 1.5 s after the first poll: Predicting, still green, fading to sky" width="240">
+
 ## Screenshots
 
 What it is doing, and the three greens (`e2e/work.spec.js`, `SHOTS=1`): working
