@@ -22,8 +22,8 @@ does ([central.md](central.md)):
 ```
 page load ──▶ register with central (identity + vault public keys)
 first poll at once (unless one is still ahead), then every 11 h (or Poll now):
-  GET observations ──▶ store (DuckDB) ──▶ history for new streams ──▶ forecast streams with a new row ──▶ queue ──▶ login (identity) ──▶ POST predictions
-                       insert or ignore    once per stream (central)    each one's bvar spec, evolved      pending      signs the challenge    batch; kept on failure
+  GET observations ──▶ store (DuckDB) ──▶ history for new streams ──▶ forecast streams not predicted yet ──▶ queue ──▶ login (identity) ──▶ POST predictions
+                       insert or ignore    once per stream (central)    each one's bvar spec, evolved         pending      signs the challenge    batch; kept on failure
 ```
 
 1. **Register** on every page load: `wallet-pubkey` (identity), `vault-pubkey`
@@ -43,8 +43,9 @@ first poll at once (unless one is still ahead), then every 11 h (or Poll now):
    stored older than its newest polled row, so it never triggers a prediction
    ([central.md](central.md#history-an-addition-beyond-lite)). Central2 answers
    404 today: remembered for a day, then asked again.
-5. **Forecast** only the streams that got a new row, from all their stored
-   history ([engine.md](engine.md)): `t1` 12 h ahead and `t2` 24 h ahead.
+5. **Forecast** each stream whose latest observation has no prediction
+   made from it (a new row, or one a reload mid-poll stored and never
+   forecast; each observation once), from all their stored history ([engine.md](engine.md)): `t1` 12 h ahead and `t2` 24 h ahead.
    Each target has its **own spec**, drawn from the identity: `bvar`, a
    Bayesian VAR(1) of the target and 1–3 companion streams (namaste_club's
    Minnesota prior with the spec's λ1 and λ2), faded toward persistence by its
@@ -231,7 +232,8 @@ The deploy image added none to npm; it is
   and its hash, the EIP-191 login signature against central's vector and
   viem's `verifyMessage`, register, login, the 401 retry, the one resend, timeouts and
   network errors, with a mocked fetch); neuron (storage and dedupe,
-  forecasting only new rows, the kept queue and its cap, a failed poll, a
+  forecasting each observation once, an interrupted poll's rows forecast
+  by the next poll, the kept queue and its cap, a failed poll, a
   local failure, register and mismatch, the schedule (at once when due) and
   a failed save); engine (namaste_club's own tests ported, recovery and shrinkage,
   minimum data, gaps, a random-walk guard, and parity with namaste_club's code:

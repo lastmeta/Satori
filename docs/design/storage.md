@@ -185,6 +185,15 @@ entry is never edited: a change is a new entry. A database from a newer app
    history runs, wallet actions, errors), for Home's health. `ts` and
    `last_ts` are the API's `at` and `until` (both are DuckDB keywords).
    Kept 90 days: pruned at start and once a day. Another central keeps it.
+9. **Predicted through** (2026-10-17): `streams.predicted_ts`, the
+   observation (its `ts`) the stream's latest prediction was made from, set
+   in the same transaction as the prediction. A poll forecasts each stream
+   whose latest observation is newer (or that has none), so a poll cut off
+   between storing and forecasting is made up by the next one
+   ([central.md](central.md#deviations-from-satori-lite-and-why)). Which
+   observation an earlier prediction came from is not recorded: a stream
+   predicted before counts as predicted through its latest observation (an
+   observation is never predicted twice), one never predicted is due.
 
 Columns kept but no longer written: `relay_streams.meta` (the announcement
 at subscribe time) and `unsubscribed_at`; nothing read them. Kept and written,

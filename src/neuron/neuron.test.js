@@ -79,7 +79,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect(await db.history('u-btc')).toHaveLength(1);
   });
 
-  test('only streams that got a new row are forecast, on their whole history (every central stream\'s history is the pool)', async () => {
+  test('only streams whose latest observation has no prediction yet are forecast, on their whole history (every central stream\'s history is the pool)', async () => {
     const engine = perStream((points) => ({ model: 'm', t1: points.length, t2: points.length + 0.5 }));
     central.batch = [entry('u-a', 'a', T, 1), entry('u-b', 'b', T, 2)];
     await run({ engine });
@@ -106,6 +106,53 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     central.batch = [entry('u-a', 'a', T, 'abc'), { ...entry('u-b', 'b', T, 1), stream: null, stream_uuid: null }, entry('u-c', 'c', T, 1)];
     const r = await run({ engine: perStream(() => null) });
     expect(r).toEqual({ poll: { at: clock, streams: 1, new: 1, predicted: 0, engine_ms: expect.any(Number) }, submit: null });
+    // no prediction was made from u-c's observation, so the next poll tries it again
+    expect((await run()).poll).toMatchObject({ new: 0, predicted: 1 });
+  });
+
+  test('an interrupted poll: rows stored, the page reloaded before the forecasts; the next poll, with nothing new, predicts and sends them', async () => {
+    central.batch = [entry('u-btc', 'bitcoin', T - 100, 100), entry('u-eth', 'eth', T - 50, 5)];
+    // the reload lands during the history backfill: the rows are committed, and this cycle never goes on
+    void run({ backfill: () => new Promise(() => {}) });
+    await vi.waitFor(async () => expect((await db.streams()).map((s) => s.observations)).toEqual([1, 1]));
+    expect(await db.predictions('bitcoin')).toEqual([]);
+    clock += 60; // the next page load polls at once: the same batch, nothing new
+    const r = await run();
+    expect(r.poll).toMatchObject({ streams: 2, new: 0, predicted: 2 });
+    expect(r.submit).toMatchObject({ total_submitted: 2, successful: 2 });
+    expect(central.sent).toEqual([[
+      predictionItem({ streamUuid: 'u-btc', streamName: 'bitcoin', t1: 100, t2: 100, now: clock }),
+      predictionItem({ streamUuid: 'u-eth', streamName: 'eth', t1: 5, t2: 5, now: clock }),
+    ]]);
+    // Lite's rule stays: an observation is predicted once
+    expect(await run()).toEqual({ poll: { at: clock, streams: 2, new: 0, predicted: 0 }, submit: null });
+    expect(central.sent).toHaveLength(1);
+  });
+
+  test('a cycle that failed after storing (the engine threw): the next poll predicts what it left', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    central.batch = [entry('u-a', 'a', T, 1)];
+    expect((await run({ engine: () => { throw new Error('out of memory'); } })).poll).toMatchObject({ local: true });
+    expect((await run()).poll).toMatchObject({ new: 0, predicted: 1 });
+    expect(central.sent.flat().map((i) => i.stream_uuid)).toEqual(['u-a']);
+    error.mockRestore();
+  });
+
+  test("a polled row older than the stream's latest (central's latest went back) is stored, not predicted: the latest was", async () => {
+    central.batch = [entry('u-a', 'a', T, 1)];
+    await run();
+    central.batch = [entry('u-a', 'a', T - 3600, 0.5)];
+    expect(await run()).toEqual({ poll: { at: clock, streams: 1, new: 1, predicted: 0 }, submit: null });
+    expect(await db.history('u-a')).toHaveLength(2);
+  });
+
+  test('only streams in this batch are predicted: one central no longer sends is left alone', async () => {
+    central.batch = [entry('u-a', 'a', T, 1), entry('u-b', 'b', T, 2)];
+    void run({ backfill: () => new Promise(() => {}) }); // interrupted: neither predicted
+    await vi.waitFor(async () => expect(await db.streams()).toHaveLength(2));
+    central.batch = [entry('u-a', 'a', T, 1)]; // central stopped sending b (its latest is over 48 h old)
+    expect((await run()).poll).toMatchObject({ new: 0, predicted: 1 });
+    expect(central.sent.flat().map((i) => i.stream_uuid)).toEqual(['u-a']);
   });
 
   test('kept queue: successful == 0 or an error keeps every prediction; the next poll resends them with its own', async () => {

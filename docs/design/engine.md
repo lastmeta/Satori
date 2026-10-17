@@ -287,7 +287,8 @@ With no companions this is exactly `bar1` (tested on the parity cases).
 
 ### Evolution
 
-After each poll that brought new rows, for each target that got one:
+After each poll, for each target whose latest observation has no prediction
+made from it yet (a new row, or one an interrupted poll stored):
 
 1. Read the champion spec (or draw the first one).
 2. **Repair** it: each companion not in the pool now is replaced, in its
@@ -326,8 +327,8 @@ for 7 rows). Central now serves a stream's past
 ([central.md](central.md#history-an-addition-beyond-lite)); each stream is
 fetched once (up to 1,000 rows, the last ~41 days of central's hourly
 observations), and its rows are stored older than the newest polled row
-only. Backfilled rows never trigger a prediction: only a poll's new row
-does, as in Lite.
+only. Backfilled rows never trigger a prediction: they are never a
+stream's latest observation, and only the latest is predicted.
 
 ### Scope
 

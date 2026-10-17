@@ -11,7 +11,7 @@ at `:65`).
 ```
 page load ─▶ register (wallet-pubkey, vault-pubkey)            once per start
          └─▶ schedule: first poll at once (a stored time still ahead is kept), then every 11 h
-poll ─▶ GET observations/batch ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams with a new row
+poll ─▶ GET observations/batch ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams not predicted yet
      ─▶ queue {value: t2, t1_value: t1, observed_at, hash} ─▶ login (identity) ─▶ POST predictions/batch
 ```
 
@@ -41,8 +41,8 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 | Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), on every start, then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | The first poll right after register, with no random wait: a new neuron at once, a reopened one at once when a poll came due while it was closed; then 11 h after every poll, as Lite. `meta.next_poll_at` is stored, so a reload keeps a time still ahead (see Deviations). **Poll now** runs a cycle at once. |
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
 | Store | `value` = float; epoch = `observed_at`, falling back to `ts` (`data_helper.py:40-93`), truncated to whole seconds (`engine.py:669-673`); `INSERT OR IGNORE` on `(stream_uuid, epoch)` (`stream_store.py:48-56,150-170`); the stream's name/meta are upserted (`server.py:1334-1358`). | Same rule into `observations (stream_uuid, ts, value)`, primary key `(stream_uuid, ts)`; `streams (uuid, name, meta)`. Rows with no stream, no finite value or no time are dropped. |
-| Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Same: `addObservations` returns the streams that got a new row; only those are forecast. |
-| Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `runModels` (`src/engine/evolve.js`) for the streams with a new row, over every central stream's history: each target's own `bvar` spec (a Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved), falling back to `bar1` (a Bayesian AR(1) on 12 h returns) or `naive` ([engine.md](engine.md)): t1 is 12 h ahead, t2 24 h. |
+| Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Each stream in the batch whose latest stored observation has **no prediction made from it** (`db.unpredicted()`: newer than `streams.predicted_ts`, which each prediction sets): a new row, as in Lite, and also a row an interrupted cycle stored but never forecast (a reload mid-poll, a local failure). An observation is still predicted once ([Deviations](#deviations-from-satori-lite-and-why)). |
+| Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `runModels` (`src/engine/evolve.js`) for those streams, over every central stream's history: each target's own `bvar` spec (a Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved), falling back to `bar1` (a Bayesian AR(1) on 12 h returns) or `naive` ([engine.md](engine.md)): t1 is 12 h ahead, t2 24 h. |
 | Payload | `{stream_uuid, stream_name, value: str(t2), t1_value: str(t1), observed_at: str(time.time() at prediction), hash: sha256(value + observed_at)[:16]}` (`engine.py:1044-1106,1188-1206`). | The same fields. Numbers are text as JS prints them (`String(n)`: `100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`): central keeps the text and reads it with `float()` ([the protocol audit](#the-protocol-audit)). |
 | Queue | `collectAndSubmitPredictions` right after the poll (`start.py:4693-4736`, called at `:4870`); `flushPredictionQueue` keeps the whole queue when `successful == 0` or the call failed, and clears it otherwise (`engine.py:432-454`). | Predictions are stored with `status = 'pending'`; after every successful poll the pending ones made in the last 2 × 11 h are sent (older ones are dropped); on `successful > 0` all are marked `sent`, otherwise they stay pending for the next cycle. |
 | Submit | Log in (`POST /api/v1/auth/login`, headers `wallet-pubkey`, `message`, `signature`: an [EIP-191 signature](#login-signature) by the **identity**, `wallet.ethSign` since satorilib 5028913; `server.py:86-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
@@ -92,10 +92,10 @@ newest. `src/neuron/history.js`:
 - **The rows**: normalized exactly as poll rows (`observed_at`, else `ts`, in
   whole seconds; rows with no finite value, no time or another stream are
   dropped), then **insert or ignore, only rows older than the stream's
-  newest polled row**. A backfilled row never triggers a prediction: only a
-  poll's new row does, as in Lite. (A row newer than the last poll would
-  otherwise be stored first, and the next poll's copy of it would not be
-  new, so that stream would not be predicted for 11 h.)
+  newest polled row**. A backfilled row never triggers a prediction: it is
+  never a stream's latest, and only the latest is predicted. (A row newer
+  than the last poll would otherwise be stored by history first, and
+  predicted from history instead of from the poll that brings it.)
 - **Failures** never break the poll. A stream central doesn't know (404
   `Stream not found: <uuid>`, a stream deleted on central or a malformed
   uuid; `central` bc043d2) is done with no rows, and the others go on. Any
@@ -245,6 +245,7 @@ relay list and Base's config are read from the new central at once.
 | Pending predictions older than 2 × 11 h are dropped before a submission; Lite's queue has no cap. | Lite's queue is emptied by every restart; ours is not, so a central that refused every batch would grow it without end. Two polls' worth is enough to ride out one failed cycle. |
 | Changing the central URL drops the pending queue and the stream list (see Settings). | Lite has one central per install; uuids differ between centrals. |
 | Every call (register, challenge and login too) is resent once on a network error, a timeout or a 5xx. satorilib resends only through `_makeAuthenticatedCall`, when it raises (`server.py:231-268`): the observations GET and the predictions POST pass `raiseForStatus=False` (`server.py:1282,1325`), so there a 5xx answer is not resent, only a network error or a timeout. | One rule in one place (`call`). A 5xx that carries CORS headers comes from central itself and a second try is cheap; nginx's 502/429 have no CORS header and arrive as network errors anyway. |
+| A poll forecasts every stream in its batch whose latest observation has no prediction made from it, not only those that got a new row (Lite: `engine.py:695-712`). `streams.predicted_ts` (migration 9) is the observation each stream was last predicted from; a stream predicted before this version counts as predicted through its latest observation. | Lite forecasts in the same long-lived process that stored the rows. A tab can reload mid-poll, after the rows are committed and before the forecasts: with Lite's trigger those streams waited for their next new row (up to 11 h), and the next poll, with nothing to send, counted as good. The owner's intent is that the neuron predicts everything it sees; an observation is still predicted once, as in Lite (a dropped, never-sent prediction too). A stream whose model gives no forecast is tried again at the next poll. A polled row older than the stream's latest (central's latest went back) is stored and not predicted: its latest was (Lite would predict again). |
 | After a successful poll, anything pending is sent even if this cycle made no new prediction; Lite flushes only when it collected a new one (`start.py:4724`). | One rule ("send what is pending after each poll") is simpler, and a kept queue does not wait for the next new observation. |
 | Login signs central's challenge UUID (`GET /auth/challenge`), not `str(time.time())` (`server.py:91`). | Central accepts any signed message today (`c/auth.py:45`); the challenge keeps working when central makes challenges single-use ([issue](../issues/central-login-replayable.md)). |
 | A fresh login for each submission; no stored token, no refresh. | The token lives 1 h and the neuron submits every 11 h. |
@@ -266,3 +267,23 @@ Home read *Starting* until then, then *Predicting*. Nothing was sent to
 prod.
 
 <img src="../screenshots/home-live-first-poll.png" alt="Home 16 s after setup: 82 sent, no Poll now" width="240">
+
+## Live: a reload mid-poll
+
+2026-10-17 16:59, the dev server on :5180 against central2, two fresh
+browser profiles with new random keys (the vault's words given at setup),
+no stubs:
+
+- A new neuron: register, the first poll at once: 82 streams, 82 new, 82
+  predicted, 82 of 82 accepted; Poll now again: 0 new, 0 predicted,
+  nothing sent, and Home reads "Up to date · next in 11 h"
+  ([health.md](health.md#live)).
+- The exact interruption: as soon as the first poll had stored its 82 rows
+  and none was forecast, the page was reloaded. The next page load polled
+  at once (the same batch): **0 new, 82 predicted, 82 of 82 accepted**
+  (before this fix, nothing until each stream's next row). Poll now again:
+  0 predicted, nothing sent (an observation is predicted once).
+
+Nothing was sent to prod.
+
+<img src="../screenshots/central-reloaded-mid-poll.png" alt="Home after a reload mid-poll: 82 sent" width="240">

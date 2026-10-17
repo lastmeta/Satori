@@ -124,6 +124,11 @@ For agents written against the earlier UI and API:
   case-insensitively, and may now be `null`: unknown, a central that does
   not send `vault_base_address` (prod on `main`); that is not a mismatch.
   The mismatch text names both addresses.
+- A poll forecasts each stream in its batch whose latest observation has no
+  prediction made from it, not only the streams with a new row: a reload
+  mid-poll (rows stored, not yet forecast) is made up by the next poll, even
+  with nothing new (`lastPoll.new` 0, `predicted` > 0). An observation is
+  still predicted once. Migration 9 adds `streams.predicted_ts`.
 
 ## Changed 2026-10-16 (the keys in this app's own format; Base only)
 
@@ -198,12 +203,15 @@ For agents written against the earlier API:
   (an addition beyond the Docker neuron; central observes hourly, so ~41
   days), at most 4 calls at a time, at load and in each poll before the
   forecasts. Its rows are stored only if older than the stream's newest
-  polled row, so they never trigger a prediction; only a poll's new row does.
-  A central without the route (404, central2 today) is asked again a day
-  later; a failure never breaks the poll.
-- Prediction: made only for a stream that got a new observation, from all of
-  its stored history. `t1` is 12 h ahead, `t2` 24 h ahead (the value central
-  scores, against the first observation 24 h or more after it). Sent right
+  polled row, so they are never a stream's latest and never trigger a
+  prediction. A central without the route (404, central2 today) is asked
+  again a day later; a failure never breaks the poll.
+- Prediction: made once for each stream's latest observation, from all of
+  its stored history: a new row, or one a poll stored and was cut off
+  before forecasting (a reload mid-poll); the next poll predicts it, even
+  with nothing new (`poll.new` 0, `poll.predicted` > 0). `t1` is 12 h
+  ahead, `t2` 24 h ahead (the value central scores, against the first
+  observation 24 h or more after it). Sent right
   after the poll in one batch (`POST /api/v1/predictions/batch`, after a
   login signed by the identity) as `{stream_uuid, stream_name, value: t2,
   t1_value: t1, observed_at, hash}`, the numbers as JS prints them. Status
@@ -401,7 +409,7 @@ the page's JS context:
   - `lastPoll`: `{ at, streams, new, predicted, engine_ms }` or `{ at, error }`
     (central's error, or a local one such as a database write, then with
     `local: true`); `engine_ms`: how long the models took (present when a
-    stream had a new row).
+    stream was forecast).
   - `history`: the last history run `{ at, url, streams, rows, left, error,
     retryAt }` (`retryAt`: the route 404'd, asked again then) and `needed`,
     how many streams have no history yet.
@@ -484,7 +492,8 @@ the page's JS context:
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
   and a call once set up throws `Already set up`.
 - `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
-  the streams with a new row, and send everything pending. `submit` is null
+  each stream in the batch whose latest observation has no prediction yet
+  (a new row, or one an interrupted poll stored), and send everything pending. `submit` is null
   when nothing was pending or when the poll failed (`poll.error`). It never
   throws for central's errors. One poll runs at a time; a call during one
   returns it. The next poll is then 11 h later.

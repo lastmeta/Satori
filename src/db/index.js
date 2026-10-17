@@ -6,6 +6,7 @@
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
 //   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.specs() / db.saveSpecs(map, at) / db.models()
 //   await db.needHistory() → uuids / db.addHistory(uuid, rows, at) → rows added (older than the newest polled only)
+//   await db.unpredicted() → uuids whose latest observation has no prediction made from it
 //   await db.addPredictions(list) → ids / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
 //   await db.resetCentral()                  // the central URL changed
 //   await db.streams() / db.predictions(uuidOrName, limit) / db.sparks(n)   // for the UI and agents
@@ -203,7 +204,14 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       }
     }),
 
-    /** A poll's predictions, in one transaction (one checkpoint). → their ids, in order */
+    /** Central streams whose latest observation has no prediction made from it (newer than predicted_ts). */
+    unpredicted: inOrder(async () => (await rows(`SELECT s.uuid FROM streams s
+      JOIN (SELECT stream_uuid, max(ts) AS ts FROM observations GROUP BY stream_uuid) o ON o.stream_uuid = s.uuid
+      WHERE s.predicted_ts IS NULL OR o.ts > s.predicted_ts ORDER BY s.uuid`)).map((r) => r.uuid)),
+    /**
+     * A poll's predictions, in one transaction (one checkpoint); each with an obs_ts (the observation it was made
+     * from) marks its stream predicted through it. → their ids, in order
+     */
     addPredictions: inOrder(async (list) => {
       const ids = [];
       await run('BEGIN TRANSACTION');
@@ -212,6 +220,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
           ids.push((await rows(`INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
             VALUES (?, ${D}, ?, ${D}, ${D}, ${D}, ${D}, ?, ?) RETURNING id`,
           p.stream_uuid, dbl(p.made_at), p.model, dbl(p.t1), dbl(p.t2), dbl(p.phi), dbl(p.weight), p.observed_at, p.hash))[0].id);
+          if (p.obs_ts != null) await run('UPDATE streams SET predicted_ts = ? WHERE uuid = ?', p.obs_ts, p.stream_uuid);
         }
         await run('COMMIT');
       } catch (err) {

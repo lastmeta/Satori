@@ -275,7 +275,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
 
   // The central URL: https only; a new one registers at once. Its uuids differ, so the
   // pending queue and the stream list are dropped and refill from it.
-  stub.batch = [entry('u-btc', 'bitcoin', T0 + 120, '67005.5'), BATCH[1]];
+  stub.batch = [entry('u-btc', 'bitcoin', T0 + (ZIG.length + 1) * STEP_S, '67005.5'), BATCH[1]]; // newer than its latest: predicted
   stub.fail.push(500, 500);
   expect((await poll()).submit.error).toBe('central 500: boom');
   await expect(page.evaluate(() => window.satori.setCentral('http://central.test'))).rejects.toThrow(/https:\/\//);

@@ -1,6 +1,7 @@
 // The neuron's flow, as Satori Lite runs it (docs/design/central.md):
 //   page load → register with central, then poll at once (a stored time still ahead is kept), then every 11 h:
-//   poll ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams with a new row ─▶ send everything pending
+//   poll ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast each stream whose latest observation has no
+//   prediction yet (a new row, or one an interrupted cycle stored) ─▶ send everything pending
 // The forecasts: each target's own bvar spec, evolved after each poll (docs/design/engine.md).
 import { normalizeObservation, predictionItem } from '../central/index.js';
 import { evmAddress } from '../keys/keys.js';
@@ -77,20 +78,25 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
   const fresh = await db.addObservations(rows);
   await backfill(); // a stream first seen gets its past now (never throws; its rows are never new)
   const poll = { at, streams: rows.length, new: fresh.length, predicted: 0 };
-  if (fresh.length) {
+  // each stream in the batch whose latest observation has no prediction yet: a new row, or one a cycle cut off
+  // (a reload, a local failure) stored and never forecast
+  const unpredicted = new Set(await db.unpredicted());
+  const due = [...new Set(rows.map((o) => o.stream_uuid))].filter((u) => unpredicted.has(u));
+  if (due.length) {
     const histories = await db.centralHistories();
     const specs = await db.specs();
     const t0 = performance.now();
-    const out = await engine({ fresh, histories, specs, seed });
+    const out = await engine({ fresh: due, histories, specs, seed });
     poll.engine_ms = Math.round(performance.now() - t0);
     await db.saveSpecs(out.specs, Math.floor(now()));
     const made = [];
-    for (const uuid of fresh) {
+    for (const uuid of due) {
       const f = out.forecasts.get(uuid);
       if (!f) continue;
       const made_at = now();
       const { observed_at, hash } = predictionItem({ t1: f.t1, t2: f.t2, now: made_at });
-      made.push({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight, observed_at, hash });
+      made.push({ stream_uuid: uuid, made_at, model: f.model, t1: f.t1, t2: f.t2, phi: f.phi, weight: f.weight, observed_at, hash,
+        obs_ts: histories.get(uuid).at(-1).ts }); // the observation it is made from: predicted once
     }
     await db.addPredictions(made); // one transaction: every commit is a checkpoint (docs/design/storage.md)
     poll.predicted = made.length;
@@ -102,9 +108,10 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
 }
 
 /**
- * One cycle: poll → store → history for new streams → forecast new rows →
- * submit. Never throws: a failed poll or a local failure (the database) is the
- * poll's error; a failed submission keeps the queue.
+ * One cycle: poll → store → history for new streams → forecast each stream in
+ * the batch whose latest observation has no prediction yet → submit. Never
+ * throws: a failed poll or a local failure (the database) is the poll's error;
+ * a failed submission keeps the queue.
  * @param {{db, central, now?: () => number, seed?: string, engine?: typeof runModels, backfill?: () => Promise}} o
  *   seed: the identity's public key (the specs' RNG); engine: one poll's models (src/engine/evolve.js)
  * @returns {Promise<{poll: object, submit: object | null}>}

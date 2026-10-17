@@ -94,4 +94,11 @@ export const MIGRATIONS = [
   `CREATE SEQUENCE activity_ids;
    CREATE TABLE activity (id INTEGER PRIMARY KEY DEFAULT nextval('activity_ids'), ts DOUBLE NOT NULL, last_ts DOUBLE,
      kind VARCHAR NOT NULL, level VARCHAR NOT NULL, data VARCHAR, count INTEGER NOT NULL DEFAULT 1, mkey VARCHAR);`,
+  // 9 (2026-10-17): streams.predicted_ts, the observation (its ts) the stream's latest prediction was made from,
+  // so a poll predicts every stream whose latest observation has none, not only those with a new row
+  // (docs/design/central.md#deviations-from-satori-lite-and-why). Which observation an earlier prediction came from
+  // is not known: a stream predicted before counts as predicted through its latest one (never predicted twice).
+  `ALTER TABLE streams ADD COLUMN predicted_ts BIGINT;
+   UPDATE streams SET predicted_ts = (SELECT max(o.ts) FROM observations o WHERE o.stream_uuid = streams.uuid)
+   WHERE EXISTS (SELECT 1 FROM predictions p WHERE p.stream_uuid = streams.uuid);`,
 ];

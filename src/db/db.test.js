@@ -205,6 +205,22 @@ describe('predictions', () => {
     expect((await db.pending()).map((p) => [p.id, p.t2])).toEqual([[ids[0], 1], [ids[1], 2], [ids[2], 3]]);
     expect(await db.addPredictions([])).toEqual([]);
   });
+  test('unpredicted: the streams whose latest observation has no prediction made from it (obs_ts); a dropped prediction still counts', async () => {
+    await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
+    expect(await db.unpredicted()).toEqual(['u-btc', 'u-eth']);
+    await db.addPredictions([pred({ obs_ts: 1000 })]);
+    expect(await db.unpredicted()).toEqual(['u-eth']);
+    await db.addHistory('u-btc', [{ ts: 500, value: 0.5 }], 1); // an older row: the latest stays predicted
+    expect(await db.unpredicted()).toEqual(['u-eth']);
+    await db.addObservations([obs({ ts: 2000 })]); // a newer one is not
+    expect(await db.unpredicted()).toEqual(['u-btc', 'u-eth']);
+    await db.addPredictions([pred({ obs_ts: 2000 }), pred({ stream_uuid: 'u-eth', obs_ts: 1000 })]);
+    expect(await db.unpredicted()).toEqual([]);
+    await db.dropPending(1e10); // never sent, but made: Lite never predicts an observation twice
+    expect(await db.unpredicted()).toEqual([]);
+    await db.addPredictions([pred()]); // no obs_ts (not central's poll): changes nothing
+    expect(await db.unpredicted()).toEqual([]);
+  });
   test('predictions(stream) by uuid or name, newest first, with a limit', async () => {
     await db.addObservations([obs()]);
     for (const t2 of [1, 2, 3]) await addPrediction(db, pred({ t2 }));
@@ -253,6 +269,20 @@ test('streams: one row per stream with its latest observation and prediction', a
   expect(btc).toMatchObject({ uuid: 'u-btc', name: 'bitcoin', observations: 2, obs_ts: 2000, obs_value: 2,
     t1: 6, t2: 7, model: 'bar1', phi: -0.25, weight: 0.75, made_at: 2100, status: 'sent', sent_at: 2200 });
   expect(eth).toMatchObject({ uuid: 'u-eth', name: 'eth', observations: 1, t1: null, t2: null, status: null });
+});
+
+test('a step-8 database: a stream predicted before counts as predicted through its latest observation; one never predicted is due', async () => {
+  const conn = await memoryConn();
+  await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+  for (const m of MIGRATIONS.slice(0, 8)) if (typeof m === 'string') await conn.query(m); // 7 moves keys: none here
+  await conn.query(`INSERT INTO meta VALUES ('schema_version', '8')`);
+  await conn.query(`INSERT INTO streams VALUES ('u-btc', 'bitcoin', NULL, NULL), ('u-eth', 'eth', NULL, NULL)`);
+  await conn.query(`INSERT INTO observations VALUES ('u-btc', 1000, 1), ('u-btc', 2000, 2), ('u-eth', 1000, 5)`);
+  await conn.query(`INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, observed_at, hash)
+    VALUES ('u-btc', 1500, 'naive', 1, 1, '1500', 'h')`);
+  const up = await openDb(conn);
+  expect(up.version).toBe(MIGRATIONS.length);
+  expect(await up.unpredicted()).toEqual(['u-eth']); // never predicted twice: u-btc's 2000 is not guessed at
 });
 
 describe('bvar: specs and central history (migration 6)', () => {
