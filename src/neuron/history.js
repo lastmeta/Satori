@@ -44,7 +44,7 @@ export async function backfillHistory({ db, central, now = nowS }) {
           if (!Array.isArray(list)) throw new Error('central sent no list of observations');
           const clean = list.map((o) => normalizeObservation({ ...o, stream_uuid: o?.stream_uuid || uuid }))
             .filter((o) => o?.stream_uuid === uuid);
-          const added = await db.addHistory(uuid, clean, Math.floor(now())); // not `rows += await`: the calls overlap
+          const added = await db.addHistories([{ uuid, rows: clean }], Math.floor(now())); // not `rows += await`: the calls overlap
           rows += added;
           streams++;
         } catch (err) {
@@ -52,7 +52,7 @@ export async function backfillHistory({ db, central, now = nowS }) {
             failure ??= err;
             continue;
           }
-          await db.addHistory(uuid, [], Math.floor(now())); // nothing to fetch: done, so it never blocks the others
+          await db.addHistories([{ uuid, rows: [] }], Math.floor(now())); // nothing to fetch: done, so it never blocks the others
           streams++;
         }
       }

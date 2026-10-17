@@ -5,7 +5,7 @@
 //   await db.get(key) / db.set(key, value)   // meta, JSON values
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
 //   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.specs() / db.saveSpecs(map, at) / db.models()
-//   await db.needHistory() → uuids / db.addHistory(uuid, rows, at) → rows added (older than the newest polled only)
+//   await db.needHistory() → uuids / db.addHistories([{uuid, rows}], at) → rows added (older than the newest polled only)
 //   await db.unpredicted() → uuids whose latest observation has no prediction made from it
 //   await db.addPredictions(list) → ids / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
 //   await db.resetCentral()                  // the central URL changed
@@ -27,6 +27,22 @@ const plain = (v) => (typeof v === 'bigint' ? Number(v) : v);
  */
 const dbl = (x) => (x == null ? null : String(x));
 const D = 'CAST(? AS DOUBLE)';
+/**
+ * A column of many rows as one parameter (one statement, not one per row: each statement is a round trip to
+ * DuckDB's worker): `col(xs)` joins the values with commas, numbers as their text (dbl), null as ''; text is
+ * base64 (UTF-8, so a comma or anything else survives), null as '-'. `rowsOf(n)` splits n of them back into
+ * rows c0, c1, …; `NUM('c0', 'DOUBLE')` and `TXT('c1')` read a column.
+ */
+const b64 = (s) => {
+  let bin = '';
+  for (const b of new TextEncoder().encode(String(s))) bin += String.fromCharCode(b);
+  return btoa(bin);
+};
+const nums = (xs) => xs.map((x) => (x == null ? '' : dbl(x))).join(',');
+const texts = (xs) => xs.map((x) => (x == null ? '-' : b64(x))).join(',');
+const rowsOf = (n) => `(SELECT ${Array.from({ length: n }, (_, i) => `unnest(string_split(?, ',')) AS c${i}`).join(', ')})`;
+const NUM = (c, type) => `CAST(NULLIF(${c}, '') AS ${type})`;
+const TXT = (c) => `CASE WHEN ${c} = '-' THEN NULL ELSE decode(from_base64(${c})) END`;
 const toRows = (table) => table.toArray().map((r) => {
   const o = r.toJSON();
   for (const k in o) o[k] = plain(o[k]);
@@ -120,24 +136,29 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       return out;
     }),
 
-    /** Upsert each row's stream; insert or ignore the observation. The uuids that got a new row. */
+    /**
+     * Upsert each row's stream (its last row in the list names it); insert or ignore the observations (a second
+     * seen twice keeps the first). Two statements, one commit. The uuids that got a new row, in the list's order.
+     */
     addObservations: inOrder(async (list) => {
-      const fresh = new Set();
+      if (!list.length) return [];
+      const streams = [...new Map(list.map((o) => [o.stream_uuid, o])).values()];
+      let added;
       await run('BEGIN TRANSACTION');
       try {
-        for (const o of list) {
-          await run(`INSERT INTO streams (uuid, name, meta) VALUES (?, ?, ?)
-            ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, meta = excluded.meta`, o.stream_uuid, o.name, o.meta);
-          const added = await rows(`INSERT OR IGNORE INTO observations VALUES (?, ?, ${D}) RETURNING stream_uuid`,
-            o.stream_uuid, o.ts, dbl(o.value));
-          if (added.length) fresh.add(o.stream_uuid);
-        }
+        await run(`INSERT INTO streams (uuid, name, meta) SELECT ${TXT('c0')}, ${TXT('c1')}, ${TXT('c2')} FROM ${rowsOf(3)}
+          ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, meta = excluded.meta`,
+        texts(streams.map((o) => o.stream_uuid)), texts(streams.map((o) => o.name)), texts(streams.map((o) => o.meta)));
+        added = await rows(`INSERT OR IGNORE INTO observations SELECT ${TXT('c0')}, ${NUM('c1', 'BIGINT')}, ${NUM('c2', 'DOUBLE')}
+          FROM ${rowsOf(3)} RETURNING stream_uuid`,
+        texts(list.map((o) => o.stream_uuid)), nums(list.map((o) => o.ts)), nums(list.map((o) => o.value)));
         await run('COMMIT');
       } catch (err) {
         await run('ROLLBACK');
         throw err;
       }
-      return [...fresh];
+      const fresh = new Set(added.map((r) => r.stream_uuid));
+      return streams.map((o) => o.stream_uuid).filter((u) => fresh.has(u));
     }),
     /** A stream's observations, oldest first: [{ts, value}]. */
     history: inOrder((uuid) => rows('SELECT ts, value FROM observations WHERE stream_uuid = ? ORDER BY ts', uuid)),
@@ -159,24 +180,26 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     /** Central streams whose history has not been fetched yet. */
     needHistory: inOrder(async () => (await rows('SELECT uuid FROM streams WHERE history_at IS NULL ORDER BY uuid')).map((r) => r.uuid)),
     /**
-     * A stream's history from central: insert or ignore the rows older than its
-     * newest stored (polled) one, so a backfill never pre-empts a poll's new row;
-     * mark the stream fetched. → how many rows were added
+     * Streams' history from central, [{ uuid, rows: [{ts, value}] }], in one commit (each commit is a checkpoint:
+     * storage.md): for each, insert or ignore the rows older than its newest stored (polled) one, so a backfill
+     * never pre-empts a poll's new row; mark them fetched. → how many rows were added
      */
-    addHistory: inOrder(async (uuid, list, at) => {
-      const [{ newest }] = await rows('SELECT max(ts) AS newest FROM observations WHERE stream_uuid = ?', uuid);
-      const keep = newest == null ? [] : list.filter((o) => o.ts < newest);
+    addHistories: inOrder(async (list, at) => {
+      if (!list.length) return 0;
       let added = 0;
       await run('BEGIN TRANSACTION');
       try {
-        if (keep.length) {
-          // one statement, times and values as comma-joined text (exact doubles, see dbl), split in SQL
-          // (INSERT's Count is the rows inserted, the ignored ones not counted; RETURNING made it 3× slower)
-          [{ Count: added }] = await rows(`INSERT OR IGNORE INTO observations SELECT ?, t::BIGINT, v::DOUBLE
-            FROM (SELECT unnest(string_split(?, ',')) AS t, unnest(string_split(?, ',')) AS v)`,
-          uuid, keep.map((o) => o.ts).join(','), keep.map((o) => dbl(o.value)).join(','));
+        for (const { uuid, rows: xs } of list) {
+          if (!xs.length) continue;
+          // one statement per stream (at most 1,000 rows: 83,000 in one stops the wasm, storage.md); INSERT's Count is
+          // the rows inserted, the ignored ones not counted (RETURNING made it 3× slower)
+          const [{ Count }] = await rows(`INSERT OR IGNORE INTO observations SELECT ?, t, v FROM
+            (SELECT ${NUM('c0', 'BIGINT')} AS t, ${NUM('c1', 'DOUBLE')} AS v FROM ${rowsOf(2)})
+            WHERE t < (SELECT max(ts) FROM observations WHERE stream_uuid = ?)`,
+          uuid, nums(xs.map((o) => o.ts)), nums(xs.map((o) => o.value)), uuid);
+          added += Number(Count);
         }
-        await run('UPDATE streams SET history_at = ? WHERE uuid = ?', at, uuid);
+        await run(`UPDATE streams SET history_at = ? WHERE uuid IN (SELECT ${TXT('c0')} FROM ${rowsOf(1)})`, at, texts(list.map((x) => x.uuid)));
         await run('COMMIT');
       } catch (err) {
         await run('ROLLBACK');
@@ -187,21 +210,16 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     /** Each target's champion spec: Map(uuid → {spec, score, generation, accepted, updated_at}). */
     specs: inOrder(async () => new Map((await rows('SELECT * FROM model_specs')).map((r) =>
       [r.target_uuid, { spec: JSON.parse(r.spec), score: r.score, generation: r.generation, accepted: r.accepted, updated_at: r.updated_at }]))),
-    /** Store the specs a poll touched: Map(uuid → {spec, score, generation, accepted}). */
+    /** Store the specs a poll touched: Map(uuid → {spec, score, generation, accepted}). One statement. */
     saveSpecs: inOrder(async (specs, at) => {
       if (!specs.size) return;
-      await run('BEGIN TRANSACTION');
-      try {
-        for (const [uuid, r] of specs) {
-          await run(`INSERT INTO model_specs VALUES (?, ?, ${D}, ?, ?, ?) ON CONFLICT (target_uuid) DO UPDATE SET
-            spec = excluded.spec, score = excluded.score, generation = excluded.generation, accepted = excluded.accepted,
-            updated_at = excluded.updated_at`, uuid, JSON.stringify(r.spec), dbl(r.score), r.generation, r.accepted, at);
-        }
-        await run('COMMIT');
-      } catch (err) {
-        await run('ROLLBACK');
-        throw err;
-      }
+      const list = [...specs];
+      await run(`INSERT INTO model_specs SELECT ${TXT('c0')}, ${TXT('c1')}, ${NUM('c2', 'DOUBLE')}, ${NUM('c3', 'INTEGER')},
+          ${NUM('c4', 'INTEGER')}, ${NUM('c5', 'BIGINT')} FROM ${rowsOf(6)}
+        ON CONFLICT (target_uuid) DO UPDATE SET spec = excluded.spec, score = excluded.score, generation = excluded.generation,
+          accepted = excluded.accepted, updated_at = excluded.updated_at`,
+      texts(list.map(([u]) => u)), texts(list.map(([, r]) => JSON.stringify(r.spec))), nums(list.map(([, r]) => r.score)),
+      nums(list.map(([, r]) => r.generation)), nums(list.map(([, r]) => r.accepted)), nums(list.map(() => at)));
     }),
 
     /** Central streams whose latest observation has no prediction made from it (newer than predicted_ts). */
@@ -213,14 +231,21 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
      * from) marks its stream predicted through it. → their ids, in order
      */
     addPredictions: inOrder(async (list) => {
-      const ids = [];
+      if (!list.length) return [];
+      const col = (k, f = nums) => f(list.map((p) => p[k]));
+      const marks = [...new Map(list.filter((p) => p.obs_ts != null).map((p) => [p.stream_uuid, p.obs_ts]))]; // its last
+      let ids;
       await run('BEGIN TRANSACTION');
       try {
-        for (const p of list) {
-          ids.push((await rows(`INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
-            VALUES (?, ${D}, ?, ${D}, ${D}, ${D}, ${D}, ?, ?) RETURNING id`,
-          p.stream_uuid, dbl(p.made_at), p.model, dbl(p.t1), dbl(p.t2), dbl(p.phi), dbl(p.weight), p.observed_at, p.hash))[0].id);
-          if (p.obs_ts != null) await run('UPDATE streams SET predicted_ts = ? WHERE uuid = ?', p.obs_ts, p.stream_uuid);
+        // the ids come from the sequence in the list's order
+        ids = (await rows(`INSERT INTO predictions (stream_uuid, made_at, model, t1, t2, phi, weight, observed_at, hash)
+          SELECT ${TXT('c0')}, ${NUM('c1', 'DOUBLE')}, ${TXT('c2')}, ${NUM('c3', 'DOUBLE')}, ${NUM('c4', 'DOUBLE')},
+            ${NUM('c5', 'DOUBLE')}, ${NUM('c6', 'DOUBLE')}, ${TXT('c7')}, ${TXT('c8')} FROM ${rowsOf(9)} RETURNING id`,
+        col('stream_uuid', texts), col('made_at'), col('model', texts), col('t1'), col('t2'), col('phi'), col('weight'),
+        col('observed_at', texts), col('hash', texts))).map((r) => r.id).sort((a, b) => a - b);
+        if (marks.length) {
+          await run(`UPDATE streams SET predicted_ts = x.t FROM (SELECT ${TXT('c0')} AS u, ${NUM('c1', 'BIGINT')} AS t FROM ${rowsOf(2)}) x
+            WHERE streams.uuid = x.u`, texts(marks.map(([u]) => u)), nums(marks.map(([, t]) => t)));
         }
         await run('COMMIT');
       } catch (err) {

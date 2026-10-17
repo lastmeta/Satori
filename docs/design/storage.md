@@ -73,8 +73,8 @@ two runs, under DuckDB's default and with every commit checkpointed:
 | Write pattern | Before (16 MB, explicit CHECKPOINTs) | Every commit checkpointed |
 |---|---|---|
 | A poll: 83 new rows (one transaction), the specs, 83 predictions, the last poll, sent, the submission, a CHECKPOINT | 2.8–2.9 s (one commit per prediction) | 4.9–5.1 s with one commit per prediction; **2.4–2.5 s** with the poll's predictions in one transaction (`addPredictions`, now) |
-| History: 83 streams × 1,000 rows, one `addHistory` each (as `history.js`, once per stream) | 3.5–4.2 s | 8.1–8.7 s |
-| One statement of 10,000 rows (`addHistory`) | 79–87 ms | 153–160 ms |
+| History: 83 streams × 1,000 rows, one commit each (as `history.js` did, once per stream) | 3.5–4.2 s | 8.1–8.7 s |
+| One statement of 10,000 rows (an `INSERT … string_split`) | 79–87 ms | 153–160 ms |
 | A `meta` write (a Setting) | 9–12 ms, plus its CHECKPOINT | 27–31 ms |
 | A relay observation, its seq and its `_pred`, a CHECKPOINT | 117–121 ms | 152–170 ms |
 | `CHECKPOINT` with nothing to do | 1–2 ms | 1–2 ms |
@@ -83,10 +83,23 @@ two runs, under DuckDB's default and with every commit checkpointed:
 The history run is the only real cost, about +55 ms per stream, so about
 +5 s for 83 streams. It runs once per stream, in the background, and its
 fetches overlap the writes. One
-statement of 83,000 rows (`addHistory` with 83 k comma-joined values) stops
+statement of 83,000 rows (83 k comma-joined values) stops
 the wasm with "memory access out of bounds" under either setting. The
 history never sends one: it is at most 1,000 rows per stream, one stream per
 statement.
+
+**Fewer statements.** Each statement is a round trip to DuckDB's worker
+(with parameters: prepare, run, close), about 4–12 ms in Chrome on this box.
+So a poll's writes are a few set statements, not one per row: a column of
+many rows goes as one parameter, comma-joined (numbers as their exact text,
+text as base64 so any character survives; `decode(from_base64(…))` in SQL)
+and `unnest(string_split(…))` splits it back. Measured on central2's 82
+streams (2026-10-17, a fresh profile on OPFS):
+
+| Write | One statement per row | Set statements |
+|---|---|---|
+| The poll's batch (`addObservations`: 82 streams upserted, 82 rows) | 1.9–2.1 s | 0.11 s |
+| The specs and the predictions (`saveSpecs`, `addPredictions`: 82 each, the streams' `predicted_ts`) | 1.8–2.3 s | 0.11 s |
 
 ## Recovery
 

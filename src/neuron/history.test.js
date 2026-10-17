@@ -72,7 +72,7 @@ describe('backfillHistory', () => {
   test(`at most ${HISTORY_CONCURRENCY} calls at a time`, async () => {
     await polled(Array.from({ length: 11 }, (_, i) => `u-${i}`));
     const f = fakeCentral({ history: (u) => [row(u, T - 3600, 1)], delayMs: 20 });
-    const slow = { ...db, addHistory: async (...a) => { await new Promise((r) => setTimeout(r, 30)); return db.addHistory(...a); } };
+    const slow = { ...db, addHistories: async (...a) => { await new Promise((r) => setTimeout(r, 30)); return db.addHistories(...a); } };
     expect(await backfillHistory({ db: slow, central: f.central, now })).toMatchObject({ streams: 11, rows: 11 }); // counted across overlapping calls
     expect(f.maxInFlight).toBe(HISTORY_CONCURRENCY);
   });

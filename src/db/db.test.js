@@ -138,7 +138,7 @@ test('doubles come back bit for bit (DuckDB-WASM sends parameters as JSON, which
   await db.addObservations(xs.map((value, i) => obs({ ts: 1000 + i, value })));
   expect((await db.history('u-btc')).map((o) => o.value)).toEqual(xs);
   await db.addObservations([obs({ ts: 100_000 })]);
-  await db.addHistory('u-btc', xs.map((value, i) => ({ ts: 50_000 + i, value })), 1);
+  await db.addHistories([{ uuid: 'u-btc', rows: xs.map((value, i) => ({ ts: 50_000 + i, value })) }], 1);
   expect((await db.history('u-btc')).slice(400, 800).map((o) => o.value)).toEqual(xs);
   for (const x of xs.slice(0, 120)) {
     await addPrediction(db, pred({ made_at: 1792000000 + x, t1: x, t2: x * 1000.123, phi: x / 7, weight: x / 3 }));
@@ -174,6 +174,13 @@ describe('addObservations', () => {
     await db.addObservations([obs({ ts: 2000, name: 'btc', meta: '{"unit":"USD"}' })]);
     expect(await db.streams()).toMatchObject([{ uuid: 'u-btc', name: 'btc', meta: '{"unit":"USD"}' }]);
   });
+  test('names and meta are kept as given (commas, quotes, any script); in one batch a stream\'s second seen twice keeps its first value, the stream its last name', async () => {
+    const meta = '{"unit":"USD","note":"a, b; \\"c\\" – 日本"}';
+    expect(await db.addObservations([obs({ name: 'BTC, spot', meta }), obs({ value: 2, name: 'bitcoin, "spot"' }),
+      obs({ stream_uuid: 'u,eth', name: 'éth – ∑', ts: 7 })])).toEqual(['u-btc', 'u,eth']);
+    expect(await db.history('u-btc')).toEqual([{ ts: 1000, value: 1 }]);
+    expect((await db.streams()).map((r) => [r.uuid, r.name, r.meta])).toEqual([['u-btc', 'bitcoin, "spot"', null], ['u,eth', 'éth – ∑', null]]);
+  });
   test('history is oldest first', async () => {
     await db.addObservations([obs({ ts: 3000, value: 3 }), obs({ ts: 1000, value: 1 }), obs({ ts: 2000, value: 2 })]);
     expect((await db.history('u-btc')).map((o) => o.value)).toEqual([1, 2, 3]);
@@ -204,13 +211,15 @@ describe('predictions', () => {
     expect(ids).toEqual([...ids].sort((a, b) => a - b));
     expect((await db.pending()).map((p) => [p.id, p.t2])).toEqual([[ids[0], 1], [ids[1], 2], [ids[2], 3]]);
     expect(await db.addPredictions([])).toEqual([]);
+    const [naive] = await db.addPredictions([pred({ model: 'naive', phi: null, weight: null, t2: 1 / 3, hash: 'h,1' })]);
+    expect((await db.predictions('u-btc', 1))[0]).toMatchObject({ id: naive, model: 'naive', phi: null, weight: null, t2: 1 / 3, hash: 'h,1' });
   });
   test('unpredicted: the streams whose latest observation has no prediction made from it (obs_ts); a dropped prediction still counts', async () => {
     await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
     expect(await db.unpredicted()).toEqual(['u-btc', 'u-eth']);
     await db.addPredictions([pred({ obs_ts: 1000 })]);
     expect(await db.unpredicted()).toEqual(['u-eth']);
-    await db.addHistory('u-btc', [{ ts: 500, value: 0.5 }], 1); // an older row: the latest stays predicted
+    await db.addHistories([{ uuid: 'u-btc', rows: [{ ts: 500, value: 0.5 }] }], 1); // an older row: the latest stays predicted
     expect(await db.unpredicted()).toEqual(['u-eth']);
     await db.addObservations([obs({ ts: 2000 })]); // a newer one is not
     expect(await db.unpredicted()).toEqual(['u-btc', 'u-eth']);
@@ -312,22 +321,33 @@ describe('bvar: specs and central history (migration 6)', () => {
     expect(await db.centralHistories()).toBeInstanceOf(Map);
   });
 
-  test('addHistory: only rows older than the newest polled one (a poll\'s new row stays new), insert or ignore; marks the stream', async () => {
+  test('addHistories: only rows older than the newest polled one (a poll\'s new row stays new), insert or ignore; marks the stream', async () => {
     await db.addObservations([obs({ ts: 5000, value: 50 }), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
     const rows = [{ ts: 3000, value: 30 }, { ts: 4000, value: 40 }, { ts: 5000, value: 99 }, { ts: 6000, value: 60 }];
-    expect(await db.addHistory('u-btc', rows, 7000)).toBe(2);
+    expect(await db.addHistories([{ uuid: 'u-btc', rows }], 7000)).toBe(2);
     expect(await db.history('u-btc')).toEqual([{ ts: 3000, value: 30 }, { ts: 4000, value: 40 }, { ts: 5000, value: 50 }]);
     expect(await db.needHistory()).toEqual(['u-eth']);
-    expect(await db.addHistory('u-btc', rows, 7001)).toBe(0); // again: ignored
+    expect(await db.addHistories([{ uuid: 'u-btc', rows }], 7001)).toBe(0); // again: ignored
     // the next poll brings 6000: new, so it is forecast
     expect(await db.addObservations([obs({ ts: 6000, value: 60 })])).toEqual(['u-btc']);
     expect((await db.streams())[0]).toMatchObject({ uuid: 'u-btc', history_at: 7001, observations: 4 });
   });
 
-  test('addHistory: many rows (chunked), floats exactly as given', async () => {
+  test('addHistories: several streams in one transaction, each only older than its own newest row; one with no rows is marked fetched', async () => {
+    await db.addObservations([obs({ ts: 5000 }), obs({ stream_uuid: 'u-eth', name: 'eth', ts: 3000 }), obs({ stream_uuid: 'u-sol', name: 'sol' })]);
+    const rows = [{ ts: 2000, value: 20 }, { ts: 4000, value: 40 }];
+    expect(await db.addHistories([{ uuid: 'u-btc', rows }, { uuid: 'u-eth', rows }, { uuid: 'u-sol', rows: [] }], 9000)).toBe(3);
+    expect(await db.history('u-btc')).toEqual([{ ts: 2000, value: 20 }, { ts: 4000, value: 40 }, { ts: 5000, value: 1 }]);
+    expect(await db.history('u-eth')).toEqual([{ ts: 2000, value: 20 }, { ts: 3000, value: 1 }]);
+    expect(await db.needHistory()).toEqual([]);
+    expect((await db.streams()).map((r) => r.history_at)).toEqual([9000, 9000, 9000]);
+    expect(await db.addHistories([], 9001)).toBe(0);
+  });
+
+  test('addHistories: many rows (one statement), floats exactly as given', async () => {
     await db.addObservations([obs({ ts: 10_000_000 })]);
     const rows = Array.from({ length: 1000 }, (_, i) => ({ ts: 1000 + i * 3600, value: 0.1 + i * 1e-7 + 1 / 3 }));
-    expect(await db.addHistory('u-btc', rows, 1)).toBe(1000);
+    expect(await db.addHistories([{ uuid: 'u-btc', rows }], 1)).toBe(1000);
     expect((await db.history('u-btc')).slice(0, 1000)).toEqual(rows);
   });
 
