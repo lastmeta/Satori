@@ -636,7 +636,7 @@ window.satori = {
   async health() {
     ready();
     return healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
-      nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt });
+      nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since() });
   },
   /** Show a tab: 'home' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL). → the tab */
   go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
@@ -700,12 +700,15 @@ window.satori = {
   async setBaseMaxFee(gwei) { ready(); return base.setSettings({ maxFee: gwei }); },
 };
 
+/** When this neuron began: the log's first session, or the keys' creation when earlier (records before it have none). */
+const since = () => Math.min(activity.first() ?? Infinity, record?.created ?? Infinity);
+
 /** Home's health, kept current from the log and the statuses (the UI's; agents' health() reads fresh). */
 watch(() => {
   if (state.screen !== 'home' || !activity) return;
   void state.activityRev; // the log changed
   state.health = healthOf({ now: state.now, rows: activity.rows(), central: state.central, base: state.base, nostr: state.nostr,
-    storage: state.storage, app: state.app, backedUp: !!state.backupAt });
+    storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since() });
 });
 
 async function boot() {

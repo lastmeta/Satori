@@ -23,10 +23,11 @@ describe('newKeys: the record', () => {
   test('identity and Nostr key in plain text (hex), the vault sealed with its public key in clear; nothing of Docker\'s', async () => {
     const r = await newKeys({ identity: hex(a.entropyHex), vault: hex(b.entropyHex), nostr: fx.nostr.secretHex }, PASS);
     expect(r).toEqual({
-      v: 1, identity: a.entropyHex, nostr: fx.nostr.secretHex,
+      v: 1, created: expect.any(Number), identity: a.entropyHex, nostr: fx.nostr.secretHex,
       vault: { pubkey: b.pubkey, kdf: expect.objectContaining({ name: 'PBKDF2', hash: 'SHA-256' }),
         cipher: expect.objectContaining({ name: 'AES-GCM' }), data: expect.any(String) },
     });
+    expect(Math.abs(r.created - Date.now() / 1000)).toBeLessThan(60); // when these keys were made: Home's first day
     expect(JSON.stringify(r)).not.toMatch(/yaml|evr|wif|scripthash|words/i);
     expect(JSON.stringify(r)).not.toContain(b.entropyHex);
   });

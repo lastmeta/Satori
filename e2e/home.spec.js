@@ -1,7 +1,8 @@
 // Home's health (docs/design/health.md) in Chrome, each state driven with the stub central and a fake chain behind
 // /rpc; "was asleep" from a seeded activity log. Also the phone's first screen (390 × 844 and 360 × 740: the answer
 // without scrolling, tap targets of 44 px, no sideways scroll on any tab) and the screenshots of each state, phone and
-// computer, light and dark (SHOTS=1 writes them to docs/screenshots/home-*.png; else to the test's output).
+// computer, light and dark (SHOTS=1 writes them to docs/screenshots/home-*.png; else to the test's output), and a new
+// neuron's first day.
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
@@ -273,7 +274,7 @@ test('bad: central refuses two batches in a row, then the login; the card goes t
   expect(central.prod).toEqual([]);
 });
 
-test('starting: a new neuron is calm before its first poll, then predicting', async ({ context, page }) => {
+test('starting: a new neuron is calm before its first poll, then predicting; the days before it are not closed days', async ({ context, page }) => {
   const { central } = await setup(context);
   await openApp(page);
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
@@ -281,8 +282,17 @@ test('starting: a new neuron is calm before its first poll, then predicting', as
   expect(h).toMatchObject({ status: 'idle', title: 'Starting', action: null });
   expect(h.line).toMatch(/^First predictions in \d+ min\.$/);
   expect(h.days.at(-1)).toMatchObject({ code: 'closed', ran: true, today: true });
+  expect(h.days.slice(0, -1).every((d) => d.code === 'before' && !d.ran)).toBe(true);
+  const before = page.locator('[data-test=day][data-code=before]');
+  await expect(before).toHaveCount(29);
+  await expect(before.first()).toHaveAttribute('title', /^\w+ \d+: Before this neuron$/);
+  await expect(page.locator('[data-test=days-summary]')).toHaveText('0 full days');
   centralAt(central, nowS() - 60);
   await page.evaluate(() => window.satori.poll());
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
   await expect(page.locator('[data-test=health-line]')).toHaveText('Sent 8 predictions just now · next in 11 h');
+  await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
+  await expect(page.locator('[data-test=days-summary]')).toHaveText('1 full day');
+  await shots(page, 'new');
+  expect(central.prod).toEqual([]);
 });

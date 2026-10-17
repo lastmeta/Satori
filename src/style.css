@@ -161,6 +161,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .cell[data-code="full"] { background: var(--ok); }
 .cell[data-code="part"] { background: linear-gradient(to top, var(--ok) 50%, var(--cell-off) 50%); }
 .cell[data-code="error"] { background: var(--bad); }
+.cell[data-code="before"] { background: none; border: 1px dashed var(--muted); opacity: 0.5; } /* before this neuron: an empty slot */
 .cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
 .strip .cell:nth-child(-n+16) { display: none; } /* the phone shows the last 14 of 30 */
 @media (max-width: 1023px) { .desk-only { display: none !important; } }
@@ -169,6 +170,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .legend i[data-code="full"] { background: var(--ok); }
 .legend i[data-code="part"] { background: linear-gradient(to top, var(--ok) 50%, var(--cell-off) 50%); }
 .legend i[data-code="error"] { background: var(--bad); }
+.legend i[data-code="before"] { background: none; border: 1px dashed var(--muted); opacity: 0.6; }
 .chans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .chan { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 4px; min-width: 0; }
 .chan .row1 { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; }

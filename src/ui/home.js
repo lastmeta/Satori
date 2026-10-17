@@ -5,20 +5,17 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { mark, sparkPath, unlockPrompt } from './parts.js';
-import { fmtNum, modelText, amountText } from './format.js';
+import { fmtNum, modelText, amountText, daysText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
 const EMPTY = { status: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
   channels: { central: { state: 'idle', text: '–' }, base: { state: 'idle', text: '–' }, network: { state: 'idle', text: '–' } } };
 const h = () => state.health ?? EMPTY;
 const HOME_ROWS = 8;
-const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed' };
+const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this neuron' };
 const CHANNEL_TAB = { central: 'streams', base: 'wallet', network: 'streams' };
 
-const fullDays = (n) => {
-  const days = h().days.slice(-n);
-  return days.length ? `${days.filter((d) => d.code === 'full').length} of ${n} full days` : '';
-};
+const fullDays = (n) => daysText(h().days.slice(-n));
 
 function dayTitle(d) {
   const when = new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -90,7 +87,7 @@ export function home(a) {
     <section class="tile days-tile">
       <div class="tile-h"><b class="phone-only">Last 14 days</b><b class="desk-only">Last 30 days</b><span class="phone-only" data-test="days-summary">${() => fullDays(14)}</span><span class="desk-only">${() => fullDays(30)}</span></div>
       <div class="strip" data-test="days">${() => h().days.map((d) => cell(d).key(`${d.date}:${d.code}:${d.ran}:${d.today}`))}</div>
-      <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span></div>
+      <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this neuron</span></div>
     </section>
 
     <section class="chans" data-test="channels">${chip(a, 'central', 'Central')}${chip(a, 'base', 'Base')}${chip(a, 'network', 'Network')}</section>

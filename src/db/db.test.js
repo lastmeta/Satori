@@ -446,6 +446,14 @@ describe('the activity log (migration 8; docs/design/health.md)', () => {
     expect((await db.activity(450)).map((r) => r.id)).toEqual([b]);
   });
 
+  test('firstSession: when the oldest session in the log began, or null', async () => {
+    expect(await db.firstSession()).toBe(null);
+    await db.addActivity({ at: 50, kind: 'central', level: 'ok', data: {} }); // not a session
+    await db.addActivity({ at: 300, kind: 'open', level: 'ok', data: {}, until: 400 });
+    await db.addActivity({ at: 100.5, kind: 'open', level: 'ok', data: {}, until: 200 });
+    expect(await db.firstSession()).toBe(100.5);
+  });
+
   test('prune: rows that ended before the cutoff go; resetCentral keeps the log (it is this neuron\'s)', async () => {
     await db.addActivity({ at: 10, kind: 'open', level: 'ok', data: {}, until: 20 });
     await db.addActivity({ at: 10, kind: 'base', level: 'bad', data: {}, until: 90, mkey: 'e' });

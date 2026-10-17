@@ -242,7 +242,7 @@ test('the action priority: the worst status; one card, the highest reason that h
 
 describe('the day strip: local days', () => {
   const day = (k, hour = 12) => new Date(2026, 9, 16 - k, hour, 0, 0).getTime() / 1000; // k days ago, local
-  test('full, part, error, closed (never ran, or ran with nothing due); today outlined; 30 days, oldest first', () => {
+  test('full, part, error, closed (never ran, or ran with nothing due), before; today outlined; 30 days, oldest first', () => {
     const rows = [
       open(day(5, 8), day(5, 20)), good(day(5, 9)), row('base', day(5, 10), 'ok', { round: 1, games: [{}] }), // full
       open(day(4, 8), day(4, 20)), good(day(4, 9)), row('base', day(4, 10), 'bad', { error: 'x' }), // part: Base failed
@@ -258,7 +258,18 @@ describe('the day strip: local days', () => {
       ['2026-10-11', 'full', true], ['2026-10-12', 'part', true], ['2026-10-13', 'error', true], ['2026-10-14', 'closed', true],
       ['2026-10-15', 'closed', false], ['2026-10-16', 'full', true]]);
     expect(days.filter((d) => d.today)).toHaveLength(1);
-    expect(days[0]).toMatchObject({ date: '2026-09-17', code: 'closed', ran: false });
+    expect(days[0]).toMatchObject({ date: '2026-09-17', code: 'before', ran: false }); // before the first session
+  });
+  test('before: the days before the neuron began (its first session, or `since` when earlier) are not closed days', () => {
+    const fresh = [open(day(0, 8), NOW), good(day(0, 9))];
+    const days = daysOf(fresh, NOW);
+    expect(days.slice(0, -1).every((d) => d.code === 'before' && !d.ran)).toBe(true);
+    expect(days.at(-1)).toMatchObject({ code: 'full', ran: true, today: true });
+    // since: the keys made 3 days ago at 22:00, or the log's first session older than the rows read
+    expect(daysOf(fresh, NOW, day(3, 22)).slice(-5).map((d) => d.code)).toEqual(['before', 'closed', 'closed', 'closed', 'full']);
+    expect(daysOf(fresh, NOW, NOW + H).slice(-2).map((d) => d.code)).toEqual(['before', 'full']); // a later one changes nothing
+    expect(daysOf([], NOW).every((d) => d.code === 'closed')).toBe(true); // nothing known: nothing before
+    expect(health({ rows: fresh, since: day(1, 23) }).days.slice(-3).map((d) => d.code)).toEqual(['before', 'closed', 'full']);
   });
   test('a merged failure counts on every day it spans; a skip that is not a failure counts on none', () => {
     const rows = [open(day(2, 1), NOW), good(day(2, 2)), good(day(1, 2)), good(day(0, 2)),

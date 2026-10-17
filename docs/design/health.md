@@ -163,8 +163,17 @@ on every day from `at` to `until`):
 | `part` | some channels |
 | `error` | only failures |
 | `closed` | nothing went out and nothing failed: the app never ran that day (`ran: false`), or ran with nothing due |
+| `before` | the day ended before the neuron began: an empty outlined cell, "Before this neuron", not a closed day |
+
+The neuron began at its first session in the log (`activity.first()`, read
+from the whole log, not only the rows loaded), or when its keys were made
+(the record's `created`, [keys.md](keys.md#the-record)) when that is earlier.
+Records from before `created` have only the log.
 
 Today has an outline. Each day is `{ date: 'YYYY-MM-DD', code, ran, today }`.
+The summary counts the neuron's own days: "12 of 14 full days"; a neuron
+younger than the strip, "1 full day" on its first day, then "2 of 3 full
+days". The legend shows "Before this neuron" only while such a day is shown.
 
 ## The feed
 
@@ -181,9 +190,12 @@ session that missed nothing is not shown.
   fabricated logs, the action priority, open time and missed work, the day
   codes, the chips and the feed.
 - `src/neuron/activity.test.js`: sessions and their heartbeat, a wake after
-  sleep, merges, the 90-day prune, caught up. `src/db/db.test.js`: the table.
+  sleep, merges, the 90-day prune, caught up, the log's first session.
+  `src/db/db.test.js`: the table. `src/ui/format.test.js`: the strip's
+  summary.
 - `e2e/home.spec.js`: the four states in Chrome with the stub central and a
-  fake chain (idle from a seeded log), and the screenshots below.
+  fake chain (idle from a seeded log); a new neuron (29 days before it,
+  "0 full days", then "1 full day"); and the screenshots below.
 
 ## Live
 
@@ -194,6 +206,11 @@ history for all 82 (81 on bvar), 82 of 82 accepted → *Predicting*, "Sent 82
 predictions just now · next in 11 h"; Base idle (a new vault, no SATORI),
 Network idle (nothing subscribed); nothing sent to prod.
 
+Again after the day strip's `before` (2026-10-17 01:55, a fresh profile, set
+up with new random words): *Starting* with 29 outlined days ("Sep 18: Before
+this neuron") and today, "0 full days"; Poll now, 13 s: 82 of 82 accepted,
+today full, "1 full day" on the phone and the computer; nothing sent to prod.
+
 ![Home live on central2 after the first poll](../screenshots/home-live-central2.png)
 
 ## Screenshots
@@ -201,8 +218,13 @@ Network idle (nothing subscribed); nothing sent to prod.
 From `e2e/home.spec.js` (`SHOTS=1 npx playwright test e2e/home.spec.js`):
 each state on a phone (390 × 844, the first screen) and a computer (1280
 wide), light and dark, `docs/screenshots/home-<state>-<phone|desktop>-<light|dark>.png`
-for `ok`, `idle`, `warn` and `bad`.
+for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 
 <img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: was asleep, caught up" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: central refused two batches" width="240">
 
 ![ok on a computer](../screenshots/home-ok-desktop-light.png)
+
+A new neuron after its first poll: the days before it are empty outlines,
+not closed days.
+
+<img src="../screenshots/home-new-phone-light.png" alt="a new neuron: 1 full day" width="240"> <img src="../screenshots/home-new-phone-dark.png" alt="a new neuron, dark" width="240">

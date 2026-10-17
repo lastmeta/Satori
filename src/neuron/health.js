@@ -253,9 +253,15 @@ function outcome(r) {
   return null;
 }
 
-/** The last `n` local days, oldest first: { date, code: full | part | error | closed, ran, today }. */
-export function daysOf(rows, now, n = DAYS) {
+/**
+ * The last `n` local days, oldest first: { date, code: full | part | error | closed | before, ran, today }. `before`:
+ * the day ended before the neuron began, its first session or `since` (the keys' creation, the log's first session)
+ * when earlier.
+ */
+export function daysOf(rows, now, since = null, n = DAYS) {
   const sessions = sessionsOf(rows, now);
+  const known = [since, sessions[0]?.at].filter(Number.isFinite);
+  const born = known.length ? Math.min(...known) : -Infinity; // nothing known: no day is before
   const today = new Date(now * 1000);
   today.setHours(0, 0, 0, 0);
   const out = [];
@@ -271,7 +277,7 @@ export function daysOf(rows, now, n = DAYS) {
       const o = outcome(r);
       if (o && r.at < b && end(r) >= a) (o[1] === 'ok' ? ok : fail).add(o[0]);
     }
-    const code = !ok.size ? (fail.size ? 'error' : 'closed') : [...fail].every((c) => ok.has(c)) ? 'full' : 'part';
+    const code = ok.size ? ([...fail].every((c) => ok.has(c)) ? 'full' : 'part') : fail.size ? 'error' : b <= born ? 'before' : 'closed';
     out.push({ date: isoDay(start), code, ran: sessions.some((s) => s.at < b && s.until >= a), today: k === 0 });
   }
   return out;
@@ -327,9 +333,10 @@ export function feedOf(rows, n = FEED) {
  * @param {{persisted: boolean}|null} o.storage
  * @param {{installed: boolean, canInstall: boolean}} o.app
  * @param {boolean} o.backedUp the vault's words confirmed (meta.backup_at)
+ * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
  * @returns {{status, title, line, action, days, channels, feed, reasons}}
  */
-export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp }) {
+export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, since = null }) {
   const sessions = sessionsOf(rows, now);
   const c = centralReasons({ now, rows, sessions, central, app });
   const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr })];
@@ -360,7 +367,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const action = a ? { id: a.id, text: a.text, button: a.button, ...a.act } : null;
   return {
     status, title, line, action,
-    days: daysOf(rows, now),
+    days: daysOf(rows, now, since),
     channels: chips({ now, reasons, lastGood: lg, base, nostr }),
     feed: feedOf(rows),
     reasons: reasons.map((r) => ({ id: r.id, status: r.status, channel: r.channel, text: r.text ?? r.line })),

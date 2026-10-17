@@ -13,6 +13,17 @@ export function fmtWhen(s) {
     { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 
+/**
+ * The day strip's summary (health().days, the days shown): '12 of 14 full days'. A neuron younger than the strip
+ * counts only its own days: '1 full day' on its first, then '2 of 3 full days'.
+ */
+export function daysText(days) {
+  const mine = days.filter((d) => d.code !== 'before');
+  const full = mine.filter((d) => d.code === 'full').length;
+  if (!days.length) return '';
+  return mine.length > 1 ? `${full} of ${mine.length} full days` : `${full} full day${full === 1 ? '' : 's'}`;
+}
+
 /** The register result (neuron register()) in a few words. */
 export function registrationText(r) {
   if (!r) return 'Registering…';

@@ -95,6 +95,13 @@ For agents written against the earlier UI and API:
 - The database has an activity log (migration 8) and `meta.backup_at` (the
   vault's backup confirmed); docs/design/storage.md.
 
+## Changed 2026-10-17
+
+- `health().days[].code` may be `'before'`: a day before this neuron began
+  (a new neuron's strip was 13 grey "closed" days). Its cell has
+  `data-code="before"` and the title "<date>: Before this neuron".
+- The keys record gains `created` (unix seconds) for keys made from now on.
+
 ## Changed 2026-10-16 (the keys in this app's own format; Base only)
 
 For agents written against the earlier API:
@@ -407,10 +414,13 @@ the page's JS context:
     holds SATORI, not delegated), `gas-low`, `base-skipped`,
     `base-unreachable`, `relay-down`, `asleep`, `starting`.
   - `days`: the last 30 local days, oldest first: `{ date: 'YYYY-MM-DD',
-    code: 'full' | 'part' | 'error' | 'closed', ran, today }` (full:
-    predictions went out on every channel active that day; part: some; error:
-    only failures; closed: nothing went out and nothing failed, `ran` says
-    whether the app ran). The phone shows the last 14.
+    code: 'full' | 'part' | 'error' | 'closed' | 'before', ran, today }`
+    (full: predictions went out on every channel active that day; part:
+    some; error: only failures; closed: nothing went out and nothing failed,
+    `ran` says whether the app ran; before: the day ended before this neuron
+    began, its first session or its keys' creation: not a closed day, and
+    not counted in `days-summary`, "1 full day", "2 of 3 full days"). The
+    phone shows the last 14.
   - `channels`: `{ central, base, network }`, each `{ state: 'ok' | 'warn' |
     'bad' | 'idle', text }` ("83 sent 2 h ago", "Round 20742 sent", "No
     streams").

@@ -3,7 +3,7 @@ import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
-  storageText, playNote, modelText, historyText,
+  storageText, playNote, modelText, historyText, daysText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -72,6 +72,15 @@ test('fmtCadence', () => {
 test('shortKey', () => {
   expect(shortKey('e5e6ce948344b1e0178f9ccf49fcb499b4b4f00fc09c7637535ee82fc7bf503d')).toBe('e5e6ce94…503d');
   expect(shortKey('')).toBe('');
+});
+
+test('daysText: the day strip\'s summary counts only the days since the neuron began', () => {
+  const days = (codes) => codes.map((code) => ({ code }));
+  expect(daysText(days(['full', 'closed', 'part', 'full']))).toBe('2 of 4 full days');
+  expect(daysText(days([...Array(13).fill('before'), 'full']))).toBe('1 full day'); // a new neuron's first day
+  expect(daysText(days([...Array(13).fill('before'), 'closed']))).toBe('0 full days');
+  expect(daysText(days([...Array(11).fill('before'), 'full', 'error', 'full']))).toBe('2 of 3 full days');
+  expect(daysText([])).toBe('');
 });
 
 test('relayText: the state in a word, and read only', () => {

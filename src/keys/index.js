@@ -63,12 +63,15 @@ const nostrOf = (secret) => {
   }
 };
 
-/** A new record: the vault (and an identity and a Nostr key, random when not given), sealed with a new passphrase. */
+/**
+ * A new record: the vault (and an identity and a Nostr key, random when not given), sealed with a new passphrase;
+ * `created`: when (unix seconds), Home's first day (docs/design/health.md#the-day-strip).
+ */
 export async function newKeys({ identity = generateSecret(), vault, nostr = generateNostrSecret() }, passphrase) {
   checkNewPassphrase(passphrase);
   notSame(checkKey(identity), checkKey(vault));
   nostrOf(nostr);
-  return { v: RECORD_VERSION, identity: bytesToHex(identity), nostr,
+  return { v: RECORD_VERSION, created: Math.floor(Date.now() / 1000), identity: bytesToHex(identity), nostr,
     vault: { pubkey: publicKey(vault), ...await sealSecret(vault, passphrase) } };
 }
 

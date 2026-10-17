@@ -69,6 +69,7 @@ nothing):
 ```json
 {
   "v": 1,
+  "created": 1792195200,
   "identity": "<64 hex>",
   "nostr": "<64 hex>",
   "vault": {
@@ -82,6 +83,10 @@ nothing):
 
 - `v` is the record's version. A record from a newer app is refused, not
   guessed at; a later change adds a version and reads this one.
+- `created` is when the record was made (unix seconds: Create, Restore or
+  Import): Home's day strip starts there or at the first session in the
+  activity log, whichever is earlier ([health.md](health.md#the-day-strip)).
+  A record made before 2026-10-17 has none.
 - The identity and the Nostr key are their secrets in plain hex; everything
   else about them (public keys, addresses) is derived at load.
 - The vault's public key is in clear: its Base address shows while locked,

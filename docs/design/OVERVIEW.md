@@ -307,7 +307,8 @@ The deploy image added none to npm; it is
   (Delegate from the card, the inline Unlock, a wrong passphrase refused, the
   batch on its own, ok again); idle after two days closed (catching up, caught
   up, ok at the next cycle); bad after two refused batches, then a refused
-  login whose card opens Settings; starting on a fresh neuron. At 390 × 844
+  login whose card opens Settings; starting on a fresh neuron (the days
+  before it outlined, "Before this neuron", not closed). At 390 × 844
   and 360 × 740 the answer is on the first screen, every tap target is 44 px
   and no tab scrolls sideways. `SHOTS=1` writes the screenshots below.
 - `npm run e2e:pwa` (a build on `vite preview` :5181, `e2e/pwa.spec.js`, each

@@ -154,6 +154,19 @@ test('kept 90 days: pruned at start and once a day', async () => {
   expect(kinds(a.rows())).toEqual(['open', 'open']);
 });
 
+test('first(): when the log\'s first session began, also one older than the rows health reads; this one in a new log', async () => {
+  const a = make();
+  expect(a.first()).toBe(null);
+  await db.addActivity({ at: T - 50 * 86400, kind: 'open', level: 'ok', data: {}, until: T - 50 * 86400 + 600 });
+  await a.start();
+  expect(a.first()).toBe(T - 50 * 86400);
+  expect(kinds(a.rows())).toEqual(['open']); // 50 days ago is not read: only this session
+  await db.pruneActivity(T); // a new log
+  const b = make();
+  await b.start();
+  expect(b.first()).toBe(T);
+});
+
 test('a write that fails is logged, never thrown', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   const a = createActivity({ db: { ...db, addActivity: async () => { throw new Error('IO Error') } }, now });

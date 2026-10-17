@@ -12,11 +12,12 @@ const QUIET_SKIPS = /^(already predicted|waiting for the batch)/; // a round alr
 
 /**
  * @param {{db: object, now?: () => number, onChange?: () => void}} o
- * → { start, beat, rows, central, history, base, published, wallet, error }
+ * → { start, beat, rows, first, central, history, base, published, wallet, error }
  */
 export function createActivity({ db, now = () => Date.now() / 1000, onChange = () => {} }) {
   let rows = []; // the last LOAD_S, oldest first, as db.activity() returns them
   let session = null; // the current `open` row
+  let first = null; // when the log's first session began (the rows read hold only the last 31 days)
   let catchUp = null; // a session that missed work: its gap, until its first good cycle
   let lastTick = 0;
   let pruned = 0;
@@ -61,11 +62,16 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
   return {
     rows: () => rows,
 
-    /** At page load: the 90-day prune, the rows health reads, a session. */
+    /** When the log's first session began (unix seconds; null before start): the neuron's first day. */
+    first: () => first,
+
+    /** At page load: the log's first session, the 90-day prune, the rows health reads, a session. */
     start: safely(async () => {
+      first = await db.firstSession();
       await prune();
       rows = await db.activity(now() - LOAD_S);
       await openSession();
+      first ??= session.at;
     }),
 
     /**

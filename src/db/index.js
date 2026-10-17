@@ -12,7 +12,7 @@
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
 //   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
 //   db.addRelayObservation(o) → new? / relayHistory(uuid) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
-//   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / pruneActivity(before)
+//   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / firstSession() / pruneActivity(before)
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
 import { MIGRATIONS } from './schema.js';
@@ -327,6 +327,8 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       WHERE greatest(ts, coalesce(last_ts, ts)) >= ${D} ORDER BY ts, id`, dbl(since)))
       .map(({ ts, last_ts: until, data, ...r }) => ({ id: r.id, at: ts, until, kind: r.kind, level: r.level,
         data: JSON.parse(data), count: r.count, mkey: r.mkey }))),
+    /** When the log's oldest session began (unix seconds), or null. */
+    firstSession: inOrder(async () => (await rows("SELECT min(ts) AS at FROM activity WHERE kind = 'open'"))[0].at ?? null),
     /** The 90-day bound: rows that ended before `before` go. */
     pruneActivity: inOrder((before) => run(`DELETE FROM activity WHERE greatest(ts, coalesce(last_ts, ts)) < ${D}`, dbl(before))),
 
