@@ -151,12 +151,23 @@ export function firstPollAt(stored, now) {
  * from the timer or poll(), runs `run` and arms the next one 11 h after it
  * ends, whatever the result. One run at a time: poll() during a run returns
  * it; idle() waits for it without starting one. onChange({ next, running })
- * follows both.
+ * follows both. With `work` (src/neuron/work.js), each poll is central's work
+ * from its start until the next one is armed, so Home shows its steps
+ * (run(report): report(step, done, total)) and, after them, the next time,
+ * never "next now…".
  */
-export function createPoller(run, { db, now = nowS, setTimeout, clearTimeout, onChange = () => {} }) {
-  const s = createSchedule(run, {
+export function createPoller(run, { db, work = null, now = nowS, setTimeout, clearTimeout, onChange = () => {} }) {
+  let job = null; // the poll in progress, as central's work
+  const s = createSchedule(() => run(job?.step ?? (() => {})), {
     now, setTimeout, clearTimeout, name: 'poll', after: () => now() + POLL_EVERY_S,
-    onChange: () => onChange({ next: s.next, running: s.running }),
+    onChange: () => {
+      if (s.running) job ??= work?.start('central') ?? null;
+      onChange({ next: s.next, running: s.running });
+      if (!s.running && job) { // after the next poll is armed
+        job.end();
+        job = null;
+      }
+    },
     async onArm(at) {
       try {
         await db.set('next_poll_at', at);
@@ -189,19 +200,18 @@ export function modelsOf(rows) {
   });
 }
 
-/** Central's state for the UI and agents (window.satori.status().central): plain values. */
+/**
+ * Central's state for the UI and agents (window.satori.status().central): plain values. The schedule's is read last,
+ * once the reads are done, so a status begun during a poll that ended meanwhile never says it still runs.
+ */
 export async function centralStatus({ db, central, registration, poller }) {
-  return {
-    url: central?.url ?? null,
-    registration,
-    lastPoll: (await db.get('central_last_poll')) ?? null,
-    nextPoll: poller?.next ?? null,
-    polling: !!poller?.running,
-    lastSubmit: (await db.get('central_last_submit')) ?? null,
-    pending: await db.pendingCount(),
-    // central's history (history.js): the last backfill, and how many streams still have none
-    history: { ...((await db.get('central_history')) ?? {}), needed: (await db.needHistory()).length },
-  };
+  const lastPoll = (await db.get('central_last_poll')) ?? null;
+  const lastSubmit = (await db.get('central_last_submit')) ?? null;
+  const pending = await db.pendingCount();
+  // central's history (history.js): the last backfill, and how many streams still have none
+  const history = { ...((await db.get('central_history')) ?? {}), needed: (await db.needHistory()).length };
+  return { url: central?.url ?? null, registration, lastPoll, nextPoll: poller?.next ?? null, polling: !!poller?.running, lastSubmit,
+    pending, history };
 }
 
 /**

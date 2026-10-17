@@ -123,18 +123,13 @@ const backfill = coalesce('history', () => work.run('central', async (step) => {
   if (r?.at >= t0) await activity.history(r); // this run's, not the last one's kept result
 }));
 
-async function runCycle() {
-  const job = work.start('central');
-  let r;
-  try {
-    // never throws: errors are in r and in the status; seed: the identity draws each target's spec
-    r = await cycle({ db, central, seed: identity.pubkey, backfill, report: job.step });
-    console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
-    await refresh();
-  } finally {
-    job.end(); // before the log's row: Home shows the last step, then the answer (src/ui/hold.js)
-  }
-  await activity.central(r, state.central.pending);
+/** A poll (createPoller's run): its steps are central's work on Home, which ends once the next poll is armed. */
+async function runCycle(report) {
+  // never throws: errors are in r and in the status; seed: the identity draws each target's spec
+  const r = await cycle({ db, central, seed: identity.pubkey, backfill, report });
+  console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
+  await refresh();
+  await activity.central(r, state.central.pending); // Home still shows the last step, then the answer (src/ui/hold.js)
   return r;
 }
 
@@ -152,7 +147,7 @@ async function startNeuron() {
     activity.beat();
   }, 30_000);
   const c = await connect();
-  poller = createPoller(runCycle, { db, onChange: ({ next, running }) => {
+  poller = createPoller(runCycle, { db, work, onChange: ({ next, running }) => {
     state.central = { ...state.central, nextPoll: next, polling: running };
   } });
   await refresh();

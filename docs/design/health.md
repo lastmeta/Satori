@@ -209,7 +209,15 @@ set by the code doing the work; nothing polls:
 
 **Critical** means closing Satori now would lose work; its words begin
 "Keep Satori open · ". The load-time history and a poll can both hold
-`central`: it ends with the last.
+`central`: it ends with the last. A poll holds it from its start until the
+next poll is armed (`createPoller`, with the cycle's row in the log before
+that), so when the line comes back it reads "Sent 82 predictions just now ·
+next in 11 h"; it never says "next now…" at rest (a recording on central2
+caught that line right after the first submit). The status read for Home
+also takes the schedule last, after its database reads, so a refresh that
+began during a poll never writes it back as still running.
+`src/neuron/neuron.test.js` checks both with fake timers at the exact
+transitions.
 
 **Home's hero** shows the hero's task: the first critical one among
 `central`, `base`, the vault's actions and `keys`, else the first of them.

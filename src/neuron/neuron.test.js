@@ -5,6 +5,8 @@ import { CentralError, predictionItem } from '../central/index.js';
 import {
   cycle, register, firstPollAt, createPoller, centralStatus, claimTab, modelsOf, POLL_EVERY_S, BATCH_LIMIT,
 } from './index.js';
+import { createWork, leading, HERO } from './work.js';
+import { healthOf } from './health.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
 
@@ -433,6 +435,73 @@ describe('createPoller', () => {
     expect(error).toHaveBeenCalledWith('[satori] saving the next poll time', expect.any(Error));
     error.mockRestore();
   });
+});
+
+describe("the poll's work on Home: from its start until the next poll is armed, so the line at rest never says \"next now…\"", () => {
+  test('at the exact transitions (fake timers): the timer firing shows the step; the work ends with the next poll armed', async () => {
+    vi.useFakeTimers({ now: T * 1000 });
+    try {
+      const nowS = () => Date.now() / 1000;
+      const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
+      const rows = [{ id: 1, kind: 'open', at: T - 3600, until: T, level: 'ok', data: { gap: null, missed: false }, count: 1, mkey: null }];
+      const seen = []; // what Home draws, batched as the UI is (one microtask after the changes): the hero's step, or its line
+      let poller;
+      let queued = false;
+      const draw = () => {
+        if (queued) return;
+        queued = true;
+        queueMicrotask(() => {
+          queued = false;
+          const w = leading(work.all(), HERO);
+          const central = { registration: { ok: true }, nextPoll: poller.next, polling: poller.running };
+          seen.push(w ? `step ${w.step}` : healthOf({ now: nowS(), rows, central, work: work.all() }).line);
+        });
+      };
+      const work = createWork({ now: Date.now, onChange: draw });
+      poller = createPoller(async (report) => { // as main.js's runCycle: the cycle's steps, then its row in the log
+        const at = nowS();
+        report('observations');
+        await sleep(1000);
+        report('send', 0, 82);
+        await sleep(2000);
+        rows.push({ id: 2, kind: 'central', at, until: null, level: 'ok', count: 1, mkey: null,
+          data: { streams: 82, new: 82, predicted: 82, sent: 82, accepted: 82, pending: 0 } });
+        draw();
+        return { poll: { at } };
+      }, { db, now: nowS, work, onChange: draw });
+
+      await poller.start(); // a new neuron: due now
+      await vi.advanceTimersByTimeAsync(0); // the timer fires: the poll starts
+      expect(poller.running).toBe(true);
+      expect(seen.at(-1)).toBe('step observations');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seen.at(-1)).toBe('step send');
+      await vi.advanceTimersByTimeAsync(2000); // the batch is sent, logged, and the next poll armed
+      expect(poller.running).toBe(false);
+      expect(poller.next).toBe(T + 3 + POLL_EVERY_S);
+      expect(work.all()).toEqual({});
+      expect(seen.at(-1)).toBe('Sent 82 predictions just now · next in 11 h');
+      expect(seen.filter((x) => !x.startsWith('step '))).toEqual(['Getting its first predictions…', 'Sent 82 predictions just now · next in 11 h']);
+      expect(seen.join('\n')).not.toMatch(/next now/);
+
+      // Poll now at rest: the step at once, never the line with "next now…"; then the next time again
+      const done = poller.poll();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seen.at(-1)).toBe('step observations');
+      await vi.advanceTimersByTimeAsync(3000);
+      await done;
+      expect(seen.at(-1)).toBe('Sent 82 predictions just now · next in 11 h');
+      expect(seen.join('\n')).not.toMatch(/next now/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+test('centralStatus: the schedule as it is once the reads are done (a refresh that began during a poll never writes it back as polling)', async () => {
+  const poller = { next: T, running: true };
+  const store = { ...db, pendingCount: async () => { poller.running = false; poller.next = T + POLL_EVERY_S; return db.pendingCount(); } }; // the poll ends meanwhile
+  expect(await centralStatus({ db: store, central, poller })).toMatchObject({ nextPoll: T + POLL_EVERY_S, polling: false });
 });
 
 test('centralStatus: the URL, the register result, the last poll and submission, the schedule, the queue, the history', async () => {
