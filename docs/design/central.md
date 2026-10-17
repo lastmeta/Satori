@@ -63,7 +63,7 @@ other `server.py` methods for routes central-lite does not serve.
 | `GET /api/v1/auth/challenge` → `{challenge}` (a UUID) | none | `c/main.py:268-281` | before each login |
 | `POST /api/v1/auth/login` (headers `wallet-pubkey`, `message`, `signature`: EIP-191) → `{access_token, expires_in: 3600, …}` | signature | `c/auth.py:21-86`, `central/src/utils/auth.py:20-56` | before each submission, once more on a 401 |
 | `POST /api/v1/predictions/batch` → `{total_submitted, successful, failed, prediction_ids, errors}` | Bearer | `c/main.py:483-602`; schema `central/src/models/schemas.py:92-113` | right after each poll, when anything is pending |
-| `GET /api/v1/peer/relays` → `[{relay_url, nostr_pubkey, evr_address}]`; `GET /api/v1/peer/relay-config` → `{max_streams}` | none | `central/src/api/v1/endpoints/peer.py:123-173` | Nostr ([nostr.md](nostr.md)): relays at start and hourly, the config once per start |
+| `GET /api/v1/peer/relays` → `[{relay_url, nostr_pubkey, …}]`; `GET /api/v1/peer/relay-config` → `{max_streams}` | none | `central/src/api/v1/endpoints/peer.py:123-173` | Nostr ([nostr.md](nostr.md)): relays at start and hourly, the config once per start |
 
 Central silently maps an unknown `stream_uuid` to its `bitcoin` stream
 (`c/main.py:536-551`), so the browser only submits uuids it received.
