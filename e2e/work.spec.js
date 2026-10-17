@@ -41,7 +41,7 @@ const RECORD = () => {
     const el = document.querySelector('[data-test=health]');
     if (el && document.body.dataset.screen === 'home') {
       const r = { line: el.querySelector('[data-test=health-line]').textContent, work: el.dataset.work ?? '', tone: el.dataset.tone,
-        title: el.querySelector('[data-test=health-title]').textContent, fade: el.hasAttribute('data-fade') };
+        title: el.querySelector('[data-test=health-title]').textContent, from: el.dataset.from ?? '' };
       const key = JSON.stringify(r);
       if (key !== last) window.__hero.push({ ...r, t: performance.now() });
       last = key;
@@ -59,6 +59,26 @@ const animations = (page) => page.evaluate(() => document.getAnimations().filter
 
 /** The hero's colour transitions, run to their end (the 2.5 min fade included). */
 const settle = (page) => hero(page).evaluate((el) => el.getAnimations().forEach((a) => a.finish()));
+
+/**
+ * The hero's text against its fill, as painted (WCAG, as src/style.test.js reads it): { line, title } contrast ratios;
+ * any CSS colour, through a canvas.
+ */
+const contrasts = (page) => hero(page).evaluate((el) => {
+  const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
+  const rgb = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+  const lum = (c) => {
+    const [r, g, b] = rgb(c).map((x) => { const s = x / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const fill = getComputedStyle(el).backgroundColor;
+  const color = (test) => getComputedStyle(el.querySelector(`[data-test=${test}]`)).color;
+  return { line: ratio(color('health-line'), fill), title: ratio(color('health-title'), fill) };
+});
+/** Seek the hero's running transitions (the fade to sky) to their middle. */
+const halfway = (page) => hero(page).evaluate((el) => el.getAnimations().forEach((a) => { a.currentTime = a.effect.getTiming().duration / 2; }));
+const frames = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
 async function shot(page, names) {
   const dir = process.env.SHOTS ? 'docs/screenshots' : test.info().outputPath();
@@ -105,11 +125,11 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
   await expect(line(page)).toHaveText('Sent 8 predictions just now · next in 11 h');
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
-  await expect(hero(page)).toHaveAttribute('data-fade', '');
+  await expect(hero(page)).toHaveAttribute('data-from', 'critical');
   await expect(hero(page)).not.toHaveAttribute('data-work');
-  // the fade to sky: running, 2.5 min long
+  // the fade to sky, from vivid: running, 2.5 min long; only its progress moves, not the colours
   expect(await hero(page).evaluate((el) => el.getAnimations().filter((a) => a instanceof CSSTransition)
-    .map((a) => [a.transitionProperty, a.effect.getTiming().duration]))).toEqual(expect.arrayContaining([['--hero-tone', 150_000]]));
+    .map((a) => [a.transitionProperty, a.effect.getTiming().duration]))).toEqual([['--hero-rest', 150_000]]);
   expect(await animations(page)).toEqual([]);
   expect(await page.evaluate(() => window.satori.health())).toMatchObject({ status: 'ok', tone: 'idle', work: null });
 
@@ -128,15 +148,57 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
 
   // run to its end: the hero is sky green
   await settle(page);
-  expect(await hero(page).evaluate((el) => getComputedStyle(el).getPropertyValue('--hero-tone').trim())).toBe('rgb(162, 207, 174)'); // --sky
+  expect(await hero(page).evaluate((el) => { // --sky, through a canvas (the mix may read as color(srgb …))
+    const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d');
+    ctx.fillStyle = getComputedStyle(el).getPropertyValue('--hero-tone');
+    ctx.fillRect(0, 0, 1, 1);
+    return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
+  })).toEqual([162, 207, 174]);
   await shot(page, ['tone-idle']);
 
   // Poll now: back to green at once, then sky again; never gray
   await page.evaluate(() => void window.satori.poll());
   await expect(hero(page)).toHaveAttribute('data-tone', 'working');
-  await expect(hero(page)).not.toHaveAttribute('data-fade');
+  await expect(hero(page)).not.toHaveAttribute('data-from');
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle', { timeout: LOAD_TIMEOUT });
   expect((await page.evaluate(() => window.__hero)).every((r) => ['working', 'critical', 'idle'].includes(r.tone))).toBe(true);
+  expect(central.prod).toEqual([]);
+});
+
+test('a theme change during the fade to sky shows at once: the hero stays readable, light to dark (system) and dark to light (Settings)', async ({ context, page }) => {
+  test.setTimeout(240_000);
+  const central = await setup(context);
+  streams(central);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openApp(page);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
+
+  // half way through the 2.5 min fade, the system goes dark: the fill is dark at once, under the light text
+  await halfway(page);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await frames(page);
+  let c = await contrasts(page);
+  expect(c.line, 'the line (4.5:1)').toBeGreaterThanOrEqual(4.5);
+  expect(c.title, 'the title (3:1)').toBeGreaterThanOrEqual(3);
+  expect(await hero(page).evaluate((el) => el.getAnimations().length), 'still fading').toBeGreaterThan(0);
+  const dir = process.env.SHOTS ? 'docs/screenshots' : test.info().outputPath();
+  await page.screenshot({ path: `${dir}/fade-theme-switch-phone-dark.png` });
+
+  // again from work, dark: half way, Settings → Appearance → Light
+  await page.evaluate(() => void window.satori.poll());
+  await expect(hero(page)).toHaveAttribute('data-tone', 'working');
+  await expect(hero(page)).toHaveAttribute('data-tone', 'idle', { timeout: LOAD_TIMEOUT });
+  await halfway(page);
+  await page.evaluate(() => window.satori.setTheme('light'));
+  await frames(page);
+  c = await contrasts(page);
+  expect(c.line, 'the line (4.5:1)').toBeGreaterThanOrEqual(4.5);
+  expect(c.title, 'the title (3:1)').toBeGreaterThanOrEqual(3);
+  expect(await hero(page).evaluate((el) => el.getAnimations().length), 'still fading').toBeGreaterThan(0);
+  await page.screenshot({ path: `${dir}/fade-theme-switch-phone-light.png` });
   expect(central.prod).toEqual([]);
 });
 

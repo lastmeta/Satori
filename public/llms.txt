@@ -137,8 +137,8 @@ For agents written against the earlier UI and API:
   `health().channels[x]` has a `tone` too (`working` while its channel has
   work in progress; `off`: Base not delegated here, or no stream subscribed).
 - Home's hero (`data-test=health`): `data-tone`, `data-work` (the step it
-  shows, `central:history`) and `aria-busy="true"` while working, `data-fade`
-  while it fades to sky green after work (2.5 min). Its line
+  shows, `central:history`) and `aria-busy="true"` while working, `data-from`
+  at rest: the tone it turns sky green from (over 2.5 min after work). Its line
   (`health-line`) says the step while working, then the health's line. One
   short arc turns around its ring while working, the only animation on the
   page (none with reduced motion). Chips have `data-tone`; the action card
@@ -753,7 +753,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   query visible elements, use `data-test`, or `go(tab)` first.
 - Form fields have labels; elements carrying data or actions have
   `data-test` attributes. Home: `home`, `health` (`data-s` = the status,
-  `data-tone`, `data-work` and `aria-busy` while working, `data-fade`),
+  `data-tone`, `data-work` and `aria-busy` while working, `data-from` at rest),
   `health-title`, `health-line`, `action` (`data-action` = the reason),
   `action-text`, `action-button`, `days` with `day` (`data-date`,
   `data-code`), `days-summary`, `channels` with `chip` (`data-channel`,

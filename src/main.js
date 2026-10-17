@@ -738,24 +738,14 @@ watch(() => {
  * What the neuron is doing, at a pace a person can read (src/ui/hold.js; docs/design/health.md#work): the hero (central's
  * poll, the Base batch, the vault's actions, a critical one first: its ring turns, its line says the step, its tone is
  * green, vivid while closing would lose work), the Wallet card's line (the vault's actions, there) and the network's
- * (the Network streams line, only once one lasts a second). After work the hero fades to sky green over 2.5 min
- * (data-fade); back to work, at once.
+ * (the Network streams line, only once one lasts a second). At rest the hero turns sky green from the tone before it
+ * (data-from: over 2.5 min after work, style.css); back to work, at once.
  */
 const VAULT_TASKS = ['delegate', 'undelegate', 'claim', 'send'];
-const REST_FADE_MS = 150_000; // the fade from work to rest: style.css's .hero[data-fade]
-const busy = (tone) => tone === 'working' || tone === 'critical';
 let heroWas = null; // the hero's view shown last (not read from state: the watch below would depend on what it writes)
-let restAt = 0; // when the fade to rest ends (ms)
-let restTimer = null;
 const heroHold = createHold({ show: (v) => {
-  const was = heroWas;
-  if (v.tone === 'idle' && busy(was?.tone)) { // the work just ended: fade to sky
-    restAt = Date.now() + REST_FADE_MS;
-    clearTimeout(restTimer);
-    restTimer = setTimeout(() => { if (heroWas.fade) state.hero = heroWas = { ...heroWas, fade: false }; }, REST_FADE_MS);
-  }
-  heroWas = { ...v, fade: v.tone === 'idle' && Date.now() < restAt && (busy(was?.tone) || !!was?.fade) };
-  state.hero = heroWas;
+  const from = v.tone !== 'idle' ? null : heroWas?.tone === 'idle' ? heroWas.from : heroWas?.tone ?? null;
+  state.hero = heroWas = { ...v, from };
 } });
 watch(() => {
   const h = state.health;

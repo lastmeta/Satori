@@ -273,9 +273,18 @@ fill and on a card, and each icon on its disc, light and dark.
 
 **The fade**: the hero's colours are registered (`@property --hero-tone`,
 `--hero-soft`, `--hero-ink`), so they move: to green within 300 ms when work
-starts (vivid when it is critical), and from work to rest, sky, over
-2.5 min, linear, barely seen while watching (`data-fade`, set for those 2.5
-minutes by `main.js`). Warn and bad come and go in 300 ms.
+starts (vivid when it is critical), and to amber or red in 300 ms. At rest
+only a number moves, `--hero-rest` from 0 to 1, and the colours are mixed
+from the tone before (`data-from`, set by `main.js`) toward sky: over
+2.5 min, linear, after work (barely seen while watching), else in 300 ms.
+The mix reads the current theme's tokens, so a theme change (the system's,
+or Settings → Appearance) shows at once, mid-fade too. It used to fade the
+colours themselves, so a theme change mid-fade kept the old theme's fill
+under the new theme's text until the fade ended ("Sent 82…" unreadable on
+dark). `e2e/work.spec.js` switches the theme half way through the fade,
+both ways, and checks the line (4.5:1) and the title (3:1) on the fill.
+
+<img src="../screenshots/fade-theme-switch-phone-dark.png" alt="half way through the fade, the system turned dark: readable at once" width="200"> <img src="../screenshots/fade-theme-switch-phone-light.png" alt="half way through the fade, Settings set Light: readable at once" width="200">
 
 ## The channels (chips)
 
@@ -377,7 +386,8 @@ session that missed nothing is not shown.
   ring as the only animation, at least three steps in order, each at least a
   second on screen, the history count ticking, working green, vivid while
   sending, then Predicting in sky green fading over 2.5 min; Poll now back to
-  green; reduced motion: no animation, the dots; random keys with storage
+  green; a theme change half way through the fade, readable at once (the
+  system's light to dark, Settings' dark to light); reduced motion: no animation, the dots; random keys with storage
   not kept (the backup is advice): working, vivid, then sky, never amber,
   with the Back up card (it read amber from the start).
 - `src/neuron/health.test.js`: every status and every reason from

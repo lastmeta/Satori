@@ -78,7 +78,7 @@ const actionTone = () => {
 export function home(a) {
   return html`
   <section class="dash" data-test="home" hidden="${() => state.tab !== 'home'}">
-    <section class="hero" data-test="health" data-s="${() => hero().status}" data-tone="${() => hero().tone}" data-fade="${() => !!hero().fade && ''}" data-work="${() => (hero().working ? hero().key : false)}" aria-busy="${() => (hero().working ? 'true' : false)}">
+    <section class="hero" data-test="health" data-s="${() => hero().status}" data-tone="${() => hero().tone}" data-from="${() => hero().from ?? false}" data-work="${() => (hero().working ? hero().key : false)}" aria-busy="${() => (hero().working ? 'true' : false)}">
       <div class="ring" aria-hidden="true"><i class="ico"></i></div>
       <div><h2 data-test="health-title">${() => hero().title}</h2><p data-test="health-line">${() => hero().line}</p></div>
     </section>

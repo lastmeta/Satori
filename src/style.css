@@ -174,17 +174,28 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .tile-h span { color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
 .tile-h a { font-size: 0.85rem; }
 
-/* The hero's colours are registered so they can move: back to green within 300 ms when work starts (vivid when it is
-   critical), but from work to rest (sky) over 2.5 min, barely seen (data-fade: main.js sets it for that long,
-   REST_FADE_MS). */
+/* The hero's colours are registered so they can move: to green within 300 ms when work starts (vivid when it is
+   critical), and to amber or red. At rest (sky) only a number moves, --hero-rest, 0 → 1: the colours are mixed from
+   the tone before (data-from, main.js) toward sky, over 2.5 min, linear, after work (barely seen), else in 300 ms. The
+   mix reads the current theme's tokens, so a theme change shows at once, mid-fade too (it once kept the old theme's
+   fill under the new theme's text). */
 @property --hero-tone { syntax: "<color>"; inherits: true; initial-value: #a2cfae; }
 @property --hero-soft { syntax: "<color>"; inherits: true; initial-value: #eaf1ec; }
 @property --hero-ink { syntax: "<color>"; inherits: true; initial-value: #568061; }
+@property --hero-rest { syntax: "<number>"; inherits: false; initial-value: 0; }
 .hero { border-radius: 20px; padding: 18px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center;
   --hero-tone: var(--tone); --hero-soft: var(--soft); --hero-ink: var(--ink, var(--tone));
   background: var(--hero-soft); border: 1px solid color-mix(in srgb, var(--hero-tone) 25%, transparent);
   transition: --hero-tone 300ms ease-out, --hero-soft 300ms ease-out, --hero-ink 300ms ease-out; }
-.hero[data-fade] { transition-duration: 150s; transition-timing-function: linear; }
+.hero[data-tone="idle"] { --hero-rest: 1; transition: --hero-rest 300ms ease-out;
+  --hero-tone: color-mix(in srgb, var(--from-tone, var(--tone)), var(--tone) calc(var(--hero-rest) * 100%));
+  --hero-soft: color-mix(in srgb, var(--from-soft, var(--soft)), var(--soft) calc(var(--hero-rest) * 100%));
+  --hero-ink: color-mix(in srgb, var(--from-ink, var(--ink)), var(--ink) calc(var(--hero-rest) * 100%)); }
+.hero[data-tone="idle"]:is([data-from="working"], [data-from="critical"]) { transition: --hero-rest 150s linear; }
+.hero[data-from="working"] { --from-tone: var(--ok); --from-soft: var(--ok-soft); --from-ink: var(--ok); }
+.hero[data-from="critical"] { --from-tone: var(--vivid); --from-soft: var(--vivid-soft); --from-ink: var(--vivid); }
+.hero[data-from="warn"] { --from-tone: var(--warn); --from-soft: var(--warn-soft); --from-ink: var(--warn); }
+.hero[data-from="bad"] { --from-tone: var(--bad); --from-soft: var(--bad-soft); --from-ink: var(--bad); }
 .ring { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--card);
   box-shadow: inset 0 0 0 5px var(--hero-tone); color: var(--hero-ink); position: relative; }
 .ring .ico { width: 28px; height: 28px; }
