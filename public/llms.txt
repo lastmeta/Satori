@@ -101,6 +101,12 @@ For agents written against the earlier UI and API:
   (a new neuron's strip was 13 grey "closed" days). Its cell has
   `data-code="before"` and the title "<date>: Before this neuron".
 - The keys record gains `created` (unix seconds) for keys made from now on.
+- `status().central.registration` gains `vault` (this vault's Base address)
+  and `vault_base_address` (central's answer: the Base address it pays this
+  vault's rewards to, or null). `vaultMismatch` compares the two,
+  case-insensitively, and may now be `null`: unknown, a central that does
+  not send `vault_base_address` (prod on `main`); that is not a mismatch.
+  The mismatch text names both addresses.
 
 ## Changed 2026-10-16 (the keys in this app's own format; Base only)
 
@@ -137,9 +143,8 @@ For agents written against the earlier API:
 - Base only: each key's address is its Base (0x) address, the only kind
   shown. There is no Evrmore anywhere in the app: central's login is an
   EIP-191 (`personal_sign`) signature by the identity, `0x` + r ‖ s ‖ v,
-  which recovers to the identity's Base address. (Central's register answer
-  names the vault only by an Evrmore address; the app derives that form of
-  its vault's pubkey to compare, and never shows or returns it.)
+  which recovers to the identity's Base address, and register's vault check
+  compares Base addresses.
 - Identity key: the neuron's own key. Stored unencrypted in this browser so
   the neuron runs from page load with nobody present. It signs central's
   login challenge (EIP-191) and the daily Base batch.
@@ -159,8 +164,10 @@ For agents written against the earlier API:
   on the dev server. Changeable (https only).
 - Register: on every page load, `POST /api/v1/peer/register` with the
   identity's and the vault's public keys. Central links the vault to the
-  identity once; a different vault on central (or none) shows as a "vault
-  mismatch".
+  identity once and answers `vault_base_address`, the Base address it pays
+  this vault's rewards to. Another address than the vault's (or none) shows
+  as a "vault mismatch" with both addresses; a central without that field
+  shows none.
 - Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
   each stream (under 48 h old). The first poll is 5–30 min after the page
   loads (random), then every 11 h; the next time is stored, so a reload keeps
@@ -365,10 +372,14 @@ the page's JS context:
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
   pending, history }`:
   - `registration`: null while registering; then
-    `{ at, ok: true, peer_id, message, vaultMismatch }` (`vaultMismatch`:
-    `false`, `'other'` when central has another vault for this identity,
-    `'none'` when it kept none) or `{ at, ok: false, error }` (central
-    refused or is unreachable).
+    `{ at, ok: true, peer_id, message, vault, vault_base_address,
+    vaultMismatch }` or `{ at, ok: false, error }` (central refused or is
+    unreachable). `vault`: this vault's Base address; `vault_base_address`:
+    central's answer, the Base address it pays this vault's rewards to (null
+    when it has none, or does not say). `vaultMismatch`: `false` (the same
+    address, in any letter case), `'other'` (a different one), `'none'`
+    (central has no vault for this identity) or `null` (unknown: a central
+    without the field, as prod on `main`; not a mismatch).
   - `lastPoll`: `{ at, streams, new, predicted, engine_ms }` or `{ at, error }`
     (central's error, or a local one such as a database write, then with
     `local: true`); `engine_ms`: how long the models took (present when a
@@ -701,9 +712,7 @@ build step beyond Vite, MIT licensed.
   key's words, public key, Base address and signatures (`keys.js`), Docker's
   files read for import and migration (`docker.js`).
 - `src/central/`: central's API (register, observations, login, predictions
-  batch) and `centralAddress` (central's name for our vault in register's
-  answer, only compared); `login.js`: central's login signature, EIP-191 by
-  the identity.
+  batch); `login.js`: central's login signature, EIP-191 by the identity.
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API; every
   commit checkpointed; `recover.js` sets aside a WAL an older version left.
 - `src/engine/`: `forecast(points, { step, horizon }) → { model, t1, t2, value,

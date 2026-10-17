@@ -47,6 +47,7 @@ today, so nothing waits on an answer.
 - **Central login accepts EIP-191** (was item 5). Done 2026-10-16: central
   `base-upgrade` f4d72f5 verifies EIP-191 (`personal_sign`) at
   `/auth/login`, Satori Lite signs only EIP-191 since satorilib 5028913, and
-  this app signs only EIP-191 (842d491) and has no Evrmore code but one
-  helper for register's answer (72d6784;
-  [../issues/central-register-vault-base.md](../issues/central-register-vault-base.md)).
+  this app signs only EIP-191 (842d491). Since central d8a2085 answers
+  register with the vault's Base address (`vault_base_address`), the app
+  has no Evrmore code at all
+  ([../design/central.md](../design/central.md#the-vault-in-registers-answer)).

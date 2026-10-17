@@ -37,7 +37,7 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 | Step | Satori Lite | Browser (`src/central/`, `src/neuron/`) |
 |---|---|---|
 | Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>`. The vault's public key is in clear in the keys record ([keys.md](keys.md#the-record)), so it is always sent. The result is shown, never retried in a loop. |
-| Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_address: null`); an identity conflict is a 409 (`c/main.py:705-838`). | Compares the returned `vault_address` with our vault's and shows a **vault mismatch** (central has another vault, or none). Central names the vault only by an address of its own form, derived from the pubkey (satorilib's `generateAddress`, an Evrmore address); `centralAddress` (`src/central/index.js`), the app's one helper for it, derives ours to compare ([below](#the-vault-in-registers-answer)). That address is never shown, nor passed to agents: the result is `vaultMismatch: false \| 'other' \| 'none'`. |
+| Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_base_address: null`); an identity conflict is a 409 (`c/main.py:772-907`). | Compares the returned `vault_base_address` (the Base address central pays this vault's rewards to) with our vault's Base address, case-insensitively, and shows a **vault mismatch** with both addresses when they differ, or when central has none ([below](#the-vault-in-registers-answer)). The result is `vaultMismatch: false \| 'other' \| 'none' \| null` (null: a central without the field, unknown). |
 | Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | Same numbers. `meta.next_poll_at` is stored, so a reload keeps the schedule (see Deviations). **Poll now** runs a cycle at once. |
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
 | Store | `value` = float; epoch = `observed_at`, falling back to `ts` (`data_helper.py:40-93`), truncated to whole seconds (`engine.py:669-673`); `INSERT OR IGNORE` on `(stream_uuid, epoch)` (`stream_store.py:48-56,150-170`); the stream's name/meta are upserted (`server.py:1334-1358`). | Same rule into `observations (stream_uuid, ts, value)`, primary key `(stream_uuid, ts)`; `streams (uuid, name, meta)`. Rows with no stream, no finite value or no time are dropped. |
@@ -57,7 +57,7 @@ other `server.py` methods for routes central-lite does not serve.
 
 | Call | Auth | Central | When |
 |---|---|---|---|
-| `POST /api/v1/peer/register` (headers `wallet-pubkey`, `vault-pubkey`, `nostr-pubkey`, `neuron-version`) → `{success, peer_id, wallet_address, vault_address, nostr_pubkey, message}` | none | `c/main.py:705-838` | every page load; again when the central URL changes |
+| `POST /api/v1/peer/register` (headers `wallet-pubkey`, `vault-pubkey`, `nostr-pubkey`, `neuron-version`) → `{success, peer_id, wallet_address, vault_address, vault_base_address, nostr_pubkey, message}` (only `peer_id`, `message` and `vault_base_address` are read) | none | `c/main.py:772-907`; `vault_base_address` since `base-upgrade` d8a2085 | every page load; again when the central URL changes |
 | `GET /api/v1/observations/batch?limit=100` → `[{id, observed_at, value, hash, stream_id, stream: {uuid, name, meta, …}, ts, stream_uuid}]` | none | `c/main.py:292-341` | each poll |
 | `GET /api/v1/observations/history?stream_uuid=<uuid>&limit=1000&since=<now − 1,000 h>` → `[{id, stream_uuid, observed_at, value, ts}]`, oldest first | none | `central` bc043d2 (the most recent `limit` rows; 404 `Stream not found: <uuid>` for an unknown or malformed uuid, 422 for a bad limit or since); not deployed on central2 yet (404 `Not Found`) | once per stream ([below](#history-an-addition-beyond-lite)) |
 | `GET /api/v1/auth/challenge` → `{challenge}` (a UUID) | none | `c/main.py:268-281` | before each login |
@@ -142,18 +142,37 @@ never sends one: there is no Evrmore code in it.
 
 ### The vault in register's answer
 
-Central's register answers `wallet_address` and `vault_address` in its own
-address form only: satorilib's `generateAddress` of each pubkey, an Evrmore
-P2PKH address (`c/main.py:771-900`, `PeerRegisterResponse` in
-`central/src/models/schemas.py:217-225`). Its `eth_wallet_address` is null
-there, and elsewhere it is the identity's reverse-bridge burn address (`…DEAD`,
-`central/src/utils/eth_address.py:60`), not the vault. So the neuron sees
-whether central kept its vault by deriving that form of the vault pubkey,
-base58check(0x21 ‖ ripemd160(sha256(pubkey))), in one documented helper,
-`centralAddress` in `src/central/index.js`, tested against satorilib's
-output. It is compared and never shown. It goes when central's register also
-returns the vault's pubkey or Base address
-([issue](../issues/central-register-vault-base.md)).
+Central (`base-upgrade` d8a2085) answers register with `vault_base_address`:
+the EIP-55 Base address it pays this vault's rewards to, `peers.base_address`
+when the row has one, else derived from the stored vault pubkey
+(`payout_base_address`, `central/src/services/base_distribution.py:71`;
+`PeerRegisterResponse`, `central/src/models/schemas.py:217-226`). It is null
+when no vault is stored, including one register dropped as a conflict
+(central keeps the first vault registered for an identity). Satori Lite
+ignores register's answer (`server.py:402-405`); this app checks it, because
+the neuron's rewards go to that address.
+
+`register()` (`src/neuron/index.js`) compares it with the vault's own Base
+address, case-insensitively. The result carries both, `vault` (ours) and
+`vault_base_address` (central's), and `vaultMismatch`:
+
+- `false`: the same address;
+- `'other'`: a different one. Home's action card and the Central card say
+  that central pays this vault's rewards to a different Base address, and
+  show both;
+- `'none'`: null, central has no vault for this identity;
+- `null`: unknown. A central without the field (prod runs `main` today)
+  shows no mismatch, and nothing else is derived to check.
+
+Checked live on central2 (dev server, 2026-10-17): a fresh profile's
+register answered its vault's own Base address (`vaultMismatch: false`),
+Poll now sent 82 of 82 accepted and Home was ok once the backup was
+confirmed ([screenshot](../screenshots/central-vault-base.png)); a new
+identity registering that same vault got null (central dropped it as a
+conflict: `'none'`). The `'other'` text, central2's answer with another
+address swapped in by the browser, on a phone:
+[Home](../screenshots/vault-mismatch-phone.png),
+[the Central card](../screenshots/vault-mismatch-central-phone.png).
 
 ## The protocol audit
 
@@ -168,7 +187,7 @@ depends on it.
 | Prediction numbers as Python's `str(float)` (`pyFloatStr`, a 439-float parity fixture) | network | **Plain JS text** (`String(n)`); the fixture, `src/py.js` and `scripts/central-parity.py` are gone | The batch schema is `value: str`, `t1_value`, `observed_at`, `hash: Optional[str]` (`c/models/schemas.py:103-110`), stored as given in `String` columns (`c/main.py:624-631`, `c/models/prediction.py:16-19`); `value` is only read with `float()` / `astype(float)` (`c/scripts/score.py:203,504,595,893,2222,2243`, `c/services/consensus_service.py:131`, `c/scripts/consensus_snapshot.py:74-84`), `t1_value` with `pd.to_numeric` (`consensus_service.py:142`); the hash is never recomputed or compared, and a prediction's `observed_at` is never parsed (scoring orders by central's own `ts`, `score.py:345-376`). Python 3.11 and pydantic 2.5.3 read `0.00001`, `1e-7`, `100`, `-0`, `1e+21`, `1760000000` to the same numbers. They must stay JSON strings: a JSON number is a 422. |
 | The hash `sha256(value + observed_at)[:16]` | network | Kept, over the text sent | Lite's field; central stores it unread. |
 | Login: an Evrmore signed message by the identity | network | **Changed to EIP-191** (2026-10-16): central's login since f4d72f5, Lite's since satorilib 5028913; the Evrmore signing is gone | [Login signature](#login-signature). |
-| Register's `vault_address` (central's address form) | network | Kept inside, compared by one helper, never shown | `c/main.py:771-900` returns the vault in no other form ([the vault in register's answer](#the-vault-in-registers-answer)). |
+| Register's vault check | network | **`vault_base_address`** (2026-10-17, central d8a2085), compared with the vault's Base address; central's other address forms are not read | [The vault in register's answer](#the-vault-in-registers-answer). |
 | Pubkeys as lowercase hex | network | Kept | Peers are found by exact string (`c/main.py:180,576`, `auth.py:53`); ours are lowercase. |
 | `neuron-version` | network | Kept (`browser-<version>`) | Stored and shown only (`c/main.py:790,841-842`). |
 
@@ -232,6 +251,6 @@ relay list and Base's config are read from the new central at once.
 | Register is not retried in a loop (Lite's `authWithCentral` backs off from 30 s up to 6 h, `start.py:4976-5006`). It runs again on the next load or a central URL change. | In practice Lite does not retry either: `checkin` swallows register errors (`server.py:405-414`) and `_getChallenge` falls back to a timestamp when central is down (`server.py:65-85`), so `checkin` almost never raises and the backoff almost never fires. |
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
 | Prediction numbers are sent as JS prints them (`100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`). | Central reads them with `float()`; nothing depends on the layout ([the protocol audit](#the-protocol-audit)). |
-| The register result keeps central's verdict on the vault (`vaultMismatch`), not its addresses. | This app shows Base addresses only; central's address form stays inside `src/central/` ([the vault in register's answer](#the-vault-in-registers-answer)). |
+| The register result checks the vault (`vaultMismatch`, with both Base addresses); Lite ignores register's answer (`server.py:402-405`). | Central keeps the first vault registered for an identity and pays that vault's Base address: a mismatch means this vault is not paid ([the vault in register's answer](#the-vault-in-registers-answer)). |
 | The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the identity and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
 | Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |

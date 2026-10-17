@@ -23,7 +23,6 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | [token-hook-gas-estimate.md](token-hook-gas-estimate.md) | contracts (a rewards upgrade now; token and hub at the next redeploy) | a delegated vault receives SATORI (a claim, a transfer, from anyone: 1 wei is enough) with an estimated gas limit: it can never undelegate, and its SATORI stays locked. The browser app pads only its own writes |
 | [central-login-replayable.md](central-login-replayable.md) | central | someone sees one login header set |
 | [central-register-unauthenticated.md](central-register-unauthenticated.md) | central | someone knows a wallet pubkey (public) |
-| [central-register-vault-base.md](central-register-vault-base.md) | central (a foundation fix, proposed) | none: register names the vault only by its Evrmore address, so the app keeps one helper that derives that form to compare |
 | [base-batch-one-bad-game-reverts-all.md](base-batch-one-bad-game-reverts-all.md) | Docker neuron (the browser simulates each game) | a game with no new value since our last prediction on it |
 | [duckdb-wasm-opfs-wal.md](duckdb-wasm-opfs-wal.md) | DuckDB (replay), DuckDB-WASM (the OPFS WAL); worked around here | a write committed without a checkpoint on OPFS: lost on reload, or (an ALTER on a table with a nextval default) the database does not open |
 

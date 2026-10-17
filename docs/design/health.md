@@ -102,7 +102,7 @@ most one card. Its button does the thing, or goes to the place it is done.
 | 6 | `relays-down` | bad | network | streams are subscribed and every relay is down | Open Settings (relays) |
 | 7 | `central-failed` | warn | central | the last cycle failed (once) | Try again |
 | 8 | `backup` | warn | – | storage is not persistent and no backup is confirmed | Back up |
-| 9 | `vault-mismatch` | warn | central | central holds another vault (or none) for this identity | Open Settings (keys) |
+| 9 | `vault-mismatch` | warn | central | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
 | 10 | `not-registered` | warn | central | registering failed | Reload |
 | 11 | `delegate` | warn | base | not delegated, and the vault holds SATORI | Delegate |
 | 12 | `gas-low` | warn | base | delegated, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
