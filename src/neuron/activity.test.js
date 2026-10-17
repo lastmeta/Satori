@@ -5,7 +5,7 @@ import { memoryDb } from '../../test/memory-db.js';
 import { createActivity } from './activity.js';
 import { CADENCE_S, HEARTBEAT_S, KEEP_S, SLEEP_S } from './health.js';
 
-vi.setConfig({ testTimeout: 60_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
 
 const T = 1_792_000_000;
 let db;
