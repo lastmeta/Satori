@@ -30,6 +30,12 @@ export const state = reactive({
   // health (docs/design/health.md): the activity log's revision, and Home's answer
   activityRev: 0,
   health: null,
+  // what the neuron is doing (src/neuron/work.js: { [task]: { task, step, done, total, since } }), and, at a pace a person
+  // can read (src/ui/hold.js), the hero's view ({ key, working, status, title, line }) and the action lines
+  work: {},
+  hero: null,
+  actionLine: '', // the vault's action in progress: its card's line
+  networkLine: '', // discover or subscribe, once it lasts a second
   // central
   central: { url: '', registration: null, lastPoll: null, nextPoll: null, polling: false, lastSubmit: null, pending: 0 },
   centralDefault: '',

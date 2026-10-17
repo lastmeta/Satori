@@ -8,6 +8,7 @@ import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
+import { createWork } from './work.js';
 import {
   createBase, runBatch, stepFor, horizonFor, directionOf, nextCheckAt, toPoints, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
 } from './base.js';
@@ -101,6 +102,19 @@ describe('the daily batch', () => {
     expect(rpc.sent).toHaveLength(1);
   });
 
+  test('report: nothing for a check with nothing to do; checking the games, sending, waiting for Base, in order', async () => {
+    const seen = [];
+    const report = (...a) => seen.push(a.join(' '));
+    await runBatch({ chain: chainOf(), identity, db, report });
+    expect(seen).toEqual([]); // not delegated: a quick skip, nothing to show
+    await delegated();
+    await runBatch({ chain: chainOf(), identity, db, report });
+    expect(seen).toEqual(['check', 'send', 'confirm']);
+    seen.length = 0;
+    await runBatch({ chain: chainOf(), identity, db, report });
+    expect(seen).toEqual([]); // already predicted
+  });
+
   test('each game is simulated alone: a stale one is dropped and the rest go (Lite sinks the whole batch)', async () => {
     await delegated();
     s.streams[3] = { game: 13, named: false, cadence: 60, history: [{ hour: H0 + 1, value: 10n }, { hour: H0 + 2, value: 11n }] };
@@ -184,8 +198,10 @@ describe('the daily batch', () => {
     const first = runBatch({ chain: chainOf(), identity, db });
     await vi.waitFor(() => expect(db.m.get('base_pending_batch')).toMatchObject({ round: ROUND, hash: expect.any(String) }));
     const { hash } = db.m.get('base_pending_batch');
-    const again = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
+    const seen = [];
+    const again = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50, report: (st) => seen.push(st) });
     expect(again).toMatchObject({ round: ROUND, skipped: `waiting for the batch already sent (${hash})` });
+    expect(seen).toEqual(['confirm']); // waiting for Base to confirm the one sent
     expect(rpc.sent).toHaveLength(1); // no second send
     rpc.release();
     const done = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
@@ -290,6 +306,35 @@ describe('createBase', () => {
       rpcSetting: 'https://rpc.example', maxFeeSetting: 0.5, maxFeeGwei: 0.5 });
     expect(await base.setSettings({ maxFee: '' })).toMatchObject({ rpcSetting: 'https://rpc.example', maxFeeSetting: null, maxFeeGwei: MAX_FEE_GWEI });
     expect(await base.setSettings({ rpc: '' })).toMatchObject({ rpcSetting: '' });
+  });
+
+  test('work: a check that has something to do, Delegate and Claim say each step (src/neuron/work.js)', async () => {
+    const seen = [];
+    const work = createWork({ onChange: () => { const e = work.current(); if (e) seen.push([e.task, e.step, e.done, e.total].filter((x) => x != null).join(' ')); } });
+    base = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+      transport: rpc.transport, now: () => at.t, setTimeout: (fn, ms) => (timers.push({ fn, ms }), timers.length),
+      clearTimeout: () => {}, work });
+    vault = vaultKey;
+    await base.delegate();
+    expect(seen).toEqual(['delegate send 1 3', 'delegate confirm 1 3', 'delegate send 2 3', 'delegate confirm 2 3',
+      'delegate send 3 3', 'delegate confirm 3 3', 'delegate settle']);
+    expect(work.current()).toBeNull();
+    seen.length = 0;
+    await base.predict();
+    expect(seen).toEqual(['base check', 'base send', 'base confirm']);
+    seen.length = 0;
+    const proof = ['0x' + 'ab'.repeat(32)];
+    central.root = '0xroot';
+    central.proofs[V] = { root: '0xroot', address: V, amountWei: (5n * E18).toString(), amount: 5, proof };
+    s.merkle.drop[V] = { amount: 5n * E18, proof };
+    s.rewards[V] = 3n * E18;
+    await base.claim();
+    expect(seen).toEqual(['claim rewards', 'claim confirm', 'claim drop', 'claim confirm']); // no airdrop vested: nothing
+    seen.length = 0;
+    await base.undelegate();
+    await base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '0.01' });
+    expect(seen).toEqual(['undelegate send 1 1', 'undelegate confirm 1 1', 'undelegate settle', 'send send 1 1', 'send confirm 1 1']);
+    expect(work.current()).toBeNull();
   });
 
   test('vault actions need Unlock', async () => {

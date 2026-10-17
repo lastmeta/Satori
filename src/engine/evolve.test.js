@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { forecast, STEP_S, MIN_SAMPLES } from './index.js';
 import {
-  seeded, drawSpec, mutate, repair, accepts, runModels, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
+  seeded, drawSpec, mutate, repair, accepts, runModels, runModelsAsync, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
 } from './evolve.js';
 import { prepare, inPool, RECENT_BUCKETS } from './bvar.js';
 
@@ -174,6 +174,20 @@ describe('runModels: one poll', () => {
     expect(runModels({ fresh: ['gold', 'n1'], histories, seed: ID })).toEqual(first); // reproducible
     const again = runModels({ fresh: ['gold'], histories, specs: first.specs, seed: ID });
     expect(again.specs.get('gold').generation).toBe(2);
+  });
+
+  test('runModelsAsync: the same result; onProgress after each target; a turn for the page every slice', async () => {
+    const histories = historiesOf(prices, 120);
+    histories.set('none', []);
+    const fresh = ['gold', 'none', 'n1', 'n2'];
+    const seen = [];
+    let pauses = 0;
+    let t = 0;
+    const out = await runModelsAsync({ fresh, histories, seed: ID, onProgress: (d, n) => seen.push([d, n]),
+      clock: () => (t += 10), sliceMs: 15, pause: async () => { pauses++; } });
+    expect(out).toEqual(runModels({ fresh, histories, seed: ID }));
+    expect(seen).toEqual([[0, 4], [1, 4], [2, 4], [3, 4], [4, 4]]); // a target with no history counts too
+    expect(pauses).toBeGreaterThan(0);
   });
 
   test(`no proposal before the backtest has ${MIN_SAMPLES} origins`, () => {

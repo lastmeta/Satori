@@ -4,6 +4,7 @@
 // only if it beats the champion on the same backtest by the margin. Pure.
 //
 //   runModels({ fresh, histories, specs, seed }) → { forecasts: Map(uuid → forecast), specs: Map(uuid → row) }
+//   runModelsAsync({ …, onProgress }): the same, with the page's turns between targets (the poll's)
 import { sha256 } from '@noble/hashes/sha2';
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { STEP_S, MIN_EXTRA_ROWS, MIN_SAMPLES, HOLDOUT, forecast as bar1, median } from './index.js';
@@ -98,7 +99,36 @@ export const accepts = (champion, challenger, margin = MARGIN) => challenger < c
  *   identity's public key; window: the backtest origins a spec is scored on (the fade uses the last HOLDOUT of them)
  * @returns {{forecasts: Map<string, object>, specs: Map<string, {spec, score, generation, accepted}>}}
  */
-export function runModels({ fresh, histories, specs = new Map(), seed, step = STEP_S, margin = MARGIN, window = HOLDOUT }) {
+export function runModels(o) {
+  const run = models(o);
+  let r = run.next();
+  while (!r.done) r = run.next();
+  return r.value;
+}
+
+/**
+ * runModels, the same result, giving the page a turn (pause) every `sliceMs` of work so it can draw;
+ * onProgress(done, total): 0 at the start, then after each target (the hero's "Building models · 40 of 82").
+ */
+export async function runModelsAsync({ onProgress = () => {}, sliceMs = 30, clock = () => performance.now(),
+  pause = () => new Promise((r) => setTimeout(r, 0)), ...o }) {
+  const run = models(o);
+  const total = o.fresh.length;
+  let done = 0;
+  let t = clock();
+  onProgress(0, total);
+  for (let r = run.next(); ; r = run.next()) {
+    if (r.done) return r.value;
+    onProgress(++done, total);
+    if (clock() - t >= sliceMs) {
+      await pause();
+      t = clock();
+    }
+  }
+}
+
+/** runModels as a generator: it yields after each target. */
+function* models({ fresh, histories, specs = new Map(), seed, step = STEP_S, margin = MARGIN, window = HOLDOUT }) {
   const cache = new Map();
   const series = (u) => {
     if (!cache.has(u)) cache.set(u, histories.has(u) ? prepare(histories.get(u), step) : null);
@@ -106,9 +136,9 @@ export function runModels({ fresh, histories, specs = new Map(), seed, step = ST
   };
   const forecasts = new Map();
   const out = new Map();
-  for (const target of fresh) {
+  const one = (target) => {
     const T = series(target);
-    if (!T) continue;
+    if (!T) return;
     const { aligned, pool } = poolFor(target, T, histories, series);
     const row = specs.get(target) ?? { spec: drawSpec(seeded(seed, target, 'draw'), pool), generation: 0, accepted: 0 };
     let { generation, accepted } = row;
@@ -139,6 +169,10 @@ export function runModels({ fresh, histories, specs = new Map(), seed, step = ST
       ?? bar1(histories.get(target), { step });
     if (f) forecasts.set(target, { ...f, proposal, repaired });
     out.set(target, { spec, score, generation, accepted });
+  };
+  for (const target of fresh) {
+    one(target);
+    yield;
   }
   return { forecasts, specs: out };
 }

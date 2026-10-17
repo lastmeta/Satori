@@ -6,6 +6,7 @@ import { memoryDb } from '../../test/memory-db.js';
 import { signEvent, verifyEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../nostr/satori.js';
 import { forecast } from '../engine/index.js';
+import { createWork } from './work.js';
 import { createNostr, FOLLOW_ID, MAX_STREAMS } from './nostr.js';
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -170,6 +171,26 @@ describe('discover', () => {
     expect(list.find((s) => s.stream_name === 's0').relays).toEqual([CENTRAL_RELAY]);
     expect(list.find((s) => s.stream_name === 's2').relays.sort()).toEqual([CENTRAL_RELAY, USER_RELAY].sort());
   });
+  test('work: discover asks the relays (0 of n, then each that answered); subscribe finds the stream first (src/neuron/work.js)', async () => {
+    db = await memoryDb();
+    relays = fakeRelays();
+    central = fakeCentral();
+    const seen = [];
+    const work = createWork({ onChange: () => { const e = work.current(); if (e) seen.push([e.task, e.step, e.done, e.total].filter((x) => x != null).join(' ')); } });
+    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+      makeRelay: relays.make, now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0, clearInterval: () => {},
+      openWaitMs: 0, work });
+    await nostr.start();
+    openAll();
+    relays.get(CENTRAL_RELAY).stored.push(announce('btc'));
+    await nostr.discover();
+    expect(seen).toEqual(['discover ask 0 2', 'discover ask 1 2', 'discover ask 2 2']);
+    seen.length = 0;
+    await nostr.subscribe(PROV_PUB, 'btc');
+    expect(seen).toEqual(['subscribe find']);
+    expect(work.current()).toBeNull();
+  });
+
   test('no relay open: an error (right after a load it waits for the first one)', async () => {
     await boot();
     await expect(nostr.discover()).rejects.toThrow(/No relay is connected/);

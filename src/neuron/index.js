@@ -5,7 +5,7 @@
 // The forecasts: each target's own bvar spec, evolved after each poll (docs/design/engine.md).
 import { normalizeObservation, predictionItem } from '../central/index.js';
 import { evmAddress } from '../keys/keys.js';
-import { runModels } from '../engine/evolve.js';
+import { runModelsAsync } from '../engine/evolve.js';
 import { createSchedule } from './schedule.js';
 import { backfillHistory } from './history.js';
 
@@ -46,10 +46,11 @@ const toItem = (p) => predictionItem({ streamUuid: p.stream_uuid, streamName: p.
  * dropped). successful > 0 marks them all sent; anything else keeps them
  * (engine.py:446-454).
  */
-async function submit(db, central, now) {
+async function submit(db, central, now, report) {
   await db.dropPending(now() - KEEP_PENDING_S);
   const pending = await db.pending();
   if (!pending.length) return null;
+  report('send', null, pending.length);
   let result;
   try {
     const r = await central.submitPredictions(pending.map(toItem));
@@ -64,7 +65,8 @@ async function submit(db, central, now) {
   return result;
 }
 
-async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
+async function pollAndSubmit({ db, central, engine, now, at, seed, backfill, report }) {
+  report('observations');
   let batch;
   try {
     batch = await central.observations(BATCH_LIMIT);
@@ -76,17 +78,18 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
   }
   const rows = batch.map(normalizeObservation).filter(Boolean);
   const fresh = await db.addObservations(rows);
-  await backfill(); // a stream first seen gets its past now (never throws; its rows are never new)
+  await backfill({ onProgress: (done, total) => report('history', done, total) }); // a stream first seen gets its past now (never throws; its rows are never new)
   const poll = { at, streams: rows.length, new: fresh.length, predicted: 0 };
   // each stream in the batch whose latest observation has no prediction yet: a new row, or one a cycle cut off
   // (a reload, a local failure) stored and never forecast
   const unpredicted = new Set(await db.unpredicted());
   const due = [...new Set(rows.map((o) => o.stream_uuid))].filter((u) => unpredicted.has(u));
   if (due.length) {
+    report('models', 0, due.length);
     const histories = await db.centralHistories();
     const specs = await db.specs();
     const t0 = performance.now();
-    const out = await engine({ fresh: due, histories, specs, seed });
+    const out = await engine({ fresh: due, histories, specs, seed, onProgress: (done, total) => report('models', done, total) });
     poll.engine_ms = Math.round(performance.now() - t0);
     await db.saveSpecs(out.specs, Math.floor(now()));
     const made = [];
@@ -102,7 +105,7 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
     poll.predicted = made.length;
   }
   await db.set('central_last_poll', poll);
-  const sent = await submit(db, central, now);
+  const sent = await submit(db, central, now, report);
   await db.checkpoint();
   return { poll, submit: sent };
 }
@@ -112,15 +115,18 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill }) {
  * the batch whose latest observation has no prediction yet → submit. Never
  * throws: a failed poll or a local failure (the database) is the poll's error;
  * a failed submission keeps the queue.
- * @param {{db, central, now?: () => number, seed?: string, engine?: typeof runModels, backfill?: () => Promise}} o
- *   seed: the identity's public key (the specs' RNG); engine: one poll's models (src/engine/evolve.js)
+ * @param {{db, central, now?: () => number, seed?: string, engine?: typeof runModelsAsync, backfill?: Function,
+ *   report?: (step: string, done?: number|null, total?: number|null) => void}} o
+ *   seed: the identity's public key (the specs' RNG); engine: one poll's models (src/engine/evolve.js);
+ *   backfill({ onProgress }): central's history; report: each step as it begins, and its count (src/neuron/work.js):
+ *   'observations', 'history' (streams in hand of those needing it), 'models' (targets done), 'send' (what is pending)
  * @returns {Promise<{poll: object, submit: object | null}>}
  */
-export async function cycle({ db, central, now = nowS, seed = '', engine = runModels,
-  backfill = () => backfillHistory({ db, central, now }) }) {
+export async function cycle({ db, central, now = nowS, seed = '', engine = runModelsAsync,
+  backfill = ({ onProgress } = {}) => backfillHistory({ db, central, now, onProgress }), report = () => {} }) {
   const at = now();
   try {
-    return await pollAndSubmit({ db, central, engine, now, at, seed, backfill });
+    return await pollAndSubmit({ db, central, engine, now, at, seed, backfill, report });
   } catch (err) {
     console.error('[satori] cycle failed', err);
     const poll = { at, error: errorText(err), local: true }; // not central's: the database or the engine

@@ -9,6 +9,7 @@ import { createChain, errorText, lockText, same, DOWN, UP, ROUND_S } from '../ch
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
 import { forecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
+import { createWork } from './work.js';
 import { emit, traced } from '../traffic.js';
 
 export const FIRST_CHECK_S = 10;
@@ -71,16 +72,18 @@ async function finish(db, b, mined) {
 
 /**
  * The daily batch (start.py:1143-1236 with the fixes in docs/design/base.md).
- * Never throws: the result says what happened.
+ * Never throws: the result says what happened. report(step): 'check' (the games, once a batch is due), 'send',
+ * 'confirm' (waiting for its receipt, or for one sent before); nothing for a check with nothing to do.
  * @returns {Promise<object>} { at, round, sent: {round, at, hash, games, dropped} } | { at, round?, skipped, dropped? } | { at, error }
  */
 export async function runBatch({ chain, identity, db, forecast = engineForecast, maxFeeWei = parseGwei(String(MAX_FEE_GWEI)),
-  pendingWaitMs = PENDING_WAIT_MS }) {
+  pendingWaitMs = PENDING_WAIT_MS, report = () => {} }) {
   let at = null;
   try {
     // A batch sent before the tab closed (or a check ended) has its hash kept: wait for it, never send twice.
     const pending = await db.get('base_pending_batch');
     if (pending) {
+      report('confirm');
       const mined = await chain.receipt(pending.hash, { timeout: pendingWaitMs });
       if (mined?.status === 'success') return finish(db, pending, mined);
       if (!mined) {
@@ -98,6 +101,7 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
     if (state.power === 0n) return { at, round, skipped: 'no prediction power delegated to the identity' };
     if (state.predicted !== 0) return { at, round, skipped: 'already predicted this round' };
 
+    report('check');
     const games = [];
     const dropped = [];
     for (const g of await chain.streams()) {
@@ -122,9 +126,11 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
       return { at, round, dropped,
         skipped: `gas above the ceiling: a max fee of ${formatGwei(fees.maxFeePerGas)} gwei > ${formatGwei(maxFeeWei)} gwei; the next check tries again` };
     }
+    report('send');
     const sent = await chain.sendBatch(identity, games, { fees, onSent: async (hash) => {
       await db.set('base_pending_batch', { round, hash, games, dropped });
       await db.checkpoint();
+      report('confirm');
     } });
     return finish(db, { hash: sent.hash, games, dropped }, sent);
   } catch (err) {
@@ -154,10 +160,11 @@ export function nextCheckAt({ now, chainTime }) {
  * @param {any} [o.transport] a viem transport (tests); else http to the RPC URLs
  * @param {() => void} [o.onTraffic] each RPC request and its answer (Home's glow, src/traffic.js)
  * @param {(result: object) => void} [o.onCheck] each batch check's result (Home's activity log)
+ * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): the batch ('base') and the vault's actions say their steps
  */
 export function createBase({ db, identity, vaultAddress, vault, central, defaultRpc, transport, forecast = engineForecast,
   now = () => Date.now() / 1000, onChange = () => {}, onCheck = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
-  origin = globalThis.location?.href, onTraffic = () => emit('base') }) {
+  origin = globalThis.location?.href, onTraffic = () => emit('base'), work = createWork() }) {
   let cache = null; // central's config, 1 h
   let made = null; // { key, chain, rpc }
   let status = null; // the last status read
@@ -250,7 +257,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     let result;
     try {
       const { chain } = await chainNow();
-      result = await runBatch({ chain, identity, db, forecast, maxFeeWei: await maxFeeWei() });
+      result = await work.run('base', async (report) => runBatch({ chain, identity, db, forecast, maxFeeWei: await maxFeeWei(), report }));
     } catch (err) {
       result = { at: null, error: errorText(err) };
     }
@@ -264,15 +271,17 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     after: () => nextCheckAt({ now: now(), chainTime: lastCheck?.at ?? status?.chainTime ?? null }),
   });
 
-  // ── vault actions (Unlock) ──
-  async function act(fn) {
+  // ── vault actions (Unlock): each says its steps as work `task` (step(name, k, n)) ──
+  async function act(task, fn) {
     const { chain } = await chainNow();
     try {
-      return await fn(chain);
+      return await work.run(task, (step) => fn(chain, step));
     } finally {
       await refresh();
     }
   }
+  /** A vault write's options: the step 'confirm' once it is sent. */
+  const sent = (step) => ({ onSent: () => step('confirm') });
 
   /**
    * The merkle drop: central's proof alone, as Lite (routes.py:1321-1331); its
@@ -280,7 +289,8 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
    * answers a plain Not Found. What was paid is read back at the claim's
    * block: the lane's reserve may pay only part (SatoriMerkle.sol:196-201).
    */
-  async function claimMerkle(chain, v) {
+  async function claimMerkle(chain, v, step) {
+    step('drop');
     const c = central();
     let entry;
     try {
@@ -293,7 +303,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     }
     const before = await chain.alreadyMinted(v.evmAddress);
     if (BigInt(entry.amountWei) <= before) return { skipped: 'already claimed: up to date with the drop' };
-    const { hash, receipt } = await chain.claimMerkle(v, entry);
+    const { hash, receipt } = await chain.claimMerkle(v, entry, sent(step));
     const after = await chain.alreadyMinted(v.evmAddress, receipt.blockNumber);
     return { hash, amount: formatEther(after - before) };
   }
@@ -335,19 +345,19 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     /** Delegate prediction power (docs/design/base.md): needs Unlock. Then a batch check soon. */
     async delegate() {
       const v = needVault();
-      const r = await act((chain) => chain.delegate({ identity, vault: v }));
+      const r = await act('delegate', (chain, step) => chain.delegate({ identity, vault: v, onStep: step }));
       schedule.arm(now() + FIRST_CHECK_S);
       return r;
     },
     async undelegate() {
       const v = needVault();
-      return act((chain) => chain.undelegate({ vault: v }));
+      return act('undelegate', (chain, step) => chain.undelegate({ vault: v, onStep: step }));
     },
 
     /** hub.claim() (the lens says > 0), the merkle drop (central's proof), the airdrop; each on its own. */
     async claim() {
       const v = needVault();
-      return act(async (chain) => {
+      return act('claim', async (chain, step) => {
         const st = await chain.status({ identity: identity.evmAddress, vault: v.evmAddress });
         const each = async (fn) => {
           try { return await fn(); } catch (err) { return { error: errorText(err) }; }
@@ -355,13 +365,15 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
         const rewards = await each(async () => {
           const owed = st.claimable.rewards;
           if (!(owed > 0n)) return { skipped: 'nothing to claim on-chain' };
-          return { hash: (await chain.claimRewards(v)).hash, amount: formatEther(owed) };
+          step('rewards');
+          return { hash: (await chain.claimRewards(v, sent(step))).hash, amount: formatEther(owed) };
         });
-        const merkle = await each(() => claimMerkle(chain, v));
+        const merkle = await each(() => claimMerkle(chain, v, step));
         const airdrop = await each(async () => {
           const owed = st.claimable.airdrop;
           if (!(owed > 0n)) return { skipped: 'no vested airdrop to claim' };
-          return { hash: (await chain.claimAirdrop(v)).hash, amount: formatEther(owed) };
+          step('airdrop');
+          return { hash: (await chain.claimAirdrop(v, sent(step))).hash, amount: formatEther(owed) };
         });
         return { rewards, merkle, airdrop };
       });
@@ -376,12 +388,17 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       let wei;
       try { wei = parseEther(String(amount ?? '').trim()); } catch { wei = 0n; }
       if (!(wei > 0n)) throw new Error('The amount must be a positive number.');
-      return act(async (chain) => {
-        if (kind === 'ETH') return { hash: (await chain.sendEth(v, to, wei)).hash };
+      return act('send', async (chain, step) => {
+        const tx = { onSent: () => step('confirm', 1, 1) };
+        if (kind === 'ETH') {
+          step('send', 1, 1);
+          return { hash: (await chain.sendEth(v, to, wei, tx)).hash };
+        }
         const st = await chain.status({ identity: identity.evmAddress, vault: v.evmAddress });
         const lock = st.vault.lock;
         if (lock?.locked) throw new Error(`${lockText(lock)}${lock.indefinite ? ': stop delegating first' : ''}.`);
-        return { hash: (await chain.sendSatori(v, to, wei)).hash };
+        step('send', 1, 1);
+        return { hash: (await chain.sendSatori(v, to, wei, tx)).hash };
       });
     },
   };

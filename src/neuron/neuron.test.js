@@ -257,6 +257,22 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect(await first('another identity')).not.toBe(await first(ID));
   });
 
+  test('report(step, done, total): observations, history (the backfill\'s), models (0 to n), send (what is pending), in order', async () => {
+    central.batch = [entry('u-btc', 'bitcoin', T - 100, 100), entry('u-eth', 'eth', T - 50, 5)];
+    const seen = [];
+    const backfill = vi.fn(async ({ onProgress }) => { onProgress(0, 2); onProgress(2, 2); });
+    const engine = async ({ fresh, onProgress }) => {
+      fresh.forEach((_, i) => onProgress(i + 1, fresh.length));
+      return { forecasts: new Map(fresh.map((u) => [u, { model: 'naive', t1: 1, t2: 1 }])), specs: new Map() };
+    };
+    await run({ backfill, engine, report: (...a) => seen.push(a) });
+    expect(seen).toEqual([['observations'], ['history', 0, 2], ['history', 2, 2], ['models', 0, 2], ['models', 1, 2],
+      ['models', 2, 2], ['send', null, 2]]);
+    seen.length = 0;
+    await run({ backfill: async () => {}, engine, report: (...a) => seen.push(a) }); // nothing new, nothing pending
+    expect(seen).toEqual([['observations']]);
+  });
+
   test('a batch that is not a list is a failed poll', async () => {
     central.batch = { detail: 'odd' };
     expect((await run()).poll).toEqual({ at: clock, error: 'central sent no list of observations' });

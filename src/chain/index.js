@@ -240,19 +240,26 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * Lite's ensure_delegation (base_predict.py:273-290) and the dapp's setup
      * (GameWalletPanel.tsx:536-595): the identity's fee to 0, the identity
      * accepts only this vault, the vault delegates to the identity. Each step
-     * only when needed. → { steps: [{ step, by, hash }], settled }
+     * only when needed. onStep('send' | 'confirm', k, n) for each, then onStep('settle').
+     * → { steps: [{ step, by, hash }], settled }
      */
-    async delegate({ identity, vault }) {
+    async delegate({ identity, vault, onStep = () => {} }) {
       const I = toAccount(identity);
       const V = toAccount(vault);
       const look = () => many([rewards('effectivePredictorFee', [I.address]), hub('allowedDelegator', [I.address]),
         rewards('predictionDelegateInfo', [V.address])]);
       const [fee, allowed, [delegate]] = await look();
+      const todo = [
+        fee !== 0 && ['setPredictorFee(0)', 'identity', I, rewards('setPredictorFee', [0])],
+        !same(allowed, V.address) && ['setAllowedDelegator(vault)', 'identity', I, hub('setAllowedDelegator', [V.address])],
+        !same(delegate, I.address) && ['delegatePredictionPower(identity)', 'vault', V, hub('delegatePredictionPower', [I.address])],
+      ].filter(Boolean);
       const steps = [];
-      const step = async (name, by, key, call) => steps.push({ step: name, by, hash: (await write(key, call)).hash });
-      if (fee !== 0) await step('setPredictorFee(0)', 'identity', I, rewards('setPredictorFee', [0]));
-      if (!same(allowed, V.address)) await step('setAllowedDelegator(vault)', 'identity', I, hub('setAllowedDelegator', [V.address]));
-      if (!same(delegate, I.address)) await step('delegatePredictionPower(identity)', 'vault', V, hub('delegatePredictionPower', [I.address]));
+      for (const [i, [name, by, key, call]] of todo.entries()) {
+        onStep('send', i + 1, todo.length);
+        steps.push({ step: name, by, hash: (await write(key, call, { onSent: () => onStep('confirm', i + 1, todo.length) })).hash });
+      }
+      if (steps.length) onStep('settle');
       const ok = !steps.length || await settled(async () => {
         const [f, a, [d]] = await look();
         return f === 0 && same(a, V.address) && same(d, I.address);
@@ -260,11 +267,13 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return { steps, settled: ok };
     },
 
-    /** Stop delegating: the vault delegates to 0x0 (base_predict.py:292-301). → { steps, settled } */
-    async undelegate({ vault }) {
+    /** Stop delegating: the vault delegates to 0x0 (base_predict.py:292-301); onStep as delegate's. → { steps, settled } */
+    async undelegate({ vault, onStep = () => {} }) {
       const V = toAccount(vault);
       if (same(await delegateOf(V.address), zeroAddress)) return { steps: [], settled: true };
-      const { hash } = await write(V, hub('delegatePredictionPower', [zeroAddress]));
+      onStep('send', 1, 1);
+      const { hash } = await write(V, hub('delegatePredictionPower', [zeroAddress]), { onSent: () => onStep('confirm', 1, 1) });
+      onStep('settle');
       const ok = await settled(async () => same(await delegateOf(V.address), zeroAddress));
       return { steps: [{ step: 'delegatePredictionPower(0x0)', by: 'vault', hash }], settled: ok };
     },
@@ -336,22 +345,24 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return { hash, at: Number(block.timestamp), blockNumber: Number(receipt.blockNumber) };
     },
 
+    // the vault's writes below: opts.onSent(hash) once sent, before the receipt (Home's "Waiting for Base to confirm…")
     /** On-chain rewards: hub.claim() from the vault (the dapp, useDashboard.ts:288-311). */
-    claimRewards: (vault) => write(vault, hub('claim')),
+    claimRewards: (vault, opts) => write(vault, hub('claim'), opts),
     /** What the merkle lane has paid `addr` (at `blockNumber`, else now). */
     alreadyMinted: (addr, blockNumber) => client.readContract({ ...merkle('alreadyMintedTo', [addr]), ...(blockNumber ? { blockNumber } : {}) }),
     /** claimMerkle(lifetimeEntitlement, proof) from the vault (base_claim.py:99-104). */
-    claimMerkle: (vault, { amountWei, proof }) => write(vault, merkle('claimMerkle', [BigInt(amountWei), proof])),
-    claimAirdrop: (vault) => write(vault, airdrop('claimAirdrop')),
+    claimMerkle: (vault, { amountWei, proof }, opts) => write(vault, merkle('claimMerkle', [BigInt(amountWei), proof]), opts),
+    claimAirdrop: (vault, opts) => write(vault, airdrop('claimAirdrop'), opts),
 
     /** SATORI from the vault (the token refuses while transfer-locked: the simulate says Locked). */
-    sendSatori: (vault, to, amount) => write(vault, token('transfer', [to, amount])),
+    sendSatori: (vault, to, amount, opts) => write(vault, token('transfer', [to, amount]), opts),
     /** ETH from the vault: estimated first (a failure throws before sending); a plain transfer runs no hook, so no pad. */
-    sendEth: (vault, to, value) => queued(async () => {
+    sendEth: (vault, to, value, { onSent } = {}) => queued(async () => {
       const account = toAccount(vault);
       const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }), fees()]);
       const wallet = createWalletClient({ account, chain, transport });
       const hash = await wallet.sendTransaction({ to, value, gas, ...fee });
+      await onSent?.(hash);
       return receiptOf(hash, 'transfer');
     }),
   };

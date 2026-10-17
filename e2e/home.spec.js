@@ -302,7 +302,8 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   const h = await health(page);
   expect(h).toMatchObject({ status: 'idle', title: 'Starting', line: 'Getting its first predictions…', action: null });
   expect(h.channels.central.text).toBe('First poll now…');
-  await expect(page.locator('[data-test=health-line]')).toHaveText('Getting its first predictions…');
+  expect(h.work).toMatchObject({ task: 'central', step: 'observations', text: "Fetching today's observations…" });
+  await expect(page.locator('[data-test=health-line]')).toHaveText("Fetching today's observations…"); // the step it is on
   await expect.poll(() => central.polls).toEqual([1]); // after the register
   expect(h.days.at(-1)).toMatchObject({ code: 'closed', ran: true, today: true });
   expect(h.days.slice(0, -1).every((d) => d.code === 'before' && !d.ran)).toBe(true);
@@ -330,7 +331,7 @@ test('starting with a vault mismatch: the title says Starting; the mismatch lead
     action: { id: 'vault-mismatch', button: 'Open Settings', do: 'go', tab: 'settings', section: 'keys' } });
   expect(h.reasons.map((r) => r.id)).toEqual(['vault-mismatch', 'starting']);
   await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');
-  await expect(page.locator('[data-test=health-line]')).toHaveText(h.line);
+  await expect(page.locator('[data-test=health-line]')).toHaveText("Fetching today's observations…"); // the poll, held: its step
   await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'vault-mismatch');
 
   // The first poll: predicting, the mismatch still there.

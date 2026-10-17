@@ -8,6 +8,7 @@ import {
   amountText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote,
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
+import { workText } from '../neuron/work.js';
 
 const BUSY = { delegate: 'Delegating…', undelegate: 'Stopping…', claim: 'Claiming…', send: 'Sending…' };
 
@@ -47,7 +48,7 @@ export function walletTab(a) {
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
       ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
       ${fact('Last batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
-      ${fact('Batch check', 'base-check', () => (b().checking ? 'Checking…'
+      ${fact('Batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
     : notDelegated() ? `Waits for delegation · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
       ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
     </dl>
@@ -66,7 +67,7 @@ export function walletTab(a) {
     </form>
     ${unlockPrompt(a, 'wallet', 'use the vault')}
     <p class="muted small" hidden="${() => state.unlocked}">Delegate, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.</p>
-    <p class="small" role="status" data-test="base-result" hidden="${() => !state.baseResult}">${() => state.baseResult}</p>
+    <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>
   </section>

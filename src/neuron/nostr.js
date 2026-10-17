@@ -12,6 +12,7 @@ import {
   catalog, parseObservation, numericValue, predValue, relayUuid,
 } from '../nostr/satori.js';
 import { forecast as engineForecast } from '../engine/index.js';
+import { createWork } from './work.js';
 import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
 
@@ -40,11 +41,12 @@ const parseRaw = (raw) => {
  * @param {string} o.walletPubkey the identity's compressed pubkey (the announcement's wallet_pubkey)
  * @param {() => object} o.central the current central client (relays(), relayConfig())
  * @param {{relays: string[], centralWrite: boolean}} o.defaults Settings before the user changes them
+ * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): discover and subscribe say their steps
  */
 export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay,
   forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:',
   onChange = () => {}, onPublished = () => {}, onError = () => {}, setInterval: si = setInterval, clearInterval: ci = clearInterval,
-  openWaitMs = 10_000 }) {
+  openWaitMs = 10_000, work: progress = createWork() }) {
   let maxStreams = MAX_STREAMS;
   let userRelays = defaults.relays;
   let centralWrite = defaults.centralWrite;
@@ -343,23 +345,27 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
      * The relays' catalog: newest per (provider, stream), no tombstones;
      * `pred` and `subscribed` marked, and `relays`: the ones that sent it.
      */
-    async discover() {
+    discover: () => progress.run('discover', async (step) => {
       const from = new Map(); // event id → the relays that sent it
-      const events = (await Promise.all((await readable()).map(async (e) => {
+      const asked = await readable();
+      let answered = 0;
+      step('ask', 0, asked.length);
+      const events = (await Promise.all(asked.map(async (e) => {
         const list = await pages(e.relay).catch(() => []);
         for (const ev of list) from.set(ev.id, [...(from.get(ev.id) ?? []), e.url]);
+        step('ask', ++answered, asked.length);
         return list;
       }))).flat();
       const active = new Set((await db.relayStreams({ active: true })).map((r) => r.uuid));
       return catalog(events).map(({ event, ...s }) => ({ ...s, relays: from.get(event.id),
         subscribed: active.has(relayUuid(s.pubkey, s.stream_name)) }));
-    },
+    }),
 
     /**
      * Subscribe and predict: the announcement is looked up and verified, the
      * 34602 and the `_pred` 34600 published, and the stream followed.
      */
-    async subscribe(pubkey, stream) {
+    subscribe: (pubkey, stream) => progress.run('subscribe', async (step) => {
       const [p, s] = checkStream(pubkey, stream);
       if (s.endsWith(PRED)) throw new Error('That is a prediction stream (…_pred); subscribe to its source.');
       const uuid = relayUuid(p, s);
@@ -373,6 +379,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
           + '(Lite keeps its publications unique by name). Unsubscribe from that one first.');
       }
       const filter = [{ kinds: [KIND.ANNOUNCE], authors: [p], '#d': [s] }];
+      step('find');
       const events = (await Promise.all((await readable()).map((e) => e.relay.fetch(filter).catch(() => [])))).flat();
       // Only what the asked provider signed, with the asked name: a relay may send anything.
       const mine = events.filter((e) => e?.kind === KIND.ANNOUNCE && e.pubkey === p
@@ -391,7 +398,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       background(publish(sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey }), at))));
       onChange();
       return viewOf(uuid);
-    },
+    }),
 
     /** Unsubscribe (routes.py:2673-2688): the 34602 unsubscribe, the `_pred` tombstone, unfollow. → status() */
     async unsubscribe(pubkey, stream) {

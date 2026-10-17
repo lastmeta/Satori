@@ -120,7 +120,7 @@ function network(a) {
         @input="${(e) => (state.catalogQuery = e.target.value)}">
       <button type="submit" disabled="${() => state.discovering}">${() => (state.discovering ? 'Discovering…' : state.catalog.length ? 'Refresh' : 'Discover')}</button>
     </form>
-    <p class="muted small" data-test="catalog-summary">${summary}</p>
+    <p class="muted small" data-test="catalog-summary">${() => state.networkLine || summary()}</p>
     <p class="error small" role="alert" hidden="${() => !state.networkError}">${() => state.networkError}</p>
     <div class="crows">${() => shownCatalog().slice(0, CATALOG_SHOWN).map((s) => catRow(s, a).key(`${s.pubkey}:${s.stream_name}:${s.subscribed}`))}</div>
   </details>`;

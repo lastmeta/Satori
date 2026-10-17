@@ -18,13 +18,15 @@ import {
 } from './keys/index.js';
 import { nsec, nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
-import { cycle, register, createPoller, centralStatus as statusOf, claimTab, modelsOf } from './neuron/index.js';
+import { cycle, register, createPoller, centralStatus as statusOf, claimTab, modelsOf, firstPollAt } from './neuron/index.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf } from './neuron/health.js';
+import { createWork, workText } from './neuron/work.js';
+import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
@@ -54,6 +56,8 @@ let base = null; // the Base flow
 let activity = null; // the activity log Home's health reads (docs/design/health.md)
 let afterUnlock = null; // the action an inline Unlock prompt was opened for
 const nowS = () => Date.now() / 1000;
+/** What the neuron is doing now (src/neuron/work.js): Home's hero and action lines, and health().work. */
+const work = createWork({ onChange: () => { state.work = work.all(); } });
 
 const centralStatus = () => statusOf({ db, central, registration, poller });
 
@@ -112,18 +116,24 @@ async function registerWith(c) {
  * run after it). Never throws. The screen is read again by the caller (the
  * cycle does at its end), not here: the poll waits for this.
  */
-const backfill = coalesce('history', async () => {
+const backfill = coalesce('history', () => work.run('central', async (step) => {
   const t0 = nowS();
-  const r = await backfillHistory({ db, central });
+  const r = await backfillHistory({ db, central, onProgress: (done, total) => step('history', done, total) });
   if (r?.streams) console.info('[satori] central history', r);
   if (r?.at >= t0) await activity.history(r); // this run's, not the last one's kept result
-});
+}));
 
 async function runCycle() {
-  // never throws: errors are in r and in the status; seed: the identity draws each target's spec
-  const r = await cycle({ db, central, seed: identity.pubkey, backfill });
-  console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
-  await refresh();
+  const job = work.start('central');
+  let r;
+  try {
+    // never throws: errors are in r and in the status; seed: the identity draws each target's spec
+    r = await cycle({ db, central, seed: identity.pubkey, backfill, report: job.step });
+    console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
+    await refresh();
+  } finally {
+    job.end(); // before the log's row: Home shows the last step, then the answer (src/ui/hold.js)
+  }
   await activity.central(r, state.central.pending);
   return r;
 }
@@ -147,17 +157,21 @@ async function startNeuron() {
   } });
   await refresh();
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite },
-    onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err) });
+    onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err), work });
   await refreshNostr();
   base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
-    onChange: refreshBase, onCheck: (r) => activity.base(r) });
+    onChange: refreshBase, onCheck: (r) => activity.base(r), work });
   await refreshBase();
+  // when a poll is due (a new neuron, or one reopened late) it runs at once, after register: signing in is its first
+  // step on Home, set before Home shows
+  const signIn = firstPollAt(await db.get('next_poll_at'), nowS()) <= nowS() ? work.start('central') : null;
+  signIn?.step('register');
   state.screen = 'home';
   fillSettings();
   keepStorage(); // after setup and on each load until the browser keeps it: the keys live in this storage
   // register, as Lite does, then the schedule: a new neuron or a due poll polls at once, a time still ahead is kept
   registerWith(c).catch((err) => console.error('[satori] register', err))
-    .then(() => poller.start()).catch((err) => console.error('[satori] poll schedule', err));
+    .then(() => poller.start()).catch((err) => console.error('[satori] poll schedule', err)).finally(() => signIn?.end());
   backfill().then(refresh).catch((err) => console.error('[satori] history', err)); // streams with no history yet get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
@@ -640,9 +654,10 @@ window.satori = {
    */
   async health() {
     ready();
-    return healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
+    const w = work.current();
+    return { ...healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
       nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since(),
-      traffic: lastTraffic() });
+      traffic: lastTraffic() }), work: w && { ...w, text: workText(w) } };
   },
   /** Show a tab: 'home' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL). → the tab */
   go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
@@ -718,6 +733,27 @@ watch(() => {
   state.health = healthOf({ now: state.now, rows: activity.rows(), central: state.central, base: state.base, nostr: state.nostr,
     storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since() });
 });
+
+/**
+ * What the neuron is doing, at a pace a person can read (src/ui/hold.js; docs/design/health.md#work): the hero (central's
+ * poll, else the Base batch: its ring turns, its line says the step), the vault's actions (their card's line) and the
+ * network's (the Network streams line, only once one lasts a second).
+ */
+const VAULT_TASKS = ['delegate', 'undelegate', 'claim', 'send'];
+const heroHold = createHold({ show: (v) => { state.hero = v; } });
+watch(() => {
+  const h = state.health;
+  if (!h) return;
+  const w = state.work.central ?? state.work.base;
+  heroHold(w ? { key: `${w.task}:${w.step}`, working: true, status: h.status, title: h.title, line: workText(w) }
+    : { key: 'idle', working: false, status: h.status, title: h.title, line: h.line });
+});
+const lineOf = (tasks, hold) => () => {
+  const w = tasks.map((t) => state.work[t]).find(Boolean);
+  hold(w ? { key: `${w.task}:${w.step}:${w.done}`, working: true, line: workText(w) } : { key: 'idle', working: false, line: '' });
+};
+watch(lineOf(VAULT_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
+watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
 
 /** Home's chips glow while their channel has real traffic (src/traffic.js, src/ui/glow.js): data-live on the chip. */
 function glowChips() {

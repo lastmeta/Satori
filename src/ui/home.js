@@ -11,6 +11,8 @@ import { fmtAgo } from '../neuron/health.js';
 const EMPTY = { status: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
   channels: { central: { state: 'idle', text: '–' }, base: { state: 'idle', text: '–' }, network: { state: 'idle', text: '–' } } };
 const h = () => state.health ?? EMPTY;
+/** The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). */
+const hero = () => state.hero ?? { ...h(), key: 'idle', working: false };
 const HOME_ROWS = 8;
 const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this neuron' };
 const CHANNEL_TAB = { central: 'streams', base: 'wallet', network: 'streams' };
@@ -72,13 +74,13 @@ const actionTone = () => h().reasons.find((r) => r.id === h().action?.id)?.statu
 export function home(a) {
   return html`
   <section class="dash" data-test="home" hidden="${() => state.tab !== 'home'}">
-    <section class="hero" data-test="health" data-s="${() => h().status}">
+    <section class="hero" data-test="health" data-s="${() => hero().status}" data-work="${() => (hero().working ? hero().key : false)}" aria-busy="${() => (hero().working ? 'true' : false)}">
       <div class="ring" aria-hidden="true"><i class="ico"></i></div>
-      <div><h2 data-test="health-title">${() => h().title}</h2><p data-test="health-line">${() => h().line}</p></div>
+      <div><h2 data-test="health-title">${() => hero().title}</h2><p data-test="health-line">${() => hero().line}</p></div>
     </section>
 
     <div class="action" data-test="action" data-action="${() => h().action?.id ?? false}" data-s="${actionTone}" hidden="${() => !h().action}">
-      <p data-test="action-text">${() => h().action?.text ?? ''}</p>
+      <p data-test="action-text">${() => (h().action?.do === 'delegate' && state.baseDid === 'delegate' && state.actionLine) || (h().action?.text ?? '')}</p>
       <button class="primary" data-test="action-button" disabled="${() => !!state.baseBusy}" @click="${() => a.act(h().action)}">${() => (h().action?.do === 'delegate' && state.baseBusy === 'delegate' ? 'Delegating…' : h().action?.button ?? '')}</button>
       ${unlockPrompt(a, 'card', 'delegate')}
       <p class="error small" role="alert" hidden="${() => !(state.baseDid === 'delegate' && state.baseError)}">${() => state.baseError}</p>
@@ -111,7 +113,7 @@ export function home(a) {
         <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy}" @click="${() => a.vaultAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
       </div>
       ${unlockPrompt(a, 'claim', 'claim')}
-      <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
+      <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.actionLine || state.baseResult || state.baseError))}">${() => state.actionLine || state.baseResult || state.baseError}</p>
       <div class="line desk-only"><span>Vault</span><span data-test="home-vault">${vaultLine}</span></div>
       <div class="line desk-only"><span>Gas for daily batch</span><span data-test="home-gas">${gasLine}</span></div>
     </section>
