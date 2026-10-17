@@ -378,7 +378,11 @@ asked at once.
   unweighted games left out, the hash kept at send and waited for, the round
   from the block, the fee ceiling, persist only after success, the schedule;
   the merkle claim's 404s and a partial payment; an RPC on another chain),
-  `abi.test.js` (every ABI entry against the contracts' build output),
+  `abi.test.js` (every ABI entry against the deployed D6 build,
+  `test/fixtures/abi-deployed.json`, and, when the public RPC answers, against
+  the deployed code: every selector, and each view's answer in the shape
+  `abi.js` decodes; a local build of the contracts runs ahead of the chain,
+  so it is not the reference),
   `config.test.js`, and the keys' Base addresses against viem.
 - `npm run e2e`: `e2e/base.spec.js`, the app with the same fake chain behind
   `/rpc` and a stub central serving a merkle proof: status, Unlock, Delegate,

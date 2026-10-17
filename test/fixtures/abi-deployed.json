@@ -1,0 +1,75 @@
+{
+  "deploy": "D6, Base Sepolia, 2026-10-14, contract commit d9d22632",
+  "functions": {
+    "SatoriEngine": [
+      "function predictMultipleWithPayloads((uint32,bytes)[]) -> () nonpayable",
+      "function predictedStreamsCount(address,uint256) -> (uint256) view"
+    ],
+    "SatoriGames": [
+      "function binaryGameByStream(uint32) -> (uint32) view"
+    ],
+    "SatoriRegistry": [
+      "function getAllDataStreams() -> (uint32[]) view",
+      "function getHistoryPage(uint32,uint256,uint256) -> (int232[],uint24[],uint16) view",
+      "function getLatestUpdateInfo(uint32) -> (uint16,uint64,uint64,uint24) view",
+      "function isNamedStream(uint32) -> (bool) view"
+    ],
+    "SatoriHub": [
+      "function allowedDelegator(address) -> (address) view",
+      "function claim(address) -> (uint256) nonpayable",
+      "function claim() -> (uint256) nonpayable",
+      "function delegatePredictionPower(address) -> () nonpayable",
+      "function setAllowedDelegator(address) -> () nonpayable"
+    ],
+    "SatoriRewards": [
+      "function effectivePredictorFee(address) -> (uint16) view",
+      "function predictionDelegateInfo(address) -> (address,uint96) view",
+      "function setPredictorFee(uint16) -> () nonpayable"
+    ],
+    "SatoriRewardsLens": [
+      "function getTotalClaimableRewards(address) -> (uint256,bool) view"
+    ],
+    "SatoriToken": [
+      "function balanceOf(address) -> (uint256) view",
+      "function getCurrentRound() -> (uint256) view",
+      "function transfer(address,uint256) -> (bool) nonpayable",
+      "function transferLockedUntil(address) -> (uint24) view"
+    ],
+    "SatoriMerkle": [
+      "function alreadyMintedTo(address) -> (uint256) view",
+      "function claimMerkle(uint256,bytes32[]) -> () nonpayable"
+    ],
+    "SatoriAirdrop": [
+      "function claimAirdrop() -> () nonpayable",
+      "function claimableAirdrop(address) -> (uint256) view"
+    ],
+    "SatoriVoting": [
+      "function weightOf(uint32) -> (uint256) view"
+    ]
+  },
+  "errors": [
+    "error AlreadyPredicted() -> ()",
+    "error AlreadySet() -> ()",
+    "error BadDirection() -> ()",
+    "error BadInput() -> ()",
+    "error BudgetExceeded() -> ()",
+    "error CapabilityDisabled() -> ()",
+    "error ClaimDelegatedAway() -> ()",
+    "error DelegateActive() -> ()",
+    "error Delegated() -> ()",
+    "error DelegatorNotAllowed() -> ()",
+    "error DuplicatePrediction() -> ()",
+    "error ERC20InsufficientBalance(address,uint256,uint256) -> ()",
+    "error ERC20InvalidReceiver(address) -> ()",
+    "error EmptyBatch() -> ()",
+    "error EmptyStream() -> ()",
+    "error InvalidPredictorFee() -> ()",
+    "error InvalidProof() -> ()",
+    "error Locked() -> ()",
+    "error NothingToClaim() -> ()",
+    "error Reentrancy() -> ()",
+    "error StaleValue() -> ()",
+    "error Unauthorized() -> ()",
+    "error UnknownStream() -> ()"
+  ]
+}

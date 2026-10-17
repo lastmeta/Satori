@@ -1,6 +1,7 @@
 // Minimal ABIs: only what the app calls (docs/design/base.md). Signatures as
-// in the D6 contracts' build output (contract/satori/out/<C>.sol/<C>.json;
-// abi.test.js checks each against it) and as Satori Lite declares them
+// deployed (D6; abi.test.js checks each against a snapshot of that build,
+// test/fixtures/abi-deployed.json, and online against the deployed code; the
+// contracts' newer builds run ahead of the chain) and as Satori Lite declares them
 // (base_predict.py:29-125, base_claim.py:19-76). Every ABI carries the
 // errors a call can bubble up, so a simulate names the reason.
 import { parseAbi } from 'viem';
