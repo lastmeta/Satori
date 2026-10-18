@@ -19,7 +19,7 @@ async function setup(context) {
 
 const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
 const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
-const ASKS = "Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.";
+const ASKS = "Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).";
 const sent = (rpc) => rpc.sent.map((t) => t.functionName);
 
 test('the Base card: stake, the batch on its own, claims, unstake, when SATORI can be sent, sends', async ({ context, page }) => {
@@ -179,12 +179,12 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue(''); // only what is stored: the default is the placeholder
   await page.getByLabel('Base RPC').fill('https://rpc.example');
   await page.getByLabel('Daily batch: max fee (gwei)').fill('0');
-  await page.getByRole('button', { name: 'Save Base settings' }).click();
+  await page.getByRole('button', { name: 'Save contract settings' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'positive number of gwei' })).toBeVisible();
   expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpcSetting: '', maxFeeSetting: null }); // neither saved
   await page.getByLabel('Base RPC').fill('/rpc');
   await page.getByLabel('Daily batch: max fee (gwei)').fill('0.5');
-  await page.getByRole('button', { name: 'Save Base settings' }).click();
+  await page.getByRole('button', { name: 'Save contract settings' }).click();
   await expect.poll(() => page.evaluate(async () => (await window.satori.base()).maxFeeGwei)).toBe(0.5); // saved
   expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpc: ['/rpc'], rpcSetting: '/rpc', maxFeeSetting: 0.5, maxFeeGwei: 0.5 });
   await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue('0.5');

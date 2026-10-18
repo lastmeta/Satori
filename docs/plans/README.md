@@ -59,10 +59,17 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    `_pred`s), and a model's drill-in: In (each input's share of its
    forecast), the Model, Out (a list of outputs, each with its chart and
    where it went); `window.satori.models()` and `model(id)`
-   ([../design/models.md](../design/models.md)).
+   ([../design/models.md](../design/models.md)). Then the same day: a
+   training pass, so the neuron never rests with a model unscored; Sort as
+   a menu; the tab in plain words; the words people see (the Satori
+   Network, the Satori contract, the Satori relays); icons only where they
+   are understood.
 13. **Runtime hardening**: catch-up on resume, the keys in a worker
    ([runtime.md](runtime.md)).
-14. **Later**, in rough order of value per effort: bounties (the predictor's side first); the gasless relay (needs a
+14. **Later**, in rough order of value per effort: the Models tab showing
+   the real-world score (central's scoring of what was sent) next to the
+   backtest, once central serves a neuron's scores
+   ([models.md](../design/models.md#quality-against-no-change)); bounties (the predictor's side first); the gasless relay (needs a
    ruling, [issue](../issues/relayer-predict-fee.md)); paid streams (their
    payment on Base, to design); own data sources. Also:
    importing a Docker neuron's keys is a move (both would predict for one
