@@ -38,6 +38,8 @@ a stream to:
 
 ## Direction now
 
+- A user can ask a model to **Retrain**. It keeps searching until it finds a
+  model that beats no change, then stops.
 - Never rest with work pending. If anything is untrained or unscored, the
   neuron does it now, picking up where it left off when the app opens. It
   doesn't wait for the next poll.
