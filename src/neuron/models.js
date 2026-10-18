@@ -6,7 +6,7 @@
 //   modelsOf({ streams, subscriptions, lastBatch, baseFits }) → [model]    pure: from what the app already holds (each
 //     model's backtest is kept with it, by the poll, the Nostr intake, the Base batch or the training pass: train.js)
 //   summaryOf(models), engineStatus({ summary, central, work, now })      the tab's top
-//   sortModels(list, 'quality' | 'name'), filterModels(list, 'all' | 'central' | 'base' | 'network')
+//   sortModels(list, 'quality' | 'name'), filterModels(list, 'all' | 'network' | 'contract' | 'relays')
 //   await modelDetail({ db, id, streams, subscriptions, lastBatch, baseHistory })   one model, recomputed on demand
 import { MARGIN, explainModel } from '../engine/evolve.js';
 import { explainForecast, STEP_S, HORIZON_STEPS, median } from '../engine/index.js';
@@ -147,7 +147,7 @@ export function centralModels(rows) {
         direction: direction(r.t2, r.obs_value),
         influence: ranked(inputs.map((u, i) => ({ ...named(u), share: shares?.[i] ?? null }))),
         quality,
-        destinations: [{ to: 'central', status: sent ? 'accepted' : 'pending', when: sent ? r.sent_at : r.made_at, ref: null }],
+        destinations: [{ to: 'network', status: sent ? 'accepted' : 'pending', when: sent ? r.sent_at : r.made_at, ref: null }],
       }],
       uuid: r.uuid, model: r.model,
       spec: spec && { companions: spec.companions.map((u) => ({ uuid: u, name: names.get(u) ?? null })), lambda1: spec.lambda1, lambda2: spec.lambda2 },
@@ -176,7 +176,7 @@ export function nostrModels(subscriptions) {
         stream: s.uuid, name, as: p.stream, latest: { value: latest, ts: s.observation?.ts ?? null },
         forecast: { value, step: cadence, horizon: cadence, at: p.made_at }, direction: direction(value, latest),
         influence: [{ stream: s.uuid, name, share: 1 }], quality,
-        destinations: [{ to: 'network', status: p.relays > 0 ? 'published' : 'waiting', when: p.made_at,
+        destinations: [{ to: 'relays', status: p.relays > 0 ? 'published' : 'waiting', when: p.made_at,
           ref: { stream: p.stream, seq: p.seq, relays: p.relays } }],
       }],
     });
@@ -202,7 +202,7 @@ export function baseModels(batch, baseFits = new Map()) {
         stream, name, latest: { value: num(g.latest), ts: null },
         forecast: { value: num(g.forecast), step: g.step ?? null, horizon: g.horizon, at: batch.at }, direction: dir,
         influence: [{ stream, name, share: 1 }], quality,
-        destinations: [{ to: 'base', status: sent ? 'sent' : 'left out', when: batch.at,
+        destinations: [{ to: 'contract', status: sent ? 'sent' : 'left out', when: batch.at,
           ref: { round: batch.round, game: g.gameId, direction: dir, tx: sent ? batch.hash : null, ...(sent ? {} : { error: g.error }) } }],
       }],
     });
@@ -255,7 +255,10 @@ export function sortModels(list, by = 'quality') {
   return [...list].sort((a, b) => rank(a) - rank(b) || ratio(a) - ratio(b) || byName(a, b));
 }
 
-/** The models whose predictions go to `to` ('central', 'base', 'network'); 'all': the list itself. */
+/**
+ * The models whose predictions go to `to`, by the words people see: 'network' (the Satori Network, central), 'contract' (the
+ * Satori contract, Base), 'relays' (the Satori relays, Nostr); 'all': the list itself.
+ */
 export const filterModels = (list, to = 'all') => (to === 'all' ? list
   : list.filter((m) => m.outputs.some((o) => o.destinations.some((d) => d.to === to))));
 

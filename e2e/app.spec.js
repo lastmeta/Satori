@@ -238,7 +238,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   stub.fail.push(500, 500); // a 5xx is resent once
   const r3 = await poll();
   expect(r3.poll).toMatchObject({ new: 1, predicted: 1 });
-  expect(r3.submit.error).toBe('central 500: boom');
+  expect(r3.submit.error).toBe('Satori Network 500: boom');
   expect((await status(page)).central.pending).toBe(1);
   await expect(page.locator('[data-test=pending]')).toHaveText('1');
   await expect(row(page, 'bitcoin').locator('[data-test=status]')).toHaveText('Pending');
@@ -277,7 +277,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   // pending queue and the stream list are dropped and refill from it.
   stub.batch = [entry('u-btc', 'bitcoin', T0 + (ZIG.length + 1) * STEP_S, '67005.5'), BATCH[1]]; // newer than its latest: predicted
   stub.fail.push(500, 500);
-  expect((await poll()).submit.error).toBe('central 500: boom');
+  expect((await poll()).submit.error).toBe('Satori Network 500: boom');
   await expect(page.evaluate(() => window.satori.setCentral('http://central.test'))).rejects.toThrow(/https:\/\//);
   expect((await status(page)).central.pending).toBe(1); // a refused URL changes nothing
   elsewhere.batch = [{ ...entry('u-btc-2', 'bitcoin', T0 + 120, '67005.5'), stream: { uuid: 'u-btc-2', name: 'bitcoin', meta: '{"unit":"USD"}' } }];
@@ -405,13 +405,13 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered[0]).toMatchObject({ 'wallet-pubkey': wallet.pubkey, 'vault-pubkey': vault.pubkey });
   await expect(page.locator('[data-test=mismatch]')).toHaveText(
-    `Vault mismatch: central pays this vault's rewards to a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`);
+    `Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`);
   expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'vault-mismatch',
     text: expect.stringContaining(`a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`) });
 
   // Settings: https only; an unreachable central is shown, not thrown.
   await go(page, 'settings');
-  const url = page.getByLabel('Central URL');
+  const url = page.getByLabel('Satori Network server');
   await url.fill('http://central.test');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'https://' })).toBeVisible();
@@ -419,10 +419,10 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   await url.fill('https://down.test');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://down.test');
-  await expect(page.locator('[data-test=registered]')).toHaveText(/^No: central unreachable: /);
+  await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable: /);
   await go(page, 'streams');
   await page.getByRole('button', { name: 'Poll now' }).click();
-  await expect(page.locator('[data-test=last-poll]')).toContainText('failed: central unreachable');
+  await expect(page.locator('[data-test=last-poll]')).toContainText('failed: Satori Network unreachable');
   await go(page, 'settings');
   await url.fill('');
   await page.getByRole('button', { name: 'Save', exact: true }).click();

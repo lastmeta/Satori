@@ -123,14 +123,14 @@ describe('createWork', () => {
 describe('workText: plain words, from the person\'s side', () => {
   const e = (task, step, done = null, total = null) => ({ task, step, done, total, since: 0 });
   test.each([
-    [e('central', 'register'), 'Signing in to central…'],
+    [e('central', 'register'), 'Signing in to the Satori Network…'],
     [e('central', 'observations'), "Fetching today's observations…"],
     [e('central', 'history', 34, 82), 'Loading history · 34 of 82 streams'],
     [e('central', 'models', 40, 82), 'Building models · 40 of 82'],
     [e('central', 'send', null, 82), 'Sending 82 predictions…'],
     [e('central', 'send', null, 1), 'Sending 1 prediction…'],
-    [e('base', 'check'), "Checking today's Base games…"],
-    [e('base', 'send'), 'Sending the Base batch…'],
+    [e('base', 'check'), "Checking today's Satori contract games…"],
+    [e('base', 'send'), 'Sending the Satori contract batch…'],
     [e('base', 'confirm'), 'Waiting for Base to confirm…'],
     [e('stake', 'send', 1, 3), 'Step 1 of 3: sending…'],
     [e('stake', 'confirm', 2, 3), 'Step 2 of 3: waiting for Base to confirm…'],

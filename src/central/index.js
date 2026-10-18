@@ -64,7 +64,7 @@ export function normalizeObservation(obs) {
 }
 
 export class CentralError extends Error {
-  constructor(status, detail, message = `central ${status}: ${detail}`) {
+  constructor(status, detail, message = `Satori Network ${status}: ${detail}`) {
     super(message);
     this.status = status;
     this.detail = detail;
@@ -87,9 +87,9 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
       text = await res.text();
       onTraffic();
     } catch (err) {
-      if (err?.name === 'TimeoutError') throw new CentralError(0, 'timeout', `central timed out (${TIMEOUT_MS / 1000} s)`);
+      if (err?.name === 'TimeoutError') throw new CentralError(0, 'timeout', `Satori Network timed out (${TIMEOUT_MS / 1000} s)`);
       // nginx's 429/502 pages have no CORS header: the browser shows them as this TypeError too.
-      throw new CentralError(0, 'network', `central unreachable: ${err?.message ?? err}`);
+      throw new CentralError(0, 'network', `Satori Network unreachable: ${err?.message ?? err}`);
     }
     let data = text;
     try { data = JSON.parse(text); } catch { /* not JSON */ }

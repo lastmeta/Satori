@@ -13,8 +13,9 @@ import { menuKey } from './prefs.js';
 /** The models (models()) and the open model (model(id)), set by main.js. */
 export const box = { list: [], detail: null };
 
-const TO = { central: 'Central', base: 'Base', network: 'Network' };
-const FILTERS = [['all', 'All'], ['central', 'Central'], ['base', 'Base'], ['network', 'Network']];
+// where predictions go, by the words people see (docs/intent/ui.md): the Satori Network, the Satori contract, the Satori relays
+const TO = { network: 'Network', contract: 'Contract', relays: 'Relays' };
+const FILTERS = [['all', 'All'], ['network', 'Network'], ['contract', 'Contract'], ['relays', 'Relays']];
 const SORTS = [['quality', 'Quality'], ['name', 'Name']];
 
 /** The models' hash route: ids are `<source>:<key>`, kept readable. */
@@ -130,7 +131,7 @@ function list(a) {
   <section class="tile mlist" data-test="models">
     <div class="mrow head" aria-hidden="true"><span>Quality</span><span>Predicts</span><span>Model</span><span>Inputs</span><span class="r">Now · forecast</span><span class="r">Goes to</span></div>
     <div>${() => listed().map((v) => row(a, v).key(`${v.id}|${v.markText}|${v.kind}|${v.chips}|${v.latest}|${v.forecast}|${v.dests}`))}</div>
-    <p class="muted small" data-test="models-empty" hidden="${() => listed().length > 0}">${() => (box.list.length ? 'No model sends its predictions there yet.' : 'No models yet: the first poll builds one for each stream central serves.')}</p>
+    <p class="muted small" data-test="models-empty" hidden="${() => listed().length > 0}">${() => (box.list.length ? 'No model sends its predictions there yet.' : 'No models yet: the first poll builds one for each stream the Satori Network serves.')}</p>
   </section>`;
 }
 

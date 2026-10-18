@@ -27,7 +27,7 @@ import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase } from './neuron/base.js';
 import { createActivity } from './neuron/activity.js';
-import { healthOf, toneOf } from './neuron/health.js';
+import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
 import { createWork, workText, leading, HERO } from './neuron/work.js';
 import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
@@ -237,7 +237,7 @@ const pollNow = () => poller.poll();
  */
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
-  if (url && !isHttps(url)) throw new Error('The central URL must be an https:// address.');
+  if (url && !isHttps(url)) throw new Error('The Satori Network server must be an https:// address.');
   if ((url || DEFAULT_CENTRAL) !== central.url) {
     await poller.idle(); // its rows are the old central's
     await db.resetCentral();
@@ -903,7 +903,7 @@ watch(() => {
 function glowChips() {
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   subscribe(createGlow({ reduced: () => motion.matches,
-    apply: (channel, on) => document.querySelector(`[data-test=chip][data-channel=${channel}]`)?.toggleAttribute('data-live', on) }));
+    apply: (channel, on) => document.querySelector(`[data-test=chip][data-channel=${CHIP_OF[channel]}]`)?.toggleAttribute('data-live', on) }));
 }
 
 async function boot() {

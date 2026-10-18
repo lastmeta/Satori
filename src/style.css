@@ -247,7 +247,8 @@ details.card > summary { color: var(--text); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   .chan::after { transition: none; box-shadow: none; background: var(--live-tint); } /* still: a faint tint, no fades */
 }
-.chan .row1 { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; }
+.chan .row1 { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; font-weight: 600; font-size: 0.85rem; }
+.chan .cost { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 0.72rem; white-space: nowrap; } /* free, or uses gas */
 .chan .sub { color: var(--muted); font-size: 0.76rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 .earn { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -516,6 +517,9 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .card { padding: 14px; }
   .hero { padding: 14px; gap: 12px; }
   .ring { width: 56px; height: 56px; }
+  .chan .cost { flex-basis: 100%; margin: 0 0 0 24px; } /* a narrow chip: "free", "uses gas" under the name */
+  .mcontrols .segmented { gap: 4px; }
+  .mcontrols .segmented .small-btn { padding: 6px 8px; } /* the four filters on one line, down to 360 px */
 }
 
 /* ── a computer: the top nav and the dashboard grid ── */

@@ -9,14 +9,15 @@ import { fmtNum, modelText, amountText, daysText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
 const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
-  channels: { central: { state: 'idle', tone: 'idle', text: '–' }, base: { state: 'idle', tone: 'idle', text: '–' },
-    network: { state: 'idle', tone: 'idle', text: '–' } } };
+  channels: { network: { state: 'idle', tone: 'idle', text: '–' }, contract: { state: 'idle', tone: 'idle', text: '–' },
+    relays: { state: 'idle', tone: 'idle', text: '–' } } };
 const h = () => state.health ?? EMPTY;
 /** The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). */
 const hero = () => state.hero ?? { ...h(), key: 'idle', working: false };
 const HOME_ROWS = 8;
 const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this neuron' };
-const CHANNEL_TAB = { central: 'streams', base: 'wallet', network: 'streams' };
+// the Satori Network (free to submit to), the Satori contract (uses gas), the Satori relays (docs/intent/ui.md)
+const CHANNEL_TAB = { network: 'streams', contract: 'wallet', relays: 'streams' };
 
 const fullDays = (n) => daysText(h().days.slice(-n));
 
@@ -28,9 +29,9 @@ function dayTitle(d) {
 
 const cell = (d) => html`<div class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}"></div>`;
 
-function chip(a, key, name) {
+function chip(a, key, name, cost = '') {
   const c = () => h().channels[key];
-  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" @click="${(e) => { e.preventDefault(); a.go(CHANNEL_TAB[key]); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}</span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
+  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" @click="${(e) => { e.preventDefault(); a.go(CHANNEL_TAB[key]); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
 }
 
 /** The claimable rewards (the hub's and the vested airdrop; the merkle drop is known only when claimed). */
@@ -96,7 +97,7 @@ export function home(a) {
       <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this neuron</span></div>
     </section>
 
-    <section class="chans" data-test="channels">${chip(a, 'central', 'Central')}${chip(a, 'base', 'Base')}${chip(a, 'network', 'Network')}</section>
+    <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}</section>
 
     <section class="tile streams-tile desk-only">
       <div class="tile-h"><b>Streams</b><span>${streamsSummary}</span></div>
@@ -119,7 +120,7 @@ export function home(a) {
       ${unlockPrompt(a, 'claim', 'claim')}
       <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
       <div class="line desk-only"><span>Vault</span><span data-test="home-vault">${vaultLine}</span></div>
-      <div class="line desk-only"><span>Gas for daily batch</span><span data-test="home-gas">${gasLine}</span></div>
+      <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
     </section>
 
     <details class="tile feed-tile" data-test="activity">

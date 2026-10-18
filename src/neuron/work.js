@@ -30,13 +30,13 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const tx = (e, what) => (e.total > 1 ? `Step ${e.done} of ${e.total}: ${what[0].toLowerCase()}${what.slice(1)}` : what);
 
 const TEXT = {
-  'central:register': () => 'Signing in to central…',
+  'central:register': () => 'Signing in to the Satori Network…',
   'central:observations': () => "Fetching today's observations…",
   'central:history': (e) => `Loading history · ${e.done} of ${e.total} streams`,
   'central:models': (e) => `Building models · ${e.done} of ${e.total}`,
   'central:send': (e) => `Sending ${plural(e.total, 'prediction')}…`,
-  'base:check': () => "Checking today's Base games…",
-  'base:send': () => 'Sending the Base batch…',
+  'base:check': () => "Checking today's Satori contract games…",
+  'base:send': () => 'Sending the Satori contract batch…',
   'base:confirm': () => 'Waiting for Base to confirm…',
   'claim:rewards': () => 'Claiming rewards…',
   'claim:drop': () => 'Claiming the reward drop…',

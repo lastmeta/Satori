@@ -19,13 +19,13 @@ const TWO = {
     { stream: 'u-gold', name: 'gold', latest: { value: 2600, ts: AT - 60 }, forecast: { t1: 2610, t2: 2620, value: 2620, step: 12 * H, horizon: 24 * H, at: AT },
       direction: 'up', quality: q(0.009),
       influence: [{ stream: 'u-oil', name: 'oil', share: 0.6 }, { stream: 'u-gold', name: 'gold', share: 0.3 }, { stream: 'u-silver', name: 'silver', share: 0.1 }],
-      destinations: [{ to: 'central', status: 'accepted', when: AT + 30, ref: null },
-        { to: 'base', status: 'sent', when: AT + 40, ref: { round: 20743, game: 1, direction: 'up', tx: '0x' + 'ab'.repeat(32) } }],
+      destinations: [{ to: 'network', status: 'accepted', when: AT + 30, ref: null },
+        { to: 'contract', status: 'sent', when: AT + 40, ref: { round: 20743, game: 1, direction: 'up', tx: '0x' + 'ab'.repeat(32) } }],
       history: hist(48, 2550, AT - 60) },
     { stream: 'u-silver', name: 'silver', latest: { value: 31, ts: AT - 60 }, forecast: { t1: 30.9, t2: 30.5, value: 30.5, step: 12 * H, horizon: 24 * H, at: AT },
       direction: 'down', quality: q(0.012),
       influence: [{ stream: 'u-silver', name: 'silver', share: 0.9 }, { stream: 'u-gold', name: 'gold', share: 0.1 }, { stream: 'u-oil', name: 'oil', share: 0 }],
-      destinations: [{ to: 'network', status: 'published', when: AT + 50, ref: { stream: 'silver_pred', seq: 12, relays: 2 } }],
+      destinations: [{ to: 'relays', status: 'published', when: AT + 50, ref: { stream: 'silver_pred', seq: 12, relays: 2 } }],
       history: hist(48, 0, AT - 60).map((p) => ({ ...p, value: 31 + Math.sin(p.ts) })) },
   ],
 };
@@ -40,12 +40,12 @@ describe('the drill-in', () => {
     const [gold, silver] = v.outputs;
     expect(gold).toMatchObject({ name: 'gold', arrow: '↑', forecast: 'In 12 h 2,610.00 · in 24 h 2,620.00', latest: '2,600.00' });
     expect(gold.destinations.map((d) => [d.to, d.text])).toEqual([
-      ['central', expect.stringMatching(/^Accepted /)],
-      ['base', 'Round 20743 · UP · tx 0xabab…abab'],
+      ['network', expect.stringMatching(/^Accepted /)],
+      ['contract', 'Round 20743 · UP · tx 0xabab…abab'],
     ]);
     expect(gold.destinations[1].href).toBe(`https://sepolia.basescan.org/tx/0x${'ab'.repeat(32)}`);
     expect(silver).toMatchObject({ name: 'silver', arrow: '↓', forecast: 'In 12 h 30.9 · in 24 h 30.5' });
-    expect(silver.destinations).toEqual([{ to: 'network', label: 'Network', text: 'silver_pred #12 · 2 relays', href: null }]);
+    expect(silver.destinations).toEqual([{ to: 'relays', label: 'Relays', text: 'silver_pred #12 · 2 relays', href: null }]);
     for (const o of v.outputs) expect(o.chart.line).toMatch(/^M/);
     // In: the first output's inputs by default, ranked; the other output's on choosing it
     expect(v.inputs.map((i) => [i.name, i.pct, i.own])).toEqual([['oil', '60%', false], ['gold', '30%', true], ['silver', '10%', false]]);
@@ -115,10 +115,10 @@ describe('the drill-in', () => {
   });
 
   test('destinations in words: central accepted or pending; Base left out; a relay that has not taken it yet', () => {
-    expect(destinationView({ to: 'central', status: 'pending', when: AT, ref: null })).toMatchObject({ label: 'Central', text: expect.stringMatching(/^Pending since /) });
-    expect(destinationView({ to: 'base', status: 'left out', when: AT, ref: { round: 5, direction: 'down', tx: null, error: 'DuplicatePrediction' } }))
-      .toEqual({ to: 'base', label: 'Base', text: 'Round 5 · DOWN · left out: DuplicatePrediction', href: null });
-    expect(destinationView({ to: 'network', status: 'waiting', when: AT, ref: { stream: 'x_pred', seq: 1, relays: 0 } }).text).toBe('x_pred #1 · no relay yet');
+    expect(destinationView({ to: 'network', status: 'pending', when: AT, ref: null })).toMatchObject({ label: 'Network', text: expect.stringMatching(/^Pending since /) });
+    expect(destinationView({ to: 'contract', status: 'left out', when: AT, ref: { round: 5, direction: 'down', tx: null, error: 'DuplicatePrediction' } }))
+      .toEqual({ to: 'contract', label: 'Contract', text: 'Round 5 · DOWN · left out: DuplicatePrediction', href: null });
+    expect(destinationView({ to: 'relays', status: 'waiting', when: AT, ref: { stream: 'x_pred', seq: 1, relays: 0 } }).text).toBe('x_pred #1 · no relay yet');
   });
 });
 
@@ -163,7 +163,7 @@ describe('the list and the status', () => {
   test('a row: the name, its kind, the inputs as chips by influence, quality, latest → forecast, where it goes', () => {
     const r = rowView(TWO);
     expect(r).toMatchObject({ name: 'bvar · 2 streams', kind: 'bvar', chips: ['+oil'], mark: 'better', markText: '10% better',
-      dests: ['central', 'base', 'network'] });
+      dests: ['network', 'contract', 'relays'] });
     const one = rowView({ ...TWO, name: 'gold', outputs: [TWO.outputs[0]] });
     expect(one).toMatchObject({ name: 'gold', chips: ['+oil', '+silver'], latest: '2,600.00', forecast: '2,620.00', arrow: '↑', as: null });
     // the values labelled: now, and the forecast at its own horizon, the arrow after it

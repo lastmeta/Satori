@@ -9,9 +9,10 @@ import { spanText, markWords, kindLabelOf, descriptionOf } from '../neuron/model
 export { spanText };
 
 const ARROW = { up: '↑', down: '↓', flat: '→' };
-const LABEL = { central: 'Central', base: 'Base', network: 'Network' };
-export const DESTS = ['central', 'base', 'network'];
-const SOURCE = { central: 'Central stream', base: 'Base registry stream', nostr: 'Nostr stream' };
+// by the words people see (docs/intent/ui.md): the Satori Network (free), the Satori contract (uses gas), the Satori relays
+const LABEL = { network: 'Network', contract: 'Contract', relays: 'Relays' };
+export const DESTS = ['network', 'contract', 'relays'];
+const SOURCE = { central: 'Satori Network stream', base: 'Satori contract stream', nostr: 'Stream on the Satori relays' };
 const KINDS = ['bvar', 'bar1', 'bar1d', 'naive', 'echo'];
 
 const minus = (s) => s.replace(/-/g, '−');
@@ -48,13 +49,13 @@ const markShort = (q) => (q.mark === 'tie' ? 'Same' : markText(q));
 export function destinationView(d, { explorer = null } = {}) {
   const r = d.ref ?? {};
   const view = { to: d.to, label: LABEL[d.to] ?? d.to, text: '', href: null };
-  if (d.to === 'central') view.text = d.status === 'accepted' ? `Accepted ${fmtWhen(d.when)}` : `Pending since ${fmtWhen(d.when)}`;
-  if (d.to === 'base') {
+  if (d.to === 'network') view.text = d.status === 'accepted' ? `Accepted ${fmtWhen(d.when)}` : `Pending since ${fmtWhen(d.when)}`;
+  if (d.to === 'contract') {
     const dir = String(r.direction ?? '').toUpperCase();
     view.text = d.status === 'sent' ? `Round ${r.round} · ${dir} · tx ${shortHash(r.tx)}` : `Round ${r.round} · ${dir} · left out: ${r.error}`;
     if (d.status === 'sent' && explorer && r.tx) view.href = `${explorer}/tx/${r.tx}`;
   }
-  if (d.to === 'network') view.text = `${r.stream} #${r.seq} · ${r.relays > 0 ? `${r.relays} relay${r.relays === 1 ? '' : 's'}` : 'no relay yet'}`;
+  if (d.to === 'relays') view.text = `${r.stream} #${r.seq} · ${r.relays > 0 ? `${r.relays} relay${r.relays === 1 ? '' : 's'}` : 'no relay yet'}`;
   return view;
 }
 

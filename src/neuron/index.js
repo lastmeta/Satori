@@ -71,7 +71,7 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill, rep
   let batch;
   try {
     batch = await central.observations(BATCH_LIMIT);
-    if (!Array.isArray(batch)) throw new Error('central sent no list of observations');
+    if (!Array.isArray(batch)) throw new Error('the Satori Network sent no list of observations');
   } catch (err) {
     const poll = { at, error: errorText(err) };
     await db.set('central_last_poll', poll);

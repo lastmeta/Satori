@@ -152,7 +152,16 @@ alone when the build sets it.
   nothing is wrong, and it never colours the hero), the day strip, three
   chips, the feed.
   Being closed is never an error: a browser neuron runs only while open.
-- **Central URL** (Settings, `meta.central_url`): https only. Empty means the
+- **Words people see** (owner, 2026-10-18, [../intent/ui.md](../intent/ui.md)):
+  central is the **Satori Network** ("Network", free to submit to), the
+  Base contracts the **Satori contract** ("Contract", it uses gas), the
+  Nostr relays the **Satori relays** ("Relays"). The UI never says
+  "central" or "server", except Settings' "Satori Network server", the one
+  place a URL shows; Base stays the chain's name (ETH on Base, Base
+  addresses). Agents' channel and destination keys use the words
+  (`health().channels.{network, contract, relays}`, `destinations[].to`);
+  the code's identifiers, method names and `status().central` keep theirs.
+- **The Satori Network server** (Settings, `meta.central_url`, the code's "central URL"): https only. Empty means the
   default: `https://central2.satorinet.io` on the dev server (so nobody writes
   to prod from a dev checkout), `https://network.satorinet.io` in a build, or
   the build's `VITE_CENTRAL_URL` ([deploy.md](deploy.md#build-variables); the

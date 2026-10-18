@@ -39,16 +39,16 @@ export function walletTab(a) {
       <h2>Base</h2>
       <button class="small-btn" data-test="base-refresh" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
-    <div class="muted small" title="${() => (b().config === 'central' ? 'Contract addresses from central' : 'Built-in contract addresses (central serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+    <div class="muted small" title="${() => (b().config === 'central' ? 'The Satori contract\'s addresses from the Satori Network' : 'Built-in Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>
     <dl class="facts">
       ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
       ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this neuron, below' : delegationText(b())))}
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
-      ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
-      ${fact('Last batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
-      ${fact('Batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
+      ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
+      ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
+      ${fact('Contract batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
     : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
       ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
     </dl>
@@ -66,7 +66,7 @@ export function walletTab(a) {
       <button type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send from the vault')}</button>
     </form>
     ${unlockPrompt(a, 'wallet', 'use the vault')}
-    <p class="muted small" hidden="${() => state.unlocked}">Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.</p>
+    <p class="muted small" hidden="${() => state.unlocked}">Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).</p>
     <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>

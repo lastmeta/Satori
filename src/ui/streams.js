@@ -1,11 +1,12 @@
-// Streams: central's (the data flow's facts and Poll now; each stream with its forecast, model and companions, and
-// its history on a tap), the Nostr subscriptions, and the Network streams to discover.
+// Streams: the Satori Network's (central: the data flow's facts and Poll now; each stream with its forecast, model and
+// companions, and its history on a tap), the subscriptions on the Satori relays (Nostr), and the relays' streams to
+// discover. The words people see (docs/intent/ui.md); the addresses are Settings'.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { fact, sparkPath } from './parts.js';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
-  fmtCadence, shortKey, relayText, obsText, rawText, catalogMatch, predText,
+  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText,
 } from './format.js';
 
 export const CATALOG_SHOWN = 50;
@@ -15,10 +16,9 @@ function centralCard(a) {
   return html`
   <section class="card central">
     <header class="card-head">
-      <h2>Central</h2>
+      <h2>Satori Network <small class="muted">free</small></h2>
       <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>
     </header>
-    <code data-test="central-url">${() => c().url}</code>
     <dl class="facts">
       ${fact('Registered', 'registered', () => registrationText(c().registration))}
       ${fact('Last poll', 'last-poll', () => pollText(c().lastPoll))}
@@ -56,7 +56,7 @@ function detail(a) {
 function streamsCard(a) {
   return html`
   <section class="card" data-test="streams">
-    <header class="card-head"><h2>Streams</h2><span class="muted small" data-test="streams-count">${() => (state.streams.length ? `${state.streams.length} from central, with our forecasts` : '')}</span></header>
+    <header class="card-head"><h2>Streams</h2><span class="muted small" data-test="streams-count">${() => (state.streams.length ? `${state.streams.length} from the Satori Network, with our forecasts` : '')}</span></header>
     <p class="muted small" hidden="${() => state.streams.length > 0}">Streams: none yet. They arrive with the first poll.</p>
     <div class="srows" hidden="${() => !state.streams.length}">
       <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
@@ -69,8 +69,10 @@ function streamsCard(a) {
   </section>`;
 }
 
-function relayRow(r) {
-  return html`<li class="relay" data-test="relay"><code>${r.url}</code><span class="${r.state === 'open' ? 'badge on' : 'badge'}" data-test="relay-state">${relayText(r)}</span></li>`;
+/** The relays in a few words (their addresses and each one's state are in Settings). */
+function relaysText(relays) {
+  const up = relays.filter((r) => r.state === 'open').length;
+  return relays.length ? `${up} of ${relays.length} relay${relays.length === 1 ? '' : 's'} connected` : 'no relay';
 }
 
 function subRow(s, a) {
@@ -84,11 +86,10 @@ function nostrCard(a) {
   return html`
   <section class="card nostr">
     <header class="card-head">
-      <h2>Nostr</h2>
-      <span class="muted small">${() => `${n().subscriptions.length} of ${n().maxStreams} streams`}</span>
+      <h2>Satori relays</h2>
+      <span class="muted small">${() => `${n().subscriptions.length} of ${n().maxStreams} streams · ${relaysText(n().relays)}`}</span>
     </header>
-    <ul class="relays">${() => n().relays.map((r) => relayRow(r).key(`${r.url} ${r.state} ${r.write}`))}</ul>
-    <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Network streams. Each new observation is forecast and published as <code>&lt;stream&gt;_pred</code>.</p>
+    <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Streams on the relays. Each new observation is forecast and published as <code>&lt;stream&gt;_pred</code>.</p>
     <div class="srows" hidden="${() => !n().subscriptions.length}">
       <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
       <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq}`))}</div>
@@ -114,7 +115,7 @@ function network(a) {
   };
   return html`
   <details class="card" data-test="network" @toggle="${(e) => e.target.open && !state.catalog.length && !state.discovering && a.discover()}">
-    <summary>Network streams</summary>
+    <summary>Streams on the relays</summary>
     <form class="search" @submit="${(e) => { e.preventDefault(); a.discover(); }}">
       <input name="q" type="search" aria-label="Search streams" placeholder="Search: bitcoin, weather, …" autocomplete="off"
         @input="${(e) => (state.catalogQuery = e.target.value)}">

@@ -1,5 +1,13 @@
 # Satori neuron (browser app)
 
+**Glossary** (the words the page shows, and the code's names, docs/intent/ui.md):
+the **Satori Network** ("Network") = central (Satori's server; free to submit
+to); the **Satori relays** ("Relays") = the Nostr relays; the **Satori
+contract** ("Contract") = the Base contracts (they cost gas). Base stays the
+chain's name (ETH on Base, Base addresses). Method names keep the code's names
+(`status().central`, `setCentral`, `setRelays`, `setBaseRpc`); the channel and
+destination keys use the words.
+
 > The Satori neuron as a client-side web app. It registers with Satori's
 > central server, polls central for the latest observation of each data
 > stream, forecasts the next values with a simple model, and sends the
@@ -48,6 +56,30 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
    it reads and where its forecasts go; `await satori.model(id)` opens one.
 
 Every method is below; `await satori.status()` shows everything at once.
+
+## Changed 2026-10-18 (the words people see: Network, Contract, Relays)
+
+Renamed, with no aliases:
+- `health().channels`: `{ central, base, network }` → `{ network, contract,
+  relays }` (network: the Satori Network, central; contract: the Satori
+  contract, Base; relays: the Satori relays, Nostr). Home's chips:
+  `data-channel` `network`, `contract`, `relays` (the old `network`, Nostr,
+  is now `relays`).
+- `health().reasons[].channel`: `'central'` → `'network'`, `'base'` →
+  `'contract'`, `'network'` → `'relays'` (reason ids unchanged).
+- `models()` `outputs[].destinations[].to`: `'central' | 'base' | 'network'`
+  → `'network' | 'contract' | 'relays'`; the Models filters
+  `models-filter-<all|network|contract|relays>`; the tags read "Network",
+  "Contract", "Relays". Model ids and `source` keep the code's names
+  (`central:<uuid>`, `source: 'central' | 'base' | 'nostr'`).
+- Words: the health lines, cards, feed and steps say "the Satori Network",
+  "the Satori contract", "the Satori relays" ("Signing in to the Satori
+  Network…", "Sent 83 predictions to the Satori Network", "Satori contract
+  batch for round 20742: 1 game"); the central client's errors read
+  "Satori Network 500: …", "Satori Network timed out (15 s)", "Satori
+  Network unreachable: …" (in `status().central`). Settings: "Satori
+  Network server" (the one place a URL shows), "Satori relays", "Satori
+  contract". The Streams tab shows no URL.
 
 ## Changed 2026-10-18 (the Models tab in plain words)
 
@@ -182,7 +214,7 @@ For agents written against the earlier UI and API:
 - `data-test` new: `home`, `health` (`data-s`: the status), `health-title`,
   `health-line`, `action` (`data-action`: the reason), `action-text`,
   `action-button`, `days` with `day` cells (`data-date`, `data-code`),
-  `days-summary`, `channels` with `chip` (`data-channel`, `data-state`) and
+  `days-summary`, `channels` with `chip` (`data-channel`: network, contract, relays; `data-state`) and
   `chip-text`, `claimable`, `claimable-amount`, `claim`, `claim-result`,
   `home-vault`, `home-gas`, `home-stream`, `activity`, `feed`, `feed-item`
   (`data-level`), `nav-<tab>` (the computer's top nav) and `tab-<tab>` (the
@@ -644,7 +676,8 @@ the page's JS context:
     began, its first session or its keys' creation: not a closed day, and
     not counted in `days-summary`, "1 full day", "2 of 3 full days"). The
     phone shows the last 14.
-  - `channels`: `{ central, base, network }`, each `{ state: 'ok' | 'warn' |
+  - `channels`: `{ network, contract, relays }` (the Satori Network, the
+    Satori contract, the Satori relays), each `{ state: 'ok' | 'warn' |
     'bad' | 'idle' | 'advice', tone, text, lastTraffic }` (`tone`: `working`, `idle`,
     `off`, `warn`, `bad`) ("83 sent 2 h ago", "Up to date ·
     next in 9 h" (nothing to send), "Round 20742
@@ -706,7 +739,7 @@ the page's JS context:
        latest: { value, ts }, forecast: { t1?, t2?, value, step, horizon, at }, direction: 'up' | 'down' | 'flat' | null,
        influence: [{ stream, name, share }],   // each input's share of this forecast, largest first, summing to 1
        quality,
-       destinations: [{ to: 'central' | 'base' | 'network', status, when, ref }] }],
+       destinations: [{ to: 'network' | 'contract' | 'relays', status, when, ref }] }],
      trained,            // when the forecast was made (unix s)
      // central's also: uuid, model, spec: { companions: [{ uuid, name }], lambda1, lambda2 }, score, generation, accepted
   }]
@@ -721,10 +754,11 @@ the page's JS context:
   This is the neuron's own backtest, not central's scoring of what it sent. `influence` for bvar: |coefficient
   × the input's standard deviation| in the target's equation of the fitted
   model, normalized; bar1 and naive: the stream itself, 1. `destinations`:
-  central `{ status: 'accepted' | 'pending', when, ref: null }`; base `{
-  status: 'sent' | 'left out', when, ref: { round, game, direction, tx,
-  error? } }`; network `{ status: 'published' | 'waiting', when, ref: {
-  stream, seq, relays } }`. Cheap: it reads what the Models tab shows,
+  network (the Satori Network) `{ status: 'accepted' | 'pending', when, ref:
+  null }`; contract (the Satori contract) `{ status: 'sent' | 'left out',
+  when, ref: { round, game, direction, tx, error? } }`; relays (the Satori
+  relays) `{ status: 'published' | 'waiting', when, ref: { stream, seq,
+  relays } }`. Cheap: it reads what the Models tab shows,
   refreshed after every poll (`poll()` resolves after it), Nostr publish and
   Base check.
 - `await satori.model(id)` → one model's drill-in, recomputed now from its
@@ -932,7 +966,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`, `tab-<tab>`,
   `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`. Models:
   `engine` (`data-tone`), `engine-title`, `engine-line`, `engine-kinds`,
-  `engine-quality` (the bar's legend), `engine-median`, `engine-note`, `models-filter-<all|central|base|network>`,
+  `engine-quality` (the bar's legend), `engine-median`, `engine-note`, `models-filter-<all|network|contract|relays>`,
   `models-sort` (the Sort button: opens a menu, `aria-expanded`), `models-sort-menu`,
   `models-sort-<quality|name>` (its items, `aria-checked`; the choice is kept on this device), `models` (the list) with
   `model-row` (`data-id`, `data-mark`: better, tie, worse or none) and inside

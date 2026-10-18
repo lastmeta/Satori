@@ -100,12 +100,12 @@ describe('the list: every model, named for the stream it predicts', () => {
       forecast: { t1: 2610, t2: 2620, value: 2620, step: STEP_S, horizon: 2 * STEP_S, at: 5010 }, direction: 'up',
       influence: [{ stream: 'u-oil', name: 'oil', share: 0.7 }, { stream: 'u-gold', name: 'gold', share: 0.2 }, { stream: 'u-eth', name: 'eth', share: 0.1 }],
       quality: gold.quality,
-      destinations: [{ to: 'central', status: 'accepted', when: 5020, ref: null }],
+      destinations: [{ to: 'network', status: 'accepted', when: 5020, ref: null }],
     }]);
     // bar1 reads the stream alone (its spec waits for aligned rows): all its own
     expect(eth).toMatchObject({ kind: 'bar1', quality: { mark: 'worse', ratio: 1.5 }, inputs: [{ stream: 'u-eth', name: 'eth' }] });
     expect(eth.outputs[0]).toMatchObject({ direction: 'down', influence: [{ stream: 'u-eth', share: 1 }],
-      destinations: [{ to: 'central', status: 'pending', when: 5010 }] });
+      destinations: [{ to: 'network', status: 'pending', when: 5010 }] });
     expect(oil).toMatchObject({ kind: 'naive', quality: { mark: 'tie' }, outputs: [{ direction: 'flat' }],
       kindLabel: 'No change · not enough history yet', description: 'Repeats the latest value until it has 4 days of back-to-back history.' });
     expect(eth).toMatchObject({ kindLabel: 'Single-stream AR (bar1)' });
@@ -133,7 +133,7 @@ describe('the list: every model, named for the stream it predicts', () => {
     expect(btc.outputs).toEqual([{ stream: 'n-1', name: 'Bitcoin', as: 'btc_pred', latest: { value: 100, ts: 7000 },
       forecast: { value: 101.5, step: 3600, horizon: 3600, at: 7001 }, direction: 'up', quality: btc.quality,
       influence: [{ stream: 'n-1', name: 'Bitcoin', share: 1 }],
-      destinations: [{ to: 'network', status: 'published', when: 7001, ref: { stream: 'btc_pred', seq: 4, relays: 2 } }] }]);
+      destinations: [{ to: 'relays', status: 'published', when: 7001, ref: { stream: 'btc_pred', seq: 4, relays: 2 } }] }]);
     expect(words).toMatchObject({ name: 'words', kind: 'echo', quality: { mark: null },
       outputs: [{ forecast: { value: null, horizon: 86_400 }, direction: null, destinations: [{ status: 'waiting' }] }] });
   });
@@ -150,7 +150,7 @@ describe('the list: every model, named for the stream it predicts', () => {
     expect(list.map((m) => [m.id, m.name, m.kind, m.quality.mark])).toEqual([
       ['base:1', 'Stream 1', 'naive', 'tie'], ['base:3', 'Named stream 3', 'bar1d', 'better'], ['base:5', 'Named stream 5', 'bar1', null]]);
     expect(list[1].outputs[0]).toMatchObject({ latest: { value: -2, ts: null }, forecast: { value: 4, step: 43_200, horizon: 86_400, at: 9000 },
-      direction: 'up', destinations: [{ to: 'base', status: 'sent', when: 9000, ref: { round: 20743, game: 13, direction: 'up', tx: '0xabc' } }] });
+      direction: 'up', destinations: [{ to: 'contract', status: 'sent', when: 9000, ref: { round: 20743, game: 13, direction: 'up', tx: '0xabc' } }] });
     expect(list[0].outputs[0].direction).toBe('down'); // a tie is DOWN, as sent
     expect(list[2].outputs[0].destinations[0]).toMatchObject({ status: 'left out', ref: { tx: null, error: 'DuplicatePrediction' } });
     expect(baseModels(null)).toEqual([]);
@@ -171,9 +171,10 @@ describe('the list: every model, named for the stream it predicts', () => {
       games: [{ streamId: 2, gameId: 2, named: false, direction: UP, model: 'bar1', latest: '1', forecast: '2', horizon: 86_400, step: 43_200 }] } });
     expect(sortModels(list, 'quality').map((m) => m.name)).toEqual(['gold', 'oil', 'eth', 'Stream 2']);
     expect(sortModels(list, 'name').map((m) => m.name)).toEqual(['eth', 'gold', 'oil', 'Stream 2']);
-    expect(filterModels(list, 'base').map((m) => m.name)).toEqual(['Stream 2']);
-    expect(filterModels(list, 'central')).toHaveLength(3);
-    expect(filterModels(list, 'network')).toEqual([]);
+    // by the words people see: the Satori Network, the Satori contract, the Satori relays
+    expect(filterModels(list, 'contract').map((m) => m.name)).toEqual(['Stream 2']);
+    expect(filterModels(list, 'network')).toHaveLength(3);
+    expect(filterModels(list, 'relays')).toEqual([]);
     expect(filterModels(list, 'all')).toBe(list);
   });
 });
@@ -225,7 +226,7 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
     expect(out.influence[0].name).toBe('lead'); // it leads gold
     expect(out.influence.reduce((s, x) => s + x.share, 0)).toBeCloseTo(1, 12);
     expect(out.influence.map((x) => x.share)).toEqual([...out.influence.map((x) => x.share)].sort((a, b) => b - a));
-    expect(out).toMatchObject({ stream: 'u-gold', forecast: { t1: f.t1, t2: f.t2, value: f.t2 }, destinations: [{ to: 'central', status: 'accepted' }] });
+    expect(out).toMatchObject({ stream: 'u-gold', forecast: { t1: f.t1, t2: f.t2, value: f.t2 }, destinations: [{ to: 'network', status: 'accepted' }] });
     // the chart: the last 7 horizons of history before the forecast was made, oldest first
     expect(out.history.at(-1)).toEqual(last);
     expect(out.history[0].ts).toBeGreaterThanOrEqual(last.ts + 60 - 7 * 2 * STEP_S);
@@ -251,7 +252,7 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
     const hist = grid(prices.n2).map(({ ts, value }) => ({ ts, value }));
     const b = await modelDetail({ db, id: 'base:3', lastBatch: batch, baseHistory: async () => hist });
     expect(b).toMatchObject({ source: 'base', name: 'Stream 3', model: { kind: 'bar1', step: 43_200, horizon: 86_400, rows: expect.any(Number) },
-      outputs: [{ destinations: [{ to: 'base', status: 'sent', ref: { round: 20743, tx: '0xabc', direction: 'up' } }] }] });
+      outputs: [{ destinations: [{ to: 'contract', status: 'sent', ref: { round: 20743, tx: '0xabc', direction: 'up' } }] }] });
     expect(b.outputs[0].history.length).toBeGreaterThan(0);
     const offline = await modelDetail({ db, id: 'base:3', lastBatch: batch, baseHistory: async () => { throw new Error('down'); } });
     expect(offline).toMatchObject({ model: { kind: 'bar1', rows: null }, outputs: [{ history: [] }] });

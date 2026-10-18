@@ -105,21 +105,21 @@ function centralReasons({ now, rows, sessions, central, app }) {
   const atOnce = !!central?.polling || !(central?.nextPoll > now); // polling, due, or not armed yet (registering first)
 
   if (failures) {
-    const err = last.data.error ?? `central took none of ${last.data.sent} predictions`;
+    const err = last.data.error ?? `The Satori Network took none of ${last.data.sent} predictions`;
     const batches = last.data.sent > 0;
     if (last.data.local) {
-      out.push(reason('db-error', 'central', { line: 'The database failed.', chip: 'Database error',
+      out.push(reason('db-error', 'network', { line: 'The database failed.', chip: 'Database error',
         text: `Saving or forecasting failed: ${err}. Reload Satori; your keys are safe.`, button: 'Reload', act: { do: 'reload' } }));
     } else if (last.data.login) {
-      out.push(reason('login-refused', 'central', { line: "Central refused this neuron's login.", chip: 'Login refused',
-        text: "Central rejects this neuron's login. Check the central address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
+      out.push(reason('login-refused', 'network', { line: "The Satori Network refused this neuron's login.", chip: 'Login refused',
+        text: "The Satori Network rejects this neuron's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
     } else if (failures >= 2) {
-      out.push(reason('central-failing', 'central', {
-        line: batches ? `Central refused the last ${failures} batches.` : `The last ${failures} polls failed.`,
-        chip: `${failures} failed in a row`, text: `${err}. Try again now, or check the central address in Settings.`,
+      out.push(reason('central-failing', 'network', {
+        line: batches ? `The Satori Network refused the last ${failures} batches.` : `The last ${failures} polls failed.`,
+        chip: `${failures} failed in a row`, text: `${err}. Try again now, or check the Satori Network's address in Settings.`,
         button: 'Try again', act: { do: 'poll' } }));
     } else {
-      out.push(reason('central-failed', 'central', { line: `The last poll failed; next try ${next}.`,
+      out.push(reason('central-failed', 'network', { line: `The last poll failed; next try ${next}.`,
         chip: 'Last poll failed', text: `${err}. It tries again on its own; try now if something was fixed.`,
         button: 'Try again', act: { do: 'poll' } }));
     }
@@ -129,7 +129,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
   const ran = since == null ? 0 : openTime(sessions, since, now);
   const overdue = ran > (lastGood ? WINDOW_S : FIRST_S);
   if (overdue) {
-    out.push(reason('central-overdue', 'central', { line: `Nothing sent for ${fmtDur(ran)}.`, chip: `Nothing sent for ${fmtDur(ran)}`,
+    out.push(reason('central-overdue', 'network', { line: `Nothing sent for ${fmtDur(ran)}.`, chip: `Nothing sent for ${fmtDur(ran)}`,
       text: `No predictions went out for ${fmtDur(ran)} while Satori was open. Try a poll now.`, button: 'Poll now', act: { do: 'poll' } }));
   }
 
@@ -137,16 +137,16 @@ function centralReasons({ now, rows, sessions, central, app }) {
   const reg = central?.registration;
   if (reg?.ok && reg.vaultMismatch) {
     const other = reg.vaultMismatch === 'other';
-    out.push(reason('vault-mismatch', 'central', { chip: 'Vault mismatch',
-      line: other ? "Central pays this vault's rewards to another address." : 'Central has no vault for this neuron.',
-      text: `${other ? `Central pays this vault's rewards to a different Base address, ${reg.vault_base_address}, not this vault's ${reg.vault}.`
-        : "Central kept no vault for this identity, so it has no Base address to pay this neuron's rewards to (the vault may be registered to another neuron)."
+    out.push(reason('vault-mismatch', 'network', { chip: 'Vault mismatch',
+      line: other ? "The Satori Network pays this vault's rewards to another address." : 'The Satori Network has no vault for this neuron.',
+      text: `${other ? `The Satori Network pays this vault's rewards to a different Base address, ${reg.vault_base_address}, not this vault's ${reg.vault}.`
+        : "The Satori Network kept no vault for this identity, so it has no Base address to pay this neuron's rewards to (the vault may be registered to another neuron)."
       } Check the keys in Settings.`,
       button: 'Open Settings', act: go('settings', 'keys') }));
   }
   if (reg && !reg.ok) {
-    out.push(reason('not-registered', 'central', { line: "Central didn't register this neuron.", chip: 'Not registered',
-      text: `Registering with central failed: ${reg.error}. It registers again on the next load.`, button: 'Reload', act: { do: 'reload' } }));
+    out.push(reason('not-registered', 'network', { line: "The Satori Network didn't register this neuron.", chip: 'Not registered',
+      text: `Registering with the Satori Network failed: ${reg.error}. It registers again on the next load.`, button: 'Reload', act: { do: 'reload' } }));
   }
 
   // was asleep: the latest session that missed work, until the next normal cycle (the second good one after it)
@@ -157,7 +157,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
     const caught = after[0];
     const install = app?.canInstall && !app?.installed;
     const catching = atOnce ? 'Catching up now…' : `Catching up ${next}`;
-    out.push(reason('asleep', 'central', {
+    out.push(reason('asleep', 'network', {
       line: caught ? `${closed} Caught up ${fmtAgo(now - caught.at)}.` : `${closed} ${catching}${atOnce ? '' : '.'}`,
       chip: caught ? null : catching }));
     if (install) {
@@ -166,7 +166,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
     }
   }
   if (!lastGood && !failures && !overdue) {
-    out.push(reason('starting', 'central', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
+    out.push(reason('starting', 'network', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
       chip: atOnce ? 'First poll now…' : `First poll ${next}` }));
   }
   // central's part of the title, from the log, whichever reason leads (failing: a bad one above); healthOf adds Base's
@@ -186,30 +186,30 @@ function baseReasons({ rows, base }) {
   const failingErr = base.error || check?.error;
   if (failingErr) {
     if (inUse && repeated) {
-      out.push(reason('base-failing', 'base', { line: `The Base batch failed ${lastRow.count} times.`, chip: `Failed ${lastRow.count} times`,
+      out.push(reason('base-failing', 'contract', { line: `The Satori contract batch failed ${lastRow.count} times.`, chip: `Failed ${lastRow.count} times`,
         text: `${failingErr}. Check the Base RPC in Settings.`, button: 'Open Settings', act: go('settings', 'base') }));
     } else {
-      out.push(reason('base-unreachable', 'base', { line: base.error ? "Can't reach Base." : 'The Base batch failed.',
+      out.push(reason('base-unreachable', 'contract', { line: base.error ? "Can't reach Base." : 'The Satori contract batch failed.',
         chip: base.error ? 'Unreachable' : 'Batch failed', text: `${failingErr}. Check the Base RPC in Settings.`,
         button: 'Open Settings', act: go('settings', 'base') }));
     }
   }
   if (base.error || !base.config) return out;
   if (d === 'none' && Number(base.vault.satori) > 0) {
-    out.push(reason('stake', 'base', { line: 'Base needs one step from you.', chip: 'Not staked',
-      text: "Your vault's SATORI isn't earning on Base. Stake with this neuron.", button: 'Stake', act: { do: 'stake' } }));
+    out.push(reason('stake', 'contract', { line: 'The Satori contract needs one step from you.', chip: 'Not staked',
+      text: "Your vault's SATORI isn't earning on the Satori contract. Stake with this neuron.", button: 'Stake', act: { do: 'stake' } }));
   }
   if (d === 'identity' && base.identity?.lowEth) {
     const n = base.identity.batchesLeft;
-    out.push(reason('gas-low', 'base', { line: "The identity's gas is running low.", chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
+    out.push(reason('gas-low', 'contract', { line: "The identity's gas is running low.", chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
       text: `The identity has gas for about ${n} daily batch${n === 1 ? '' : 'es'}. Send it a little Base ETH.`,
       button: 'Add gas', act: go('wallet') }));
   }
   if (d === 'identity' && check?.skipped && FIXABLE_SKIPS.test(check.skipped) && (check.round == null || check.round === base.round)) {
     const why = check.skipped.split(':')[0];
     const gas = why.startsWith('gas');
-    out.push(reason('base-skipped', 'base', { line: 'The Base batch was skipped.', chip: `Skipped: ${why}`,
-      text: `Base batch skipped: ${check.skipped}.`, button: gas ? 'Open Settings' : 'Open Wallet',
+    out.push(reason('base-skipped', 'contract', { line: 'The Satori contract batch was skipped.', chip: `Skipped: ${why}`,
+      text: `Satori contract batch skipped: ${check.skipped}.`, button: gas ? 'Open Settings' : 'Open Wallet',
       act: gas ? go('settings', 'base') : go('wallet') }));
   }
   return out;
@@ -221,11 +221,11 @@ function networkReasons({ nostr }) {
   const relays = nostr.relays ?? [];
   const down = relays.filter((r) => r.state === 'closed' || r.state === 'blocked');
   if (!relays.length || down.length === relays.length) {
-    out.push(reason('relays-down', 'network', { line: 'Every relay is down.', chip: 'Relays down',
+    out.push(reason('relays-down', 'relays', { line: 'Every relay is down.', chip: 'Relays down',
       text: "No relay is connected, so subscribed streams aren't predicted. Check the relays in Settings.",
       button: 'Open Settings', act: go('settings', 'relays') }));
   } else if (down.length) {
-    out.push(reason('relay-down', 'network', { chip: `${down.length} of ${relays.length} relays down`,
+    out.push(reason('relay-down', 'relays', { chip: `${down.length} of ${relays.length} relays down`,
       text: `${down.map((r) => r.url).join(', ')} not connected; it keeps retrying. Check the relays in Settings.`,
       button: 'Open Settings', act: go('settings', 'relays') }));
   }
@@ -242,8 +242,16 @@ function networkReasons({ nostr }) {
 export const toneOf = (status, work) => (status === 'warn' || status === 'bad' ? status
   : work ? (work.critical ? 'critical' : 'working') : 'idle');
 
-/** Each channel's work: central's poll; Base's batch and the vault's actions; the network's discover and subscribe. */
-const CHANNEL_WORK = { central: ['central'], base: ['base', 'stake', 'unstake', 'claim', 'send'], network: ['discover', 'subscribe'] };
+/**
+ * The channels, by the words people see (docs/intent/ui.md, 2026-10-18): `network` the Satori Network (central, free to
+ * submit to), `contract` the Satori contract (Base, uses gas), `relays` the Satori relays (Nostr). Each one's work:
+ * central's poll; the batch and the vault's actions; discover and subscribe. TRAFFIC: each one's traffic channel
+ * (src/traffic.js keeps the code's names).
+ */
+const CHANNEL_WORK = { network: ['central'], contract: ['base', 'stake', 'unstake', 'claim', 'send'], relays: ['discover', 'subscribe'] };
+export const TRAFFIC = { network: 'central', contract: 'base', relays: 'network' };
+/** A traffic channel's chip (src/traffic.js's name → the channel's). */
+export const CHIP_OF = Object.fromEntries(Object.entries(TRAFFIC).map(([chip, t]) => [t, chip]));
 
 // ── the channels (chips) ──
 
@@ -253,10 +261,10 @@ const sentText = (lg, now, next) => (lg.data.accepted > 0 ? `${lg.data.accepted}
 function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }) {
   const top = (channel) => reasons.find((r) => r.channel === channel && r.chip);
   const sent = lastGood ? sentText(lastGood, now, next) : '–';
-  const c = top('central');
+  const c = top('network');
   const central = c ? { state: c.status, text: c.chip } : { state: lastGood ? 'ok' : 'idle', text: sent };
 
-  const b = top('base');
+  const b = top('contract');
   let baseChip;
   if (b) baseChip = { state: b.status, text: b.chip };
   else if (!base?.config) baseChip = { state: 'idle', text: 'Connecting…', busy: true };
@@ -266,8 +274,8 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   else if (base.lastBatch?.round === base.round) baseChip = { state: 'ok', text: `Round ${base.round} sent` };
   else baseChip = { state: 'ok', text: base.checking ? 'Sending…' : `Round ${base.round} due` };
 
-  const n = top('network');
-  const network = n ? { state: n.status, text: n.chip }
+  const n = top('relays');
+  const relays = n ? { state: n.status, text: n.chip }
     : nostr?.subscriptions?.length ? { state: 'ok', text: `${(nostr.relays ?? []).length} relay${(nostr.relays ?? []).length === 1 ? '' : 's'}` }
       : { state: 'idle', text: 'No streams', off: true };
   // the tone: warn and bad as they are; working (its channel has work in progress, or is connecting); off (deliberately
@@ -276,21 +284,21 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   const toned = (key, { off, busy, ...chip }) => {
     const working = busy || CHANNEL_WORK[key].some((t) => work[t]);
     const tone = chip.state === 'warn' || chip.state === 'bad' ? chip.state : working ? 'working' : off ? 'off' : 'idle';
-    return { state: chip.state, tone, text: chip.text, ...(traffic ? { lastTraffic: traffic[key] ?? null } : {}) }; // ms; the glow's
+    return { state: chip.state, tone, text: chip.text, ...(traffic ? { lastTraffic: traffic[TRAFFIC[key]] ?? null } : {}) }; // ms; the glow's
   };
-  return { central: toned('central', central), base: toned('base', baseChip), network: toned('network', network) };
+  return { network: toned('network', central), contract: toned('contract', baseChip), relays: toned('relays', relays) };
 }
 
 // ── the day strip ──
 
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** What a row says about a channel: ['central' | 'base' | 'network', 'ok' | 'fail'], or null. */
+/** What a row says about a channel: ['network' | 'contract' | 'relays', 'ok' | 'fail'], or null. */
 function outcome(r) {
-  if (r.kind === 'central') return ['central', isGood(r) ? 'ok' : 'fail'];
-  if (r.kind === 'base') return r.level === 'ok' ? ['base', 'ok'] : r.level === 'bad' || r.level === 'warn' ? ['base', 'fail'] : null;
-  if (r.kind === 'nostr') return ['network', 'ok'];
-  if (r.kind === 'error') return [r.data?.where === 'nostr' ? 'network' : 'central', 'fail'];
+  if (r.kind === 'central') return ['network', isGood(r) ? 'ok' : 'fail'];
+  if (r.kind === 'base') return r.level === 'ok' ? ['contract', 'ok'] : r.level === 'bad' || r.level === 'warn' ? ['contract', 'fail'] : null;
+  if (r.kind === 'nostr') return ['relays', 'ok'];
+  if (r.kind === 'error') return [r.data?.where === 'nostr' ? 'relays' : 'network', 'fail'];
   return null;
 }
 
@@ -335,19 +343,19 @@ function feedText(r) {
     case 'open': return d.missed ? `Satori was closed for ${fmtDur(d.gap ?? 0, true)}` : null;
     case 'central':
       if (d.local) return `Saving or forecasting failed: ${d.error}`;
-      if (d.login) return `Central refused the login: ${d.error}`;
-      if (d.error) return `${d.sent > 0 ? 'Central refused the batch' : 'The poll failed'}: ${d.error}`;
-      if (d.sent > 0 && !(d.accepted > 0)) return `Central took none of ${d.sent} predictions`;
+      if (d.login) return `The Satori Network refused the login: ${d.error}`;
+      if (d.error) return `${d.sent > 0 ? 'The Satori Network refused the batch' : 'The poll failed'}: ${d.error}`;
+      if (d.sent > 0 && !(d.accepted > 0)) return `The Satori Network took none of ${d.sent} predictions`;
       if (d.caughtUp != null) return d.accepted > 0 ? `Caught up: sent ${d.accepted} predictions` : 'Caught up: up to date';
-      return d.accepted > 0 ? `Sent ${d.accepted} predictions to central` : 'Polled central: up to date';
+      return d.accepted > 0 ? `Sent ${d.accepted} predictions to the Satori Network` : 'Checked the Satori Network: up to date';
     case 'history': return d.error ? `History not loaded: ${d.error}` : `History loaded for ${d.streams} streams`;
     case 'base':
-      if (d.error) return `Base batch failed: ${d.error}${times(r)}`;
-      if (d.skipped) return `Base batch skipped: ${d.skipped.split(':')[0]}${times(r)}`;
-      return `Base batch for round ${d.round}: ${games(d.games?.length ?? 0)}`;
-    case 'nostr': return `Published ${d.published} forecast${d.published === 1 ? '' : 's'} to the network`;
+      if (d.error) return `Satori contract batch failed: ${d.error}${times(r)}`;
+      if (d.skipped) return `Satori contract batch skipped: ${d.skipped.split(':')[0]}${times(r)}`;
+      return `Satori contract batch for round ${d.round}: ${games(d.games?.length ?? 0)}`;
+    case 'nostr': return `Published ${d.published} forecast${d.published === 1 ? '' : 's'} to the Satori relays`;
     case 'wallet': return d.text;
-    case 'error': return `${d.where === 'nostr' ? 'A network forecast failed' : 'Something failed'}: ${d.message}`;
+    case 'error': return `${d.where === 'nostr' ? 'A relay forecast failed' : 'Something failed'}: ${d.message}`;
     default: return null;
   }
 }
@@ -375,7 +383,7 @@ export function feedOf(rows, n = FEED) {
  * @param {{installed: boolean, canInstall: boolean}} o.app
  * @param {boolean} o.backedUp the vault's words confirmed (meta.backup_at)
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
- * @param {{central, base, network}} [o.traffic] each channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
+ * @param {{central, base, network}} [o.traffic] each traffic channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
  * @param {Object<string, object>} [o.work] the work in progress, { [task]: entry } (src/neuron/work.js): the tones, `work`
  * @returns {{status, tone, title, line, action, days, channels, feed, reasons, work}}
  */
@@ -393,10 +401,10 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   // The title: is the neuron predicting on the channels that pay? Central (Not predicting wins), and Base when it should
   // be predicting: staked with this neuron, or not read (its RPC down) after a batch went out. Nostr never moves it.
   const d = base?.vault?.staked;
-  const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.channel === 'base' && r.status === 'bad');
+  const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.channel === 'contract' && r.status === 'bad');
   const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting' : c.title;
   const top = told[0];
-  const centralTop = told.find((r) => r.channel === 'central');
+  const centralTop = told.find((r) => r.channel === 'network');
 
   let line;
   const lg = c.lastGood;
@@ -404,7 +412,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   if (!top) { // no reason but advice: a good cycle is in the log
     line = lg.data.accepted > 0 ? `Sent ${lg.data.accepted} predictions ${fmtAgo(now - lg.at)} · next ${next}` : sentText(lg, now, next);
   } else {
-    line = top.channel === 'central' || centralTop ? top.line : `Central is fine. ${top.line}`;
+    line = top.channel === 'network' || centralTop ? top.line : `The Satori Network is fine. ${top.line}`;
   }
 
   const a = reasons.find((r) => r.act);

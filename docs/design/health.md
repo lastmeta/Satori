@@ -18,6 +18,15 @@ fabricated logs), with what the neuron is doing right now
 ([the tone](#the-tone-three-greens)). Home draws it, and agents read the same object:
 `window.satori.health()` → `{ status, tone, title, line, action, days, channels, feed, reasons, work }`.
 
+**Words people see** (the owner, 2026-10-18, [../intent/ui.md](../intent/ui.md)):
+central is the **Satori Network** ("Network"; free to submit to), the
+Base contracts are the **Satori contract** ("Contract"; it costs gas), the
+Nostr relays are the **Satori relays** ("Relays"). The channels are named
+so for agents too: `network`, `contract`, `relays` (they were `central`,
+`base`, `network`). The code's identifiers (the log's kinds `central`,
+`base`, `nostr`; the reason ids; the work tasks) keep their names. The live
+records below, from before that day, quote the words of their day.
+
 This is local to the browser. Nothing new goes over the network, and Satori
 Lite has no counterpart to follow: its dashboard shows raw state. The rules
 reuse Lite's 11 h poll for their thresholds. The first poll runs at once
@@ -117,24 +126,24 @@ button).
 
 | # | Reason | Level | Why this level | Channel | When | Button |
 |---|---|---|---|---|---|---|
-| 1 | `db-error` | bad | nothing is stored or forecast, so nothing goes out | central | the last cycle failed locally (the database or the engine) | Reload |
-| 2 | `login-refused` | bad | central takes nothing from this neuron until it is fixed | central | the last cycle's login was refused (after its one retry) | Open Settings (central) |
-| 3 | `central-failing` | bad | two cycles in a row sent nothing: predictions are failing | central | the last 2 cycles failed | Try again (a poll) |
-| 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | central | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
-| 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | base | the batch check failed twice in a row while Base is in use (staked, or a batch sent before) | Open Settings (Base) |
-| 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | network | streams are subscribed and every relay is down | Open Settings (relays) |
-| 7 | `central-failed` | warn | one cycle sent nothing; it retries on its own, but something may need fixing | central | the last cycle failed (once) | Try again |
-| 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | central | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
-| 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | central | registering failed | Reload |
-| 10 | `stake` | warn | the vault's SATORI earns nothing on Base until it is staked (with no SATORI there is no reason: the Base chip is off, grey) | base | not staked, and the vault holds SATORI: "Your vault's SATORI isn't earning on Base. Stake with this neuron." | Stake |
-| 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | base | staked, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
-| 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | base | staked, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
-| 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | base | the chain did not answer | Open Settings (Base) |
-| 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | central | *Was asleep* (above) | none |
-| 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | central | *Starting* (above) | none |
+| 1 | `db-error` | bad | nothing is stored or forecast, so nothing goes out | network | the last cycle failed locally (the database or the engine) | Reload |
+| 2 | `login-refused` | bad | central takes nothing from this neuron until it is fixed | network | the last cycle's login was refused (after its one retry) | Open Settings (central) |
+| 3 | `central-failing` | bad | two cycles in a row sent nothing: predictions are failing | network | the last 2 cycles failed | Try again (a poll) |
+| 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | network | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
+| 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | contract | the batch check failed twice in a row while Base is in use (staked, or a batch sent before) | Open Settings (Base) |
+| 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | relays | streams are subscribed and every relay is down | Open Settings (relays) |
+| 7 | `central-failed` | warn | one cycle sent nothing; it retries on its own, but something may need fixing | network | the last cycle failed (once) | Try again |
+| 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | network | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
+| 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | network | registering failed | Reload |
+| 10 | `stake` | warn | the vault's SATORI earns nothing on Base until it is staked (with no SATORI there is no reason: the Base chip is off, grey) | contract | not staked, and the vault holds SATORI: "Your vault's SATORI isn't earning on Base. Stake with this neuron." | Stake |
+| 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | contract | staked, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
+| 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | contract | staked, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
+| 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | contract | the chain did not answer | Open Settings (Base) |
+| 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | network | *Was asleep* (above) | none |
+| 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | network | *Starting* (above) | none |
 | 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the vault | – | storage is not persistent and no backup is confirmed | Back up |
 | 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | *Was asleep*, and the browser offers Install | Install |
-| 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | network | streams are subscribed and some relay, not all, is down | Open Settings (relays) |
+| 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | relays | streams are subscribed and some relay, not all, is down | Open Settings (relays) |
 
 `asleep` and `starting` are neither warn nor advice: they are the calm
 states the title names (*Was asleep*, *Starting*), their line says what the
@@ -179,8 +188,8 @@ until the next normal cycle (sky green on Home, not grey). `src/neuron/health.te
 (starting, asleep, caught up, predicting, retrying after one failed poll,
 failing) with every reason (a table).
 
-The line is the top reason's short text (advice has none), after "Central
-is fine." when central has no reason. With no reason, or only advice, it is
+The line is the top reason's short text (advice has none), after "The
+Satori Network is fine." when the network channel has no reason. With no reason, or only advice, it is
 "Sent 83 predictions 2 h ago · next in 9 h", or "Up to date · next in 9 h" when the last poll had nothing
 new to predict and nothing to send. Words appear only when something needs
 them.
@@ -194,13 +203,13 @@ set by the code doing the work; nothing polls:
 
 | task | step | words (Home) | critical |
 |---|---|---|---|
-| `central` | `register` | Signing in to central… (only when a poll follows at once: a new neuron, or one reopened with a poll due) | |
+| `central` | `register` | Signing in to the Satori Network… (only when a poll follows at once: a new neuron, or one reopened with a poll due) | |
 | | `observations` | Fetching today's observations… (the batch, stored) | |
 | | `history` | Loading history · 34 of 82 streams (the streams in hand; [central.md](central.md#history-an-addition-beyond-lite)) | |
 | | `models` | Building models · 40 of 82 (the engine yields to the page between targets: the same results) | |
 | | `send` | Keep Satori open · Sending 82 predictions… (the login and the batch) | yes |
-| `base` | `check` | Checking today's Base games… (only once a batch is due: a check with nothing to do shows nothing) | |
-| | `send`, `confirm` | Sending the Base batch…, Waiting for Base to confirm… (also for a batch sent before) | yes |
+| `base` | `check` | Checking today's Satori contract games… (only once a batch is due: a check with nothing to do shows nothing) | |
+| | `send`, `confirm` | Sending the Satori contract batch…, Waiting for Base to confirm… (also for a batch sent before) | yes |
 | `stake`, `unstake`, `send` | `send`, `confirm` (k of n), `settle` | Step 1 of 3: sending…, Step 1 of 3: waiting for Base to confirm…, Checking it on Base… | yes |
 | `claim` | `rewards`, `drop`, `airdrop`, `confirm` | Claiming rewards…, Claiming the reward drop…, Claiming the airdrop…, Waiting for Base to confirm… | yes |
 | `keys` | `save` | Saving your keys… (an earlier version's record, rewritten at Unlock) | yes |
@@ -309,16 +318,22 @@ level), the tone from [the tone](#the-tone-three-greens) (the chip's
 colour and icon: a check on sky, three dots while working, a moon when
 off).
 
-- **Central**: ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
+Home shows them as **Network** · free, **Contract** · uses gas, and
+**Relays** (`data-channel`: `network`, `contract`, `relays`; a tap opens
+Streams, Wallet, Streams). Their traffic channels in `src/traffic.js` keep
+the code's names (`central`, `base`, `network`: `TRAFFIC` and `CHIP_OF` in
+health.js map them).
+
+- **Network** (the Satori Network): ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
   the last poll had nothing to send (never "0 sent"); idle "First poll now…",
   "Catching up now…" ("… in 2 h" when a poll is still ahead); warn "Last poll failed", "Vault mismatch",
   "Not registered"; bad "Database error", "Login refused", "2 failed in a
   row", "Nothing sent for 14 h".
-- **Base**: ok "Round 20742 sent", "Round 20742 due"; idle "Not staked"
+- **Contract** (the Satori contract): ok "Round 20742 sent", "Round 20742 due"; idle "Not staked"
   (no SATORI), "Staked elsewhere", "No SATORI staked", "Connecting…"; warn
   "Not staked", "Gas: 3 batches", "Skipped: …", "Unreachable"; bad "Failed 3
   times".
-- **Network**: idle "No streams" (nothing subscribed); ok "2 relays"; advice
+- **Relays** (the Satori relays): idle "No streams" (nothing subscribed); ok "2 relays"; advice
   "1 of 2 relays down" (sky, or green while working); bad "Relays down". A
   relay that is connecting counts as up.
 
@@ -382,11 +397,12 @@ days". The legend shows "Before this neuron" only while such a day is shown.
 ## The feed
 
 The log, newest first, 20 rows: `{ at, level, text }`. "Sent 83 predictions
-to central", "Polled central: up to date" (nothing to send), "Caught up:
-sent 83 predictions" ("Caught up: up to date"), "Central refused the batch:
-central 401: Invalid signature", "Base batch for round 20742: 1 game", "Base
-batch skipped: gas above the ceiling (×3)", "Published 3 forecasts to the
-network", "Satori was closed for 2 d", "Staked with this neuron". A
+to the Satori Network", "Checked the Satori Network: up to date" (nothing
+to send), "Caught up: sent 83 predictions" ("Caught up: up to date"), "The
+Satori Network refused the batch: Satori Network 401: Invalid signature",
+"Satori contract batch for round 20742: 1 game", "Satori contract batch
+skipped: gas above the ceiling (×3)", "Published 3 forecasts to the Satori
+relays", "Satori was closed for 2 d", "Staked with this neuron". A
 session that missed nothing is not shown.
 
 ## Verify

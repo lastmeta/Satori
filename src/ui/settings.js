@@ -1,12 +1,12 @@
 // Settings: the technical detail, behind Home (docs/intent/ui.md): the keys and their addresses with Unlock and Lock,
-// the backup, central's URL, the Nostr relays, the Base RPC and the batch's max fee, the appearance (System, Light,
+// the backup, the Satori Network's server (central's URL), the Satori relays, the Base RPC and the batch's max fee, the appearance (System, Light,
 // Dark: src/ui/theme.js), and this device (storage, install, update). Each section has an id (#settings-<name>) Home's
 // action card scrolls to.
 import { html } from '@arrow-js/core';
 import { version } from '../../package.json';
 import { state } from './state.js';
 import { form, idRow, unlockPrompt, wordList } from './parts.js';
-import { storageText } from './format.js';
+import { storageText, relayText } from './format.js';
 
 /** Install Satori (Chromium's prompt), or Safari's way to add it; hidden once installed (docs/design/pwa.md). */
 const SAFARI_ADD = 'To keep your keys, add Satori to the Dock (File › Add to Dock) or Home Screen (Share › Add to Home Screen). '
@@ -23,7 +23,7 @@ function keys(a) {
     <div class="key">
       <h3>Identity</h3>
       ${idRow('Address', 'identity', () => state.identity, a)}
-      <p class="muted small">Runs the neuron on its own: signs in to central and sends the daily Base batch. Unencrypted.</p>
+      <p class="muted small">Runs the neuron on its own: signs in to the Satori Network and sends the daily batch to the Satori contract. Unencrypted.</p>
     </div>
     <div class="key">
       <h3>Vault <span class="${() => (state.unlocked ? 'badge on' : 'badge')}" data-test="vault-state">${() => (state.unlocked ? 'Unlocked' : 'Locked')}</span></h3>
@@ -80,11 +80,12 @@ function centralForm(a) {
   return html`
   <section class="card settings-section" id="settings-central">
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
-      <h2>Central</h2>
-      <label>Central URL
+      <h2>Satori Network</h2>
+      <p class="muted small">Where the neuron gets its streams and sends its predictions. Free: sending costs nothing.</p>
+      <label>Satori Network server
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>
-      <p class="muted small">Now: ${() => state.central.url}. Empty: the default, ${() => state.centralDefault}.
+      <p class="muted small">Now: <code data-test="central-url">${() => state.central.url}</code>. Empty: the default, ${() => state.centralDefault}.
         Saving registers there at once.</p>
       <p class="error" role="alert" hidden="${() => !state.settingsError}">${() => state.settingsError}</p>
       <div class="actions"><button class="primary" type="submit">Save</button></div>
@@ -96,12 +97,13 @@ function relaysForm(a) {
   return html`
   <section class="card settings-section" id="settings-relays">
     <form class="fields relays-form" @submit="${(e) => a.saveRelays(form(e), e.target)}">
-      <h2>Nostr relays</h2>
-      <label>Nostr relays (one per line, ws:// or wss://)
+      <h2>Satori relays</h2>
+      <ul class="relays">${() => state.nostr.relays.map((r) => html`<li class="relay" data-test="relay"><code>${r.url}</code><span class="${r.state === 'open' ? 'badge on' : 'badge'}" data-test="relay-state">${relayText(r)}</span></li>`.key(`${r.url} ${r.state} ${r.write}`))}</ul>
+      <label>Your relays (Nostr; one per line, ws:// or wss://)
         <textarea name="relays" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
-      <label class="check"><input name="centralWrite" type="checkbox"> Publish to central's relays</label>
-      <p class="muted small">Central's relays are always read. Unticked, they are read only: the dev server's default,
+      <label class="check"><input name="centralWrite" type="checkbox"> Publish to the Satori Network's relays</label>
+      <p class="muted small">The Satori Network's relays are always read. Unticked, they are read only: the dev server's default,
         so a checkout never writes to the production relay. The relays above are always written to.</p>
       <p class="error" role="alert" hidden="${() => !state.relaysError}">${() => state.relaysError}</p>
       <div class="actions"><button class="primary" type="submit">Save relays</button></div>
@@ -113,11 +115,12 @@ function baseForm(a) {
   return html`
   <section class="card settings-section" id="settings-base">
     <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
-      <h2>Base</h2>
+      <h2>Satori contract</h2>
+      <p class="muted small">The daily batch of predictions on Base. It uses gas: the identity pays each batch in Base ETH.</p>
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>
-      <p class="muted small" title="The default: in a build, central's RPC (sepolia.base.org), then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
+      <p class="muted small" title="The default: in a build, the Satori Network's RPC (sepolia.base.org), then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
         An https:// URL, or a path on this site. Empty: the default (on the dev server, the local test chain). A saved one replaces it.</p>
       <label>Daily batch: max fee (gwei)
         <input name="maxFee" inputmode="decimal" autocomplete="off" placeholder="2">
@@ -125,7 +128,7 @@ function baseForm(a) {
       <p class="muted small">The identity sends the batch on its own; above this max fee per gas it waits for the next check.
         Base's fees are about 0.01 gwei. Empty: 2 gwei.</p>
       <p class="error" role="alert" hidden="${() => !state.baseRpcError}">${() => state.baseRpcError}</p>
-      <div class="actions"><button class="primary" type="submit">Save Base settings</button></div>
+      <div class="actions"><button class="primary" type="submit">Save contract settings</button></div>
     </form>
   </section>`;
 }

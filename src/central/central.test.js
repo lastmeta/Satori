@@ -89,7 +89,7 @@ test('traffic: each request to central and each answer', async () => {
   expect(fired).toHaveLength(2);
   const down = async () => { throw new TypeError('Failed to fetch'); };
   await expect(createCentral({ url: BASE, fetch: down, identity, version: '0.1.0', onTraffic: () => fired.push(1) }).observations())
-    .rejects.toThrow('central unreachable');
+    .rejects.toThrow('Satori Network unreachable');
   expect(fired).toHaveLength(4); // two tries, no answer
 });
 
@@ -114,7 +114,7 @@ describe('register', () => {
     const { fetch } = mockFetch({ 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });
     const err = await client(fetch).register({ vaultPubkey: '03cd' }).catch((e) => e);
     expect(err).toBeInstanceOf(CentralError);
-    expect(err).toMatchObject({ status: 409, detail: 'wallet conflicts', message: 'central 409: wallet conflicts' });
+    expect(err).toMatchObject({ status: 409, detail: 'wallet conflicts', message: 'Satori Network 409: wallet conflicts' });
   });
 });
 
@@ -200,7 +200,7 @@ describe('submitPredictions', () => {
   });
   test('a failed login is the error (signature refused)', async () => {
     const { fetch, calls } = mockFetch({ ...login(), 'POST /api/v1/auth/login': () => json(401, { detail: 'Invalid signature' }) });
-    await expect(client(fetch).submitPredictions([])).rejects.toThrow('central 401: Invalid signature');
+    await expect(client(fetch).submitPredictions([])).rejects.toThrow('Satori Network 401: Invalid signature');
     await expect(client(fetch).submitPredictions([])).rejects.toMatchObject({ status: 401, login: true }); // health: login refused
     expect(paths(calls).slice(0, 2)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/auth/login']);
     expect(calls.filter((c) => c.path === '/api/v1/predictions/batch')).toHaveLength(0);
@@ -217,19 +217,19 @@ describe('transport', () => {
   });
   test('a timeout is a CentralError saying so, after one resend', async () => {
     const fetch = vi.fn(async () => { throw new DOMException('signal timed out', 'TimeoutError'); });
-    await expect(client(fetch).observations()).rejects.toMatchObject({ status: 0, message: 'central timed out (15 s)' });
+    await expect(client(fetch).observations()).rejects.toMatchObject({ status: 0, message: 'Satori Network timed out (15 s)' });
     expect(fetch).toHaveBeenCalledTimes(2);
   });
   test('a body that stalls past the timeout is a timeout too', async () => {
     const fetch = async () => ({ ok: true, status: 200,
       text: async () => { throw new DOMException('signal timed out', 'TimeoutError'); } });
-    await expect(client(fetch).observations()).rejects.toMatchObject({ status: 0, message: 'central timed out (15 s)' });
+    await expect(client(fetch).observations()).rejects.toMatchObject({ status: 0, message: 'Satori Network timed out (15 s)' });
   });
   test('a network TypeError (offline, or an nginx 429/502 with no CORS header) is wrapped, after one resend', async () => {
     const fetch = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
     const err = await client(fetch).observations().catch((e) => e);
     expect(err).toBeInstanceOf(CentralError);
-    expect(err).toMatchObject({ status: 0, message: 'central unreachable: Failed to fetch' });
+    expect(err).toMatchObject({ status: 0, message: 'Satori Network unreachable: Failed to fetch' });
     expect(fetch).toHaveBeenCalledTimes(2);
   });
   test('one network failure, then an answer: the answer', async () => {
@@ -240,7 +240,7 @@ describe('transport', () => {
   });
   test('a non-JSON error body is the detail; a trailing slash on the URL is fine', async () => {
     const { fetch, calls } = mockFetch({ 'GET /api/v1/observations/batch?limit=100': () => new Response('Bad Gateway', { status: 502 }) });
-    await expect(client(fetch, `${BASE}/`).observations()).rejects.toThrow('central 502: Bad Gateway');
+    await expect(client(fetch, `${BASE}/`).observations()).rejects.toThrow('Satori Network 502: Bad Gateway');
     expect(calls[0].path).toBe('/api/v1/observations/batch?limit=100');
   });
 });

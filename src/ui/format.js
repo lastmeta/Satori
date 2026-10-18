@@ -31,13 +31,13 @@ export function registrationText(r) {
   return `No: ${r.error}`;
 }
 
-/** Why central does not pay this vault (register's vault_base_address), or '' (it does, or this central does not say). */
+/** Why the Satori Network does not pay this vault (register's vault_base_address), or '' (it does, or it does not say). */
 export function mismatchText(r) {
   if (!r?.ok || !r.vaultMismatch) return '';
   if (r.vaultMismatch === 'other') {
-    return `Vault mismatch: central pays this vault's rewards to a different Base address, ${r.vault_base_address}, not this vault's ${r.vault}.`;
+    return `Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${r.vault_base_address}, not this vault's ${r.vault}.`;
   }
-  return "Vault mismatch: central kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
+  return "Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
     + ' (this vault may be registered to another neuron).';
 }
 
@@ -96,7 +96,7 @@ export function historyText(h) {
   if (!h) return 'Not yet';
   const wait = h.needed ? `${h.needed} streams wait for the next poll` : '';
   if (h.at == null) return wait || 'Not yet';
-  if (h.retryAt) return `Not on this central (${h.error}); next try ${fmtWhen(h.retryAt)}`;
+  if (h.retryAt) return `No history from the Satori Network yet (${h.error}); next try ${fmtWhen(h.retryAt)}`;
   const done = `${fmtWhen(h.at)} · ${h.streams} streams, ${h.rows.toLocaleString('en-US')} rows`;
   if (h.error) return `${done} · failed: ${h.error}${wait ? `; ${wait}` : ''}`;
   return wait ? `${done} · ${wait}` : done;

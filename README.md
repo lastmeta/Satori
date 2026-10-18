@@ -14,9 +14,16 @@ node scripts/test-relay.mjs 7778     # a local Nostr relay to publish to; withou
 node scripts/fork.mjs start          # a local fork of Base Sepolia (needs Foundry's anvil); without it the Base card says "The chain did not answer"
 ```
 
-Open the app, **Create a new neuron**, and it runs: it registers with central,
-polls it, forecasts, sends its predictions back. AI agents: read
+Open the app, **Create a new neuron**, and it runs: it registers with the
+Satori Network, polls it, forecasts, sends its predictions back. AI agents: read
 [/llms.txt](public/llms.txt); the page exposes `window.satori`.
+
+**Words.** What people see, and what the code calls it
+([intent](docs/intent/ui.md)): the **Satori Network** ("Network") is central,
+free to submit to; the **Satori contract** ("Contract") is the Base
+contracts, which cost gas; the **Satori relays** ("Relays") are the Nostr
+relays. Base is the chain's own name (ETH on Base, Base addresses). This
+README, the design docs and the code keep the code's names.
 
 ## What it does
 
@@ -48,7 +55,8 @@ value as far as its own backtest says it trails it ([engine](docs/design/engine.
 **Home** answers one question at a glance: is the neuron predicting every
 day on its own, and is anything broken? One status (predicting, was asleep,
 needs you, problem), at most one thing to do, the last 14 days, and the
-Central, Base and Network connections; on a computer it is a dashboard with
+Network, Contract and Relays connections (the Satori Network, free; the
+Satori contract, which uses gas; the Satori relays); on a computer it is a dashboard with
 the streams, the wallet and the activity ([health](docs/design/health.md)).
 Streams, Wallet and Settings hold the rest.
 
@@ -75,9 +83,9 @@ follow there:
 node scripts/provider.mjs ws://localhost:7778 demo-walk 60   # a demo stream, a value a minute
 ```
 
-Open **Network streams**, search `demo-walk`, **Subscribe**: the Nostr card
-shows the latest observation and our `_pred`. Tick **Publish to central's
-relays** under Settings to write to satorian too (a build does by default).
+Open **Streams on the relays**, search `demo-walk`, **Subscribe**: the Satori
+relays card shows the latest observation and our `_pred`. Tick **Publish to
+the Satori Network's relays** under Settings to write to satorian too (a build does by default).
 An https deployment needs a `wss://` relay ([issue](docs/issues/relays-not-wss.md)).
 
 **Base.** The dev server's RPC is `/rpc`, proxied to the anvil fork on

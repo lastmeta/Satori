@@ -142,32 +142,32 @@ test('ok, then warn (Stake from the action card, with the inline Unlock), then o
   await expect(page.locator('[data-test=health-line]')).toHaveText(/^Sent 8 predictions just now · next in 11 h$/);
   await expect(page.locator('[data-test=action]')).toBeHidden();
   const chip = (c) => page.locator(`[data-test=chip][data-channel=${c}]`);
-  await expect(chip('central')).toHaveAttribute('data-state', 'ok');
-  await expect(chip('central').locator('[data-test=chip-text]')).toHaveText('8 sent just now');
-  await expect(chip('base')).toHaveAttribute('data-state', 'idle');
-  await expect(chip('base').locator('[data-test=chip-text]')).toHaveText('Not staked');
-  await expect(chip('network').locator('[data-test=chip-text]')).toHaveText('No streams');
+  await expect(chip('network')).toHaveAttribute('data-state', 'ok');
+  await expect(chip('network').locator('[data-test=chip-text]')).toHaveText('8 sent just now');
+  await expect(chip('contract')).toHaveAttribute('data-state', 'idle');
+  await expect(chip('contract').locator('[data-test=chip-text]')).toHaveText('Not staked');
+  await expect(chip('relays').locator('[data-test=chip-text]')).toHaveText('No streams');
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=day].today')).toHaveCount(1);
   await expect(page.locator('[data-test=home-stream]')).toHaveCount(8);
-  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Sent 8 predictions to central' }).first()).toBeVisible();
+  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Sent 8 predictions to the Satori Network' }).first()).toBeVisible();
   await shots(page, 'ok');
   await phoneChecks(page, 390, 844);
   await phoneChecks(page, 360, 740);
   // Poll now with nothing new: nothing to predict or send, so up to date, never "0 sent"
   expect(await page.evaluate(() => window.satori.poll())).toMatchObject({ poll: { new: 0, predicted: 0 }, submit: null });
-  await expect(chip('central').locator('[data-test=chip-text]')).toHaveText('Up to date · next in 11 h');
+  await expect(chip('network').locator('[data-test=chip-text]')).toHaveText('Up to date · next in 11 h');
   await expect(page.locator('[data-test=health-line]')).toHaveText('Up to date · next in 11 h');
-  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Polled central: up to date' })).toHaveCount(1);
+  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Checked the Satori Network: up to date' })).toHaveCount(1);
   await page.setViewportSize({ width: 1280, height: 900 });
 
   // The vault gets SATORI: Base needs one step from the person. One card, one button.
   s.balance[st.vault.address.toLowerCase()] = 100n * E18;
   await page.evaluate(() => window.satori.base());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Central is fine. Base needs one step from you.',
-    action: { id: 'stake', text: "Your vault's SATORI isn't earning on Base. Stake with this neuron.", button: 'Stake', do: 'stake' },
-    channels: { base: { state: 'warn', text: 'Not staked' } } });
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Network is fine. The Satori contract needs one step from you.',
+    action: { id: 'stake', text: "Your vault's SATORI isn't earning on the Satori contract. Stake with this neuron.", button: 'Stake', do: 'stake' },
+    channels: { contract: { state: 'warn', text: 'Not staked' } } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
   await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'stake');
   await expect(page.locator('[data-test=claimable-amount]')).toHaveText('0');
@@ -187,11 +187,11 @@ test('ok, then warn (Stake from the action card, with the inline Unlock), then o
   await expect(page.locator('[data-test=action]')).toBeHidden({ timeout: 30_000 }); // staked: nothing needs the person
   expect(rpc.sent.map((t) => t.functionName)).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower']);
   // the identity's batch, on its own, 10 s after staking
-  await expect(chip('base').locator('[data-test=chip-text]')).toHaveText(`Round ${ROUND} sent`, { timeout: 30_000 });
+  await expect(chip('contract').locator('[data-test=chip-text]')).toHaveText(`Round ${ROUND} sent`, { timeout: 30_000 });
   h = await health(page);
-  expect(h).toMatchObject({ status: 'ok', channels: { base: { state: 'ok', text: `Round ${ROUND} sent` } } });
+  expect(h).toMatchObject({ status: 'ok', channels: { contract: { state: 'ok', text: `Round ${ROUND} sent` } } });
   const texts = h.feed.map((f) => f.text);
-  expect(texts.indexOf(`Base batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Staked with this neuron')); // newest first
+  expect(texts.indexOf(`Satori contract batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Staked with this neuron')); // newest first
 
   // Base's RPC goes down while central is fine: the batch check fails twice, Base is red, and the neuron predicts
   // only in part (it read a red "Predicting"); Home and health() say the same
@@ -200,16 +200,16 @@ test('ok, then warn (Stake from the action card, with the inline Unlock), then o
   await page.evaluate(() => window.satori.predictBase());
   await expect(page.locator('[data-test=health-title]')).toHaveText('Partly predicting');
   await expect(hero(page)).toHaveAttribute('data-s', 'bad');
-  await expect(page.locator('[data-test=health-line]')).toHaveText('Central is fine. The Base batch failed 2 times.');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Network is fine. The Satori contract batch failed 2 times.');
   h = await health(page);
   expect(h).toMatchObject({ status: 'bad', title: 'Partly predicting', action: { id: 'base-failing' },
-    channels: { central: { state: 'ok' }, base: { state: 'bad', text: 'Failed 2 times' } } });
+    channels: { network: { state: 'ok' }, contract: { state: 'bad', text: 'Failed 2 times' } } });
   await shots(page, 'partly');
   await page.unroute('**/rpc');
   await page.evaluate(() => window.satori.base());
 
   // A chip goes to its tab; tabs are hash routes, kept over a reload.
-  await chip('base').click();
+  await chip('contract').click();
   await expect(page).toHaveURL(/#wallet$/);
   await expect(page.locator('[data-test=wallet-tab]')).toBeVisible();
   await expect(page.locator('[data-test=tab-wallet]')).toHaveAttribute('aria-current', 'page');
@@ -230,7 +230,7 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   let h = await health(page);
   expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', action: null, line: 'Closed for 2 days. Catching up now…' });
   await expect(page.locator('[data-test=health-title]')).toHaveText('Was asleep');
-  expect(h.channels.central.text).toBe('Catching up now…');
+  expect(h.channels.network.text).toBe('Catching up now…');
   expect(h.feed).toContainEqual(expect.objectContaining({ level: 'idle', text: 'Satori was closed for 2 d' }));
   expect(h.days.slice(-3).map((d) => [d.code, d.ran])).toEqual([['full', true], ['closed', false], ['closed', true]]);
 
@@ -238,7 +238,7 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   await expect(page.locator('[data-test=health-line]')).toHaveText('Closed for 2 days. Caught up just now.', { timeout: LOAD_TIMEOUT }); // history, bvar
   await expect(hero(page)).toHaveAttribute('data-s', 'idle'); // until the next normal cycle
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting'); // caught up
-  await expect(page.locator('[data-test=chip][data-channel=central]')).toHaveAttribute('data-state', 'ok');
+  await expect(page.locator('[data-test=chip][data-channel=network]')).toHaveAttribute('data-state', 'ok');
   h = await health(page);
   expect(h.feed).toContainEqual(expect.objectContaining({ level: 'ok', text: 'Caught up: sent 8 predictions' }));
   expect(h.days.at(-1).code).toBe('full');
@@ -272,9 +272,9 @@ test('bad: central refuses two batches in a row, then the login; the card goes t
   await page.evaluate(() => window.satori.poll());
   await expect(hero(page)).toHaveAttribute('data-s', 'bad');
   await expect(page.locator('[data-test=health-title]')).toHaveText('Not predicting');
-  await expect(page.locator('[data-test=health-line]')).toHaveText('Central refused the last 2 batches.');
-  await expect(page.locator('[data-test=action-text]')).toHaveText('central 500: boom. Try again now, or check the central address in Settings.');
-  await expect(page.locator('[data-test=chip][data-channel=central] [data-test=chip-text]')).toHaveText('2 failed in a row');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Network refused the last 2 batches.');
+  await expect(page.locator('[data-test=action-text]')).toHaveText("Satori Network 500: boom. Try again now, or check the Satori Network's address in Settings.");
+  await expect(page.locator('[data-test=chip][data-channel=network] [data-test=chip-text]')).toHaveText('2 failed in a row');
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full'); // today's first poll went out
   await shots(page, 'bad');
 
@@ -285,12 +285,12 @@ test('bad: central refuses two batches in a row, then the login; the card goes t
   central.refuseLogin = true;
   await page.evaluate(() => window.satori.poll());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'bad', line: "Central refused this neuron's login.",
+  expect(h).toMatchObject({ status: 'bad', line: "The Satori Network refused this neuron's login.",
     action: { id: 'login-refused', button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' },
-    channels: { central: { state: 'bad', text: 'Login refused' } } });
+    channels: { network: { state: 'bad', text: 'Login refused' } } });
   await page.locator('[data-test=action-button]').click();
   await expect(page).toHaveURL(/#settings$/);
-  await expect(page.getByLabel('Central URL')).toBeInViewport();
+  await expect(page.getByLabel('Satori Network server')).toBeInViewport();
   expect(central.prod).toEqual([]);
 });
 
@@ -302,7 +302,7 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
   const h = await health(page);
   expect(h).toMatchObject({ status: 'idle', title: 'Starting', line: 'Getting its first predictions…', action: null });
-  expect(h.channels.central.text).toBe('First poll now…');
+  expect(h.channels.network.text).toBe('First poll now…');
   expect(h.work).toMatchObject({ task: 'central', step: 'observations', text: "Fetching today's observations…" });
   await expect(page.locator('[data-test=health-line]')).toHaveText("Fetching today's observations…"); // the step it is on
   await expect.poll(() => central.polls).toEqual([1]); // after the register
@@ -328,7 +328,7 @@ test('starting with a vault mismatch: the title says Starting; the mismatch lead
   await start(page);
   await expect(hero(page)).toHaveAttribute('data-s', 'warn'); // registered: the mismatch
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "Central pays this vault's rewards to another address.",
+  expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Network pays this vault's rewards to another address.",
     action: { id: 'vault-mismatch', button: 'Open Settings', do: 'go', tab: 'settings', section: 'keys' } });
   expect(h.reasons.map((r) => r.id)).toEqual(['vault-mismatch', 'starting']);
   await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');
@@ -351,29 +351,29 @@ test("traffic: a chip glows while its channel talks and fades after; the status 
   await start(page);
   await polled(page);
   const chip = (c) => page.locator(`[data-test=chip][data-channel=${c}]`);
-  await expect(chip('central')).not.toHaveAttribute('data-live', { timeout: 15_000 }); // quiet after the first poll
+  await expect(chip('network')).not.toHaveAttribute('data-live', { timeout: 15_000 }); // quiet after the first poll
 
   // A poll: central's stub serves it (held here), so the Central chip glows; its status stays ok.
   const release = central.hold();
   const before = Date.now();
   await page.evaluate(() => void window.satori.poll());
-  await expect(chip('central')).toHaveAttribute('data-live', '');
-  await expect(chip('central')).toHaveAttribute('data-state', 'ok');
+  await expect(chip('network')).toHaveAttribute('data-live', '');
+  await expect(chip('network')).toHaveAttribute('data-state', 'ok');
   const h = await health(page);
-  expect(h.channels.central.lastTraffic).toBeGreaterThanOrEqual(before);
-  expect(h.channels.central.lastTraffic).toBeLessThanOrEqual(Date.now());
-  expect(await chip('central').evaluate((el) => getComputedStyle(el, '::after').opacity)).not.toBe('0'); // fading in or in
+  expect(h.channels.network.lastTraffic).toBeGreaterThanOrEqual(before);
+  expect(h.channels.network.lastTraffic).toBeLessThanOrEqual(Date.now());
+  expect(await chip('network').evaluate((el) => getComputedStyle(el, '::after').opacity)).not.toBe('0'); // fading in or in
   release();
-  await expect.poll(async () => (await health(page)).channels.central.lastTraffic).toBeGreaterThan(h.channels.central.lastTraffic);
-  await expect(chip('central')).not.toHaveAttribute('data-live', { timeout: 10_000 }); // 1.5 s after the last, then the fade
-  await expect.poll(() => chip('central').evaluate((el) => getComputedStyle(el, '::after').opacity)).toBe('0');
+  await expect.poll(async () => (await health(page)).channels.network.lastTraffic).toBeGreaterThan(h.channels.network.lastTraffic);
+  await expect(chip('network')).not.toHaveAttribute('data-live', { timeout: 10_000 }); // 1.5 s after the last, then the fade
+  await expect.poll(() => chip('network').evaluate((el) => getComputedStyle(el, '::after').opacity)).toBe('0');
 
   // Base's RPC (the fake chain behind /rpc) glows the Base chip.
   await page.evaluate(() => window.satori.base());
-  expect((await health(page)).channels.base.lastTraffic).toBeGreaterThanOrEqual(before);
+  expect((await health(page)).channels.contract.lastTraffic).toBeGreaterThanOrEqual(before);
 
   // prefers-reduced-motion: no fades, a still tint.
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await chip('central').evaluate((el) => getComputedStyle(el, '::after').transitionDuration)).toBe('0s');
+  expect(await chip('network').evaluate((el) => getComputedStyle(el, '::after').transitionDuration)).toBe('0s');
   expect(central.prod).toEqual([]);
 });

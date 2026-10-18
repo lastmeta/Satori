@@ -116,7 +116,7 @@ describe('backfillHistory', () => {
     const f = fakeCentral();
     const warn = vi.spyOn(console, 'warn');
     const r = await backfillHistory({ db, central: f.central, now });
-    expect(r).toEqual({ at: T + 0.5, url: BASE, streams: 0, rows: 0, left: 9, error: 'central 404: Not Found', retryAt: T + 0.5 + HISTORY_RETRY_S });
+    expect(r).toEqual({ at: T + 0.5, url: BASE, streams: 0, rows: 0, left: 9, error: 'Satori Network 404: Not Found', retryAt: T + 0.5 + HISTORY_RETRY_S });
     expect(f.calls.length).toBe(HISTORY_CONCURRENCY); // the first ones in flight, nothing after
     expect(warn).not.toHaveBeenCalled();
     clock += HISTORY_RETRY_S - 10;
@@ -152,7 +152,7 @@ describe('backfillHistory', () => {
       : [row(u, T - 100, 'abc'), row(u, null, 5, { ts: null }), row('u-z', T - 50, 5), row(u, T - 3600, 7), { nonsense: true }, null]) });
     const r = await backfillHistory({ db, central: f.central, now });
     // the three are fetched at once: u-a and u-c land, u-b fails and waits for the next run
-    expect(r).toMatchObject({ streams: 2, rows: 2, left: 1, error: 'central 500: boom', retryAt: null });
+    expect(r).toMatchObject({ streams: 2, rows: 2, left: 1, error: 'Satori Network 500: boom', retryAt: null });
     expect(await db.history('u-a')).toEqual([{ ts: T - 3600, value: 7 }, { ts: T, value: 100 }]);
     expect(await db.history('u-z')).toEqual([]);
     expect(await db.needHistory()).toEqual(['u-b']);
@@ -163,7 +163,7 @@ describe('backfillHistory', () => {
   test('not a list: an error, retried next time', async () => {
     await polled(['u-a']);
     const f = fakeCentral({ history: () => json(200, { detail: 'odd' }) });
-    expect(await backfillHistory({ db, central: f.central, now })).toMatchObject({ streams: 0, error: 'central sent no list of observations' });
+    expect(await backfillHistory({ db, central: f.central, now })).toMatchObject({ streams: 0, error: 'the Satori Network sent no list of observations' });
     expect(await db.needHistory()).toEqual(['u-a']);
   });
 
@@ -200,6 +200,6 @@ describe('in the cycle', () => {
     const r = await cycle({ db, central: f.central, now, seed: 'id' });
     expect(r.poll).toMatchObject({ new: 1, predicted: 1 });
     expect(r.submit).toMatchObject({ successful: 1 });
-    expect(await db.get('central_history')).toMatchObject({ error: 'central 404: Not Found', retryAt: T + 0.5 + HISTORY_RETRY_S });
+    expect(await db.get('central_history')).toMatchObject({ error: 'Satori Network 404: Not Found', retryAt: T + 0.5 + HISTORY_RETRY_S });
   });
 });

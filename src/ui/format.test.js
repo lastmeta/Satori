@@ -26,15 +26,15 @@ test('fmtWhen: unix seconds → local month, day and time', () => {
 test('registrationText and mismatchText', () => {
   expect(registrationText(null)).toBe('Registering…');
   expect(registrationText({ ok: true, peer_id: 7 })).toBe('Yes · peer 7');
-  expect(registrationText({ ok: false, error: 'central 409: taken' })).toBe('No: central 409: taken');
+  expect(registrationText({ ok: false, error: 'Satori Network 409: taken' })).toBe('No: Satori Network 409: taken');
   expect(mismatchText(null)).toBe('');
   const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: ours, vaultMismatch: false })).toBe('');
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: null })).toBe(''); // central does not say: unknown
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' }))
-    .toBe(`Vault mismatch: central pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}.`);
+    .toBe(`Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}.`);
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: 'none' }))
-    .toBe("Vault mismatch: central kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
+    .toBe("Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
       + ' (this vault may be registered to another neuron).');
 });
 
@@ -42,12 +42,12 @@ test('pollText and submitText', () => {
   const at = new Date(2026, 9, 15, 14, 3).getTime() / 1000;
   expect(pollText(null)).toBe('Not yet');
   expect(pollText({ at, streams: 83, new: 80, predicted: 80 })).toBe('Oct 15, 14:03 · 83 streams, 80 new, 80 predicted');
-  expect(pollText({ at, error: 'central timed out (15 s)' })).toBe('Oct 15, 14:03 · failed: central timed out (15 s)');
+  expect(pollText({ at, error: 'Satori Network timed out (15 s)' })).toBe('Oct 15, 14:03 · failed: Satori Network timed out (15 s)');
   expect(submitText(null)).toBe('Not yet');
   expect(submitText({ at, total_submitted: 80, successful: 80, failed: 0 })).toBe('Oct 15, 14:03 · 80 of 80 accepted');
   expect(submitText({ at, total_submitted: 2, successful: 0, failed: 2, errors: ['x'] }))
     .toBe('Oct 15, 14:03 · 0 of 2 accepted; kept for the next poll');
-  expect(submitText({ at, error: 'central 500: boom' })).toBe('Oct 15, 14:03 · failed: central 500: boom; kept for the next poll');
+  expect(submitText({ at, error: 'Satori Network 500: boom' })).toBe('Oct 15, 14:03 · failed: Satori Network 500: boom; kept for the next poll');
 });
 
 test('pickIndexes', () => {
@@ -208,14 +208,14 @@ test('modelTitle: bvar with its spec, score and generation; a fallback says what
       + ' · its spec: bvar with eth, gold, λ1 0.2, λ2 0.5, generation 0, until it has 8 aligned 12 h rows');
 });
 
-test('historyText: central\'s history for our streams (the Central card)', () => {
+test('historyText: the Satori Network\'s history for our streams (its card on Streams)', () => {
   const at = Date.UTC(2026, 9, 16, 9, 30) / 1000;
   expect(historyText(null)).toBe('Not yet');
   expect(historyText({ at, streams: 83, rows: 81234, left: 0, error: null, retryAt: null, needed: 0 }))
     .toBe(`${fmtWhen(at)} · 83 streams, 81,234 rows`);
-  expect(historyText({ at, streams: 0, rows: 0, left: 83, error: 'central 404: Not Found', retryAt: at + 86400, needed: 83 }))
-    .toBe(`Not on this central (central 404: Not Found); next try ${fmtWhen(at + 86400)}`);
-  expect(historyText({ at, streams: 2, rows: 10, left: 3, error: 'central 500: boom', retryAt: null, needed: 3 }))
-    .toBe(`${fmtWhen(at)} · 2 streams, 10 rows · failed: central 500: boom; 3 streams wait for the next poll`);
+  expect(historyText({ at, streams: 0, rows: 0, left: 83, error: 'Satori Network 404: Not Found', retryAt: at + 86400, needed: 83 }))
+    .toBe(`No history from the Satori Network yet (Satori Network 404: Not Found); next try ${fmtWhen(at + 86400)}`);
+  expect(historyText({ at, streams: 2, rows: 10, left: 3, error: 'Satori Network 500: boom', retryAt: null, needed: 3 }))
+    .toBe(`${fmtWhen(at)} · 2 streams, 10 rows · failed: Satori Network 500: boom; 3 streams wait for the next poll`);
   expect(historyText({ needed: 5 })).toBe('5 streams wait for the next poll');
 });

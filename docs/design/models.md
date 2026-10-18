@@ -33,9 +33,9 @@ Every model the neuron runs, from what the app already holds:
 
 | Source | Models | Kind | Output | Goes to |
 |---|---|---|---|---|
-| central | one per central stream with a forecast (`db.streams()`) | `bvar`, `bar1`, `bar1d`, `naive` (the latest prediction's) | the stream, 24 h ahead in two 12 h steps (t1, t2) | Central |
-| Base | one per registry stream in the last batch, and each one left out after a forecast (`meta.base_last_batch`) | `bar1`, `bar1d`, `naive` | the stream at its horizon (max(24 h, cadence)) | Base |
-| Nostr | one per subscription with a `_pred` (`nostr.status()`) | `bar1`, `bar1d`, `naive`, `echo` (a value that is not a number, echoed) | `<stream>_pred`, one cadence ahead | Network |
+| central | one per central stream with a forecast (`db.streams()`) | `bvar`, `bar1`, `bar1d`, `naive` (the latest prediction's) | the stream, 24 h ahead in two 12 h steps (t1, t2) | Network (the Satori Network, `network`) |
+| Base | one per registry stream in the last batch, and each one left out after a forecast (`meta.base_last_batch`) | `bar1`, `bar1d`, `naive` | the stream at its horizon (max(24 h, cadence)) | Contract (the Satori contract, `contract`) |
+| Nostr | one per subscription with a `_pred` (`nostr.status()`) | `bar1`, `bar1d`, `naive`, `echo` (a value that is not a number, echoed) | `<stream>_pred`, one cadence ahead | Relays (the Satori relays, `relays`) |
 
 A model's id is `<source>:<key>`: `central:<stream uuid>`, `base:<stream
 id>`, `nostr:<relay stream uuid>`.
@@ -61,14 +61,15 @@ model).
       direction: 'up' | 'down' | 'flat' | null,
       influence: [{ stream, name, share }],             // largest first; sums to 1 (null shares: not kept yet)
       quality,
-      destinations: [{ to: 'central' | 'base' | 'network', status, when, ref }] }],
+      destinations: [{ to: 'network' | 'contract' | 'relays', status, when, ref }] }],
   // central's, as models() gave them before: uuid, model, spec { companions: [{ uuid, name }], lambda1, lambda2 }, score, generation, accepted
 }
 quality = { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange,
             text }   // the mark in words: "7% better", "Same as no change", "12% worse", "Not scored yet"
-destinations: central { status: 'accepted' | 'pending', ref: null }
-              base    { status: 'sent' | 'left out', ref: { round, game, direction, tx, error? } }
-              network { status: 'published' | 'waiting', ref: { stream, seq, relays } }
+destinations: network  { status: 'accepted' | 'pending', ref: null }                        // the Satori Network (central)
+              contract { status: 'sent' | 'left out', ref: { round, game, direction, tx, error? } } // the Satori contract (Base)
+              relays   { status: 'published' | 'waiting', ref: { stream, seq, relays } }         // the Satori relays (Nostr)
+// (until 2026-10-18 the destinations were 'central' | 'base' | 'network': renamed to the words people see)
 ```
 
 ## Quality: against no change
@@ -240,9 +241,9 @@ stream, as chips by influence ("+eth +gold"); the values labelled, "Now
 3,153.92 · in 24 h 3,141.01 ↓", the horizon the model's own (24 h, 1 h,
 a day), the arrow after the forecast saying which way it goes from now (on
 a phone, two short lines: "Now 3,153.92" and "in 24 h 3,141.01 ↓"); where
-its predictions go, as tiny text tags in the chip style ("Central",
-"Base", "Network": the pictograms they replaced were unreadable). Above it, on the left, the
-filters **All · Central · Base · Network** (with counts); on the right a
+its predictions go, as tiny text tags in the chip style ("Network",
+"Contract", "Relays": the pictograms they replaced were unreadable). Above it, on the left, the
+filters **All · Network · Contract · Relays** (with counts); on the right a
 borderless **Sort** with a sort icon (three stacked lines) that shows its
 choice subtly ("Sort: Quality"). Tapping it opens a small menu, **Quality**
 and **Name**, with a check on the current choice (quality: the lowest ratio
@@ -265,8 +266,8 @@ is** in plain words (`kindLabel`): "Bayesian VAR · reads 3 streams",
 "Single-stream AR (bar1)", "Single-stream AR on changes (bar1d)", "No
 change · not enough history yet", "Echo · the value is not a number"; a
 model of several algorithms (`algorithms` is a list) would read "Ensemble ·
-3 algorithms". Beside the name, its mark in words. Then the source ("Central
-stream"). Top to bottom, joined by short arrows:
+3 algorithms". Beside the name, its mark in words. Then the source ("Satori
+Network stream"). Top to bottom, joined by short arrows:
 
 - **In**: each input with its share as a bar, ranked; for a model of several
   outputs, a choice of whose inputs.
@@ -283,9 +284,9 @@ stream"). Top to bottom, joined by short arrows:
   coefficients (or φ), the fade weight, the median error and no change's,
   rows and backtests.
 - **Out**: per output: the forecast (t1 and t2, or the one value), the
-  latest value, a chart, and where it went: Central ("Accepted Oct 18,
-  16:23", or "Pending since …"), Base ("Round 20743 · UP · tx 0xab…cd",
-  linked to the explorer; or "left out: …"), Network ("`btc_pred` #12 · 2
+  latest value, a chart, and where it went: Network ("Accepted Oct 18,
+  16:23", or "Pending since …"), Contract ("Round 20743 · UP · tx 0xab…cd",
+  linked to the explorer; or "left out: …"), Relays ("`btc_pred` #12 · 2
   relays").
 
 **Computed on demand** (`modelDetail`): the stored spec and the stored
@@ -343,7 +344,7 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
 - `data-test`: `models-tab`, `engine` (`data-tone`), `engine-title`,
   `engine-line`, `engine-kinds`, `engine-quality` (the bar's legend: its items `.qleg`, its `aria-label` the
   whole line), `engine-median`, `engine-note`,
-  `models-filter-<all|central|base|network>`, `models-sort` (the Sort button, `aria-expanded`),
+  `models-filter-<all|network|contract|relays>`, `models-sort` (the Sort button, `aria-expanded`),
   `models-sort-menu`, `models-sort-<quality|name>` (its items, `aria-checked`),
   `models`, `model-row` (`data-id`, `data-mark`) with `model-mark` (the words; `data-short`: the phone's),
   `model-name`, `model-kind`, `model-inputs`, `model-forecast`, `model-to`;

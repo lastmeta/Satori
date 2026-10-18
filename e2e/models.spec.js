@@ -122,7 +122,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   expect(kinds.filter((k) => k === 'bvar').length).toBeGreaterThanOrEqual(6); // history loaded: most are bvar
   for (const m of list) {
     expect(m).toMatchObject({ id: `central:${m.uuid}`, source: 'central', outputs: [{ stream: m.uuid, name: m.name,
-      destinations: [{ to: 'central', status: 'accepted' }] }] });
+      destinations: [{ to: 'network', status: 'accepted' }] }] });
     expect(m.quality.mark).toMatch(/^(better|tie|worse)$/);
     if (m.kind === 'bvar') expect(m.outputs[0].influence.reduce((x, i) => x + i.share, 0)).toBeCloseTo(1, 9);
   }
@@ -181,7 +181,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   // An open drill-in follows the model: the next `_pred` shows in its Out without reopening it.
   const rainId = (await models(page)).find((m) => m.source === 'nostr').id;
   await page.evaluate((id) => window.satori.go(`models/${id}`), rainId);
-  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Network\s*e2e-models-\w+_pred #16 · 1 relay$/);
+  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Relays\s*e2e-models-\w+_pred #16 · 1 relay$/);
   await page.waitForTimeout(1050);
   await provider.observe({ stream, value: '14', seq: 17, timestamp: t0 + 16 * H });
   await expect(page.locator('[data-test=model-destination]')).toHaveText(/_pred #17 · 1 relay$/, { timeout: 60_000 });
@@ -191,20 +191,20 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   list = await models(page);
   const rain = list.find((m) => m.source === 'nostr');
   expect(rain).toMatchObject({ name: 'Rain gauge', kind: 'bar1', outputs: [{ as: `${stream}_pred`, forecast: { horizon: 3600 },
-    destinations: [{ to: 'network', status: 'published', ref: { stream: `${stream}_pred`, seq: 17, relays: 1 } }] }] });
+    destinations: [{ to: 'relays', status: 'published', ref: { stream: `${stream}_pred`, seq: 17, relays: 1 } }] }] });
   expect(rain.quality.mark).not.toBeNull();
   const base = list.filter((m) => m.source === 'base');
   expect(base.map((m) => [m.id, m.name, m.kind])).toEqual([['base:1', 'Stream 1', 'naive'], ['base:3', 'Stream 3', 'bar1']]);
-  expect(base[1].outputs[0].destinations[0]).toMatchObject({ to: 'base', status: 'sent', ref: { round: ROUND, tx: expect.stringMatching(/^0x/) } });
+  expect(base[1].outputs[0].destinations[0]).toMatchObject({ to: 'contract', status: 'sent', ref: { round: ROUND, tx: expect.stringMatching(/^0x/) } });
 
   // Filter by where the predictions go; sort by quality or name.
-  await page.locator('[data-test=models-filter-base]').click();
+  await page.locator('[data-test=models-filter-contract]').click();
   expect(await names(page)).toEqual(['Stream 1', 'Stream 3']);
-  await expect(page.locator('[data-test=models-filter-base] .n')).toHaveText('2');
-  await page.locator('[data-test=models-filter-network]').click();
+  await expect(page.locator('[data-test=models-filter-contract] .n')).toHaveText('2');
+  await page.locator('[data-test=models-filter-relays]').click();
   expect(await names(page)).toEqual(['Rain gauge']);
   await expect(rows(page).locator('.mname small')).toHaveText(`→ ${stream}_pred`);
-  await page.locator('[data-test=models-filter-central]').click();
+  await page.locator('[data-test=models-filter-network]').click();
   await expect(rows(page)).toHaveCount(8);
   await page.locator('[data-test=models-filter-all]').click();
   // Sort: the filters stay on the left; on the right a borderless "Sort" with its current choice, a menu of two with a
@@ -255,7 +255,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await expect(goldRow.locator('.ichip')).toHaveText(gold.outputs[0].influence.filter((i) => i.stream !== gold.uuid).map((i) => `+${i.name}`));
   }
   // where it goes, in words; its quality in words; its values labelled (now, and in 24 h, the arrow after it)
-  await expect(goldRow.locator('[data-test=model-to] .tag')).toHaveText(['Central']);
+  await expect(goldRow.locator('[data-test=model-to] .tag')).toHaveText(['Network']);
   await expect(goldRow.locator('[data-test=model-mark]')).toHaveText(gold.quality.text);
   for (const t of await rows(page).locator('[data-test=model-mark]').allTextContents()) {
     expect(t).toMatch(/^(\d+% better|Same as no change|\d+% worse|Worse|Not scored yet)$/);
@@ -290,7 +290,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(page.locator('[data-test=model-details]')).toContainText(`${bvar.spec.lambda1}, ${bvar.spec.lambda2}`);
   await expect(page.locator('[data-test=model-output]')).toHaveCount(1);
   await expect(page.locator('[data-test=model-output-name]')).toHaveText(bvar.name);
-  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Central\s*Accepted /);
+  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Network\s*Accepted /);
   await expect(page.locator('[data-test=model-chart] path.hist')).toHaveAttribute('d', /^M[\d.]+ [\d.]+( L[\d.]+ [\d.]+){10,}$/);
   await expect(page.locator('[data-test=model-endpoint]')).toBeVisible();
   // the agent's drill-in: the same, recomputed on demand, cheap
@@ -328,7 +328,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await expect(page.locator('[data-test=model-output]')).toHaveCount(1);
     await fits(page, `a drill-in at ${w} px`);
     await page.evaluate((id) => window.satori.go(`models/${id}`), base[1].id);
-    await expect(page.locator('[data-test=model-destination]')).toHaveText(/Base\s*Round \d+ · (UP|DOWN) · tx 0x/);
+    await expect(page.locator('[data-test=model-destination]')).toHaveText(/Contract\s*Round \d+ · (UP|DOWN) · tx 0x/);
     await fits(page, `a Base drill-in at ${w} px`);
     await page.evaluate((id) => window.satori.go(`models/${id}`), base[0].id);
     await expect(page.locator('[data-test=model-kind-label]')).toHaveText('No change · not enough history yet');
