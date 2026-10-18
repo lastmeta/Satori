@@ -29,6 +29,15 @@ it in walls of text.
   It's the neuron's pipeline (extract, transform, load), told without a
   canvas. The Streams tab stays for now and may later become "streams I
   publish".
+- **Words people see (owner, 2026-10-18).** People don't think about servers.
+  - Central is the **Satori Network** ("Network" for short). It is free to
+    submit to.
+  - Nostr is the **Satori relays**, named only where detail is needed.
+  - Base is the **Satori contract**. It costs gas, so people need to know it
+    is separate.
+
+  Code identifiers keep their names. Later, central may simply read the
+  relays, and the Satori Network and the relays become one thing.
 - Healthy is green, never gray. Three shades on one scale:
   - "sky green" (lighter, softer) when all is well and the neuron is waiting,
     reached by a slow fade over minutes;
