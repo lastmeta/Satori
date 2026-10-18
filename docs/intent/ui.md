@@ -38,6 +38,10 @@ it in walls of text.
 
   Code identifiers keep their names. Later, central may simply read the
   relays, and the Satori Network and the relays become one thing.
+- **Icons over words, but only when they're instantly understood.** An icon
+  stands alone only if its meaning is obvious, or if the same icon is paired
+  with its word somewhere nearby (a filter, a header). If it's at all
+  ambiguous, use the word.
 - Healthy is green, never gray. Three shades on one scale:
   - "sky green" (lighter, softer) when all is well and the neuron is waiting,
     reached by a slow fade over minutes;
