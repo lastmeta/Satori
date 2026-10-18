@@ -228,9 +228,18 @@ Each row, scannable without reading: the mark and its number; the name (a
 Nostr model also "→ `<stream>_pred`"); the kind as a chip; the inputs it
 reads besides the stream, as chips by influence ("+eth +gold"); the latest
 value → the forecast with an arrow (↑ ↓ →); small icons for where its
-predictions go (Central, Base, Network). Above it: **All · Central · Base ·
-Network** (with counts) and **Quality · Name** (quality: the lowest ratio
-first, not scored last). A computer shows a dense table; a phone shows each
+predictions go (Central, Base, Network). Above it, on the left, the
+filters **All · Central · Base · Network** (with counts); on the right a
+borderless **Sort** with a sort icon (three stacked lines) that shows its
+choice subtly ("Sort: Quality"). Tapping it opens a small menu, **Quality**
+and **Name**, with a check on the current choice (quality: the lowest ratio
+first, not scored last). It is WAI-ARIA's menu button: the current choice
+is focused when it opens, the arrows (and Home, End) move, Enter or a tap
+chooses, Escape closes back to the button, Tab or a tap elsewhere closes;
+the button and each item are 44 px tall. The choice is kept on this device
+(`localStorage` `satori-models-sort`, read and written in try/catch as the
+theme is, `src/ui/prefs.js`). (It was two segmented buttons, Quality ·
+Name, which the owner did not read as a sort.) A computer shows a dense table; a phone shows each
 row in two lines (the name and where it goes; the kind, the inputs and the
 values, wrapping, never cut). A tap opens the drill-in; the back link
 returns to the list where it was.
@@ -304,7 +313,8 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
   `#models/<id>`.
 - `data-test`: `models-tab`, `engine` (`data-tone`), `engine-title`,
   `engine-line`, `engine-kinds`, `engine-quality`, `engine-median`, `engine-note`,
-  `models-filter-<all|central|base|network>`, `models-sort-<quality|name>`,
+  `models-filter-<all|central|base|network>`, `models-sort` (the Sort button, `aria-expanded`),
+  `models-sort-menu`, `models-sort-<quality|name>` (its items, `aria-checked`),
   `models`, `model-row` (`data-id`, `data-mark`) with `model-mark`,
   `model-name`, `model-kind`, `model-inputs`, `model-forecast`, `model-to`;
   `models-empty`; the drill-in `model-detail`, `model-back`, `model-title`,
@@ -369,7 +379,12 @@ agent API reads the tab's state instead of every stream's row again
   Out with its chart and Central's acceptance) and `model(id)` against the
   list, back to the list where it was, a Base drill-in, a deep link over a
   reload, an unknown id; at 390 and 360 px nothing scrolls sideways and every
-  tap target is 44 px. `e2e/home.spec.js` checks the Models tab on the phone
+  tap target is 44 px; the Sort menu: the filters on the left and Sort on
+  the right, open (the current choice checked and focused), the arrows,
+  Enter, Escape back to the button, a tap outside, the choice kept over a
+  reload, its items 44 px on the phone. `src/ui/prefs.test.js`: the kept
+  choice (storage blocked: the default) and the menu's keys.
+  `e2e/home.spec.js` checks the Models tab on the phone
   with the others. `e2e/train.spec.js`: a neuron whose stored specs lost
   their scores (cleared through the e2e store page, as a version before
   migration 11 left them) opens to "Scoring models · k of 8" on Home and
@@ -404,7 +419,12 @@ has gaps):
 
 From `e2e/models.spec.js` (`SHOTS=1`): the list and a bvar drill-in, on a
 phone (390 px; the drill-in whole) and a computer (1280 px), light and dark:
-`docs/screenshots/models-{list,drill}-{phone,desktop}-{light,dark}.png`.
+`docs/screenshots/models-{list,drill}-{phone,desktop}-{light,dark}.png`;
+the Sort menu open on a phone, `models-sort-phone-{light,dark}.png`.
+
+The Sort menu open on a phone, light and dark:
+
+<img src="../screenshots/models-sort-phone-light.png" alt="the Sort menu open, phone, light" width="200"> <img src="../screenshots/models-sort-phone-dark.png" alt="the Sort menu open, phone, dark" width="200">
 
 <img src="../screenshots/models-list-phone-light.png" alt="the list, phone, light" width="200"> <img src="../screenshots/models-list-phone-dark.png" alt="the list, phone, dark" width="200"> <img src="../screenshots/models-drill-phone-light.png" alt="a drill-in, phone, light" width="200"> <img src="../screenshots/models-drill-phone-dark.png" alt="a drill-in, phone, dark" width="200">
 

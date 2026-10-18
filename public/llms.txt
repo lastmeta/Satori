@@ -919,7 +919,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`. Models:
   `engine` (`data-tone`), `engine-title`, `engine-line`, `engine-kinds`,
   `engine-quality`, `engine-median`, `engine-note`, `models-filter-<all|central|base|network>`,
-  `models-sort-<quality|name>` (`aria-pressed`), `models` (the list) with
+  `models-sort` (the Sort button: opens a menu, `aria-expanded`), `models-sort-menu`,
+  `models-sort-<quality|name>` (its items, `aria-checked`; the choice is kept on this device), `models` (the list) with
   `model-row` (`data-id`, `data-mark`: better, tie, worse or none) and inside
   it `model-mark`, `model-name`, `model-kind`, `model-inputs`,
   `model-forecast`, `model-to`; `models-empty`; the drill-in `model-detail`,

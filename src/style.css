@@ -362,6 +362,23 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 .q b { font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .q[data-q="none"] b { color: var(--muted); font-weight: 500; }
 .mcontrols { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0 12px; }
+/* Sort: a borderless text button on the right, its choice subtle; a small menu under it, a check on the current one */
+.msort { position: relative; margin-left: auto; }
+.sortbtn { border: 0; background: none; min-height: 44px; padding: 0 4px 0 8px; display: inline-flex; align-items: center; gap: 6px;
+  color: var(--text); font-size: 0.88rem; font-weight: 600; }
+.sortbtn:hover { color: var(--accent); }
+.sortv { color: var(--muted); font-weight: 500; }
+.sorti, .sortitem::before { width: 16px; height: 16px; flex: none; background: currentColor;
+  -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
+.sorti { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M2.5 4h11M2.5 8h7.5M2.5 12h4'/%3E%3C/svg%3E"); }
+.sortmenu { position: absolute; right: 0; top: calc(100% + 2px); z-index: 20; min-width: 170px; display: grid; padding: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px rgb(0 0 0 / 0.18); }
+.sortitem { border: 0; background: none; min-height: 44px; width: 100%; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+  border-radius: 8px; text-align: left; font-size: 0.92rem; color: var(--text); }
+.sortitem::before { content: ""; --i: var(--i-check); color: var(--accent); visibility: hidden; }
+.sortitem[aria-checked="true"] { font-weight: 600; }
+.sortitem[aria-checked="true"]::before { visibility: visible; }
+.sortitem:hover, .sortitem:focus-visible { background: var(--accent-soft); outline: none; }
 .mcontrols .segmented { margin: 0; gap: 6px; }
 .segmented .n { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 .mlist { padding-top: 4px; padding-bottom: 4px; }

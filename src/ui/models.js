@@ -8,6 +8,7 @@ import { state } from './state.js';
 import { summaryOf, engineStatus, sortModels, filterModels } from '../neuron/models.js';
 import { rowView, statusView, drillView, chartOf } from './drill.js';
 import { fmtNum, fmtWhen } from './format.js';
+import { menuKey } from './prefs.js';
 
 /** The models (models()) and the open model (model(id)), set by main.js. */
 export const box = { list: [], detail: null };
@@ -75,11 +76,50 @@ function status() {
   </section>`;
 }
 
+// ── the Sort menu: a menu button (WAI-ARIA), its items the choices with a check on the current one ──
+const sortItems = () => [...document.querySelectorAll('[data-test=models-sort-menu] [role=menuitemradio]')];
+const sortButton = () => document.querySelector('[data-test=models-sort]');
+/** Open it, the current choice focused (after it is drawn). */
+function openSort() {
+  state.sortOpen = true;
+  requestAnimationFrame(() => (sortItems().find((el) => el.getAttribute('aria-checked') === 'true') ?? sortItems()[0])?.focus());
+}
+/** Close it; `restore`: focus back on the button (Escape, a choice), not when focus moved on (Tab, a tap elsewhere). */
+function closeSort(restore = false) {
+  if (!state.sortOpen) return;
+  state.sortOpen = false;
+  if (restore) sortButton()?.focus();
+}
+function sortKeys(e) {
+  const items = sortItems();
+  const i = items.indexOf(e.target);
+  if (i < 0) { // on the button: the arrows open it too
+    if (['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); openSort(); }
+    return;
+  }
+  const k = menuKey(e.key, i, items.length);
+  if (!k) return;
+  if (k.focus != null) { e.preventDefault(); items[k.focus].focus(); }
+  if (k.close) {
+    if (k.restore) e.preventDefault();
+    closeSort(k.restore);
+  }
+}
+// a tap anywhere else closes it
+globalThis.document?.addEventListener('pointerdown', (e) => {
+  if (state.sortOpen && !e.target.closest?.('.msort')) closeSort();
+});
+
+function sortMenu(a) {
+  const current = () => SORTS.find(([k]) => k === state.modelSort)?.[1] ?? SORTS[0][1];
+  return html`<div class="msort" @keydown="${sortKeys}"><button class="sortbtn" data-test="models-sort" aria-haspopup="menu" aria-controls="models-sort-menu" aria-expanded="${() => String(state.sortOpen)}" @click="${() => (state.sortOpen ? closeSort(true) : openSort())}"><i class="sorti" aria-hidden="true"></i><span>Sort<span class="sortv">${() => `: ${current()}`}</span></span></button><div class="sortmenu" id="models-sort-menu" role="menu" aria-label="Sort the models by" data-test="models-sort-menu" hidden="${() => !state.sortOpen}">${SORTS.map(([k, word]) => html`<button class="sortitem" role="menuitemradio" tabindex="-1" data-test="${`models-sort-${k}`}" aria-checked="${() => String(state.modelSort === k)}" @click="${() => { a.setModelView({ sort: k }); closeSort(true); }}">${word}</button>`)}</div></div>`;
+}
+
 function controls(a) {
   return html`
   <div class="mcontrols">
     <div class="segmented" role="group" aria-label="Show the models whose predictions go to">${FILTERS.map(([k, word]) => html`<button class="small-btn" data-test="${`models-filter-${k}`}" aria-pressed="${() => String(state.modelFilter === k)}" @click="${() => a.setModelView({ filter: k })}">${word} <span class="n">${() => count(k)}</span></button>`)}</div>
-    <div class="segmented" role="group" aria-label="Sort the models by">${SORTS.map(([k, word]) => html`<button class="small-btn" data-test="${`models-sort-${k}`}" aria-pressed="${() => String(state.modelSort === k)}" @click="${() => a.setModelView({ sort: k })}">${word}</button>`)}</div>
+    ${sortMenu(a)}
   </div>`;
 }
 

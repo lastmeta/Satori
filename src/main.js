@@ -33,6 +33,7 @@ import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
+import { writePref, SORT_KEY } from './ui/prefs.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
@@ -581,9 +582,13 @@ const actions = {
     if (fromList) history.back();
     else go('models');
   },
+  /** The Models list's filter (where predictions go) and sort; the sort is kept on this device. */
   setModelView({ filter, sort }) {
     if (filter) state.modelFilter = filter;
-    if (sort) state.modelSort = sort;
+    if (sort) {
+      state.modelSort = sort;
+      writePref(SORT_KEY, sort);
+    }
   },
   /** Streams: a stream's detail (its trend, its model, its latest predictions), or none (''). */
   async openStream(uuid) {

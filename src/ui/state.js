@@ -1,6 +1,7 @@
 // The UI's one reactive state (ArrowJS). main.js and src/pwa/ write it; the screens read it.
 import { reactive } from '@arrow-js/core';
 import { themeOf } from './theme.js';
+import { readPref, SORT_KEY } from './prefs.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | setup | finish (an earlier version's vault: Unlock once) | home
@@ -38,7 +39,8 @@ export const state = reactive({
   networkLine: '', // discover or subscribe, once it lasts a second
   // Models (docs/design/models.md): the list and the open model live in src/ui/models.js's box; these say they changed
   modelsRev: 0,
-  modelSort: 'quality', // quality | name
+  modelSort: readPref(SORT_KEY, ['quality', 'name'], 'quality'), // quality | name: this device's choice (src/ui/prefs.js)
+  sortOpen: false, // the Sort menu is open
   modelFilter: 'all', // all | central | base | network: where the predictions go
   modelOpen: '', // the drill-in's model id (#models/<id>), or ''
   modelRev: 0,

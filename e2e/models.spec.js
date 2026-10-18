@@ -1,8 +1,8 @@
 // The Models tab (docs/design/models.md) in Chrome: a neuron with central's 8 streams (600 hours of history each, so
 // most models are bvar), staked on a fake chain (its Base batch: a model per registry stream) and subscribed to a
 // stream on a test relay (its `_pred`: a Network model). The engine's status, the list, filter and sort, a model's
-// drill-in (#models/<id>) and back, a deep link, the agent API, the phone's width (nothing scrolls sideways, tap
-// targets of 44 px), and the screenshots (SHOTS=1 writes them to docs/screenshots/models-*.png; else to the test's output).
+// drill-in (#models/<id>) and back, a deep link, the Sort menu (kept over a reload), the agent API, the phone's width
+// (nothing scrolls sideways, tap targets of 44 px), and the screenshots (SHOTS=1 writes them to docs/screenshots/models-*.png; else to the test's output).
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
@@ -203,12 +203,46 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await page.locator('[data-test=models-filter-central]').click();
   await expect(rows(page)).toHaveCount(8);
   await page.locator('[data-test=models-filter-all]').click();
-  await page.locator('[data-test=models-sort-name]').click();
+  // Sort: the filters stay on the left; on the right a borderless "Sort" with its current choice, a menu of two with a
+  // check on the current one, by keyboard (arrows, Enter, Escape back to the button) or a tap.
+  const sortBtn = page.locator('[data-test=models-sort]');
+  const menu = page.locator('[data-test=models-sort-menu]');
+  await expect(sortBtn).toHaveText('Sort: Quality');
+  await expect(sortBtn).toHaveAttribute('aria-expanded', 'false');
+  await expect(menu).toBeHidden();
+  const box = (l) => l.boundingBox();
+  const [filters, listBox, sortBox] = [await box(page.locator('.mcontrols .segmented')), await box(page.locator('[data-test=models]')), await box(sortBtn)];
+  expect(Math.abs(filters.x - listBox.x)).toBeLessThan(2); // the filters on the left
+  expect(Math.abs(sortBox.x + sortBox.width - (listBox.x + listBox.width))).toBeLessThan(10); // Sort on the right
+  await sortBtn.click();
+  await expect(menu).toBeVisible();
+  await expect(sortBtn).toHaveAttribute('aria-expanded', 'true');
+  await expect(menu.locator('[role=menuitemradio]')).toHaveText(['Quality', 'Name']);
+  await expect(page.locator('[data-test=models-sort-quality]')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('[data-test=models-sort-name]')).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('[data-test=models-sort-quality]')).toBeFocused(); // the current choice
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('[data-test=models-sort-name]')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect(sortBtn).toBeFocused();
+  await expect(sortBtn).toHaveText('Sort: Name');
   expect(await names(page)).toEqual(list.map((m) => m.name).sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base', numeric: true })));
+  await page.keyboard.press('ArrowDown'); // on the button: opens it
+  await expect(page.locator('[data-test=models-sort-name]')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(sortBtn).toBeFocused();
+  await expect(sortBtn).toHaveText('Sort: Name'); // Escape changes nothing
+  await sortBtn.click();
   await page.locator('[data-test=models-sort-quality]').click();
+  await expect(sortBtn).toHaveText('Sort: Quality');
   const order = { better: 0, tie: 1, worse: 2, none: 3 };
   const shown = await rows(page).evaluateAll((els) => els.map((e) => e.dataset.mark));
   expect(shown).toEqual([...shown].sort((a, b) => order[a] - order[b]));
+  await sortBtn.click();
+  await page.locator('[data-test=engine-title]').click(); // a tap outside closes it
+  await expect(menu).toBeHidden();
   // a row: its kind, its companions as chips, latest → forecast, where it goes
   const gold = list.find((m) => m.name === 'gold');
   const goldRow = rows(page).filter({ has: page.locator('[data-test=model-name]', { hasText: /^gold$/ }) });
@@ -273,11 +307,31 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await fits(page, `a Base drill-in at ${w} px`);
   }
 
+  // The Sort menu open on the phone: its items are 44 px tap targets; light and dark.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => window.satori.go('models'));
+  await sortBtn.click();
+  await expect(menu).toBeVisible();
+  await fits(page, 'the sort menu open at 390 px');
+  const dir = process.env.SHOTS ? 'docs/screenshots' : test.info().outputPath();
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${dir}/models-sort-phone-${scheme}.png` });
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.locator('[data-test=models-sort-name]').click(); // kept on this device: the reload below still sorts by name
+  await expect(menu).toBeHidden();
+
   // A deep link survives a reload; an unknown model says so.
   await page.evaluate((id) => window.satori.go(`models/${id}`), rain.id);
   await reloadApp(page);
   await expect(page.locator('[data-test=model-title]')).toHaveText('Rain gauge', { timeout: LOAD_TIMEOUT });
   await expect(page.locator('[data-test=model-output] .ohead small')).toHaveText(`published as ${stream}_pred`);
+  // the sort chosen before the reload, kept on this device
+  await page.evaluate(() => window.satori.go('models'));
+  await expect(sortBtn).toHaveText('Sort: Name');
+  expect(await names(page)).toEqual(list.map((m) => m.name).sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base', numeric: true })));
   await page.evaluate(() => window.satori.go('models/central:nope'));
   await expect(page.locator('[data-test=model-error]')).toHaveText(/^No such model: central:nope/);
   expect(await page.evaluate(() => window.satori.model('central:nope'))).toBeNull();
