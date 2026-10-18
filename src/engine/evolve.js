@@ -5,10 +5,11 @@
 //
 //   runModels({ fresh, histories, specs, seed }) → { forecasts: Map(uuid → forecast), specs: Map(uuid → row) }
 //   runModelsAsync({ …, onProgress }): the same, with the page's turns between targets (the poll's)
+//   explainModel({ target, spec, histories }) → the stored spec's forecast with its fit and backtest (the Models tab's)
 import { sha256 } from '@noble/hashes/sha2';
 import { utf8ToBytes } from '@noble/hashes/utils';
-import { STEP_S, MIN_EXTRA_ROWS, MIN_SAMPLES, HOLDOUT, forecast as bar1, median } from './index.js';
-import { prepare, backtestOf, errorsAt, forecastSpec, inPool } from './bvar.js';
+import { STEP_S, MIN_EXTRA_ROWS, MIN_SAMPLES, HOLDOUT, forecast as bar1, explainForecast, median } from './index.js';
+import { prepare, backtestOf, errorsAt, forecastSpec, fitSums, influence, inPool } from './bvar.js';
 
 export const LAMBDA1_GRID = [0.05, 0.1, 0.2, 0.5]; // namaste_club's tuner (models.py:589)
 export const LAMBDA2_GRID = [0.25, 0.5, 1.0]; // models.py:590
@@ -97,7 +98,9 @@ export const accepts = (champion, challenger, margin = MARGIN) => challenger < c
  * @param {{fresh: string[], histories: Map<string, {ts: number, value: number}[]>, specs?: Map<string, object>,
  *   seed: string, step?: number, margin?: number, window?: number}} o histories: every central stream's; seed: the
  *   identity's public key; window: the backtest origins a spec is scored on (the fade uses the last HOLDOUT of them)
- * @returns {{forecasts: Map<string, object>, specs: Map<string, {spec, score, generation, accepted}>}}
+ * @returns {{forecasts: Map<string, object>, specs: Map<string, {spec, score, persist, influence, generation, accepted}>}}
+ *   score: the champion's median backtest error; persist: no change's on the same origins (both null below 5);
+ *   influence: for a bvar forecast, each input's share of it, [target, ...companions] (else null)
  */
 export function runModels(o) {
   const run = models(o);
@@ -168,7 +171,9 @@ function* models({ fresh, histories, specs = new Map(), seed, step = STEP_S, mar
     const f = forecastSpec(T, spec.companions.map(series), spec, run.acc, recent(run.errors), recent(bt.persist))
       ?? bar1(histories.get(target), { step });
     if (f) forecasts.set(target, { ...f, proposal, repaired });
-    out.set(target, { spec, score, generation, accepted });
+    const persist = score === null ? null : median(bt.persist);
+    const shares = f?.model === 'bvar' ? influence(fitSums(run.acc, spec.lambda1, spec.lambda2), run.acc) : null;
+    out.set(target, { spec, score, persist, influence: shares, generation, accepted });
   };
   for (const target of fresh) {
     one(target);
@@ -186,4 +191,31 @@ function poolFor(target, T, histories, series) {
   const others = [...histories.keys()].filter((u) => u !== target).sort();
   const aligned = others.filter((u) => series(u) && inPool(T, series(u), MIN_ALIGNED));
   return { aligned, pool: aligned.length ? aligned : others };
+}
+
+/**
+ * A model as the poll made it, again, from the stored spec and history (the Models tab's drill-in,
+ * docs/design/models.md): the forecast (bvar, else bar1 on the stream alone, else naive), with `inputs`
+ * ([target, ...companions], or [target]), each one's `influence` (bvar: its share, influence(); else the stream's
+ * own 1), `coef` (the target's equation, bvar), `rows`, `tests`, `score` and `persist` (the backtest's medians, as
+ * runModels stores them). No proposal: nothing is changed. null without history.
+ */
+export function explainModel({ target, spec, histories, step = STEP_S, window = HOLDOUT }) {
+  const points = histories.get(target);
+  const T = points?.length ? prepare(points, step) : null;
+  if (!T) return null;
+  const C = (spec?.companions ?? []).map((u) => (histories.get(u)?.length ? prepare(histories.get(u), step) : null));
+  if (C.length && C.every(Boolean)) {
+    const bt = backtestOf(T, window);
+    const { errors, acc } = errorsAt([T, ...C], spec, bt);
+    const recent = (xs) => xs.filter((_, i) => bt.origins[i].recent);
+    const f = forecastSpec(T, C, spec, acc, recent(errors), recent(bt.persist));
+    if (f) {
+      const fit = fitSums(acc, spec.lambda1, spec.lambda2);
+      const scored = bt.origins.length >= MIN_SAMPLES;
+      return { ...f, inputs: [target, ...spec.companions], influence: influence(fit, acc), coef: fit.coef[0],
+        tests: errors.length, score: scored ? median(errors) : null, persist: scored ? median(bt.persist) : null };
+    }
+  }
+  return { ...explainForecast(points, { step }), inputs: [target], influence: [1] };
 }

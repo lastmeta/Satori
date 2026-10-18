@@ -6,6 +6,7 @@
 //   const bt = backtestOf(T)                          // the target's origins, bar1's and persistence's errors
 //   const { errors, acc } = errorsAt([T, ...C], spec, bt)   // the spec's unfaded t2 error at each origin (bar1 where it can't fit)
 //   forecastSpec(T, C, spec, acc, errors, bt.persist) // { model: 'bvar', t1, t2, value, horizon, phi, weight, rows } | null
+//   influence(fitSums(acc, λ1, λ2), acc)              // each series' share of the target's forecast (the Models tab's)
 import {
   STEP_S, LAMBDA1, SIGMA2_FLOOR, MIN_EXTRA_ROWS, HORIZON_STEPS, MAX_STEP_RETURN, HOLDOUT,
   RETURNS, CHANGES, finiteOr0, clamp, firstLag, fadeWeight,
@@ -195,6 +196,19 @@ export function fitSums(acc, lambda1, lambda2) {
     fit.prior.push(prior);
   }
   return fit;
+}
+
+/**
+ * How much each series moves the target's forecast (docs/design/models.md): its standardized coefficient in the
+ * target's equation, |coef[0][k]| × the standard deviation of its lag over the rows (how far a typical step of it
+ * moves the forecast), as shares that sum to 1, the target's own first. With no effect at all (every coefficient 0:
+ * the forecast is the last value), the target's own is 1.
+ */
+export function influence(fit, acc) {
+  const { n, N } = acc;
+  const effect = fit.coef[0].map((c, k) => Math.abs(c) * Math.sqrt(Math.max(acc.xx[k * n + k] / N - (acc.sx[k] / N) ** 2, 0)));
+  const total = effect.reduce((s, x) => s + x, 0);
+  return total > 0 && Number.isFinite(total) ? effect.map((x) => x / total) : effect.map((_, k) => (k ? 0 : 1));
 }
 
 /** Iterate the VAR two steps from the lags (bvar.py:316-339), each step clamped per series: [step 1, step 2] of every series. */

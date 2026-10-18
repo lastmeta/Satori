@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { forecast, STEP_S, MIN_SAMPLES } from './index.js';
+import { forecast, explainForecast, STEP_S, MIN_SAMPLES } from './index.js';
 import {
-  seeded, drawSpec, mutate, repair, accepts, runModels, runModelsAsync, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
+  seeded, drawSpec, mutate, repair, accepts, runModels, runModelsAsync, explainModel, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
 } from './evolve.js';
-import { prepare, inPool, RECENT_BUCKETS } from './bvar.js';
+import { prepare, inPool, backtestOf, RECENT_BUCKETS } from './bvar.js';
 
 const T0 = Date.UTC(2026, 8, 1) / 1000;
 const grid = (values, start = 0) => values.map((value, k) => ({ ts: T0 + (start + k + 1) * STEP_S - 1, value }));
@@ -282,5 +282,52 @@ describe('the pool needs recent alignment; companions that leave it are replaced
     expect(repair(spec, () => 0, ['a', 'b', 'x'])).toBe(spec); // all in the pool: unchanged
     expect(repair(spec, () => 0, [])).toBe(spec); // no aligned stream yet (no history): the draw stays
     expect(repair({ ...spec, companions: [] }, () => 0, ['c'])).toEqual({ ...spec, companions: ['c'] });
+  });
+});
+
+describe('what the Models tab reads: the stored quality and influence, and explainModel (docs/design/models.md)', () => {
+  const names = ['gold', 'lead', 'n1', 'n2', 'n3', 'n4'];
+  const prices = market(200, names, 5);
+  const median = (xs) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s.length % 2 ? s[s.length >> 1] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+  };
+
+  test('runModels stores no-change\'s median error on the same origins (persist) and, for bvar, each input\'s influence', () => {
+    const histories = historiesOf(prices, 200);
+    histories.set('tiny', grid([3, 4]));
+    const specs = new Map([['gold', { spec: { companions: ['n1', 'lead'], lambda1: 0.5, lambda2: 1 }, generation: 0, accepted: 0 }]]);
+    const out = runModels({ fresh: ['gold', 'tiny'], histories, specs, seed: ID });
+    const gold = out.specs.get('gold');
+    expect(out.forecasts.get('gold').model).toBe('bvar');
+    const T = prepare(histories.get('gold'));
+    expect(gold.persist).toBe(median(backtestOf(T).persist));
+    expect(gold.influence).toHaveLength(1 + gold.spec.companions.length); // the target first, then each companion
+    expect(gold.influence.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+    expect(gold.influence[1 + gold.spec.companions.indexOf('lead')]).toBe(Math.max(...gold.influence)); // the leader leads
+    expect(out.specs.get('tiny')).toMatchObject({ score: null, persist: null, influence: null }); // naive
+  });
+
+  test('explainModel: the same forecast from the stored spec, with its fit\'s influence, rows and backtest', () => {
+    const histories = historiesOf(prices, 200);
+    let specs = new Map();
+    let out;
+    for (let k = 196; k <= 200; k++) ({ specs, forecasts: out } = runModels({ fresh: ['gold', 'n2'], histories: historiesOf(prices, k), specs, seed: ID }));
+    for (const target of ['gold', 'n2']) {
+      const row = specs.get(target);
+      const f = out.get(target);
+      const x = explainModel({ target, spec: row.spec, histories });
+      expect(x).toMatchObject({ model: f.model, t1: f.t1, t2: f.t2, weight: f.weight, rows: f.rows, score: row.score, persist: row.persist,
+        inputs: [target, ...row.spec.companions], influence: row.influence, tests: 28 });
+      expect(x.coef).toHaveLength(x.inputs.length);
+    }
+  });
+
+  test('explainModel falls back as the engine does: bar1 on the stream alone (all its own), or nothing without history', () => {
+    const histories = new Map([['n2', grid(prices.n2)], ['gone', []]]);
+    const x = explainModel({ target: 'n2', spec: { companions: ['gone'], lambda1: 0.2, lambda2: 0.5 }, histories });
+    expect(x).toMatchObject({ ...explainForecast(histories.get('n2')), inputs: ['n2'], influence: [1] });
+    expect(explainModel({ target: 'n2', spec: null, histories })).toMatchObject({ model: 'bar1', inputs: ['n2'], influence: [1] });
+    expect(explainModel({ target: 'gone', spec: null, histories })).toBeNull();
   });
 });

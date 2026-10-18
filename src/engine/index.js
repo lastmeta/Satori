@@ -1,6 +1,7 @@
 // The engine (docs/design/engine.md): a one-stream, lag-1 cut of namaste_club's
 // Bayesian VAR (../namaste_club), in Satori Lite's interface:
 //   forecast(points, { step, horizon }) → { model, t1, t2, value, horizon, phi?, weight? } | null
+//   explainForecast(points, { step, horizon }) → the same, with { rows, tests, score, persist } (the Models tab's)
 // points: [{ ts, value }] (ts in unix seconds), all of a stream's history.
 // step: the bucket in seconds (12 h for central's streams, a relay stream's
 // cadence); horizon: how far ahead `value` is, one cadence of the stream
@@ -60,7 +61,22 @@ export const horizonSteps = (step, horizon) => Math.max(1, Math.round(horizon / 
  *   (namaste_club's MODEL_WEIGHT); step is the bucket in seconds (t1 is one step ahead, t2 two); horizon is how far
  *   ahead `value` is (two steps by default), and what the backtest that sets the fade scores
  */
-export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S, horizon = HORIZON_STEPS * step } = {}) {
+export function forecast(points, options) {
+  return run(points, options, false)?.f ?? null;
+}
+
+/**
+ * The same forecast, with what the Models tab shows (docs/design/models.md): `rows` (the lag pairs it was fit on),
+ * `tests` (its backtest's origins), `score` (the median error of its unfaded forecast there) and `persist` (no
+ * change's, on the same origins); score and persist are null below MIN_SAMPLES tests. A forced weight still runs
+ * the backtest here.
+ */
+export function explainForecast(points, options) {
+  const r = run(points, options, true);
+  return r && { ...r.f, ...r.diag };
+}
+
+function run(points, { lambda1 = LAMBDA1, weight, step = STEP_S, horizon = HORIZON_STEPS * step } = {}, explain = false) {
   const p = Array.from(points).filter((o) => Number.isFinite(o?.ts) && Number.isFinite(o?.value))
     .sort((a, b) => a.ts - b.ts);
   if (!p.length) return null;
@@ -76,14 +92,17 @@ export function forecast(points, { lambda1 = LAMBDA1, weight, step = STEP_S, hor
   const r = b.map((k, i) => (i && k - b[i - 1] === 1 ? finiteOr0(m.change(v[i - 1], v[i])) : null)); // none across a gap
 
   const pairs = pairsUpTo(r, b.length - 1);
-  if (pairs.length < 1 + MIN_EXTRA_ROWS) return naive;
+  if (pairs.length < 1 + MIN_EXTRA_ROWS) return { f: naive, diag: { rows: pairs.length, tests: 0, score: null, persist: null } };
   const phi = fitPhi(pairs, lambda1);
   const cap = m.cap(r);
   // the backtest scores only origins where the transform, as known then, is this one: from the first value ≤ 0 on
   const since = m === CHANGES ? Math.floor(p.find((o) => !(o.value > 0)).ts / step) : -Infinity;
-  const w = weight ?? backtestWeight(b, v, r, lambda1, m, n, since);
+  const bt = weight === undefined || explain ? backtest(b, v, r, lambda1, m, n, since) : null;
+  const w = weight ?? fadeWeight(bt.me, bt.pe);
   const t = m.path(...steps(phi, firstLag(p, step, m), cap, Math.max(n, HORIZON_STEPS))).map((x) => m.apply(last, x, w));
-  return { model: m.model, t1: t[0], t2: t[1], value: t[n - 1], horizon: n * step, phi, weight: w };
+  const f = { model: m.model, t1: t[0], t2: t[1], value: t[n - 1], horizon: n * step, phi, weight: w };
+  const scored = bt?.me.length >= MIN_SAMPLES;
+  return { f, diag: bt && { rows: pairs.length, tests: bt.me.length, score: scored ? median(bt.me) : null, persist: scored ? median(bt.pe) : null } };
 }
 
 /** (r[k−1], r[k]) for k ≤ upTo, both present: the lag-1 regression rows. */
@@ -168,9 +187,9 @@ export function median(xs) {
  * series, from its first value ≤ 0 on (`since`: before it the stream was on
  * returns); fit on the pairs up to o, forecast n steps from v[o], clamped by the
  * largest step up to o, and score against v[o+n], as persistence (v[o]) is scored.
- * Nothing after o is used but the actual.
+ * Nothing after o is used but the actual. → { me, pe }: the model's errors and persistence's
  */
-function backtestWeight(b, v, r, lambda1, m = RETURNS, n = HORIZON_STEPS, since = -Infinity) {
+function backtest(b, v, r, lambda1, m = RETURNS, n = HORIZON_STEPS, since = -Infinity) {
   const me = [];
   const pe = [];
   const L = b.length - 1;
@@ -183,5 +202,5 @@ function backtestWeight(b, v, r, lambda1, m = RETURNS, n = HORIZON_STEPS, since 
     me.push(m.error(m.raw(v[o], x), a));
     pe.push(m.error(v[o], a));
   }
-  return fadeWeight(me, pe);
+  return { me, pe };
 }

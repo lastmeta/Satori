@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import {
-  forecast, iterate, blend, weightFromErrors, fadeWeight, horizonSteps,
+  forecast, explainForecast, iterate, blend, weightFromErrors, fadeWeight, horizonSteps,
   STEP_S, LAMBDA1, MIN_SAMPLES, DEFAULT_WEIGHT, HOLDOUT,
 } from './index.js';
 
@@ -343,5 +343,29 @@ describe('the backtest uses the transform as known at each origin (a late value 
       pe.push(Math.abs(values[o] - values[o + 2]));
     }
     expect(forecast(pts).weight).toBeCloseTo(fadeWeight(me, pe), 12);
+  });
+});
+
+describe('explainForecast: the same forecast, with what the Models tab shows (docs/design/models.md)', () => {
+  test('the forecast unchanged, and the backtest it was faded by: rows, tests, its median error and no-change\'s', () => {
+    const pts = grid(arPrices(90, 0.4, 0.02, 31));
+    for (const o of [{}, { horizon: STEP_S }, { step: STEP_S, horizon: 3 * STEP_S }]) {
+      const f = forecast(pts, o);
+      const x = explainForecast(pts, o);
+      expect(x).toMatchObject(f);
+      expect(Object.keys(x).sort()).toEqual([...Object.keys(f), 'rows', 'tests', 'score', 'persist'].sort());
+      expect(x.rows).toBe(88); // 90 buckets: 89 returns, 88 lag pairs
+      expect(x.tests).toBe(HOLDOUT);
+      expect(weightFromErrors(x.score, x.persist)).toBeCloseTo(f.weight, 12); // the fade's own medians
+    }
+  });
+
+  test('naive: too few pairs to fit or test; a forced weight still explains', () => {
+    expect(explainForecast(grid(ZIG.slice(0, 7)))).toMatchObject({ model: 'naive', rows: 5, tests: 0, score: null, persist: null });
+    const pts = grid(arPrices(40, 0.4, 0.02, 3));
+    const x = explainForecast(pts, { weight: 0.5 });
+    expect(x).toMatchObject({ ...forecast(pts, { weight: 0.5 }), weight: 0.5 });
+    expect(x.score).toBeGreaterThan(0);
+    expect(explainForecast([])).toBeNull();
   });
 });

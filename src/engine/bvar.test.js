@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { forecast, fadeWeight, STEP_S, LAMBDA1, HOLDOUT } from './index.js';
 import {
-  prepare, rowsOf, sums, addRow, fitSums, iterateVar, priorVariances, solveSym, backtestOf, errorsAt, forecastSpec,
+  prepare, rowsOf, sums, addRow, fitSums, iterateVar, priorVariances, solveSym, backtestOf, errorsAt, forecastSpec, influence,
 } from './bvar.js';
 
 const parity = JSON.parse(readFileSync(new URL('../../test/fixtures/bvar-parity.json', import.meta.url)));
@@ -229,5 +229,46 @@ describe('the backtest', () => {
     expect(n).toBeGreaterThan(0);
     expect(e.slice(0, n)).toEqual(bt.base.slice(0, n));
     expect(e.slice(n)).not.toEqual(bt.base.slice(n));
+  });
+});
+
+describe('influence: how much each input moves the target\'s forecast (docs/design/models.md)', () => {
+  /** Three price series: `driver`'s and `noise`'s 12 h returns are noise; the target's follow 0.6 × driver's last. */
+  function three(n, seed) {
+    const { normal } = rng(seed);
+    const s = { target: [100], driver: [50], noise: [20] };
+    let rd = 0;
+    for (let k = 1; k < n; k++) {
+      const r = { target: 0.6 * rd + 0.005 * normal(), driver: 0.02 * normal(), noise: 0.02 * normal() };
+      rd = r.driver;
+      for (const key of Object.keys(s)) s[key].push(s[key].at(-1) * (1 + r[key]));
+    }
+    return s;
+  }
+
+  test('a fit where one companion drives the target ranks it first, and the shares sum to 100%', () => {
+    for (const seed of [1, 2, 3]) {
+      const s = three(300, seed);
+      // the noise companion second in the spec, the driver last: the ranking comes from the fit, not the order
+      const S = [prepare(grid(s.target)), prepare(grid(s.noise)), prepare(grid(s.driver))];
+      const acc = sumsOf(rowsOf(S), 3);
+      const fit = fitSums(acc, 0.5, 1);
+      const shares = influence(fit, acc);
+      expect(shares).toHaveLength(3);
+      expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+      expect(shares.every((x) => x >= 0)).toBe(true);
+      expect(shares[2]).toBeGreaterThan(0.6); // the driver
+      expect(shares[2]).toBeGreaterThan(shares[0]);
+      expect(shares[2]).toBeGreaterThan(shares[1]);
+    }
+  });
+
+  test('|coefficient| × the input\'s standard deviation over the rows, normalized; none at all → the stream itself', () => {
+    const acc = sums(2);
+    for (const [x0, x1] of [[0.01, 0.1], [-0.01, -0.1], [0.03, 0.3], [-0.03, -0.3]]) addRow(acc, { x: [x0, x1], y: [0, 0] });
+    // σ(x0) = 0.02236…, σ(x1) = 10 × that: equal coefficients give 1 : 10
+    expect(influence({ coef: [[0.5, 0.5], [0, 0]] }, acc).map((x) => +x.toFixed(9))).toEqual([+(1 / 11).toFixed(9), +(10 / 11).toFixed(9)]);
+    expect(influence({ coef: [[0.5, -0.05], [0, 0]] }, acc).map((x) => +x.toFixed(9))).toEqual([0.5, 0.5]); // the sign does not count
+    expect(influence({ coef: [[0, 0], [1, 1]] }, acc)).toEqual([1, 0]); // the forecast is the last value: all its own
   });
 });
