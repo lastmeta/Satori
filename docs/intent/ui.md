@@ -19,6 +19,16 @@ it in walls of text.
   connections. Technical detail (keys, addresses, endpoints, relays) moves
   behind settings or account. It is not the main screen.
 - This is not a game. Manual play lives in Satori Daily.
+- A **Models** tab shows the engine. Its status sits on top, above a list of
+  models, each named for the stream it predicts. Opening a model shows,
+  simply and in order:
+  - the streams that go in, ranked by how much each helps;
+  - the model;
+  - the predictions that come out, and where they go.
+
+  It's the neuron's pipeline (extract, transform, load), told without a
+  canvas. The Streams tab stays for now and may later become "streams I
+  publish".
 - Healthy is green, never gray. Three shades on one scale:
   - "sky green" (lighter, softer) when all is well and the neuron is waiting,
     reached by a slow fade over minutes;
