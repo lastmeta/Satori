@@ -29,6 +29,28 @@ const direction = (forecast, latest) => (forecast == null || latest == null ? nu
   : forecast > latest ? 'up' : forecast < latest ? 'down' : 'flat');
 const classify = (ratio) => (ratio < 1 - TIE ? 'better' : ratio > 1 + TIE ? 'worse' : 'tie');
 
+/** A span of time in a word or two: '45 min', '12 h', '24 h', '3 days'. */
+export function spanText(s) {
+  if (!(s > 0)) return '–';
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s <= 48 * 3600 && s % 3600 === 0) return `${s / 3600} h`;
+  const n = Math.round(s / 86400);
+  return n === 1 ? '1 day' : `${n} days`;
+}
+
+/**
+ * The mark in short words (the owner, 2026-10-18: a symbol beside an icon was not read): '7% better', 'Same as no
+ * change', '12% worse' ('Worse' when no change was perfect), 'Not scored yet'. The list row, the drill-in's header and
+ * the status's legend say the same.
+ */
+export function markWords({ mark, ratio }) {
+  if (mark == null) return 'Not scored yet';
+  if (mark === 'tie') return 'Same as no change';
+  if (ratio == null) return mark === 'worse' ? 'Worse' : 'Better';
+  return mark === 'better' ? `${Math.round((1 - ratio) * 100)}% better` : `${Math.round((ratio - 1) * 100)}% worse`;
+}
+const worded = (q) => ({ ...q, text: markWords(q) });
+
 /**
  * A model against no change, from its backtest: score (its median error) and persist (no change's, on the same
  * origins). ratio = score / persist; better below 0.95, worse above 1.05, else a tie. naive is no change itself: a
@@ -36,29 +58,68 @@ const classify = (ratio) => (ratio < 1 - TIE ? 'better' : ratio > 1 + TIE ? 'wor
  * @returns {{mark: 'better'|'tie'|'worse'|null, ratio: number|null, error: number|null, noChange: number|null}}
  */
 export function qualityOf({ kind, score = null, persist = null }) {
-  if (kind === 'naive') return { mark: 'tie', ratio: 1, error: null, noChange: null };
-  if (score == null || persist == null || kind === 'echo') return { mark: null, ratio: null, error: score ?? null, noChange: persist ?? null };
-  if (!(persist > 0)) return score > 0 ? { mark: 'worse', ratio: null, error: score, noChange: persist } : { mark: 'tie', ratio: 1, error: score, noChange: persist };
+  if (kind === 'naive') return worded({ mark: 'tie', ratio: 1, error: null, noChange: null });
+  if (score == null || persist == null || kind === 'echo') return worded({ mark: null, ratio: null, error: score ?? null, noChange: persist ?? null });
+  if (!(persist > 0)) {
+    return worded(score > 0 ? { mark: 'worse', ratio: null, error: score, noChange: persist } : { mark: 'tie', ratio: 1, error: score, noChange: persist });
+  }
   const ratio = score / persist;
-  return { mark: classify(ratio), ratio, error: score, noChange: persist };
+  return worded({ mark: classify(ratio), ratio, error: score, noChange: persist });
 }
 
 /** A model with several outputs: the median of their ratios (one output: its own). */
 export function qualityOfAll(list) {
   if (list.length === 1) return list[0];
   const ratios = list.map((q) => q.ratio).filter(Number.isFinite);
-  if (!ratios.length) return { mark: null, ratio: null, error: null, noChange: null };
+  if (!ratios.length) return worded({ mark: null, ratio: null, error: null, noChange: null });
   const ratio = median(ratios);
-  return { mark: classify(ratio), ratio, error: null, noChange: null };
+  return worded({ mark: classify(ratio), ratio, error: null, noChange: null });
+}
+
+/** The fewest back-to-back steps a model needs before it leaves no change: 6 lag pairs (engine.md, `bar1` step 4). */
+export const NAIVE_STEPS = 8;
+const ALGORITHMS = { bvar: 'Bayesian VAR', bar1: 'Single-stream AR (bar1)', bar1d: 'Single-stream AR on changes (bar1d)',
+  naive: 'No change · not enough history yet', echo: 'Echo · the value is not a number' };
+const listText = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+
+/**
+ * Its algorithm in plain words, always shown under a model's name: "Bayesian VAR · reads 3 streams", "Single-stream AR
+ * (bar1)", "No change · not enough history yet"; a model of several algorithms (an ensemble, later): "Ensemble · 3
+ * algorithms". `algorithms`: a list, one today.
+ */
+export function kindLabelOf({ algorithms, inputs = [] }) {
+  if (algorithms.length > 1) return `Ensemble · ${algorithms.length} algorithms`;
+  const [k] = algorithms;
+  if (k === 'bvar') return `${ALGORITHMS.bvar} · reads ${inputs.length} stream${inputs.length === 1 ? '' : 's'}`;
+  return ALGORITHMS[k] ?? k;
+}
+
+/** How it works, in one plain sentence (the drill-in's Model), with the true rule for no change. */
+export function descriptionOf({ algorithms, inputs = [], outputs }) {
+  const o = outputs[0];
+  const h = spanText(o.forecast.horizon);
+  const step = o.forecast.step ?? o.forecast.horizon;
+  if (algorithms.length > 1) return `Combines ${algorithms.length} algorithms, then predicts ${h} ahead.`;
+  const others = inputs.filter((i) => i.stream !== o.stream).map((i) => i.name ?? i.stream);
+  switch (algorithms[0]) {
+    case 'bvar': return `Learns how this stream moves together with ${listText(others)}, then predicts ${h} ahead.`;
+    case 'bar1': return `Learns how each ${spanText(step)} move of this stream follows the one before, then predicts ${h} ahead.`;
+    case 'bar1d': return `Learns how each ${spanText(step)} change of this stream follows the one before, then predicts ${h} ahead.`;
+    case 'naive': return `Repeats the latest value until it has ${spanText(NAIVE_STEPS * step)} of back-to-back history.`;
+    case 'echo': return 'Passes the latest value on as it is: it is not a number, so there is nothing to forecast.';
+    default: return '';
+  }
 }
 
 /** Influence, largest first (inputs whose share is unknown keep their order, after the known). */
 const ranked = (list) => [...list].sort((a, b) => (b.share ?? -1) - (a.share ?? -1));
 
-/** A model from its outputs: named for its one output, or "<kind> · n streams". */
-function modelOf({ id, source, kind, inputs, outputs, trained, ...rest }) {
+/** A model from its outputs: named for its one output, or "<kind> · n streams"; what it is and how it works, in words. */
+function modelOf({ id, source, kind, inputs, outputs, trained, algorithms = [kind], ...rest }) {
   const name = outputs.length === 1 ? outputs[0].name : `${kind} · ${outputs.length} streams`;
-  return { id, source, name, kind, quality: qualityOfAll(outputs.map((o) => o.quality)), inputs, outputs, trained, ...rest };
+  return { id, source, name, kind, algorithms, kindLabel: kindLabelOf({ algorithms, inputs }),
+    description: descriptionOf({ algorithms, inputs, outputs }), quality: qualityOfAll(outputs.map((o) => o.quality)), inputs, outputs,
+    trained, ...rest };
 }
 
 /**

@@ -51,6 +51,9 @@ model).
 
 ```
 { id, source: 'central' | 'base' | 'nostr', name, kind, quality, trained,
+  algorithms: [kind],          // a list: one today; a future ensemble lists several
+  kindLabel,                   // its algorithm in plain words: "Bayesian VAR · reads 3 streams", "No change · not enough history yet"
+  description,                 // how it works, one sentence: "Learns how this stream moves together with ltc and safetrade_eth, then predicts 24 h ahead."
   inputs: [{ stream, name }],
   outputs: [{ stream, name, as?,                       // as: the `_pred` stream a Nostr model publishes
       latest: { value, ts },
@@ -61,7 +64,8 @@ model).
       destinations: [{ to: 'central' | 'base' | 'network', status, when, ref }] }],
   // central's, as models() gave them before: uuid, model, spec { companions: [{ uuid, name }], lambda1, lambda2 }, score, generation, accepted
 }
-quality = { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange }
+quality = { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange,
+            text }   // the mark in words: "7% better", "Same as no change", "12% worse", "Not scored yet"
 destinations: central { status: 'accepted' | 'pending', ref: null }
               base    { status: 'sent' | 'left out', ref: { round, game, direction, tx, error? } }
               network { status: 'published' | 'waiting', ref: { stream, seq, relays } }
@@ -113,9 +117,13 @@ intake with each `_pred` (`relay_streams.p_score`, `p_persist`, `p_tests`);
 Base's on the batch's games. Whatever lacks a current one, the training
 pass fills. The list computes nothing: it reads what is kept.
 
-On the page each mark is a shape and a colour plus a short number: ✓ green
-(better, "−3%": 3% less error), = grey-blue (tie, "+1%"), − amber (worse,
-"+8%"), a dashed ring (not scored, "new"). The amber is the model's own mark
+On the page each mark is **short words in its colour** (`quality.text`), a
+tinted pill: "7% better" green, "Same as no change" grey-blue (on a phone
+"Same"), "12% worse" amber, "Not scored yet" in a dashed outline. The list
+row, the drill-in's header and the status bar's legend say the same. (It
+was an icon in a circle beside a symbol, ✓ "−3%", = "+1%", "new": the
+owner read neither.) The pill's ink is the colour mixed 65% toward the text,
+so it reads on its tint in light and dark. The amber is the model's own mark
 against no change, not the engine's status: the fade already pulls a weak
 model toward no change, and nothing needs the person.
 
@@ -219,16 +227,21 @@ while a poll is held). The step text comes from the same work state
 step, so a count ticks at once.
 
 Under it: "83 models · 81 bvar · 2 naive"; a bar of better / tie / worse /
-not scored; "Beats no change on 24 of 83 · ties 40 · worse 19"; "Median
-model: 1% less error than no change"; the plain line on whose score it is.
+not scored with its legend in the rows' words, a swatch of each colour:
+"24 better · 40 same as no change · 19 worse" ("· 2 not scored yet" when
+there are some); "Median model: 1% less error than no change"; the plain
+line on whose score it is.
 
 ## The list
 
-Each row, scannable without reading: the mark and its number; the name (a
-Nostr model also "→ `<stream>_pred`"); the kind as a chip; the inputs it
-reads besides the stream, as chips by influence ("+eth +gold"); the latest
-value → the forecast with an arrow (↑ ↓ →); small icons for where its
-predictions go (Central, Base, Network). Above it, on the left, the
+Each row, scannable: the mark in words; the name (a Nostr model also "→
+`<stream>_pred`"); the kind as a chip; the inputs it reads besides the
+stream, as chips by influence ("+eth +gold"); the values labelled, "Now
+3,153.92 · in 24 h 3,141.01 ↓", the horizon the model's own (24 h, 1 h,
+a day), the arrow after the forecast saying which way it goes from now (on
+a phone, two short lines: "Now 3,153.92" and "in 24 h 3,141.01 ↓"); where
+its predictions go, as tiny text tags in the chip style ("Central",
+"Base", "Network": the pictograms they replaced were unreadable). Above it, on the left, the
 filters **All · Central · Base · Network** (with counts); on the right a
 borderless **Sort** with a sort icon (three stacked lines) that shows its
 choice subtly ("Sort: Quality"). Tapping it opens a small menu, **Quality**
@@ -239,19 +252,31 @@ chooses, Escape closes back to the button, Tab or a tap elsewhere closes;
 the button and each item are 44 px tall. The choice is kept on this device
 (`localStorage` `satori-models-sort`, read and written in try/catch as the
 theme is, `src/ui/prefs.js`). (It was two segmented buttons, Quality ·
-Name, which the owner did not read as a sort.) A computer shows a dense table; a phone shows each
-row in two lines (the name and where it goes; the kind, the inputs and the
-values, wrapping, never cut). A tap opens the drill-in; the back link
+Name, which the owner did not read as a sort.) A computer shows a dense
+table; a phone shows each row as the name and where it goes, then the mark,
+the kind, the inputs and the values, wrapping, never cut. A tap opens the drill-in; the back link
 returns to the list where it was.
 
 ## The drill-in
 
 `#models/<id>` (a link or a reload opens it; the back link is the browser's
-back when the list came first). Top to bottom, joined by short arrows:
+back when the list came first). Under the model's name, always, **what it
+is** in plain words (`kindLabel`): "Bayesian VAR · reads 3 streams",
+"Single-stream AR (bar1)", "Single-stream AR on changes (bar1d)", "No
+change · not enough history yet", "Echo · the value is not a number"; a
+model of several algorithms (`algorithms` is a list) would read "Ensemble ·
+3 algorithms". Beside the name, its mark in words. Then the source ("Central
+stream"). Top to bottom, joined by short arrows:
 
 - **In**: each input with its share as a bar, ranked; for a model of several
   outputs, a choice of whose inputs.
-- **Model**: in plain lines: "Predicts 24 h ahead in 12 h steps", "Learned
+- **Model**: first how it works, in one sentence (`description`): "Learns
+  how this stream moves together with ltc and safetrade_eth, then predicts
+  24 h ahead."; bar1 "Learns how each 12 h move of this stream follows the
+  one before, then predicts 24 h ahead."; naive, with the true rule (6 lag
+  pairs need 8 back-to-back steps): "Repeats the latest value until it has 4
+  days of back-to-back history." (8 h for an hourly stream). Then in plain
+  lines: "Predicts 24 h ahead in 12 h steps", "Learned
   from 49 steps of history (12 h each)", "Backtest over 28 tests: 15% less
   error than no change", "Fade: none, its forecast is sent as is", "Trained
   2 h ago". **Details** (closed): λ1, λ2, mutations tried and kept, the
@@ -280,7 +305,11 @@ from 7 horizons before the forecast was made (at most 400 points) as a 2 px
 line in the accent colour, broken where observations stop for over four of
 their usual intervals; the forecast to scale in time and value, dashed from
 the last point, t1 as a ring and the endpoint (the value sent) filled,
-ringed in the surface colour and labelled; a hairline where the forecast was
+ringed in the surface colour and labelled with its value; each forecast
+point labelled with how far ahead it is, "12 h" and "24 h" (one point:
+"24 h", "1 h"), so the open and the filled circle mean something without a
+legend (two points too close for both, as a week of history on a phone puts
+them, are labelled a line apart); a hairline where the forecast was
 made; the range's top and bottom as hairlines with their values outside the
 plot; the first time and "+24 h" under it. Hover, or the arrow keys once
 focused, moves a crosshair and the readout under the chart says that point
@@ -312,16 +341,18 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
 - `satori.go('models')`, `satori.go('models/<id>')`; the URL's `#models`,
   `#models/<id>`.
 - `data-test`: `models-tab`, `engine` (`data-tone`), `engine-title`,
-  `engine-line`, `engine-kinds`, `engine-quality`, `engine-median`, `engine-note`,
+  `engine-line`, `engine-kinds`, `engine-quality` (the bar's legend: its items `.qleg`, its `aria-label` the
+  whole line), `engine-median`, `engine-note`,
   `models-filter-<all|central|base|network>`, `models-sort` (the Sort button, `aria-expanded`),
   `models-sort-menu`, `models-sort-<quality|name>` (its items, `aria-checked`),
-  `models`, `model-row` (`data-id`, `data-mark`) with `model-mark`,
+  `models`, `model-row` (`data-id`, `data-mark`) with `model-mark` (the words; `data-short`: the phone's),
   `model-name`, `model-kind`, `model-inputs`, `model-forecast`, `model-to`;
   `models-empty`; the drill-in `model-detail`, `model-back`, `model-title`,
   `model-in` with `model-input`, `model-model` with `model-line` and
   `model-details`, `model-out` with `model-output` (`data-stream`),
   `model-output-name`, `model-output-forecast`, `model-chart`,
-  `model-endpoint`, `model-readout`, `model-destination` (`data-to`);
+  `model-endpoint`, `model-ahead` (the forecast points' "12 h", "24 h"), `model-readout`, `model-destination` (`data-to`),
+  `model-kind-label`, `model-quality`;
   `model-loading`, `model-error`.
 
 ## Cost
@@ -419,12 +450,17 @@ has gaps):
 
 From `e2e/models.spec.js` (`SHOTS=1`): the list and a bvar drill-in, on a
 phone (390 px; the drill-in whole) and a computer (1280 px), light and dark:
-`docs/screenshots/models-{list,drill}-{phone,desktop}-{light,dark}.png`;
+`docs/screenshots/models-{list,drill}-{phone,desktop}-{light,dark}.png`, a
+naive drill-in (the Base default stream) `models-drill-naive-*.png`;
 the Sort menu open on a phone, `models-sort-phone-{light,dark}.png`.
 
 The Sort menu open on a phone, light and dark:
 
 <img src="../screenshots/models-sort-phone-light.png" alt="the Sort menu open, phone, light" width="200"> <img src="../screenshots/models-sort-phone-dark.png" alt="the Sort menu open, phone, dark" width="200">
+
+A naive model's drill-in on a phone: what it is, its rule, the chart's labels:
+
+<img src="../screenshots/models-drill-naive-phone-light.png" alt="a naive drill-in, phone, light" width="200"> <img src="../screenshots/models-drill-naive-phone-dark.png" alt="a naive drill-in, phone, dark" width="200">
 
 <img src="../screenshots/models-list-phone-light.png" alt="the list, phone, light" width="200"> <img src="../screenshots/models-list-phone-dark.png" alt="the list, phone, dark" width="200"> <img src="../screenshots/models-drill-phone-light.png" alt="a drill-in, phone, light" width="200"> <img src="../screenshots/models-drill-phone-dark.png" alt="a drill-in, phone, dark" width="200">
 

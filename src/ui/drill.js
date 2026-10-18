@@ -4,6 +4,9 @@
 // destinations, and In shows the inputs of the output chosen (the only one, today).
 import { fmtNum, fmtWhen, shortHash } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
+import { spanText, markWords, kindLabelOf, descriptionOf } from '../neuron/models.js';
+
+export { spanText };
 
 const ARROW = { up: '↑', down: '↓', flat: '→' };
 const LABEL = { central: 'Central', base: 'Base', network: 'Network' };
@@ -17,15 +20,6 @@ export const numText = (n) => (Number.isFinite(n) && n !== 0 && (Math.abs(n) >= 
   ? minus(n.toExponential(3).replace('e+', 'e')) : fmtNum(n));
 const dec = (x, d = 3) => (x == null ? '–' : minus(String(Number(Number(x).toFixed(d)))));
 const pct2 = (x) => `${Number((x * 100).toFixed(2))}%`;
-
-/** A span of time in a word or two: '45 min', '12 h', '24 h', '3 days'. */
-export function spanText(s) {
-  if (!(s > 0)) return '–';
-  if (s < 3600) return `${Math.round(s / 60)} min`;
-  if (s <= 48 * 3600 && s % 3600 === 0) return `${s / 3600} h`;
-  const n = Math.round(s / 86400);
-  return n === 1 ? '1 day' : `${n} days`;
-}
 
 /** A ratio to no change's error as a short signed number: '−3%', '+8%', '0%'. */
 export function pctText(ratio) {
@@ -46,12 +40,9 @@ export function qualityText(q) {
   return `about the same as no change (${n < 0 ? `${-n}% less error` : n > 0 ? `${n}% more error` : 'the same error'})`;
 }
 
-/** The row's mark: its short number, '=' for naive (no change itself), 'new' before 5 backtests. */
-function markText(q) {
-  if (q.mark == null) return 'new';
-  if (isNaive(q)) return '=';
-  return q.ratio == null ? 'worse' : pctText(q.ratio);
-}
+/** The mark in words ('10% better', 'Same as no change', 'Not scored yet'); `short`: the phone's ('Same'). */
+const markText = (q) => q.text ?? markWords(q);
+const markShort = (q) => (q.mark === 'tie' ? 'Same' : markText(q));
 
 /** Where an output went, in words: central accepted or pending, Base's round and direction (and its tx), Nostr's `_pred`. */
 export function destinationView(d, { explorer = null } = {}) {
@@ -92,7 +83,8 @@ export function chartOf(o, { w = 600, h = 160 } = {}) {
   const hist = o.history ?? [];
   const at = o.forecast.at ?? hist.at(-1)?.ts ?? null;
   const fc = forecastPoints(o.forecast, at);
-  const empty = { w, h, pad, line: '', ahead: '', points: [], last: null, now: null, grid: [], yLabels: [], xLabels: [], hover: [], endLabel: null };
+  const empty = { w, h, pad, line: '', ahead: '', points: [], last: null, now: null, grid: [], yLabels: [], xLabels: [], hover: [], endLabel: null,
+    timeLabels: [] };
   if (!hist.length) return empty;
   const all = [...hist.map((p) => [p.ts, p.value]), ...fc];
   const ts = all.map(([t]) => t);
@@ -109,10 +101,12 @@ export function chartOf(o, { w = 600, h = 160 } = {}) {
   const last = { x: X(lastP.ts), y: Y(lastP.value) };
   const points = fc.map(([t, v], i) => ({ x: X(t), y: Y(v), ts: t, value: v, end: i === fc.length - 1 }));
   const end = points.at(-1);
+  const endBelow = end && end.y < pad.t + 16;
   return {
     w, h, pad, last, points,
     // the endpoint's value, right-aligned with it: above it, or below when it is near the top
-    endLabel: end ? { x: end.x + 5, y: end.y < pad.t + 16 ? end.y + 20 : end.y - 11, text: numText(end.value) } : null,
+    endLabel: end ? { x: end.x + 5, y: endBelow ? end.y + 20 : end.y - 11, text: numText(end.value) } : null,
+    timeLabels: timeLabelsOf(points, at, { h, pad, endBelow }),
     line: hist.map((p, i) => `${i && p.ts - hist[i - 1].ts <= gap ? 'L' : 'M'}${xy(X(p.ts), Y(p.value))}`).join(' '),
     ahead: points.length ? `M${xy(last.x, last.y)} ${points.map((p) => `L${xy(p.x, p.y)}`).join(' ')}` : '',
     now: at == null ? null : X(at),
@@ -124,6 +118,26 @@ export function chartOf(o, { w = 600, h = 160 } = {}) {
   };
 }
 
+/**
+ * How far ahead each forecast point is ("12 h", "24 h"), so the open and the filled circle need no legend: under each
+ * point (over the endpoint when its value label is under it). Two points too close for both (a week of history on a
+ * phone puts them ~10 px apart): staggered a line apart, each right-aligned at its point.
+ */
+function timeLabelsOf(points, at, { h, pad, endBelow }) {
+  const floor = h - pad.b + 13; // the bottom value's line: never lower
+  const crowded = points.length === 2 && points[1].x - points[0].x < 40;
+  const dir = endBelow ? -1 : 1; // under the points, or over them when the endpoint's value is under it
+  const y0 = (p) => (dir > 0 ? Math.min(p.y + 17, floor) : Math.max(p.y - 10, 10));
+  if (!crowded) {
+    return points.map((p) => ({ x: p.end ? p.x + 5 : p.x, anchor: p.end ? 'end' : 'middle', text: spanText(p.ts - at),
+      y: p.end ? y0(p) : Math.min(p.y + 17, floor) }));
+  }
+  const [m, e] = points;
+  const near = dir > 0 ? Math.min(Math.max(m.y, e.y) + 17, floor - 12) : Math.max(Math.min(m.y, e.y) - 10, 22);
+  return [{ x: m.x + 3, anchor: 'end', text: spanText(m.ts - at), y: near },
+    { x: e.x + 5, anchor: 'end', text: spanText(e.ts - at), y: near + 12 * dir }];
+}
+
 /** One output's block in Out. */
 export function outputView(o, { explorer = null } = {}) {
   return {
@@ -133,15 +147,13 @@ export function outputView(o, { explorer = null } = {}) {
   };
 }
 
-/** The Model, in plain lines; the jargon (λ, mutations, coefficients, the weight and the errors) in details. */
-function modelView(d, now) {
+/** The Model, in plain lines (how it works first); the jargon (λ, mutations, coefficients, the weight, the errors) in details. */
+function modelView(d, now, description) {
   const m = d.model;
   const q = m.quality ?? d.quality;
-  const lines = [];
+  const lines = description ? [description] : [];
   if (m.horizon) lines.push(`Predicts ${spanText(m.horizon)} ahead in ${m.step && m.step < m.horizon ? `${spanText(m.step)} steps` : 'one step'}`);
-  if (m.kind === 'naive') lines.push(`Repeats the last value until it has 6 rows of back-to-back steps${m.rows == null ? '' : ` (it has ${m.rows})`}`);
-  else if (m.kind === 'echo') lines.push('Echoes the value: it is not a number');
-  else if (m.rows != null) lines.push(`Learned from ${m.rows.toLocaleString('en-US')} steps of history${m.step ? ` (${spanText(m.step)} each)` : ''}`);
+  if (m.kind !== 'naive' && m.kind !== 'echo' && m.rows != null) lines.push(`Learned from ${m.rows.toLocaleString('en-US')} steps of history${m.step ? ` (${spanText(m.step)} each)` : ''}`);
   if (m.kind === 'naive') lines.push('Backtest: none, it repeats the last value (no change)');
   else if (m.kind !== 'echo') lines.push(`Backtest${q?.mark != null && m.tests ? ` over ${m.tests} tests` : ''}: ${qualityText(q)}`);
   if (m.weight != null) {
@@ -168,12 +180,14 @@ export function drillView(d, { now = Date.now() / 1000, explorer = null, output 
   const chosen = d.outputs[i];
   const inputs = (chosen?.influence ?? []).map((x) => ({ stream: x.stream, name: x.name ?? x.stream, share: x.share,
     pct: x.share == null ? '–' : x.share > 0 && x.share < 0.005 ? '<1%' : `${Math.round(x.share * 100)}%`, own: x.stream === chosen.stream }));
+  const algorithms = d.algorithms ?? [d.kind];
   return {
     title: d.name, kind: d.kind, sub: SOURCE[d.source] ?? d.source,
+    kindLabel: d.kindLabel ?? kindLabelOf({ algorithms, inputs: d.inputs }), // always shown under the name
     quality: { mark: d.quality.mark ?? 'none', short: markText(d.quality), text: qualityText(d.quality) },
     choose: d.outputs.length > 1 ? d.outputs.map((o) => o.name) : null, output: i,
     inputs, note: inputs.length > 1 ? IN_NOTE : ALONE_NOTE,
-    model: modelView(d, now),
+    model: modelView(d, now, d.description ?? descriptionOf({ algorithms, inputs: d.inputs, outputs: d.outputs })),
     outputs: d.outputs.map((o) => outputView(o, { explorer })),
   };
 }
@@ -185,30 +199,39 @@ export function rowView(m) {
   const own = new Set(outs.map((o) => o.stream));
   const chips = (outs[0]?.influence ?? m.inputs).filter((x) => !own.has(x.stream)).map((x) => `+${x.name ?? x.stream}`);
   const to = new Set(outs.flatMap((o) => o.destinations.map((d) => d.to)));
+  const horizon = one ? spanText(one.forecast.horizon) : '';
+  const latest = one ? numText(one.latest?.value) : '';
+  const forecast = one ? numText(one.forecast.value) : `${outs.length} forecasts`;
   return {
     id: m.id, name: m.name, as: one?.as ?? null, kind: m.kind ?? '–', chips,
-    mark: m.quality.mark ?? 'none', markText: markText(m.quality), markTitle: `vs no change: ${qualityText(m.quality)}`,
-    latest: one ? numText(one.latest?.value) : '', forecast: one ? numText(one.forecast.value) : `${outs.length} forecasts`,
-    arrow: one ? ARROW[one.direction] ?? '' : '', horizon: one ? spanText(one.forecast.horizon) : '',
+    mark: m.quality.mark ?? 'none', markText: markText(m.quality), markShort: markShort(m.quality),
+    markTitle: `vs no change: ${qualityText(m.quality)}`,
+    latest, forecast, arrow: one ? ARROW[one.direction] ?? '' : '', horizon,
+    // the values labelled: now, and the forecast at its horizon (the arrow after it: the way it goes from now)
+    nowText: one ? `Now ${latest}` : '', nextText: one ? `in ${horizon} ${forecast}` : forecast,
     dests: DESTS.filter((x) => to.has(x)),
   };
 }
 
 const MARKS = ['better', 'tie', 'worse', 'unscored'];
+const MARK_WORDS = { better: 'better', tie: 'same as no change', worse: 'worse', unscored: 'not scored yet' };
 /** What the quality is (docs/design/models.md#quality-against-no-change): the owner asked whose score it is. */
 export const QUALITY_NOTE = "The neuron's own backtest, made as it trains: how each model would have done on past data against no change."
   + " Not the Satori Network's score of the predictions it sent.";
 
 /** The engine's quality at a glance (summaryOf's): by kind, by mark (a bar of the four), the median model. */
 export function statusView(s) {
-  if (!s.total) return { kinds: 'No models yet', marks: '', median: '', bar: [], note: '' };
+  if (!s.total) return { kinds: 'No models yet', marks: '', median: '', bar: [], legend: [], note: '' };
   const kinds = Object.keys(s.kinds).sort((a, b) => (KINDS.indexOf(a) + 1 || 99) - (KINDS.indexOf(b) + 1 || 99));
   const m = s.marks;
   const median = s.median == null ? '' : `Median model: ${Math.abs(s.median - 1) < 0.005 ? 'the same error as no change'
     : s.median < 1 ? `${Math.round((1 - s.median) * 100)}% less error than no change` : `${Math.round((s.median - 1) * 100)}% more error than no change`}`;
+  // the bar's legend in the rows' words, each in its colour; not scored only when there are some
+  const legend = MARKS.filter((k) => k !== 'unscored' || m[k] > 0).map((k) => ({ mark: k, n: m[k], text: `${m[k]} ${MARK_WORDS[k]}` }));
   return {
     kinds: `${s.total} model${s.total === 1 ? '' : 's'} · ${kinds.map((k) => `${s.kinds[k]} ${k}`).join(' · ')}`,
-    marks: `Beats no change on ${m.better} of ${s.total} · ties ${m.tie} · worse ${m.worse}${m.unscored ? ` · ${m.unscored} not scored yet` : ''}`,
+    marks: legend.map((x) => x.text).join(' · '),
+    legend,
     median,
     bar: MARKS.filter((k) => m[k] > 0).map((k) => ({ mark: k, n: m[k], pct: (m[k] / s.total) * 100 })),
     note: QUALITY_NOTE,

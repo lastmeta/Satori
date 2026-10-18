@@ -83,7 +83,7 @@ async function shots(page, name) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(250);
-    if (name === 'drill') { // the whole drill-in, its tab bar at the bottom (a full-page shot leaves it mid-page)
+    if (name.startsWith('drill')) { // the whole drill-in, its tab bar at the bottom (a full-page shot leaves it mid-page)
       await page.setViewportSize({ width: 390, height: await page.evaluate(() => document.documentElement.scrollHeight) });
       await page.waitForTimeout(250);
     }
@@ -127,7 +127,11 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     if (m.kind === 'bvar') expect(m.outputs[0].influence.reduce((x, i) => x + i.share, 0)).toBeCloseTo(1, 9);
   }
   const marks = Object.fromEntries(['better', 'tie', 'worse'].map((k) => [k, list.filter((m) => m.quality.mark === k).length]));
-  await expect(page.locator('[data-test=engine-quality]')).toHaveText(`Beats no change on ${marks.better} of 8 · ties ${marks.tie} · worse ${marks.worse}`);
+  // the bar's legend, in the rows' words
+  await expect(page.locator('[data-test=engine-quality] .qleg:not([hidden])'))
+    .toHaveText([`${marks.better} better`, `${marks.tie} same as no change`, `${marks.worse} worse`]);
+  await expect(page.locator('[data-test=engine-quality]'))
+    .toHaveAttribute('aria-label', `${marks.better} better · ${marks.tie} same as no change · ${marks.worse} worse`);
   await expect(page.locator('[data-test=engine-kinds]')).toHaveText(new RegExp(`^8 models · ${kinds.filter((k) => k === 'bvar').length} bvar`));
   await expect(page.locator('[data-test=engine-median]')).toHaveText(/^Median model: /);
 
@@ -250,7 +254,14 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   if (gold.kind === 'bvar') {
     await expect(goldRow.locator('.ichip')).toHaveText(gold.outputs[0].influence.filter((i) => i.stream !== gold.uuid).map((i) => `+${i.name}`));
   }
-  await expect(goldRow.locator('[data-test=model-to] .dest')).toHaveAttribute('data-to', 'central');
+  // where it goes, in words; its quality in words; its values labelled (now, and in 24 h, the arrow after it)
+  await expect(goldRow.locator('[data-test=model-to] .tag')).toHaveText(['Central']);
+  await expect(goldRow.locator('[data-test=model-mark]')).toHaveText(gold.quality.text);
+  for (const t of await rows(page).locator('[data-test=model-mark]').allTextContents()) {
+    expect(t).toMatch(/^(\d+% better|Same as no change|\d+% worse|Worse|Not scored yet)$/);
+  }
+  await expect(goldRow.locator('[data-test=model-forecast]')).toHaveAttribute('title', /^Now [\d,.]+, in 24 h [\d,.]+ [↑↓→]$/);
+  await expect(rows(page).filter({ hasText: 'Rain gauge' }).locator('[data-test=model-forecast]')).toHaveAttribute('title', /, in 1 h /);
   await page.setViewportSize({ width: 1280, height: 900 });
   await shots(page, 'list');
 
@@ -267,7 +278,12 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   const pcts = (await inputs.locator('.ipct').allTextContents()).map((x) => Number(x.replace('%', '')));
   expect(pcts).toEqual([...pcts].sort((a, b) => b - a)); // ranked
   expect(Math.abs(pcts.reduce((a, b) => a + b, 0) - 100)).toBeLessThanOrEqual(pcts.length); // rounding
-  await expect(page.locator('[data-test=model-line]').first()).toHaveText('Predicts 24 h ahead in 12 h steps');
+  // what it is, under its name, and how it works, first in the Model
+  await expect(page.locator('[data-test=model-kind-label]')).toHaveText(`Bayesian VAR · reads ${1 + bvar.spec.companions.length} streams`);
+  await expect(page.locator('[data-test=model-quality]')).toHaveText(bvar.quality.text);
+  await expect(page.locator('[data-test=model-line]').first()).toHaveText(/^Learns how this stream moves together with .+, then predicts 24 h ahead\.$/);
+  await expect(page.locator('[data-test=model-line]').nth(1)).toHaveText('Predicts 24 h ahead in 12 h steps');
+  await expect(page.locator('[data-test=model-ahead]')).toHaveText(['12 h', '24 h']); // the chart's two forecast points, labelled
   await expect(page.locator('[data-test=model-line]').filter({ hasText: /^Backtest over 28 tests: / })).toHaveCount(1);
   await expect(page.locator('[data-test=model-details] dl')).toBeHidden(); // the jargon, behind details
   await page.locator('[data-test=model-details] summary').click();
@@ -294,6 +310,15 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(rows(page)).toHaveCount(11);
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(before);
 
+  // A naive model says what it is and its rule (the Base default stream: two points)
+  await page.evaluate((id) => window.satori.go(`models/${id}`), base[0].id);
+  await expect(page.locator('[data-test=model-kind-label]')).toHaveText('No change · not enough history yet');
+  await expect(page.locator('[data-test=model-quality]')).toHaveText('Same as no change');
+  await expect(page.locator('[data-test=model-line]').first()).toHaveText(/^Repeats the latest value until it has \d+ (h|days?) of back-to-back history\.$/);
+  await expect(page.locator('[data-test=model-ahead]').first()).toHaveText(/^(\d+ h|1 day|\d+ days)$/);
+  await shots(page, 'drill-naive');
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   // The phone: the list and a drill-in fit at 390 and 360 px.
   for (const [w, h] of [[390, 844], [360, 740]]) {
     await page.setViewportSize({ width: w, height: h });
@@ -305,6 +330,16 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await page.evaluate((id) => window.satori.go(`models/${id}`), base[1].id);
     await expect(page.locator('[data-test=model-destination]')).toHaveText(/Base\s*Round \d+ · (UP|DOWN) · tx 0x/);
     await fits(page, `a Base drill-in at ${w} px`);
+    await page.evaluate((id) => window.satori.go(`models/${id}`), base[0].id);
+    await expect(page.locator('[data-test=model-kind-label]')).toHaveText('No change · not enough history yet');
+    await fits(page, `a naive drill-in at ${w} px`);
+  }
+  // every string at 360 px, to look at (the test's output): the list, a bvar drill-in, a naive one
+  await page.setViewportSize({ width: 360, height: 740 });
+  for (const [name, where] of [['list', 'models'], ['bvar', `models/${bvar.id}`], ['naive', `models/${base[0].id}`]]) {
+    await page.evaluate((x) => window.satori.go(x), where);
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: test.info().outputPath(`models-360-${name}.png`), fullPage: true });
   }
 
   // The Sort menu open on the phone: its items are 44 px tap targets; light and dark.

@@ -148,7 +148,6 @@ details.card > summary { color: var(--text); font-weight: 600; }
   -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
 :root { --i-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); --i-moon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z'/%3E%3C/svg%3E");
   --i-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 5.5v9'/%3E%3Ccircle cx='12' cy='19' r='0.8'/%3E%3C/svg%3E"); --i-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E");
-  --i-equals: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 9h12M6 15h12'/%3E%3C/svg%3E"); --i-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
   --i-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2.3'/%3E%3Ccircle cx='12' cy='12' r='2.3'/%3E%3Ccircle cx='19' cy='12' r='2.3'/%3E%3C/svg%3E"); }
 [data-s="ok"] { --i: var(--i-check); --tone: var(--ok); --soft: var(--ok-soft); }
 [data-s="idle"] { --i: var(--i-moon); --tone: var(--idle); --soft: var(--idle-soft); }
@@ -350,17 +349,20 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 /* the quality bar: better / tie / worse / not scored, as the rows' marks; a 2px surface gap between segments */
 .qbar { display: block; width: 100%; height: 10px; border-radius: 4px; }
 .qbar .seg { stroke: var(--card); stroke-width: 2px; vector-effect: non-scaling-stroke; }
-[data-q="better"] { --qc: var(--ok); --qi: var(--i-check); }
-[data-q="tie"] { --qc: var(--idle); --qi: var(--i-equals); }
-[data-q="worse"] { --qc: var(--warn); --qi: var(--i-minus); }
+[data-q="better"] { --qc: var(--ok); }
+[data-q="tie"] { --qc: var(--idle); }
+[data-q="worse"] { --qc: var(--warn); }
 .qbar .seg { fill: var(--qc, var(--cell-off)); }
-.q { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.q .qi { width: 18px; height: 18px; border-radius: 50%; flex: none; display: inline-grid; place-items: center; background: var(--qc); }
-.q .qi::after { content: ""; width: 11px; height: 11px; background: var(--card); -webkit-mask: var(--qi) center / contain no-repeat; mask: var(--qi) center / contain no-repeat; }
-.q[data-q="none"] .qi { background: none; border: 1.5px dashed var(--muted); }
-.q[data-q="none"] .qi::after { content: none; }
-.q b { font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.q[data-q="none"] b { color: var(--muted); font-weight: 500; }
+/* the mark in words ("7% better", "Same as no change", "12% worse", "Not scored yet"), in its colour: a tinted pill, its
+   ink the colour mixed toward the text (readable light and dark) */
+.q { display: inline-flex; align-items: center; min-width: 0; }
+.q b { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; line-height: 1.35;
+  font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--qc) 16%, var(--card));
+  color: color-mix(in srgb, var(--qc) 65%, var(--text)); }
+.q[data-q="none"] b { background: none; border: 1px dashed var(--line); color: var(--muted); font-weight: 500; }
+.qlegend { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.qleg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.qleg i { width: 10px; height: 10px; border-radius: 2px; background: var(--qc, var(--cell-off)); flex: none; }
 .mcontrols { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0 12px; }
 /* Sort: a borderless text button on the right, its choice subtle; a small menu under it, a check on the current one */
 .msort { position: relative; margin-left: auto; }
@@ -382,7 +384,7 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 .mcontrols .segmented { margin: 0; gap: 6px; }
 .segmented .n { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 .mlist { padding-top: 4px; padding-bottom: 4px; }
-.mrow { display: grid; grid-template-columns: 76px minmax(0, 1.3fr) 58px minmax(0, 1.5fr) minmax(0, 1.5fr) 72px; gap: 12px; align-items: center;
+.mrow { display: grid; grid-template-columns: 128px minmax(0, 1.3fr) 58px minmax(0, 1.3fr) minmax(0, 1.7fr) 76px; gap: 12px; align-items: center;
   min-height: 48px; padding: 8px 14px; margin: 0 -14px; border-top: 1px solid var(--line); color: var(--text); text-decoration: none;
   font-size: 0.88rem; font-variant-numeric: tabular-nums; }
 .mrow.head { min-height: 0; padding-top: 8px; padding-bottom: 6px; border-top: 0; color: var(--muted); font-size: 0.72rem;
@@ -396,26 +398,26 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .mname small { color: var(--muted); font-size: 0.76rem; }
 .mins { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; } /* long names wrap, never cut */
 .ichip { font-size: 0.72rem; padding: 1px 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
-.mval { display: flex; justify-content: flex-end; align-items: baseline; gap: 5px; white-space: nowrap; overflow: hidden; }
-.mval .to-arrow, .dir { color: var(--muted); }
+.mval { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 4px; min-width: 0; }
+.mnow, .mnext { white-space: nowrap; }
+.mnext::before { content: "·" / ""; margin: 0 4px 0 0; color: var(--muted); } /* a computer: "Now 3,153.92 · in 24 h 3,141.01 ↓" */
+.mnow[hidden] + .mnext::before { content: none; }
+.dir { color: var(--muted); }
 .mval b { font-weight: 600; }
-.mto { display: flex; justify-content: flex-end; gap: 6px; color: var(--muted); }
-.dest { display: inline-block; width: 16px; height: 16px; flex: none; background: currentColor;
-  -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
-/* where the predictions go: central (a server), Base (a block), the network (a broadcast) */
-.dest[data-to="central"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5'%3E%3Crect x='2.5' y='2.5' width='11' height='4.5' rx='1.5'/%3E%3Crect x='2.5' y='9' width='11' height='4.5' rx='1.5'/%3E%3C/svg%3E"); }
-.dest[data-to="base"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M8 1.8l5.4 3.1v6.2L8 14.2l-5.4-3.1V4.9z'/%3E%3C/svg%3E"); }
-.dest[data-to="network"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='8' cy='9' r='1.6' fill='black' stroke='none'/%3E%3Cpath d='M4.8 5.8a4.5 4.5 0 0 0 0 6.4M11.2 5.8a4.5 4.5 0 0 1 0 6.4M2.6 3.6a7.6 7.6 0 0 0 0 10.8M13.4 3.6a7.6 7.6 0 0 1 0 10.8'/%3E%3C/svg%3E"); }
+.mto { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+/* where the predictions go, in words: a tiny tag */
+.tag { font-size: 0.72rem; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line);
+  color: var(--text); white-space: nowrap; }
 
 .drill { max-width: 880px; margin: 0 auto; }
 .back { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; text-decoration: none; }
-.drill-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin: 2px 0 12px; }
+/* the drill-in's head: the name and its quality, then what the model is (always shown) and where the stream comes from */
+.drill-h { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 0 12px; margin: 2px 0 12px; }
 .drill-h h2 { margin: 0; font-size: 1.45rem; overflow-wrap: anywhere; }
-.drill-h p { margin: 2px 0 0; }
-.q.big { gap: 8px; padding-top: 4px; }
-.q.big .qi { width: 26px; height: 26px; }
-.q.big .qi::after { width: 15px; height: 15px; }
-.q.big b { font-size: 1rem; }
+.drill-h p { margin: 2px 0 0; grid-column: 1 / -1; }
+.q.big { padding-top: 4px; flex: none; }
+.q.big b { font-size: 0.95rem; padding: 4px 12px; }
+.kindlabel { margin: 3px 0 0; font-weight: 600; font-size: 0.95rem; }
 .stage { display: grid; gap: 10px; }
 .stage-h { display: flex; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; }
 .stage-h > b { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
@@ -458,11 +460,11 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .mchart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums;
   paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round; }
 .mchart text.elab { fill: var(--text); font-weight: 600; font-size: 12px; }
+.mchart text.tlab { font-size: 10.5px; } /* how far ahead a forecast point is */
 .readout { margin: 2px 0 0; min-height: 1.4em; font-variant-numeric: tabular-nums; }
 .dests { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
 .drow { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; min-height: 30px; font-size: 0.88rem; }
-.drow .dest { color: var(--muted); }
-.dlabel { font-weight: 600; }
+.dlabel { flex: none; }
 .drow .dtext { overflow-wrap: anywhere; }
 .drow a.dtext:not([href]) { color: var(--text); text-decoration: none; }
 
@@ -470,12 +472,17 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
    one line that wraps (the values to the right, on a line of their own when the inputs need the room), never cut */
 @media (max-width: 760px) {
   .mrow.head { display: none; }
-  .mrow { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: "q name to" "q meta meta";
-    gap: 4px 8px; align-items: center; padding-top: 10px; padding-bottom: 10px; }
-  .mrow > .q { grid-area: q; flex-direction: column; gap: 3px; align-self: start; padding-top: 2px; }
+  .mrow { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "name name to" "q meta meta";
+    gap: 6px 8px; align-items: center; padding-top: 10px; padding-bottom: 10px; }
+  .mrow > .q { grid-area: q; align-self: start; }
+  /* the phone: "Same", not "Same as no change" (the full words stay the element's text) */
+  .mrow .q b[data-short="Same"] { font-size: 0; }
+  .mrow .q b[data-short="Same"]::after { content: "Same" / ""; font-size: 0.78rem; }
+  .mval { flex-direction: column; align-items: flex-end; }
+  .mnext::before { content: none; }
   .mrow > .mname { grid-area: name; }
   .mrow > .mto { grid-area: to; }
-  .mrow > .mmeta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+  .mrow > .mmeta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 6px; min-width: 0; }
   .mmeta > .mins { display: contents; }
   .mmeta > .mval { margin-left: auto; }
   .ibar { grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3.2em; gap: 10px; }

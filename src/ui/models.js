@@ -6,8 +6,8 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { summaryOf, engineStatus, sortModels, filterModels } from '../neuron/models.js';
-import { rowView, statusView, drillView, chartOf } from './drill.js';
-import { fmtNum, fmtWhen } from './format.js';
+import { rowView, statusView, drillView, chartOf, numText } from './drill.js';
+import { fmtWhen } from './format.js';
 import { menuKey } from './prefs.js';
 
 /** The models (models()) and the open model (model(id)), set by main.js. */
@@ -22,12 +22,13 @@ export const modelHref = (id) => `#models/${encodeURIComponent(id).replace(/%3A/
 
 // Inside a list's item, an expression keeps one kind of value (always text, or always a template): ArrowJS 1.0.6 syncs
 // a reused item's slots in place, and a slot that was text and is now a template printed the template's source.
-// So icons are CSS masks (style.css), and what is shown or not is `hidden`, never a conditional template.
-const dest = (to) => html`<i class="dest" data-to="${to}" title="${TO[to]}" aria-label="${TO[to]}"></i>`;
+// So what is shown or not is `hidden`, never a conditional template.
+/** Where predictions go: a tiny text tag (the owner could not read the pictograms). */
+const dest = (to) => html`<span class="tag" data-to="${to}">${TO[to]}</span>`;
 
 function row(a, v) {
   // One root node, no whitespace around it (see streams.js: ArrowJS 1.0.6's keyed lists).
-  return html`<a class="mrow" href="${modelHref(v.id)}" data-test="model-row" data-id="${v.id}" data-mark="${v.mark}" @click="${(e) => { e.preventDefault(); a.openModel(v.id); }}"><span class="q" data-q="${v.mark}" title="${v.markTitle}"><i class="qi"></i><b data-test="model-mark">${v.markText}</b></span><span class="mname"><b data-test="model-name">${v.name}</b><small hidden="${!v.as}">${`→ ${v.as}`}</small></span><span class="mmeta"><span class="mkind"><span class="${v.kind === 'bvar' ? 'chip' : 'chip n'}" data-test="model-kind">${v.kind}</span></span><span class="mins" data-test="model-inputs">${v.chips.map((c) => html`<span class="ichip">${c}</span>`)}</span><span class="mval" data-test="model-forecast" title="${`latest → forecast ${v.horizon} ahead`}"><span class="muted">${v.latest}</span><span class="to-arrow">→</span><b>${v.forecast}</b><span class="dir" data-dir="${v.arrow}">${v.arrow}</span></span></span><span class="mto" data-test="model-to">${v.dests.map(dest)}</span></a>`;
+  return html`<a class="mrow" href="${modelHref(v.id)}" data-test="model-row" data-id="${v.id}" data-mark="${v.mark}" @click="${(e) => { e.preventDefault(); a.openModel(v.id); }}"><span class="q" data-q="${v.mark}" title="${v.markTitle}"><b data-test="model-mark" data-short="${v.markShort}">${v.markText}</b></span><span class="mname"><b data-test="model-name">${v.name}</b><small hidden="${!v.as}">${`→ ${v.as}`}</small></span><span class="mmeta"><span class="mkind"><span class="${v.kind === 'bvar' ? 'chip' : 'chip n'}" data-test="model-kind">${v.kind}</span></span><span class="mins" data-test="model-inputs">${v.chips.map((c) => html`<span class="ichip">${c}</span>`)}</span><span class="mval" data-test="model-forecast" title="${`${v.nowText}, ${v.nextText} ${v.arrow}`}"><span class="mnow" hidden="${!v.horizon}"><span class="muted">Now</span> ${v.latest}</span><span class="mnext"><span class="muted" hidden="${!v.horizon}">${`in ${v.horizon}`}</span> <b>${v.forecast}</b> <span class="dir" data-dir="${v.arrow}">${v.arrow}</span></span></span></span><span class="mto" data-test="model-to">${v.dests.map(dest)}</span></a>`;
 }
 
 /** The list's view, read again when the models, the sort or the filter change. */
@@ -47,6 +48,7 @@ const count = (to) => {
 function status() {
   const st = () => engineStatus({ summary: summary(), central: state.central, work: state.engineWork, now: state.now });
   const sv = () => statusView(summary());
+  const legendOf = (k) => sv().legend.find((x) => x.mark === k); // the bar's legend: the rows' words, each in its colour
   // the quality bar: a fixed segment per mark in a 100-wide box (preserveAspectRatio none; the gaps are the surface).
   // Fixed SVG children with reactive attributes: ArrowJS builds an inserted chunk outside the SVG namespace.
   const seg = (mark) => () => {
@@ -69,7 +71,7 @@ function status() {
     <div class="engine-fact" hidden="${() => !summary().total}">
       <span class="label">Against no change</span>
       <svg class="qbar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><rect class="seg" data-q="better" x="${x('better')}" y="0" width="${w('better')}" height="8"></rect><rect class="seg" data-q="tie" x="${x('tie')}" y="0" width="${w('tie')}" height="8"></rect><rect class="seg" data-q="worse" x="${x('worse')}" y="0" width="${w('worse')}" height="8"></rect><rect class="seg" data-q="unscored" x="${x('unscored')}" y="0" width="${w('unscored')}" height="8"></rect></svg>
-      <span data-test="engine-quality">${() => sv().marks}</span>
+      <span class="qlegend" data-test="engine-quality" aria-label="${() => sv().marks}">${['better', 'tie', 'worse', 'unscored'].map((k) => html`<span class="qleg" data-q="${k}" hidden="${() => !legendOf(k)}"><i aria-hidden="true"></i>${() => legendOf(k)?.text ?? ''}</span> `)}</span>
       <span class="muted small" data-test="engine-median">${() => sv().median}</span>
       <span class="muted small" data-test="engine-note">${() => sv().note}</span>
     </div>
@@ -126,7 +128,7 @@ function controls(a) {
 function list(a) {
   return html`
   <section class="tile mlist" data-test="models">
-    <div class="mrow head" aria-hidden="true"><span>Quality</span><span>Predicts</span><span>Model</span><span>Inputs</span><span class="r">Latest → forecast</span><span class="r">To</span></div>
+    <div class="mrow head" aria-hidden="true"><span>Quality</span><span>Predicts</span><span>Model</span><span>Inputs</span><span class="r">Now · forecast</span><span class="r">Goes to</span></div>
     <div>${() => listed().map((v) => row(a, v).key(`${v.id}|${v.markText}|${v.kind}|${v.chips}|${v.latest}|${v.forecast}|${v.dests}`))}</div>
     <p class="muted small" data-test="models-empty" hidden="${() => listed().length > 0}">${() => (box.list.length ? 'No model sends its predictions there yet.' : 'No models yet: the first poll builds one for each stream central serves.')}</p>
   </section>`;
@@ -156,16 +158,16 @@ const chartAt = (i) => {
 
 const bar = (x) => html`<div class="ibar" data-test="model-input" data-own="${x.own}"><span class="iname" title="${x.own ? `${x.name} (itself: its own last step)` : x.name}">${x.name}</span><svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><line class="track" x1="0" y1="5" x2="100" y2="5"></line><line class="fill" x1="0" y1="5" x2="${x.share ? Math.max(x.share * 100, 0.5) : 0}" y2="5" hidden="${!x.share}"></line></svg><b class="ipct">${x.pct}</b></div>`;
 
-const destRow = (d) => html`<li class="drow" data-test="model-destination" data-to="${d.to}">${dest(d.to)}<span class="dlabel">${d.label}</span><a class="dtext" href="${d.href || false}" target="_blank" rel="noopener">${d.text}</a></li>`;
+const destRow = (d) => html`<li class="drow" data-test="model-destination" data-to="${d.to}"><span class="tag dlabel">${d.label}</span><a class="dtext" href="${d.href || false}" target="_blank" rel="noopener">${d.text}</a></li>`;
 
 /** The readout under a chart: the point under the pointer, else the forecast's endpoint. */
 function readout(o, i) {
   const h = state.modelHover;
   const c = chartAt(i);
   const p = h?.out === i ? c?.hover[h.i] : null;
-  if (p) return `${p.ahead ? 'Forecast for ' : ''}${fmtWhen(p.ts)} · ${fmtNum(p.value)}`;
+  if (p) return `${p.ahead ? 'Forecast for ' : ''}${fmtWhen(p.ts)} · ${numText(p.value)}`;
   const end = c?.points.at(-1);
-  return end ? `Forecast for ${fmtWhen(end.ts)} · ${fmtNum(end.value)}` : o.latestWhen ? `Latest ${o.latestWhen}` : '';
+  return end ? `Forecast for ${fmtWhen(end.ts)} · ${numText(end.value)}` : o.latestWhen ? `Latest ${o.latestWhen}` : '';
 }
 
 function hover(e, i) {
@@ -197,6 +199,7 @@ function chart(i) {
   const end = pt('end');
   const mid = pt('mid');
   const y = (k) => () => c()?.yLabels[k];
+  const tl = (k) => () => c()?.timeLabels[k]; // how far ahead each forecast point is ("12 h", "24 h")
   const x = (k) => () => c()?.xLabels[k];
   const label = () => {
     const o = dv()?.outputs[i];
@@ -204,7 +207,7 @@ function chart(i) {
   };
   const top = () => c()?.pad.t ?? 0;
   const bottom = () => CHART_H - (c()?.pad.b ?? 0);
-  return html`<svg class="mchart" data-test="model-chart" viewBox="${() => `0 0 ${c()?.w ?? 300} ${CHART_H}`}" height="${CHART_H}" role="img" aria-label="${label}" tabindex="0" @pointermove="${(e) => hover(e, i)}" @pointerleave="${() => { state.modelHover = null; }}" @keydown="${(e) => step(e, i)}"><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[0] ?? -10}" y2="${() => c()?.grid[0] ?? -10}"></line><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[1] ?? -10}" y2="${() => c()?.grid[1] ?? -10}"></line><line class="now" x1="${() => c()?.now ?? -10}" x2="${() => c()?.now ?? -10}" y1="${top}" y2="${bottom}"></line><path class="hist" d="${() => c()?.line ?? ''}"></path><path class="ahead" d="${() => c()?.ahead ?? ''}"></path><line class="cross" hidden="${() => !hp()}" x1="${() => hp()?.x ?? -10}" x2="${() => hp()?.x ?? -10}" y1="${top}" y2="${bottom}"></line><circle class="last" r="3.5" hidden="${() => !c()?.last}" cx="${() => c()?.last?.x ?? -10}" cy="${() => c()?.last?.y ?? -10}"></circle><circle class="fpt" r="4" hidden="${() => !mid()}" cx="${() => mid()?.x ?? -10}" cy="${() => mid()?.y ?? -10}"></circle><circle class="fpt end" data-test="model-endpoint" r="5.5" hidden="${() => !end()}" cx="${() => end()?.x ?? -10}" cy="${() => end()?.y ?? -10}"></circle><circle class="hot" r="4.5" hidden="${() => !hp()}" cx="${() => hp()?.x ?? -10}" cy="${() => hp()?.y ?? -10}"></circle><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(0)()?.y ?? -10}">${() => y(0)()?.text ?? ''}</text><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(1)()?.y ?? -10}">${() => y(1)()?.text ?? ''}</text><text class="xlab" x="${() => x(0)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(0)()?.text ?? ''}</text><text class="xlab" text-anchor="end" x="${() => x(1)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(1)()?.text ?? ''}</text><text class="elab" text-anchor="end" x="${() => c()?.endLabel?.x ?? -10}" y="${() => c()?.endLabel?.y ?? -10}">${() => c()?.endLabel?.text ?? ''}</text></svg>`;
+  return html`<svg class="mchart" data-test="model-chart" viewBox="${() => `0 0 ${c()?.w ?? 300} ${CHART_H}`}" height="${CHART_H}" role="img" aria-label="${label}" tabindex="0" @pointermove="${(e) => hover(e, i)}" @pointerleave="${() => { state.modelHover = null; }}" @keydown="${(e) => step(e, i)}"><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[0] ?? -10}" y2="${() => c()?.grid[0] ?? -10}"></line><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[1] ?? -10}" y2="${() => c()?.grid[1] ?? -10}"></line><line class="now" x1="${() => c()?.now ?? -10}" x2="${() => c()?.now ?? -10}" y1="${top}" y2="${bottom}"></line><path class="hist" d="${() => c()?.line ?? ''}"></path><path class="ahead" d="${() => c()?.ahead ?? ''}"></path><line class="cross" hidden="${() => !hp()}" x1="${() => hp()?.x ?? -10}" x2="${() => hp()?.x ?? -10}" y1="${top}" y2="${bottom}"></line><circle class="last" r="3.5" hidden="${() => !c()?.last}" cx="${() => c()?.last?.x ?? -10}" cy="${() => c()?.last?.y ?? -10}"></circle><circle class="fpt" r="4" hidden="${() => !mid()}" cx="${() => mid()?.x ?? -10}" cy="${() => mid()?.y ?? -10}"></circle><circle class="fpt end" data-test="model-endpoint" r="5.5" hidden="${() => !end()}" cx="${() => end()?.x ?? -10}" cy="${() => end()?.y ?? -10}"></circle><circle class="hot" r="4.5" hidden="${() => !hp()}" cx="${() => hp()?.x ?? -10}" cy="${() => hp()?.y ?? -10}"></circle><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(0)()?.y ?? -10}">${() => y(0)()?.text ?? ''}</text><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(1)()?.y ?? -10}">${() => y(1)()?.text ?? ''}</text><text class="xlab" x="${() => x(0)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(0)()?.text ?? ''}</text><text class="xlab" text-anchor="end" x="${() => x(1)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(1)()?.text ?? ''}</text><text class="elab" text-anchor="end" x="${() => c()?.endLabel?.x ?? -10}" y="${() => c()?.endLabel?.y ?? -10}">${() => c()?.endLabel?.text ?? ''}</text><text class="tlab" data-test="model-ahead" text-anchor="${() => tl(0)()?.anchor ?? 'middle'}" x="${() => tl(0)()?.x ?? -10}" y="${() => tl(0)()?.y ?? -10}">${() => tl(0)()?.text ?? ''}</text><text class="tlab" data-test="model-ahead" text-anchor="${() => tl(1)()?.anchor ?? 'middle'}" x="${() => tl(1)()?.x ?? -10}" y="${() => tl(1)()?.y ?? -10}">${() => tl(1)()?.text ?? ''}</text></svg>`;
 }
 
 function outBlock(o, i) {
@@ -220,8 +223,10 @@ function drill(a) {
     <p class="error" role="alert" data-test="model-error" hidden="${() => !state.modelError}">${() => state.modelError}</p>
     <div class="stages" hidden="${() => !v()}">
       <header class="drill-h">
-        <div><h2 data-test="model-title">${() => v()?.title ?? ''}</h2><p class="muted small">${() => v()?.sub ?? ''}</p></div>
-        <span class="q big" data-q="${() => v()?.quality.mark ?? 'none'}" title="${() => (v() ? `vs no change: ${v().quality.text}` : '')}"><i class="qi"></i><b>${() => v()?.quality.short ?? ''}</b></span>
+        <h2 data-test="model-title">${() => v()?.title ?? ''}</h2>
+        <span class="q big" data-test="model-quality" data-q="${() => v()?.quality.mark ?? 'none'}" title="${() => (v() ? `vs no change: ${v().quality.text}` : '')}"><b>${() => v()?.quality.short ?? ''}</b></span>
+        <p class="kindlabel" data-test="model-kind-label">${() => v()?.kindLabel ?? ''}</p>
+        <p class="muted small sub">${() => v()?.sub ?? ''}</p>
       </header>
       <section class="tile stage" data-test="model-in">
         <div class="stage-h"><b>In</b><span>${() => v()?.note ?? ''}</span></div>

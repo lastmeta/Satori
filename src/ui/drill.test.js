@@ -34,6 +34,8 @@ describe('the drill-in', () => {
   test('two outputs: Out draws both, each with its forecast, chart and destinations; In follows the chosen output', () => {
     const v = drillView(TWO, { now: AT + 2 * H, explorer: 'https://sepolia.basescan.org' });
     expect(v.title).toBe('bvar · 2 streams');
+    expect(v.kindLabel).toBe('Bayesian VAR · reads 3 streams'); // its algorithm in plain words, under the name
+    expect(v.quality).toMatchObject({ mark: 'better', short: '10% better' });
     expect(v.outputs).toHaveLength(2);
     const [gold, silver] = v.outputs;
     expect(gold).toMatchObject({ name: 'gold', arrow: '↑', forecast: 'In 12 h 2,610.00 · in 24 h 2,620.00', latest: '2,600.00' });
@@ -58,6 +60,7 @@ describe('the drill-in', () => {
     const v = drillView(one, { now: AT + 2 * H });
     expect(v.choose).toBeNull();
     expect(v.model.lines).toEqual([
+      'Learns how this stream moves together with silver and oil, then predicts 24 h ahead.',
       'Predicts 24 h ahead in 12 h steps',
       'Learned from 980 steps of history (12 h each)',
       'Backtest over 28 tests: 10% less error than no change',
@@ -69,9 +72,30 @@ describe('the drill-in', () => {
     const nq = q(null, null, 'naive');
     const naive = drillView({ ...one, kind: 'naive', quality: nq, model: { kind: 'naive', rows: 3, tests: 0, step: 12 * H, horizon: 24 * H, weight: null,
       trained: AT, quality: nq } }, { now: AT });
-    expect(naive.model.lines).toEqual(['Predicts 24 h ahead in 12 h steps', 'Repeats the last value until it has 6 rows of back-to-back steps (it has 3)',
+    expect(naive.kindLabel).toBe('No change · not enough history yet');
+    expect(naive.quality).toMatchObject({ mark: 'tie', short: 'Same as no change' });
+    // the true rule: 6 lag pairs need 8 back-to-back steps (4 days of 12 h)
+    expect(naive.model.lines).toEqual(['Repeats the latest value until it has 4 days of back-to-back history.', 'Predicts 24 h ahead in 12 h steps',
       'Backtest: none, it repeats the last value (no change)', 'Trained just now']);
     expect(naive.model.details).toEqual([]);
+    // every kind says what it is; a future ensemble too
+    const kind = (k, o = {}) => drillView({ ...one, kind: k, ...o }, { now: AT });
+    expect(kind('bar1').kindLabel).toBe('Single-stream AR (bar1)');
+    expect(kind('bar1').model.lines[0]).toBe('Learns how each 12 h move of this stream follows the one before, then predicts 24 h ahead.');
+    expect(kind('bar1d').kindLabel).toBe('Single-stream AR on changes (bar1d)');
+    expect(kind('echo').kindLabel).toBe('Echo · the value is not a number');
+    expect(kind('bvar', { algorithms: ['bvar', 'bar1', 'naive'] }).kindLabel).toBe('Ensemble · 3 algorithms');
+    const hourly = { ...one, kind: 'naive', outputs: [{ ...one.outputs[0], forecast: { value: 5, step: H, horizon: H, at: AT } }] };
+    expect(drillView(hourly, { now: AT }).model.lines[0]).toBe('Repeats the latest value until it has 8 h of back-to-back history.');
+  });
+
+  test('the mark in short words, the colour kept: "10% better", "Same as no change" (the phone: "Same"), "20% worse", "Not scored yet"', () => {
+    expect(rowView({ ...TWO, quality: q(0.009) })).toMatchObject({ mark: 'better', markText: '10% better', markShort: '10% better' });
+    expect(rowView({ ...TWO, quality: q(0.0101) })).toMatchObject({ mark: 'tie', markText: 'Same as no change', markShort: 'Same' });
+    expect(rowView({ ...TWO, quality: q(null, null, 'naive') })).toMatchObject({ mark: 'tie', markText: 'Same as no change' });
+    expect(rowView({ ...TWO, quality: q(0.012) })).toMatchObject({ mark: 'worse', markText: '20% worse' });
+    expect(rowView({ ...TWO, quality: q(null) })).toMatchObject({ mark: 'none', markText: 'Not scored yet', markShort: 'Not scored yet' });
+    expect(rowView({ ...TWO, quality: q(0.1, 0) })).toMatchObject({ mark: 'worse', markText: 'Worse' }); // no change was perfect
   });
 
   test('quality in words and as a short number', () => {
@@ -110,6 +134,23 @@ describe('the chart: recent history and the forecast to scale, the endpoint emph
     expect(end.y).toBeLessThan(c.last.y); // 2,620 above 2,600 (y grows down)
     expect(c.ahead.startsWith(`M${c.last.x.toFixed(1)}`)).toBe(true);
     expect(c.yLabels.map((l) => l.text)).toEqual(['2,620.00', '2,550.00']);
+    // each forecast point says how far ahead it is, so the open and the filled circle need no legend
+    expect(c.timeLabels.map((l) => l.text)).toEqual(['12 h', '24 h']);
+    expect(c.timeLabels[0]).toMatchObject({ x: c.points[0].x, anchor: 'middle' });
+    expect(c.timeLabels[1]).toMatchObject({ anchor: 'end' });
+    for (const [i, l] of c.timeLabels.entries()) expect(Math.abs(l.y - c.points[i].y)).toBeGreaterThanOrEqual(8); // off the circle (r 5.5)
+    const once = chartOf({ ...TWO.outputs[0], forecast: { value: 2620, step: 24 * H, horizon: 24 * H, at: AT } }, { w: 600, h: 160 });
+    expect(once.timeLabels.map((l) => l.text)).toEqual(['24 h']);
+    // a narrow chart (a week of history on a phone): the two points ~10 px apart; their labels are staggered, never overlapping
+    const long = { ...TWO.outputs[0], history: hist(7 * 48, 2550, AT - 60) };
+    const narrow = chartOf(long, { w: 300, h: 160 });
+    expect(narrow.points[1].x - narrow.points[0].x).toBeLessThan(20);
+    const [a, b] = narrow.timeLabels;
+    const width = (l) => l.text.length * 6; // ~6 px a character at 10.5 px
+    const span = (l) => (l.anchor === 'end' ? [l.x - width(l), l.x] : [l.x - width(l) / 2, l.x + width(l) / 2]);
+    const apart = span(a)[1] <= span(b)[0] || span(b)[1] <= span(a)[0] || Math.abs(a.y - b.y) >= 11;
+    expect(apart).toBe(true);
+    for (const l of narrow.timeLabels) expect(l.y).toBeLessThanOrEqual(160 - narrow.pad.b + 13); // above the axis' labels
     expect(chartOf({ ...TWO.outputs[0], history: [] }, { w: 600, h: 160 }).line).toBe('');
     // a stretch with no observations is not drawn as if there were: the line breaks
     const gappy = TWO.outputs[0].history.filter((_, k) => k < 20 || k > 30);
@@ -121,10 +162,14 @@ describe('the chart: recent history and the forecast to scale, the endpoint emph
 describe('the list and the status', () => {
   test('a row: the name, its kind, the inputs as chips by influence, quality, latest → forecast, where it goes', () => {
     const r = rowView(TWO);
-    expect(r).toMatchObject({ name: 'bvar · 2 streams', kind: 'bvar', chips: ['+oil'], mark: 'better', markText: '−10%',
+    expect(r).toMatchObject({ name: 'bvar · 2 streams', kind: 'bvar', chips: ['+oil'], mark: 'better', markText: '10% better',
       dests: ['central', 'base', 'network'] });
     const one = rowView({ ...TWO, name: 'gold', outputs: [TWO.outputs[0]] });
     expect(one).toMatchObject({ name: 'gold', chips: ['+oil', '+silver'], latest: '2,600.00', forecast: '2,620.00', arrow: '↑', as: null });
+    // the values labelled: now, and the forecast at its own horizon, the arrow after it
+    expect(one).toMatchObject({ nowText: 'Now 2,600.00', nextText: 'in 24 h 2,620.00' });
+    const hourly = rowView({ ...TWO, name: 'rain', outputs: [{ ...TWO.outputs[1], forecast: { value: 4, step: H, horizon: H, at: AT } }] });
+    expect(hourly).toMatchObject({ nowText: 'Now 31', nextText: 'in 1 h 4', arrow: '↓' });
     expect(rowView({ ...TWO, name: 'btc', outputs: [{ ...TWO.outputs[1], as: 'btc_pred' }] }).as).toBe('btc_pred');
   });
 
@@ -132,7 +177,11 @@ describe('the list and the status', () => {
     const models = [TWO, { ...TWO, kind: 'naive', quality: q(null, null, 'naive') }, { ...TWO, kind: 'bar1', quality: q(0.02) }, { ...TWO, kind: 'bar1', quality: q(null) }];
     const v = statusView(summaryOf(models));
     expect(v.kinds).toBe('4 models · 1 bvar · 2 bar1 · 1 naive');
-    expect(v.marks).toBe('Beats no change on 1 of 4 · ties 1 · worse 1 · 1 not scored yet');
+    expect(v.marks).toBe('1 better · 1 same as no change · 1 worse · 1 not scored yet');
+    // the bar's legend: the rows' words, each in its colour
+    expect(v.legend).toEqual([{ mark: 'better', n: 1, text: '1 better' }, { mark: 'tie', n: 1, text: '1 same as no change' },
+      { mark: 'worse', n: 1, text: '1 worse' }, { mark: 'unscored', n: 1, text: '1 not scored yet' }]);
+    expect(statusView(summaryOf([TWO])).marks).toBe('1 better · 0 same as no change · 0 worse');
     expect(v.median).toBe('Median model: 45% more error than no change');
     expect(v.bar.map((s) => [s.mark, s.pct])).toEqual([['better', 25], ['tie', 25], ['worse', 25], ['unscored', 25]]);
     expect(statusView(summaryOf([])).kinds).toBe('No models yet');

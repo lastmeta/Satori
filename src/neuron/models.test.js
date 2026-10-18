@@ -40,7 +40,10 @@ function market(n, names, seed) {
 describe('quality: the model\'s backtest error against no change\'s, on the same origins', () => {
   test(`better below ${(1 - TIE) * 100} % of no change's error, worse above ${(1 + TIE) * 100} %, else a tie`, () => {
     expect(TIE).toBe(0.05); // evolution's margin
-    expect(qualityOf({ kind: 'bvar', score: 0.009, persist: 0.01 })).toEqual({ mark: 'better', ratio: expect.closeTo(0.9, 12), error: 0.009, noChange: 0.01 });
+    expect(qualityOf({ kind: 'bvar', score: 0.009, persist: 0.01 })).toEqual({ mark: 'better', ratio: expect.closeTo(0.9, 12), error: 0.009, noChange: 0.01,
+      text: '10% better' });
+    expect(qualityOf({ kind: 'bvar', score: 0.0112, persist: 0.01 }).text).toBe('12% worse');
+    expect(qualityOf({ kind: 'bvar', score: 0.0104, persist: 0.01 }).text).toBe('Same as no change');
     expect(qualityOf({ kind: 'bar1', score: 0.0094, persist: 0.01 }).mark).toBe('better');
     expect(qualityOf({ kind: 'bar1', score: 0.0096, persist: 0.01 }).mark).toBe('tie');
     expect(qualityOf({ kind: 'bvar', score: 0.0104, persist: 0.01 }).mark).toBe('tie');
@@ -49,8 +52,8 @@ describe('quality: the model\'s backtest error against no change\'s, on the same
   });
 
   test('naive is no change: a tie by construction; no backtest yet: not scored; a perfect no change', () => {
-    expect(qualityOf({ kind: 'naive', score: null, persist: null })).toEqual({ mark: 'tie', ratio: 1, error: null, noChange: null });
-    expect(qualityOf({ kind: 'bvar', score: null, persist: null })).toEqual({ mark: null, ratio: null, error: null, noChange: null });
+    expect(qualityOf({ kind: 'naive', score: null, persist: null })).toEqual({ mark: 'tie', ratio: 1, error: null, noChange: null, text: 'Same as no change' });
+    expect(qualityOf({ kind: 'bvar', score: null, persist: null })).toEqual({ mark: null, ratio: null, error: null, noChange: null, text: 'Not scored yet' });
     expect(qualityOf({ kind: 'echo' }).mark).toBeNull();
     expect(qualityOf({ kind: 'bar1', score: 0, persist: 0 })).toMatchObject({ mark: 'tie', ratio: 1 });
     expect(qualityOf({ kind: 'bar1', score: 0.1, persist: 0 })).toMatchObject({ mark: 'worse', ratio: null });
@@ -60,7 +63,8 @@ describe('quality: the model\'s backtest error against no change\'s, on the same
     const q = (score) => qualityOf({ kind: 'bvar', score, persist: 1 });
     expect(qualityOfAll([q(0.9)])).toEqual(q(0.9));
     expect(qualityOfAll([q(0.8), q(0.9), q(1.2)])).toMatchObject({ mark: 'better', ratio: expect.closeTo(0.9, 12) });
-    expect(qualityOfAll([q(null), q(null)]).mark).toBeNull();
+    expect(qualityOfAll([q(null), q(null)])).toMatchObject({ mark: null, text: 'Not scored yet' });
+    expect(qualityOfAll([q(0.8), q(0.9), q(1.2)]).text).toBe('10% better');
   });
 });
 
@@ -82,6 +86,9 @@ describe('the list: every model, named for the stream it predicts', () => {
     expect(centralModels(ROWS)).toHaveLength(3); // a stream with no forecast yet is no model yet
     expect(gold).toMatchObject({
       id: 'central:u-gold', source: 'central', name: 'gold', kind: 'bvar', trained: 5010,
+      // what it is and how it works, in plain words; `algorithms` a list (one today; an ensemble would list several)
+      algorithms: ['bvar'], kindLabel: 'Bayesian VAR · reads 3 streams',
+      description: 'Learns how this stream moves together with eth and oil, then predicts 24 h ahead.',
       quality: { mark: 'better' },
       inputs: [{ stream: 'u-gold', name: 'gold' }, { stream: 'u-eth', name: 'eth' }, { stream: 'u-oil', name: 'oil' }],
       // as before
@@ -99,7 +106,9 @@ describe('the list: every model, named for the stream it predicts', () => {
     expect(eth).toMatchObject({ kind: 'bar1', quality: { mark: 'worse', ratio: 1.5 }, inputs: [{ stream: 'u-eth', name: 'eth' }] });
     expect(eth.outputs[0]).toMatchObject({ direction: 'down', influence: [{ stream: 'u-eth', share: 1 }],
       destinations: [{ to: 'central', status: 'pending', when: 5010 }] });
-    expect(oil).toMatchObject({ kind: 'naive', quality: { mark: 'tie' }, outputs: [{ direction: 'flat' }] });
+    expect(oil).toMatchObject({ kind: 'naive', quality: { mark: 'tie' }, outputs: [{ direction: 'flat' }],
+      kindLabel: 'No change · not enough history yet', description: 'Repeats the latest value until it has 4 days of back-to-back history.' });
+    expect(eth).toMatchObject({ kindLabel: 'Single-stream AR (bar1)' });
     // trained: when it was last fit, the poll's forecast or the training pass after it
     expect(centralModels([{ ...ROWS[0], spec_at: 9000 }])[0].trained).toBe(9000);
     expect(centralModels([{ ...ROWS[0], spec_at: 4000 }])[0].trained).toBe(5010);

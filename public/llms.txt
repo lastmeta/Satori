@@ -49,6 +49,19 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-18 (the Models tab in plain words)
+
+- Each `models()` entry gains `algorithms` (a list: one today, an ensemble
+  later), `kindLabel` (its algorithm in plain words: "Bayesian VAR · reads 3
+  streams", "Single-stream AR (bar1)", "No change · not enough history yet")
+  and `description` (how it works, one sentence). `quality` gains `text`:
+  "7% better", "Same as no change", "12% worse", "Not scored yet", the
+  words the page shows.
+- `data-test`: `model-mark` holds the words (`data-short` the phone's);
+  `engine-quality` is the bar's legend (`aria-label`: "24 better · 40 same
+  as no change · 19 worse"); new `model-kind-label`, `model-quality`,
+  `model-ahead` (the chart's "12 h", "24 h"). Destinations are text tags.
+
 ## Changed 2026-10-18 (the training pass)
 
 - The neuron never rests with a model unscored: a **training pass** fits
@@ -685,7 +698,8 @@ the page's JS context:
      source: 'central' | 'base' | 'nostr',
      name,               // the stream it predicts ("bvar · 3 streams" for a model of several)
      kind,               // 'bvar' | 'bar1' | 'bar1d' | 'naive' | 'echo' (Nostr: a value that is not a number)
-     quality: { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange },
+     algorithms: [kind], kindLabel, description, // what it is and how it works, in plain words
+     quality: { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange, text }, // text: "7% better", "Same as no change", …
      inputs: [{ stream, name }],     // what it reads: the stream itself, then a bvar's companions
      outputs: [{                     // what it predicts: a list (one today)
        stream, name, as?,            // as: the `<stream>_pred` a Nostr model publishes
@@ -918,13 +932,13 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`, `tab-<tab>`,
   `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`. Models:
   `engine` (`data-tone`), `engine-title`, `engine-line`, `engine-kinds`,
-  `engine-quality`, `engine-median`, `engine-note`, `models-filter-<all|central|base|network>`,
+  `engine-quality` (the bar's legend), `engine-median`, `engine-note`, `models-filter-<all|central|base|network>`,
   `models-sort` (the Sort button: opens a menu, `aria-expanded`), `models-sort-menu`,
   `models-sort-<quality|name>` (its items, `aria-checked`; the choice is kept on this device), `models` (the list) with
   `model-row` (`data-id`, `data-mark`: better, tie, worse or none) and inside
-  it `model-mark`, `model-name`, `model-kind`, `model-inputs`,
+  it `model-mark` (the words), `model-name`, `model-kind`, `model-inputs`,
   `model-forecast`, `model-to`; `models-empty`; the drill-in `model-detail`,
-  `model-back`, `model-title`, `model-loading`, `model-error`, `model-in`
+  `model-back`, `model-title`, `model-kind-label`, `model-quality`, `model-ahead`, `model-loading`, `model-error`, `model-in`
   with `model-input` (`data-own` for the stream itself), `model-model` with
   `model-line` and `model-details`, `model-out` with `model-output`
   (`data-stream`), `model-output-name`, `model-output-forecast`,
