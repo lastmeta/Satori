@@ -118,6 +118,17 @@ describe('createWork', () => {
     w.start('train').step('score', 0, 81);
     expect(w.of('train')).toMatchObject({ critical: false });
   });
+
+  test('Retrain (`retrain`) is the hero\'s after the training pass, never critical; its entry carries the model\'s name', () => {
+    const e = (task, step) => ({ task, step, done: 3, total: null, since: 0, critical: false });
+    expect(ORDER.slice(0, 4)).toEqual(['central', 'base', 'train', 'retrain']);
+    expect(HERO).toContain('retrain');
+    expect(leading({ retrain: e('retrain', 'search'), central: e('central', 'observations') }, HERO)).toMatchObject({ task: 'central' });
+    expect(leading({ retrain: e('retrain', 'search'), train: e('train', 'score') }, HERO)).toMatchObject({ task: 'train' });
+    const w = createWork();
+    w.start('retrain').step('search', 40, null, { name: 'eth' });
+    expect(w.of('retrain')).toMatchObject({ task: 'retrain', step: 'search', done: 40, name: 'eth', critical: false });
+  });
 });
 
 describe('workText: plain words, from the person\'s side', () => {
@@ -145,6 +156,8 @@ describe('workText: plain words, from the person\'s side', () => {
     [e('subscribe', 'find'), 'Finding the stream on the relays…'],
     [e('keys', 'save'), 'Saving your keys…'],
     [e('train', 'score', 12, 81), 'Scoring models · 12 of 81'],
+    [{ ...e('retrain', 'search', 0), name: 'eth' }, 'Retraining eth…'],
+    [{ ...e('retrain', 'search', 40), name: 'eth' }, 'Retraining eth · tried 40'],
   ])('%o → %s', (entry, text) => {
     expect(workText(entry)).toBe(text);
   });

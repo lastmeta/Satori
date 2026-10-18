@@ -5,13 +5,15 @@
 // closing Satori now would lose work (the hero goes vivid green and says to keep it open).
 //
 //   const job = work.start('central'); job.step('history', 34, 82); job.end();   // or work.run(task, (step) => …)
+//   job.step('search', 40, null, { name: 'eth' })                                 // extra fields on the entry (a Retrain's model)
 
 /**
  * The tasks, the neuron's own first; HERO: the ones Home's hero shows (the network's show on the Streams tab). `train`:
- * the training pass (src/neuron/train.js), after a poll and the Base batch, which it waits for.
+ * the training pass (src/neuron/train.js), after a poll and the Base batch, which it waits for; `retrain`: a model's
+ * Retrain (src/neuron/retrain.js), which waits for a poll too.
  */
-export const ORDER = ['central', 'base', 'train', 'stake', 'unstake', 'claim', 'send', 'keys', 'discover', 'subscribe'];
-export const HERO = ORDER.slice(0, 8);
+export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'discover', 'subscribe'];
+export const HERO = ORDER.slice(0, 9);
 const VAULT = new Set(['stake', 'unstake', 'claim', 'send', 'keys']);
 /**
  * Closing now would lose work: predictions being sent, a Base batch or a vault transaction sent and not yet confirmed,
@@ -45,6 +47,7 @@ const TEXT = {
   'subscribe:find': () => 'Finding the stream on the relays…',
   'keys:save': () => 'Saving your keys…',
   'train:score': (e) => `Scoring models · ${e.done} of ${e.total}`,
+  'retrain:search': (e) => (e.done ? `Retraining ${e.name} · tried ${e.done}` : `Retraining ${e.name}…`),
   // a vault action's steps (Stake, Unstake, Send; Claim's confirm)
   send: (e) => tx(e, 'Sending…'),
   confirm: (e) => tx(e, 'Waiting for Base to confirm…'),
@@ -72,10 +75,10 @@ export function createWork({ now = () => Date.now(), onChange = () => {} } = {})
     t.holders++;
     let open = true;
     return {
-      /** The task's step now; the same step with a new count keeps its `since`. Nothing once this job ended. */
-      step(step, done = null, total = null) {
+      /** The task's step now (extra: what it is about, e.g. { name }); the same step with a new count keeps its `since`. Nothing once this job ended. */
+      step(step, done = null, total = null, extra = {}) {
         if (!open) return;
-        t.entry = { task, step, done, total, since: t.entry?.step === step ? t.entry.since : now(), critical: isCritical(task, step) };
+        t.entry = { task, step, done, total, ...extra, since: t.entry?.step === step ? t.entry.since : now(), critical: isCritical(task, step) };
         onChange();
       },
       /** This holder is done; the task ends with its last. */

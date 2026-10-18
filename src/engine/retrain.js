@@ -125,8 +125,8 @@ export function canRetrain({ target, histories, step = STEP_S }) {
  * The best is accepted ('found') when it beats no change there (beats(): by the tab's margin over them all, by WEEK_BAR
  * in each half) and, when the champion already does, the champion by the same test. Otherwise it ends (b): the look
  * used ('checked'), `patience` tries without a better search score or `maxTries` in all ('budget'), every spec tried
- * ('exhausted'); or (c) end('stopped'). Then the best is kept only if it beats the champion by the same test.
- * looked: the held-out origins were read for a candidate (so the next retrain waits for new data).
+ * ('exhausted'), and the best is kept only if it beats the champion by the same test; or (c) end('stopped'), which keeps
+ * the champion. looked: the held-out origins were read for a candidate (so the next retrain waits for new data).
  * @param {{target: string, histories: Map, champion: object, seed: string, n?: number, from?: object, step?: number,
  *   patience?: number, maxTries?: number}} o from: a state() to resume (the data may be newer by then)
  * @returns the search, or { ok: false } without the history to split
@@ -169,10 +169,11 @@ export function retrainer({ target, histories, champion, seed, n = 1, from = nul
   const isBest = (spec) => keyOf(spec) === keyOf(st.best);
 
   function finish(outcome, spec = null) {
-    // (b), (c): the best only if it beats the champion where it was never chosen, by the same test
-    if (!spec && !isBest(champion) && beats(st.best, champion)) spec = st.best;
+    // (b): the best only if it beats the champion where it was never chosen, by the same test (a look); (c) Stop: none
+    const keep = !spec && outcome !== 'stopped' && !isBest(champion);
+    if (keep && beats(st.best, champion)) spec = st.best;
     result = { outcome, kept: spec ? 'new' : 'current', spec: spec ?? champion, ratio: heldOn(spec ?? champion), was: h0,
-      search: scored(st.best).s, tried: st.tried, checks: st.checks, heldEnd, looked: st.checks > 0 || !isBest(champion) };
+      search: scored(st.best).s, tried: st.tried, checks: st.checks, heldEnd, looked: st.checks > 0 || keep };
     return result;
   }
 
@@ -221,7 +222,7 @@ export function retrainer({ target, histories, champion, seed, n = 1, from = nul
       }
       return consider(order[st.j++]);
     },
-    /** (c): it ends now (Stop); the best is kept only by the champion rule. */
+    /** (c): it ends now (Stop) and keeps the champion: nothing looked at. */
     end: (outcome = 'stopped') => result ?? finish(outcome),
     /** For the progress line: tries so far, and the best's ratio on the search origins (what the search sees). */
     progress: () => ({ tried: st.tried, best: scored(st.best).s, checks: st.checks }),

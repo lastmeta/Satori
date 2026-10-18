@@ -122,4 +122,8 @@ export const MIGRATIONS = [
    ALTER TABLE relay_streams ADD COLUMN p_score DOUBLE;
    ALTER TABLE relay_streams ADD COLUMN p_persist DOUBLE;
    ALTER TABLE relay_streams ADD COLUMN p_tests INTEGER;`,
+  // 13 (2026-10-18): Retrain (docs/design/models.md#retrain). model_specs.retrain: JSON, the target's retrain asked by
+  // the user, kept with its spec: { n (the retrain counter), status 'running' | 'done', asked_at, state (the search's
+  // place, to resume), result (the last one's summary) }; null: never asked.
+  `ALTER TABLE model_specs ADD COLUMN retrain VARCHAR;`,
 ];

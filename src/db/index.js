@@ -6,6 +6,7 @@
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
 //   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.histories(uuids) / db.specs() / db.saveSpecs(map, at)
 //   await db.saveFits(list, at) → how many: the training pass's scores (src/neuron/train.js)
+//   await db.setRetrain(uuid, value) / db.saveRetrained(row, at) → how many: Retrain's request and result (src/neuron/retrain.js)
 //   await db.needHistory() → uuids / db.addHistories([{uuid, rows}], at) → rows added (older than the newest polled only)
 //   await db.unpredicted() → uuids whose latest observation has no prediction made from it
 //   await db.addPredictions(list) → ids / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
@@ -131,7 +132,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
         (SELECT count(*) FROM observations x WHERE x.stream_uuid = s.uuid) AS observations,
         o.ts AS obs_ts, o.value AS obs_value,
         p.model, p.t1, p.t2, p.phi, p.weight, p.made_at, p.status, p.sent_at,
-        m.spec, m.score, m.persist, m.influence, m.generation, m.accepted, m.updated_at AS spec_at, m.fit_key, s.history_at
+        m.spec, m.score, m.persist, m.influence, m.generation, m.accepted, m.updated_at AS spec_at, m.fit_key, m.retrain, s.history_at
       FROM streams s
       LEFT JOIN model_specs m ON m.target_uuid = s.uuid
       LEFT JOIN (SELECT * FROM observations QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC) = 1) o
@@ -234,11 +235,11 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       }
       return added;
     }),
-    /** Each target's champion spec: Map(uuid → {spec, score, persist, influence, generation, accepted, updated_at, fit_key}). */
+    /** Each target's champion spec: Map(uuid → {spec, score, persist, influence, generation, accepted, updated_at, fit_key, retrain}). */
     specs: inOrder(async () => new Map((await rows('SELECT * FROM model_specs')).map((r) =>
       [r.target_uuid, { spec: JSON.parse(r.spec), score: r.score, persist: r.persist ?? null,
         influence: r.influence == null ? null : JSON.parse(r.influence), generation: r.generation, accepted: r.accepted,
-        updated_at: r.updated_at, fit_key: r.fit_key ?? null }]))),
+        updated_at: r.updated_at, fit_key: r.fit_key ?? null, retrain: r.retrain == null ? null : JSON.parse(r.retrain) }]))),
     /**
      * Store the specs a poll touched: Map(uuid → {spec, score, persist?, influence?, generation, accepted, fit_key?}). One
      * statement. persist and influence: what the Models tab shows (migration 11); fit_key: the data they were computed on (12).
@@ -272,6 +273,24 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       texts(list.map((r) => r.uuid)), texts(list.map((r) => r.spec)), nums(list.map((r) => r.score)),
       nums(list.map((r) => r.persist)), texts(list.map((r) => (r.influence ? JSON.stringify(r.influence) : null))),
       texts(list.map((r) => r.fit_key)), nums(list.map(() => at)));
+      return Number(Count);
+    }),
+
+    /** A target's retrain (migration 13): the request, its progress, its result, as JSON on its spec's row (null clears it). → rows changed */
+    setRetrain: inOrder(async (uuid, value) => {
+      const [{ Count }] = await rows('UPDATE model_specs SET retrain = ? WHERE target_uuid = ?', value == null ? null : JSON.stringify(value), uuid);
+      return Number(Count);
+    }),
+    /**
+     * A retrain's new champion (docs/design/models.md#retrain), one statement: the spec with its fit (score, persist,
+     * influence, fit_key: as the poll scores it), generation + 1, accepted + 1, the retrain's summary; only where the
+     * stored spec is still `from` (the text it was compared with: a poll that evolved it meanwhile wins). → rows changed
+     */
+    saveRetrained: inOrder(async ({ uuid, from, spec, score, persist, influence, fit_key, retrain }, at) => {
+      const [{ Count }] = await rows(`UPDATE model_specs SET spec = ?, score = ${D}, persist = ${D}, influence = ?, fit_key = ?,
+          generation = generation + 1, accepted = accepted + 1, updated_at = ?, retrain = ?
+        WHERE target_uuid = ? AND spec = ?`,
+      JSON.stringify(spec), dbl(score), dbl(persist), influence ? JSON.stringify(influence) : null, fit_key, at, JSON.stringify(retrain), uuid, from);
       return Number(Count);
     }),
 

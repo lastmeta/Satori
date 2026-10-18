@@ -203,20 +203,17 @@ describe('the search', () => {
     expect(run(again)).toEqual(whole);
   });
 
-  test('Stop: it ends at once; the best is kept only if it beats the champion on the held-out origins by the margin', () => {
-    const h = market(1, { lead: true });
+  test('Stop: it ends at once and keeps the champion, without a look at the held-out origins', () => {
+    const h = market(3, { lead: true });
     const r = retrainer({ target: 'gold', histories: h, champion: TIGHT, seed: ID });
     const stopped = r.end('stopped');
     expect(stopped).toMatchObject({ outcome: 'stopped', kept: 'current', spec: TIGHT, tried: 0, looked: false });
     expect(r.step()).toBe(stopped);
-    // stopped once it holds what a full run finds: kept (it beats the champion where it was never chosen)
-    const h3 = market(3, { lead: true });
-    const found = run(retrainer({ target: 'gold', histories: h3, champion: TIGHT, seed: ID })).spec;
-    const later = retrainer({ target: 'gold', histories: h3, champion: TIGHT, seed: ID });
+    // stopped once it holds what a full run finds: still the champion (Stop changes nothing)
+    const found = run(retrainer({ target: 'gold', histories: h, champion: TIGHT, seed: ID })).spec;
+    const later = retrainer({ target: 'gold', histories: h, champion: TIGHT, seed: ID });
     while (keyOf(later.state().best) !== keyOf(found)) later.step();
-    const res = later.end('stopped');
-    expect(res).toMatchObject({ outcome: 'stopped', kept: 'new', looked: true, spec: found, checks: 0 });
-    expect(res.ratio).toBeLessThan(res.was * 0.95);
+    expect(later.end('stopped')).toMatchObject({ outcome: 'stopped', kept: 'current', spec: TIGHT, looked: false, checks: 0 });
   });
 
   test('the progress: tries so far and the best on the search origins, never worse than where it started', () => {

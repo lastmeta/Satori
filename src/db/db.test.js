@@ -344,7 +344,7 @@ describe('bvar: specs and central history (migration 6)', () => {
     const up = await openDb(conn);
     expect(up.version).toBe(MIGRATIONS.length);
     expect((await up.specs()).get('u-btc')).toEqual({ spec: { companions: [], lambda1: 0.2, lambda2: 0.5 }, score: 0.02, persist: null,
-      influence: null, generation: 3, accepted: 1, updated_at: 4000, fit_key: null });
+      influence: null, generation: 3, accepted: 1, updated_at: 4000, fit_key: null, retrain: null });
   });
 
   test('migration 12: a spec stored before has no fit key (the training pass scores it again); a `_pred` before, no backtest', async () => {
@@ -361,6 +361,19 @@ describe('bvar: specs and central history (migration 6)', () => {
     expect((await up.specs()).get('u-btc')).toMatchObject({ score: 0.02, persist: 0.03, fit_key: null });
     expect((await up.streams())[0]).toMatchObject({ uuid: 'u-btc', fit_key: null });
     expect((await up.relayStreams())[0]).toMatchObject({ p_seq: 2, p_score: null, p_persist: null, p_tests: null });
+  });
+
+  test('migration 13: a spec stored before has no retrain asked (null)', async () => {
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 12)) if (typeof m === 'string') await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '12')`);
+    await conn.query(`INSERT INTO streams (uuid, name, meta) VALUES ('u-btc', 'bitcoin', NULL)`);
+    await conn.query(`INSERT INTO model_specs VALUES ('u-btc', '{"companions":[],"lambda1":0.2,"lambda2":0.5}', 0.02, 3, 1, 4000, 0.03, NULL, 'k')`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    expect((await up.specs()).get('u-btc')).toMatchObject({ score: 0.02, fit_key: 'k', retrain: null });
+    expect((await up.streams())[0]).toMatchObject({ uuid: 'u-btc', retrain: null });
   });
 
   test('centralHistories: every central stream\'s observations in one read, oldest first; another central\'s left out', async () => {
@@ -428,9 +441,9 @@ describe('bvar: specs and central history (migration 6)', () => {
     const shares = [0.6 + 1e-17, 0.4 - 1 / 3e9]; // doubles kept bit for bit
     await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1 }]]), 4100);
     expect(await db.specs()).toEqual(new Map([
-      ['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1, updated_at: 4100, fit_key: null }],
+      ['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1, updated_at: 4100, fit_key: null, retrain: null }],
       ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, persist: null, influence: null, generation: 0, accepted: 0, updated_at: 4000,
-        fit_key: null }],
+        fit_key: null, retrain: null }],
     ]));
     expect((await db.streams())[0]).toMatchObject({ spec: JSON.stringify(spec), score: 0.0122, persist: 0.0121,
       influence: JSON.stringify(shares), generation: 4, accepted: 1 });
@@ -466,10 +479,45 @@ describe('saveFits: the training pass\'s results (docs/design/models.md#the-trai
     ], 5000);
     expect(n).toBe(1);
     expect(await db.specs()).toEqual(new Map([
-      ['u-btc', { spec, score: 0.019, persist: 0.021, influence: shares, generation: 3, accepted: 1, updated_at: 5000, fit_key: 'k-btc' }],
-      ['u-eth', { spec: other, score: 0.05, persist: null, influence: null, generation: 7, accepted: 2, updated_at: 4000, fit_key: null }],
+      ['u-btc', { spec, score: 0.019, persist: 0.021, influence: shares, generation: 3, accepted: 1, updated_at: 5000, fit_key: 'k-btc', retrain: null }],
+      ['u-eth', { spec: other, score: 0.05, persist: null, influence: null, generation: 7, accepted: 2, updated_at: 4000, fit_key: null, retrain: null }],
     ]));
     expect(await db.saveFits([], 1)).toBe(0);
+    expect(await db.pendingCount()).toBe(0); // never a prediction
+  });
+});
+
+describe('Retrain (docs/design/models.md#retrain): the request, its progress and its result, kept with the spec', () => {
+  const spec = { companions: ['u-eth'], lambda1: 0.2, lambda2: 0.5 };
+  const seed = async () => {
+    await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' }), obs({ stream_uuid: 'u-oil', name: 'oil' })]);
+    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.02, persist: 0.019, influence: [0.6, 0.4], generation: 3, accepted: 1, fit_key: 'k1' }]]), 4000);
+  };
+
+  test('setRetrain: kept as JSON on the spec\'s row (specs(), streams()); null clears it; no spec: nothing', async () => {
+    await seed();
+    const r = { n: 1, status: 'running', asked_at: 4100, state: { tried: 20, best: spec } };
+    expect(await db.setRetrain('u-btc', r)).toBe(1);
+    expect((await db.specs()).get('u-btc')).toMatchObject({ spec, generation: 3, retrain: r });
+    expect((await db.streams()).find((x) => x.uuid === 'u-btc').retrain).toBe(JSON.stringify(r));
+    expect(await db.setRetrain('u-oil', r)).toBe(0); // no spec yet
+    expect(await db.setRetrain('u-btc', null)).toBe(1);
+    expect((await db.specs()).get('u-btc').retrain).toBeNull();
+  });
+
+  test('saveRetrained: the new champion with its fit, generation + 1, accepted + 1, the summary; only where the spec is still the one compared with', async () => {
+    await seed();
+    const found = { companions: [], lambda1: 0.2, lambda2: 0.5, algorithm: 'bar1' };
+    const summary = { n: 1, status: 'done', result: { outcome: 'found', kept: 'new', ratio: 0.8 } };
+    const row = { uuid: 'u-btc', from: JSON.stringify(spec), spec: found, score: 0.015, persist: 0.019, influence: null, fit_key: 'k2', retrain: summary };
+    expect(await db.saveRetrained({ ...row, from: JSON.stringify({ ...spec, lambda1: 0.5 }) }, 5000)).toBe(0); // a poll evolved it meanwhile
+    expect((await db.specs()).get('u-btc')).toMatchObject({ spec, generation: 3, accepted: 1, retrain: null });
+    expect(await db.saveRetrained(row, 5000)).toBe(1);
+    expect((await db.specs()).get('u-btc')).toEqual({ spec: found, score: 0.015, persist: 0.019, influence: null, generation: 4, accepted: 2,
+      updated_at: 5000, fit_key: 'k2', retrain: summary });
+    // a poll's store afterwards keeps the retrain's summary (it writes only its own columns)
+    await db.saveSpecs(new Map([['u-btc', { spec: found, score: 0.016, persist: 0.019, influence: null, generation: 5, accepted: 2 }]]), 6000);
+    expect((await db.specs()).get('u-btc')).toMatchObject({ generation: 5, retrain: summary });
     expect(await db.pendingCount()).toBe(0); // never a prediction
   });
 });

@@ -324,7 +324,9 @@ random walks of 20.
   the current one." For a model worse than no change, one more line: "Its
   fade already pulls the forecast toward no change." (the weight from the
   same backtest, [engine.md](engine.md#the-backtest-score-and-fade)).
-- **(c) Stop**: the same rule as (b), at once.
+- **(c) Stop**: it ends at once and keeps the current one: "Stopped after
+  40 tries. Kept the current one." It looks at nothing held out, so a
+  retrain can follow at once.
 
 A new champion is used **from the next prediction**, the next new
 observation (Lite's rule: an observation is never predicted twice); until
