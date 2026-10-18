@@ -4,7 +4,7 @@
 //   const db = await openDb(conn, close?)    // runs migrations
 //   await db.get(key) / db.set(key, value)   // meta, JSON values
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
-//   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.specs() / db.saveSpecs(map, at) / db.models()
+//   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.histories(uuids) / db.specs() / db.saveSpecs(map, at)
 //   await db.needHistory() → uuids / db.addHistories([{uuid, rows}], at) → rows added (older than the newest polled only)
 //   await db.unpredicted() → uuids whose latest observation has no prediction made from it
 //   await db.addPredictions(list) → ids / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
@@ -187,6 +187,18 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
         if (i === 0 || uuids[i] !== uuids[i - 1]) out.set(uuids[i], (list = []));
         list.push({ ts: ts[i], value: values[i] });
       }
+      return out;
+    }),
+    /** Some streams' observations in one read, oldest first: Map(uuid → [{ts, value}]), in the order asked (the Models tab's drill-in). */
+    histories: inOrder(async (uuids) => {
+      const out = new Map(uuids.map((u) => [u, []]));
+      if (!uuids.length) return out;
+      const t = await query(conn, `SELECT stream_uuid, ts::DOUBLE AS ts, value FROM observations
+        WHERE stream_uuid IN (${uuids.map(() => '?').join(', ')}) ORDER BY stream_uuid, ts`, uuids);
+      const u = t.getChild('stream_uuid').toArray();
+      const ts = t.getChild('ts').toArray();
+      const values = t.getChild('value').toArray();
+      for (let i = 0; i < t.numRows; i++) out.get(u[i]).push({ ts: ts[i], value: values[i] });
       return out;
     }),
     /** Central streams whose history has not been fetched yet. */

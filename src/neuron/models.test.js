@@ -186,7 +186,8 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
   const names = ['gold', 'lead', 'n1', 'n2'];
   const prices = market(200, names, 5);
   const histories = new Map(names.map((k) => [`u-${k}`, grid(prices[k])]));
-  const db = { history: async (u) => histories.get(u) ?? [], relayHistory: async (u) => (u === 'n-1' ? grid(prices.n1, 0, 3600) : []) };
+  const db = { histories: async (us) => new Map(us.map((u) => [u, histories.get(u) ?? []])),
+    relayHistory: async (u) => (u === 'n-1' ? grid(prices.n1, 0, 3600) : []) };
 
   test('central bvar: In ranked by its fit, the Model, Out as a list with each output\'s recent history and destinations', async () => {
     const { forecasts, specs } = runModels({ fresh: ['u-gold'], histories, seed: ID, specs: new Map([['u-gold',
@@ -216,6 +217,7 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
     expect(out.history[0].ts).toBeGreaterThanOrEqual(last.ts + 60 - 7 * 2 * STEP_S);
     expect(out.history).toHaveLength(14);
     expect(d.ms).toEqual(expect.any(Number));
+    expect(d.readMs).toBeLessThanOrEqual(d.ms);
     // by name or bare uuid too
     expect((await modelDetail({ db, id: 'gold', streams: rows })).id).toBe('central:u-gold');
     expect((await modelDetail({ db, id: 'u-gold', streams: rows })).id).toBe('central:u-gold');

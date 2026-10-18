@@ -212,17 +212,24 @@ function parseId(id, streams) {
  * it (explainModel; Nostr and Base: explainForecast at their step and horizon), so In (each input's influence on
  * each output, ranked) and the Model (its rows, backtest, fade) are the fit's; Out is what was sent. Base's history is
  * the chain's (baseHistory(streamId) → [{ts, value}]); when the chain does not answer, Out stands alone. null: no such
- * model. `ms`: how long it took.
+ * model. `ms`: how long it took; `readMs`: of which reading the history.
  */
 export async function modelDetail({ db, id, streams = [], subscriptions = [], lastBatch = null, baseHistory = null,
   clock = () => performance.now() }) {
   const t0 = clock();
+  let read = 0; // the history reads' share (DuckDB's worker, or the chain), apart from the engine's
+  const timed = (fn) => async (...args) => {
+    const t = clock();
+    try { return await fn(...args); } finally { read += clock() - t; }
+  };
+  const reads = { histories: timed((u) => db.histories(u)), relayHistory: timed((u) => db.relayHistory(u)) };
   const [source, key] = parseId(id, streams);
   let d = null;
-  if (source === 'central') d = await centralDetail(db, key, streams);
-  if (source === 'nostr') d = await nostrDetail(db, key, subscriptions);
-  if (source === 'base') d = await baseDetail(key, lastBatch, baseHistory);
-  return d && { ...d, ms: Math.round((clock() - t0) * 10) / 10 };
+  if (source === 'central') d = await centralDetail(reads, key, streams);
+  if (source === 'nostr') d = await nostrDetail(reads, key, subscriptions);
+  if (source === 'base') d = await baseDetail(key, lastBatch, baseHistory && timed(baseHistory));
+  const ms = (x) => Math.round(x * 10) / 10;
+  return d && { ...d, ms: ms(clock() - t0), readMs: ms(read) };
 }
 
 /** The detail's shape: the list's model, its Model facts, each output with its history; In from the fit when it has one. */
@@ -249,8 +256,7 @@ async function centralDetail(db, key, streams) {
   if (!m) return null;
   const row = streams.find((r) => r.uuid === key);
   const spec = parse(row.spec);
-  const histories = new Map();
-  for (const u of [key, ...(spec?.companions ?? [])]) histories.set(u, await db.history(u));
+  const histories = await db.histories([key, ...(spec?.companions ?? [])]); // one read
   const x = explainModel({ target: key, spec, histories });
   const model = { step: STEP_S, horizon: CENTRAL_HORIZON, weight: row.weight ?? null, phi: row.phi ?? null,
     ...(spec ? { lambda1: spec.lambda1, lambda2: spec.lambda2, generation: row.generation, accepted: row.accepted } : {}) };

@@ -359,6 +359,14 @@ describe('bvar: specs and central history (migration 6)', () => {
     expect(await db.centralHistories()).toBeInstanceOf(Map);
   });
 
+  test('histories: some streams\' observations in one read (the Models tab\'s drill-in), oldest first; none: empty', async () => {
+    await db.addObservations([obs({ ts: 2000, value: 2 }), obs({ ts: 1000, value: 1.5 }), obs({ stream_uuid: 'u-eth', name: 'eth', value: 5 }),
+      obs({ stream_uuid: 'u-oil', name: 'oil', value: 7 })]);
+    expect(await db.histories(['u-eth', 'u-btc', 'u-none'])).toEqual(new Map([
+      ['u-eth', [{ ts: 1000, value: 5 }]], ['u-btc', [{ ts: 1000, value: 1.5 }, { ts: 2000, value: 2 }]], ['u-none', []]]));
+    expect(await db.histories([])).toEqual(new Map());
+  });
+
   test('addHistories: only rows older than the newest polled one (a poll\'s new row stays new), insert or ignore; marks the stream', async () => {
     await db.addObservations([obs({ ts: 5000, value: 50 }), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
     const rows = [{ ts: 3000, value: 30 }, { ts: 4000, value: 40 }, { ts: 5000, value: 99 }, { ts: 6000, value: 60 }];
