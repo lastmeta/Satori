@@ -38,6 +38,10 @@ a stream to:
 
 ## Direction now
 
+- Never rest with work pending. If anything is untrained or unscored, the
+  neuron does it now, picking up where it left off when the app opens. It
+  doesn't wait for the next poll.
+
 - Focus on the streams that pay: those from central, and those from the Base
   contract (relayed over Nostr). That is why people run a neuron. Other Nostr
   streams, which may or may not carry a reward, come later.
