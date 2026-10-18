@@ -244,8 +244,11 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    keep its hash at once (step 0).
 9. **Persist after the receipt**: `meta.base_last_batch` = `{round, at, hash,
    games: [{streamId, gameId, named, direction, model, latest, forecast,
-   horizon}], dropped:
-   [{streamId, gameId, error}]}`. `at` is the block's time and `round` is
+   horizon, step, score?, persist?}], dropped:
+   [{streamId, gameId, error}]}`. `step` is the engine's step; `score` and
+   `persist` (when the engine had 5 backtest origins) are its median error
+   and no change's, which the Models tab shows ([models.md](models.md)); the
+   batch does not read them. `at` is the block's time and `round` is
    `floor(at / 86400)`: a batch sent at 23:59:59 can land in the next round.
    Lite writes its time before sending (START:1228-1232), so a revert loses
    the day; here a failed send is shown, and the next check tries again.

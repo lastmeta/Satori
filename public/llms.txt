@@ -17,8 +17,9 @@ the engine, Nostr, Base), a finishing pass is done, a build installs as
 an app (PWA), each central stream has its own evolving multivariate
 model per neuron (`bvar`) with history from central, the keys are in
 this app's own format, Base only, and Home answers "is my neuron predicting
-every day on its own, and is anything broken?" from an activity log, on four
-tabs, phone first (2026-10-16).
+every day on its own, and is anything broken?" from an activity log, on five
+tabs, phone first (2026-10-16); a Models tab shows the engine, model by
+model (2026-10-18).
 
 Served at https://neuron.satorinet.io (https://satori.satorinet.io redirects
 there; one static image; docs/design/deploy.md).
@@ -43,8 +44,40 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
    `await satori.predictBase()`.
 6. `await satori.health()`: is it predicting, and is anything broken? Its
    `action` is the one thing to do, if any.
+7. `await satori.models()`: every model, how it does against no change, what
+   it reads and where its forecasts go; `await satori.model(id)` opens one.
 
 Every method is below; `await satori.status()` shows everything at once.
+
+## Changed 2026-10-18 (the Models tab)
+
+The page has five tabs: Home · **Models** · Streams · Wallet · Settings
+(docs/design/models.md). Nothing else moved.
+
+- `satori.models()` now lists **every model the neuron runs**, not only
+  central's specs: central's streams (`bvar`, `bar1`, `bar1d`, `naive`), the
+  Base batch's registry streams and the Nostr `_pred`s. Each is `{ id,
+  source, name, kind, quality, inputs, outputs, trained }`; central's keep
+  every field they had (`uuid`, `name`, `model`, `spec: { companions: [{
+  uuid, name }], lambda1, lambda2 }`, `score`, `generation`, `accepted`), in
+  the same order, first. A central stream with no forecast yet is not listed
+  (it was, with `model: null`, when it had a spec).
+- **`outputs` is a list**: a model's predicted streams, one today (a model
+  of several streams may come; its `name` then reads like "bvar · 3
+  streams"). Each output has its own `influence`, `quality` and
+  `destinations`.
+- New: `satori.model(id)`, a model's drill-in recomputed from its stored
+  spec and history; `satori.go('models')` and `go('models/<id>')` (the URL's
+  `#models`, `#models/<id>`).
+- `streams()` rows gain `persist` (no change's median backtest error on the
+  same origins as `score`), `influence` (JSON text: each input's share of a
+  bvar forecast, the stream itself first) and `spec_at` (when the spec was
+  last stored). Migration 11 adds the first two to `model_specs`; specs
+  stored before have them null until their next poll.
+- `base()`'s `lastBatch.games[]` gain `step`, and `score` and `persist` when
+  the engine had a backtest.
+- `data-test` new: see the Models tab below. The Streams card's `model`
+  (a stream row's Model column) keeps its name; a Models row is `model-row`.
 
 ## Changed 2026-10-18 (staking: the words and the agent API)
 
@@ -592,8 +625,9 @@ the page's JS context:
   device's light or dark), `'light'` or `'dark'`, as Settings → Appearance;
   kept on this device (localStorage, read before the first paint) and set as
   `<html data-theme>` (none for System). Anything else throws.
-- `satori.go(tab)` → the tab: shows `home`, `streams`, `wallet` or `settings`
-  (a leading `#` is fine), as the nav does. Anything else throws.
+- `satori.go(tab)` → the tab: shows `home`, `models`, `streams`, `wallet` or
+  `settings` (a leading `#` is fine), as the nav does; `go('models/<id>')`
+  opens a model's drill-in (→ `'models/<id>'`). Anything else throws.
 - `await satori.install()` → `'accepted' | 'dismissed' | 'unavailable'`: the
   browser's install prompt when `status().app.canInstall` (Chromium only; it
   needs a user gesture, which Playwright's `page.evaluate` provides; a person
@@ -619,13 +653,56 @@ the page's JS context:
   or null), `observations`, `obs_ts`, `obs_value`, and our latest `t1`, `t2`,
   `model` (`bvar`, `bar1`, `bar1d` or `naive`), `phi`, `weight`, `made_at`,
   `status` (`pending`/`sent`), `sent_at`; the stream's `spec` (`{ companions:
-  [uuid], lambda1, lambda2 }` or null), `score`, `generation`, `accepted`; and
-  `history_at` (when its history came from central; null: not yet).
-- `await satori.models()` → each target's champion spec: `[{ uuid, name,
-  model, spec: { companions: [{ uuid, name }], lambda1, lambda2 }, score,
-  generation, accepted }]` (`model`: what made its latest prediction; `score`:
-  the median relative error of its 24 h forecast over its last 28 backtest
-  origins, null below 5).
+  [uuid], lambda1, lambda2 }` or null), `score`, `persist` (no change's
+  median backtest error on the same origins as `score`), `influence` (JSON
+  text: a bvar forecast's shares, the stream itself first, then each
+  companion; null otherwise), `generation`, `accepted`, `spec_at` (when the
+  spec was last stored); and `history_at` (when its history came from
+  central; null: not yet).
+- `await satori.models()` → every model the neuron runs
+  (docs/design/models.md), central's first, then Base's, then Nostr's:
+  ```
+  [{ id: 'central:<uuid>' | 'base:<stream id>' | 'nostr:<relay stream uuid>',
+     source: 'central' | 'base' | 'nostr',
+     name,               // the stream it predicts ("bvar · 3 streams" for a model of several)
+     kind,               // 'bvar' | 'bar1' | 'bar1d' | 'naive' | 'echo' (Nostr: a value that is not a number)
+     quality: { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange },
+     inputs: [{ stream, name }],     // what it reads: the stream itself, then a bvar's companions
+     outputs: [{                     // what it predicts: a list (one today)
+       stream, name, as?,            // as: the `<stream>_pred` a Nostr model publishes
+       latest: { value, ts }, forecast: { t1?, t2?, value, step, horizon, at }, direction: 'up' | 'down' | 'flat' | null,
+       influence: [{ stream, name, share }],   // each input's share of this forecast, largest first, summing to 1
+       quality,
+       destinations: [{ to: 'central' | 'base' | 'network', status, when, ref }] }],
+     trained,            // when the forecast was made (unix s)
+     // central's also: uuid, model, spec: { companions: [{ uuid, name }], lambda1, lambda2 }, score, generation, accepted
+  }]
+  ```
+  Quality is the engine's own rolling backtest: `error` the median error of
+  the model's unfaded forecast at its last 28 origins (24 h ahead for
+  central), `noChange` no change's (the last value) on the same origins,
+  `ratio` = error / noChange; `better` below 0.95, `worse` above 1.05, else
+  `tie` (evolution's 5 % margin); `naive` is no change itself (a tie, ratio
+  1); null: not scored yet (under 5 origins, an echoed value, or a spec from
+  before migration 11 until its next poll). `influence` for bvar: |coefficient
+  × the input's standard deviation| in the target's equation of the fitted
+  model, normalized; bar1 and naive: the stream itself, 1. `destinations`:
+  central `{ status: 'accepted' | 'pending', when, ref: null }`; base `{
+  status: 'sent' | 'left out', when, ref: { round, game, direction, tx,
+  error? } }`; network `{ status: 'published' | 'waiting', when, ref: {
+  stream, seq, relays } }`. Cheap: it reads what the Models tab shows,
+  refreshed after every poll (`poll()` resolves after it), Nostr publish and
+  Base check.
+- `await satori.model(id)` → one model's drill-in, recomputed now from its
+  stored spec and history (`id`: a `models()` id, or a central stream's uuid
+  or name; null when there is none): the fields above, plus `model: { kind,
+  rows, tests, step, horizon, weight, phi, coef, lambda1, lambda2,
+  generation, accepted, trained, quality }` (`coef`: the target's equation,
+  in `inputs` order; `rows`: the rows it learned from; `tests`: backtest
+  origins), each output's `history` (the chart's points, [{ ts, value }],
+  the last 7 horizons) and its `influence` from that refit, `ms` (about 70
+  ms live) and `readMs` (the history read). A Base model reads its stream's
+  history from the chain.
 - `await satori.predictions(stream, limit = 20)` → one stream's predictions
   (by uuid or name), newest first: `[{ id, stream_uuid, name, made_at, model,
   t1, t2, phi, weight, observed_at, hash, status, sent_at }]`. `observed_at`
@@ -683,7 +760,7 @@ the page's JS context:
   identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
   vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other',
   lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
-  lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, forecast, horizon }],
+  lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, forecast, horizon, step, score?, persist? }],
   dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
   are decimal strings (ETH, SATORI); `fee` is in basis points (1000 = the
   10 % default); `direction` 1 = UP, 2 = DOWN; a game's `latest` is the
@@ -735,9 +812,10 @@ thrown: they are in `status().central` (for example `central 500: …`,
   are not kept.
 - "Unlock to finish the update" (screen `finish`): the vault passphrase
   field ("Vault passphrase to finish the update") and Unlock.
-- Four tabs once set up: a tab bar at the bottom on a phone, a top nav on a
-  computer (1024 px and wider); the URL's `#home`, `#streams`, `#wallet`,
-  `#settings` open them (a link or a reload keeps the tab). The header has
+- Five tabs once set up: a tab bar at the bottom on a phone, a top nav on a
+  computer (1024 px and wider); the URL's `#home`, `#models` (and
+  `#models/<id>`), `#streams`, `#wallet`, `#settings` open them (a link or a
+  reload keeps the tab). The header has
   Lock while unlocked and "Update ready, reload" when a new version waits.
 - **Home** answers "is my neuron predicting every day on its own, and is
   anything broken?" at a glance (`health()`'s object, drawn): the health (an
@@ -753,6 +831,23 @@ thrown: they are in `status().central` (for example `central 500: …`,
   companions, a trend line of the last 24 observations) with a link to all,
   the wallet (claimable, the vault, the identity's gas in days) and the
   activity feed (open; a tap away on a phone).
+- **Models** (docs/design/models.md): on top the engine's status: *Working*
+  (the poll's or Base's step, Home's words, no animation), *Resting*
+  ("Trained 2 h ago · next run in 9 h"), *No models yet*, or *Needs a look*
+  (amber: the engine itself failed); the models by kind ("83 models · 81
+  bvar · 2 naive") and against no change (a bar, "Beats no change on 24 of
+  83 · ties 40 · worse 19", the median model). Then filters (All, Central,
+  Base, Network, with counts) and the sort (Quality, Name), and every model:
+  its mark against no change (✓ better, = tie, − worse, a dashed ring when
+  not scored) and its number ("−3%": 3% less error), the stream it predicts
+  ("→ `<stream>_pred`" for Nostr), its kind, the companions it reads as chips
+  by influence, latest → forecast with ↑ ↓ →, and icons for where it goes. A
+  tap opens the drill-in: **In** (each input's share as a bar), **Model**
+  (plain lines; Details: λ1, λ2, mutations, coefficients, the fade weight,
+  the errors), **Out** (each output: the forecast, the latest value, a chart
+  of recent history with the forecast to scale, and where it went: Central
+  accepted, Base round and tx, Network `_pred` seq and relays); "← Models"
+  goes back.
 - **Streams**: the **Central** card (the URL, Registered, Last poll, Next
   poll, Last submission, Pending, History, a vault mismatch if any, "Poll
   now"); the **Streams** card ("N from central, with our forecasts"; one row
@@ -801,7 +896,19 @@ thrown: they are in `status().central` (for example `central 500: …`,
   after the last, 3 s with reduced motion) and `chip-text`, `claimable` with `claimable-amount`, `claim`
   and `claim-result`, `home-vault`, `home-gas`, `home-stream`, `activity`,
   `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`, `tab-<tab>`,
-  `streams-tab`, `wallet-tab`, `settings-tab`. Streams: `central-url`,
+  `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`. Models:
+  `engine` (`data-tone`), `engine-title`, `engine-line`, `engine-kinds`,
+  `engine-quality`, `engine-median`, `models-filter-<all|central|base|network>`,
+  `models-sort-<quality|name>` (`aria-pressed`), `models` (the list) with
+  `model-row` (`data-id`, `data-mark`: better, tie, worse or none) and inside
+  it `model-mark`, `model-name`, `model-kind`, `model-inputs`,
+  `model-forecast`, `model-to`; `models-empty`; the drill-in `model-detail`,
+  `model-back`, `model-title`, `model-loading`, `model-error`, `model-in`
+  with `model-input` (`data-own` for the stream itself), `model-model` with
+  `model-line` and `model-details`, `model-out` with `model-output`
+  (`data-stream`), `model-output-name`, `model-output-forecast`,
+  `model-chart`, `model-endpoint`, `model-readout`, `model-destination`
+  (`data-to`). Streams: `central-url`,
   `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`,
   `history`, `mismatch`, `poll-now`, `streams` (the card) with
   `streams-count` and `stream` rows (`obs`, `t1`, `t2`, `model`, `status`
@@ -885,8 +992,10 @@ build step beyond Vite, MIT licensed.
   where value = t2; one cadence for a relay stream; max(24 h, cadence) on
   Base); t1 and t2 are one and two steps ahead; `{ weight }` forces the fade.
   `bvar.js`: the Bayesian VAR(1) of a target and its companions, its backtest
-  and fallbacks; `evolve.js`: `runModels({ fresh, histories, specs, seed })`,
-  each target's identity-seeded spec, one mutation per poll, the forecasts.
+  and fallbacks, `influence()`; `evolve.js`: `runModels({ fresh, histories, specs, seed })`,
+  each target's identity-seeded spec, one mutation per poll, the forecasts;
+  `explainForecast` and `explainModel`: the same with what the Models tab
+  shows.
 - `src/nostr/`: NIP-01 events and the Nostr key over `@noble/curves`
   (`event.js`), Satori's events and parsing (`satori.js`), one relay over a
   WebSocket with reconnect (`relay.js`).
@@ -900,12 +1009,14 @@ build step beyond Vite, MIT licensed.
   sends, the Base settings; `activity.js`: the activity log (sessions,
   cycles, checks, publishes; 90 days); `health.js`: Home's answer from it,
   pure (`health()`), with its tone; `work.js`: what it is doing now
-  (`health().work`).
+  (`health().work`); `models.js`: the Models tab's data (`models()`,
+  `model(id)`), pure but for the drill-in's reads.
 - `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
   `index.js` (`createChain`: status multicall, stake, the batch's pieces,
   claims, sends).
 - `src/ui/`: ArrowJS: `view.js` (the shell, the tabs, Setup and the screens
-  before Home), `home.js`, `streams.js`, `wallet.js`, `settings.js`,
+  before Home), `home.js`, `models.js` (the Models tab; its words and chart
+  in `drill.js`, pure), `streams.js`, `wallet.js`, `settings.js`,
   `parts.js` (the inline Unlock, shared pieces), `state.js`, `format.js`,
   `glow.js` (the chips' traffic glow), `hold.js` (the pace of the hero's
   steps), `theme.js` (Appearance;
@@ -922,7 +1033,8 @@ build step beyond Vite, MIT licensed.
   and checks `satori-neuron:<git sha>`.
 - `docs/design/`: what is built and why (`OVERVIEW.md`, `health.md` (Home's
   rules: thresholds and the action priority; `home-mockup.html` the approved
-  design), `keys.md`,
+  design), `models.md` (the Models tab: quality, influence, the drill-in),
+  `keys.md`,
   `central.md` with Satori Lite's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
   Lite's and satorilib's, `base.md` with Lite's, the dapp's and the

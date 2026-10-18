@@ -52,10 +52,17 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    chips; four tabs, phone first, a dashboard on a computer; the inline
    Unlock; `window.satori.health()` and `go()`
    ([../design/health.md](../design/health.md)).
-12. **Runtime hardening**: catch-up on resume, the keys in a worker
+12. ✅ **Models tab** (owner, 2026-10-18: [../intent/ui.md](../intent/ui.md)):
+   the engine's status (working or resting, the models by kind, when they
+   trained and run next, how they do against no change), every model named
+   for the stream it predicts (central's, the Base batch's, the Nostr
+   `_pred`s), and a model's drill-in: In (each input's share of its
+   forecast), the Model, Out (a list of outputs, each with its chart and
+   where it went); `window.satori.models()` and `model(id)`
+   ([../design/models.md](../design/models.md)).
+13. **Runtime hardening**: catch-up on resume, the keys in a worker
    ([runtime.md](runtime.md)).
-13. **Later**, in rough order of value per effort: a per-stream chart and model
-   view; bounties (the predictor's side first); the gasless relay (needs a
+14. **Later**, in rough order of value per effort: bounties (the predictor's side first); the gasless relay (needs a
    ruling, [issue](../issues/relayer-predict-fee.md)); paid streams (their
    payment on Base, to design); own data sources. Also:
    importing a Docker neuron's keys is a move (both would predict for one
@@ -72,7 +79,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   restore-the-vault flow on Home.
 - **Keys on the main thread.** When a script runs in the page (an XSS, a
   malicious extension), it can read the identity, the Nostr key and an
-  unlocked vault. Fix: the keys and signing in a worker (step 11).
+  unlocked vault. Fix: the keys and signing in a worker (step 13).
 - **Words that open in a standard wallet.** The 24 words are satorilib's
   scheme (the secret as BIP39 entropy), so MetaMask derives another account
   from them; Backup shows the private key for that. Whether new neurons use

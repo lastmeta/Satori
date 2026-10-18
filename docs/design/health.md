@@ -234,7 +234,11 @@ shows at once; the end waits at least 0.3 s and gives way to work that
 comes meanwhile (register, then the poll, read as one). The hero keeps its
 title and status from the health.
 
-Elsewhere: the Wallet card's line says the vault's action step (the hero is
+Elsewhere: the Models tab's status says the poll's or the Base batch's step,
+the same words through its own pacer, with the still "working" mark and no
+ring, so the hero's ring stays the one moving indicator
+([models.md](models.md#the-engines-status-top-of-the-tab)); it uses the same
+tones, amber only when the engine itself failed. The Wallet card's line says the vault's action step (the hero is
 on Home only); Home's Stake and Claim buttons say "Staking…",
 "Claiming…"; the Wallet's Unstake says "Unstaking…". The Network streams line says discover's or subscribe's step,
 only once it has lasted 1 s.

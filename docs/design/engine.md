@@ -2,7 +2,8 @@
 
 [← OVERVIEW](OVERVIEW.md)
 
-`src/engine/index.js`: `forecast(points) → {model, t1, t2, phi?, weight?} | null`.
+`src/engine/index.js`: `forecast(points) → {model, t1, t2, phi?, weight?} | null` (and
+`explainForecast`, the same with its backtest, for the [Models tab](#what-the-models-tab-reads)).
 Pure functions. Step 4 replaced step 3's least-squares line
 (`ols-20`) with a one-stream, lag-1 cut of the engine the owner built in
 `../namaste_club` ("a simplified engine… take inspiration from it").
@@ -372,6 +373,36 @@ polls every ~11 h and predicts two of those steps, about 24 h.
 With the default horizon the numbers are the ones before the rule (the
 namaste_club parity cases are unchanged). `bvar` is central's, so it keeps
 two 12 h steps.
+
+## What the Models tab reads
+
+The Models tab ([models.md](models.md)) shows each model's quality against no
+change and how much each input moves its forecast. The engine already
+computes both; nothing it predicts changes (tested: `forecast()` is
+`explainForecast()` without the extra fields, and `explainModel()` gives the
+poll's numbers again).
+
+- `explainForecast(points, { step, horizon })` (`index.js`): `forecast()`'s
+  result with `rows` (the lag pairs fit on), `tests` (the backtest's
+  origins), `score` (the median error of the unfaded forecast at those
+  origins) and `persist` (no change's, on the same origins); both null below
+  `MIN_SAMPLES`. These are the medians the fade weight is made of: w =
+  `weightFromErrors(score, persist)`. Nostr's models are explained this way
+  on demand, and the Base batch keeps `score` and `persist` on each game.
+- `influence(fit, acc)` (`bvar.js`): for the target's equation, each input's
+  standardized coefficient, |coef[0][k]| × the standard deviation of its lag
+  over the rows (how far a typical step of that input moves the forecast),
+  as shares that sum to 1, the target's own lag first. With every
+  coefficient 0 (the forecast is the last value) the target's own is 1.
+- `runModels` keeps, for each target, `persist` (no change's median on the
+  same origins as `score`) and, when the forecast is bvar, `influence`
+  (aligned with `[target, ...companions]`), stored in `model_specs`
+  (migration 11, [storage.md](storage.md#migrations)).
+- `explainModel({ target, spec, histories })` (`evolve.js`): the stored
+  champion refit on its stored history, as the poll fit it (no proposal):
+  bvar with `inputs`, `influence`, `coef` (the target's equation), `rows`,
+  `tests`, `score`, `persist`; else `explainForecast` on the stream alone
+  (`influence` [1]).
 
 ## Deviations, and why
 

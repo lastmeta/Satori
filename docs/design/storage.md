@@ -213,6 +213,18 @@ entry is never edited: a change is a new entry. A database from a newer app
    text become `stake` "Staked with this neuron" and `unstake` "Unstaked",
    and a Base skip (its data and merge key) "nothing staked with this
    neuron", so the feed never shows the old words.
+11. **The Models tab** (2026-10-18, [models.md](models.md)): `model_specs.persist`,
+   no change's median backtest error on the same origins as `score`, and
+   `model_specs.influence`, JSON shares of the bvar forecast (`[the target's
+   own lag, then each companion's]`, null when the forecast was not bvar),
+   written by the poll that ran the target. Specs stored before have both
+   null until their next poll (the tab shows such a model as not scored
+   yet). A Base batch's games keep `step`, `score` and `persist` in
+   `meta.base_last_batch` (no migration: it is JSON).
+
+The Models tab's drill-in reads its streams' history with `db.histories(uuids)`:
+one statement for the target and its companions (one per stream took ~100 ms
+of a ~110 ms drill-in on this box; [models.md](models.md#cost)).
 
 Columns kept but no longer written: `relay_streams.meta` (the announcement
 at subscribe time) and `unsubscribed_at`; nothing read them. Kept and written,
