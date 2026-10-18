@@ -18,7 +18,7 @@ const signer = () => {
 };
 
 describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on a local fork of Base Sepolia', () => {
-  test('delegate, the batch, claims, stop, the lock, a send', { timeout: 180_000 }, async () => {
+  test('stake, the batch, claims, unstake, the transfer rule, a send', { timeout: 180_000 }, async () => {
     const identity = signer();
     const vault = signer();
     const I = identity.evmAddress;
@@ -62,11 +62,11 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     expect(await chain.alreadyMinted(V)).toBe(5n * E18);
     const claimed = await st();
     expect(claimed.vault.satori).toBeGreaterThan(105n * E18);
-    // The token's hook kept the delegate's power in step with the vault's new balance (HOOK_GAS):
-    // with the bare estimate it fails silently and the undelegate below panics (0x11).
+    // The token's hook kept the identity's power in step with the vault's new balance (HOOK_GAS):
+    // with the bare estimate it fails silently and the unstake below panics (0x11).
     expect(claimed.identity.power).toBe(claimed.vault.satori);
 
-    // Stop: transfer-locked through the next round (>=), then free.
+    // Unstake: transfer-locked through the next round (>=), then free.
     const off = await chain.undelegate({ vault });
     expect(off.steps).toHaveLength(1);
     const stopped = await st();

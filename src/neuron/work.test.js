@@ -93,7 +93,7 @@ describe('createWork', () => {
     const crit = (task, step) => { const j = w.start(task); j.step(step); const c = w.of(task).critical; j.end(); return c; };
     expect(['register', 'observations', 'history', 'models', 'send'].map((st) => crit('central', st))).toEqual([false, false, false, false, true]);
     expect(['check', 'send', 'confirm'].map((st) => crit('base', st))).toEqual([false, true, true]);
-    expect([['delegate', 'send'], ['delegate', 'settle'], ['undelegate', 'confirm'], ['claim', 'drop'], ['send', 'send']]
+    expect([['stake', 'send'], ['stake', 'settle'], ['unstake', 'confirm'], ['claim', 'drop'], ['send', 'send']]
       .map(([t, st]) => crit(t, st))).toEqual([true, true, true, true, true]);
     expect([crit('discover', 'ask'), crit('subscribe', 'find')]).toEqual([false, false]);
     expect(crit('keys', 'save')).toBe(true); // the keys written (an earlier version's record, upgraded at Unlock)
@@ -120,11 +120,11 @@ describe('workText: plain words, from the person\'s side', () => {
     [e('base', 'check'), "Checking today's Base games…"],
     [e('base', 'send'), 'Sending the Base batch…'],
     [e('base', 'confirm'), 'Waiting for Base to confirm…'],
-    [e('delegate', 'send', 1, 3), 'Step 1 of 3: sending…'],
-    [e('delegate', 'confirm', 2, 3), 'Step 2 of 3: waiting for Base to confirm…'],
-    [e('delegate', 'send', 1, 1), 'Sending…'],
-    [e('delegate', 'confirm', 1, 1), 'Waiting for Base to confirm…'],
-    [e('delegate', 'settle'), 'Checking it on Base…'],
+    [e('stake', 'send', 1, 3), 'Step 1 of 3: sending…'],
+    [e('stake', 'confirm', 2, 3), 'Step 2 of 3: waiting for Base to confirm…'],
+    [e('stake', 'send', 1, 1), 'Sending…'],
+    [e('stake', 'confirm', 1, 1), 'Waiting for Base to confirm…'],
+    [e('stake', 'settle'), 'Checking it on Base…'],
     [e('claim', 'rewards'), 'Claiming rewards…'],
     [e('claim', 'drop'), 'Claiming the reward drop…'],
     [e('claim', 'airdrop'), 'Claiming the airdrop…'],
@@ -137,7 +137,7 @@ describe('workText: plain words, from the person\'s side', () => {
   });
   test('a critical step says to keep Satori open, briefly', () => {
     expect(workText({ ...e('central', 'send', null, 82), critical: true })).toBe('Keep Satori open · Sending 82 predictions…');
-    expect(workText({ ...e('delegate', 'confirm', 2, 3), critical: true })).toBe('Keep Satori open · Step 2 of 3: waiting for Base to confirm…');
+    expect(workText({ ...e('stake', 'confirm', 2, 3), critical: true })).toBe('Keep Satori open · Step 2 of 3: waiting for Base to confirm…');
   });
   test('null and unknown steps', () => {
     expect(workText(null)).toBe('');

@@ -132,7 +132,7 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
       await merge('nostr', 'ok', { published: 1 }, `h:${Math.floor(now() / 3600)}`, (old, d) => ({ published: old.published + d.published }));
     }),
 
-    /** Delegate, Stop delegating, Claim, Send: what was done, in a few words. */
+    /** Stake, Unstake, Claim, Send: what was done, in a few words. */
     wallet: safely(async (action, text) => { await add('wallet', 'ok', { action, text }); }),
 
     /** An engine or database failure outside central's cycle. */

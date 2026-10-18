@@ -117,20 +117,20 @@ test('catalogMatch: name, stream, description or tags, any case', () => {
   expect(catalogMatch(s, 'eth')).toBe(false);
 });
 
-test('Base: amounts, the delegation, the lock (until round N, free from N + 1 at 00:00 UTC)', () => {
+test('Base: amounts, the stake, the transfer rule (sent from round N + 1 at 00:00 UTC)', () => {
   expect(amountText('100', 'SATORI')).toBe('100 SATORI');
   expect(amountText('0.000123456', 'ETH')).toBe('0.000123 ETH');
   expect(amountText(null, 'ETH')).toBe('–');
   expect(fmtUtc(20743 * 86400)).toBe('Oct 17, 00:00 UTC');
-  const v = { identity: { power: '100' }, vault: { delegated: 'identity', delegate: '0xI' } };
-  expect(delegationText(v)).toBe('Delegated to the identity · 100 SATORI of prediction power');
-  expect(delegationText({ ...v, vault: { delegated: 'none' } })).toBe('Not delegated');
-  expect(delegationText({ ...v, vault: { delegated: 'other', delegate: '0xO' } })).toBe('Delegated to 0xO, not this identity');
+  const v = { identity: { power: '100' }, vault: { staked: 'identity', stakedWith: '0xI' } };
+  expect(delegationText(v)).toBe('Staked: 100 SATORI with this neuron');
+  expect(delegationText({ ...v, vault: { staked: 'none' } })).toBe('Not staked');
+  expect(delegationText({ ...v, vault: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this neuron');
   expect(delegationText(null)).toBe('–');
   expect(lockText({ locked: false })).toBe('Free to send');
-  expect(lockText({ locked: true, indefinite: true })).toBe('SATORI transfer-locked while delegated');
+  expect(lockText({ locked: true, indefinite: true })).toBe("Staked SATORI can't be sent until you unstake");
   expect(lockText({ locked: true, indefinite: false, untilRound: 20742, freeAt: 20743 * 86400 }))
-    .toBe('SATORI transfer-locked until round 20742 (free from Oct 17, 00:00 UTC)');
+    .toBe('SATORI can be sent from Oct 17, 00:00 UTC (round 20743)');
 });
 
 test('Base: gas, the last batch, the check, a claim', () => {
@@ -165,7 +165,8 @@ test('rpcText, rpcTitle, stepText: plain words on the card, the detail in the ho
   expect(rpcText({ rpc: ['https://mine.example/rpc'], rpcSetting: 'https://mine.example/rpc', localFork: false })).toBe('mine.example');
   expect(rpcText({ rpc: [], rpcSetting: '', localFork: false })).toBe('–');
   expect(stepText('setPredictorFee(0)')).toBe('Identity: fee to 0');
-  expect(stepText('delegatePredictionPower(0x0)')).toBe('Vault: stops delegating');
+  expect(stepText('delegatePredictionPower(identity)')).toBe('Vault: stakes with this neuron');
+  expect(stepText('delegatePredictionPower(0x0)')).toBe('Vault: unstakes');
   expect(stepText('somethingNew()')).toBe('somethingNew()');
 });
 
@@ -179,10 +180,10 @@ test('storageText: kept or not (docs/design/pwa.md), and the usage of the quota 
 
 test('playNote: the neuron plays on-chain automatically, Satori Daily by hand, never both with one vault (docs/design/base.md)', () => {
   const text = (d) => playNote(d)?.join('Satori Daily');
-  expect(text('identity')).toBe("Your vault's prediction power is with this neuron, so the vault can't also play Satori Daily by hand. "
-    + 'Stop delegating to play manually.');
-  expect(text('none')).toBe('Delegate to let the neuron predict every round, or play Satori Daily by hand.');
-  expect(playNote('other')).toBe(null); // delegated elsewhere: the Delegation line says to whom
+  expect(text('identity')).toBe("Your SATORI is staked with this neuron, so it can't also play Satori Daily by hand. "
+    + 'Unstake to play manually.');
+  expect(text('none')).toBe('Stake with this neuron to let it predict every round, or play Satori Daily by hand.');
+  expect(playNote('other')).toBe(null); // staked elsewhere: the Staking line says with whom
   expect(playNote(null)).toBe(null); // before the first chain read
 });
 

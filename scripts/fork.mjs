@@ -33,10 +33,10 @@ A local anvil fork of Base Sepolia; the dev server's /rpc goes to 127.0.0.1:8545
   predict [up|down]              the deployer predicts the default game (moves its next value)
   stream [name]                  anyone's new stream (a 0.001 SATORI burn) with one value: its game has no voting weight
 
-Fund a neuron to predict on Base (its prediction power is the vault's SATORI, delegated to the identity):
+Fund a neuron to predict on Base (its prediction power is the vault's SATORI, staked with this neuron):
   node scripts/fork.mjs fund <identity 0x…>               gas for the daily batch
-  node scripts/fork.mjs fund <vault 0x…> --satori 100     gas for Delegate, and SATORI to delegate
-  then in the page: await satori.unlock(passphrase); await satori.delegate(); await satori.predictBase()
+  node scripts/fork.mjs fund <vault 0x…> --satori 100     gas for Stake, and SATORI to stake
+  then in the page: await satori.unlock(passphrase); await satori.stake(); await satori.predictBase()
 (both 0x addresses: satori.status().base.identity.address and .vault.address)`;
 const FORK_URL = 'https://sepolia.base.org';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -71,7 +71,7 @@ async function asDeployer(rpc, address, functionName, args) {
   await test.setBalance({ address: DEPLOYER, value: parseEther('10') }); // anvil's default gas limit is the block's (1.2e9)
   const { request } = await pub.simulateContract({ account: DEPLOYER, address, abi, functionName, args }); // a revert says why
   const gas = await pub.estimateContractGas({ account: DEPLOYER, address, abi, functionName, args });
-  const hash = await deployer.writeContract({ ...request, gas: gas + HOOK_GAS }); // SATORI to a delegated vault: the hook needs it
+  const hash = await deployer.writeContract({ ...request, gas: gas + HOOK_GAS }); // SATORI to a staked vault: the hook needs it
   const r = await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
   if (r.status !== 'success') throw new Error(`${functionName} failed (${hash})`);
   return hash;

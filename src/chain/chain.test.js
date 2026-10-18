@@ -28,7 +28,7 @@ beforeEach(() => {
 const sentBy = () => rpc.sent.map((t) => [t.from === I ? 'identity' : t.from === V ? 'vault' : t.from, t.functionName, t.args]);
 
 describe('the transfer lock: blocked while lockedUntil >= round (SatoriToken.sol:816-821)', () => {
-  test('free, while delegated, after stopping (through the next round), then free', () => {
+  test('free, while staked, after unstaking (through the next round), then free', () => {
     expect(transferLock(0, ROUND)).toEqual({ locked: false, indefinite: false, untilRound: null, freeAt: null });
     expect(transferLock(INDEFINITE, ROUND)).toEqual({ locked: true, indefinite: true, untilRound: null, freeAt: null });
     expect(transferLock(ROUND + 1, ROUND)).toEqual({ locked: true, indefinite: false, untilRound: ROUND + 1, freeAt: (ROUND + 2) * 86400 });
@@ -38,7 +38,7 @@ describe('the transfer lock: blocked while lockedUntil >= round (SatoriToken.sol
 });
 
 describe('status: one multicall', () => {
-  test('balances, delegation, fee, the lock, the round, claimables', async () => {
+  test('balances, the stake, fee, the transfer rule, the round, claimables', async () => {
     s.rewards[V] = 3n * E18;
     s.airdrop[V] = 7n * E18;
     const before = rpc.log.length;
@@ -54,8 +54,8 @@ describe('status: one multicall', () => {
   });
 });
 
-describe('delegate prediction power (Lite\'s Enable staking + the dapp\'s instant signing)', () => {
-  test('fee → 0 and allowedDelegator → vault (identity), then the vault delegates; the reads show it', async () => {
+describe('stake: delegatePredictionPower(identity) (Lite\'s Enable staking + the dapp\'s instant signing)', () => {
+  test('fee → 0 and allowedDelegator → vault (identity), then the vault\'s delegatePredictionPower(identity); the reads show it', async () => {
     const r = await chain.delegate({ identity, vault });
     expect(sentBy()).toEqual([
       ['identity', 'setPredictorFee', [0]],
@@ -89,7 +89,7 @@ describe('delegate prediction power (Lite\'s Enable staking + the dapp\'s instan
     expect(r.settled).toBe(false);
     expect(rpc.sent).toHaveLength(3);
   });
-  test('stop: the vault delegates to 0x0; SATORI is transfer-locked through the next round', async () => {
+  test('unstake: delegatePredictionPower(0x0); SATORI can\'t be sent through the next round', async () => {
     await chain.delegate({ identity, vault });
     const r = await chain.undelegate({ vault });
     expect(sentBy().at(-1)).toEqual(['vault', 'delegatePredictionPower', [zeroAddress]]);
@@ -208,7 +208,7 @@ describe('claims and sends (the vault)', () => {
     expect(sentBy()).toEqual([['vault', 'claimAirdrop', undefined]]);
     expect(s.balance[V]).toBe(107n * E18);
   });
-  test('SATORI: Locked while delegated, sent when free', async () => {
+  test('SATORI: the token reverts Locked while staked, sent when free', async () => {
     const to = '0x' + '33'.repeat(20);
     await chain.delegate({ identity, vault });
     await expect(chain.sendSatori(vault, to, E18)).rejects.toThrow(/Locked/);

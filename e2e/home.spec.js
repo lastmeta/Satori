@@ -119,7 +119,7 @@ async function phoneChecks(page, width, height) {
   expect(fold.answer, `Home's first screen at ${width} × ${height}`).toBeLessThanOrEqual(fold.bar);
 }
 
-test('ok, then warn (Delegate from the action card, with the inline Unlock), then ok on Base too', async ({ context, page }) => {
+test('ok, then warn (Stake from the action card, with the inline Unlock), then ok on Base too', async ({ context, page }) => {
   test.setTimeout(240_000);
   const { s, rpc, central } = await setup(context);
   await seed(page, month(nowS(), { closed: [6, 7], part: [3] }));
@@ -145,7 +145,7 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   await expect(chip('central')).toHaveAttribute('data-state', 'ok');
   await expect(chip('central').locator('[data-test=chip-text]')).toHaveText('8 sent just now');
   await expect(chip('base')).toHaveAttribute('data-state', 'idle');
-  await expect(chip('base').locator('[data-test=chip-text]')).toHaveText('Not delegated');
+  await expect(chip('base').locator('[data-test=chip-text]')).toHaveText('Not staked');
   await expect(chip('network').locator('[data-test=chip-text]')).toHaveText('No streams');
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=day].today')).toHaveCount(1);
@@ -166,31 +166,32 @@ test('ok, then warn (Delegate from the action card, with the inline Unlock), the
   await page.evaluate(() => window.satori.base());
   h = await health(page);
   expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Central is fine. Base needs one step from you.',
-    action: { id: 'delegate', button: 'Delegate', do: 'delegate' }, channels: { base: { state: 'warn', text: 'Not delegated' } } });
+    action: { id: 'stake', text: "Your vault's SATORI isn't earning on Base. Stake with this neuron.", button: 'Stake', do: 'stake' },
+    channels: { base: { state: 'warn', text: 'Not staked' } } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
-  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'delegate');
+  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'stake');
   await expect(page.locator('[data-test=claimable-amount]')).toHaveText('0');
   await shots(page, 'warn');
   await phoneChecks(page, 360, 740); // with the action card, the answer still fits
   await page.setViewportSize({ width: 1280, height: 900 });
 
-  // Delegate: the vault is locked, so the passphrase is asked for in the card; then it delegates.
+  // Stake: the vault is locked, so the passphrase is asked for in the card; then it stakes.
   await page.locator('[data-test=action-button]').click();
-  const prompt = page.getByLabel('Vault passphrase to delegate');
+  const prompt = page.getByLabel('Vault passphrase to stake');
   await expect(prompt).toBeVisible();
   await prompt.fill('not it');
   await page.locator('[data-unlock-for=card]').getByRole('button', { name: 'Unlock' }).click();
   await expect(page.locator('[data-unlock-for=card] [role=alert]')).toHaveText('Wrong passphrase');
   await prompt.fill(PASS);
   await page.locator('[data-unlock-for=card]').getByRole('button', { name: 'Unlock' }).click();
-  await expect(page.locator('[data-test=action]')).toBeHidden({ timeout: 30_000 }); // delegated: nothing needs the person
+  await expect(page.locator('[data-test=action]')).toBeHidden({ timeout: 30_000 }); // staked: nothing needs the person
   expect(rpc.sent.map((t) => t.functionName)).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower']);
-  // the identity's batch, on its own, 10 s after delegating
+  // the identity's batch, on its own, 10 s after staking
   await expect(chip('base').locator('[data-test=chip-text]')).toHaveText(`Round ${ROUND} sent`, { timeout: 30_000 });
   h = await health(page);
   expect(h).toMatchObject({ status: 'ok', channels: { base: { state: 'ok', text: `Round ${ROUND} sent` } } });
   const texts = h.feed.map((f) => f.text);
-  expect(texts.indexOf(`Base batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Delegated to this neuron')); // newest first
+  expect(texts.indexOf(`Base batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Staked with this neuron')); // newest first
 
   // Base's RPC goes down while central is fine: the batch check fails twice, Base is red, and the neuron predicts
   // only in part (it read a red "Predicting"); Home and health() say the same

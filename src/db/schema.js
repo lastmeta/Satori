@@ -101,4 +101,10 @@ export const MIGRATIONS = [
   `ALTER TABLE streams ADD COLUMN predicted_ts BIGINT;
    UPDATE streams SET predicted_ts = (SELECT max(o.ts) FROM observations o WHERE o.stream_uuid = streams.uuid)
    WHERE EXISTS (SELECT 1 FROM predictions p WHERE p.stream_uuid = streams.uuid);`,
+  // 10 (2026-10-18): the vault's delegatePredictionPower(identity) is called staking (docs/design/base.md): the
+  // activity log's earlier rows say it in those words too, so the feed never shows the old ones.
+  `UPDATE activity SET data = replace(replace(replace(replace(data, '"undelegate"', '"unstake"'), '"delegate"', '"stake"'),
+     'Delegated to this neuron', 'Staked with this neuron'), 'Stopped delegating', 'Unstaked') WHERE kind = 'wallet';
+   UPDATE activity SET data = replace(data, 'no prediction power delegated to the identity', 'nothing staked with this neuron'),
+     mkey = replace(mkey, 'no prediction power delegated to the identity', 'nothing staked with this neuron') WHERE kind = 'base';`,
 ];

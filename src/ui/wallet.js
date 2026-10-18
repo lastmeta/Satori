@@ -1,4 +1,4 @@
-// Wallet: Base (docs/design/base.md): the vault's and the identity's balances, Delegate or Stop delegating, claims,
+// Wallet: Base (docs/design/base.md): the vault's and the identity's balances, Stake with this neuron or Unstake, claims,
 // send, the gas for the daily batch, the last batch, and who plays (this neuron, or Satori Daily by hand). The vault's
 // actions ask for the passphrase in place (the inline Unlock) when it is locked.
 import { html } from '@arrow-js/core';
@@ -10,7 +10,7 @@ import {
 import { SATORI_DAILY_URL } from '../chain/config.js';
 import { workText } from '../neuron/work.js';
 
-const BUSY = { delegate: 'Delegating…', undelegate: 'Stopping…', claim: 'Claiming…', send: 'Sending…' };
+const BUSY = { stake: 'Staking…', unstake: 'Unstaking…', claim: 'Claiming…', send: 'Sending…' };
 
 /**
  * A tx hash, linked to the explorer unless the RPC is a local fork; `title` (the call) in its hover. One root
@@ -27,11 +27,11 @@ const txLink = (hash, label = '', title = '') => {
 
 export function walletTab(a) {
   const b = () => state.base;
-  const delegated = () => b().vault.delegated === 'identity';
-  const notDelegated = () => b().vault.delegated === 'none';
-  const lowEth = () => b().identity.lowEth && delegated(); // gas matters once the identity has a batch to send
+  const staked = () => b().vault.staked === 'identity';
+  const notStaked = () => b().vault.staked === 'none';
+  const lowEth = () => b().identity.lowEth && staked(); // gas matters once the identity has a batch to send
   const busy = () => !!state.baseBusy;
-  const play = () => playNote(b().vault.delegated);
+  const play = () => playNote(b().vault.staked);
   return html`
   <section class="tab-page" data-test="wallet-tab" hidden="${() => state.tab !== 'wallet'}">
   <section class="card base">
@@ -44,21 +44,21 @@ export function walletTab(a) {
     <dl class="facts">
       ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
       ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}
-      ${fact('Delegation', 'base-delegation', () => (notDelegated() ? 'Not delegated: Delegate prediction power, below' : delegationText(b())))}
+      ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this neuron, below' : delegationText(b())))}
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
       ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the daily batch' : '')}</span>`)}
       ${fact('Last batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
       ${fact('Batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
-    : notDelegated() ? `Waits for delegation · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
+    : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
       ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
     </dl>
     <p class="muted small" data-test="base-play" hidden="${() => !play()}">${() => play()?.[0] ?? ''}<a href="${SATORI_DAILY_URL}" target="_blank" rel="noopener">Satori Daily</a>${() => play()?.[1] ?? ''}</p>
     <div class="actions">
-      <button class="primary" data-test="base-delegate" hidden="${delegated}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseDelegate')}">${() => (state.baseBusy === 'delegate' ? BUSY.delegate : 'Delegate prediction power')}</button>
-      <button data-test="base-undelegate" hidden="${() => !delegated()}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'undelegate' ? BUSY.undelegate : 'Stop delegating')}</button>
+      <button class="primary" data-test="base-stake" hidden="${staked}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? BUSY.stake : 'Stake with this neuron')}</button>
+      <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
       <button data-test="base-claim" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
     </div>
-    <p class="muted small">Delegating lets the identity predict with the vault's SATORI; the SATORI stays in the vault, transfer-locked while delegated and through the round after you stop.</p>
+    <p class="muted small">Staking lets this neuron predict with your vault's SATORI every round. The SATORI stays in the vault and earns; it can't be sent while staked, or through the round after you unstake.</p>
     <form class="send" @submit="${(e) => a.baseSend(form(e), e.target)}">
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
@@ -66,7 +66,7 @@ export function walletTab(a) {
       <button type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send from the vault')}</button>
     </form>
     ${unlockPrompt(a, 'wallet', 'use the vault')}
-    <p class="muted small" hidden="${() => state.unlocked}">Delegate, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.</p>
+    <p class="muted small" hidden="${() => state.unlocked}">Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.</p>
     <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>

@@ -23,13 +23,13 @@ import { serial } from '../util.js';
 export const ROUND_S = 86400; // a round is a UTC day (SatoriToken.sol:329-331)
 export const UP = 1; // base_predict.py:23-24
 export const DOWN = 2;
-export const INDEFINITE = 2 ** 24 - 1; // transferLockedUntil while delegated (SatoriHub.sol:426-429)
+export const INDEFINITE = 2 ** 24 - 1; // transferLockedUntil while staked (SatoriHub.sol:426-429)
 export const HISTORY = 768; // the registry's ring (SatoriRegistry.sol HISTORY_SIZE)
 /**
  * Gas over eth_estimateGas on every write. The token runs its transfer hook in
  * a try/catch (SatoriToken.sol:831-842), so the estimate is the least gas at
- * which the hook may fail silently: SATORI minted or sent to a delegated vault
- * then leaves the delegate's power short, and the vault can never undelegate
+ * which the hook may fail silently: SATORI minted or sent to a staked vault
+ * then leaves the identity's power short, and the vault can never unstake
  * (Panic 0x11, docs/issues/token-hook-gas-estimate.md). Unused gas is
  * not charged.
  */
@@ -59,12 +59,15 @@ export function fmtUtc(s) {
     hourCycle: 'h23', timeZone: 'UTC' })} UTC`;
 }
 
-/** The vault's SATORI transfer lock (the token's rule: locked while lockedUntil >= round). */
+/**
+ * Whether the vault's SATORI can be sent (the token's rule: not while lockedUntil >= round): never while staked; after
+ * Unstake, from the round after lockedUntil, at its 00:00 UTC.
+ */
 export function lockText(lock) {
   if (!lock) return '–';
   if (!lock.locked) return 'Free to send';
-  if (lock.indefinite) return 'SATORI transfer-locked while delegated';
-  return `SATORI transfer-locked until round ${lock.untilRound} (free from ${fmtUtc(lock.freeAt)})`;
+  if (lock.indefinite) return "Staked SATORI can't be sent until you unstake";
+  return `SATORI can be sent from ${fmtUtc(lock.freeAt)} (round ${lock.untilRound + 1})`;
 }
 
 /** The one-byte payload: solidityPacked(['uint8'], [direction]) (base_predict.py:237). */
@@ -237,9 +240,9 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     },
 
     /**
-     * Lite's ensure_delegation (base_predict.py:273-290) and the dapp's setup
+     * Stake: Lite's ensure_delegation (base_predict.py:273-290) and the dapp's setup
      * (GameWalletPanel.tsx:536-595): the identity's fee to 0, the identity
-     * accepts only this vault, the vault delegates to the identity. Each step
+     * accepts only this vault, the vault's delegatePredictionPower(identity). Each step
      * only when needed. onStep('send' | 'confirm', k, n) for each, then onStep('settle').
      * → { steps: [{ step, by, hash }], settled }
      */
@@ -267,7 +270,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return { steps, settled: ok };
     },
 
-    /** Stop delegating: the vault delegates to 0x0 (base_predict.py:292-301); onStep as delegate's. → { steps, settled } */
+    /** Unstake: the vault's delegatePredictionPower(0x0) (base_predict.py:292-301); onStep as above. → { steps, settled } */
     async undelegate({ vault, onStep = () => {} }) {
       const V = toAccount(vault);
       if (same(await delegateOf(V.address), zeroAddress)) return { steps: [], settled: true };

@@ -56,11 +56,11 @@ export const state = reactive({
   base: {
     rpc: [], rpcSetting: '', maxFeeSetting: null, maxFeeGwei: null, localFork: false, explorer: null, config: null, error: '', round: null,
     identity: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false },
-    vault: { address: '', eth: null, satori: null, delegate: null, delegated: null, lock: null },
+    vault: { address: '', eth: null, satori: null, stakedWith: null, staked: null, lock: null },
     claimable: { rewards: null, airdrop: null }, lastBatch: null, lastCheck: null, nextCheck: null, checking: false,
   },
-  baseBusy: '', // '' | 'refresh' | 'delegate' | 'undelegate' | 'claim' | 'send'
-  baseDid: '', // the last vault action ('delegate' | 'undelegate' | 'claim' | 'send'): where its result shows
+  baseBusy: '', // '' | 'refresh' | 'stake' | 'unstake' | 'claim' | 'send'
+  baseDid: '', // the last vault action ('stake' | 'unstake' | 'claim' | 'send'): where its result shows
   baseError: '',
   baseResult: '',
   baseTxs: [], // the last action's transactions: [{ label, hash }]

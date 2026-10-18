@@ -7,9 +7,9 @@
 //   const job = work.start('central'); job.step('history', 34, 82); job.end();   // or work.run(task, (step) => …)
 
 /** The tasks, the neuron's own first; HERO: the ones Home's hero shows (the network's show on the Streams tab). */
-export const ORDER = ['central', 'base', 'delegate', 'undelegate', 'claim', 'send', 'keys', 'discover', 'subscribe'];
+export const ORDER = ['central', 'base', 'stake', 'unstake', 'claim', 'send', 'keys', 'discover', 'subscribe'];
 export const HERO = ORDER.slice(0, 7);
-const VAULT = new Set(['delegate', 'undelegate', 'claim', 'send', 'keys']);
+const VAULT = new Set(['stake', 'unstake', 'claim', 'send', 'keys']);
 /**
  * Closing now would lose work: predictions being sent, a Base batch or a vault transaction sent and not yet confirmed,
  * the keys being written.
@@ -41,7 +41,7 @@ const TEXT = {
   'discover:ask': (e) => `Asking the relays · ${e.done} of ${e.total}`,
   'subscribe:find': () => 'Finding the stream on the relays…',
   'keys:save': () => 'Saving your keys…',
-  // a vault action's steps (Delegate, Stop delegating, Send; Claim's confirm)
+  // a vault action's steps (Stake, Unstake, Send; Claim's confirm)
   send: (e) => tx(e, 'Sending…'),
   confirm: (e) => tx(e, 'Waiting for Base to confirm…'),
   settle: () => 'Checking it on Base…',

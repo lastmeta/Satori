@@ -22,7 +22,7 @@ export const FEED = 20;
  */
 export const LEVEL = {
   'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad', 'relays-down': 'bad',
-  'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', delegate: 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
+  'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', stake: 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
   'base-unreachable': 'warn',
   asleep: 'idle', starting: 'idle',
   backup: 'advice', install: 'advice', 'relay-down': 'advice',
@@ -178,7 +178,7 @@ function centralReasons({ now, rows, sessions, central, app }) {
 function baseReasons({ rows, base }) {
   const out = [];
   if (!base) return out;
-  const d = base.vault?.delegated;
+  const d = base.vault?.staked;
   const inUse = d === 'identity' || !!base.lastBatch;
   const lastRow = rows.filter((r) => r.kind === 'base').at(-1);
   const repeated = lastRow?.level === 'bad' && lastRow.count >= 2;
@@ -196,8 +196,8 @@ function baseReasons({ rows, base }) {
   }
   if (base.error || !base.config) return out;
   if (d === 'none' && Number(base.vault.satori) > 0) {
-    out.push(reason('delegate', 'base', { line: 'Base needs one step from you.', chip: 'Not delegated',
-      text: 'Base predictions are off. Delegate your vault’s prediction power to this neuron.', button: 'Delegate', act: { do: 'delegate' } }));
+    out.push(reason('stake', 'base', { line: 'Base needs one step from you.', chip: 'Not staked',
+      text: "Your vault's SATORI isn't earning on Base. Stake with this neuron.", button: 'Stake', act: { do: 'stake' } }));
   }
   if (d === 'identity' && base.identity?.lowEth) {
     const n = base.identity.batchesLeft;
@@ -243,7 +243,7 @@ export const toneOf = (status, work) => (status === 'warn' || status === 'bad' ?
   : work ? (work.critical ? 'critical' : 'working') : 'idle');
 
 /** Each channel's work: central's poll; Base's batch and the vault's actions; the network's discover and subscribe. */
-const CHANNEL_WORK = { central: ['central'], base: ['base', 'delegate', 'undelegate', 'claim', 'send'], network: ['discover', 'subscribe'] };
+const CHANNEL_WORK = { central: ['central'], base: ['base', 'stake', 'unstake', 'claim', 'send'], network: ['discover', 'subscribe'] };
 
 // ── the channels (chips) ──
 
@@ -260,9 +260,9 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   let baseChip;
   if (b) baseChip = { state: b.status, text: b.chip };
   else if (!base?.config) baseChip = { state: 'idle', text: 'Connecting…', busy: true };
-  else if (base.vault?.delegated === 'other') baseChip = { state: 'idle', text: 'Delegated elsewhere', off: true };
-  else if (base.vault?.delegated !== 'identity') baseChip = { state: 'idle', text: 'Not delegated', off: true };
-  else if (!(Number(base.identity?.power) > 0)) baseChip = { state: 'idle', text: 'No SATORI delegated', off: true };
+  else if (base.vault?.staked === 'other') baseChip = { state: 'idle', text: 'Staked elsewhere', off: true };
+  else if (base.vault?.staked !== 'identity') baseChip = { state: 'idle', text: 'Not staked', off: true };
+  else if (!(Number(base.identity?.power) > 0)) baseChip = { state: 'idle', text: 'No SATORI staked', off: true };
   else if (base.lastBatch?.round === base.round) baseChip = { state: 'ok', text: `Round ${base.round} sent` };
   else baseChip = { state: 'ok', text: base.checking ? 'Sending…' : `Round ${base.round} due` };
 
@@ -271,7 +271,7 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
     : nostr?.subscriptions?.length ? { state: 'ok', text: `${(nostr.relays ?? []).length} relay${(nostr.relays ?? []).length === 1 ? '' : 's'}` }
       : { state: 'idle', text: 'No streams', off: true };
   // the tone: warn and bad as they are; working (its channel has work in progress, or is connecting); off (deliberately
-  // not used: Base not delegated here, no stream subscribed); else idle (sky: healthy, waiting). Advice is calm: its
+  // not used: Base not staked here, no stream subscribed); else idle (sky: healthy, waiting). Advice is calm: its
   // words, a green tone.
   const toned = (key, { off, busy, ...chip }) => {
     const working = busy || CHANNEL_WORK[key].some((t) => work[t]);
@@ -391,8 +391,8 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const told = reasons.filter((r) => r.status !== 'advice'); // what the hero says: advice is the card's only
   const status = told[0]?.status ?? 'ok'; // the worst: PRIORITY is by level
   // The title: is the neuron predicting on the channels that pay? Central (Not predicting wins), and Base when it should
-  // be predicting: delegated to this identity, or not read (its RPC down) after a batch went out. Nostr never moves it.
-  const d = base?.vault?.delegated;
+  // be predicting: staked with this neuron, or not read (its RPC down) after a batch went out. Nostr never moves it.
+  const d = base?.vault?.staked;
   const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.channel === 'base' && r.status === 'bad');
   const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting' : c.title;
   const top = told[0];

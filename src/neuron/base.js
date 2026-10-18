@@ -1,6 +1,6 @@
 // The Base flow (docs/design/base.md), as Satori Lite runs it (start.py:1143-1274,
 // web/routes.py:1321-1529) and as the dapp goes further:
-//   status (no key) · Delegate / Stop delegating (Unlock) · the daily batch (the identity, on its own)
+//   status (no key) · Stake / Unstake (Unlock) · the daily batch (the identity, on its own)
 //   · claims (Unlock: hub.claim, merkle, airdrop) · send (Unlock)
 // The batch goes at the first check of each UTC round: 10 s after start, at
 // the next round's start (chain time) and at least hourly.
@@ -98,7 +98,7 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
     const state = await chain.batchState(identity.evmAddress);
     at = state.chainTime;
     const { round } = state;
-    if (state.power === 0n) return { at, round, skipped: 'no prediction power delegated to the identity' };
+    if (state.power === 0n) return { at, round, skipped: 'nothing staked with this neuron' };
     if (state.predicted !== 0) return { at, round, skipped: 'already predicted this round' };
 
     report('check');
@@ -225,7 +225,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     const s = status;
     const gas = s?.gasPrice ? BATCH_GAS * 2n * s.gasPrice : null;
     const batchesLeft = s?.identity.eth != null && gas ? Number(s.identity.eth / gas) : null;
-    const vd = s?.vault.delegate;
+    const vd = s?.vault.delegate; // whom the vault's prediction power goes to (predictionDelegateInfo)
     return {
       rpc: made?.rpc ?? [], config: made ? (made.fromCentral ? 'central' : 'bundled') : null,
       localFork: !!made?.local, // a path on this site: the dev server's /rpc, a local fork
@@ -234,13 +234,13 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       round: s?.round ?? null, chainTime: s?.chainTime ?? null,
       identity: {
         address: identity.evmAddress, eth: plainAmount(s?.identity.eth), power: plainAmount(s?.identity.power),
-        fee: s?.identity.fee ?? null, allowedDelegator: s?.identity.allowedDelegator ?? null,
+        fee: s?.identity.fee ?? null, allowedStaker: s?.identity.allowedDelegator ?? null,
         batchesLeft, lowEth: batchesLeft != null && batchesLeft < LOW_BATCHES,
       },
       vault: {
         address: vaultAddress, eth: plainAmount(s?.vault.eth), satori: plainAmount(s?.vault.satori),
-        delegate: vd ?? null,
-        delegated: vd == null ? null : same(vd, identity.evmAddress) ? 'identity' : same(vd, zeroAddress) ? 'none' : 'other',
+        stakedWith: vd ?? null,
+        staked: vd == null ? null : same(vd, identity.evmAddress) ? 'identity' : same(vd, zeroAddress) ? 'none' : 'other',
         lock: s?.vault.lock ?? null,
       },
       claimable: { rewards: plainAmount(s?.claimable.rewards), airdrop: plainAmount(s?.claimable.airdrop) },
@@ -342,16 +342,17 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     /** The batch now if due (window.satori.predictBase). */
     predict: schedule.run,
 
-    /** Delegate prediction power (docs/design/base.md): needs Unlock. Then a batch check soon. */
+    /** Stake with this neuron (docs/design/base.md): needs Unlock. Then a batch check soon. */
     async delegate() {
       const v = needVault();
-      const r = await act('delegate', (chain, step) => chain.delegate({ identity, vault: v, onStep: step }));
+      const r = await act('stake', (chain, step) => chain.delegate({ identity, vault: v, onStep: step }));
       schedule.arm(now() + FIRST_CHECK_S);
       return r;
     },
+    /** Unstake (needs Unlock). */
     async undelegate() {
       const v = needVault();
-      return act('undelegate', (chain, step) => chain.undelegate({ vault: v, onStep: step }));
+      return act('unstake', (chain, step) => chain.undelegate({ vault: v, onStep: step }));
     },
 
     /** hub.claim() (the lens says > 0), the merkle drop (central's proof), the airdrop; each on its own. */
@@ -396,7 +397,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
         }
         const st = await chain.status({ identity: identity.evmAddress, vault: v.evmAddress });
         const lock = st.vault.lock;
-        if (lock?.locked) throw new Error(`${lockText(lock)}${lock.indefinite ? ': stop delegating first' : ''}.`);
+        if (lock?.locked) throw new Error(`${lockText(lock)}.`);
         step('send', 1, 1);
         return { hash: (await chain.sendSatori(v, to, wei, tx)).hash };
       });

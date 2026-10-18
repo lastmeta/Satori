@@ -4,7 +4,7 @@
 // subscribed Nostr streams, publishing `<stream>_pred` (docs/design/nostr.md),
 // and the identity's daily batch on Base (docs/design/base.md).
 // Unlock/Lock open and wipe the vault; the neuron never needs it (Base's
-// delegate, claims and sends do). The keys are one record of this app's own
+// Stake, claims and sends do). The keys are one record of this app's own
 // (meta `keys`, docs/design/keys.md); Base is the only chain shown.
 // window.satori is the same surface for agents (public/llms.txt). The
 // installed app (service worker, Install, persistent storage) is src/pwa/.
@@ -291,12 +291,12 @@ const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => v
 const vaultOps = {
   async delegate() {
     const r = await base.delegate();
-    if (r.steps.length) activity.wallet('delegate', 'Delegated to this neuron');
+    if (r.steps.length) activity.wallet('stake', 'Staked with this neuron');
     return r;
   },
   async undelegate() {
     const r = await base.undelegate();
-    if (r.steps.length) activity.wallet('undelegate', 'Stopped delegating');
+    if (r.steps.length) activity.wallet('unstake', 'Unstaked');
     return r;
   },
   async claim() {
@@ -500,7 +500,7 @@ const actions = {
     if (a.do === 'reload') location.reload();
     else if (a.do === 'poll') actions.pollNow();
     else if (a.do === 'install') actions.install();
-    else if (a.do === 'delegate') withVault('card', actions.baseDelegate);
+    else if (a.do === 'stake') withVault('card', actions.baseDelegate);
     else if (a.do === 'backup') {
       go('settings', 'backup');
       withVault('backup', () => actions.showBackup('vault'));
@@ -559,14 +559,14 @@ const actions = {
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
   /** A vault action from the UI: Unlock first (inline, at `slot`) when the vault is locked. */
   vaultAction: (slot, name) => withVault(slot, () => actions[name]()),
-  baseDelegate: () => baseUi('delegate', async () => {
+  baseDelegate: () => baseUi('stake', async () => {
     const r = await vaultOps.delegate();
-    return { text: r.steps.length ? 'Delegated prediction power to the identity.' : 'Already delegated to the identity.',
+    return { text: r.steps.length ? 'Staked with this neuron.' : 'Already staked with this neuron.',
       txs: stepTxs(r.steps) };
   }),
-  baseUndelegate: () => baseUi('undelegate', async () => {
+  baseUndelegate: () => baseUi('unstake', async () => {
     const r = await vaultOps.undelegate();
-    return { text: r.steps.length ? 'Stopped delegating.' : 'Not delegated.', txs: stepTxs(r.steps) };
+    return { text: r.steps.length ? 'Unstaked.' : 'Not staked.', txs: stepTxs(r.steps) };
   }),
   baseClaim: () => baseUi('claim', async () => {
     const r = await vaultOps.claim();
@@ -702,10 +702,10 @@ window.satori = {
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
   /** Base: a fresh read of the chain (one multicall) and the last batch. */
   async base() { ready(); await base.refresh(); return base.status(); },
-  /** Delegate the vault's prediction power to the identity (needs Unlock). → { steps: [{ step, by, hash }], settled } */
-  async delegate() { ready(); return baseAction('delegate', vaultOps.delegate); },
-  /** Stop delegating (needs Unlock): SATORI stays transfer-locked through the next round. */
-  async undelegate() { ready(); return baseAction('undelegate', vaultOps.undelegate); },
+  /** Stake with this neuron (needs Unlock): the vault's prediction power to the identity. → { steps: [{ step, by, hash }], settled } */
+  async stake() { ready(); return baseAction('stake', vaultOps.delegate); },
+  /** Unstake (needs Unlock): the SATORI can be sent once the next round ends. → the same shape */
+  async unstake() { ready(); return baseAction('unstake', vaultOps.undelegate); },
   /** hub.claim(), the merkle drop, the airdrop, from the vault (needs Unlock). → { rewards, merkle, airdrop } */
   async claim() { ready(); return baseAction('claim', vaultOps.claim); },
   /** The identity's daily batch now, if this round has none yet. → the check's result */
@@ -736,7 +736,7 @@ watch(() => {
  * (the Network streams line, only once one lasts a second). At rest the hero turns sky green from the tone before it
  * (data-from: over 2.5 min after work, style.css); back to work, at once.
  */
-const VAULT_TASKS = ['delegate', 'undelegate', 'claim', 'send'];
+const VAULT_TASKS = ['stake', 'unstake', 'claim', 'send'];
 let heroWas = null; // the hero's view shown last (not read from state: the watch below would depend on what it writes)
 const heroHold = createHold({ show: (v) => {
   const from = v.tone !== 'idle' ? null : heroWas?.tone === 'idle' ? heroWas.from : heroWas?.tone ?? null;

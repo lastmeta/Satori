@@ -165,10 +165,10 @@ export const rpcTitle = (b) => `${b.rpc.join(', ')}${b.localFork ? ' → 127.0.0
 const STEPS = {
   'setPredictorFee(0)': 'Identity: fee to 0',
   'setAllowedDelegator(vault)': 'Identity: accepts this vault',
-  'delegatePredictionPower(identity)': 'Vault: delegates to the identity',
-  'delegatePredictionPower(0x0)': 'Vault: stops delegating',
+  'delegatePredictionPower(identity)': 'Vault: stakes with this neuron',
+  'delegatePredictionPower(0x0)': 'Vault: unstakes',
 };
-/** A delegation step (base.delegate() / undelegate()) in plain words. */
+/** A step of Stake or Unstake (satori.stake() / unstake()) in plain words. */
 export const stepText = (step) => STEPS[step] ?? step;
 
 /** 0x1234…abcd */
@@ -180,12 +180,12 @@ export function amountText(x, unit) {
   return `${fmtNum(Number(x))} ${unit}`;
 }
 
-/** The vault's delegation in a few words. */
+/** The vault's stake in a few words. */
 export function delegationText(v) {
-  const d = v?.vault?.delegated;
-  if (d === 'identity') return `Delegated to the identity · ${amountText(v.identity.power, 'SATORI')} of prediction power`;
-  if (d === 'none') return 'Not delegated';
-  if (d === 'other') return `Delegated to ${v.vault.delegate}, not this identity`;
+  const d = v?.vault?.staked;
+  if (d === 'identity') return `Staked: ${amountText(v.identity.power, 'SATORI')} with this neuron`;
+  if (d === 'none') return 'Not staked';
+  if (d === 'other') return `Staked with ${v.vault.stakedWith}, not this neuron`;
   return '–';
 }
 
@@ -233,12 +233,12 @@ export function storageText(s) {
 
 /**
  * The Base card's note on who plays (docs/design/base.md): the neuron automatically, or the vault by hand in
- * Satori Daily, never both (the engine refuses a delegated vault's own predictions). [before, after] the
- * "Satori Daily" link, or null (delegated elsewhere, or not read yet).
+ * Satori Daily, never both (the engine refuses a staked vault's own predictions). [before, after] the
+ * "Satori Daily" link, or null (staked elsewhere, or not read yet).
  */
-export function playNote(delegated) {
-  if (delegated === 'identity') {
-    return ["Your vault's prediction power is with this neuron, so the vault can't also play ", ' by hand. Stop delegating to play manually.'];
+export function playNote(staked) {
+  if (staked === 'identity') {
+    return ["Your SATORI is staked with this neuron, so it can't also play ", ' by hand. Unstake to play manually.'];
   }
-  return delegated === 'none' ? ['Delegate to let the neuron predict every round, or play ', ' by hand.'] : null;
+  return staked === 'none' ? ['Stake with this neuron to let it predict every round, or play ', ' by hand.'] : null;
 }

@@ -1,5 +1,5 @@
 // The Base flow (docs/design/base.md): the daily batch's rules, the schedule,
-// delegate, claims and sends, against test/fake-satori.js (viem over a custom
+// stake, claims and sends, against test/fake-satori.js (viem over a custom
 // transport) and a Map for the database.
 import { forecast } from '../engine/index.js';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -39,7 +39,7 @@ beforeEach(async () => {
   const { DEFAULTS } = await import('../chain/config.js');
   chainOf = () => createChain({ config: DEFAULTS, transport: rpc.transport, pollingInterval: 1, settle: { tries: 5, ms: 1 } });
 });
-const delegated = async () => { await chainOf().delegate({ identity, vault: vaultKey }); rpc.sent.length = 0; };
+const staked = async () => { await chainOf().delegate({ identity, vault: vaultKey }); rpc.sent.length = 0; };
 const batchesSent = () => rpc.sent.filter((t) => t.functionName === 'predictMultipleWithPayloads').map((t) => t.args[0]);
 
 describe('rules', () => {
@@ -80,14 +80,14 @@ describe('rules', () => {
 });
 
 describe('the daily batch', () => {
-  test('not delegated: skipped, nothing sent', async () => {
+  test('not staked: skipped, nothing sent', async () => {
     const r = await runBatch({ chain: chainOf(), identity, db });
-    expect(r).toEqual({ at: ROUND * ROUND_S + 9 * 3600, round: ROUND, skipped: 'no prediction power delegated to the identity' });
+    expect(r).toEqual({ at: ROUND * ROUND_S + 9 * 3600, round: ROUND, skipped: 'nothing staked with this neuron' });
     expect(rpc.sent).toHaveLength(0);
   });
 
-  test('delegated: the default stream with the engine (naive on two points → DOWN), one tx, persisted after the receipt', async () => {
-    await delegated();
+  test('staked: the default stream with the engine (naive on two points → DOWN), one tx, persisted after the receipt', async () => {
+    await staked();
     const r = await runBatch({ chain: chainOf(), identity, db });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }]]);
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
@@ -106,8 +106,8 @@ describe('the daily batch', () => {
     const seen = [];
     const report = (...a) => seen.push(a.join(' '));
     await runBatch({ chain: chainOf(), identity, db, report });
-    expect(seen).toEqual([]); // not delegated: a quick skip, nothing to show
-    await delegated();
+    expect(seen).toEqual([]); // not staked: a quick skip, nothing to show
+    await staked();
     await runBatch({ chain: chainOf(), identity, db, report });
     expect(seen).toEqual(['check', 'send', 'confirm']);
     seen.length = 0;
@@ -116,7 +116,7 @@ describe('the daily batch', () => {
   });
 
   test('each game is simulated alone: a stale one is dropped and the rest go (Lite sinks the whole batch)', async () => {
-    await delegated();
+    await staked();
     s.streams[3] = { game: 13, named: false, cadence: 60, history: [{ hour: H0 + 1, value: 10n }, { hour: H0 + 2, value: 11n }] };
     s.streams[4] = { game: 14, named: false, cadence: 60, history: [{ hour: H0 + 1, value: 7n }] };
     s.deadGames[14] = 'StaleValue';
@@ -128,7 +128,7 @@ describe('the daily batch', () => {
   });
 
   test('a named game under 24 clock hours since our last prediction on it: the simulate drops it (the contract\'s own rule)', async () => {
-    await delegated();
+    await staked();
     s.streams[5] = { game: 15, named: true, cadence: 60, history: [{ hour: H0 + 1, value: 3n }] };
     s.weights[15] = E18;
     s.lastPred[`${I}:15`] = H0 - 2; // 22:00 yesterday; now 09:00
@@ -138,7 +138,7 @@ describe('the daily batch', () => {
   });
 
   test('each stream is forecast at its horizon: a daily one in one 24 h step, an hourly one in two 12 h steps; the direction from that value', async () => {
-    await delegated();
+    await staked();
     s.streams[3] = { game: 13, named: false, cadence: 60, history: [{ hour: H0 + 1, value: 10n }] };
     s.weights[13] = E18;
     const calls = [];
@@ -151,14 +151,14 @@ describe('the daily batch', () => {
   });
 
   test('a game without voting weight (anyone\'s new stream) is not in the batch at all', async () => {
-    await delegated();
+    await staked();
     for (let i = 10; i < 20; i++) s.streams[i] = { game: i + 100, named: false, cadence: 60, history: [{ hour: H0, value: 1000n }] };
     await runBatch({ chain: chainOf(), identity, db });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }]]);
   });
 
   test('nothing passes: no transaction, the reasons listed', async () => {
-    await delegated();
+    await staked();
     s.deadGames[1] = 'EmptyStream';
     const r = await runBatch({ chain: chainOf(), identity, db });
     expect(r).toMatchObject({ round: ROUND, skipped: 'no game passes its simulation', dropped: [{ gameId: 1, error: 'EmptyStream' }] });
@@ -193,7 +193,7 @@ describe('the daily batch', () => {
   });
 
   test('the hash is kept as soon as the batch is sent: the next check waits for it instead of sending again', async () => {
-    await delegated();
+    await staked();
     rpc.state.mine = false; // sent, not mined: the tab may close here
     const first = runBatch({ chain: chainOf(), identity, db });
     await vi.waitFor(() => expect(db.m.get('base_pending_batch')).toMatchObject({ round: ROUND, hash: expect.any(String) }));
@@ -213,14 +213,14 @@ describe('the daily batch', () => {
   });
 
   test('a pending batch from an earlier round that never mined is let go', async () => {
-    await delegated();
+    await staked();
     db.m.set('base_pending_batch', { round: ROUND - 1, hash: '0x' + '12'.repeat(32), games: [], dropped: [] });
     const r = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
     expect(r).toMatchObject({ round: ROUND, sent: { round: ROUND } });
   });
 
   test('the spending ceiling: a max fee above it skips to the next check, and says why', async () => {
-    await delegated();
+    await staked();
     rpc.state.tip = 3n * 10n ** 9n; // 3 gwei
     rpc.state.baseFee = 0n;
     const r = await runBatch({ chain: chainOf(), identity, db, maxFeeWei: 2n * 10n ** 9n });
@@ -232,7 +232,7 @@ describe('the daily batch', () => {
   });
 
   test('an RPC failure is an error for this check, not a dropped game', async () => {
-    await delegated();
+    await staked();
     rpc.state.down = true;
     expect(await runBatch({ chain: chainOf(), identity, db })).toMatchObject({ error: expect.any(String) });
   });
@@ -275,13 +275,13 @@ describe('createBase', () => {
     expect(fired.length % 2).toBe(0); // a request, its answer
   });
 
-  test('status: amounts as decimal strings, the delegation, the lock, batches of gas left', async () => {
+  test('status: amounts as decimal strings, the stake, the transfer rule, batches of gas left', async () => {
     s.airdrop[V] = 6n * E18;
     const v = await base.refresh();
     expect(v).toMatchObject({
       error: '', config: 'bundled', round: ROUND,
-      identity: { address: identity.evmAddress, eth: '0.1', power: '0', fee: 1000, lowEth: false },
-      vault: { address: vaultKey.evmAddress, eth: '0.1', satori: '100', delegated: 'none', lock: { locked: false } },
+      identity: { address: identity.evmAddress, eth: '0.1', power: '0', fee: 1000, allowedStaker: zeroAddress, lowEth: false },
+      vault: { address: vaultKey.evmAddress, eth: '0.1', satori: '100', stakedWith: zeroAddress, staked: 'none', lock: { locked: false } },
       claimable: { rewards: '0', airdrop: '6' },
     });
     expect(v.identity.batchesLeft).toBe(Number(10n ** 17n / (1_500_000n * 2n * 1_000_000n)));
@@ -308,7 +308,7 @@ describe('createBase', () => {
     expect(await base.setSettings({ rpc: '' })).toMatchObject({ rpcSetting: '' });
   });
 
-  test('work: a check that has something to do, Delegate and Claim say each step (src/neuron/work.js)', async () => {
+  test('work: a check that has something to do, Stake and Claim say each step (src/neuron/work.js)', async () => {
     const seen = [];
     const work = createWork({ onChange: () => { const e = work.current(); if (e) seen.push([e.task, e.step, e.done, e.total].filter((x) => x != null).join(' ')); } });
     base = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
@@ -316,8 +316,8 @@ describe('createBase', () => {
       clearTimeout: () => {}, work });
     vault = vaultKey;
     await base.delegate();
-    expect(seen).toEqual(['delegate send 1 3', 'delegate confirm 1 3', 'delegate send 2 3', 'delegate confirm 2 3',
-      'delegate send 3 3', 'delegate confirm 3 3', 'delegate settle']);
+    expect(seen).toEqual(['stake send 1 3', 'stake confirm 1 3', 'stake send 2 3', 'stake confirm 2 3',
+      'stake send 3 3', 'stake confirm 3 3', 'stake settle']);
     expect(work.current()).toBeNull();
     seen.length = 0;
     await base.predict();
@@ -333,7 +333,7 @@ describe('createBase', () => {
     seen.length = 0;
     await base.undelegate();
     await base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '0.01' });
-    expect(seen).toEqual(['undelegate send 1 1', 'undelegate confirm 1 1', 'undelegate settle', 'send send 1 1', 'send confirm 1 1']);
+    expect(seen).toEqual(['unstake send 1 1', 'unstake confirm 1 1', 'unstake settle', 'send send 1 1', 'send confirm 1 1']);
     expect(work.current()).toBeNull();
   });
 
@@ -343,13 +343,13 @@ describe('createBase', () => {
     await expect(base.send({ asset: 'ETH', to: zeroAddress, amount: '1' })).rejects.toThrow('Unlock the vault first');
   });
 
-  test('delegate → the identity\'s batch at the next check; stop → transfer-locked until the next round', async () => {
+  test('stake → the identity\'s batch at the next check; unstake → SATORI can be sent once the next round ends', async () => {
     vault = vaultKey;
     base.start();
     const r = await base.delegate();
     expect(r.steps.map((x) => x.step)).toEqual(['setPredictorFee(0)', 'setAllowedDelegator(vault)', 'delegatePredictionPower(identity)']);
     let v = await base.status();
-    expect(v.vault).toMatchObject({ delegated: 'identity', lock: { locked: true, indefinite: true } });
+    expect(v.vault).toMatchObject({ staked: 'identity', stakedWith: identity.evmAddress, lock: { locked: true, indefinite: true } });
     expect(v.nextCheck).toBe(at.t + FIRST_CHECK_S);
     await timers.at(-1).fn(); // the check
     await vi.waitFor(() => expect(batchesSent()).toHaveLength(1));
@@ -362,9 +362,9 @@ describe('createBase', () => {
 
     await base.undelegate();
     v = await base.status();
-    expect(v.vault).toMatchObject({ delegated: 'none', lock: { locked: true, indefinite: false, untilRound: ROUND + 1 } });
+    expect(v.vault).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false, untilRound: ROUND + 1 } });
     await expect(base.send({ asset: 'SATORI', to: '0x' + '33'.repeat(20), amount: '1' }))
-      .rejects.toThrow(`SATORI transfer-locked until round ${ROUND + 1} (free from Oct 17, 00:00 UTC).`);
+      .rejects.toThrow(`SATORI can be sent from Oct 17, 00:00 UTC (round ${ROUND + 2}).`);
     base.stop();
   });
 
@@ -442,6 +442,6 @@ describe('createBase', () => {
     await base.send({ asset: 'SATORI', to, amount: '2.5' });
     expect(s.balance[to]).toBe(25n * E18 / 10n);
     s.lock[V] = INDEFINITE;
-    await expect(base.send({ asset: 'SATORI', to, amount: '1' })).rejects.toThrow(/while delegated: stop delegating first/);
+    await expect(base.send({ asset: 'SATORI', to, amount: '1' })).rejects.toThrow("Staked SATORI can't be sent until you unstake.");
   });
 });

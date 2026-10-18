@@ -1,6 +1,6 @@
 // Test double (never imported by the app): a small, stateful Satori D6 on
 // fake-rpc.js, with the rules the app depends on (docs/design/base.md):
-// the engine's batch checks (C/next/SatoriEngine.sol:698-810), delegation and
+// the engine's batch checks (C/next/SatoriEngine.sol:698-810), staking (delegatePredictionPower) and
 // its locks (C/next/SatoriHub.sol:426-434,813-877), the set-once predictor fee
 // (C/SatoriRewards.sol:119-143,651-669), the token's transfer lock
 // (C/next/SatoriToken.sol:816-821), the registry's history page
@@ -32,7 +32,7 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     batches: [], // [{ from, round, hour, requests }]
     delegateOf: {}, // addr → delegate
     feeStored: {}, // addr → bps (0 = never set: the 10 % default)
-    allowed: {}, // addr → the one delegator it accepts
+    allowed: {}, // addr → the one vault it accepts (allowedDelegator)
     lock: {}, // addr → round (transferLockedUntil)
     balance: {}, // SATORI
     rewards: {}, // what the lens says the address can claim with hub.claim()

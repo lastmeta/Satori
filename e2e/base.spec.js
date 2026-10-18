@@ -1,8 +1,8 @@
 // Base in the app (docs/design/base.md), against a fake D6 behind /rpc
 // (test/fake-satori.js, run in this test process) and a stub central2
-// that serves a merkle proof: the status while locked, Unlock → Delegate
-// prediction power, the identity's batch on its own, a round later the claims
-// and the next batch, Stop delegating, the transfer lock, sends; the agent API.
+// that serves a merkle proof: the status while locked, Unlock → Stake with
+// this neuron, the identity's batch on its own, a round later the claims
+// and the next batch, Unstake, when SATORI can be sent, sends; the agent API.
 import { expect, test } from '@playwright/test';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
@@ -19,10 +19,10 @@ async function setup(context) {
 
 const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
 const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
-const ASKS = "Delegate, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.";
+const ASKS = "Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch on its own.";
 const sent = (rpc) => rpc.sent.map((t) => t.functionName);
 
-test('the Base card: delegate, the batch on its own, claims, stop, the lock, sends', async ({ context, page }) => {
+test('the Base card: stake, the batch on its own, claims, unstake, when SATORI can be sent, sends', async ({ context, page }) => {
   test.setTimeout(180_000);
   const { s, rpc, central } = await setup(context);
   await openApp(page);
@@ -35,14 +35,14 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   const V = base.vault.address.toLowerCase();
   await expect(page.locator('[data-test=identity]')).toHaveText(base.identity.address); // the Keys card shows the Base addresses
   await expect(page.locator('[data-test=vault]')).toHaveText(base.vault.address);
-  expect(base).toMatchObject({ rpc: ['/rpc'], config: 'bundled', round: ROUND, vault: { delegated: 'none', satori: '0' } });
+  expect(base).toMatchObject({ rpc: ['/rpc'], config: 'bundled', round: ROUND, vault: { staked: 'none', satori: '0' } });
   await go(page, 'wallet');
-  await expect(fact(page, 'identity')).toHaveText('0 ETH · about 0 daily batches'); // no warning before delegating
-  await expect(fact(page, 'delegation')).toHaveText('Not delegated: Delegate prediction power, below');
-  const CHOICE = 'Delegate to let the neuron predict every round, or play Satori Daily by hand.';
+  await expect(fact(page, 'identity')).toHaveText('0 ETH · about 0 daily batches'); // no warning before staking
+  await expect(fact(page, 'staking')).toHaveText('Not staked: Stake with this neuron, below');
+  const CHOICE = 'Stake with this neuron to let it predict every round, or play Satori Daily by hand.';
   await expect(fact(page, 'play')).toHaveText(CHOICE);
   await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://app.satorinet.io');
-  await expect(fact(page, 'check')).toContainText('Waits for delegation');
+  await expect(fact(page, 'check')).toContainText('Waits until you stake');
   await expect(page.getByText(ASKS)).toBeVisible();
 
   rpc.eth[I] = 10n ** 17n;
@@ -53,7 +53,7 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'identity')).not.toContainText('low');
   await expect(fact(page, 'lock')).toHaveText('Free to send');
 
-  // Unlock → Delegate prediction power: the identity's two steps, then the vault's.
+  // Unlock → Stake with this neuron: the identity's two steps, then the vault's.
   await go(page, 'settings');
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
@@ -62,24 +62,24 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await page.getByRole('button', { name: 'Identity words' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();
   await go(page, 'wallet');
-  await page.getByRole('button', { name: 'Delegate prediction power' }).click();
-  await expect(fact(page, 'result')).toHaveText('Delegated prediction power to the identity.', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Stake with this neuron' }).click();
+  await expect(fact(page, 'result')).toHaveText('Staked with this neuron.', { timeout: 30_000 });
   expect(rpc.sent.map((t) => [t.from, t.functionName])).toEqual([
     [I, 'setPredictorFee'], [I, 'setAllowedDelegator'], [V, 'delegatePredictionPower'],
   ]);
-  await expect(fact(page, 'delegation')).toHaveText('Delegated to the identity · 100 SATORI of prediction power');
-  await expect(fact(page, 'play')).toHaveText("Your vault's prediction power is with this neuron, so the vault can't also play Satori Daily by hand. "
-    + 'Stop delegating to play manually.');
-  await expect(fact(page, 'lock')).toHaveText('SATORI transfer-locked while delegated');
-  await expect(page.getByRole('button', { name: 'Stop delegating' })).toBeVisible();
+  await expect(fact(page, 'staking')).toHaveText('Staked: 100 SATORI with this neuron');
+  await expect(fact(page, 'play')).toHaveText("Your SATORI is staked with this neuron, so it can't also play Satori Daily by hand. "
+    + 'Unstake to play manually.');
+  await expect(fact(page, 'lock')).toHaveText("Staked SATORI can't be sent until you unstake");
+  await expect(page.getByRole('button', { name: 'Unstake' })).toBeVisible();
 
   await expect(page.locator('[data-test=base-txs] > *')).toHaveCount(3);
   await expect(page.locator('[data-test=base-txs]')).not.toContainText('renderTemplate');
   await expect(page.locator('[data-test=base-txs] code')).toHaveText([/^Identity: fee to 0 0x/, /^Identity: accepts this vault 0x/,
-    /^Vault: delegates to the identity 0x/]); // plain words; a local fork: no explorer link
+    /^Vault: stakes with this neuron 0x/]); // plain words; a local fork: no explorer link
   await expect(page.locator('[data-test=base-txs] code').first()).toHaveAttribute('title', /^setPredictorFee\(0\) by the identity · 0x/);
 
-  // The identity's batch, on its own, 10 s after delegating: the default game, DOWN (naive on two values).
+  // The identity's batch, on its own, 10 s after staking: the default game, DOWN (naive on two values).
   // Anyone's new stream has a game but no voting weight: the engine pays it nothing, and it is left out.
   s.streams[7] = { game: 70, named: false, cadence: 60, history: [{ hour: ROUND * 24, value: 1000n }] };
   await expect(fact(page, 'last-batch')).toContainText(`Round ${ROUND}`, { timeout: 30_000 });
@@ -113,25 +113,25 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'last-batch')).toContainText(`Round ${ROUND + 1}`);
   expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ skipped: 'already predicted this round' });
 
-  // Delegated, the identity's gas matters: below a week of batches it says so.
+  // Staked, the identity's gas matters: below a week of batches it says so.
   rpc.eth[I] = 10n ** 12n;
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(fact(page, 'identity')).toContainText('low, send it a little Base ETH');
   rpc.eth[I] = 10n ** 17n;
 
-  // Stop delegating: transfer-locked through the next round, then free.
-  await page.getByRole('button', { name: 'Stop delegating' }).click();
-  await expect(fact(page, 'result')).toContainText('Stopped delegating', { timeout: 30_000 });
+  // Unstake: SATORI can't be sent through the next round, then it can.
+  await page.getByRole('button', { name: 'Unstake' }).click();
+  await expect(fact(page, 'result')).toHaveText('Unstaked.', { timeout: 30_000 });
   await expect(fact(page, 'play')).toHaveText(CHOICE);
-  await expect(fact(page, 'lock')).toContainText(`SATORI transfer-locked until round ${ROUND + 2} (free from Oct 18, 00:00 UTC)`);
+  await expect(fact(page, 'lock')).toHaveText(`SATORI can be sent from Oct 18, 00:00 UTC (round ${ROUND + 3})`);
   const to = '0x' + '44'.repeat(20);
   await page.getByLabel('Amount').fill('1');
   await page.getByLabel('To (0x address)').fill(to);
   await page.getByRole('button', { name: 'Send from the vault' }).click();
-  await expect(fact(page, 'action-error')).toContainText(`transfer-locked until round ${ROUND + 2}`);
+  await expect(fact(page, 'action-error')).toContainText(`SATORI can be sent from Oct 18, 00:00 UTC (round ${ROUND + 3}).`);
   rpc.advance(DAY);
   await page.getByRole('button', { name: 'Refresh' }).click();
-  await expect(fact(page, 'lock')).toContainText(`until round ${ROUND + 2}`); // round N itself is still locked
+  await expect(fact(page, 'lock')).toContainText(`(round ${ROUND + 3})`); // round N itself still can't send
   rpc.advance(DAY);
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(fact(page, 'lock')).toHaveText('Free to send');
@@ -152,8 +152,19 @@ test('the Base card: delegate, the batch on its own, claims, stop, the lock, sen
   await expect(fact(page, 'result')).toContainText('Rewards: nothing to claim on-chain', { timeout: 30_000 });
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   base = (await page.evaluate(() => window.satori.status())).base;
-  expect(base).toMatchObject({ vault: { delegated: 'none', satori: '114' }, lastBatch: { round: ROUND + 1 } });
+  expect(base).toMatchObject({ vault: { staked: 'none', satori: '114' }, lastBatch: { round: ROUND + 1 } });
   expect(sent(rpc).filter((f) => f === 'predictMultipleWithPayloads')).toHaveLength(2);
+
+  // The agent API: stake() and unstake() (delegate() and undelegate() until 2026-10-18; no aliases).
+  expect(await page.evaluate(() => [typeof window.satori.delegate, typeof window.satori.undelegate])).toEqual(['undefined', 'undefined']);
+  await expect(page.evaluate(() => window.satori.stake())).rejects.toThrow('Unlock the vault first');
+  await page.evaluate((p) => window.satori.unlock(p), PASS);
+  expect(await page.evaluate(() => window.satori.stake())).toMatchObject({ steps: [{ step: 'delegatePredictionPower(identity)', by: 'vault' }], settled: true });
+  let v = (await page.evaluate(() => window.satori.base())).vault;
+  expect([v.staked, v.stakedWith.toLowerCase()]).toEqual(['identity', I]);
+  expect(await page.evaluate(() => window.satori.unstake())).toMatchObject({ steps: [{ step: 'delegatePredictionPower(0x0)', by: 'vault' }], settled: true });
+  v = (await page.evaluate(() => window.satori.base())).vault;
+  expect(v).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false } });
 });
 
 test('the Base settings: the RPC (https or a path on this site; empty is the default) and the batch\'s max fee', async ({ context, page }) => {

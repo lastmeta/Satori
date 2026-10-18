@@ -294,6 +294,31 @@ test('a step-8 database: a stream predicted before counts as predicted through i
   expect(await up.unpredicted()).toEqual(['u-eth']); // never predicted twice: u-btc's 2000 is not guessed at
 });
 
+test('a step-9 database: the activity log says staking in its earlier rows too (the feed never shows the old words)', async () => {
+  const conn = await memoryConn();
+  await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+  for (const m of MIGRATIONS.slice(0, 9)) if (typeof m === 'string') await conn.query(m);
+  await conn.query(`INSERT INTO meta VALUES ('schema_version', '9')`);
+  const rows = [ // as the earlier app wrote them
+
+    ['wallet', 'ok', { action: 'delegate', text: 'Delegated to this neuron' }, null],
+    ['wallet', 'ok', { action: 'undelegate', text: 'Stopped delegating' }, null],
+    ['base', 'idle', { round: 8, skipped: 'no prediction power delegated to the identity' }, 'skip:no prediction power delegated to the identity'],
+    ['wallet', 'ok', { action: 'claim', text: 'Claimed 3 SATORI' }, null],
+  ];
+  for (const [kind, level, data, mkey] of rows) {
+    await conn.query(`INSERT INTO activity (ts, kind, level, data, mkey) VALUES (1000, '${kind}', '${level}', '${JSON.stringify(data)}', ${mkey ? `'${mkey}'` : 'NULL'})`);
+  }
+  const up = await openDb(conn);
+  expect(up.version).toBe(MIGRATIONS.length);
+  expect((await up.activity(0)).map((r) => [r.kind, r.data, r.mkey])).toEqual([
+    ['wallet', { action: 'stake', text: 'Staked with this neuron' }, null],
+    ['wallet', { action: 'unstake', text: 'Unstaked' }, null],
+    ['base', { round: 8, skipped: 'nothing staked with this neuron' }, 'skip:nothing staked with this neuron'],
+    ['wallet', { action: 'claim', text: 'Claimed 3 SATORI' }, null],
+  ]);
+});
+
 describe('bvar: specs and central history (migration 6)', () => {
   test('a step-6 database: streams gain history_at (null: not fetched yet), and model_specs starts empty', async () => {
     const conn = await memoryConn();

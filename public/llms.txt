@@ -6,8 +6,8 @@
 > predictions back to central, the way the Docker neuron (Satori Lite) does.
 > It also follows Satori streams on Nostr relays and publishes a prediction
 > stream (`<stream>_pred`) for each one it subscribes to, and predicts on
-> Base: the vault delegates its prediction power to the identity, which sends
-> one batch of up/down predictions every UTC round on its own.
+> Base: the vault stakes with this neuron, and its identity sends one batch
+> of up/down predictions every UTC round on its own.
 > Everything runs in the browser tab: the keys, the database (DuckDB-WASM on
 > OPFS) and the engine. There is no server of our own. It is built to be
 > driven by people and by AI agents alike.
@@ -39,12 +39,49 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 5. Base: fund both Base addresses (on the dev server's local fork:
    `node scripts/fork.mjs fund <identity 0x…>` and
    `node scripts/fork.mjs fund <vault 0x…> --satori 100`), then
-   `await satori.unlock(passphrase)`, `await satori.delegate()`,
+   `await satori.unlock(passphrase)`, `await satori.stake()`,
    `await satori.predictBase()`.
 6. `await satori.health()`: is it predicting, and is anything broken? Its
    `action` is the one thing to do, if any.
 
 Every method is below; `await satori.status()` shows everything at once.
+
+## Changed 2026-10-18 (staking: the words and the agent API)
+
+The vault giving its prediction power to the identity (on-chain, the
+vault's `delegatePredictionPower(identity)`) is called **staking**: "Stake
+with this neuron", "Unstake". The old names are gone, with no aliases:
+
+- `satori.delegate()` → `satori.stake()`, `satori.undelegate()` →
+  `satori.unstake()`; the same results.
+- `base()` (and `status().base`): `vault.delegated` → `vault.staked` (the
+  same values: `'identity'`, `'none'`, `'other'`, null before the first
+  read), `vault.delegate` → `vault.stakedWith` (the address it stakes with),
+  `identity.allowedDelegator` → `identity.allowedStaker`.
+- `health()`: the reason `delegate` → `stake` (and the action card's
+  `data-action`), its action's `do: 'delegate'` → `do: 'stake'`, button
+  "Stake", text "Your vault's SATORI isn't earning on Base. Stake with this
+  neuron."; `work.task` `delegate` / `undelegate` → `stake` / `unstake`; the
+  Base chip "Not staked", "Staked elsewhere", "No SATORI staked".
+- `predictBase()`'s skip `no prediction power delegated to the identity` →
+  `nothing staked with this neuron`.
+- `data-test`: `base-delegation` → `base-staking`, `base-delegate` →
+  `base-stake`, `base-undelegate` → `base-unstake`.
+- Words on the page: "Delegate prediction power" / "Stop delegating" →
+  "Stake with this neuron" / "Unstake" ("Staking…", "Unstaking…"); the
+  Delegation fact → Staking, "Staked: 100 SATORI with this neuron" or "Not
+  staked: Stake with this neuron, below"; Transfers "SATORI transfer-locked
+  while delegated" → "Staked SATORI can't be sent until you unstake", and
+  after Unstake "SATORI can be sent from Oct 17, 00:00 UTC (round 20743)"
+  (it said "transfer-locked until round 20742 (free from …)"; `send()`
+  throws the same words); the batch check "Waits until you stake"; who
+  plays: "Your SATORI is staked with this neuron, so it can't also play
+  Satori Daily by hand. Unstake to play manually." / "Stake with this
+  neuron to let it predict every round, or play Satori Daily by hand.";
+  Home's vault line "· staked"; the inline prompt "Vault passphrase to
+  stake"; the transactions "Vault: stakes with this neuron" / "Vault:
+  unstakes"; the feed "Staked with this neuron" / "Unstaked" (migration 10
+  rewrites the log's earlier rows in these words).
 
 ## Changed 2026-10-16 (Home answers "is it predicting?"; four tabs)
 
@@ -377,26 +414,27 @@ For agents written against the earlier API:
   build central's (`https://sepolia.base.org`), then publicnode, unless the
   build sets `VITE_BASE_RPC`. An RPC on
   another chain than 84532 is refused (nothing is read or sent).
-- Delegate prediction power (needs Unlock): the identity sets its predictor
-  fee to 0 (`rewards.setPredictorFee(0)`, set-once) and accepts only this
-  vault (`hub.setAllowedDelegator(vault)`), then the vault calls
-  `hub.delegatePredictionPower(identity)`. Each step only when needed. While
-  delegated the vault's SATORI is transfer-locked; Stop delegating
-  (`delegatePredictionPower(0x0)`) leaves it locked through the next round:
-  the token refuses transfers while `transferLockedUntil >= round`, so
-  "until round N" means free from round N + 1 at 00:00 UTC. ("Staking" in the
-  Docker neuron.)
+- Stake with this neuron (needs Unlock): on-chain, the vault's
+  `hub.delegatePredictionPower(identity)`; the SATORI stays in the vault and
+  earns. First the identity sets its predictor fee to 0
+  (`rewards.setPredictorFee(0)`, set-once) and accepts only this vault
+  (`hub.setAllowedDelegator(vault)`). Each step only when needed. Staked
+  SATORI can't be sent; Unstake (`delegatePredictionPower(0x0)`) keeps it
+  unsendable through the next round: the token refuses transfers while
+  `transferLockedUntil >= round`, so it can be sent from round
+  `transferLockedUntil + 1` at 00:00 UTC. ("Staking" in the Docker neuron
+  too.)
 - Automatic only: on-chain the neuron plays only through the identity's
   daily batch; manual play is Satori Daily (https://app.satorinet.io, the
   dapp). Per vault per round it is one or the other: the engine refuses a
-  delegated vault's own predictions (`Delegated`).
-- Prediction power: the vault's SATORI, delegated to the identity. A vault
-  with no SATORI, or one that has not delegated, gives the identity none, and
-  the batch skips (`no prediction power delegated to the identity`).
+  staked vault's own predictions (the revert `Delegated`).
+- Prediction power: the vault's SATORI, staked with this neuron. A vault
+  with no SATORI, or one that has not staked, gives the identity none, and
+  the batch skips (`nothing staked with this neuron`).
 - The daily batch (the identity, no Unlock): once per UTC round
   (`block.timestamp / 86400`), at the first check of the round (10 s after
-  load, after Delegate, at the round's start on the chain's clock, at least
-  hourly), when the identity has delegated power and no batch this round.
+  load, after Stake, at the round's start on the chain's clock, at least
+  hourly), when the identity has staked power and no batch this round.
   Every registry stream whose binary game has voting weight (the engine pays
   only those) is forecast by the engine one cadence ahead and at least the
   24 h a round scores (horizon = max(24 h, the cadence), in n = max(1,
@@ -496,7 +534,7 @@ the page's JS context:
   - `work`: null, or what the neuron is doing now: `{ task, step, done,
     total, since, critical, text }` (the changelog above lists the steps).
   - `status`: `'ok'` (predicting: central took predictions within 12 h of
-    open time, and if delegated Base has this round's batch or its check has
+    open time, and if staked Base has this round's batch or its check has
     not run yet), `'idle'` (calm: *Starting* before the first poll, or *Was
     asleep*: a poll came due while Satori was closed; it catches up and says
     so until the next normal cycle; never red for being closed), `'warn'`
@@ -507,7 +545,7 @@ the page's JS context:
     action; the first that holds: `'Not predicting'` (a bad central reason:
     `db-error`, `login-refused`, `central-failing`, `central-overdue`),
     `'Partly predicting'` (central predicts, but Base has a red reason,
-    `base-failing`, while it is delegated to this identity, or not read
+    `base-failing`, while it is staked with this neuron, or not read
     after a batch went out), `'Starting'` (no good cycle in the log yet),
     `'Was asleep'` (a session missed work and has not caught up), else
     `'Predicting'`. Nostr never changes it.
@@ -516,8 +554,8 @@ the page's JS context:
     last poll had nothing to send).
   - `action`: null, or the one thing to do, the highest reason with a
     button (so advice only when no warn or bad reason is present): `{ id,
-    text, button, do, tab?, section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `delegate`
-    (`unlock()` then `delegate()`), `backup` (`unlock()` then
+    text, button, do, tab?, section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `stake`
+    (`unlock()` then `stake()`), `backup` (`unlock()` then
     `backup('vault')`), `install` (`install()`), `go` (`go(tab)`; the fix is
     at `#<tab>-<section>`).
   - `reasons`: every reason, highest first: `[{ id, status, channel, text }]`,
@@ -527,8 +565,8 @@ the page's JS context:
     `title` or `line`). The order, by level: bad `db-error`,
     `login-refused`, `central-failing` (2 cycles failed), `central-overdue`,
     `base-failing`, `relays-down`; warn `central-failed` (1 cycle),
-    `vault-mismatch`, `not-registered`, `delegate` (the vault holds SATORI,
-    not delegated), `gas-low`, `base-skipped`, `base-unreachable`; idle
+    `vault-mismatch`, `not-registered`, `stake` (the vault holds SATORI,
+    not staked), `gas-low`, `base-skipped`, `base-unreachable`; idle
     `asleep`, `starting`; advice `backup` (storage not kept, no backup
     confirmed), `install` (was asleep, and the browser offers Install),
     `relay-down` (some relay down, not all). docs/design/health.md says why
@@ -642,8 +680,8 @@ the page's JS context:
   whether central's relays are written to.
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
-  identity: { address, eth, power, fee, allowedDelegator, batchesLeft, lowEth },
-  vault: { address, eth, satori, delegate, delegated: 'identity' | 'none' | 'other',
+  identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
+  vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other',
   lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
   lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, forecast, horizon }],
   dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
@@ -659,17 +697,17 @@ the page's JS context:
   the defaults); `maxFeeGwei` is the ceiling in force. Before the first
   chain read (a second or two after load) `status().base` has `rpc: []`,
   `config: null` and null chain values; `satori.base()` reads at once.
-- `await satori.delegate()` (needs Unlock) → `{ steps: [{ step, by: 'identity' | 'vault', hash }], settled }`.
+- `await satori.stake()` (needs Unlock): stake with this neuron → `{ steps: [{ step, by: 'identity' | 'vault', hash }], settled }`.
   `steps` is empty when everything was in place.
-- `await satori.undelegate()` (needs Unlock) → the same shape.
+- `await satori.unstake()` (needs Unlock) → the same shape.
 - `await satori.predictBase()` → the batch now, if due: `{ at, round, sent: { round, at, hash, games, dropped } }`
-  or `{ …, skipped: 'already predicted this round' | 'no prediction power delegated to the identity' |
+  or `{ …, skipped: 'already predicted this round' | 'nothing staked with this neuron' |
   'gas above the ceiling: …' | 'waiting for the batch already sent (0x…)' | … }` or `{ at, error }`.
 - `await satori.claim()` (needs Unlock) → `{ rewards, merkle, airdrop }`, each
   `{ hash, amount }`, `{ skipped: why }` or `{ error }`.
 - `await satori.send({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`
-  (needs Unlock) → `{ hash }`, from the vault. SATORI while transfer-locked
-  throws, saying until which round.
+  (needs Unlock) → `{ hash }`, from the vault. SATORI that can't be sent
+  (staked, or through the round after Unstake) throws, saying when it can.
 - `await satori.setBaseRpc(url)` → `base()`: an https URL, a path on this
   site (such as `/rpc`), or `''` for the default. A saved URL replaces the
   default.
@@ -710,7 +748,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   when it needs the vault, the passphrase is asked in place), the last 14 days (30 on a computer, with a legend: full, part of
   the day, closed, error; today outlined), the Central, Base and Network
   chips (each opens its tab), and the claimable rewards with Claim (the
-  vault's SATORI and its delegation under it). On a computer it is a
+  vault's SATORI, staked or not, under it). On a computer it is a
   dashboard: also the first 8 streams (latest, forecast 24 h, model with its
   companions, a trend line of the last 24 observations) with a link to all,
   the wallet (claimable, the vault, the identity's gas in days) and the
@@ -728,10 +766,12 @@ thrown: they are in `status().central` (for example `central 500: …`,
   **Network streams** (opening it discovers): a search box and the first 50
   matching streams with Subscribe/Unsubscribe.
 - **Wallet**: the **Base** card: the round, the vault's SATORI and ETH,
-  Claimable, Delegation, Transfers (the lock), the identity's ETH as daily
-  batches of gas (a low warning once delegated), Last batch, Batch check,
-  the RPC, who plays (this neuron, or Satori Daily by hand, linked), then
-  "Delegate prediction power" or "Stop delegating", "Claim", and a send form
+  Claimable, Staking ("Staked: 100 SATORI with this neuron"), Transfers
+  ("Staked SATORI can't be sent until you unstake", "SATORI can be sent from
+  <date> (round N)", "Free to send"), the identity's ETH as daily batches of
+  gas (a low warning once staked), Last batch, Batch check, the RPC, who
+  plays (this neuron, or Satori Daily by hand, linked), then "Stake with
+  this neuron" or "Unstake", "Claim", and a send form
   (asset, Amount, "To (0x address)", "Send from the vault"); while locked
   each asks for the passphrase in place ("Vault passphrase to use the
   vault"), then does it.
@@ -770,9 +810,9 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `sub-seq`, `sub-relays`, `unsubscribe`), `network`, `catalog-summary` and
   `catalog-row` (with `catalog-action`: Subscribe or Unsubscribe). Wallet:
   `base-refresh`, `base-rpc`, `base-error`, `base-identity`, `base-vault`,
-  `base-delegation`, `base-play` (who plays: this neuron or Satori Daily),
+  `base-staking`, `base-play` (who plays: this neuron or Satori Daily),
   `base-lock`, `base-claimable`, `base-last-batch`, `base-check`,
-  `base-delegate`, `base-undelegate`, `base-claim`, `base-result`,
+  `base-stake`, `base-unstake`, `base-claim`, `base-result`,
   `base-txs` (the last action's transactions), `base-action-error`.
   Settings: `identity`, `vault` (the Base addresses), `vault-state`,
   `nostr-pubkey`, `unlock`, `lock-vault`, `backup-key` (a private key, or
@@ -800,8 +840,8 @@ to a public chain). `node scripts/fork.mjs --help` lists:
   with no voting weight, which the batch leaves out).
 
 Recipe: `fund <identity 0x…>` (gas for the batch) and
-`fund <vault 0x…> --satori 100` (gas and the power to delegate), then
-Unlock, `delegate()`, `predictBase()`.
+`fund <vault 0x…> --satori 100` (gas and SATORI to stake), then
+Unlock, `stake()`, `predictBase()`.
 
 ## From the Docker neuron (migrate in, never back)
 
@@ -813,7 +853,7 @@ github.com/SatoriNetwork/satorilib): one
 words; its keys are then stored in this app's own format. Nothing is written
 back in Docker's formats. Central sees the same identity either way, and on
 Base the same secrets give the same 0x addresses as the Docker neuron's
-(`ethAddress`), so delegation and rewards follow the keys. Satori Lite is the
+(`ethAddress`), so the stake and rewards follow the keys. Satori Lite is the
 reference for what goes over the network: central's payload and Satori's
 Nostr events carry Lite's fields (the text as JS writes it: numbers like
 `100`, compact JSON, which central and satorilib parse; see
@@ -856,13 +896,13 @@ build step beyond Vite, MIT licensed.
 - `src/neuron/`: register, the cycle (poll → store → history → forecast →
   submit), `history.js` (central's history for new streams), central's status, the schedule (`schedule.js`, shared with Base), the
   one-tab lock; `nostr.js`: relays, discover, subscribe, intake → `_pred`,
-  reconcile; `base.js`: the daily batch and its schedule, delegate, claims,
+  reconcile; `base.js`: the daily batch and its schedule, stake, claims,
   sends, the Base settings; `activity.js`: the activity log (sessions,
   cycles, checks, publishes; 90 days); `health.js`: Home's answer from it,
   pure (`health()`), with its tone; `work.js`: what it is doing now
   (`health().work`).
 - `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
-  `index.js` (`createChain`: status multicall, delegate, the batch's pieces,
+  `index.js` (`createChain`: status multicall, stake, the batch's pieces,
   claims, sends).
 - `src/ui/`: ArrowJS: `view.js` (the shell, the tabs, Setup and the screens
   before Home), `home.js`, `streams.js`, `wallet.js`, `settings.js`,
