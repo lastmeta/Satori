@@ -6,7 +6,7 @@ import { createCentral } from '../central/index.js';
 import { backfillHistory, HISTORY_LIMIT, HISTORY_SPAN_S, HISTORY_CONCURRENCY, HISTORY_RETRY_S, HISTORY_BATCH } from './history.js';
 import { cycle } from './index.js';
 
-vi.setConfig({ testTimeout: 60_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
 
 const BASE = 'https://central.test';
 const T = 1_792_000_000;

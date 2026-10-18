@@ -8,7 +8,7 @@ import { openDb } from './index.js';
 import { loadKeys, unlockVault, wordsOf } from '../keys/index.js';
 import { nostrPubkey } from '../nostr/event.js';
 
-vi.setConfig({ testTimeout: 60_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
 
 let db;
 beforeEach(async () => { db = await memoryDb(); });
