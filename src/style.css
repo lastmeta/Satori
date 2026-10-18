@@ -146,11 +146,11 @@ details.card > summary { color: var(--text); font-weight: 600; }
 /* ── health icons: one element, its state picks the shape (CSS masks; the color is currentColor) ── */
 .ico { display: inline-block; width: 1em; height: 1em; background: currentColor; flex: none;
   -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
-:root { --i-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); --i-moon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z'/%3E%3C/svg%3E");
+:root { --i-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
   --i-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 5.5v9'/%3E%3Ccircle cx='12' cy='19' r='0.8'/%3E%3C/svg%3E"); --i-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E");
   --i-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2.3'/%3E%3Ccircle cx='12' cy='12' r='2.3'/%3E%3Ccircle cx='19' cy='12' r='2.3'/%3E%3C/svg%3E"); }
 [data-s="ok"] { --i: var(--i-check); --tone: var(--ok); --soft: var(--ok-soft); }
-[data-s="idle"] { --i: var(--i-moon); --tone: var(--idle); --soft: var(--idle-soft); }
+[data-s="idle"] { --i: none; --tone: var(--idle); --soft: var(--idle-soft); }
 [data-s="warn"] { --i: var(--i-mark); --tone: var(--warn); --soft: var(--warn-soft); }
 [data-s="bad"] { --i: var(--i-cross); --tone: var(--bad); --soft: var(--bad-soft); }
 /* the tone (docs/design/health.md#the-tone), over the status's colours where both are set: green while all is well
@@ -162,9 +162,11 @@ details.card > summary { color: var(--text); font-weight: 600; }
 [data-tone="critical"] { --i: var(--i-dots); --tone: var(--vivid); --soft: var(--vivid-soft); }
 [data-tone="warn"] { --i: var(--i-mark); --tone: var(--warn); --soft: var(--warn-soft); }
 [data-tone="bad"] { --i: var(--i-cross); --tone: var(--bad); --soft: var(--bad-soft); }
-[data-tone="off"] { --i: var(--i-moon); --tone: var(--idle); --soft: var(--idle-soft); }
+[data-tone="off"] { --i: none; --tone: var(--idle); --soft: var(--idle-soft); }
 .state { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--tone); color: var(--on, var(--card)); flex: none; }
 .state .ico { width: 11px; height: 11px; }
+/* off, or idle in the feed: a plain grey disc, its words say why (a moon was not read as "off": docs/design/OVERVIEW.md#icons) */
+.state[data-tone="off"] .ico, .state[data-s="idle"]:not([data-tone]) .ico { visibility: hidden; }
 
 /* ── Home ── */
 .dash { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
@@ -398,6 +400,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .mname b { font-weight: 600; }
 .mname small { color: var(--muted); font-size: 0.76rem; }
 .mins { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; } /* long names wrap, never cut */
+.mreads { display: none; color: var(--muted); font-size: 0.72rem; } /* a computer: the "Inputs" column says it */
 .ichip { font-size: 0.72rem; padding: 1px 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .mval { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 4px; min-width: 0; }
 .mnow, .mnext { white-space: nowrap; }
@@ -485,6 +488,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .mrow > .mto { grid-area: to; }
   .mrow > .mmeta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 6px; min-width: 0; }
   .mmeta > .mins { display: contents; }
+  .mreads:not([hidden]) { display: inline; padding-top: 2px; } /* a phone: "reads +eth +gold" (no column header) */
   .mmeta > .mval { margin-left: auto; }
   .ibar { grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3.2em; gap: 10px; }
 }

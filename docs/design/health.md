@@ -315,8 +315,9 @@ both ways, and checks the line (4.5:1) and the title (3:1) on the fill.
 Each is `{ state: ok | warn | bad | idle | advice, tone, text }`, the state
 from the reasons above (a channel's top reason with chip words, at its
 level), the tone from [the tone](#the-tone-three-greens) (the chip's
-colour and icon: a check on sky, three dots while working, a moon when
-off).
+colour and icon: a check on sky, three dots while working, a plain grey
+disc when off: a moon there was not read as "not used",
+[OVERVIEW](OVERVIEW.md#icons)).
 
 Home shows them as **Network** · free, **Contract** · uses gas, and
 **Relays** (`data-channel`: `network`, `contract`, `relays`; a tap opens

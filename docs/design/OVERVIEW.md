@@ -161,6 +161,11 @@ alone when the build sets it.
   addresses). Agents' channel and destination keys use the words
   (`health().channels.{network, contract, relays}`, `destinations[].to`);
   the code's identifiers, method names and `status().central` keep theirs.
+- **Icons over words, only when instantly understood** (owner, 2026-10-18,
+  [../intent/ui.md](../intent/ui.md)): an icon stands alone only when its
+  meaning is obvious to someone new, or when the same icon is paired with
+  its word nearby; else the word, or the icon and the word. The audit
+  ([below](#icons)).
 - **The Satori Network server** (Settings, `meta.central_url`, the code's "central URL"): https only. Empty means the
   default: `https://central2.satorinet.io` on the dev server (so nobody writes
   to prod from a dev checkout), `https://network.satorinet.io` in a build, or
@@ -210,6 +215,38 @@ alone when the build sets it.
   the dev server's default is the local fork, so by default a checkout does
   not send to a public chain; an RPC on another chain is refused
   ([base.md](base.md#config)). The unattended batch has a max-fee ceiling.
+
+## Icons
+
+Every icon and symbol in the UI, 2026-10-18, by the rule above:
+
+| Icon or symbol | Where | Verdict | Why |
+|---|---|---|---|
+| Tab icons (house, flow, line, wallet, lines) | the phone's tab bar | keep | each has its word under it |
+| ✓ in the hero's ring | Home | keep | beside the title, "Predicting" |
+| Three dots and the turning arc | Home's hero | keep | beside the step's words, "Scoring models · 12 of 81" |
+| ! and × in the hero's ring | Home | keep | understood, and the title and the line say what |
+| ✓, dots, !, × on the chips' discs | Home | keep | beside the channel's name and its words |
+| A moon on an "off" chip | Home | **replace** | read as sleep or dark mode, not "not used": a plain grey disc now; the words say why ("Not staked", "No streams") |
+| ✓ ! × in the activity feed | Home | keep | each line says what happened |
+| A moon on an idle feed line | Home | **replace** | as above: a plain grey disc |
+| Quality marks (✓ = − in circles, "−3%", "new") | Models | **replaced** | words in the mark's colour: "7% better", "Same as no change", "12% worse", "Not scored yet" |
+| Destination pictograms (server, block, broadcast) | Models | **replaced** | tags: "Network", "Contract", "Relays" |
+| ↑ ↓ → after a forecast | Models rows, Out | keep | after "in 24 h 3,141.01", where the way it goes from now belongs; the row's tooltip says it in words |
+| → before a Nostr model's `x_pred` | Models rows | **replace** | "publishes x_pred" |
+| "+eth" input chips | Models rows | **pair** on a phone | a computer's "Inputs" column header says it; a phone now says "reads +eth +gold" |
+| ← before "Models" | the drill-in | keep | beside the word |
+| Arrows between In, Model and Out | the drill-in | keep | between the stages' headings |
+| The chart's open and filled circles | the drill-in | **paired** | labelled "12 h", "24 h" on the chart |
+| The status bar's segments | Models | keep | its legend under it, in the rows' words |
+| The sort icon (stacked lines) | Models | keep | beside "Sort" |
+| The chips' glow | Home | keep | ambient traffic, never information: the chip's words carry the state |
+| The day strip's colours | Home | keep | the summary says it in words ("11 of 14 full days"), a computer shows the legend, each day's tooltip names it |
+| Sparklines | Home (a computer), Streams | keep | under "Trend", or beside the stream |
+| The engine's state disc | Models | keep | beside "Resting", "Working" |
+
+Settings, Wallet and Streams have no other icons: their buttons and badges
+are words ("Copy", "Lock", "Sent", "Connected").
 
 ## Tech (pinned)
 

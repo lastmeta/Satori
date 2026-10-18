@@ -235,9 +235,10 @@ line on whose score it is.
 
 ## The list
 
-Each row, scannable: the mark in words; the name (a Nostr model also "→
-`<stream>_pred`"); the kind as a chip; the inputs it reads besides the
-stream, as chips by influence ("+eth +gold"); the values labelled, "Now
+Each row, scannable: the mark in words; the name (a Nostr model also
+"publishes `<stream>_pred`"); the kind as a chip; the inputs it reads besides the
+stream, as chips by influence ("+eth +gold"; on a phone, with no column
+header, "reads +eth +gold"); the values labelled, "Now
 3,153.92 · in 24 h 3,141.01 ↓", the horizon the model's own (24 h, 1 h,
 a day), the arrow after the forecast saying which way it goes from now (on
 a phone, two short lines: "Now 3,153.92" and "in 24 h 3,141.01 ↓"); where

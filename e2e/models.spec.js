@@ -203,7 +203,9 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(page.locator('[data-test=models-filter-contract] .n')).toHaveText('2');
   await page.locator('[data-test=models-filter-relays]').click();
   expect(await names(page)).toEqual(['Rain gauge']);
-  await expect(rows(page).locator('.mname small')).toHaveText(`→ ${stream}_pred`);
+  await expect(rows(page).locator('.mname small')).toHaveText(`publishes ${stream}_pred`); // a word, not an arrow
+  // on a phone the input chips say what they are (a computer's column header does): "reads +eth"
+  await expect(rows(page).first().locator('.mreads')).toBeHidden();
   await page.locator('[data-test=models-filter-network]').click();
   await expect(rows(page)).toHaveCount(8);
   await page.locator('[data-test=models-filter-all]').click();
@@ -324,6 +326,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await page.setViewportSize({ width: w, height: h });
     await page.evaluate(() => window.satori.go('models'));
     await fits(page, `the list at ${w} px`);
+    await expect(rows(page).filter({ has: page.locator('.ichip') }).first().locator('.mreads')).toHaveText('reads'); // the phone's word
     await page.evaluate((id) => window.satori.go(`models/${id}`), bvar.id);
     await expect(page.locator('[data-test=model-output]')).toHaveCount(1);
     await fits(page, `a drill-in at ${w} px`);

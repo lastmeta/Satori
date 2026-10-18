@@ -147,6 +147,8 @@ test('ok, then warn (Stake from the action card, with the inline Unlock), then o
   await expect(chip('contract')).toHaveAttribute('data-state', 'idle');
   await expect(chip('contract').locator('[data-test=chip-text]')).toHaveText('Not staked');
   await expect(chip('relays').locator('[data-test=chip-text]')).toHaveText('No streams');
+  // off: a plain grey disc, its words say why (a moon was not understood: docs/design/OVERVIEW.md#icons)
+  expect(await chip('relays').locator('.ico').evaluate((el) => getComputedStyle(el).visibility)).toBe('hidden');
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=day].today')).toHaveCount(1);
   await expect(page.locator('[data-test=home-stream]')).toHaveCount(8);
