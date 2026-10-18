@@ -208,6 +208,11 @@ entry is never edited: a change is a new entry. A database from a newer app
    observation an earlier prediction came from is not recorded: a stream
    predicted before counts as predicted through its latest observation (an
    observation is never predicted twice), one never predicted is due.
+10. **Staking words** (2026-10-18, [base.md](base.md)): the activity log's
+   earlier rows say staking as the app now does: a wallet row's action and
+   text become `stake` "Staked with this neuron" and `unstake` "Unstaked",
+   and a Base skip (its data and merge key) "nothing staked with this
+   neuron", so the feed never shows the old words.
 
 Columns kept but no longer written: `relay_streams.meta` (the announcement
 at subscribe time) and `unsubscribed_at`; nothing read them. Kept and written,

@@ -44,7 +44,7 @@ Rows older than 90 days are deleted at start and once a day.
 | `history` | `ok` / `warn` | `{ streams, rows, error? }` | a history run that loaded streams or failed (not a central without the route) |
 | `base` | `ok` sent, `warn` fixable skip, `idle` other skip, `bad` error | `{ round, hash?, games?, dropped?, skipped?, error? }` | each batch check that sent, skipped or failed, except "already predicted" and "waiting for the batch already sent". The same skip or error again is merged into its row (`count`, `until`) |
 | `nostr` | `ok` | `{ published }` | each `_pred` a relay took, merged per hour |
-| `wallet` | `ok` | `{ action, text }` | Delegate, Stop delegating, Claim, Send |
+| `wallet` | `ok` | `{ action, text }` | Stake, Unstake, Claim, Send |
 | `error` | `bad` | `{ where, message }` | an engine or database failure outside central's cycle (a relay stream's intake) |
 
 Times, in `src/neuron/health.js`:
@@ -78,7 +78,7 @@ of four levels, and the status is the worst `bad`, `warn` or `idle` one:
 `bad` > `warn` > `idle` > `ok`. An `advice` reason never moves it.
 
 - **ok** (predicting): central took predictions within `WINDOW_S` of open
-  time. If the vault is delegated, Base has this round's batch or its
+  time. If the vault is staked, Base has this round's batch or its
   check has not run yet. No channel is in error.
 - **idle**: not predicting right now, for a calm reason. It is never red,
   and on Home never grey either: it is green, by [the tone](#the-tone-three-greens)
@@ -121,14 +121,14 @@ button).
 | 2 | `login-refused` | bad | central takes nothing from this neuron until it is fixed | central | the last cycle's login was refused (after its one retry) | Open Settings (central) |
 | 3 | `central-failing` | bad | two cycles in a row sent nothing: predictions are failing | central | the last 2 cycles failed | Try again (a poll) |
 | 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | central | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
-| 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | base | the batch check failed twice in a row while Base is in use (delegated, or a batch sent before) | Open Settings (Base) |
+| 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | base | the batch check failed twice in a row while Base is in use (staked, or a batch sent before) | Open Settings (Base) |
 | 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | network | streams are subscribed and every relay is down | Open Settings (relays) |
 | 7 | `central-failed` | warn | one cycle sent nothing; it retries on its own, but something may need fixing | central | the last cycle failed (once) | Try again |
 | 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | central | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
 | 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | central | registering failed | Reload |
-| 10 | `delegate` | warn | the vault's SATORI earns nothing on Base until it is delegated (with no SATORI there is no reason: the Base chip is off, grey) | base | not delegated, and the vault holds SATORI | Delegate |
-| 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | base | delegated, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
-| 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | base | delegated, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
+| 10 | `stake` | warn | the vault's SATORI earns nothing on Base until it is staked (with no SATORI there is no reason: the Base chip is off, grey) | base | not staked, and the vault holds SATORI: "Your vault's SATORI isn't earning on Base. Stake with this neuron." | Stake |
+| 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | base | staked, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
+| 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | base | staked, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
 | 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | base | the chain did not answer | Open Settings (Base) |
 | 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | central | *Was asleep* (above) | none |
 | 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | central | *Starting* (above) | none |
@@ -145,9 +145,9 @@ advice reason now, `install`, so each reason has one level.
 **Backup confirmed** (`meta.backup_at`) is set when the vault's words are
 confirmed in Create, given at Restore (also `setup({ vaultWords })`), brought
 by a Dockerized Neuron import, or shown under Backup. The vault holds the
-funds. A lost identity is replaced by a new one and a new delegation.
+funds. A lost identity is replaced by a new one, and the vault stakes with it.
 
-An action needing the vault (Delegate, Back up, and Home's Claim) opens one
+An action needing the vault (Stake, Back up, and Home's Claim) opens one
 inline passphrase prompt in place when the vault is locked, then does the
 action.
 
@@ -161,7 +161,7 @@ holds:
 | Title | When |
 |---|---|
 | *Not predicting* | central's predictions are failing: a bad central reason (`db-error`, `login-refused`, `central-failing`, `central-overdue`) |
-| *Partly predicting* | central predicts (a good cycle in the log, no bad central reason; one failed poll still counts, as for *Predicting*), but Base, which should be predicting, has a red reason (`base-failing`). Base should be predicting when the vault is delegated to this identity, or when the delegation is not read (its RPC down since the page loaded) and a batch went out before |
+| *Partly predicting* | central predicts (a good cycle in the log, no bad central reason; one failed poll still counts, as for *Predicting*), but Base, which should be predicting, has a red reason (`base-failing`). Base should be predicting when the vault is staked with this neuron, or when the stake is not read (its RPC down since the page loaded) and a batch went out before |
 | *Starting* | no good cycle in the log yet (the rows this session read) |
 | *Was asleep* | a session missed work and has not caught up: no good cycle since it began |
 | *Predicting* | otherwise |
@@ -171,9 +171,9 @@ advice, and the title stays central's and Base's. So a new neuron with a vault m
 is *Starting*: amber, with the mismatch's line and card (it was
 *Predicting*, from the mismatch, a central reason above `starting`). A first
 poll that failed once is still *Starting*; a later one that failed once is
-still *Predicting*. A failing Base batch while delegated is *Partly
+still *Predicting*. A failing Base batch while staked is *Partly
 predicting* (it read a red *Predicting*), also while catching up after
-being asleep; not delegated, a red Base leaves the title to central. Once
+being asleep; not staked, a red Base leaves the title to central. Once
 caught up after being asleep it is *Predicting*, its status still `idle`
 until the next normal cycle (sky green on Home, not grey). `src/neuron/health.test.js` checks every one of these states
 (starting, asleep, caught up, predicting, retrying after one failed poll,
@@ -201,7 +201,7 @@ set by the code doing the work; nothing polls:
 | | `send` | Keep Satori open · Sending 82 predictions… (the login and the batch) | yes |
 | `base` | `check` | Checking today's Base games… (only once a batch is due: a check with nothing to do shows nothing) | |
 | | `send`, `confirm` | Sending the Base batch…, Waiting for Base to confirm… (also for a batch sent before) | yes |
-| `delegate`, `undelegate`, `send` | `send`, `confirm` (k of n), `settle` | Step 1 of 3: sending…, Step 1 of 3: waiting for Base to confirm…, Checking it on Base… | yes |
+| `stake`, `unstake`, `send` | `send`, `confirm` (k of n), `settle` | Step 1 of 3: sending…, Step 1 of 3: waiting for Base to confirm…, Checking it on Base… | yes |
 | `claim` | `rewards`, `drop`, `airdrop`, `confirm` | Claiming rewards…, Claiming the reward drop…, Claiming the airdrop…, Waiting for Base to confirm… | yes |
 | `keys` | `save` | Saving your keys… (an earlier version's record, rewritten at Unlock) | yes |
 | `discover` | `ask` (relays answered) | Asking the relays · 1 of 2 | |
@@ -235,8 +235,8 @@ comes meanwhile (register, then the poll, read as one). The hero keeps its
 title and status from the health.
 
 Elsewhere: the Wallet card's line says the vault's action step (the hero is
-on Home only); Home's Delegate and Claim buttons say "Delegating…",
-"Claiming…". The Network streams line says discover's or subscribe's step,
+on Home only); Home's Stake and Claim buttons say "Staking…",
+"Claiming…"; the Wallet's Unstake says "Unstaking…". The Network streams line says discover's or subscribe's step,
 only once it has lasted 1 s.
 
 **Reduced motion**: nothing turns; the three dots stay in the ring, and the
@@ -258,7 +258,7 @@ what is deliberately off. `health().tone` and each `channels[x].tone`:
 | `critical` | vivid green (`--vivid`), "Keep Satori open · …" | closing now would lose work (the critical steps above) |
 | `idle` | sky green (`--sky`) | all good, nothing to do, waiting for the next cycle |
 | `warn`, `bad` | amber, red | something is wrong for predicting or earning; they win over every green (advice never does: it is not a status) |
-| `off` | grey | a channel deliberately not used (Base not delegated here, no stream subscribed), and the strip's closed days; never the hero |
+| `off` | grey | a channel deliberately not used (Base not staked here, no stream subscribed), and the strip's closed days; never the hero |
 
 `toneOf(status, work)`: `warn` and `bad` from the status; else `critical`
 or `working` while the hero's task runs; else `idle`. A chip: its state's
@@ -309,9 +309,10 @@ off).
   "Catching up now…" ("… in 2 h" when a poll is still ahead); warn "Last poll failed", "Vault mismatch",
   "Not registered"; bad "Database error", "Login refused", "2 failed in a
   row", "Nothing sent for 14 h".
-- **Base**: ok "Round 20742 sent", "Round 20742 due"; idle "Not delegated"
-  (no SATORI), "Delegated elsewhere", "Connecting…"; warn "Not delegated",
-  "Gas: 3 batches", "Skipped: …", "Unreachable"; bad "Failed 3 times".
+- **Base**: ok "Round 20742 sent", "Round 20742 due"; idle "Not staked"
+  (no SATORI), "Staked elsewhere", "No SATORI staked", "Connecting…"; warn
+  "Not staked", "Gas: 3 batches", "Skipped: …", "Unreachable"; bad "Failed 3
+  times".
 - **Network**: idle "No streams" (nothing subscribed); ok "2 relays"; advice
   "1 of 2 relays down" (sky, or green while working); bad "Relays down". A
   relay that is connecting counts as up.
@@ -380,7 +381,7 @@ to central", "Polled central: up to date" (nothing to send), "Caught up:
 sent 83 predictions" ("Caught up: up to date"), "Central refused the batch:
 central 401: Invalid signature", "Base batch for round 20742: 1 game", "Base
 batch skipped: gas above the ceiling (×3)", "Published 3 forecasts to the
-network", "Satori was closed for 2 d", "Delegated to this neuron". A
+network", "Satori was closed for 2 d", "Staked with this neuron". A
 session that missed nothing is not shown.
 
 ## Verify
@@ -407,7 +408,7 @@ session that missed nothing is not shown.
   predicting, retrying, failing) with every reason → the title, the status,
   the tone (with no work, working and critical) and the card; an advice
   reason leaves the title, the status, the tone and the line as they were.
-  Also *Partly predicting* (Base delegated, or not read, and red), open time and missed work, the day codes, the chips and the feed.
+  Also *Partly predicting* (Base staked, or not read, and red), open time and missed work, the day codes, the chips and the feed.
 - `src/traffic.test.js` and `src/ui/glow.test.js`: the emitter, a traced
   transport, a burst as one update, the hold after the last message, cards
   apart, reduced motion; central's, the relay's and Base's emits in their
@@ -515,7 +516,7 @@ for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 ![ok on a computer](../screenshots/home-ok-desktop-light.png)
 
 *Partly predicting* (the e2e's fake chain with its RPC aborted after
-delegating: the batch check failed twice while central is fine; it read a
+staking: the batch check failed twice while central is fine; it read a
 red *Predicting*):
 
 <img src="../screenshots/home-partly-phone-light.png" alt="Partly predicting: Base failed 2 times" width="240"> <img src="../screenshots/home-partly-phone-dark.png" alt="Partly predicting, dark" width="240">

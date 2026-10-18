@@ -58,8 +58,7 @@ Set by the owner; quoted where these are the owner's own words.
 - **The neuron is for automatic play.** It predicts on its own, off-chain
   through central and on-chain through the identity's daily Base batch.
   Manual on-chain play belongs to a separate slim app, **Satori Daily**. A
-  vault that has delegated to the neuron can't also play by hand in the same
-  round.
+  vault staked with the neuron can't also play by hand in the same round.
 - **The engine:** every neuron builds models that are unique for a good
   reason, in their algorithm, priors and, above all, data. See
   [engine.md](engine.md).

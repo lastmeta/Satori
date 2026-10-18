@@ -2,7 +2,7 @@
 
 [← Roadmap](README.md)
 
-Step 6 built Base: config, the status multicall, delegate and stop, the
+Step 6 built Base: config, the status multicall, stake and unstake, the
 identity's daily batch, claims (`hub.claim`, merkle, airdrop) and sends.
 [../design/base.md](../design/base.md) is the source of truth, with
 Lite's and the dapp's file:line evidence and every deviation. What is left
@@ -35,7 +35,7 @@ check sees a fifth word. When D7 deploys:
 SATORI fee (`contract/satori/contracts/next/SatoriHub.sol:899-990`); the relayer is live at
 `https://app.satorinet.io/relayer` with open CORS (probed). Fees: 0.25 SATORI
 default, Claim 0 (`contract/relayer/fees.json`). Predict is paid by the
-identity, which holds no SATORI, and delegated wallets cannot pay a SATORI fee
+identity, which holds no SATORI, and staked wallets cannot pay a SATORI fee
 (`contract/relayer/README.md:37-39`). Needs a ruling
 ([issue](../issues/relayer-predict-fee.md)).
 

@@ -14,7 +14,7 @@ could move back. This app is about Base: each key's address is its **Base
 | Key | Stored as (meta `keys`) | Encrypted? | Used for |
 |---|---|---|---|
 | **identity** | its 32-byte secret, hex | no, on purpose | everything the neuron does on its own: central's register and login ([central.md](central.md)); its pubkey is the `wallet_pubkey` of our Nostr announcements; the daily Base batch ([base.md](base.md)) |
-| **vault** | its secret sealed with the passphrase; its public key in clear | yes | holds the funds: delegate, claims and sends on Base. Only while unlocked. |
+| **vault** | its secret sealed with the passphrase; its public key in clear | yes | holds the funds: stake, claims and sends on Base. Only while unlocked. |
 | Nostr key | its secret, hex | no, on purpose | signs the neuron's Nostr events ([nostr.md](nostr.md)); random, not one of the two keys above, as in Docker |
 
 The identity and the Nostr key are unencrypted on purpose: the neuron must
@@ -30,7 +30,7 @@ wiped from memory by **Lock**.
 | The vault is made only when a password is given (`vault-setup`, at least 4 characters, typed twice). | `init/wallet.py:44-45,113-155`; `neuron/web/routes.py:570-619` (length rule at `:589`) |
 | Login (unlock) decrypts the vault with the password; a wrong password leaves it encrypted. Logout closes it (Lock). | `routes.py:462-568,625-634`; `init/wallet.py:219-245` |
 | The vault's public key is read from `vault.yaml` without decrypting it, so it shows and registers while locked. | `start.py:4637-4667` |
-| The identity signs the daily Base batch with no vault unlock ("the vault delegated its prediction power to it"). | `start.py:1148-1165` |
+| The identity signs the daily Base batch with no vault unlock (the vault staked with it, Lite's "Enable staking"). | `start.py:1148-1165` |
 | The vault password is never saved by the web setup. | `routes.py:598` |
 | Backup: the dashboard (behind login) reveals the vault's and the identity's private key; "Download Wallet" zips `wallet.yaml` + `vault.yaml`; "Import Wallet" takes both files back. | `routes.py:1267-1291,3214-3254,2281-2420`; `web/templates/dashboard.html:2112-2160,3821-3850` |
 
@@ -159,7 +159,7 @@ migration re-encrypts the vault with it as it is.
   on the identity: it registers both public keys with central and signs
   central's login challenge. The vault has **Unlock** there; while
   unlocked, **Lock** is in the header (and "Lock the vault" there). An action
-  that needs the vault (Delegate, Claim, Send, Backup) asks for the
+  that needs the vault (Stake, Claim, Send, Backup) asks for the
   passphrase in place when it is locked: one inline prompt, then the action
   ([health.md](health.md)).
 - **Backup** (Docker shows it behind login, so here it needs Unlock):

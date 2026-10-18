@@ -23,19 +23,19 @@ polls it, forecasts, sends its predictions back. AI agents: read
 Satori's two keys (identity and vault; a Dockerized Neuron's import), a DuckDB-WASM
 database in the browser, central's data flow as the Docker neuron (Satori
 Lite) runs it, Lite's Nostr flow (subscribe to streams, publish
-`<stream>_pred`), and Lite's Base flow (the vault delegates its prediction
-power to the identity, which sends a batch of up/down predictions every UTC
-round on its own):
+`<stream>_pred`), and Lite's Base flow (the vault stakes with this neuron,
+whose identity sends a batch of up/down predictions every UTC round on its
+own):
 
 ```
 register ─▶ poll central (at once when due, then every 11 h) ─▶ store ─▶ forecast what is not predicted yet ─▶ submit the batch
 relays ─▶ subscribed stream's observation (34601) ─▶ store ─▶ forecast two cadences ahead (t2) ─▶ publish <stream>_pred (34601)
-Base: Unlock ─▶ delegate ─▶ each round the identity: registry streams ─▶ forecast ─▶ UP/DOWN ─▶ one batch tx; claims, sends
+Base: Unlock ─▶ stake ─▶ each round the identity: registry streams ─▶ forecast ─▶ UP/DOWN ─▶ one batch tx; claims, sends
 ```
 
 The **identity** is stored unencrypted, so the neuron runs and signs from page
 load; the **vault** holds the funds, encrypted with your passphrase. **Unlock**
-opens the vault (needed for backup and Base's delegate, claims and sends);
+opens the vault (needed for backup and Base's stake, claims and sends);
 **Lock** wipes it from memory. The keys are stored in this app's own format
 (the vault: PBKDF2-SHA256 and AES-256-GCM, any Unicode passphrase of 8 or
 more); each key's address is its Base address. Setup can also restore from
@@ -58,7 +58,7 @@ Streams, Wallet and Settings hold the rest.
 
 ![The Nostr card, subscribed to the demo stream](docs/screenshots/nostr.png)
 
-![The Base card on the local fork: delegated, the last batch](docs/screenshots/base.png)
+![The Base card on the local fork: staked, the last batch](docs/screenshots/base.png)
 
 ## The dev server
 
@@ -83,7 +83,7 @@ An https deployment needs a `wss://` relay ([issue](docs/issues/relays-not-wss.m
 **Base.** The dev server's RPC is `/rpc`, proxied to the anvil fork on
 127.0.0.1:8545 (the real D6 addresses; by default a dev checkout sends
 nothing to a public chain). Fund the neuron's Base addresses (in the Keys
-card), then Unlock and **Delegate prediction power**:
+card), then Unlock and **Stake with this neuron**:
 
 ```sh
 node scripts/fork.mjs fund 0xIDENTITY                  # gas for the daily batch

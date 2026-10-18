@@ -32,7 +32,7 @@ one-minute tick is enough. "Runs while closed" is inherent and not offered.
 
 | Job | Due | Docker equivalent |
 |---|---|---|
-| Base stream refresh | each tick while delegated | replaces `start.py:453-543` |
+| Base stream refresh | each tick while staked | replaces `start.py:453-543` |
 | central-lite poll | +11 h; first 5-30 min after each worker start | `start.py:4766-4800` |
 | Base daily batch | current UTC round has no batch on chain | `start.py:1256-1281` (was last + 24 h) |
 

@@ -17,7 +17,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
 4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence; then `bvar`, each central stream's own Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved after each poll, with history from central ([../design/engine.md](../design/engine.md)); left for later: [engine.md](engine.md).
 5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [transport.md](transport.md). A deployed app needs a wss relay ([issue](../issues/relays-not-wss.md)).
-6. ✅ **Base**: delegate prediction power, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [chain.md](chain.md). A local fork for the dev server: `scripts/fork.mjs`.
+6. ✅ **Base**: stake with this neuron, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [chain.md](chain.md). A local fork for the dev server: `scripts/fork.mjs`.
 7. ✅ **Finishing pass**: simpler code that follows what Lite and satorilib
    already do (one schedule, one serial line, one stub central, shared
    constants, no dead code), a Home grouped by key, and agents first
@@ -84,11 +84,11 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   central2's uuids to prod. Only Settings resets them. Fix: remember the
   central the data is from and reset at start when it differs
   ([../design/deploy.md](../design/deploy.md#moving-to-the-production-central)).
-- **The token's hook starves on an estimated gas limit.** When a delegated
+- **The token's hook starves on an estimated gas limit.** When a staked
   vault receives SATORI (any claim, any transfer to it) in a transaction sent
   with `eth_estimateGas`'s limit, the token's try/catch hook fails silently
-  and the vault can never undelegate (Panic 0x11); anyone can do it to any
-  delegated vault with 1 wei. The app pads its own writes by 500,000 gas,
+  and the vault can never unstake (Panic 0x11); anyone can do it to any
+  staked vault with 1 wei. The app pads its own writes by 500,000 gas,
   which protects only those; the fix belongs in the contracts
   ([issue](../issues/token-hook-gas-estimate.md)).
 - **Every browser neuron votes DOWN on Base for now.** When a forecast equals
@@ -116,8 +116,8 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 - A relay keeps one of two replaceable events with the same `created_at`
   (NIP-01): two `_pred` of one stream in one second lose one, as in Lite
   ([../design/nostr.md](../design/nostr.md#inherent-as-in-lite)).
-- A vault's delegator share of the identity's wins shows on the lens only
-  after its loyalty builds (on the fork: 9 rounds after delegating, with the
+- A vault's staking share of the identity's wins shows on the lens only
+  after its loyalty builds (on the fork: 9 rounds after staking, with the
   default stream moving), so the first rounds' Claim finds 0 on-chain rewards.
 - On a fork moved ahead in time the Base card's times are the chain's (days
   ahead of the wall clock), while the next check is local time.

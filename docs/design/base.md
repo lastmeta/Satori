@@ -1,29 +1,35 @@
-# Base: delegate, the daily batch, claims, send
+# Base: stake, the daily batch, claims, send
 
 [← OVERVIEW](OVERVIEW.md)
 
 The neuron predicts on Base the way Satori Lite (`../neuron`, the Docker
-neuron) does: the **vault** delegates its prediction power to the
-**identity**, and the identity signs one batch of up/down predictions a day
-on its own, with no passphrase. The vault signs only what moves or locks its
-funds: delegating, stopping, claims and sends, each after **Unlock**. Where
-the dapp (`../contract/satori-ui`) goes further than Lite (it claims on-chain
-rewards, restricts who may delegate to the key, mirrors the engine's predict
-gate), the browser follows the dapp.
+neuron) does: the **vault** stakes with this neuron, and the **identity**
+signs one batch of up/down predictions a day on its own, with no passphrase.
+The vault signs only what moves or locks its funds: Stake, Unstake, claims
+and sends, each after **Unlock**. Where the dapp (`../contract/satori-ui`)
+goes further than Lite (it claims on-chain rewards, lets only our vault
+stake with the identity, mirrors the engine's predict gate), the browser
+follows the dapp.
+
+**Staking (the owner's word, 2026-10-18).** On-chain, staking with this
+neuron is the vault's `delegatePredictionPower(identity)`: the SATORI stays
+in the vault, can't be transferred while staked, and earns. Everything
+people and agents read says stake and unstake (Lite's word); the contracts
+and the code keep their names, and Lock and Unlock stay the passphrase's.
 
 **Automatic only (the owner's split, 2026-10-15).** On-chain the neuron plays
 only automatically, through the identity's daily batch; manual play is
 **Satori Daily**, the dapp at https://app.satorinet.io (`SATORI_DAILY_URL`,
 `src/chain/config.js`). The two are mutually exclusive per vault per round:
-the engine refuses a delegated vault's own predictions
+the engine refuses a staked vault's own predictions
 (`if (delegate != address(0)) revert Delegated();`,
 `C/next/SatoriEngine.sol:711`). The Base card says which one is in force.
 
 ```
 page load ─▶ config (bundled D6 addresses, central's /api/v1/base/config over them, 1 h)
-          └─▶ status: one multicall (ETH ×2, SATORI, delegation ×2, fee, allowedDelegator, lock, round, claimable ×2)
-Unlock ─▶ Delegate prediction power: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
-       └─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH, or SATORI when not transfer-locked
+          └─▶ status: one multicall (ETH ×2, SATORI, stake ×2, fee, allowedDelegator, lock, round, claimable ×2)
+Unlock ─▶ Stake with this neuron: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
+       └─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH, or SATORI when it can be sent
 each round (the identity, no unlock): a batch already sent? wait for it ─▶ power > 0 and no batch yet
           ─▶ registry streams whose game has voting weight ─▶ history ─▶ engine ─▶ UP/DOWN per game
           ─▶ simulate each game alone ─▶ fees under the ceiling? ─▶ predictMultipleWithPayloads(the ones that pass)
@@ -88,11 +94,11 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 |---|---|
 | `getEthBalance(identity)`, `getEthBalance(vault)` | gas; the identity's balance is shown as days of batches left |
 | `token.balanceOf(vault)` | the vault's SATORI |
-| `rewards.predictionDelegateInfo(vault)` | whom the vault delegates to |
+| `rewards.predictionDelegateInfo(vault)` | whom the vault stakes with |
 | `rewards.predictionDelegateInfo(identity)` | the identity's incoming power (BP:243-248) |
 | `rewards.effectivePredictorFee(identity)` | 10 % until set to 0 (`C/SatoriRewards.sol:119-143`) |
-| `hub.allowedDelegator(identity)` | who may delegate to the identity (`C/next/SatoriHub.sol:813-819,1007`) |
-| `token.transferLockedUntil(vault)` | the transfer lock |
+| `hub.allowedDelegator(identity)` | the one vault that may stake with the identity (`C/next/SatoriHub.sol:813-819,1007`) |
+| `token.transferLockedUntil(vault)` | when the vault's SATORI can be sent |
 | `token.getCurrentRound()`, `getCurrentBlockTimestamp()` | the round (`block.timestamp / 86400`, `C/next/SatoriToken.sol:329-331`) and chain time |
 | `lens.getTotalClaimableRewards(vault)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
 | `airdrop.claimableAirdrop(vault)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
@@ -100,16 +106,16 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 Each read may fail on its own (`allowFailure`), so one reverting view does
 not hide the rest.
 
-**The transfer lock.** The token refuses a transfer while
+**When SATORI can be sent.** The token refuses a transfer while
 `transferLockedUntil != 0 && transferLockedUntil >= currentRound`
-(`C/next/SatoriToken.sol:816-821`). `2^24 − 1` means "while delegated"
-(`C/next/SatoriHub.sol:426-429`); stopping sets it to the current round + 1
-(`:431-434`), so SATORI is transfer-locked through round N = R + 1 and free
-from round N + 1, at 00:00 UTC. The card says "transfer-locked until round
-N (free from <date>)". Lite's `stake_status` uses `lock_round > current`
+(`C/next/SatoriToken.sol:816-821`). `2^24 − 1` means "while staked"
+(`C/next/SatoriHub.sol:426-429`); Unstake sets it to the current round + 1
+(`:431-434`), so SATORI can't be sent through round N = R + 1 and can from
+round N + 1, at 00:00 UTC. The card says "Staked SATORI can't be sent until
+you unstake", then "SATORI can be sent from <date> (round N + 1)". Lite's `stake_status` uses `lock_round > current`
 (BP:316) and so shows the tokens as free one round early.
 
-## Delegate prediction power (Unlock)
+## Stake with this neuron (Unlock)
 
 Lite's "Enable staking" (`ensure_delegation`, BP:273-290; ROUTES:1485-1529)
 plus the dapp's instant-signing setup (`UI/components/GameWalletPanel.tsx:536-595`):
@@ -120,19 +126,18 @@ plus the dapp's instant-signing setup (`UI/components/GameWalletPanel.tsx:536-59
    set to something else keeps it, and the simulate says so before any gas.
 2. If `allowedDelegator(identity) != vault`, the identity sends
    `hub.setAllowedDelegator(vault)`, as the dapp does (`GameWalletPanel.tsx:545`):
-   only our vault can then delegate to the identity
+   only our vault can then stake with the identity
    (`C/next/SatoriHub.sol:842-846`). Lite skips this step.
 3. If `predictionDelegateInfo(vault).delegate != identity`, the vault sends
    `hub.delegatePredictionPower(identity)` (BP:286-287).
 
-**Stop delegating**: the vault sends `delegatePredictionPower(0x0)`
-(BP:292-301). SATORI stays transfer-locked through the next round (above).
+**Unstake**: the vault sends `delegatePredictionPower(0x0)`
+(BP:292-301). Its SATORI can't be sent through the next round (above).
 
-Words: the app already says Unlock/Lock for the vault's passphrase, so
-delegation is "Delegate prediction power" / "Stop delegating", the dapp's
-words (`UI/components/DelegationTab.tsx:159`), and its result is "SATORI
-transfer-locked …". Lite calls the same thing "Staking" ("Stake your vault
-& predict on Base").
+Words: "Stake with this neuron" / "Unstake", "Staked: 100 SATORI with this
+neuron" / "Not staked", as Lite says it ("Stake your vault & predict on
+Base"). The app says Unlock/Lock for the vault's passphrase, so the token's
+transfer lock is "can't be sent" / "can be sent from <date>".
 
 **Sending a transaction** (`src/chain/index.js`, `write()`), as EVM:60-93:
 simulate the call first (a revert throws with the contract's error name and
@@ -142,12 +147,12 @@ and `maxFeePerGas = 2 × the latest base fee + the tip` (Lite's 2× margin,
 EVM:74-75, on the base fee instead of the gas price). The gas limit of a
 contract call is the estimate + 500,000 (`HOOK_GAS`; unused gas is not
 charged): the token runs its transfer hook in a try/catch, so the bare
-estimate starves the hook, and SATORI that reaches a delegated vault that way
-(any claim) leaves it unable to ever undelegate. Found on the fork while
+estimate starves the hook, and SATORI that reaches a staked vault that way
+(any claim) leaves it unable to ever unstake. Found on the fork while
 building this step ([issue](../issues/token-hook-gas-estimate.md));
 Lite and the dapp send with the bare estimate. **The pad protects only our
 own writes**: a transfer or a `claimAirdropFor(vault)` someone else sends
-to our delegated vault with a bare estimate (1 wei is enough) still bricks
+to our staked vault with a bare estimate (1 wei is enough) still bricks
 it; that needs the contract fix. A plain ETH transfer runs no hook and is
 sent with its estimate. After a write the app re-reads until the change shows, 5 × 1 s
 as Lite (`_stake_status_after`, ROUTES:1449-1463), then trusts the receipt:
@@ -248,7 +253,7 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 ### When in the round
 
 **At the first check of the round, never held.** Checks run 10 s after the
-page loads and after Delegate, then at the next round's start (00:01 UTC on
+page loads and after Stake, then at the next round's start (00:01 UTC on
 the chain's clock) and at least hourly; `window.satori.predictBase()` runs one
 at once. Why:
 
@@ -285,7 +290,7 @@ did, why it skipped, or its error.
 
 1. **On-chain rewards**: `hub.claim()` (`C/next/SatoriHub.sol:802`) when
    `lens.getTotalClaimableRewards(vault)` > 0, as the dapp
-   (`UI/hooks/useDashboard.ts:128,288-311`). The vault earns as a delegator:
+   (`UI/hooks/useDashboard.ts:128,288-311`). The vault earns as a staker:
    its share of the identity's correct calls (fee 0), folded in at claim time
    (`C/SatoriRewards.sol:1285-1320`). Lite never claims these.
 2. **Merkle**: `GET {central}/api/v1/merkle/proof/{vault}` alone, as Lite
@@ -322,10 +327,10 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | The hash is kept when the batch is sent and the batch stored after its receipt; Lite stores its time before sending. | A reverted send no longer loses the day, and a tab closed before the receipt never sends twice. |
 | A max-fee ceiling for the unattended batch (2 gwei by default); the tip from `eth_maxPriorityFeePerGas`. | Nobody watches the batch; Lite pays whatever the gas price is. |
 | An RPC on another chain is refused. | A wrong RPC must not take writes. |
-| `setAllowedDelegator(vault)` is sent by the identity (the dapp); Lite does not. | Only our vault can delegate to the identity. |
-| `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's delegator earnings. |
+| `setAllowedDelegator(vault)` is sent by the identity (the dapp); Lite does not. | Only our vault can stake with the identity. |
+| `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's staking earnings. |
 | The transfer lock is shown with `>=` (the token's rule); Lite's display uses `>`. | Lite shows the tokens free one round early. |
-| Words: "Delegate prediction power" / "Stop delegating" (the dapp), not Lite's "Staking". | The app's Lock/Unlock is the passphrase. |
+| Words: Lite's "Stake" / "Unstake" (the owner's choice, 2026-10-18), not the dapp's; the token's transfer lock is "can't be sent". | The app's Lock/Unlock is the passphrase. |
 | The vault's Base address is computed from its public key, in clear in the keys record. | Status without Unlock; Lite needs the decrypted vault. |
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
@@ -338,17 +343,19 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
   vault and the gas in days ([health.md](health.md)).
   The **Wallet** tab's **Base** card: the round, the active RPC in plain words (the local fork
   named "Local test chain"; the URLs on hover); the identity's ETH as daily
-  batches of gas (red below 7, once delegated: before that the identity has
-  no batch to pay for); the vault's SATORI and ETH; the delegation (until
-  delegated: "Delegate prediction power, below"); the transfer lock;
+  batches of gas (red below 7, once staked: before that the identity has
+  no batch to pay for); the vault's SATORI and ETH; Staking ("Staked: 100
+  SATORI with this neuron"; until then "Not staked: Stake with this neuron,
+  below"); Transfers ("Staked SATORI can't be sent until you unstake", after
+  Unstake "SATORI can be sent from <date> (round N)", then "Free to send");
   what is claimable; the last batch (round, time, each game's direction, what
-  was left out, the tx); the last check and the next ("Waits for delegation"
-  until then); under them, who plays (`base-play`): while delegated "Your
-  vault's prediction power is with this neuron, so the vault can't also play
-  Satori Daily by hand. Stop delegating to play manually.", while not
-  "Delegate to let the neuron predict every round, or play Satori Daily by
-  hand.", with Satori Daily linked. Delegate prediction power or Stop
-  delegating, Claim, and Send from the vault (SATORI or ETH), each asking
+  was left out, the tx); the last check and the next ("Waits until you stake"
+  until then); under them, who plays (`base-play`): while staked "Your
+  SATORI is staked with this neuron, so it can't also play Satori Daily by
+  hand. Unstake to play manually.", while not "Stake with this neuron to let
+  it predict every round, or play Satori Daily by hand.", with Satori Daily
+  linked. Stake with this neuron or Unstake, Claim, and Send from the vault
+  (SATORI or ETH), each asking
   for the passphrase in place while the vault is locked; each action lists its
   transactions in plain words ("Identity: fee to 0"; the call on hover). Tx
   hashes link to the explorer, except on a local fork. **Settings**: Base
@@ -371,7 +378,7 @@ asked at once.
 
 - `npm test`: `src/chain/chain.test.js` (viem against `test/fake-rpc.js`, a small
   in-memory Satori behind a custom transport: the status multicall, the lock
-  rule, delegate and stop, streams kept by voting weight, per-game
+  rule, stake and unstake, streams kept by voting weight, per-game
   simulation, payload bytes, fees from `eth_maxPriorityFeePerGas` and the
   pad, receipts, claims' branches, sends), `src/neuron/base.test.js` (the
   batch flow: forecast, direction, a named game dropped by its simulate,
@@ -385,15 +392,16 @@ asked at once.
   so it is not the reference),
   `config.test.js`, and the keys' Base addresses against viem.
 - `npm run e2e`: `e2e/base.spec.js`, the app with the same fake chain behind
-  `/rpc` and a stub central serving a merkle proof: status, Unlock, Delegate,
-  the batch, claims, Stop delegating, the lock, a send.
+  `/rpc` and a stub central serving a merkle proof: status, Unlock, Stake,
+  the batch, claims, Unstake, when SATORI can be sent, a send, and
+  `stake()` / `unstake()` from the agent API.
 - Against a fork: `BASE_FORK=http://127.0.0.1:8546 npx vitest run
   src/chain/fork.test.js` runs the chain module against the real D6
   contracts on an anvil fork (`node scripts/fork.mjs start --port 8546`):
-  delegate (three steps), the registry's streams (a new junk stream left
+  stake (three steps), the registry's streams (a new junk stream left
   out: no voting weight) and history, a batch and
   `AlreadyPredicted` after it, the airdrop and merkle claims a round later
-  (and that the delegate's power then equals the vault's balance), stop, the
+  (and that the identity's power then equals the vault's balance), unstake, the
   lock still on in round N, a SATORI send in round N + 1, an ETH send.
 
 ### Live, in the running app (2026-10-15)
@@ -405,39 +413,53 @@ profile, central2 for register (its `base/config` answered, so the card says
 1. Funded: the vault 100 SATORI and 0.1 ETH, the identity 0.1 ETH. Before:
    `predictionDelegateInfo(vault).delegate` 0x0, `effectivePredictorFee(identity)`
    1000, `transferLockedUntil(vault)` 0.
-2. Unlock → Delegate prediction power: `setPredictorFee(0)` and
+2. Unlock → Stake: `setPredictorFee(0)` and
    `setAllowedDelegator(vault)` by the identity, `delegatePredictionPower(identity)`
-   by the vault. After: the vault's delegate = the identity, the identity's
+   by the vault. After: `predictionDelegateInfo(vault)` = the identity, the identity's
    power 100 SATORI, fee 0, `transferLockedUntil` 16,777,215.
 3. 10 s later the identity's batch, on its own: round 20741, game 1 DOWN;
    `predictedStreamsCount(identity, 20741)` = 1.
 4. Airdrop loaded (600) and a merkle root (5); a round later: the next batch
    (round 20742), then Claim: merkle 5 SATORI and airdrop 100.69 SATORI
-   claimed, on-chain rewards skipped (the lens said 0: a delegator's share
+   claimed, on-chain rewards skipped (the lens said 0: a staker's share
    needs its loyalty, which lags). The identity's power followed the vault's
    balance (205.69). Batches each round to 20752, the deployer predicting
    every other round so the default stream moves; at round 20752 the lens
    said 341.82 SATORI and Claim sent `hub.claim()`: claimed.
-5. Stop delegating at round 20752: `transferLockedUntil` 20753. A SATORI
+5. Unstake at round 20752: `transferLockedUntil` 20753. A SATORI
    send was refused in round 20752 ("until round 20753") and the card still
    said locked in round 20753; in round 20754 it said free and 1 SATORI
    went to 0x…dEaD.
 
 After the review (the same day, a fresh fork and profile): a junk stream
 made with `fork.mjs stream` (stream 2, game 2, voting weight 0) was on the
-registry; Unlock → Delegate (three transactions, listed on the card); 10 s
+registry; Unlock → Stake (three transactions, listed on the card); 10 s
 later the identity's batch held one game, game 1 DOWN (`predictedStreamsCount`
 1), stream 2 left out; the card's first fact named the RPC "/rpc: the local
-fork of Base Sepolia"; Stop delegating: `transferLockedUntil` 20742 at round
+fork of Base Sepolia"; Unstake: `transferLockedUntil` 20742 at round
 20741.
 
 The finishing pass's smoke (2026-10-15 21:05, a fresh profile, the UI only):
 setup, Poll now (central2: 83 of 83 accepted), subscribe to `demo-walk` on
 the test relay, `fork.mjs fund` (the identity 0.1 ETH; the vault 0.1 ETH and
-50 SATORI), Unlock → Delegate (three transactions) → 12 s later the
-identity's batch, round 20741, game 1 DOWN. The screenshot
-(`docs/screenshots/base.png`) is from that run, delegated, with the last
-batch and the Delegate transactions shown.
+50 SATORI), Unlock → Stake (three transactions) → 12 s later the
+identity's batch, round 20741, game 1 DOWN.
+
+The staking words, live (2026-10-18 01:48 UTC chain time, a fresh profile on
+the dev app, the fork; `fork.mjs fund`: the identity 0.1 ETH, the vault 0.1
+ETH and 100 SATORI): Home's card said "Your vault's SATORI isn't earning on
+Base. Stake with this neuron." (button Stake, chip "Not staked"); Settings ›
+Unlock, then the Wallet's "Stake with this neuron": "Staked with this
+neuron." with its three transactions, Staking "Staked: 100 SATORI with this
+neuron", Transfers "Staked SATORI can't be sent until you unstake"; 19 s
+later the identity's batch, round 20744, game 1 DOWN, and Home's Base chip
+"Round 20744 sent", the vault "100 SATORI · staked"; Unstake: "Unstaked.",
+Transfers "SATORI can be sent from Oct 20, 00:00 UTC (round 20746)",
+`transferLockedUntil` 20745; `window.satori` has `stake` and `unstake`, the old names gone.
+The Wallet's card staked, with the batch and the Stake transactions
+(`docs/screenshots/base.png`), and Home then
+([phone](../screenshots/home-staked-live-phone.png),
+[computer](../screenshots/home-staked-live-desktop.png)).
 
 ## The local fork (dev)
 
@@ -454,7 +476,7 @@ batch and the Delegate transactions shown.
   was deployed and accrues each round, so claim a round later.
 - `advance [days]`: moves chain time and mines.
 - `predict [up|down]`: the deployer predicts the default game, so the default
-  stream's next value moves (and delegators' rewards can show).
+  stream's next value moves (and stakers' rewards can show).
 - `stream [name]`: a new stream from the deployer (a 0.001 SATORI burn) with
   one value; its game has no voting weight, so the batch leaves it out.
 - `stop [--port 8545]`: stops the fork `start` began (its pid is in

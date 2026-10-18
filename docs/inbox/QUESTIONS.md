@@ -9,10 +9,10 @@ today, so nothing waits on an answer.
    one stream. A seeded slope rule, with a seeded coin flip on a flat series,
    is parked as an option ([../plans/engine.md](../plans/engine.md)). Switch,
    or keep parity with Lite?
-2. **The token hook: the rewards upgrade.** A delegated vault that receives
-   SATORI in a transaction sent with a bare gas estimate can never undelegate
+2. **The token hook: the rewards upgrade.** A staked vault that receives
+   SATORI in a transaction sent with a bare gas estimate can never unstake
    (Panic 0x11), and anyone can cause it with 1 wei. A rewards UUPS upgrade
-   that subtracts the delegator's booked balance fixes it now (tested on the
+   that subtracts the staker's booked balance fixes it now (tested on the
    fork); the root fix waits for a redeploy. Ship the upgrade?
    ([../issues/token-hook-gas-estimate.md](../issues/token-hook-gas-estimate.md))
 3. **Prod central's Base and merkle routes.** `network.satorinet.io` answers
