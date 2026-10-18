@@ -8,6 +8,8 @@
 //   fitter({ histories })(target, spec) → { model, score, persist, influence }: a stored champion scored again on the
 //     stored history as the poll scored it, nothing about the spec changed (the training pass's, src/neuron/train.js)
 //   explainModel({ target, spec, histories }) → the stored spec's forecast with its fit and backtest (the Models tab's)
+// A spec may choose the single-stream AR instead ({ companions: [], algorithm: 'bar1', λ's kept }): a Retrain can pick
+// it (./retrain.js); repair leaves it alone and the poll's only proposal for it is to add a companion back.
 import { sha256 } from '@noble/hashes/sha2';
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { STEP_S, MIN_EXTRA_ROWS, MIN_SAMPLES, HOLDOUT, forecast as bar1, explainForecast, median } from './index.js';
@@ -21,6 +23,9 @@ export const MAX_COMPANIONS = 3;
 // (docs/design/engine.md#measured)
 export const MARGIN = 0.05;
 export const MIN_ALIGNED = 2 + MIN_EXTRA_ROWS; // the rows a one-companion model needs: the pool's bar
+/** A spec that chose the single-stream AR (bar1): no companions on purpose, not for want of a pool. */
+export const ALONE = 'bar1';
+export const isAlone = (spec) => spec?.algorithm === ALONE;
 
 /** A deterministic uniform [0, 1) stream: sha256 of the parts and a counter. */
 export function seeded(...parts) {
@@ -53,16 +58,18 @@ function neighbour(rand, grid, x) {
 /**
  * One mutation, chosen uniformly among those that apply: swap a companion for
  * another from the pool, add one (fewer than 3), drop one (more than 1), or move
- * λ1 or λ2 one grid step. → { spec, op }
+ * λ1 or λ2 one grid step. A single-stream spec (isAlone) can only add one back
+ * (its λ's don't move its forecast), or stays as it is ('none') with no pool. → { spec, op }
  */
 export function mutate(spec, rand, pool) {
   const companions = [...spec.companions];
   const others = [...pool].filter((u) => !companions.includes(u)).sort();
+  if (isAlone(spec) && !others.length) return { spec, op: 'none' };
   const ops = [];
   if (companions.length && others.length) ops.push('swap');
   if (companions.length < MAX_COMPANIONS && others.length) ops.push('add');
   if (companions.length > 1) ops.push('drop');
-  ops.push('lambda1', 'lambda2');
+  if (!isAlone(spec)) ops.push('lambda1', 'lambda2');
   const op = pick(rand, ops);
   const next = { companions, lambda1: spec.lambda1, lambda2: spec.lambda2 };
   if (op === 'swap') companions[Math.floor(rand() * companions.length)] = pick(rand, others);
@@ -77,10 +84,11 @@ export function mutate(spec, rand, pool) {
  * Replace each companion that is not in the target's aligned pool (a stream that
  * stopped, one that never aligns, one drawn blind before there was history) by
  * one drawn from the pool, in its place; when the pool has none left, drop it.
- * With no aligned stream at all (no history yet) the spec stays as drawn.
+ * With no aligned stream at all (no history yet) the spec stays as drawn; a spec
+ * that chose the single-stream AR (isAlone) stays as it is.
  */
 export function repair(spec, rand, aligned) {
-  if (!aligned.length) return spec;
+  if (!aligned.length || isAlone(spec)) return spec;
   const ok = spec.companions.filter((u) => aligned.includes(u));
   if (ok.length && ok.length === spec.companions.length) return spec;
   const left = aligned.filter((u) => !ok.includes(u)).sort();
@@ -133,7 +141,7 @@ export async function runModelsAsync({ onProgress = () => {}, sliceMs = 30, cloc
 }
 
 /** Each stream's prepared series, once (null: no history). */
-function seriesOf(histories, step) {
+export function seriesOf(histories, step) {
   const cache = new Map();
   return (u) => {
     if (!cache.has(u)) cache.set(u, histories.has(u) ? prepare(histories.get(u), step) : null);
@@ -142,7 +150,7 @@ function seriesOf(histories, step) {
 }
 
 /** A spec's errors at the backtest's origins: bvar's where its companions have history, else bar1's (bt.base). */
-const errorsOf = (T, s, series, bt) => (s.companions.length && s.companions.every(series)
+export const errorsOf = (T, s, series, bt) => (s.companions.length && s.companions.every(series)
   ? errorsAt([T, ...s.companions.map(series)], s, bt) : { errors: bt.base, acc: null });
 
 /** The champion's forecast and what is stored with it: persist (no change's median) and, for bvar, its inputs' influence. */
@@ -220,7 +228,7 @@ function* models({ fresh, histories, specs = new Map(), seed, step = STEP_S, mar
  * enough rows for a one-companion model (inPool); `pool`, those, or every other
  * stream while none is (a young neuron without history draws blind, repaired later).
  */
-function poolFor(target, T, histories, series) {
+export function poolFor(target, T, histories, series) {
   const others = [...histories.keys()].filter((u) => u !== target).sort();
   const aligned = others.filter((u) => series(u) && inPool(T, series(u), MIN_ALIGNED));
   return { aligned, pool: aligned.length ? aligned : others };

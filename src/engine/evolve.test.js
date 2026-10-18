@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { forecast, explainForecast, STEP_S, MIN_SAMPLES } from './index.js';
 import {
-  seeded, drawSpec, mutate, repair, accepts, runModels, runModelsAsync, explainModel, fitter, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
+  seeded, drawSpec, mutate, repair, accepts, runModels, runModelsAsync, explainModel, fitter, isAlone, LAMBDA1_GRID, LAMBDA2_GRID,
+  MAX_COMPANIONS, MARGIN,
 } from './evolve.js';
 import { prepare, inPool, backtestOf, RECENT_BUCKETS } from './bvar.js';
 
@@ -115,6 +116,41 @@ describe('mutations', () => {
 
   test('reproducible from identity + target + generation', () => {
     expect(mutate(base, seeded(ID, 'gold', 3), POOL)).toEqual(mutate(base, seeded(ID, 'gold', 3), POOL));
+  });
+});
+
+describe('a spec that chose the single-stream AR (a Retrain\'s choice: docs/design/engine.md#the-spec)', () => {
+  const alone = { companions: [], lambda1: 0.2, lambda2: 0.5, algorithm: 'bar1' };
+  test('repair leaves it; the poll\'s only proposal is to add a companion back (none without a pool)', () => {
+    expect(repair(alone, () => 0, ['u-01', 'u-02'])).toBe(alone);
+    const ops = new Set();
+    for (let g = 0; g < 40; g++) {
+      const { spec, op } = mutate(alone, seeded(ID, 'gold', g), POOL);
+      ops.add(op);
+      expect(isAlone(spec)).toBe(false);
+      expect(spec).toMatchObject({ lambda1: 0.2, lambda2: 0.5 });
+      expect(spec.companions).toHaveLength(1);
+    }
+    expect(ops).toEqual(new Set(['add']));
+    expect(mutate(alone, seeded(ID, 'gold', 0), [])).toEqual({ spec: alone, op: 'none' });
+  });
+
+  test('the poll forecasts it as bar1 and keeps it, unless adding a companion back wins by the margin', () => {
+    const prices = market(200, ['gold', 'lead', 'n1', 'n2'], 21);
+    const histories = historiesOf(prices, 200);
+    const specs = new Map(['gold', 'n2'].map((u) => [u, { spec: alone, generation: 0, accepted: 0 }]));
+    const out = runModels({ fresh: ['gold', 'n2'], histories, seed: ID, specs });
+    // n2 is noise: still the single-stream AR, forecast as bar1 itself
+    const f = forecast(histories.get('n2'));
+    expect(out.forecasts.get('n2')).toMatchObject({ model: 'bar1', t1: f.t1, t2: f.t2, repaired: false, proposal: { op: 'add', accepted: false } });
+    expect(out.specs.get('n2')).toMatchObject({ spec: alone, generation: 1, accepted: 0 });
+    expect(explainModel({ target: 'n2', spec: alone, histories })).toMatchObject({ model: 'bar1', inputs: ['n2'], influence: [1] });
+    // gold follows lead: adding it back wins, and the spec is bvar again
+    const gold = out.forecasts.get('gold');
+    expect(gold.proposal).toMatchObject({ op: 'add', accepted: true });
+    expect(gold.model).toBe('bvar');
+    expect(isAlone(out.specs.get('gold').spec)).toBe(false);
+    expect(out.specs.get('gold').spec.companions).toEqual(['lead']);
   });
 });
 
