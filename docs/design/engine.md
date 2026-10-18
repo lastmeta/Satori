@@ -195,6 +195,13 @@ One per central target stream, in `model_specs`:
 
 The λ grids are namaste_club's tuner's (`NC/models.py:589-590`). Lag stays 1.
 
+A spec may instead choose the single-stream AR: `{ companions: [],
+algorithm: 'bar1' }`, its λ's kept. Only a user's
+[Retrain](models.md#retrain) picks it (when `bar1` beats every
+companion it tried); it scores and forecasts exactly as `bar1`, the repair
+below leaves it alone, and the poll's one proposal for it is to add a
+companion back (its λ's don't move a `bar1` forecast).
+
 - **First draw**, when a target is first forecast: a deterministic RNG
   seeded from the identity's public key and the target's uuid
   (sha256 of `identity|target|draw|i` per draw), so neurons start
@@ -297,7 +304,7 @@ made from it yet (a new row, or one an interrupted poll stored):
    generation + "repair"), or dropped when the pool has none left. A spec
    drawn blind before there was history, or reading a stream that stopped,
    is fixed before it is scored. With no aligned stream at all the draw
-   stays. (Before, such specs kept their dead companions until a mutation
+   stays; so does a spec that chose `bar1`. (Before, such specs kept their dead companions until a mutation
    happened to swap them: in a simulation, 2–8 of 20 targets were still on
    `bar1` after 30 days.)
 3. Score it on the backtest. With fewer than 5 origins, stop here: no
@@ -305,7 +312,8 @@ made from it yet (a new row, or one an interrupted poll stored):
 4. Propose **one** mutation (seeded by identity + target + generation), one
    of those that apply, uniformly: swap a companion for another from the
    pool, add one (fewer than 3), drop one (more than 1), or move λ1 or λ2 to
-   a neighbouring grid value.
+   a neighbouring grid value (a `bar1` spec: add one, or nothing without a
+   pool).
 5. Score the challenger on the same origins.
 6. Keep it only if its score beats the champion's by the margin (5 %:
    challenger < champion × 0.95). generation + 1; accepted + 1 if kept.

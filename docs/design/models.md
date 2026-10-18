@@ -207,6 +207,151 @@ went to prod.
 
 <img src="../screenshots/train-live-scoring-phone-light.png" alt="live: Home's hero says Scoring models · 0 of 84" width="240"> <img src="../screenshots/train-live-models-phone-light.png" alt="live: the Models tab after the pass, every model scored, Resting" width="240">
 
+## Retrain
+
+The owner, 2026-10-18 ([../intent/engine.md](../intent/engine.md)): "The
+first thing I want to do as a user is tell the neuron to keep training on
+the models that are worse than naive. A button in the model details screen,
+near the top right, that tells it to **Retrain**, meaning it'll keep
+training till it finds a better model, then stops."
+
+What it is for, in the owner's terms: a person who sees a model losing to
+no change can make the neuron work on that one model now, instead of
+waiting for one mutation per poll, and it stops by itself once it has
+something better, or says plainly that it could not.
+
+`src/engine/retrain.js` (the search, pure), `src/neuron/retrain.js` (one at
+a time, paced, persisted, paused for a poll), the drill-in's header.
+
+### Where
+
+A **Retrain** button in the drill-in's header, top right, under the
+quality words (a word, no icon). It is the accent (primary) button when the
+model is worse than no change or the same; a plain one when it is already
+better (a retrain then looks for a model better than it).
+
+- **Shown** on Satori Network (central) models, `bvar`, `bar1`, `bar1d` or
+  `naive`, whose stream has the history to split: 14 older backtest origins
+  besides the tab's 28, which takes 52 back-to-back 12 h buckets, about four
+  weeks (central serves ~41 days of an hourly stream, so every hourly
+  stream has it). A `naive` model with that history now (history that came
+  after its forecast) has it too.
+- **Not on Contract (Base) and Relays (Nostr) models**, for now: they read
+  only their own stream (`bar1`, [engine.md](engine.md#scope)), so there is
+  no spec to search and none is stored. Their drill-in says so in one muted
+  line where the button would be: "Retrain is for Satori Network models for
+  now: this one reads only its own stream."
+- A Network model without that history has no button either, and one
+  muted line: "Retrain needs about four weeks of this stream's history."
+  (a daily stream never has it: it never has three buckets in a row).
+
+### What it does
+
+A focused search on this one target, from stored history only. Like the
+training pass, it **never predicts and never submits**, and never calls
+the Satori Network.
+
+- **The space**: 1–3 companions from the target's aligned pool (the poll's
+  pool, [engine.md](engine.md#the-spec)), λ1 and λ2 on their grids, and the
+  algorithm: `bvar` with its companions, or the single-stream AR (`bar1`).
+  A spec that chose `bar1` is `{ companions: [], algorithm: 'bar1' }` with
+  its λ's kept: the poll's repair leaves it alone, and the poll's only
+  proposal for it is to add a companion back.
+- **The search**: a hill-climb. From the current champion it tries every
+  spec one change away (swap a companion, add one, drop one, λ1 or λ2 one
+  grid step, to or from `bar1`) in a seeded order, and moves to the first
+  that scores better; at a local optimum (every neighbour tried) it
+  restarts from a seeded random draw. Seeded by identity + target + the
+  target's retrain counter, so a retrain is reproducible.
+- **The goal**: better than no change, by the tab's rule (the median error
+  over no change's, below 0.95).
+
+**The held-out scheme.** The search scores candidates only on the older
+backtest origins, and checks its best once, on the newest 28 (the last two
+weeks, the ones the tab's quality is), which it never chose on; it keeps it
+only if it beats no change there by the tab's 5 % and by 10 % in each of
+those two weeks. On simulated random walks that passes by luck 1–2 times in
+100, where the tab's rule alone over the same 28 would pass 15–19.
+
+Why so: the tab's quality is itself noisy. On a pure random walk a spec
+drawn with no search reads "better" on the 28 origins 11 % of the time,
+and the search's best 22 % of the time (its high-variance specs spread
+both ways), so a split alone is not enough: the check must be one look,
+and its bar must hold against that spread. Measured with
+`retrainer` on synthetic 12 h series, 83 buckets (central's ~41 days), the
+champion a drawn spec, one look:
+
+| Rule at the one look | Random walk, pool 7 (200 seeds) | pool 30 (100) | pool 80 (100) | A leader worth ~12 %, pool 7 (100) | pool 80 (50) |
+|---|---:|---:|---:|---:|---:|
+| the tab's rule over the 28 | 15 % | | 19 % | 50 % | 42 % |
+| and each week beats no change | 3 % | | 9 % | 33 % | 24 % |
+| and each week by 5 % | 1.5 % | 5 % | 3 % | 26 % | 14 % |
+| **and each week by 10 % (shipped)** | **1 %** | **2 %** | **2 %** | 22 % | 12 % |
+
+(A leader worth ~12 %: the target's 12 h return is 0.6 × another stream's
+last one; the second 12 h step of a 24 h forecast is not predictable, so
+the true edge at 24 h is about 12 %, and 28 origins rarely confirm it. A
+stronger one, such as a thin market trailing a big one, passes; the unit
+test's.) Before the shipped rule, three looks at 0.95 overall accepted 4
+random walks of 20.
+
+- **The split**: the held-out origins are the tab's (the last 28 bucket
+  positions); the search's are the older ones whose actual (24 h on) came
+  before the first held-out origin, so no value it scored on is one it is
+  checked on. The champion's own held-out ratio is the tab's number.
+- **One look per observation**: a second retrain on the same data would
+  look at the same 28 origins again (more looks, more luck), so once a
+  retrain has looked, the next one waits for the stream's next observation:
+  "Already retrained on this data. Try again after its next observation."
+
+### When it stops
+
+- **(a) Found**: the one look passes (at the first local optimum that is
+  the best so far and beats no change on the search origins, or when the
+  search ends). The spec becomes the champion where evolution keeps it
+  (`model_specs`: the spec; its score, no change's, influence and fit key
+  as the poll scores them, so the tab shows the held-out number;
+  generation + 1, accepted + 1). Written only where the stored spec is
+  still the one it was compared with (a poll that evolved it meanwhile
+  wins). "Found one: 14% better. Used from the next prediction."
+- **(b) Search over**: the look failed, or **400 tries without a better
+  search score** (more than every neighbour of a three-companion spec in an
+  83-stream pool, 3 × 80 swaps + 2 drops + 4 λ steps + 1 = 247, so a
+  stalled climb has tried them all), or 3,000 tries in all (about 10 s), or
+  every spec tried (a small pool). The best is kept only if it beats the
+  current champion on the held-out origins by the margin (5 %); else the
+  champion is untouched: "Couldn't find a model that beats no change. Kept
+  the current one." For a model worse than no change, one more line: "Its
+  fade already pulls the forecast toward no change." (the weight from the
+  same backtest, [engine.md](engine.md#the-backtest-score-and-fade)).
+- **(c) Stop**: the same rule as (b), at once.
+
+A new champion is used **from the next prediction**, the next new
+observation (Lite's rule: an observation is never predicted twice); until
+then Out still shows what was sent. The result line stays until the model
+next predicts. The spec keeps a small summary of the last retrain:
+`{ n, at, outcome, kept, ratio, was, tried, ms }` (Details: "Last retrain").
+
+### While it runs
+
+- The button reads **Stop**; a line under the header: "Retraining · tried
+  40 · best so far 3% worse" (the best on the search origins: what the
+  search sees; the result is the held-out number). Behind another:
+  "Retraining · after eth". During a poll: "Retraining · waits for the
+  poll · tried 40".
+- The work task `retrain` (step `search`, its count, the model's name):
+  Home's hero reads "Retraining eth…", then "Retraining eth · tried 40", in
+  working green with its one moving indicator; the Models status the same.
+- **Paced**: it gives the page a turn every 10 ms of work (`scheduler.yield`,
+  as the training pass); the count shows at most every 250 ms.
+- **Resumable**: the request is pending work. It is kept with the spec
+  (`model_specs.retrain`, migration 13) when asked, with the search's state
+  (the count, the climb's place, the best) every 2 s, so a closed app
+  continues on open, where it was, until (a), (b) or (c) ("never rest with
+  work pending"). Retrains run one at a time, in the order asked.
+- **One writer**: it waits while central's work runs (a poll, its sign-in,
+  the history), then continues on the new data, the champion read again.
+
 ## Influence: how much each input moves the forecast
 
 For a `bvar` model (a Bayesian VAR(1) of the target and its 1–3 companions,
