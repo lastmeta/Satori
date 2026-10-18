@@ -8,6 +8,7 @@ import { evmAddress } from '../keys/keys.js';
 import { runModelsAsync } from '../engine/evolve.js';
 import { createSchedule } from './schedule.js';
 import { backfillHistory } from './history.js';
+import { fitKey, statsFrom } from './train.js';
 
 export const POLL_EVERY_S = 11 * 3600; // start.py:4785-4876
 export const BATCH_LIMIT = 100;
@@ -91,6 +92,9 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill, rep
     const t0 = performance.now();
     const out = await engine({ fresh: due, histories, specs, seed, onProgress: (done, total) => report('models', done, total) });
     poll.engine_ms = Math.round(performance.now() - t0);
+    // each spec with the key of the data it was fit on: current, until new history comes (src/neuron/train.js)
+    const stat = statsFrom(histories);
+    for (const [u, row] of out.specs) row.fit_key = fitKey(u, row.spec, stat);
     await db.saveSpecs(out.specs, Math.floor(now()));
     const made = [];
     for (const uuid of due) {

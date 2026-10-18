@@ -218,9 +218,22 @@ entry is never edited: a change is a new entry. A database from a newer app
    `model_specs.influence`, JSON shares of the bvar forecast (`[the target's
    own lag, then each companion's]`, null when the forecast was not bvar),
    written by the poll that ran the target. Specs stored before have both
-   null until their next poll (the tab shows such a model as not scored
-   yet). A Base batch's games keep `step`, `score` and `persist` in
-   `meta.base_last_batch` (no migration: it is JSON).
+   null until the training pass scores them (migration 12). A Base batch's
+   games keep `step`, `score` and `persist` in `meta.base_last_batch` (no
+   migration: it is JSON).
+12. **The training pass** (2026-10-18,
+   [models.md](models.md#the-training-pass)): `model_specs.fit_key`, the
+   data `score`, `persist` and `influence` were computed on (the spec's λs,
+   and each input's row count and newest time), written by the poll with
+   them and by the training pass (`db.saveFits`: only where the spec is
+   still the one it fit, so a poll that evolved it meanwhile wins). A key
+   that is not the data's now (null for every spec stored before) means the
+   fit is stale: the pass fits it again from the stored history, without a
+   poll. `relay_streams.p_score`, `p_persist`, `p_tests`: the latest
+   `_pred`'s backtest, kept with it by the intake (`p_tests` null: not
+   computed, a `_pred` kept before, which the pass scores, `db.setRelayFit`).
+   A Base batch's games now always carry `score`, `persist` and `tests`
+   (null when there is no backtest).
 
 The Models tab's drill-in reads its streams' history with `db.histories(uuids)`:
 one statement for the target and its companions (one per stream took ~100 ms

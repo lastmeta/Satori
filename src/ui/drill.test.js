@@ -137,4 +137,11 @@ describe('the list and the status', () => {
     expect(v.bar.map((s) => [s.mark, s.pct])).toEqual([['better', 25], ['tie', 25], ['worse', 25], ['unscored', 25]]);
     expect(statusView(summaryOf([])).kinds).toBe('No models yet');
   });
+
+  test('what the quality is, in one plain line: the neuron\'s own backtest, made as it trains; not the network\'s score of what it sent', () => {
+    const v = statusView(summaryOf([TWO]));
+    expect(v.note).toBe("The neuron's own backtest, made as it trains: how each model would have done on past data against no change."
+      + " Not the Satori Network's score of the predictions it sent.");
+    expect(statusView(summaryOf([])).note).toBe('');
+  });
 });

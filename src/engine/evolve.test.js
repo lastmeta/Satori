@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { forecast, explainForecast, STEP_S, MIN_SAMPLES } from './index.js';
 import {
-  seeded, drawSpec, mutate, repair, accepts, runModels, runModelsAsync, explainModel, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
+  seeded, drawSpec, mutate, repair, accepts, runModels, runModelsAsync, explainModel, fitter, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN,
 } from './evolve.js';
 import { prepare, inPool, backtestOf, RECENT_BUCKETS } from './bvar.js';
 
@@ -321,6 +321,23 @@ describe('what the Models tab reads: the stored quality and influence, and expla
         inputs: [target, ...row.spec.companions], influence: row.influence, tests: 28 });
       expect(x.coef).toHaveLength(x.inputs.length);
     }
+  });
+
+  test('fitter (the training pass): each stored champion scored on the stored history exactly as the poll scored it; the spec untouched', () => {
+    let specs = new Map();
+    let out;
+    for (let k = 196; k <= 200; k++) ({ specs, forecasts: out } = runModels({ fresh: ['gold', 'n2', 'n3'], histories: historiesOf(prices, k), specs, seed: ID }));
+    const fit = fitter({ histories: historiesOf(prices, 200) });
+    for (const target of ['gold', 'n2', 'n3']) {
+      const row = specs.get(target);
+      expect(fit(target, row.spec)).toEqual({ model: out.get(target).model, score: row.score, persist: row.persist, influence: row.influence });
+    }
+    // a spec reading a stream with no history: bar1's errors stand in, as in the poll; the spec is not repaired
+    const spec = { companions: ['gone'], lambda1: 0.2, lambda2: 0.5 };
+    const histories = historiesOf(prices, 200);
+    const x = explainForecast(histories.get('n2'));
+    expect(fitter({ histories })('n2', spec)).toEqual({ model: 'bar1', score: x.score, persist: x.persist, influence: null });
+    expect(fitter({ histories })('gone', spec)).toBeNull(); // no history: nothing to fit
   });
 
   test('explainModel falls back as the engine does: bar1 on the stream alone (all its own), or nothing without history', () => {

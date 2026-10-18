@@ -5,6 +5,8 @@
 //
 //   runModels({ fresh, histories, specs, seed }) → { forecasts: Map(uuid → forecast), specs: Map(uuid → row) }
 //   runModelsAsync({ …, onProgress }): the same, with the page's turns between targets (the poll's)
+//   fitter({ histories })(target, spec) → { model, score, persist, influence }: a stored champion scored again on the
+//     stored history as the poll scored it, nothing about the spec changed (the training pass's, src/neuron/train.js)
 //   explainModel({ target, spec, histories }) → the stored spec's forecast with its fit and backtest (the Models tab's)
 import { sha256 } from '@noble/hashes/sha2';
 import { utf8ToBytes } from '@noble/hashes/utils';
@@ -130,13 +132,50 @@ export async function runModelsAsync({ onProgress = () => {}, sliceMs = 30, cloc
   }
 }
 
-/** runModels as a generator: it yields after each target. */
-function* models({ fresh, histories, specs = new Map(), seed, step = STEP_S, margin = MARGIN, window = HOLDOUT }) {
+/** Each stream's prepared series, once (null: no history). */
+function seriesOf(histories, step) {
   const cache = new Map();
-  const series = (u) => {
+  return (u) => {
     if (!cache.has(u)) cache.set(u, histories.has(u) ? prepare(histories.get(u), step) : null);
     return cache.get(u);
   };
+}
+
+/** A spec's errors at the backtest's origins: bvar's where its companions have history, else bar1's (bt.base). */
+const errorsOf = (T, s, series, bt) => (s.companions.length && s.companions.every(series)
+  ? errorsAt([T, ...s.companions.map(series)], s, bt) : { errors: bt.base, acc: null });
+
+/** The champion's forecast and what is stored with it: persist (no change's median) and, for bvar, its inputs' influence. */
+function finish({ T, target, spec, run, score, bt, series, histories, step }) {
+  const recent = (xs) => xs.filter((_, i) => bt.origins[i].recent); // the fade: bar1's last HOLDOUT origins
+  const f = forecastSpec(T, spec.companions.map(series), spec, run.acc, recent(run.errors), recent(bt.persist))
+    ?? bar1(histories.get(target), { step });
+  const persist = score === null ? null : median(bt.persist);
+  const shares = f?.model === 'bvar' ? influence(fitSums(run.acc, spec.lambda1, spec.lambda2), run.acc) : null;
+  return { f, persist, influence: shares };
+}
+
+/**
+ * The training pass's fit (src/neuron/train.js, docs/design/models.md#the-training-pass): a stored champion scored on
+ * the stored history exactly as the poll scored it, with no repair and no proposal, so nothing about the spec changes.
+ * → (target, spec) → { model, score, persist, influence } (null: the target has no history)
+ */
+export function fitter({ histories, step = STEP_S, window = HOLDOUT }) {
+  const series = seriesOf(histories, step);
+  return (target, spec) => {
+    const T = series(target);
+    if (!T) return null;
+    const bt = backtestOf(T, window);
+    const run = errorsOf(T, spec, series, bt);
+    const score = bt.origins.length >= MIN_SAMPLES ? median(run.errors) : null;
+    const { f, persist, influence: shares } = finish({ T, target, spec, run, score, bt, series, histories, step });
+    return { model: f?.model ?? null, score, persist, influence: shares };
+  };
+}
+
+/** runModels as a generator: it yields after each target. */
+function* models({ fresh, histories, specs = new Map(), seed, step = STEP_S, margin = MARGIN, window = HOLDOUT }) {
+  const series = seriesOf(histories, step);
   const forecasts = new Map();
   const out = new Map();
   const one = (target) => {
@@ -149,14 +188,12 @@ function* models({ fresh, histories, specs = new Map(), seed, step = STEP_S, mar
     let spec = repair(row.spec, seeded(seed, target, generation, 'repair'), aligned);
     const repaired = spec !== row.spec;
     const bt = backtestOf(T, window);
-    const errorsOf = (s) => (s.companions.length && s.companions.every(series)
-      ? errorsAt([T, ...s.companions.map(series)], s, bt) : { errors: bt.base, acc: null });
-    let run = errorsOf(spec);
+    let run = errorsOf(T, spec, series, bt);
     let score = bt.origins.length >= MIN_SAMPLES ? median(run.errors) : null;
     let proposal = null;
     if (score !== null) {
       const m = mutate(spec, seeded(seed, target, generation), pool);
-      const challenger = errorsOf(m.spec);
+      const challenger = errorsOf(T, m.spec, series, bt);
       const s = median(challenger.errors);
       generation++;
       proposal = { op: m.op, spec: m.spec, score: s, accepted: accepts(score, s, margin) };
@@ -167,12 +204,8 @@ function* models({ fresh, histories, specs = new Map(), seed, step = STEP_S, mar
         accepted++;
       }
     }
-    const recent = (xs) => xs.filter((_, i) => bt.origins[i].recent); // the fade: bar1's last HOLDOUT origins
-    const f = forecastSpec(T, spec.companions.map(series), spec, run.acc, recent(run.errors), recent(bt.persist))
-      ?? bar1(histories.get(target), { step });
+    const { f, persist, influence: shares } = finish({ T, target, spec, run, score, bt, series, histories, step });
     if (f) forecasts.set(target, { ...f, proposal, repaired });
-    const persist = score === null ? null : median(bt.persist);
-    const shares = f?.model === 'bvar' ? influence(fitSums(run.acc, spec.lambda1, spec.lambda2), run.acc) : null;
     out.set(target, { spec, score, persist, influence: shares, generation, accepted });
   };
   for (const target of fresh) {

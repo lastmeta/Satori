@@ -6,6 +6,7 @@ import {
   cycle, register, firstPollAt, createPoller, centralStatus, claimTab, POLL_EVERY_S, BATCH_LIMIT,
 } from './index.js';
 import { createWork, leading, HERO } from './work.js';
+import { lacking } from './train.js';
 import { healthOf } from './health.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
@@ -247,6 +248,9 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
       expect(row.score).toBeGreaterThan(0);
     }
     expect((await db.predictions('gold', 1))[0]).toMatchObject({ model: 'bvar', phi: expect.any(Number), weight: expect.any(Number) });
+    // each spec the poll fit keeps the key of the data it fit: current, so the training pass after it has nothing to do
+    expect([...specs.values()].every((row) => row.fit_key)).toBe(true);
+    expect(lacking({ streams: await db.streams() }).total).toBe(0);
     expect((await db.predictions('gold', 40)).at(-1).model).toBe('naive'); // the first poll: one observation
     // the first draw: the same identity draws the same specs, another identity others
     const first = async (seed) => {

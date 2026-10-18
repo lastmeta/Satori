@@ -223,6 +223,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   // The drill-in of a bvar model: In (ranked, 100 %), the Model (plain, the jargon behind details), Out (a list).
   const bvar = list.find((m) => m.kind === 'bvar' && m.name === 'eth') ?? list.find((m) => m.kind === 'bvar');
   await page.mouse.wheel(0, 300);
+  await page.waitForTimeout(300); // the wheel's scroll lands
   const before = await page.evaluate(() => scrollY);
   await rows(page).filter({ has: page.locator('[data-test=model-name]', { hasText: new RegExp(`^${bvar.name}$`) }) }).click();
   await expect(page).toHaveURL(new RegExp(`#models/central:${bvar.uuid}$`));

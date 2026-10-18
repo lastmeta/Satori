@@ -70,6 +70,7 @@ function status() {
       <svg class="qbar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><rect class="seg" data-q="better" x="${x('better')}" y="0" width="${w('better')}" height="8"></rect><rect class="seg" data-q="tie" x="${x('tie')}" y="0" width="${w('tie')}" height="8"></rect><rect class="seg" data-q="worse" x="${x('worse')}" y="0" width="${w('worse')}" height="8"></rect><rect class="seg" data-q="unscored" x="${x('unscored')}" y="0" width="${w('unscored')}" height="8"></rect></svg>
       <span data-test="engine-quality">${() => sv().marks}</span>
       <span class="muted small" data-test="engine-median">${() => sv().median}</span>
+      <span class="muted small" data-test="engine-note">${() => sv().note}</span>
     </div>
   </section>`;
 }

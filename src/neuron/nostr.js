@@ -11,7 +11,7 @@ import {
   KIND, PRED, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
   catalog, parseObservation, numericValue, predValue, relayUuid,
 } from '../nostr/satori.js';
-import { forecast as engineForecast } from '../engine/index.js';
+import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
 import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
@@ -244,8 +244,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const seq = await db.nextPredSeq(uuid);
     const at = t();
     const ev = sign(observationEvent({ stream: sub.stream_name + PRED, value: pub, seq, timestamp: at }));
+    // with its backtest (the forecast's, kept for the Models tab: scoring is part of training)
     await db.addRelayPrediction({ stream_uuid: uuid, seq, value: pub, model: f?.model ?? 'echo', obs_seq: o.seq,
-      made_at: at, event_id: ev.id, relays: 0 });
+      made_at: at, event_id: ev.id, relays: 0, score: f?.score ?? null, persist: f?.persist ?? null, tests: f?.tests ?? null });
     await db.checkpoint(); // the seq, the observation and the prediction are kept before anything is sent, as Lite commits first
     onChange();
     background(publish(ev).then(async (n) => {
@@ -298,7 +299,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     observation: r.obs_seq == null ? null
       : { seq: r.obs_seq, ts: r.obs_ts, value: r.obs_value, raw: parseRaw(r.obs_raw), received_at: r.obs_received_at },
     prediction: r.p_seq == null ? null
-      : { stream: r.stream_name + PRED, seq: r.p_seq, value: r.p_value, model: r.p_model, made_at: r.p_made_at, relays: r.p_relays },
+      : { stream: r.stream_name + PRED, seq: r.p_seq, value: r.p_value, model: r.p_model, made_at: r.p_made_at, relays: r.p_relays,
+        score: r.p_score ?? null, persist: r.p_persist ?? null, tests: r.p_tests ?? null }, // tests null: no backtest kept yet
   });
   const viewOf = async (uuid) => view((await db.relayStreams()).find((r) => r.uuid === uuid));
 

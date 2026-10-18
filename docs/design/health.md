@@ -206,6 +206,7 @@ set by the code doing the work; nothing polls:
 | `keys` | `save` | Saving your keys… (an earlier version's record, rewritten at Unlock) | yes |
 | `discover` | `ask` (relays answered) | Asking the relays · 1 of 2 | |
 | `subscribe` | `find` | Finding the stream on the relays… | |
+| `train` | `score` | Scoring models · 12 of 81 (the [training pass](models.md#the-training-pass): models without a current fit, from stored history; never a prediction) | |
 
 **Critical** means closing Satori now would lose work; its words begin
 "Keep Satori open · ". The load-time history and a poll can both hold
@@ -220,7 +221,7 @@ began during a poll never writes it back as still running.
 transitions.
 
 **Home's hero** shows the hero's task: the first critical one among
-`central`, `base`, the vault's actions and `keys`, else the first of them.
+`central`, `base`, `train`, the vault's actions and `keys`, else the first of them.
 While it runs, a short arc of light turns around the ring (1.8 s a turn,
 only its transform changes), the ring's icon is three dots, and the line
 says the step. It is the only animation on the screen (the chips' glow is a

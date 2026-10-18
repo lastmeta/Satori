@@ -113,4 +113,13 @@ export const MIGRATIONS = [
   // Specs stored before have both null until their next poll.
   `ALTER TABLE model_specs ADD COLUMN persist DOUBLE;
    ALTER TABLE model_specs ADD COLUMN influence VARCHAR;`,
+  // 12 (2026-10-18): the training pass (docs/design/models.md#the-training-pass). model_specs.fit_key: the data the
+  // score, persist and influence were computed on (the spec's λs and each input's row count and newest time); a spec
+  // whose key is not its data's now is scored again from the stored history, without a poll (null: never, so specs
+  // stored before are). relay_streams.p_score, p_persist, p_tests: the latest `_pred`'s backtest, made with it (tests:
+  // its origins, 0 for naive; null: not computed, so a `_pred` kept before is scored by the pass).
+  `ALTER TABLE model_specs ADD COLUMN fit_key VARCHAR;
+   ALTER TABLE relay_streams ADD COLUMN p_score DOUBLE;
+   ALTER TABLE relay_streams ADD COLUMN p_persist DOUBLE;
+   ALTER TABLE relay_streams ADD COLUMN p_tests INTEGER;`,
 ];

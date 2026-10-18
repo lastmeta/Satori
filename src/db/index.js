@@ -5,6 +5,7 @@
 //   await db.get(key) / db.set(key, value)   // meta, JSON values
 //   await db.addObservations(rows) → uuids with a new row / db.history(uuid) → [{ts, value}]
 //   await db.centralHistories() → Map(uuid → [{ts, value}]) / db.histories(uuids) / db.specs() / db.saveSpecs(map, at)
+//   await db.saveFits(list, at) → how many: the training pass's scores (src/neuron/train.js)
 //   await db.needHistory() → uuids / db.addHistories([{uuid, rows}], at) → rows added (older than the newest polled only)
 //   await db.unpredicted() → uuids whose latest observation has no prediction made from it
 //   await db.addPredictions(list) → ids / db.pending() / db.pendingCount() / db.markSent(ids, at) / db.dropPending(before)
@@ -13,6 +14,7 @@
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
 //   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
 //   db.addRelayObservation(o) → new? / relayHistory(uuid) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
+//   db.setRelayFit(uuid, seq, { score, persist, tests }): a `_pred`'s backtest, kept later (the training pass)
 //   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / firstSession() / pruneActivity(before)
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
@@ -129,7 +131,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
         (SELECT count(*) FROM observations x WHERE x.stream_uuid = s.uuid) AS observations,
         o.ts AS obs_ts, o.value AS obs_value,
         p.model, p.t1, p.t2, p.phi, p.weight, p.made_at, p.status, p.sent_at,
-        m.spec, m.score, m.persist, m.influence, m.generation, m.accepted, m.updated_at AS spec_at, s.history_at
+        m.spec, m.score, m.persist, m.influence, m.generation, m.accepted, m.updated_at AS spec_at, m.fit_key, s.history_at
       FROM streams s
       LEFT JOIN model_specs m ON m.target_uuid = s.uuid
       LEFT JOIN (SELECT * FROM observations QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC) = 1) o
@@ -232,26 +234,45 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       }
       return added;
     }),
-    /** Each target's champion spec: Map(uuid → {spec, score, persist, influence, generation, accepted, updated_at}). */
+    /** Each target's champion spec: Map(uuid → {spec, score, persist, influence, generation, accepted, updated_at, fit_key}). */
     specs: inOrder(async () => new Map((await rows('SELECT * FROM model_specs')).map((r) =>
       [r.target_uuid, { spec: JSON.parse(r.spec), score: r.score, persist: r.persist ?? null,
         influence: r.influence == null ? null : JSON.parse(r.influence), generation: r.generation, accepted: r.accepted,
-        updated_at: r.updated_at }]))),
+        updated_at: r.updated_at, fit_key: r.fit_key ?? null }]))),
     /**
-     * Store the specs a poll touched: Map(uuid → {spec, score, persist?, influence?, generation, accepted}). One statement.
-     * persist and influence: what the Models tab shows (migration 11).
+     * Store the specs a poll touched: Map(uuid → {spec, score, persist?, influence?, generation, accepted, fit_key?}). One
+     * statement. persist and influence: what the Models tab shows (migration 11); fit_key: the data they were computed on (12).
      */
     saveSpecs: inOrder(async (specs, at) => {
       if (!specs.size) return;
       const list = [...specs];
-      await run(`INSERT INTO model_specs (target_uuid, spec, score, generation, accepted, updated_at, persist, influence)
+      await run(`INSERT INTO model_specs (target_uuid, spec, score, generation, accepted, updated_at, persist, influence, fit_key)
           SELECT ${TXT('c0')}, ${TXT('c1')}, ${NUM('c2', 'DOUBLE')}, ${NUM('c3', 'INTEGER')}, ${NUM('c4', 'INTEGER')},
-            ${NUM('c5', 'BIGINT')}, ${NUM('c6', 'DOUBLE')}, ${TXT('c7')} FROM ${rowsOf(8)}
+            ${NUM('c5', 'BIGINT')}, ${NUM('c6', 'DOUBLE')}, ${TXT('c7')}, ${TXT('c8')} FROM ${rowsOf(9)}
         ON CONFLICT (target_uuid) DO UPDATE SET spec = excluded.spec, score = excluded.score, generation = excluded.generation,
-          accepted = excluded.accepted, updated_at = excluded.updated_at, persist = excluded.persist, influence = excluded.influence`,
+          accepted = excluded.accepted, updated_at = excluded.updated_at, persist = excluded.persist, influence = excluded.influence,
+          fit_key = excluded.fit_key`,
       texts(list.map(([u]) => u)), texts(list.map(([, r]) => JSON.stringify(r.spec))), nums(list.map(([, r]) => r.score)),
       nums(list.map(([, r]) => r.generation)), nums(list.map(([, r]) => r.accepted)), nums(list.map(() => at)),
-      nums(list.map(([, r]) => r.persist)), texts(list.map(([, r]) => (r.influence ? JSON.stringify(r.influence) : null))));
+      nums(list.map(([, r]) => r.persist)), texts(list.map(([, r]) => (r.influence ? JSON.stringify(r.influence) : null))),
+      texts(list.map(([, r]) => r.fit_key ?? null)));
+    }),
+    /**
+     * The training pass's scores ([{ uuid, spec (the stored text it fit), score, persist, influence, fit_key }]), one
+     * statement: only where that spec is still the stored one (a poll that evolved it meanwhile wins); the spec, its
+     * generation and accepted untouched; updated_at = at (when it last trained). → how many rows took it
+     */
+    saveFits: inOrder(async (list, at) => {
+      if (!list.length) return 0;
+      const [{ Count }] = await rows(`UPDATE model_specs SET score = x.score, persist = x.persist, influence = x.influence,
+          fit_key = x.fit_key, updated_at = x.at
+        FROM (SELECT ${TXT('c0')} AS u, ${TXT('c1')} AS spec, ${NUM('c2', 'DOUBLE')} AS score, ${NUM('c3', 'DOUBLE')} AS persist,
+          ${TXT('c4')} AS influence, ${TXT('c5')} AS fit_key, ${NUM('c6', 'BIGINT')} AS at FROM ${rowsOf(7)}) x
+        WHERE model_specs.target_uuid = x.u AND model_specs.spec = x.spec`,
+      texts(list.map((r) => r.uuid)), texts(list.map((r) => r.spec)), nums(list.map((r) => r.score)),
+      nums(list.map((r) => r.persist)), texts(list.map((r) => (r.influence ? JSON.stringify(r.influence) : null))),
+      texts(list.map((r) => r.fit_key)), nums(list.map(() => at)));
+      return Number(Count);
     }),
 
     /** Central streams whose latest observation has no prediction made from it (newer than predicted_ts). */
@@ -356,13 +377,17 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     /** The `_pred` seq for the next publish: last + 1, kept (network_db.py:835-848). */
     nextPredSeq: inOrder(async (uuid) =>
       (await rows('UPDATE relay_streams SET pred_seq = pred_seq + 1 WHERE uuid = ? RETURNING pred_seq', uuid))[0].pred_seq),
+    /** A `_pred` we publish, and on its stream's row (the latest): with its backtest (score, persist, tests) when it has one. */
     addRelayPrediction: inOrder(async (p) => {
       await run('INSERT INTO relay_predictions VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         p.stream_uuid, p.seq, p.value, p.model ?? null, p.obs_seq ?? null, p.made_at, p.event_id, p.relays);
-      await run(`UPDATE relay_streams SET p_seq = ?, p_value = ?, p_model = ?, p_made_at = ?, p_relays = ?
-        WHERE uuid = ? AND (p_seq IS NULL OR p_seq < ?)`,
-      p.seq, p.value, p.model ?? null, p.made_at, p.relays, p.stream_uuid, p.seq);
+      await run(`UPDATE relay_streams SET p_seq = ?, p_value = ?, p_model = ?, p_made_at = ?, p_relays = ?, p_score = ${D},
+          p_persist = ${D}, p_tests = ? WHERE uuid = ? AND (p_seq IS NULL OR p_seq < ?)`,
+      p.seq, p.value, p.model ?? null, p.made_at, p.relays, dbl(p.score), dbl(p.persist), p.tests ?? null, p.stream_uuid, p.seq);
     }),
+    /** The latest `_pred`'s backtest, computed later (the training pass): only while `seq` is still the latest. */
+    setRelayFit: inOrder((uuid, seq, { score, persist, tests }) => run(`UPDATE relay_streams SET p_score = ${D}, p_persist = ${D},
+      p_tests = ? WHERE uuid = ? AND p_seq = ?`, dbl(score), dbl(persist), tests ?? null, uuid, seq)),
     /** How many relays took a published `_pred` (known after it is kept). */
     setPredictionRelays: inOrder(async (uuid, seq, n) => {
       await run('UPDATE relay_predictions SET relays = ? WHERE stream_uuid = ? AND seq = ?', n, uuid, seq);

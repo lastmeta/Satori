@@ -49,6 +49,24 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-18 (the training pass)
+
+- The neuron never rests with a model unscored: a **training pass** fits
+  every model that lacks a current backtest (a spec stored before its score
+  was, new history, a new spec, a changed companion) from stored history
+  only, on load, after a poll and whenever the list changes. It never
+  predicts or submits. While it runs, `health().work` is `{ task: 'train',
+  step: 'score', done, total, text: 'Scoring models · 12 of 81' }` and the
+  Models status says the same (title "Working").
+- `status().train`: the last pass, `{ central, nostr, base, stopped, ms }`,
+  or null.
+- `streams()` rows gain `fit_key` (the data their score was computed on).
+  `nostr().subscriptions[].prediction` gains `score`, `persist`, `tests`
+  (its backtest, kept with it). `base()`'s `lastBatch.games[]` always carry
+  `score`, `persist` and `tests` (null without a backtest).
+- Quality is the neuron's **own backtest** (how its model would have done on
+  past data against no change), not central's scoring of what it sent.
+
 ## Changed 2026-10-18 (the Models tab)
 
 The page has five tabs: Home · **Models** · Streams · Wallet · Settings
@@ -520,7 +538,8 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 (synchronous, kept current; `await satori.status()` says the same). Then, in
 the page's JS context:
 
-- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base, storage, app, recovered }`.
+- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base, storage, app, recovered, train }`
+  (`train`: the last training pass, `{ central, nostr, base, stopped, ms }`, or null).
   `screen` is `setup` (no keys yet), `home` (running), `finish` (an earlier
   version's vault whose public key was not in clear: `unlock(passphrase)`
   once, then it runs), `elsewhere` (another tab has it open; only one tab
@@ -683,8 +702,9 @@ the page's JS context:
   central), `noChange` no change's (the last value) on the same origins,
   `ratio` = error / noChange; `better` below 0.95, `worse` above 1.05, else
   `tie` (evolution's 5 % margin); `naive` is no change itself (a tie, ratio
-  1); null: not scored yet (under 5 origins, an echoed value, or a spec from
-  before migration 11 until its next poll). `influence` for bvar: |coefficient
+  1); null: not scored yet (under 5 origins, or an echoed value; a missing or
+  stale score is filled by the training pass at once, not at the next poll).
+  This is the neuron's own backtest, not central's scoring of what it sent. `influence` for bvar: |coefficient
   × the input's standard deviation| in the target's equation of the fitted
   model, normalized; bar1 and naive: the stream itself, 1. `destinations`:
   central `{ status: 'accepted' | 'pending', when, ref: null }`; base `{
@@ -898,7 +918,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`, `tab-<tab>`,
   `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`. Models:
   `engine` (`data-tone`), `engine-title`, `engine-line`, `engine-kinds`,
-  `engine-quality`, `engine-median`, `models-filter-<all|central|base|network>`,
+  `engine-quality`, `engine-median`, `engine-note`, `models-filter-<all|central|base|network>`,
   `models-sort-<quality|name>` (`aria-pressed`), `models` (the list) with
   `model-row` (`data-id`, `data-mark`: better, tie, worse or none) and inside
   it `model-mark`, `model-name`, `model-kind`, `model-inputs`,

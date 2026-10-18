@@ -112,10 +112,11 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
       if (!f) { dropped.push({ ...base, error: 'no history' }); continue; }
       const last = history.at(-1).value; // int232, in the stream's own units
       // As decimal strings, as amounts are: an int232 is often beyond 2^53 (the default stream is a ratio × 1e18).
-      // score, persist: the engine's backtest (its median error and no change's), for the Models tab, when it has one.
+      // score, persist, tests: the engine's backtest (its median error and no change's, null below 5 origins, and its
+      // origins), kept with the forecast for the Models tab (scoring is part of training).
       const game = { ...base, direction: directionOf(f.value, Number(last)), model: f.model, latest: last.toString(),
         forecast: BigInt(Math.round(f.value)).toString(), horizon: f.horizon, step,
-        ...(f.score != null ? { score: f.score, persist: f.persist } : {}) };
+        score: f.score ?? null, persist: f.persist ?? null, tests: f.tests ?? null };
       // The contract's own checks, named games' 24 clock hours included (SatoriEngine.sol:791-810).
       const error = await chain.simulateGame(identity, game);
       if (error) dropped.push({ ...game, error });

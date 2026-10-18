@@ -69,7 +69,20 @@ destinations: central { status: 'accepted' | 'pending', ref: null }
 
 ## Quality: against no change
 
-The engine already scores every model against **no change** (the last
+**Whose score is it?** The neuron's own. The quality figure is the
+neuron's **backtest**: how its model would have done on past data against
+"no change", worked out as part of training. It is **not** central's
+scoring of the predictions the neuron submitted. The tab says so in one
+plain line under the bar: "The neuron's own backtest, made as it trains:
+how each model would have done on past data against no change. Not the
+Satori Network's score of the predictions it sent." (`engine-note`).
+
+*Later (a plan, not built):* also show the real-world score, central's
+scoring of what was sent, next to the backtest, once central serves a
+neuron's scores; the two answer different questions (would this model have
+helped, did it).
+
+The engine scores every model against **no change** (the last
 value, "persistence") in its rolling backtest ([engine.md](engine.md#the-backtest-score-and-fade)):
 at each of the last 28 origins, the model fit on the data up to the origin
 forecasts the horizon (24 h for central), and both its error and no change's
@@ -81,8 +94,10 @@ are measured against what came. The tab uses exactly those numbers:
   evolution's margin (`MARGIN`, 5 %): the change a neuron needs to see before
   it keeps a mutation. Inside it, the backtest can't tell the two apart.
 - **naive** is no change itself: a tie by construction (`=`, ratio 1).
-- **not scored yet** (`null`) below 5 origins (a young stream), an echoed
-  value, or a central spec stored before this tab (its next poll scores it).
+- **not scored yet** (`null`) below 5 origins (a young stream), or an
+  echoed value. A model whose score is missing or stale is not left so: the
+  [training pass](#the-training-pass) scores it at once, from the stored
+  history.
 - The forecast scored is the **unfaded** one. The fade weight is computed
   from these same medians (w = clamp(2 − ratio, 0, 1)), so scoring the faded
   forecast on the same origins would be circular; the Model says how far the
@@ -90,16 +105,74 @@ are measured against what came. The tab uses exactly those numbers:
 - **The median model**: the median ratio of the models with a backtest
   (naive left out: it says nothing about the models).
 
-Where it comes from: central's `score` and `persist` are kept by the poll
-that ran the model (`model_specs`, migration 11); Base's on the batch's
-games; Nostr's are computed on demand from the stored history, once per
-published `_pred` (`nostrScores`, cached by seq).
+Where it comes from: scoring is part of training, so each model's backtest
+is kept with it by whatever fit it: central's by the poll that ran the
+model (`model_specs`: `score`, `persist`, `influence` and the `fit_key` of
+the data they were computed on, migrations 11 and 12); Nostr's by the
+intake with each `_pred` (`relay_streams.p_score`, `p_persist`, `p_tests`);
+Base's on the batch's games. Whatever lacks a current one, the training
+pass fills. The list computes nothing: it reads what is kept.
 
 On the page each mark is a shape and a colour plus a short number: ✓ green
 (better, "−3%": 3% less error), = grey-blue (tie, "+1%"), − amber (worse,
 "+8%"), a dashed ring (not scored, "new"). The amber is the model's own mark
 against no change, not the engine's status: the fade already pulls a weak
 model toward no change, and nothing needs the person.
+
+## The training pass
+
+The owner, 2026-10-18 ([../intent/engine.md](../intent/engine.md)): "Why
+aren't you doing anything? I can see that you have work to do." The tab
+said *Resting* over "Beats no change on 0 of 83 · ties 2 · worse 0 · 81 not
+scored yet": those 81 specs were stored before migration 11, and only a
+poll scored a model, so they waited up to 11 h. The neuron never rests
+while a model it runs lacks a current fit.
+
+`src/neuron/train.js`. **What lacks a fit** is read from the data each time
+(`lacking()`), never queued:
+
+| Model | Current when | Else |
+|---|---|---|
+| central | its spec's `fit_key` is its data's now: `v1`, λ1, λ2, then the target's and each companion's row count and newest time (`fitKey`, from `db.streams()`'s `observations` and `obs_ts`) | null (stored before migration 12), or new history (a poll's row, a backfill), a new spec, a changed companion |
+| Nostr | its latest `_pred` has its backtest (`p_tests` not null; the intake keeps it with each one) | a `_pred` kept before migration 12 |
+| Base | its game has `score` or `tests` (the batch keeps them with each game) | a batch from before they were kept: scored from the chain's history (the registry, one read per game as the batch reads it), kept in memory for the session |
+
+naive and echo have nothing to score (naive is no change itself).
+
+**The pass** (`trainPass`) fits each one with stored history only:
+central's with `fitter` ([engine.md](engine.md#what-the-models-tab-reads)),
+the poll's own scoring with no repair and no proposal, so the spec, its
+generation and its mutations never change and the numbers are the poll's on
+the same data (tested); Nostr's and Base's with `explainForecast` at their
+step and horizon. Central's histories are one read (`db.histories` of the
+targets and their companions), then the fits are one write (`db.saveFits`,
+only where the spec is still the one fit: a poll that evolved it meanwhile
+wins). It **never predicts and never submits**: no prediction row, no
+central call (tested with a spy, and in Chrome against the stub central:
+no poll, no predictions batch).
+
+**When it runs** (`createTrainer`, one pass at a time, one more after it
+when asked during it):
+
+- on load, once the screen shows the models;
+- after a poll and after the load-time history, when central's work ends;
+- whenever the list is read again (central's streams, the Nostr status, the
+  Base status changed), if something lacks a fit.
+
+It waits while central's work runs (a poll, its sign-in, the history) and
+stops between models when a poll begins; what it fit is kept, and the
+poll's end runs it again for the rest. A closed tab is the same: nothing is
+queued, so the next open picks up exactly what still lacks a fit
+(restart-safe by construction). A model it tried this session with the same
+data is not tried again (a fit that cannot be kept never loops).
+
+**What it shows**: the work task `train`, step `score`: Home's hero and the
+Models status read "Scoring models · 12 of 81" in regular green (working,
+never critical), then *Resting* once the list is read again with the
+scores. A poll and the Base batch lead over it on the hero. It gives the
+page a turn between models once 10 ms of work have passed
+(`scheduler.yield`, else a task), so the page stays responsive.
+`status().train` is the last pass: `{ central, nostr, base, stopped, ms }`.
 
 ## Influence: how much each input moves the forecast
 
@@ -131,7 +204,7 @@ bitcoin).
 
 | Title | Tone | When | Line |
 |---|---|---|---|
-| Working | green (`working`), vivid while sending (`critical`) | the poll or the Base batch runs | the step, in Home's hero's words at its pace: "Building models · 40 of 82" |
+| Working | green (`working`), vivid while sending (`critical`) | the poll, the Base batch or the training pass runs | the step, in Home's hero's words at its pace: "Building models · 40 of 82", "Scoring models · 12 of 81" |
 | Resting | sky (`idle`) | otherwise | "Trained 2 h ago · next run in 9 h" (the newest forecast; central's next poll) |
 | No models yet | sky | before the first poll | "The first poll builds them · in 1 min" |
 | Needs a look | amber (`warn`) | the engine itself failed: the last run's local error (the database or the engine) | "The last run failed: …" |
@@ -147,7 +220,7 @@ step, so a count ticks at once.
 
 Under it: "83 models · 81 bvar · 2 naive"; a bar of better / tie / worse /
 not scored; "Beats no change on 24 of 83 · ties 40 · worse 19"; "Median
-model: 1% less error than no change".
+model: 1% less error than no change"; the plain line on whose score it is.
 
 ## The list
 
@@ -217,8 +290,11 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
 ## Agents
 
 - `await satori.models()` → every model, as above. It reads what the tab
-  shows (refreshed after every poll, Nostr publish and Base check; `poll()`
-  resolves after it), with the Nostr models' backtests from their history.
+  shows (refreshed after every poll, Nostr publish, Base check and training
+  pass; `poll()` resolves after it), each with the backtest kept with it.
+- `(await satori.status()).train` → the last training pass, `{ central,
+  nostr, base, stopped, ms }`, or null (none this session); while one runs,
+  `health().work` is `{ task: 'train', step: 'score', done, total }`.
 - `await satori.model(id)` → the drill-in: the model's fields, `model: {
   kind, rows, tests, step, horizon, weight, phi, coef, lambda1, lambda2,
   generation, accepted, trained, quality }`, each output's `history` (the
@@ -227,7 +303,7 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
 - `satori.go('models')`, `satori.go('models/<id>')`; the URL's `#models`,
   `#models/<id>`.
 - `data-test`: `models-tab`, `engine` (`data-tone`), `engine-title`,
-  `engine-line`, `engine-kinds`, `engine-quality`, `engine-median`,
+  `engine-line`, `engine-kinds`, `engine-quality`, `engine-median`, `engine-note`,
   `models-filter-<all|central|base|network>`, `models-sort-<quality|name>`,
   `models`, `model-row` (`data-id`, `data-mark`) with `model-mark`,
   `model-name`, `model-kind`, `model-inputs`, `model-forecast`, `model-to`;
@@ -274,7 +350,15 @@ agent API reads the tab's state instead of every stream's row again
   scale, a gap; the row and the status); `src/engine/bvar.test.js`
   (influence), `engine.test.js` (`explainForecast`), `evolve.test.js` (what
   `runModels` keeps; `explainModel` gives the poll's numbers again);
-  `src/db/db.test.js` (migration 11, `histories`).
+  `src/db/db.test.js` (migrations 11 and 12, `histories`, `saveFits`,
+  `setRelayFit`); `src/neuron/train.test.js` (the training pass: the fit
+  key; exactly the models without a current fit, central, Nostr and Base;
+  each scored as the poll would with the spec untouched; never a
+  prediction; stopped between models and resumed by the next pass; a poll
+  that evolved a spec meanwhile wins; it waits for central's work; the work
+  state "Scoring models · k of n", refreshed before it ends);
+  `neuron.test.js` (a poll's specs carry their fit key: nothing lacks a fit
+  after it).
 - `npm run e2e`: `e2e/models.spec.js`: a new neuron on the stub central with
   8 streams and 600 hours of history, staked on the fake chain (its batch:
   2 Base models) and subscribed to a stream on a test relay (16
@@ -286,7 +370,12 @@ agent API reads the tab's state instead of every stream's row again
   list, back to the list where it was, a Base drill-in, a deep link over a
   reload, an unknown id; at 390 and 360 px nothing scrolls sideways and every
   tap target is 44 px. `e2e/home.spec.js` checks the Models tab on the phone
-  with the others.
+  with the others. `e2e/train.spec.js`: a neuron whose stored specs lost
+  their scores (cleared through the e2e store page, as a version before
+  migration 11 left them) opens to "Scoring models · k of 8" on Home and
+  the tab (working green, never *Resting* before it), then every score is
+  back, equal to the poll's, and *Resting*; no poll, no predictions batch;
+  a reload with nothing to do rests at once.
 
 ## Live
 

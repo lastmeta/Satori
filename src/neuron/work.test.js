@@ -106,6 +106,18 @@ describe('createWork', () => {
     expect(leading({ base: e('base', 'check'), central: e('central', 'history') }, HERO)).toMatchObject({ task: 'central' });
     expect(leading({ claim: e('claim', 'confirm', true), central: e('central', 'history') }, HERO)).toMatchObject({ task: 'claim' });
   });
+
+  test('the training pass (`train`) is the hero\'s, never critical, and gives way to a poll or the Base batch', () => {
+    const e = (task, step, critical = false) => ({ task, step, done: 3, total: 81, since: 0, critical });
+    expect(HERO).toContain('train');
+    expect(ORDER.slice(0, 3)).toEqual(['central', 'base', 'train']);
+    expect(leading({ train: e('train', 'score') }, HERO)).toMatchObject({ task: 'train' });
+    expect(leading({ train: e('train', 'score'), central: e('central', 'observations') }, HERO)).toMatchObject({ task: 'central' });
+    expect(leading({ train: e('train', 'score'), base: e('base', 'check') }, HERO)).toMatchObject({ task: 'base' });
+    const w = createWork();
+    w.start('train').step('score', 0, 81);
+    expect(w.of('train')).toMatchObject({ critical: false });
+  });
 });
 
 describe('workText: plain words, from the person\'s side', () => {
@@ -132,6 +144,7 @@ describe('workText: plain words, from the person\'s side', () => {
     [e('discover', 'ask', 1, 2), 'Asking the relays · 1 of 2'],
     [e('subscribe', 'find'), 'Finding the stream on the relays…'],
     [e('keys', 'save'), 'Saving your keys…'],
+    [e('train', 'score', 12, 81), 'Scoring models · 12 of 81'],
   ])('%o → %s', (entry, text) => {
     expect(workText(entry)).toBe(text);
   });

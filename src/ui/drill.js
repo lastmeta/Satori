@@ -195,10 +195,13 @@ export function rowView(m) {
 }
 
 const MARKS = ['better', 'tie', 'worse', 'unscored'];
+/** What the quality is (docs/design/models.md#quality-against-no-change): the owner asked whose score it is. */
+export const QUALITY_NOTE = "The neuron's own backtest, made as it trains: how each model would have done on past data against no change."
+  + " Not the Satori Network's score of the predictions it sent.";
 
 /** The engine's quality at a glance (summaryOf's): by kind, by mark (a bar of the four), the median model. */
 export function statusView(s) {
-  if (!s.total) return { kinds: 'No models yet', marks: '', median: '', bar: [] };
+  if (!s.total) return { kinds: 'No models yet', marks: '', median: '', bar: [], note: '' };
   const kinds = Object.keys(s.kinds).sort((a, b) => (KINDS.indexOf(a) + 1 || 99) - (KINDS.indexOf(b) + 1 || 99));
   const m = s.marks;
   const median = s.median == null ? '' : `Median model: ${Math.abs(s.median - 1) < 0.005 ? 'the same error as no change'
@@ -208,5 +211,6 @@ export function statusView(s) {
     marks: `Beats no change on ${m.better} of ${s.total} · ties ${m.tie} · worse ${m.worse}${m.unscored ? ` · ${m.unscored} not scored yet` : ''}`,
     median,
     bar: MARKS.filter((k) => m[k] > 0).map((k) => ({ mark: k, n: m[k], pct: (m[k] / s.total) * 100 })),
+    note: QUALITY_NOTE,
   };
 }

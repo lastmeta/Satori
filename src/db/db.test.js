@@ -344,7 +344,23 @@ describe('bvar: specs and central history (migration 6)', () => {
     const up = await openDb(conn);
     expect(up.version).toBe(MIGRATIONS.length);
     expect((await up.specs()).get('u-btc')).toEqual({ spec: { companions: [], lambda1: 0.2, lambda2: 0.5 }, score: 0.02, persist: null,
-      influence: null, generation: 3, accepted: 1, updated_at: 4000 });
+      influence: null, generation: 3, accepted: 1, updated_at: 4000, fit_key: null });
+  });
+
+  test('migration 12: a spec stored before has no fit key (the training pass scores it again); a `_pred` before, no backtest', async () => {
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 11)) if (typeof m === 'string') await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '11')`);
+    await conn.query(`INSERT INTO streams (uuid, name, meta) VALUES ('u-btc', 'bitcoin', NULL)`);
+    await conn.query(`INSERT INTO model_specs VALUES ('u-btc', '{"companions":[],"lambda1":0.2,"lambda2":0.5}', 0.02, 3, 1, 4000, 0.03, NULL)`);
+    await conn.query(`INSERT INTO relay_streams (uuid, stream_name, provider_pubkey, name, active, subscribed_at, pred_created_at, pred_seq, p_seq, p_model)
+      VALUES ('r-1', 'btc', 'e5', 'B', true, 1, 1, 2, 2, 'bar1')`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    expect((await up.specs()).get('u-btc')).toMatchObject({ score: 0.02, persist: 0.03, fit_key: null });
+    expect((await up.streams())[0]).toMatchObject({ uuid: 'u-btc', fit_key: null });
+    expect((await up.relayStreams())[0]).toMatchObject({ p_seq: 2, p_score: null, p_persist: null, p_tests: null });
   });
 
   test('centralHistories: every central stream\'s observations in one read, oldest first; another central\'s left out', async () => {
@@ -412,11 +428,15 @@ describe('bvar: specs and central history (migration 6)', () => {
     const shares = [0.6 + 1e-17, 0.4 - 1 / 3e9]; // doubles kept bit for bit
     await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1 }]]), 4100);
     expect(await db.specs()).toEqual(new Map([
-      ['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1, updated_at: 4100 }],
-      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, persist: null, influence: null, generation: 0, accepted: 0, updated_at: 4000 }],
+      ['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1, updated_at: 4100, fit_key: null }],
+      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, persist: null, influence: null, generation: 0, accepted: 0, updated_at: 4000,
+        fit_key: null }],
     ]));
     expect((await db.streams())[0]).toMatchObject({ spec: JSON.stringify(spec), score: 0.0122, persist: 0.0121,
       influence: JSON.stringify(shares), generation: 4, accepted: 1 });
+    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1, fit_key: 'k1' }]]), 4200);
+    expect((await db.specs()).get('u-btc').fit_key).toBe('k1');
+    expect((await db.streams())[0].fit_key).toBe('k1');
     await db.set('central_history', { at: 1 });
     await db.resetCentral();
     expect(await db.specs()).toEqual(new Map());
@@ -429,6 +449,29 @@ test('calls run in order even when not awaited', async () => {
   const read = db.history('u-btc');
   await Promise.all(writes);
   expect((await read).map((o) => o.value)).toEqual([1, 2, 3]);
+});
+
+describe('saveFits: the training pass\'s results (docs/design/models.md#the-training-pass)', () => {
+  test('score, no change\'s error, influence and the fit key, only where the spec is still the one fit; the spec and its counts untouched', async () => {
+    await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' }), obs({ stream_uuid: 'u-oil', name: 'oil' })]);
+    const spec = { companions: ['u-eth'], lambda1: 0.2, lambda2: 0.5 };
+    const other = { companions: ['u-btc'], lambda1: 0.1, lambda2: 1 };
+    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.02, persist: null, influence: null, generation: 3, accepted: 1 }],
+      ['u-eth', { spec: other, score: 0.05, persist: null, influence: null, generation: 7, accepted: 2 }]]), 4000);
+    const shares = [0.7 + 1e-17, 0.3];
+    const n = await db.saveFits([
+      { uuid: 'u-btc', spec: JSON.stringify(spec), score: 0.019, persist: 0.021, influence: shares, fit_key: 'k-btc' },
+      { uuid: 'u-eth', spec: JSON.stringify(spec), score: 0.5, persist: 0.5, influence: null, fit_key: 'k-eth' }, // a poll changed it meanwhile
+      { uuid: 'u-oil', spec: JSON.stringify(spec), score: 0.5, persist: 0.5, influence: null, fit_key: 'k-oil' }, // no spec: nothing
+    ], 5000);
+    expect(n).toBe(1);
+    expect(await db.specs()).toEqual(new Map([
+      ['u-btc', { spec, score: 0.019, persist: 0.021, influence: shares, generation: 3, accepted: 1, updated_at: 5000, fit_key: 'k-btc' }],
+      ['u-eth', { spec: other, score: 0.05, persist: null, influence: null, generation: 7, accepted: 2, updated_at: 4000, fit_key: null }],
+    ]));
+    expect(await db.saveFits([], 1)).toBe(0);
+    expect(await db.pendingCount()).toBe(0); // never a prediction
+  });
 });
 
 describe('relay streams (Nostr), apart from central', () => {
@@ -508,11 +551,17 @@ describe('relay streams (Nostr), apart from central', () => {
     await db.addRelayObservation(robs());
     await db.addRelayObservation(robs({ seq: 9, ts: 2000, value: 6, raw: '"6"', event_id: 'e9', received_at: 2001 }));
     await db.addRelayPrediction({ stream_uuid: 'r-1', seq: 1, value: '5.0', model: 'naive', obs_seq: 1, made_at: 1002, event_id: 'p1', relays: 1 });
-    await db.addRelayPrediction({ stream_uuid: 'r-1', seq: 2, value: '6.5', model: 'bar1', obs_seq: 9, made_at: 2002, event_id: 'p2', relays: 2 });
+    await db.addRelayPrediction({ stream_uuid: 'r-1', seq: 2, value: '6.5', model: 'bar1', obs_seq: 9, made_at: 2002, event_id: 'p2', relays: 2,
+      score: 0.011, persist: 0.012, tests: 9 });
     const [eth, btc] = await db.relayStreams();
     expect(btc).toMatchObject({ uuid: 'r-1', stream_name: 'btc', active: true, observations: 2, obs_seq: 9, obs_ts: 2000,
       obs_value: 6, obs_raw: '"6"', obs_received_at: 2001, p_seq: 2, p_value: '6.5', p_model: 'bar1', p_made_at: 2002,
-      p_relays: 2 });
+      p_relays: 2, p_score: 0.011, p_persist: 0.012, p_tests: 9 }); // its backtest, made with it
+    // the training pass: a `_pred` kept before its backtest was, scored later; only the latest one
+    await db.setRelayFit('r-1', 1, { score: 1, persist: 1, tests: 1 });
+    expect((await db.relayStream('r-1'))).toMatchObject({ p_seq: 2, p_score: 0.011, p_tests: 9 });
+    await db.setRelayFit('r-1', 2, { score: 0.02, persist: 0.03, tests: 0 });
+    expect((await db.relayStream('r-1'))).toMatchObject({ p_seq: 2, p_score: 0.02, p_persist: 0.03, p_tests: 0 });
     expect(eth).toMatchObject({ uuid: 'r-2', observations: 0, obs_value: null, p_value: null });
     expect((await db.relayPredictions('r-1', 1)).map((p) => p.value)).toEqual(['6.5']);
     await db.setPredictionRelays('r-1', 2, 3); // the relays' OKs come after the row is kept

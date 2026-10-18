@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { memoryDb } from '../../test/memory-db.js';
 import { signEvent, verifyEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../nostr/satori.js';
-import { forecast } from '../engine/index.js';
+import { forecast, explainForecast } from '../engine/index.js';
 import { createWork } from './work.js';
 import { createNostr, FOLLOW_ID, MAX_STREAMS } from './nostr.js';
 
@@ -276,8 +276,11 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(lastPub.tags).toEqual([['d', 'btc_pred'], ['stream', 'btc_pred'], ['seq', '10'], ['satori', 'observation']]);
     expect(JSON.parse(u.published[0].content)).toMatchObject({ value: '100', seq_num: 1 }); // naive at first
     const [s] = (await nostr.status()).subscriptions;
+    // its backtest, made with the forecast (scoring is part of training) and kept with it: the Models tab reads it
+    const x = explainForecast(points, { step: 900, horizon: 900 });
     expect(s).toMatchObject({ observations: 10, observation: { seq: 59, value: 105, raw: '105', ts: clock },
-      prediction: { stream: 'btc_pred', seq: 10, value: String(f.value), model: 'bar1', relays: 1, made_at: clock } });
+      prediction: { stream: 'btc_pred', seq: 10, value: String(f.value), model: 'bar1', relays: 1, made_at: clock,
+        score: x.score, persist: x.persist, tests: x.tests } });
     expect(changes).toBeGreaterThan(0);
   });
 

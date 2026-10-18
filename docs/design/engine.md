@@ -398,6 +398,13 @@ poll's numbers again).
   same origins as `score`) and, when the forecast is bvar, `influence`
   (aligned with `[target, ...companions]`), stored in `model_specs`
   (migration 11, [storage.md](storage.md#migrations)).
+- `fitter({ histories })(target, spec)` (`evolve.js`): the poll's own
+  scoring of one champion (the same code as `runModels`, shared), with no
+  repair and no proposal: `{ model, score, persist, influence }`, the
+  numbers the poll stores on the same data (tested). The
+  [training pass](models.md#the-training-pass) uses it for every spec whose
+  stored fit is missing or stale; the poll stores each spec with the
+  `fit_key` of the data it fit (migration 12).
 - `explainModel({ target, spec, histories })` (`evolve.js`): the stored
   champion refit on its stored history, as the poll fit it (no proposal):
   bvar with `inputs`, `influence`, `coef` (the target's equation), `rows`,

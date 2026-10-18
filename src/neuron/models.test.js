@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   qualityOf, qualityOfAll, centralModels, nostrModels, baseModels, modelsOf, summaryOf, sortModels, filterModels, engineStatus,
-  modelDetail, nostrScores, TIE,
+  modelDetail, TIE,
 } from './models.js';
 import { runModels } from '../engine/evolve.js';
 import { explainForecast, STEP_S } from '../engine/index.js';
@@ -100,6 +100,9 @@ describe('the list: every model, named for the stream it predicts', () => {
     expect(eth.outputs[0]).toMatchObject({ direction: 'down', influence: [{ stream: 'u-eth', share: 1 }],
       destinations: [{ to: 'central', status: 'pending', when: 5010 }] });
     expect(oil).toMatchObject({ kind: 'naive', quality: { mark: 'tie' }, outputs: [{ direction: 'flat' }] });
+    // trained: when it was last fit, the poll's forecast or the training pass after it
+    expect(centralModels([{ ...ROWS[0], spec_at: 9000 }])[0].trained).toBe(9000);
+    expect(centralModels([{ ...ROWS[0], spec_at: 4000 }])[0].trained).toBe(5010);
     // a bvar spec stored before its influence was kept (migration 11): its shares unknown, its inputs still listed
     const old = centralModels([{ ...ROWS[0], influence: null, persist: null }, ...ROWS.slice(1)])[0];
     expect(old.quality.mark).toBeNull();
@@ -109,12 +112,12 @@ describe('the list: every model, named for the stream it predicts', () => {
   test('Nostr: each subscription\'s `_pred`, a cadence ahead, published to the network', () => {
     const subs = [
       { uuid: 'n-1', stream: 'btc', provider: 'p', name: 'Bitcoin', cadence_seconds: 3600, observation: { seq: 9, ts: 7000, value: 100 },
-        prediction: { stream: 'btc_pred', seq: 4, value: '101.5', model: 'bar1', made_at: 7001, relays: 2 } },
+        prediction: { stream: 'btc_pred', seq: 4, value: '101.5', model: 'bar1', made_at: 7001, relays: 2, score: 0.01, persist: 0.02, tests: 9 } },
       { uuid: 'n-2', stream: 'words', provider: 'p', name: '', cadence_seconds: null, observation: { seq: 1, ts: 7000, value: null },
         prediction: { stream: 'words_pred', seq: 1, value: 'hello', model: 'echo', made_at: 7002, relays: 0 } },
       { uuid: 'n-3', stream: 'quiet', provider: 'p', name: 'Quiet', cadence_seconds: 60, observation: null, prediction: null },
     ];
-    const [btc, words] = nostrModels(subs, new Map([['n-1', { score: 0.01, persist: 0.02 }]]));
+    const [btc, words] = nostrModels(subs); // the backtest kept with its `_pred`
     expect(nostrModels(subs)).toHaveLength(2); // nothing predicted yet: no model yet
     expect(btc).toMatchObject({ id: 'nostr:n-1', source: 'nostr', name: 'Bitcoin', kind: 'bar1', trained: 7001,
       quality: { mark: 'better', ratio: 0.5 }, inputs: [{ stream: 'n-1', name: 'Bitcoin' }] });
@@ -142,6 +145,8 @@ describe('the list: every model, named for the stream it predicts', () => {
     expect(list[0].outputs[0].direction).toBe('down'); // a tie is DOWN, as sent
     expect(list[2].outputs[0].destinations[0]).toMatchObject({ status: 'left out', ref: { tx: null, error: 'DuplicatePrediction' } });
     expect(baseModels(null)).toEqual([]);
+    // a game from a batch before backtests were kept: the training pass's fit (in memory, by `<hash>:<stream id>`)
+    expect(baseModels(batch, new Map([['0xabc:5', { score: 0.5, persist: 1, tests: 9 }]]))[2].quality).toMatchObject({ mark: 'better', ratio: 0.5 });
   });
 
   test('modelsOf: central, then Base, then Nostr; summaryOf: by kind, by mark, the median against no change', () => {
@@ -241,17 +246,5 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
     expect(b.outputs[0].history.length).toBeGreaterThan(0);
     const offline = await modelDetail({ db, id: 'base:3', lastBatch: batch, baseHistory: async () => { throw new Error('down'); } });
     expect(offline).toMatchObject({ model: { kind: 'bar1', rows: null }, outputs: [{ history: [] }] });
-  });
-
-  test('nostrScores: each subscription\'s backtest once per published seq', async () => {
-    const subs = [{ uuid: 'n-1', cadence_seconds: 3600, prediction: { seq: 4 } }, { uuid: 'n-2', cadence_seconds: 60, prediction: null }];
-    let reads = 0;
-    const counting = { relayHistory: async (u) => { reads++; return db.relayHistory(u); } };
-    const cache = new Map();
-    const s = await nostrScores({ db: counting, subscriptions: subs, cache });
-    const x = explainForecast(grid(prices.n1, 0, 3600), { step: 3600, horizon: 3600 });
-    expect(s).toEqual(new Map([['n-1', { score: x.score, persist: x.persist }]]));
-    await nostrScores({ db: counting, subscriptions: subs, cache });
-    expect(reads).toBe(1);
   });
 });

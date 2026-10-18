@@ -1,14 +1,17 @@
 // What the neuron is doing now (docs/design/health.md#work): one entry per task in progress, { task, step, done, total,
 // since, critical }, set by the poll cycle (its history, engine and submission), the Base batch and the vault's and the
-// network's actions. Home draws it: the hero's ring turns and its line says the step, slowly enough to read
+// network's actions, and the training pass. Home draws it: the hero's ring turns and its line says the step, slowly enough to read
 // (src/ui/hold.js); agents read health().work. since: when the step began (ms); a count ticking keeps it. critical:
 // closing Satori now would lose work (the hero goes vivid green and says to keep it open).
 //
 //   const job = work.start('central'); job.step('history', 34, 82); job.end();   // or work.run(task, (step) => …)
 
-/** The tasks, the neuron's own first; HERO: the ones Home's hero shows (the network's show on the Streams tab). */
-export const ORDER = ['central', 'base', 'stake', 'unstake', 'claim', 'send', 'keys', 'discover', 'subscribe'];
-export const HERO = ORDER.slice(0, 7);
+/**
+ * The tasks, the neuron's own first; HERO: the ones Home's hero shows (the network's show on the Streams tab). `train`:
+ * the training pass (src/neuron/train.js), after a poll and the Base batch, which it waits for.
+ */
+export const ORDER = ['central', 'base', 'train', 'stake', 'unstake', 'claim', 'send', 'keys', 'discover', 'subscribe'];
+export const HERO = ORDER.slice(0, 8);
 const VAULT = new Set(['stake', 'unstake', 'claim', 'send', 'keys']);
 /**
  * Closing now would lose work: predictions being sent, a Base batch or a vault transaction sent and not yet confirmed,
@@ -41,6 +44,7 @@ const TEXT = {
   'discover:ask': (e) => `Asking the relays · ${e.done} of ${e.total}`,
   'subscribe:find': () => 'Finding the stream on the relays…',
   'keys:save': () => 'Saving your keys…',
+  'train:score': (e) => `Scoring models · ${e.done} of ${e.total}`,
   // a vault action's steps (Stake, Unstake, Send; Claim's confirm)
   send: (e) => tx(e, 'Sending…'),
   confirm: (e) => tx(e, 'Waiting for Base to confirm…'),

@@ -3,11 +3,11 @@
 // forecast, and its outputs, each with where it went. A model's outputs are a list: today each predicts one stream;
 // a model of several (one VAR or a network for all) fills `name` with something like "bvar · 3 streams".
 //
-//   modelsOf({ streams, subscriptions, lastBatch, scores }) → [model]       pure: from what the app already holds
+//   modelsOf({ streams, subscriptions, lastBatch, baseFits }) → [model]    pure: from what the app already holds (each
+//     model's backtest is kept with it, by the poll, the Nostr intake, the Base batch or the training pass: train.js)
 //   summaryOf(models), engineStatus({ summary, central, work, now })      the tab's top
 //   sortModels(list, 'quality' | 'name'), filterModels(list, 'all' | 'central' | 'base' | 'network')
 //   await modelDetail({ db, id, streams, subscriptions, lastBatch, baseHistory })   one model, recomputed on demand
-//   await nostrScores({ db, subscriptions, cache })                                  the Nostr models' backtests
 import { MARGIN, explainModel } from '../engine/evolve.js';
 import { explainForecast, STEP_S, HORIZON_STEPS, median } from '../engine/index.js';
 import { UP } from '../chain/index.js';
@@ -76,8 +76,10 @@ export function centralModels(rows) {
     const shares = bvar ? parse(r.influence) : [1];
     const quality = qualityOf({ kind: r.model, score: r.score, persist: r.persist });
     const sent = r.status === 'sent';
+    // trained: when it was last fit (the poll that made its forecast, or the training pass after it)
+    const trained = Math.max(r.made_at ?? -Infinity, r.spec_at ?? -Infinity);
     return modelOf({
-      id: `central:${r.uuid}`, source: 'central', kind: r.model, inputs: inputs.map(named), trained: r.made_at ?? null,
+      id: `central:${r.uuid}`, source: 'central', kind: r.model, inputs: inputs.map(named), trained: Number.isFinite(trained) ? trained : null,
       outputs: [{
         stream: r.uuid, name: r.name, latest: { value: r.obs_value ?? null, ts: r.obs_ts ?? null },
         forecast: { t1: r.t1, t2: r.t2, value: r.t2, step: STEP_S, horizon: CENTRAL_HORIZON, at: r.made_at },
@@ -97,16 +99,16 @@ const cadenceOf = (s) => (s.cadence_seconds > 0 ? s.cadence_seconds : DEFAULT_CA
 
 /**
  * The Nostr models: each subscription's `<stream>_pred`, one cadence ahead, published to the relays (none before its
- * first observation). scores: uuid → { score, persist } (nostrScores()).
+ * first observation), with the backtest kept with it (score, persist).
  */
-export function nostrModels(subscriptions, scores = new Map()) {
+export function nostrModels(subscriptions) {
   return subscriptions.filter((s) => s.prediction).map((s) => {
     const p = s.prediction;
     const name = s.name || s.stream;
     const cadence = cadenceOf(s);
     const value = /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(p.value ?? '') ? Number(p.value) : null;
     const latest = s.observation?.value ?? null;
-    const quality = qualityOf({ kind: p.model, ...scores.get(s.uuid) });
+    const quality = qualityOf({ kind: p.model, score: p.score ?? null, persist: p.persist ?? null });
     return modelOf({
       id: `nostr:${s.uuid}`, source: 'nostr', kind: p.model, inputs: [{ stream: s.uuid, name }], trained: p.made_at,
       outputs: [{
@@ -120,15 +122,19 @@ export function nostrModels(subscriptions, scores = new Map()) {
   });
 }
 
-/** The Base models: the last batch's games, and those left out after a forecast (by their simulate). */
-export function baseModels(batch) {
+/**
+ * The Base models: the last batch's games, and those left out after a forecast (by their simulate), each with the
+ * backtest kept with it, or for a batch before they were, the training pass's (baseFits: `<hash>:<stream id>` → fit).
+ */
+export function baseModels(batch, baseFits = new Map()) {
   if (!batch) return [];
   const all = [...batch.games.map((g) => [g, true]), ...(batch.dropped ?? []).filter((g) => g.model).map((g) => [g, false])];
   return all.map(([g, sent]) => {
     const name = `${g.named ? 'Named stream' : 'Stream'} ${g.streamId}`;
     const stream = String(g.streamId);
     const dir = g.direction === UP ? 'up' : 'down'; // as sent: a tie is DOWN
-    const quality = qualityOf({ kind: g.model, score: g.score, persist: g.persist });
+    const fit = 'tests' in g || 'score' in g ? g : baseFits.get(`${batch.hash ?? batch.round}:${g.streamId}`) ?? {};
+    const quality = qualityOf({ kind: g.model, score: fit.score ?? null, persist: fit.persist ?? null });
     return modelOf({
       id: `base:${stream}`, source: 'base', kind: g.model, inputs: [{ stream, name }], trained: batch.at,
       outputs: [{
@@ -143,8 +149,8 @@ export function baseModels(batch) {
 }
 
 /** Every model the neuron runs: central's, then Base's, then Nostr's. */
-export const modelsOf = ({ streams = [], subscriptions = [], lastBatch = null, scores } = {}) =>
-  [...centralModels(streams), ...baseModels(lastBatch), ...nostrModels(subscriptions, scores)];
+export const modelsOf = ({ streams = [], subscriptions = [], lastBatch = null, baseFits } = {}) =>
+  [...centralModels(streams), ...baseModels(lastBatch, baseFits), ...nostrModels(subscriptions)];
 
 /**
  * The tab's top: how many models by kind, by mark, and the median ratio of the models with a backtest (naive, which
@@ -270,7 +276,7 @@ async function nostrDetail(db, key, subscriptions) {
   const cadence = cadenceOf(s);
   const points = await db.relayHistory(key);
   const x = explainForecast(points, { step: cadence, horizon: cadence });
-  const scored = nostrModels([s], new Map([[key, { score: x?.score, persist: x?.persist }]]))[0];
+  const scored = nostrModels([{ ...s, prediction: { ...s.prediction, score: x?.score, persist: x?.persist } }])[0];
   return detailOf(scored, x && { ...x, inputs: [key], influence: [1] }, { step: cadence, horizon: cadence, weight: x?.weight ?? null,
     phi: x?.phi ?? null }, new Map([[key, points]]));
 }
@@ -288,22 +294,4 @@ async function baseDetail(key, lastBatch, baseHistory) {
   const x = points.length ? explainForecast(points, { step: step ?? horizon, horizon }) : null;
   return detailOf(m, x && { ...x, inputs: [key], influence: [1] }, { step, horizon, weight: x?.weight ?? null, phi: x?.phi ?? null },
     new Map([[key, points]]));
-}
-
-/**
- * Each Nostr model's backtest (score, persist), recomputed from its stored history once per published seq (cache:
- * `uuid:seq` → result). → Map(uuid → { score, persist })
- */
-export async function nostrScores({ db, subscriptions, cache = new Map() }) {
-  const out = new Map();
-  for (const s of subscriptions) {
-    if (!s.prediction) continue;
-    const key = `${s.uuid}:${s.prediction.seq}`;
-    if (!cache.has(key)) {
-      const x = explainForecast(await db.relayHistory(s.uuid), { step: cadenceOf(s), horizon: cadenceOf(s) });
-      cache.set(key, { score: x?.score ?? null, persist: x?.persist ?? null });
-    }
-    out.set(s.uuid, cache.get(key));
-  }
-  return out;
 }

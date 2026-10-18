@@ -19,7 +19,8 @@ import {
 import { nsec, nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
-import { modelsOf, modelDetail, nostrScores } from './neuron/models.js';
+import { modelsOf, modelDetail } from './neuron/models.js';
+import { createTrainer } from './neuron/train.js';
 import { box as modelBox, modelHref } from './ui/models.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
@@ -56,6 +57,7 @@ let registration = null; // this page load's register result
 let poller = null;
 let base = null; // the Base flow
 let activity = null; // the activity log Home's health reads (docs/design/health.md)
+let trainer = null; // the training pass (src/neuron/train.js): every model's current fit, from stored history
 let afterUnlock = null; // the action an inline Unlock prompt was opened for
 const nowS = () => Date.now() / 1000;
 /** What the neuron is doing now (src/neuron/work.js): Home's hero and action lines, and health().work. */
@@ -94,20 +96,20 @@ const refreshNostr = coalesce('nostr status', async () => { state.nostr = await 
 const refreshBase = coalesce('base status', async () => { state.base = await base.status(); });
 
 // ── the Models tab (docs/design/models.md) ──
-const scoreCache = new Map(); // the Nostr models' backtests, per published seq
-/** Every model (models()), from the given statuses; the Nostr models' backtests from their stored history. */
+/** Every model (models()), from the given statuses, each with the backtest kept with it (the training pass's for Base's older ones). */
 async function listModels({ streams, nostrStatus, baseStatus }) {
-  const scores = await nostrScores({ db, subscriptions: nostrStatus.subscriptions, cache: scoreCache });
-  return modelsOf({ streams, subscriptions: nostrStatus.subscriptions, lastBatch: baseStatus.lastBatch, scores });
+  return modelsOf({ streams, subscriptions: nostrStatus.subscriptions, lastBatch: baseStatus.lastBatch, baseFits: trainer?.baseFits });
 }
 /**
  * The Models list, read again when central's streams, the Nostr status or the Base status change; the open model
- * with it (a poll, a `_pred` published or a Base batch may have changed it).
+ * with it (a poll, a `_pred` published or a Base batch may have changed it). Then the training pass, when a model lacks a
+ * current fit (src/neuron/train.js: not awaited, it runs one at a time and refreshes this when it is done).
  */
 const refreshModels = coalesce('models', async () => {
   modelBox.list = await listModels({ streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
   state.modelsRev++;
   if (state.modelOpen) await loadModel(state.modelOpen);
+  trainer?.run();
 });
 /** One model's drill-in (model(id)), from the given statuses: recomputed from its stored spec and history. */
 const detailOf = (id, { streams, nostrStatus, baseStatus }) => modelDetail({ db, id, streams, subscriptions: nostrStatus.subscriptions,
@@ -182,6 +184,15 @@ async function startNeuron() {
   state.backupAt = (await db.get('backup_at')) ?? null;
   activity = createActivity({ db, onChange: () => { state.activityRev++; } });
   await activity.start(); // this session, and whether a poll came due while Satori was closed
+  // the training pass: what the screen shows is what it trains (it waits for central's work); the list read again after it
+  trainer = createTrainer({ db, work, baseHistory: (streamId) => base.history(streamId),
+    read: async () => ({ streams: state.streams, subscriptions: state.nostr.subscriptions, lastBatch: state.base.lastBatch }),
+    after: async (r) => {
+      console.info('[satori] training pass', r);
+      if (r.central) await refresh();
+      if (r.nostr) await refreshNostr();
+      await refreshModels();
+    } });
   state.now = nowS();
   setInterval(() => {
     state.now = nowS();
@@ -707,6 +718,8 @@ window.satori = {
       storage: await storage(),
       app: { ...state.app },
       recovered: state.recovered,
+      // the last training pass (docs/design/models.md#the-training-pass): { central, nostr, base, stopped, ms }, or null
+      train: trainer?.last ?? null,
     };
   },
   /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
@@ -860,10 +873,10 @@ const lineOf = (tasks, hold) => () => {
 };
 watch(lineOf(VAULT_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
 watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
-/** The Models tab's status: the poll's or the Base batch's step, the same words at the same pace as Home's hero (no ring). */
+/** The Models tab's status: the poll's, the Base batch's or the training pass's step, in Home's hero's words at its pace (no ring). */
 const engineHold = createHold({ show: (v) => { state.engineWork = v.working ? { line: v.line, critical: v.critical } : null; } });
 watch(() => {
-  const w = leading(state.work, ['central', 'base']);
+  const w = leading(state.work, ['central', 'base', 'train']);
   engineHold(w ? { key: `${w.task}:${w.step}`, working: true, line: workText(w), critical: w.critical } : { key: 'idle', working: false, line: '' });
 });
 /** The Models list follows central's streams, the Nostr status and the Base status. */
@@ -872,6 +885,13 @@ watch(() => {
   void state.nostr;
   void state.base;
   if (state.screen === 'home') refreshModels();
+});
+/** The training pass waits while central's work runs (a poll, its sign-in, the history): its end runs it. */
+let centralWas = false;
+watch(() => {
+  const now = !!state.work.central;
+  if (centralWas && !now && state.screen === 'home') trainer?.run();
+  centralWas = now;
 });
 
 /** Home's chips glow while their channel has real traffic (src/traffic.js, src/ui/glow.js): data-live on the chip. */

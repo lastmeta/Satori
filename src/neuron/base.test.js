@@ -93,7 +93,7 @@ describe('the daily batch', () => {
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
       // latest: the registry's int232, exact; forecast: the engine's at the horizon, as an integer (both decimal strings, as JSON keeps them)
       games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: '59058240589371161',
-        forecast: '59058240589371160', horizon: 86_400, step: 86_400 }] };
+        forecast: '59058240589371160', horizon: 86_400, step: 86_400, score: null, persist: null, tests: 0 }] };
     expect(r).toEqual({ at: batch.at, round: ROUND, sent: batch });
     expect(db.m.get('base_last_batch')).toEqual(batch);
     expect(db.m.get('base_pending_batch')).toBe(null);
@@ -156,9 +156,11 @@ describe('the daily batch', () => {
     s.weights[13] = E18;
     const r = await runBatch({ chain: chainOf(), identity, db });
     const g13 = r.sent.games.find((g) => g.gameId === 13);
-    expect(g13).toMatchObject({ model: 'bar1', step: 43_200, horizon: 86_400, score: expect.any(Number), persist: expect.any(Number) });
+    expect(g13).toMatchObject({ model: 'bar1', step: 43_200, horizon: 86_400, score: expect.any(Number), persist: expect.any(Number),
+      tests: expect.any(Number) });
     expect(db.m.get('base_last_batch').games.find((g) => g.gameId === 13)).toEqual(g13);
-    expect(r.sent.games.find((g) => g.gameId === 1)).not.toHaveProperty('score'); // naive: nothing tested
+    // naive: nothing tested, and said so (a game with no `tests` is from a batch before they were kept: the training pass's)
+    expect(r.sent.games.find((g) => g.gameId === 1)).toMatchObject({ model: 'naive', score: null, persist: null, tests: 0 });
   });
 
   test('a game without voting weight (anyone\'s new stream) is not in the batch at all', async () => {
