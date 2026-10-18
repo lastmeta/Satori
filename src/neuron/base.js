@@ -312,6 +312,11 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
 
   return {
     refresh,
+    /** A registry stream's history as the engine reads it (the Models tab's drill-in): [{ ts, value }], oldest first. */
+    async history(streamId) {
+      const { chain } = await chainNow();
+      return toPoints(await chain.history(streamId));
+    },
     /** The status, with the settings as stored ('' and null: the defaults) and the max fee in force. */
     async status() {
       const maxFeeSetting = (await db.get('base_max_fee_gwei')) ?? null;

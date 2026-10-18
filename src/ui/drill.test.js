@@ -1,0 +1,134 @@
+// The Models tab's views (src/ui/drill.js): what each row, the status and the drill-in show, from models() and
+// model(id) data. A fabricated model with two outputs proves the drill-in draws every output and its destinations.
+import { describe, expect, test } from 'vitest';
+import { drillView, rowView, statusView, chartOf, pctText, qualityText, destinationView, numText } from './drill.js';
+import { summaryOf, qualityOf } from '../neuron/models.js';
+
+const H = 3600;
+const q = (score, persist = 0.01, kind = 'bvar') => qualityOf({ kind, score, persist });
+const hist = (n, v0, at) => Array.from({ length: n }, (_, k) => ({ ts: at - (n - 1 - k) * H, value: v0 + k }));
+const AT = 1_760_000_000;
+
+/** A future model of two streams (one VAR for both): the engine makes one per stream today; this is a fake. */
+const TWO = {
+  id: 'central:joint', source: 'central', name: 'bvar · 2 streams', kind: 'bvar', quality: q(0.009),
+  inputs: [{ stream: 'u-gold', name: 'gold' }, { stream: 'u-silver', name: 'silver' }, { stream: 'u-oil', name: 'oil' }],
+  model: { kind: 'bvar', rows: 980, tests: 28, step: 12 * H, horizon: 24 * H, weight: 0.6, phi: 0.1, coef: [0.1, 0.2, 0.3],
+    lambda1: 0.2, lambda2: 0.5, generation: 7, accepted: 2, trained: AT, quality: q(0.009) },
+  outputs: [
+    { stream: 'u-gold', name: 'gold', latest: { value: 2600, ts: AT - 60 }, forecast: { t1: 2610, t2: 2620, value: 2620, step: 12 * H, horizon: 24 * H, at: AT },
+      direction: 'up', quality: q(0.009),
+      influence: [{ stream: 'u-oil', name: 'oil', share: 0.6 }, { stream: 'u-gold', name: 'gold', share: 0.3 }, { stream: 'u-silver', name: 'silver', share: 0.1 }],
+      destinations: [{ to: 'central', status: 'accepted', when: AT + 30, ref: null },
+        { to: 'base', status: 'sent', when: AT + 40, ref: { round: 20743, game: 1, direction: 'up', tx: '0x' + 'ab'.repeat(32) } }],
+      history: hist(48, 2550, AT - 60) },
+    { stream: 'u-silver', name: 'silver', latest: { value: 31, ts: AT - 60 }, forecast: { t1: 30.9, t2: 30.5, value: 30.5, step: 12 * H, horizon: 24 * H, at: AT },
+      direction: 'down', quality: q(0.012),
+      influence: [{ stream: 'u-silver', name: 'silver', share: 0.9 }, { stream: 'u-gold', name: 'gold', share: 0.1 }, { stream: 'u-oil', name: 'oil', share: 0 }],
+      destinations: [{ to: 'network', status: 'published', when: AT + 50, ref: { stream: 'silver_pred', seq: 12, relays: 2 } }],
+      history: hist(48, 0, AT - 60).map((p) => ({ ...p, value: 31 + Math.sin(p.ts) })) },
+  ],
+};
+
+describe('the drill-in', () => {
+  test('two outputs: Out draws both, each with its forecast, chart and destinations; In follows the chosen output', () => {
+    const v = drillView(TWO, { now: AT + 2 * H, explorer: 'https://sepolia.basescan.org' });
+    expect(v.title).toBe('bvar · 2 streams');
+    expect(v.outputs).toHaveLength(2);
+    const [gold, silver] = v.outputs;
+    expect(gold).toMatchObject({ name: 'gold', arrow: '↑', forecast: 'In 12 h 2,610.00 · in 24 h 2,620.00', latest: '2,600.00' });
+    expect(gold.destinations.map((d) => [d.to, d.text])).toEqual([
+      ['central', expect.stringMatching(/^Accepted /)],
+      ['base', 'Round 20743 · UP · tx 0xabab…abab'],
+    ]);
+    expect(gold.destinations[1].href).toBe(`https://sepolia.basescan.org/tx/0x${'ab'.repeat(32)}`);
+    expect(silver).toMatchObject({ name: 'silver', arrow: '↓', forecast: 'In 12 h 30.9 · in 24 h 30.5' });
+    expect(silver.destinations).toEqual([{ to: 'network', label: 'Network', text: 'silver_pred #12 · 2 relays', href: null }]);
+    for (const o of v.outputs) expect(o.chart.line).toMatch(/^M/);
+    // In: the first output's inputs by default, ranked; the other output's on choosing it
+    expect(v.inputs.map((i) => [i.name, i.pct, i.own])).toEqual([['oil', '60%', false], ['gold', '30%', true], ['silver', '10%', false]]);
+    expect(v.choose).toEqual(['gold', 'silver']); // several outputs: a choice of whose inputs
+    expect(drillView(TWO, { now: AT, output: 1 }).inputs.map((i) => [i.name, i.pct])).toEqual([['silver', '90%'], ['gold', '10%'], ['oil', '0%']]);
+    const tiny = { ...TWO, outputs: [{ ...TWO.outputs[0], influence: [{ stream: 'u-oil', name: 'oil', share: 0.997 }, { stream: 'u-gold', name: 'gold', share: 0.003 }] }] };
+    expect(drillView(tiny, { now: AT }).inputs.map((i) => i.pct)).toEqual(['100%', '<1%']); // a sliver is not nothing
+  });
+
+  test('one output: no choice; the Model in plain words, the jargon behind details', () => {
+    const one = { ...TWO, name: 'gold', outputs: [TWO.outputs[0]] };
+    const v = drillView(one, { now: AT + 2 * H });
+    expect(v.choose).toBeNull();
+    expect(v.model.lines).toEqual([
+      'Predicts 24 h ahead in 12 h steps',
+      'Learned from 980 steps of history (12 h each)',
+      'Backtest over 28 tests: 10% less error than no change',
+      'Fade: 40% of the way back to no change',
+      'Trained 2 h ago',
+    ]);
+    expect(v.model.details).toEqual(expect.arrayContaining([['λ1, λ2', '0.2, 0.5'], ['Mutations tried, kept', '7, 2'],
+      ['Fade weight', '0.6'], ['Median error, no change\'s', '0.9%, 1%']]));
+    const nq = q(null, null, 'naive');
+    const naive = drillView({ ...one, kind: 'naive', quality: nq, model: { kind: 'naive', rows: 3, tests: 0, step: 12 * H, horizon: 24 * H, weight: null,
+      trained: AT, quality: nq } }, { now: AT });
+    expect(naive.model.lines).toEqual(['Predicts 24 h ahead in 12 h steps', 'Repeats the last value until it has 6 rows of back-to-back steps (it has 3)',
+      'Backtest: none, it repeats the last value (no change)', 'Trained just now']);
+    expect(naive.model.details).toEqual([]);
+  });
+
+  test('quality in words and as a short number', () => {
+    expect(pctText(0.97)).toBe('−3%');
+    expect(pctText(1.084)).toBe('+8%');
+    expect(pctText(1)).toBe('0%');
+    expect(qualityText(q(0.009))).toBe('10% less error than no change');
+    expect(qualityText(q(0.012))).toBe('20% more error than no change');
+    expect(qualityText(q(0.0101))).toBe('about the same as no change (1% more error)');
+    expect(qualityText(q(0.0098))).toBe('about the same as no change (2% less error)');
+    expect(numText(59058240589371160)).toBe('5.906e16'); // a Base registry value: a ratio × 1e18
+    expect(numText(-2.5e13)).toBe('−2.500e13');
+    expect(numText(2600)).toBe('2,600.00');
+    expect(qualityText(q(null))).toBe('not scored yet (it needs 5 backtests)');
+  });
+
+  test('destinations in words: central accepted or pending; Base left out; a relay that has not taken it yet', () => {
+    expect(destinationView({ to: 'central', status: 'pending', when: AT, ref: null })).toMatchObject({ label: 'Central', text: expect.stringMatching(/^Pending since /) });
+    expect(destinationView({ to: 'base', status: 'left out', when: AT, ref: { round: 5, direction: 'down', tx: null, error: 'DuplicatePrediction' } }))
+      .toEqual({ to: 'base', label: 'Base', text: 'Round 5 · DOWN · left out: DuplicatePrediction', href: null });
+    expect(destinationView({ to: 'network', status: 'waiting', when: AT, ref: { stream: 'x_pred', seq: 1, relays: 0 } }).text).toBe('x_pred #1 · no relay yet');
+  });
+});
+
+describe('the chart: recent history and the forecast to scale, the endpoint emphasized', () => {
+  test('time and value scales; the forecast points after the history; the endpoint is the value sent', () => {
+    const c = chartOf(TWO.outputs[0], { w: 600, h: 160 });
+    expect(c.points.map((p) => p.end)).toEqual([false, true]);
+    const end = c.points.at(-1);
+    expect(end.x).toBeCloseTo(600 - c.pad.r, 6); // the latest time on the axis: the horizon
+    expect(c.last.x).toBeLessThan(c.points[0].x);
+    // one step = half the horizon, to scale
+    expect(c.points[1].x - c.now).toBeCloseTo(2 * (c.points[0].x - c.now), 6);
+    expect(end.y).toBeLessThan(c.last.y); // 2,620 above 2,600 (y grows down)
+    expect(c.ahead.startsWith(`M${c.last.x.toFixed(1)}`)).toBe(true);
+    expect(c.yLabels.map((l) => l.text)).toEqual(['2,620.00', '2,550.00']);
+    expect(chartOf({ ...TWO.outputs[0], history: [] }, { w: 600, h: 160 }).line).toBe('');
+  });
+});
+
+describe('the list and the status', () => {
+  test('a row: the name, its kind, the inputs as chips by influence, quality, latest → forecast, where it goes', () => {
+    const r = rowView(TWO);
+    expect(r).toMatchObject({ name: 'bvar · 2 streams', kind: 'bvar', chips: ['+oil'], mark: 'better', markText: '−10%',
+      dests: ['central', 'base', 'network'] });
+    const one = rowView({ ...TWO, name: 'gold', outputs: [TWO.outputs[0]] });
+    expect(one).toMatchObject({ name: 'gold', chips: ['+oil', '+silver'], latest: '2,600.00', forecast: '2,620.00', arrow: '↑', as: null });
+    expect(rowView({ ...TWO, name: 'btc', outputs: [{ ...TWO.outputs[1], as: 'btc_pred' }] }).as).toBe('btc_pred');
+  });
+
+  test('the status: by kind, by mark, the median against no change', () => {
+    const models = [TWO, { ...TWO, kind: 'naive', quality: q(null, null, 'naive') }, { ...TWO, kind: 'bar1', quality: q(0.02) }, { ...TWO, kind: 'bar1', quality: q(null) }];
+    const v = statusView(summaryOf(models));
+    expect(v.kinds).toBe('4 models · 1 bvar · 2 bar1 · 1 naive');
+    expect(v.marks).toBe('Beats no change on 1 of 4 · ties 1 · worse 1 · 1 not scored yet');
+    expect(v.median).toBe('Median model: 45% more error than no change');
+    expect(v.bar.map((s) => [s.mark, s.pct])).toEqual([['better', 25], ['tie', 25], ['worse', 25], ['unscored', 25]]);
+    expect(statusView(summaryOf([])).kinds).toBe('No models yet');
+  });
+});

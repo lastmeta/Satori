@@ -4,7 +4,7 @@ import { themeOf } from './theme.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | setup | finish (an earlier version's vault: Unlock once) | home
-  tab: 'home', // home | streams | wallet | settings (the URL's #home … #settings)
+  tab: 'home', // home | models | streams | wallet | settings (the URL's #home … #settings; #models/<id> opens a model)
   now: Date.now() / 1000, // ticks every 30 s: relative times and the health's thresholds
   fatal: '',
   busy: '', // what is running: '' | 'setup' | 'unlock'
@@ -36,6 +36,17 @@ export const state = reactive({
   hero: null,
   actionLine: '', // the vault's action in progress: its card's line
   networkLine: '', // discover or subscribe, once it lasts a second
+  // Models (docs/design/models.md): the list and the open model live in src/ui/models.js's box; these say they changed
+  modelsRev: 0,
+  modelSort: 'quality', // quality | name
+  modelFilter: 'all', // all | central | base | network: where the predictions go
+  modelOpen: '', // the drill-in's model id (#models/<id>), or ''
+  modelRev: 0,
+  modelOutput: 0, // whose inputs In shows (a model with several outputs)
+  modelError: '',
+  modelWidth: 320, // the Out block's width: the charts are drawn at it
+  modelHover: null, // { out, i }: the chart point under the pointer
+  engineWork: null, // the poll's or the Base batch's step, paced as Home's hero: { line, critical }
   // central
   central: { url: '', registration: null, lastPoll: null, nextPoll: null, polling: false, lastSubmit: null, pending: 0 },
   centralDefault: '',

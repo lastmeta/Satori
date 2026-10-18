@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { memoryDb } from '../../test/memory-db.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
-  cycle, register, firstPollAt, createPoller, centralStatus, claimTab, modelsOf, POLL_EVERY_S, BATCH_LIMIT,
+  cycle, register, firstPollAt, createPoller, centralStatus, claimTab, POLL_EVERY_S, BATCH_LIMIT,
 } from './index.js';
 import { createWork, leading, HERO } from './work.js';
 import { healthOf } from './health.js';
@@ -516,15 +516,6 @@ test('centralStatus: the URL, the register result, the last poll and submission,
       retryAt: clock + 86_400, needed: 1 },
   });
   expect(await centralStatus({ db })).toMatchObject({ url: null, nextPoll: null, polling: false });
-});
-
-test('modelsOf: each target\'s spec with its companions\' names, for agents (window.satori.models())', () => {
-  const spec = (c) => JSON.stringify({ companions: c, lambda1: 0.1, lambda2: 1 });
-  expect(modelsOf([
-    { uuid: 'u-a', name: 'a', model: 'bvar', spec: spec(['u-b', 'u-x']), score: 0.01, generation: 4, accepted: 1 },
-    { uuid: 'u-b', name: 'b', model: null, spec: null },
-  ])).toEqual([{ uuid: 'u-a', name: 'a', model: 'bvar', spec: { companions: [{ uuid: 'u-b', name: 'b' }, { uuid: 'u-x', name: null }],
-    lambda1: 0.1, lambda2: 1 }, score: 0.01, generation: 4, accepted: 1 }]);
 });
 
 test('claimTab: the first claim wins, a second gets false', async () => {

@@ -187,20 +187,6 @@ export function createPoller(run, { db, work = null, now = nowS, setTimeout, cle
 }
 
 /**
- * Each target's champion spec for agents (window.satori.models()), from db.streams() rows:
- * [{ uuid, name, model, spec: { companions: [{ uuid, name }], lambda1, lambda2 }, score, generation, accepted }].
- */
-export function modelsOf(rows) {
-  const names = new Map(rows.map((r) => [r.uuid, r.name]));
-  return rows.filter((r) => r.spec).map((r) => {
-    const { companions, lambda1, lambda2 } = JSON.parse(r.spec);
-    return { uuid: r.uuid, name: r.name, model: r.model ?? null,
-      spec: { companions: companions.map((u) => ({ uuid: u, name: names.get(u) ?? null })), lambda1, lambda2 },
-      score: r.score, generation: r.generation, accepted: r.accepted };
-  });
-}
-
-/**
  * Central's state for the UI and agents (window.satori.status().central): plain values. The schedule's is read last,
  * once the reads are done, so a status begun during a poll that ended meanwhile never says it still runs.
  */

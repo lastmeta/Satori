@@ -1,5 +1,5 @@
-// The shell: the header, the tabs (Home · Streams · Wallet · Settings: a tab bar on a phone, a top nav on a
-// computer; hash routes #home … #settings), and the screens before Home: Setup, "Unlock to finish the update",
+// The shell: the header, the tabs (Home · Models · Streams · Wallet · Settings: a tab bar on a phone, a top nav on a
+// computer; hash routes #home … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
 // "open in another tab", "could not start". ArrowJS. Every screen and tab is built once and shown or hidden, so
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, watch } from '@arrow-js/core';
@@ -8,15 +8,18 @@ import { state } from './state.js';
 import { form, wordList } from './parts.js';
 import { home } from './home.js';
 import { streamsTab } from './streams.js';
+import { modelsTab, watchModelWidth } from './models.js';
 import { walletTab } from './wallet.js';
 import { settingsTab, install } from './settings.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['home', 'streams', 'wallet', 'settings'];
-const LABEL = { home: 'Home', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
+export const TABS = ['home', 'models', 'streams', 'wallet', 'settings'];
+const LABEL = { home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
   home: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>`,
+  // streams in, one model, a forecast out: the pipeline
+  models: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h4.5l4 4.5M2 18h4.5l4-4.5M2 12h7.5"></path><rect x="10.5" y="8" width="6" height="8" rx="1.5"></rect><path d="M16.5 12H22M19.5 9l2.5 3-2.5 3"></path></svg>`,
   streams: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"></path></svg>`,
   wallet: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M16 12h2"></path></svg>`,
   settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>`,
@@ -172,12 +175,14 @@ export function render(root, a) {
     ${setup(a)}
     <div hidden="${running}">
       ${home(a)}
+      ${modelsTab(a)}
       ${streamsTab(a)}
       ${walletTab(a)}
       ${settingsTab(a)}
     </div>
   </main>
   <nav class="tabbar" aria-label="Sections" hidden="${running}">${TABS.map((t) => barLink(a, t))}</nav>`(root);
+  watchModelWidth(root);
   // The activity feed is open on a computer, a tap away on a phone.
   const wide = matchMedia('(min-width: 1024px)');
   const feed = root.querySelector('[data-test=activity]');

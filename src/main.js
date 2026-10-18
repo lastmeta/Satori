@@ -18,7 +18,9 @@ import {
 } from './keys/index.js';
 import { nsec, nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
-import { cycle, register, createPoller, centralStatus as statusOf, claimTab, modelsOf, firstPollAt } from './neuron/index.js';
+import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
+import { modelsOf, modelDetail, nostrScores } from './neuron/models.js';
+import { box as modelBox, modelHref } from './ui/models.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
@@ -66,6 +68,7 @@ async function refresh() {
   state.streams = await db.streams();
   state.sparks = await db.sparks();
   if (state.streamOpen) state.streamPreds = await db.predictions(state.streamOpen, 10);
+  if (state.modelOpen) loadModel(state.modelOpen); // the open model, again: a poll may have changed it
 }
 
 /**
@@ -90,6 +93,41 @@ function coalesce(name, fn) {
 /** The Nostr and Base cards: their status, read again on each change. */
 const refreshNostr = coalesce('nostr status', async () => { state.nostr = await nostr.status(); });
 const refreshBase = coalesce('base status', async () => { state.base = await base.status(); });
+
+// ── the Models tab (docs/design/models.md) ──
+const scoreCache = new Map(); // the Nostr models' backtests, per published seq
+/** Every model (models()), from the given statuses; the Nostr models' backtests from their stored history. */
+async function listModels({ streams, nostrStatus, baseStatus }) {
+  const scores = await nostrScores({ db, subscriptions: nostrStatus.subscriptions, cache: scoreCache });
+  return modelsOf({ streams, subscriptions: nostrStatus.subscriptions, lastBatch: baseStatus.lastBatch, scores });
+}
+/** The Models list, read again when central's streams, the Nostr status or the Base status change. */
+const refreshModels = coalesce('models', async () => {
+  modelBox.list = await listModels({ streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
+  state.modelsRev++;
+});
+/** One model's drill-in (model(id)), from the given statuses: recomputed from its stored spec and history. */
+const detailOf = (id, { streams, nostrStatus, baseStatus }) => modelDetail({ db, id, streams, subscriptions: nostrStatus.subscriptions,
+  lastBatch: baseStatus.lastBatch, baseHistory: (streamId) => base.history(streamId) });
+let modelAsked = 0; // the latest drill-in asked for wins
+/** The open model, (re)computed; its error is shown in place. */
+async function loadModel(id) {
+  const n = ++modelAsked;
+  try {
+    const d = await detailOf(id, { streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
+    if (n !== modelAsked || state.modelOpen !== id) return;
+    if (d) console.info(`[satori] model ${d.id} in ${d.ms} ms`);
+    modelBox.detail = d;
+    state.modelError = d ? '' : `No such model: ${id}. It may not have predicted yet.`;
+  } catch (err) {
+    if (n !== modelAsked) return;
+    modelBox.detail = null;
+    state.modelError = `This model could not be opened: ${err?.message ?? err}`;
+  }
+  state.modelRev++;
+}
+let listScroll = 0; // the list's scroll, kept while a model is open
+let fromList = false; // the open model was opened from the list: its back link is the browser's back
 
 // ── core: used by the UI and by window.satori ───────────────────────────────
 
@@ -170,6 +208,7 @@ async function startNeuron() {
   backfill().then(refresh).catch((err) => console.error('[satori] history', err)); // streams with no history yet get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
+  if (state.modelOpen) loadModel(state.modelOpen); // a link to a model (#models/<id>), now that every flow is up
 }
 
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
@@ -324,23 +363,51 @@ const setup = (makeRecord, { backedUp = false } = {}) => exclusive('setup', asyn
 
 // ── tabs (hash routes) and the inline Unlock ──
 
-/** Show a tab (#home, #streams, #wallet, #settings) and, given one, scroll to its section (#settings-<section>). */
-function go(tab, section) {
-  if (!TABS.includes(tab)) throw new Error(`No such tab: ${tab}. One of ${TABS.join(', ')}.`);
-  if (location.hash !== `#${tab}`) history.pushState(null, '', `#${tab}`);
+/** A route ('#models/central:…', 'settings') → { tab, model } (tab null: none such; model '': the list). */
+function routeOf(where) {
+  const [t, ...rest] = String(where ?? '').replace(/^#/, '').split('/');
+  const model = t === 'models' && rest.length ? decodeURIComponent(rest.join('/')) : '';
+  return { tab: TABS.includes(t) ? t : null, model };
+}
+
+/** Open a model's drill-in ('' closes it): its route's data, computed now; the list's scroll kept for the way back. */
+function showModel(id) {
+  if (id === state.modelOpen) return;
+  if (id && !state.modelOpen) listScroll = scrollY;
+  const back = !id && state.modelOpen;
+  fromList = false;
+  Object.assign(state, { modelOpen: id, modelOutput: 0, modelHover: null, modelError: '' });
+  modelBox.detail = null;
+  state.modelRev++;
+  if (id && db) loadModel(id);
+  requestAnimationFrame(() => scrollTo(0, back ? listScroll : 0));
+}
+
+/**
+ * Show a tab (#home, #models, #streams, #wallet, #settings) and, given one, scroll to its section
+ * (#settings-<section>); 'models/<id>' opens a model's drill-in.
+ */
+function go(where, section) {
+  const { tab, model } = routeOf(where);
+  if (!tab) throw new Error(`No such tab: ${where}. One of ${TABS.join(', ')}, or models/<id>.`);
+  const hash = model ? modelHref(model) : `#${tab}`;
+  if (location.hash !== hash) history.pushState(null, '', hash);
   const changed = state.tab !== tab;
+  const opened = tab === 'models' && model !== state.modelOpen; // showModel scrolls
   state.tab = tab;
   if (changed) fillSettings();
+  if (tab === 'models') showModel(model);
   requestAnimationFrame(() => {
     const el = section && document.getElementById(`${tab}-${section}`);
     if (el) el.scrollIntoView({ block: 'start' });
-    else if (changed) scrollTo(0, 0);
+    else if (changed && !opened) scrollTo(0, 0);
   });
-  return tab;
+  return model ? `models/${model}` : tab;
 }
 addEventListener('popstate', () => {
-  const t = location.hash.slice(1);
-  state.tab = TABS.includes(t) ? t : 'home';
+  const { tab, model } = routeOf(location.hash);
+  state.tab = tab ?? 'home';
+  if (state.tab === 'models') showModel(model);
   fillSettings();
 });
 
@@ -489,6 +556,21 @@ const actions = {
     Object.assign(state, { unlockFor: '', unlockError: '' });
   },
   go,
+  /** Models: open a model's drill-in (#models/<id>). */
+  openModel(id) {
+    const listed = state.tab === 'models' && !state.modelOpen;
+    go(`models/${id}`);
+    fromList = listed;
+  },
+  /** Back to the list: the browser's back when the list is the page before, else to #models. */
+  closeModel() {
+    if (fromList) history.back();
+    else go('models');
+  },
+  setModelView({ filter, sort }) {
+    if (filter) state.modelFilter = filter;
+    if (sort) state.modelSort = sort;
+  },
   /** Streams: a stream's detail (its trend, its model, its latest predictions), or none (''). */
   async openStream(uuid) {
     state.streamOpen = uuid;
@@ -654,7 +736,10 @@ window.satori = {
       nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since(),
       traffic: lastTraffic(), work: work.all() });
   },
-  /** Show a tab: 'home' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL). → the tab */
+  /**
+   * Show a tab: 'home' | 'models' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL), or a model's
+   * drill-in: 'models/<id>' (#models/<id>). → the tab, or 'models/<id>'
+   */
   go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
   /** Settings → Appearance: 'system' (the default: the device's light or dark), 'light' or 'dark'; kept on this device. → it */
   setTheme(theme) { state.theme = setTheme(theme); return state.theme; },
@@ -662,8 +747,24 @@ window.satori = {
   async poll() { ready(); return pollNow(); },
   /** Central's streams with the latest observation, our latest prediction and the stream's spec. */
   async streams() { ready(); return (await db.streams()).map((r) => ({ ...r, meta: parseMeta(r.meta), spec: parseMeta(r.spec) })); },
-  /** Each target's champion spec (bvar): companions by uuid and name, λ1, λ2, score, generation, accepted; and its latest model. */
-  async models() { ready(); return modelsOf(await db.streams()); },
+  /**
+   * Every model the neuron runs (docs/design/models.md): central's streams, the Base batch's, the Nostr `_pred`s; each
+   * { id, source, name, kind, quality, inputs, outputs: [{ stream, name, latest, forecast, direction, influence,
+   * quality, destinations }], trained } and, for central's, the spec as before. Read fresh.
+   */
+  async models() {
+    ready();
+    return listModels({ streams: await db.streams(), nostrStatus: await nostrStatus(), baseStatus: await base.status() });
+  },
+  /**
+   * One model's drill-in, recomputed now from its stored spec and history: models()'s fields, `model` (kind, rows,
+   * tests, step, horizon, weight, λ's, generation, accepted, coef, trained, quality), each output's `history` (the
+   * chart's) and `ms`. id: models()'s, or a central stream's uuid or name. → null when there is none
+   */
+  async model(id) {
+    ready();
+    return detailOf(id, { streams: await db.streams(), nostrStatus: await nostrStatus(), baseStatus: await base.status() });
+  },
   /** One stream's predictions (uuid or name), newest first. */
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
   /** Set the central URL ('' = the default) and register there. → status().central */
@@ -755,6 +856,19 @@ const lineOf = (tasks, hold) => () => {
 };
 watch(lineOf(VAULT_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
 watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
+/** The Models tab's status: the poll's or the Base batch's step, the same words at the same pace as Home's hero (no ring). */
+const engineHold = createHold({ show: (v) => { state.engineWork = v.working ? { line: v.line, critical: v.critical } : null; } });
+watch(() => {
+  const w = leading(state.work, ['central', 'base']);
+  engineHold(w ? { key: `${w.task}:${w.step}`, working: true, line: workText(w), critical: w.critical } : { key: 'idle', working: false, line: '' });
+});
+/** The Models list follows central's streams, the Nostr status and the Base status. */
+watch(() => {
+  void state.streams;
+  void state.nostr;
+  void state.base;
+  if (state.screen === 'home') refreshModels();
+});
 
 /** Home's chips glow while their channel has real traffic (src/traffic.js, src/ui/glow.js): data-live on the chip. */
 function glowChips() {
@@ -766,8 +880,8 @@ function glowChips() {
 async function boot() {
   const root = document.getElementById('app');
   root.replaceChildren(); // index.html's "Opening…", painted before any module loads
-  const t = location.hash.slice(1);
-  if (TABS.includes(t)) state.tab = t;
+  const { tab, model } = routeOf(location.hash);
+  if (tab) Object.assign(state, { tab, modelOpen: model });
   render(root, actions);
   applyTheme(state.theme); // public/theme.js set data-theme before the first paint; this, the browser bar's color too
   glowChips();
