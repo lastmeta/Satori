@@ -183,6 +183,30 @@ page a turn between models once 10 ms of work have passed
 (`scheduler.yield`, else a task), so the page stays responsive.
 `status().train` is the last pass: `{ central, nostr, base, stopped, ms }`.
 
+**Measured, live** (2026-10-18 21:30, the dev server on :5180 restarted
+with this code, central2, a fresh Chrome profile, no stubs; this shared box
+at load 5–6): setup → the first poll (84 streams, 84 of 84 accepted) →
+the app closed and every spec's `score`, `persist`, `influence` and
+`fit_key` cleared (as a profile from before migration 11) → reopened on
+Home. Twice:
+
+| | run 1 | run 2 |
+|---|---:|---:|
+| The pass (`status().train.ms`): 84 models, one history read, the fits, one write | **1,529 ms** | **2,133 ms** |
+| of which the history read (until "1 of 84") | ~0.5 s | ~0.9 s |
+| the 84 fits ("1 of 84" to "84 of 84" on screen) | 0.66 s (~8 ms a model) | 0.81 s |
+| Home shown → *Resting* with every score (the list read again, the step's end grace) | 3.5 s | 4.2 s |
+
+The hero said "Scoring models · 0 of 84", "10 of 84", "28 of 84" … "84 of
+84" in working green, then "Sent 84 predictions just now · next in 11 h";
+the tab "Working · Scoring models · …", then *Resting · Trained just now*.
+Every score came back equal to the poll's (84 of 84). After the reload the
+app called central2 for register, `base/config`, `relay-config` and
+`relays` only: **no observations batch and no predictions batch**; nothing
+went to prod.
+
+<img src="../screenshots/train-live-scoring-phone-light.png" alt="live: Home's hero says Scoring models · 0 of 84" width="240"> <img src="../screenshots/train-live-models-phone-light.png" alt="live: the Models tab after the pass, every model scored, Resting" width="240">
+
 ## Influence: how much each input moves the forecast
 
 For a `bvar` model (a Bayesian VAR(1) of the target and its 1–3 companions,
