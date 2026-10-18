@@ -174,12 +174,20 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     const ref = (await models(page)).find((m) => m.source === 'nostr')?.outputs[0].destinations[0].ref;
     return `${ref?.seq}:${ref?.relays}`; // published: the relay took the last one
   }, { timeout: 120_000 }).toBe('16:1');
+  // An open drill-in follows the model: the next `_pred` shows in its Out without reopening it.
+  const rainId = (await models(page)).find((m) => m.source === 'nostr').id;
+  await page.evaluate((id) => window.satori.go(`models/${id}`), rainId);
+  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Network\s*e2e-models-\w+_pred #16 · 1 relay$/);
+  await page.waitForTimeout(1050);
+  await provider.observe({ stream, value: '14', seq: 17, timestamp: t0 + 16 * H });
+  await expect(page.locator('[data-test=model-destination]')).toHaveText(/_pred #17 · 1 relay$/, { timeout: 60_000 });
+  await page.evaluate(() => window.satori.go('models'));
   provider.close();
   await expect(rows(page)).toHaveCount(11);
   list = await models(page);
   const rain = list.find((m) => m.source === 'nostr');
   expect(rain).toMatchObject({ name: 'Rain gauge', kind: 'bar1', outputs: [{ as: `${stream}_pred`, forecast: { horizon: 3600 },
-    destinations: [{ to: 'network', status: 'published', ref: { stream: `${stream}_pred`, seq: 16, relays: 1 } }] }] });
+    destinations: [{ to: 'network', status: 'published', ref: { stream: `${stream}_pred`, seq: 17, relays: 1 } }] }] });
   expect(rain.quality.mark).not.toBeNull();
   const base = list.filter((m) => m.source === 'base');
   expect(base.map((m) => [m.id, m.name, m.kind])).toEqual([['base:1', 'Stream 1', 'naive'], ['base:3', 'Stream 3', 'bar1']]);

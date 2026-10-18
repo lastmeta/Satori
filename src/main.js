@@ -68,7 +68,6 @@ async function refresh() {
   state.streams = await db.streams();
   state.sparks = await db.sparks();
   if (state.streamOpen) state.streamPreds = await db.predictions(state.streamOpen, 10);
-  if (state.modelOpen) loadModel(state.modelOpen); // the open model, again: a poll may have changed it
 }
 
 /**
@@ -101,10 +100,14 @@ async function listModels({ streams, nostrStatus, baseStatus }) {
   const scores = await nostrScores({ db, subscriptions: nostrStatus.subscriptions, cache: scoreCache });
   return modelsOf({ streams, subscriptions: nostrStatus.subscriptions, lastBatch: baseStatus.lastBatch, scores });
 }
-/** The Models list, read again when central's streams, the Nostr status or the Base status change. */
+/**
+ * The Models list, read again when central's streams, the Nostr status or the Base status change; the open model
+ * with it (a poll, a `_pred` published or a Base batch may have changed it).
+ */
 const refreshModels = coalesce('models', async () => {
   modelBox.list = await listModels({ streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
   state.modelsRev++;
+  if (state.modelOpen) await loadModel(state.modelOpen);
 });
 /** One model's drill-in (model(id)), from the given statuses: recomputed from its stored spec and history. */
 const detailOf = (id, { streams, nostrStatus, baseStatus }) => modelDetail({ db, id, streams, subscriptions: nostrStatus.subscriptions,

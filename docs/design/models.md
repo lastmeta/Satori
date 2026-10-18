@@ -188,7 +188,10 @@ their step and horizon). Until new history arrives it is the poll's model
 exactly (the e2e compares the drill-in's influence with the one the poll
 kept). In and the Model are that refit; Out is what was sent. When the
 refit is another kind than the forecast sent (history came after the poll),
-In and the Model fall back to what the list kept.
+In and the Model fall back to what the list kept. An open drill-in follows
+its model: after a poll, a `_pred` published or a Base batch it is
+recomputed (the e2e publishes one more observation with a Nostr model open
+and sees its `#17` in Out).
 
 **The chart** (one series, so no legend; the title names it): the history
 from 7 horizons before the forecast was made (at most 400 points) as a 2 px
