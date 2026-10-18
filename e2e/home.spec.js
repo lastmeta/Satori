@@ -101,12 +101,12 @@ async function shots(page, name) {
 /** The phone: Home answers on its first screen; on every tab, tap targets are 44 px and nothing scrolls sideways. */
 async function phoneChecks(page, width, height) {
   await page.setViewportSize({ width, height });
-  for (const tab of ['streams', 'wallet', 'settings', 'home']) {
+  for (const tab of ['models', 'streams', 'wallet', 'settings', 'home']) {
     await page.evaluate((t) => window.satori.go(t), tab);
     const r = await page.evaluate(() => {
       const box = (el) => el.getBoundingClientRect();
       const shown = (el) => box(el).width > 0 && box(el).height > 0;
-      const small = [...document.querySelectorAll('button, input:not([type=checkbox]), select, textarea, summary, nav a, a.chan')]
+      const small = [...document.querySelectorAll('button, input:not([type=checkbox]), select, textarea, summary, nav a, a.chan, a.mrow')]
         .filter(shown).filter((el) => box(el).height < 44 || box(el).width < 44).map((el) => el.outerHTML.slice(0, 90));
       return { sideways: document.documentElement.scrollWidth - innerWidth, small };
     });
