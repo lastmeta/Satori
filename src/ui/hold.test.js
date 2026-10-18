@@ -65,11 +65,11 @@ describe('createHold', () => {
 
   test('the same step (its count ticking) shows at once, and keeps its time on screen', () => {
     set(step('history', 'Loading history · 1 of 82 streams'));
-    vi.advanceTimersByTime(600);
+    vi.advanceTimersByTime(150);
     set(step('history', 'Loading history · 9 of 82 streams'));
     expect(shown.at(-1)).toBe('Loading history · 9 of 82 streams');
     set(step('models'));
-    vi.advanceTimersByTime(399);
+    vi.advanceTimersByTime(HOLD_MS - 151);
     expect(shown.at(-1)).toBe('Loading history · 9 of 82 streams');
     vi.advanceTimersByTime(1);
     expect(shown.at(-1)).toBe('models');
@@ -77,13 +77,13 @@ describe('createHold', () => {
 
   test('a short step that began while another was held still shows; at most two wait (the next in order, and the latest)', () => {
     set(step('register'));
-    vi.advanceTimersByTime(800);
-    set(step('observations')); // 0.2 s of work
-    vi.advanceTimersByTime(100);
+    vi.advanceTimersByTime(HOLD_MS - 50);
+    set(step('observations')); // a short step
+    vi.advanceTimersByTime(25);
     set(step('history'));
     set(step('models'));
     set(step('send'));
-    vi.advanceTimersByTime(100);
+    vi.advanceTimersByTime(25);
     expect(shown).toEqual(['register', 'observations']);
     vi.advanceTimersByTime(HOLD_MS);
     expect(shown).toEqual(['register', 'observations', 'send']); // history and models gave way to the latest
@@ -99,9 +99,10 @@ describe('createHold', () => {
 
   test(`the end waits the rest of the hold, and at least ${GRACE_MS} ms`, () => {
     set(step('send'));
-    vi.advanceTimersByTime(300);
+    vi.advanceTimersByTime(50);
     set(idle('Predicting'));
-    vi.advanceTimersByTime(HOLD_MS - 301);
+    const wait = Math.max(HOLD_MS - 50, GRACE_MS); // the rest of the hold, and at least the grace
+    vi.advanceTimersByTime(wait - 1);
     expect(shown).toEqual(['send']);
     vi.advanceTimersByTime(1);
     expect(shown).toEqual(['send', 'Predicting']);

@@ -3,12 +3,12 @@
 // before another replaces it: its time begins once it is painted (the frame that draws it, then a task after that
 // paint), not when it was set, since a busy page (Home's first frame) paints late. At most two views wait: the next in
 // order (so a short step that began meanwhile still shows) and the latest (later ones take its place), so the screen
-// is at most about two seconds behind. The same step with a new count shows at once, waiting or not. The end of the
+// is at most about half a second behind. The same step with a new count shows at once, waiting or not. The end of the
 // work waits at least GRACE_MS, and gives way to work that comes meanwhile, so two tasks back to back (register, then
 // the poll) read as one. With `delay`, work shows only once it has lasted that long (the network's actions: a quick
 // one never flickers).
 
-export const HOLD_MS = 1000;
+export const HOLD_MS = 250;
 export const GRACE_MS = 300;
 
 /**

@@ -133,14 +133,14 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
   expect(await animations(page)).toEqual([]);
   expect(await page.evaluate(() => window.satori.health())).toMatchObject({ status: 'ok', tone: 'idle', work: null });
 
-  // the steps, in order, each at least about a second on screen; the line never sat on the same words
+  // the steps, in order, each at least HOLD_MS (a quarter second) on screen; the line never sat on the same words
   const seen = await page.evaluate(() => window.__hero);
   const steps = [];
   for (const r of seen) if (r.work && r.work !== steps.at(-1)?.work) steps.push(r);
   expect(steps.length).toBeGreaterThanOrEqual(3);
   expect(steps.map((r) => r.work)).toEqual(STEPS.filter((s) => steps.some((r) => r.work === s))); // in order
   expect(steps.map((r) => r.work)).toEqual(expect.arrayContaining(['central:history', 'central:send']));
-  for (let i = 0; i + 1 < steps.length; i++) expect(steps[i + 1].t - steps[i].t, steps[i].work).toBeGreaterThanOrEqual(950);
+  for (let i = 0; i + 1 < steps.length; i++) expect(steps[i + 1].t - steps[i].t, steps[i].work).toBeGreaterThanOrEqual(230);
   expect(new Set(seen.filter((r) => r.work === 'central:history').map((r) => r.line)).size).toBeGreaterThan(2); // the count ticked
   expect(seen.filter((r) => r.work && r.work !== 'central:send').every((r) => r.tone === 'working')).toBe(true);
   const firstDone = seen.findIndex((r) => r.title === 'Predicting');
