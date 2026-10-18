@@ -11,9 +11,10 @@ export const DESTS = ['central', 'base', 'network'];
 const SOURCE = { central: 'Central stream', base: 'Base registry stream', nostr: 'Nostr stream' };
 const KINDS = ['bvar', 'bar1', 'bar1d', 'naive', 'echo'];
 
-const minus = (s) => s.replace('-', '−');
+const minus = (s) => s.replace(/-/g, '−');
 /** A value as the app prints it; a huge one (a Base registry value, often a ratio × 1e18) in 4 digits and a power of 10. */
-export const numText = (n) => (Number.isFinite(n) && Math.abs(n) >= 1e12 ? minus(n.toExponential(3).replace('e+', 'e')) : fmtNum(n));
+export const numText = (n) => (Number.isFinite(n) && n !== 0 && (Math.abs(n) >= 1e12 || Math.abs(n) < 1e-4)
+  ? minus(n.toExponential(3).replace('e+', 'e')) : fmtNum(n));
 const dec = (x, d = 3) => (x == null ? '–' : minus(String(Number(Number(x).toFixed(d)))));
 const pct2 = (x) => `${Number((x * 100).toFixed(2))}%`;
 
@@ -81,17 +82,17 @@ function forecastPoints(f, at) {
 }
 
 /**
- * The output's chart, in a w × h box (drawn with preserveAspectRatio none: lines and dots keep their size, see
- * style.css): the recent history as a line, the forecast to scale in time and value, dashed from the last point,
- * its endpoint (the value sent) emphasized; `now`: when it was made; y labels at the top and bottom of the range.
- * `hover`: every point, for the readout.
+ * The output's chart, in a w × h box drawn px for px: the recent history as a line (broken where the observations
+ * stop for over four of their usual intervals), the forecast to scale in time and value, dashed from the last point,
+ * its endpoint (the value sent) emphasized; `now`: when it was made; the range's top and bottom as hairlines with
+ * their values just outside the plot, the first time and the horizon under it. `hover`: every point, for the readout.
  */
 export function chartOf(o, { w = 600, h = 160 } = {}) {
-  const pad = { l: 6, r: 10, t: 12, b: 24 }; // the bottom: room for the time labels
+  const pad = { l: 6, r: 10, t: 18, b: 34 }; // above: the top value; below: the bottom value, then the times
   const hist = o.history ?? [];
   const at = o.forecast.at ?? hist.at(-1)?.ts ?? null;
   const fc = forecastPoints(o.forecast, at);
-  const empty = { w, h, pad, line: '', ahead: '', points: [], last: null, now: null, yLabels: [], xLabels: [], hover: [], endLabel: null };
+  const empty = { w, h, pad, line: '', ahead: '', points: [], last: null, now: null, grid: [], yLabels: [], xLabels: [], hover: [], endLabel: null };
   if (!hist.length) return empty;
   const all = [...hist.map((p) => [p.ts, p.value]), ...fc];
   const ts = all.map(([t]) => t);
@@ -103,6 +104,8 @@ export function chartOf(o, { w = 600, h = 160 } = {}) {
   const Y = (v) => pad.t + ((y1 - v) / (y1 - y0)) * (h - pad.t - pad.b);
   const xy = (x, y) => `${x.toFixed(1)} ${y.toFixed(1)}`;
   const lastP = hist.at(-1);
+  const dts = hist.slice(1).map((p, i) => p.ts - hist[i].ts).sort((a, b) => a - b);
+  const gap = dts.length ? 4 * dts[dts.length >> 1] : Infinity;
   const last = { x: X(lastP.ts), y: Y(lastP.value) };
   const points = fc.map(([t, v], i) => ({ x: X(t), y: Y(v), ts: t, value: v, end: i === fc.length - 1 }));
   const end = points.at(-1);
@@ -110,10 +113,11 @@ export function chartOf(o, { w = 600, h = 160 } = {}) {
     w, h, pad, last, points,
     // the endpoint's value, right-aligned with it: above it, or below when it is near the top
     endLabel: end ? { x: end.x + 5, y: end.y < pad.t + 16 ? end.y + 20 : end.y - 11, text: numText(end.value) } : null,
-    line: hist.map((p, i) => `${i ? 'L' : 'M'}${xy(X(p.ts), Y(p.value))}`).join(' '),
+    line: hist.map((p, i) => `${i && p.ts - hist[i - 1].ts <= gap ? 'L' : 'M'}${xy(X(p.ts), Y(p.value))}`).join(' '),
     ahead: points.length ? `M${xy(last.x, last.y)} ${points.map((p) => `L${xy(p.x, p.y)}`).join(' ')}` : '',
     now: at == null ? null : X(at),
-    yLabels: [{ y: Y(Math.max(...vs)), text: numText(Math.max(...vs)) }, { y: Y(Math.min(...vs)), text: numText(Math.min(...vs)) }],
+    grid: [pad.t, h - pad.b],
+    yLabels: [{ y: pad.t - 5, text: numText(Math.max(...vs)) }, { y: h - pad.b + 13, text: numText(Math.min(...vs)) }],
     xLabels: [{ x: X(x0), text: fmtWhen(x0) }, { x: X(x1), text: `+${spanText(o.forecast.horizon)}` }],
     hover: [...hist.map((p) => ({ x: X(p.ts), y: Y(p.value), ts: p.ts, value: p.value, ahead: false })),
       ...points.map((p) => ({ ...p, ahead: true }))],

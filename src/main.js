@@ -750,20 +750,21 @@ window.satori = {
   /**
    * Every model the neuron runs (docs/design/models.md): central's streams, the Base batch's, the Nostr `_pred`s; each
    * { id, source, name, kind, quality, inputs, outputs: [{ stream, name, latest, forecast, direction, influence,
-   * quality, destinations }], trained } and, for central's, the spec as before. Read fresh.
+   * quality, destinations }], trained } and, for central's, the spec as before. From what the Models tab shows (read
+   * again after every poll, Nostr publish and Base check: poll() resolves after it), so it is cheap.
    */
   async models() {
     ready();
-    return listModels({ streams: await db.streams(), nostrStatus: await nostrStatus(), baseStatus: await base.status() });
+    return listModels({ streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
   },
   /**
    * One model's drill-in, recomputed now from its stored spec and history: models()'s fields, `model` (kind, rows,
    * tests, step, horizon, weight, λ's, generation, accepted, coef, trained, quality), each output's `history` (the
-   * chart's) and `ms`. id: models()'s, or a central stream's uuid or name. → null when there is none
+   * chart's), `ms` and `readMs`. id: models()'s, or a central stream's uuid or name. → null when there is none
    */
   async model(id) {
     ready();
-    return detailOf(id, { streams: await db.streams(), nostrStatus: await nostrStatus(), baseStatus: await base.status() });
+    return detailOf(String(id ?? ''), { streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
   },
   /** One stream's predictions (uuid or name), newest first. */
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },

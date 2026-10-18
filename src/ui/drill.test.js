@@ -85,6 +85,8 @@ describe('the drill-in', () => {
     expect(numText(59058240589371160)).toBe('5.906e16'); // a Base registry value: a ratio × 1e18
     expect(numText(-2.5e13)).toBe('−2.500e13');
     expect(numText(2600)).toBe('2,600.00');
+    expect(numText(0.0000012345)).toBe('1.234e−6'); // not "0"
+    expect(numText(0)).toBe('0');
     expect(qualityText(q(null))).toBe('not scored yet (it needs 5 backtests)');
   });
 
@@ -109,6 +111,10 @@ describe('the chart: recent history and the forecast to scale, the endpoint emph
     expect(c.ahead.startsWith(`M${c.last.x.toFixed(1)}`)).toBe(true);
     expect(c.yLabels.map((l) => l.text)).toEqual(['2,620.00', '2,550.00']);
     expect(chartOf({ ...TWO.outputs[0], history: [] }, { w: 600, h: 160 }).line).toBe('');
+    // a stretch with no observations is not drawn as if there were: the line breaks
+    const gappy = TWO.outputs[0].history.filter((_, k) => k < 20 || k > 30);
+    expect(chartOf({ ...TWO.outputs[0], history: gappy }, { w: 600, h: 160 }).line.match(/M/g)).toHaveLength(2);
+    expect(c.line.match(/M/g)).toHaveLength(1);
   });
 });
 

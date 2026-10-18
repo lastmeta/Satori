@@ -12,11 +12,6 @@ import { fmtNum, fmtWhen } from './format.js';
 /** The models (models()) and the open model (model(id)), set by main.js. */
 export const box = { list: [], detail: null };
 
-const ICON = {
-  central: () => html`<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="4.5" rx="1.5"></rect><rect x="2.5" y="9" width="11" height="4.5" rx="1.5"></rect></svg>`,
-  base: () => html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l5.4 3.1v6.2L8 14.2l-5.4-3.1V4.9z"></path></svg>`,
-  network: () => html`<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="9" r="1.6"></circle><path d="M4.8 5.8a4.5 4.5 0 0 0 0 6.4M11.2 5.8a4.5 4.5 0 0 1 0 6.4M2.6 3.6a7.6 7.6 0 0 0 0 10.8M13.4 3.6a7.6 7.6 0 0 1 0 10.8"></path></svg>`,
-};
 const TO = { central: 'Central', base: 'Base', network: 'Network' };
 const FILTERS = [['all', 'All'], ['central', 'Central'], ['base', 'Base'], ['network', 'Network']];
 const SORTS = [['quality', 'Quality'], ['name', 'Name']];
@@ -24,7 +19,10 @@ const SORTS = [['quality', 'Quality'], ['name', 'Name']];
 /** The models' hash route: ids are `<source>:<key>`, kept readable. */
 export const modelHref = (id) => `#models/${encodeURIComponent(id).replace(/%3A/gi, ':')}`;
 
-const dest = (to) => html`<span class="dest" data-to="${to}" title="${TO[to]}" aria-label="${TO[to]}">${ICON[to]()}</span>`;
+// Inside a list's item, an expression keeps one kind of value (always text, or always a template): ArrowJS 1.0.6 syncs
+// a reused item's slots in place, and a slot that was text and is now a template printed the template's source.
+// So icons are CSS masks (style.css), and what is shown or not is `hidden`, never a conditional template.
+const dest = (to) => html`<i class="dest" data-to="${to}" title="${TO[to]}" aria-label="${TO[to]}"></i>`;
 
 function row(a, v) {
   // One root node, no whitespace around it (see streams.js: ArrowJS 1.0.6's keyed lists).
@@ -104,7 +102,7 @@ const dv = () => {
   }
   return memo.view;
 };
-const CHART_H = 150;
+const CHART_H = 160;
 let charts = { key: '', list: [] };
 /** Each output's chart at the out block's measured width (px for px: text and dots at their size). */
 const chartAt = (i) => {
@@ -115,9 +113,9 @@ const chartAt = (i) => {
   return charts.list[i] ?? null;
 };
 
-const bar = (x) => html`<div class="ibar" data-test="model-input" data-own="${x.own}"><span class="iname">${x.name}${x.own ? html`<small> (itself)</small>` : ''}</span><svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><line class="track" x1="0" y1="5" x2="100" y2="5"></line><line class="fill" x1="0" y1="5" x2="${x.share ? Math.max(x.share * 100, 0.5) : 0}" y2="5" hidden="${!x.share}"></line></svg><b class="ipct">${x.pct}</b></div>`;
+const bar = (x) => html`<div class="ibar" data-test="model-input" data-own="${x.own}"><span class="iname" title="${x.own ? `${x.name} (itself: its own last step)` : x.name}">${x.name}</span><svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><line class="track" x1="0" y1="5" x2="100" y2="5"></line><line class="fill" x1="0" y1="5" x2="${x.share ? Math.max(x.share * 100, 0.5) : 0}" y2="5" hidden="${!x.share}"></line></svg><b class="ipct">${x.pct}</b></div>`;
 
-const destRow = (d) => html`<li class="drow" data-test="model-destination" data-to="${d.to}">${dest(d.to)}<span class="dlabel">${d.label}</span>${d.href ? html`<a href="${d.href}" target="_blank" rel="noopener">${d.text}</a>` : html`<span>${d.text}</span>`}</li>`;
+const destRow = (d) => html`<li class="drow" data-test="model-destination" data-to="${d.to}">${dest(d.to)}<span class="dlabel">${d.label}</span><a class="dtext" href="${d.href || false}" target="_blank" rel="noopener">${d.text}</a></li>`;
 
 /** The readout under a chart: the point under the pointer, else the forecast's endpoint. */
 function readout(o, i) {
@@ -165,7 +163,7 @@ function chart(i) {
   };
   const top = () => c()?.pad.t ?? 0;
   const bottom = () => CHART_H - (c()?.pad.b ?? 0);
-  return html`<svg class="mchart" data-test="model-chart" viewBox="${() => `0 0 ${c()?.w ?? 300} ${CHART_H}`}" height="${CHART_H}" role="img" aria-label="${label}" tabindex="0" @pointermove="${(e) => hover(e, i)}" @pointerleave="${() => { state.modelHover = null; }}" @keydown="${(e) => step(e, i)}"><line class="now" x1="${() => c()?.now ?? -10}" x2="${() => c()?.now ?? -10}" y1="${top}" y2="${bottom}"></line><path class="hist" d="${() => c()?.line ?? ''}"></path><path class="ahead" d="${() => c()?.ahead ?? ''}"></path><line class="cross" hidden="${() => !hp()}" x1="${() => hp()?.x ?? -10}" x2="${() => hp()?.x ?? -10}" y1="${top}" y2="${bottom}"></line><circle class="last" r="3.5" hidden="${() => !c()?.last}" cx="${() => c()?.last?.x ?? -10}" cy="${() => c()?.last?.y ?? -10}"></circle><circle class="fpt" r="4" hidden="${() => !mid()}" cx="${() => mid()?.x ?? -10}" cy="${() => mid()?.y ?? -10}"></circle><circle class="fpt end" data-test="model-endpoint" r="5.5" hidden="${() => !end()}" cx="${() => end()?.x ?? -10}" cy="${() => end()?.y ?? -10}"></circle><circle class="hot" r="4.5" hidden="${() => !hp()}" cx="${() => hp()?.x ?? -10}" cy="${() => hp()?.y ?? -10}"></circle><text class="ylab" x="${() => (c()?.pad.l ?? 0) + 2}" y="${() => (y(0)()?.y ?? 0) + 11}">${() => y(0)()?.text ?? ''}</text><text class="ylab" x="${() => (c()?.pad.l ?? 0) + 2}" y="${() => (y(1)()?.y ?? 0) - 4}">${() => y(1)()?.text ?? ''}</text><text class="xlab" x="${() => x(0)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(0)()?.text ?? ''}</text><text class="xlab" text-anchor="end" x="${() => x(1)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(1)()?.text ?? ''}</text><text class="elab" text-anchor="end" x="${() => c()?.endLabel?.x ?? -10}" y="${() => c()?.endLabel?.y ?? -10}">${() => c()?.endLabel?.text ?? ''}</text></svg>`;
+  return html`<svg class="mchart" data-test="model-chart" viewBox="${() => `0 0 ${c()?.w ?? 300} ${CHART_H}`}" height="${CHART_H}" role="img" aria-label="${label}" tabindex="0" @pointermove="${(e) => hover(e, i)}" @pointerleave="${() => { state.modelHover = null; }}" @keydown="${(e) => step(e, i)}"><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[0] ?? -10}" y2="${() => c()?.grid[0] ?? -10}"></line><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[1] ?? -10}" y2="${() => c()?.grid[1] ?? -10}"></line><line class="now" x1="${() => c()?.now ?? -10}" x2="${() => c()?.now ?? -10}" y1="${top}" y2="${bottom}"></line><path class="hist" d="${() => c()?.line ?? ''}"></path><path class="ahead" d="${() => c()?.ahead ?? ''}"></path><line class="cross" hidden="${() => !hp()}" x1="${() => hp()?.x ?? -10}" x2="${() => hp()?.x ?? -10}" y1="${top}" y2="${bottom}"></line><circle class="last" r="3.5" hidden="${() => !c()?.last}" cx="${() => c()?.last?.x ?? -10}" cy="${() => c()?.last?.y ?? -10}"></circle><circle class="fpt" r="4" hidden="${() => !mid()}" cx="${() => mid()?.x ?? -10}" cy="${() => mid()?.y ?? -10}"></circle><circle class="fpt end" data-test="model-endpoint" r="5.5" hidden="${() => !end()}" cx="${() => end()?.x ?? -10}" cy="${() => end()?.y ?? -10}"></circle><circle class="hot" r="4.5" hidden="${() => !hp()}" cx="${() => hp()?.x ?? -10}" cy="${() => hp()?.y ?? -10}"></circle><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(0)()?.y ?? -10}">${() => y(0)()?.text ?? ''}</text><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(1)()?.y ?? -10}">${() => y(1)()?.text ?? ''}</text><text class="xlab" x="${() => x(0)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(0)()?.text ?? ''}</text><text class="xlab" text-anchor="end" x="${() => x(1)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(1)()?.text ?? ''}</text><text class="elab" text-anchor="end" x="${() => c()?.endLabel?.x ?? -10}" y="${() => c()?.endLabel?.y ?? -10}">${() => c()?.endLabel?.text ?? ''}</text></svg>`;
 }
 
 function outBlock(o, i) {

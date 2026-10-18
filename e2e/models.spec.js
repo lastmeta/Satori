@@ -131,6 +131,18 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(page.locator('[data-test=engine-kinds]')).toHaveText(new RegExp(`^8 models · ${kinds.filter((k) => k === 'bvar').length} bvar`));
   await expect(page.locator('[data-test=engine-median]')).toHaveText(/^Median model: /);
 
+  // Working: a poll held at its first step says it in Home's hero's words; nothing on this tab moves (the hero's ring
+  // is Home's one moving indicator).
+  const release = central.hold();
+  await page.evaluate(() => void window.satori.poll());
+  await expect(page.locator('[data-test=engine-title]')).toHaveText('Working');
+  await expect(page.locator('[data-test=engine-line]')).toHaveText("Fetching today's observations…");
+  await expect(page.locator('[data-test=engine]')).toHaveAttribute('data-tone', 'working');
+  await expect(page.locator('[data-test=health-line]')).toHaveText("Fetching today's observations…");
+  expect(await page.evaluate(() => document.querySelector('[data-test=models-tab]').getAnimations({ subtree: true }).length)).toBe(0);
+  release();
+  await expect(page.locator('[data-test=engine-title]')).toHaveText('Resting');
+
   // Base: stake (Unlock first), and the identity's batch: a model per registry stream with a game.
   const st = await page.evaluate(() => window.satori.base());
   rpc.eth[st.identity.address.toLowerCase()] = 10n ** 17n;
@@ -158,7 +170,10 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await provider.observe({ stream, value: String(10 + 3 * Math.sin(k) + k * 0.2), seq: k, timestamp: t0 + (k - 1) * H });
   }
   // the intake takes each in turn (on this busy box, seconds each): all 16 forecast and published
-  await expect.poll(async () => (await models(page)).find((m) => m.source === 'nostr')?.outputs[0].destinations[0].ref.seq, { timeout: 120_000 }).toBe(16);
+  await expect.poll(async () => {
+    const ref = (await models(page)).find((m) => m.source === 'nostr')?.outputs[0].destinations[0].ref;
+    return `${ref?.seq}:${ref?.relays}`; // published: the relay took the last one
+  }, { timeout: 120_000 }).toBe('16:1');
   provider.close();
   await expect(rows(page)).toHaveCount(11);
   list = await models(page);

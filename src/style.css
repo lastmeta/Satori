@@ -383,9 +383,12 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .mval .to-arrow, .dir { color: var(--muted); }
 .mval b { font-weight: 600; }
 .mto { display: flex; justify-content: flex-end; gap: 6px; color: var(--muted); }
-.dest { display: inline-grid; place-items: center; width: 18px; height: 18px; flex: none; }
-.dest svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.dest[data-to="network"] circle { fill: currentColor; stroke: none; }
+.dest { display: inline-block; width: 16px; height: 16px; flex: none; background: currentColor;
+  -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
+/* where the predictions go: central (a server), Base (a block), the network (a broadcast) */
+.dest[data-to="central"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5'%3E%3Crect x='2.5' y='2.5' width='11' height='4.5' rx='1.5'/%3E%3Crect x='2.5' y='9' width='11' height='4.5' rx='1.5'/%3E%3C/svg%3E"); }
+.dest[data-to="base"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M8 1.8l5.4 3.1v6.2L8 14.2l-5.4-3.1V4.9z'/%3E%3C/svg%3E"); }
+.dest[data-to="network"] { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='8' cy='9' r='1.6' fill='black' stroke='none'/%3E%3Cpath d='M4.8 5.8a4.5 4.5 0 0 0 0 6.4M11.2 5.8a4.5 4.5 0 0 1 0 6.4M2.6 3.6a7.6 7.6 0 0 0 0 10.8M13.4 3.6a7.6 7.6 0 0 1 0 10.8'/%3E%3C/svg%3E"); }
 
 .drill { max-width: 880px; margin: 0 auto; }
 .back { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; text-decoration: none; }
@@ -407,7 +410,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .bars { display: grid; gap: 8px; }
 .ibar { display: grid; grid-template-columns: minmax(0, 10em) minmax(0, 1fr) 3.4em; gap: 12px; align-items: center; font-size: 0.88rem; }
 .iname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.iname small { color: var(--muted); }
+.iname[data-own="true"]::after, .ibar[data-own="true"] .iname::after { content: " (itself)"; color: var(--muted); font-size: 0.8em; }
 .ibar svg { display: block; width: 100%; height: 12px; }
 .ibar .track { stroke: var(--accent-soft); stroke-width: 12px; vector-effect: non-scaling-stroke; }
 .ibar .fill { stroke: var(--accent); stroke-width: 12px; stroke-linecap: round; vector-effect: non-scaling-stroke; } /* the svg clips the baseline's cap: square there, round at the end */
@@ -424,7 +427,8 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .ovals { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 2px 16px; margin: 4px 0 8px;
   font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .oforecast { font-weight: 600; }
-.mchart { display: block; width: 100%; height: 150px; overflow: visible; touch-action: pan-y; }
+.mchart { display: block; width: 100%; height: 160px; overflow: visible; touch-action: pan-y; }
+.mchart .grid { stroke: var(--line); stroke-width: 1; }
 .mchart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
 .mchart .hist, .mchart .ahead { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .mchart .ahead { stroke-dasharray: 3 5; } /* ahead of the data: the forecast */
@@ -442,7 +446,8 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .drow { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; min-height: 30px; font-size: 0.88rem; }
 .drow .dest { color: var(--muted); }
 .dlabel { font-weight: 600; }
-.drow a, .drow span:last-child { overflow-wrap: anywhere; }
+.drow .dtext { overflow-wrap: anywhere; }
+.drow a.dtext:not([href]) { color: var(--text); text-decoration: none; }
 
 /* the phone: a row is two lines: the mark; the name and where it goes; then its kind, its inputs and latest → forecast,
    one line that wraps (the values to the right, on a line of their own when the inputs need the room), never cut */
