@@ -240,16 +240,19 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
 
 ## Cost
 
-Measured 2026-10-18 on this shared 8-core box (load average 5–6 from other
-work), headless Chrome:
+Measured 2026-10-18 on this shared 8-core box, headless Chrome, each live
+drill-in 3 times (the median), every one of the 83 models:
 
-| What | Time |
-|---|---|
-| A drill-in, live on central2 (83 streams, 54,756 rows of central's history), each model 3 times, the median | **74 ms** (median of 83; max 101 ms), of which 44 ms reading the history and ~30 ms the refit |
-| The same from an agent, `satori.model(id)` | 81–182 ms |
-| `satori.models()` (83 models) | 2–12 ms |
-| A drill-in in the e2e (8 streams, 600 hourly rows each) | 22–112 ms, the read 19–75 ms |
-| The poll's engine, for comparison (83 targets, a champion and a challenger each) | 924–1,111 ms here (205 ms on a quiet box, [engine.md](engine.md#measured)) |
+| What | Busy box (load 5–6) | Quieter |
+|---|---|---|
+| A drill-in, live on central2 (83 streams, ~54,760 rows of central's history) | **74 ms** median, max 101 ms; the history read 44 ms | **25 ms** median, max 80 ms; the read 21 ms |
+| The same from an agent, `satori.model(id)`, timed in the page | 81–182 ms | |
+| `satori.models()` (83 models), timed in the page | 2–12 ms | |
+| A drill-in in the e2e (8 streams, 600 hourly rows each) | 22–112 ms, the read 19–75 ms | 15 ms, the read 13 ms |
+| The poll's engine, for comparison (83 targets, a champion and a challenger each) | 924–1,111 ms | 503–565 ms (205 ms on a quiet box, [engine.md](engine.md#measured)) |
+
+The refit itself is 4–30 ms; the rest is the one read of 2–4 streams'
+history in DuckDB's worker.
 
 Two changes made it cheap: the drill-in reads its 2–4 streams in one query
 (one query per stream: ~100 ms of a ~110 ms drill-in in the e2e), and the
@@ -287,21 +290,24 @@ agent API reads the tab's state instead of every stream's row again
 
 ## Live
 
-2026-10-18, the dev server on :5180 restarted, against central2, a fresh
-Chrome profile, no stubs (prod blocked, none asked): setup → the first poll
-at once: 83 streams, central's history for all 83 (54,756 rows), 83 of 83
-accepted. The tab: *Resting*, "Trained just now · next run in 11 h", "83
-models · 81 bvar · 2 naive", "Beats no change on 24 of 83 · ties 40 · worse
-19", "Median model: the same error as no change" (another fresh profile drew
-other specs: 17 better, 49 ties, 17 worse, the median 1% less error). Nothing
-scrolls sideways at 390 px.
+2026-10-18 17:12, the dev server on :5180 restarted with the final code,
+against central2, a fresh Chrome profile, no stubs (prod blocked, none
+asked): setup → the first poll at once: 83 streams, central's history for
+all 83 (54,761 rows), 83 of 83 accepted. The tab: *Resting*, "Trained just
+now · next run in 11 h", "83 models · 81 bvar · 2 naive", "Beats no change
+on 18 of 83 · ties 43 · worse 22", "Median model: the same error as no
+change". Each fresh profile draws its own specs (the identity seeds them):
+three others that day read 24 / 40 / 19, 17 / 49 / 17 and 19 / 32 / 32, the
+median model between 1% less error and the same. Nothing scrolls sideways at
+390 px.
 
 ![The Models list live on central2](../screenshots/models-live-list-desktop-light.png)
 
 <img src="../screenshots/models-live-list-phone-light.png" alt="The list on a phone, live" width="240"> <img src="../screenshots/models-live-list-phone-dark.png" alt="The list on a phone, live, dark" width="240">
 
-A drill-in live (neo: 55% safetrade_nock, 19% itself; 15% less error than no
-change over 24 tests; the line breaks where central2's history has gaps):
+A drill-in live (xrp: 74% ltc, 15% safetrade_eth, 11% itself; 20% less
+error than no change over 24 tests; the line breaks where central2's history
+has gaps):
 
 ![A bvar drill-in live](../screenshots/models-live-drill-desktop-light.png)
 

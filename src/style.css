@@ -377,7 +377,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .mname b, .mname small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mname b { font-weight: 600; }
 .mname small { color: var(--muted); font-size: 0.76rem; }
-.mins { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
+.mins { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; } /* long names wrap, never cut */
 .ichip { font-size: 0.72rem; padding: 1px 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .mval { display: flex; justify-content: flex-end; align-items: baseline; gap: 5px; white-space: nowrap; overflow: hidden; }
 .mval .to-arrow, .dir { color: var(--muted); }
