@@ -7,7 +7,7 @@
 import { fallback, formatEther, formatGwei, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
 import { createChain, errorText, lockText, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
-import { forecast as engineForecast, STEP_S } from '../engine/index.js';
+import { explainForecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
 import { createWork } from './work.js';
 import { emit, traced } from '../traffic.js';
@@ -106,14 +106,16 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
     const dropped = [];
     for (const g of await chain.streams()) {
       const history = await chain.history(g.streamId);
-      const f = history.length
-        ? forecast(toPoints(history), { step: stepFor(g.cadenceMinutes), horizon: horizonFor(g.cadenceMinutes) }) : null;
+      const step = stepFor(g.cadenceMinutes);
+      const f = history.length ? forecast(toPoints(history), { step, horizon: horizonFor(g.cadenceMinutes) }) : null;
       const base = { streamId: g.streamId, gameId: g.gameId, named: g.named };
       if (!f) { dropped.push({ ...base, error: 'no history' }); continue; }
       const last = history.at(-1).value; // int232, in the stream's own units
       // As decimal strings, as amounts are: an int232 is often beyond 2^53 (the default stream is a ratio × 1e18).
+      // score, persist: the engine's backtest (its median error and no change's), for the Models tab, when it has one.
       const game = { ...base, direction: directionOf(f.value, Number(last)), model: f.model, latest: last.toString(),
-        forecast: BigInt(Math.round(f.value)).toString(), horizon: f.horizon };
+        forecast: BigInt(Math.round(f.value)).toString(), horizon: f.horizon, step,
+        ...(f.score != null ? { score: f.score, persist: f.persist } : {}) };
       // The contract's own checks, named games' 24 clock hours included (SatoriEngine.sol:791-810).
       const error = await chain.simulateGame(identity, game);
       if (error) dropped.push({ ...game, error });

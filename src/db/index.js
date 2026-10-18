@@ -129,7 +129,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
         (SELECT count(*) FROM observations x WHERE x.stream_uuid = s.uuid) AS observations,
         o.ts AS obs_ts, o.value AS obs_value,
         p.model, p.t1, p.t2, p.phi, p.weight, p.made_at, p.status, p.sent_at,
-        m.spec, m.score, m.generation, m.accepted, s.history_at
+        m.spec, m.score, m.persist, m.influence, m.generation, m.accepted, m.updated_at AS spec_at, s.history_at
       FROM streams s
       LEFT JOIN model_specs m ON m.target_uuid = s.uuid
       LEFT JOIN (SELECT * FROM observations QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC) = 1) o
@@ -220,19 +220,26 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       }
       return added;
     }),
-    /** Each target's champion spec: Map(uuid → {spec, score, generation, accepted, updated_at}). */
+    /** Each target's champion spec: Map(uuid → {spec, score, persist, influence, generation, accepted, updated_at}). */
     specs: inOrder(async () => new Map((await rows('SELECT * FROM model_specs')).map((r) =>
-      [r.target_uuid, { spec: JSON.parse(r.spec), score: r.score, generation: r.generation, accepted: r.accepted, updated_at: r.updated_at }]))),
-    /** Store the specs a poll touched: Map(uuid → {spec, score, generation, accepted}). One statement. */
+      [r.target_uuid, { spec: JSON.parse(r.spec), score: r.score, persist: r.persist ?? null,
+        influence: r.influence == null ? null : JSON.parse(r.influence), generation: r.generation, accepted: r.accepted,
+        updated_at: r.updated_at }]))),
+    /**
+     * Store the specs a poll touched: Map(uuid → {spec, score, persist?, influence?, generation, accepted}). One statement.
+     * persist and influence: what the Models tab shows (migration 11).
+     */
     saveSpecs: inOrder(async (specs, at) => {
       if (!specs.size) return;
       const list = [...specs];
-      await run(`INSERT INTO model_specs SELECT ${TXT('c0')}, ${TXT('c1')}, ${NUM('c2', 'DOUBLE')}, ${NUM('c3', 'INTEGER')},
-          ${NUM('c4', 'INTEGER')}, ${NUM('c5', 'BIGINT')} FROM ${rowsOf(6)}
+      await run(`INSERT INTO model_specs (target_uuid, spec, score, generation, accepted, updated_at, persist, influence)
+          SELECT ${TXT('c0')}, ${TXT('c1')}, ${NUM('c2', 'DOUBLE')}, ${NUM('c3', 'INTEGER')}, ${NUM('c4', 'INTEGER')},
+            ${NUM('c5', 'BIGINT')}, ${NUM('c6', 'DOUBLE')}, ${TXT('c7')} FROM ${rowsOf(8)}
         ON CONFLICT (target_uuid) DO UPDATE SET spec = excluded.spec, score = excluded.score, generation = excluded.generation,
-          accepted = excluded.accepted, updated_at = excluded.updated_at`,
+          accepted = excluded.accepted, updated_at = excluded.updated_at, persist = excluded.persist, influence = excluded.influence`,
       texts(list.map(([u]) => u)), texts(list.map(([, r]) => JSON.stringify(r.spec))), nums(list.map(([, r]) => r.score)),
-      nums(list.map(([, r]) => r.generation)), nums(list.map(([, r]) => r.accepted)), nums(list.map(() => at)));
+      nums(list.map(([, r]) => r.generation)), nums(list.map(([, r]) => r.accepted)), nums(list.map(() => at)),
+      nums(list.map(([, r]) => r.persist)), texts(list.map(([, r]) => (r.influence ? JSON.stringify(r.influence) : null))));
     }),
 
     /** Central streams whose latest observation has no prediction made from it (newer than predicted_ts). */

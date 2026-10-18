@@ -93,7 +93,7 @@ describe('the daily batch', () => {
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
       // latest: the registry's int232, exact; forecast: the engine's at the horizon, as an integer (both decimal strings, as JSON keeps them)
       games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: '59058240589371161',
-        forecast: '59058240589371160', horizon: 86_400 }] };
+        forecast: '59058240589371160', horizon: 86_400, step: 86_400 }] };
     expect(r).toEqual({ at: batch.at, round: ROUND, sent: batch });
     expect(db.m.get('base_last_batch')).toEqual(batch);
     expect(db.m.get('base_pending_batch')).toBe(null);
@@ -148,6 +148,17 @@ describe('the daily batch', () => {
     expect(calls).toEqual([{ step: 86_400, horizon: 86_400 }, { step: 43_200, horizon: 86_400 }]); // stream 1 is daily (1440 min)
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }, { gameId: 13, payload: '0x02' }]]);
     expect(r.sent.games.map((g) => [g.gameId, g.forecast, g.horizon])).toEqual([[1, expect.any(String), 86_400], [13, '5', 86_400]]);
+  });
+
+  test('each game keeps its step and, from the engine\'s backtest, its median error and no change\'s (the Models tab\'s)', async () => {
+    await staked();
+    s.streams[3] = { game: 13, named: false, cadence: 60, history: Array.from({ length: 200 }, (_, k) => ({ hour: H0 - 199 + k, value: BigInt(1000 + (k % 7) * 3 + k) })) };
+    s.weights[13] = E18;
+    const r = await runBatch({ chain: chainOf(), identity, db });
+    const g13 = r.sent.games.find((g) => g.gameId === 13);
+    expect(g13).toMatchObject({ model: 'bar1', step: 43_200, horizon: 86_400, score: expect.any(Number), persist: expect.any(Number) });
+    expect(db.m.get('base_last_batch').games.find((g) => g.gameId === 13)).toEqual(g13);
+    expect(r.sent.games.find((g) => g.gameId === 1)).not.toHaveProperty('score'); // naive: nothing tested
   });
 
   test('a game without voting weight (anyone\'s new stream) is not in the batch at all', async () => {

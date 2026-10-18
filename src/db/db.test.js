@@ -334,6 +334,19 @@ describe('bvar: specs and central history (migration 6)', () => {
     expect(await up.streams()).toMatchObject([{ uuid: 'u-btc', observations: 1, spec: null, history_at: null }]);
   });
 
+  test('migration 11: a spec stored before keeps its row; no-change\'s error and the influence are null until the next poll', async () => {
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 10)) if (typeof m === 'string') await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '10')`);
+    await conn.query(`INSERT INTO streams (uuid, name, meta) VALUES ('u-btc', 'bitcoin', NULL)`);
+    await conn.query(`INSERT INTO model_specs VALUES ('u-btc', '{"companions":[],"lambda1":0.2,"lambda2":0.5}', 0.02, 3, 1, 4000)`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    expect((await up.specs()).get('u-btc')).toEqual({ spec: { companions: [], lambda1: 0.2, lambda2: 0.5 }, score: 0.02, persist: null,
+      influence: null, generation: 3, accepted: 1, updated_at: 4000 });
+  });
+
   test('centralHistories: every central stream\'s observations in one read, oldest first; another central\'s left out', async () => {
     await db.addObservations([obs({ ts: 2000, value: 2 }), obs({ ts: 1000, value: 1.5 }), obs({ stream_uuid: 'u-eth', name: 'eth', value: 5 })]);
     await db.addObservations([obs({ stream_uuid: 'u-old', name: 'old' })]);
@@ -386,14 +399,16 @@ describe('bvar: specs and central history (migration 6)', () => {
   test('specs: saved and read back; resetCentral drops them (another central\'s uuids)', async () => {
     await db.addObservations([obs(), obs({ stream_uuid: 'u-eth', name: 'eth' })]);
     const spec = { companions: ['u-eth'], lambda1: 0.2, lambda2: 0.5 };
-    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0123, generation: 3, accepted: 1 }],
-      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, generation: 0, accepted: 0 }]]), 4000);
-    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0122, generation: 4, accepted: 1 }]]), 4100);
+    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0123, persist: 0.0125, influence: [0.75, 0.25], generation: 3, accepted: 1 }],
+      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, persist: null, influence: null, generation: 0, accepted: 0 }]]), 4000);
+    const shares = [0.6 + 1e-17, 0.4 - 1 / 3e9]; // doubles kept bit for bit
+    await db.saveSpecs(new Map([['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1 }]]), 4100);
     expect(await db.specs()).toEqual(new Map([
-      ['u-btc', { spec, score: 0.0122, generation: 4, accepted: 1, updated_at: 4100 }],
-      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, generation: 0, accepted: 0, updated_at: 4000 }],
+      ['u-btc', { spec, score: 0.0122, persist: 0.0121, influence: shares, generation: 4, accepted: 1, updated_at: 4100 }],
+      ['u-eth', { spec: { ...spec, companions: ['u-btc'] }, score: null, persist: null, influence: null, generation: 0, accepted: 0, updated_at: 4000 }],
     ]));
-    expect((await db.streams())[0]).toMatchObject({ spec: JSON.stringify(spec), score: 0.0122, generation: 4, accepted: 1 });
+    expect((await db.streams())[0]).toMatchObject({ spec: JSON.stringify(spec), score: 0.0122, persist: 0.0121,
+      influence: JSON.stringify(shares), generation: 4, accepted: 1 });
     await db.set('central_history', { at: 1 });
     await db.resetCentral();
     expect(await db.specs()).toEqual(new Map());

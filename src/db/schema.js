@@ -107,4 +107,10 @@ export const MIGRATIONS = [
      'Delegated to this neuron', 'Staked with this neuron'), 'Stopped delegating', 'Unstaked') WHERE kind = 'wallet';
    UPDATE activity SET data = replace(data, 'no prediction power delegated to the identity', 'nothing staked with this neuron'),
      mkey = replace(mkey, 'no prediction power delegated to the identity', 'nothing staked with this neuron') WHERE kind = 'base';`,
+  // 11 (2026-10-18): what the Models tab shows for each central target (docs/design/models.md), kept by the poll that
+  // ran it: persist = no change's median backtest error on the same origins as `score` (null until 5 origins);
+  // influence = JSON [share of the target's own lag, then each companion's] in the bvar forecast (null: not bvar).
+  // Specs stored before have both null until their next poll.
+  `ALTER TABLE model_specs ADD COLUMN persist DOUBLE;
+   ALTER TABLE model_specs ADD COLUMN influence VARCHAR;`,
 ];
