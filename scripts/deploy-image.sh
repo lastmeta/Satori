@@ -2,7 +2,8 @@
 # Builds the deploy image (docs/design/deploy.md):
 #   1. npm ci, if node_modules is missing or older than package-lock.json;
 #   2. dist/ with this deployment's defaults (deploy/build.env; a variable already
-#      set in the environment wins), checked for them;
+#      set in the environment wins), checked for them; DuckDB's wasm also in brotli
+#      (scripts/brotli.mjs: minutes the first time per DuckDB version, then cached);
 #   3. satori-neuron:<git short sha> (…-dirty with uncommitted changes), also :latest,
 #      with the CSP from csp.js;
 #   4. checks the image: nginx -t, its CSP line, and the defaults in its bundle.
@@ -21,6 +22,7 @@ while IFS='=' read -r key value; do
 done < deploy/build.env
 { env | grep '^VITE_' || true; } | sort | sed 's/^/build: /'
 npm run build
+node scripts/brotli.mjs dist/assets # DuckDB's wasm in brotli beside it (deploy/nginx.conf; cached per DuckDB version)
 
 # Each set default, as it must appear in the bundle: the central URL and each relay.
 expected=()

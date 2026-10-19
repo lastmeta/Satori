@@ -57,10 +57,31 @@ test('every response has the CSP from csp.js and nosniff; hashed assets are immu
   const text = await request.get(`${APP}llms.txt`);
   expect(await text.text()).toMatch(/^# Satori neuron/);
 
-  // gzipped beside itself: DuckDB's wasm goes compressed, as the same file
-  const gz = await request.fetch(APP + wasm, { method: 'HEAD', headers: { 'accept-encoding': 'gzip' } });
-  expect(gz.headers()).toMatchObject({ 'content-encoding': 'gzip', vary: 'Accept-Encoding', 'content-type': 'application/wasm' });
-  expect(Number(gz.headers()['content-length'])).toBeLessThan(10e6);
+  // compressed beside itself: DuckDB's wasm goes in brotli where the browser takes it (5.1 MB), else gzipped (7.7 MB),
+  // else as it is, the same file each time, with the CSP and the cache rule (docs/design/deploy.md#compression)
+  const encoded = async (accept) => {
+    const r = await request.get(APP + wasm, { headers: { 'accept-encoding': accept } });
+    return { h: r.headers(), length: (await r.body()).length };
+  };
+  const br = await encoded('gzip, deflate, br, zstd');
+  expect(br.h).toMatchObject({ 'content-encoding': 'br', vary: 'Accept-Encoding', 'content-type': 'application/wasm',
+    'content-security-policy': CSP, 'x-content-type-options': 'nosniff', 'cache-control': IMMUTABLE });
+  const gz = await encoded('gzip, deflate');
+  expect(gz.h).toMatchObject({ 'content-encoding': 'gzip', vary: 'Accept-Encoding', 'content-type': 'application/wasm',
+    'content-security-policy': CSP, 'cache-control': IMMUTABLE });
+  const plain = await encoded('identity');
+  expect(plain.h['content-encoding']).toBeUndefined();
+  expect(plain.h['content-type']).toBe('application/wasm');
+  // Playwright decodes bodies: each is the same wasm; the wire sizes are the content-length
+  expect([br.length, gz.length]).toEqual([plain.length, plain.length]);
+  const [brBytes, gzBytes] = [Number(br.h['content-length']), Number(gz.h['content-length'])];
+  expect(brBytes).toBeLessThan(gzBytes * 0.7); // about a third smaller than gzip
+  expect(gzBytes).toBeLessThan(10e6);
+  // a wasm with no brotli copy (DuckDB's mvp, for browsers without wasm exceptions) is gzip's, never marked br
+  const mvp = /assets\/duckdb-mvp-[\w-]+\.wasm/.exec(await (await request.get(APP + js)).text())?.[0];
+  expect(mvp).toBeTruthy();
+  const m = await request.fetch(APP + mvp, { method: 'HEAD', headers: { 'accept-encoding': 'gzip, br' } });
+  expect(m.headers()).toMatchObject({ 'content-encoding': 'gzip', 'content-type': 'application/wasm' });
 });
 
 test("the app in a browser profile: the CSP, DuckDB, the service worker, the manifest, and this deployment's central and relays", async () => {
