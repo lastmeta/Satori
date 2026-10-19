@@ -9,21 +9,23 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 - A **reward address**: where the Satori Network sends this neuron's
   rewards instead of the vault, such as a pool's; a Base (0x) address. The
   Satori Network keeps it; the identity signs it in (no Unlock, no gas).
-- `await satori.rewardAddress()` → `{ address: '0x…' | null, at }` (null:
-  not set, rewards go to the vault), read from the Satori Network now.
-- `await satori.setRewardAddress('0x…' | null | '')` → `{ address, at }`,
-  only on the person's request (Safety): set, or clear. Checked first (0x
-  and 40 hex, its EIP-55 checksum, not the zero address) and sent
+- `await satori.rewardAddress()` → `{ address: '0x…' | null, whose:
+  'vault' | 'identity' | null, at }` (null: not set, rewards go to the
+  vault), read from the Satori Network now: the Base address it pays at.
+- `await satori.setRewardAddress('0x…' | null | '')` → `{ address, whose,
+  at }`, only on the person's request (Safety): set, or clear. Checked first
+  (0x and 40 hex, its EIP-55 checksum, not the zero address, not this
+  neuron's identity: the app claims only from the vault) and sent
   checksummed.
-- `status().central.reward`: `{ address, at, error, reading }`, as last
-  read. `health().work` may be `{ task: 'reward', step: 'login' | 'save' |
-  'clear' }`. `health().notices` may have `what: 'reward'` ("Reward address
-  set to 0x…", "Reward address cleared: rewards go to your vault").
+- `status().central.reward`: `{ address, whose, at, error, reading }`, as
+  last read. `health().work` may be `{ task: 'reward', step: 'login' |
+  'save' | 'clear' }`. `health().notices` may have `what: 'reward'`
+  ("Reward address set to 0x…", "Reward address cleared: rewards go to your
+  vault").
 - Settings has a **Reward address** card after Backup (`reward-address`,
-  `reward-none`, `reward-read-error`, `reward-retry`, `reward-line`,
+  `reward-whose`, `reward-identity`, `reward-none`, `reward-reading`,
+  `reward-saving`, `reward-read-error`, `reward-retry`, `reward-line`,
   `reward-error`, `reward-save`, `reward-clear`).
-- Until central2 runs central's Base check for this route, it refuses every
-  0x address ("Satori Network 400: Invalid Evrmore address").
 
 ## Changed 2026-10-19 (hardening; agents' safety; recovery and housekeeping)
 

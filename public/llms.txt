@@ -151,9 +151,12 @@ Every method is below; `await satori.status()` shows everything at once.
   /api/v1/peer/reward-address`, signed in by the identity: no Unlock, no
   gas); the app keeps no copy, and reads it when Settings opens (once per
   page load and Satori Network) or when `rewardAddress()` asks. Not set:
-  rewards go to the vault. A value the Satori Network still holds from
-  before Base reads as not set. It does not change staking. A change is
-  noted on Home for 24 h.
+  rewards go to the vault. The Satori Network answers the Base address it
+  pays at (a value set before Base reads as the same key's Base address).
+  This neuron's own vault or identity is named (`whose`); the identity is
+  never set from here: the app claims only from the vault, so rewards sent
+  to the identity would sit unclaimed. It does not change staking. A change
+  is noted on Home for 24 h.
 - Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
   each stream (under 48 h old). The first poll runs at once, right after
   register (a new neuron, or one reopened with a poll due; no random wait),
@@ -411,10 +414,12 @@ the page's JS context:
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
     `{ at, error, total_submitted }` (with `login: true` when central refused
     the login, `unreachable: true` when it was not reached); `pending`: how many predictions wait to be sent.
-  - `reward`: the reward address as last read, `{ address, at, error,
-    reading }`: `address` `'0x…'` or null (not set: the vault); `at` when
-    the Satori Network last answered (null: not read yet on this page load;
-    `rewardAddress()` reads it); `error` the last read's failure, or null.
+  - `reward`: the reward address as last read, `{ address, whose, at,
+    error, reading }`: `address` `'0x…'` or null (not set: the vault);
+    `whose` `'vault'` or `'identity'` when it is this neuron's own, else
+    null; `at` when the Satori Network last answered (null: not known yet on
+    this page load; `rewardAddress()` reads it); `error` the last read's
+    failure, or null.
 
   `storage` and `app` are there on every screen. `storage`: `{ persisted,
   usage, quota }` (`persisted`: the browser keeps this origin's data, the keys
@@ -639,21 +644,26 @@ the page's JS context:
   request): an https URL, or `''` for the default; registers there at once. A
   different URL drops the pending predictions and the stream list (see
   Concepts), and is noted on Home for 24 h.
-- `await satori.rewardAddress()` → `{ address, at }`: the reward address,
-  read from the Satori Network now (a login by the identity, then the GET;
-  about a second): `address` `'0x…'` checksummed, or null (not set: the
-  Satori Network pays the vault; a value it still holds from before Base is
-  null too). Throws the Satori Network's error in words when it can't be
-  read ("Satori Network unreachable: Failed to fetch").
-- `await satori.setRewardAddress(address)` → `{ address, at }` (only on the
-  person's request): a Base address (`'0x…'`) to set it, `null` or `''` to
-  clear it (rewards go to the vault). Free: the identity signs it, no
-  Unlock, no gas. Checked before anything is sent; throws "A reward address
-  is a Base address: 0x and 40 hex characters.", "That address's capital
-  letters don't match its checksum: check it for a typo." or the zero
+- `await satori.rewardAddress()` → `{ address, whose, at }`: the reward
+  address, read from the Satori Network now (a login by the identity, then
+  the GET; about a second): `address` `'0x…'` checksummed, the Base address
+  the rewards are paid at, or null (not set: the Satori Network pays the
+  vault); `whose` `'vault'`, `'identity'` (rewards there aren't claimed by
+  this app) or null. Throws the Satori Network's error in words when it
+  can't be read ("Satori Network unreachable: Failed to fetch"), and "The
+  Satori Network answered a reward address that isn't a Base address, so it
+  isn't shown." for anything but a 0x address or null.
+- `await satori.setRewardAddress(address)` → `{ address, whose, at }` (only
+  on the person's request): a Base address (`'0x…'`) to set it, `null` or
+  `''` to clear it (rewards go to the vault). Free: the identity signs it,
+  no Unlock, no gas. Checked before anything is sent; throws "A reward
+  address is a Base address: 0x and 40 hex characters.", "That address's
+  capital letters don't match its checksum: check it for a typo.", the zero
   address's ("The zero address (0x000…000) burns what is sent to it:
-  refused."), or the Satori Network's refusal ("Satori Network 400: Invalid
-  Base address"). Sent checksummed; one at a time (another while one runs
+  refused."), "That is this neuron's identity. This app claims rewards only
+  from the vault, so rewards sent to the identity would sit unclaimed. Use
+  another address, or Clear to send them to your vault.", or the Satori
+  Network's refusal ("Satori Network 400: Invalid Base address"). Sent checksummed; one at a time (another while one runs
   throws `Busy (save)…`). A change is noted on Home for 24 h. It does not
   change staking.
 - `await satori.setAside()` → status, only on the `damaged` screen and only
@@ -873,13 +883,16 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   asks for the passphrase in place, every time, "Vault passphrase to show
   the backup", Show; Hide), **Reward address** (where the Satori Network
   sends this neuron's rewards: "Now" with the address shortened, its whole
-  self in the hover, and Copy, or "Not set · rewards go to your vault",
-  "Reading it from the Satori Network…" while it is read, its error with
-  Try again; "New reward address" (0x…), Save ("Saving…"), Clear while one
-  is set ("Clearing…"); the line says each step, "Signing in to the Satori
+  self in the hover, and Copy, named "your vault" or "your identity" when it
+  is this neuron's own (the identity with a note: rewards there aren't
+  claimed here), or "Not set · rewards go to your vault"; "Reading it from
+  the Satori Network…" while it is read, its error with Try again; "New
+  reward address" (0x…), Save ("Saving…"), Clear while one is set
+  ("Clearing…"); the line says each step, "Signing in to the Satori
   Network…", "Saving the reward address…", then "Saved: the Satori Network
   sends this neuron's rewards to 0x…" or "Cleared: rewards go to your
-  vault."; no passphrase, no gas), **Satori Network** ("Satori Network server", an
+  vault."; a small turning ring beside the words while it reads or saves;
+  no passphrase, no gas), **Satori Network** ("Satori Network server", an
   https URL, empty = the default; Save), **Satori relays** (each relay with
   its state, "Connected", "Not reachable here" for a blocked one, with one
   note why; "Your relays" one per line; "Publish to the Satori Network's
@@ -936,7 +949,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   Settings: `identity`, `vault` (the Base addresses), `vault-state`,
   `nostr-pubkey`, `unlock`, `lock-vault`, `backup-prompt`, `backup-key` (a
   private key, or the nsec), `backup-hex`, `reward-address` (the address
-  shortened; `title` the whole one), `reward-none` (not set, or reading),
+  shortened; `title` the whole one), `reward-whose` ("your vault", "your
+  identity"), `reward-identity` (the identity's note), `reward-none` (not
+  set, or reading), `reward-reading` and `reward-saving` (the turning ring),
   `reward-read-error` with `reward-retry`, `reward-line`, `reward-error`,
   `reward-save`, `reward-clear`, `central-url`, `relay` with
   `relay-state`, `relays-blocked`, `theme-<system|light|dark>`

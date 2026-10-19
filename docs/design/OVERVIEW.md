@@ -223,8 +223,9 @@ uses central's `rpcUrl`, then publicnode.
   24 h ([health.md](health.md#address-changes)).
 - **The reward address** (Settings › Reward address, `setRewardAddress`):
   where the Satori Network sends this neuron's rewards instead of the vault,
-  such as a pool's. Base only (0x, checked and sent checksummed); none set:
-  the vault. The Satori Network keeps it; the identity signs it in, so it is
+  such as a pool's. Base only (0x, checked and sent checksummed; never this
+  neuron's identity, as the app claims only from the vault); none set: the
+  vault. The Satori Network keeps it; the identity signs it in, so it is
   free and needs no Unlock. It is not staking. In Settings, not the Wallet:
   the Wallet is the vault's, on-chain and paid in gas
   ([central.md](central.md#the-reward-address)).

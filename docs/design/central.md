@@ -218,29 +218,44 @@ the Satori Network's answer is the one source.
 
 **When it is read**: when Settings opens, once per page load and Satori
 Network (again after a read that failed, or with Try again), and by
-`window.satori.rewardAddress()`. Never in a loop, and not at load: a load's
-first poll logs in to send its batch, and a second login at the same moment
-buys nothing while nobody is looking at the address. `status().central.reward`
+`window.satori.rewardAddress()`. Never in a loop, and not at load unless the
+page opens on Settings (a link or a reload on `#settings`: then at once,
+beside the first poll; central takes both logins): a load's first poll logs
+in to send its batch, and a second login at the same moment buys nothing
+while nobody is looking at the address. `status().central.reward`
 is the last read (`at` null: not read yet).
 
 **Checked before any call** (`src/neuron/reward.js`, `checkRewardAddress`):
 trimmed; `0x` and 40 hex characters; a mixed-case address must match its
 EIP-55 checksum (viem's `isAddress`, strict, as Send's recipient), while
 all lower or all upper case carries no checksum (EIP-55) and is taken as
-it is; not the zero address; sent checksummed (viem's `getAddress`). An empty field is not
+it is; not the zero address; not this neuron's identity (the app claims
+rewards only from the vault, Wallet › Claim, so rewards paid to the
+identity would sit unclaimed); sent checksummed (viem's `getAddress`). The
+vault's own address is allowed: it is where they go anyway. An empty field is not
 a clear: Clear is its own button (and `setRewardAddress(null)` or `''`).
 The words: "A reward address is a Base address: 0x and 40 hex characters.",
 "That address's capital letters don't match its checksum: check it for a
-typo.", the zero address's (as Send's).
+typo.", the zero address's (as Send's), "That is this neuron's identity.
+This app claims rewards only from the vault, so rewards sent to the
+identity would sit unclaimed. Use another address, or Clear to send them to
+your vault."
 
-**Central's answer** (`rewardFrom`): a 0x address is shown checksummed;
-null, `''`, the zero address or anything else (central may still hold a
-value from before Base until its migration runs) is **not set**: rewards go to the vault.
-Such an old value is never shown, and it never breaks the card.
+**Central's answer** (`rewardFrom`): since `base-upgrade` 8dcc016 the GET
+answers the Base address the reward is paid at: a value set before Base
+reads as the same key's Base address (a pool's, or this neuron's own
+identity or vault), and null when unset or unknown. A 0x address is shown
+checksummed; null (or `''`) is **not set**: rewards go to the vault.
+Anything else (it should not happen) is an error, "The Satori Network
+answered a reward address that isn't a Base address, so it isn't shown.",
+never read as not set. This neuron's own addresses are named: "your vault",
+or "your identity" with a note that rewards there aren't claimed in this
+app (Save another address, or Clear). `status().central.reward.whose` and
+`rewardAddress().whose` say the same (`'vault'`, `'identity'` or null).
 
 **Shown**: "Not set · rewards go to your vault", or the address shortened
 (`0x3a91…B6E7`, as the Wallet shortens a recipient; the full one in its
-hover) with Copy; while it is read,
+hover) with Copy and its name when it is this neuron's own; while it is read,
 "Reading it from the Satori Network…"; when it could not be read, the error
 with Try again. A field for a new one, **Save**, and **Clear** (only while
 one is set). Save and Clear say "Saving…", "Clearing…", and the card's line
@@ -248,9 +263,15 @@ says each step at Home's pace (`src/ui/hold.js`): "Signing in to the Satori
 Network…", "Saving the reward address…" (or "Clearing the reward
 address…"), then "Saved: the Satori Network sends this neuron's rewards to
 0x…" with the full address, or "Cleared: rewards go to your vault". It is
-the `reward` task in `health().work`, which Home's hero shows too. Errors
-are the check's words, or the Satori Network's ("Satori Network 400:
-Invalid Base address", "Satori Network unreachable: …").
+the `reward` task in `health().work`, which Home's hero shows too. While it
+reads or saves, a small ring turns beside the words: the hero's ring
+(`.spin`, the same `ring-turn`, still under reduced motion), so the wait is
+never silent on Settings, where the hero is not; it is the only moving thing
+there. Errors are the check's words, or the Satori Network's ("Satori
+Network 400: Invalid Base address", "Satori Network unreachable: …"). A
+change of the Satori Network's address forgets the last one's: its reward
+address, and the card's saved line and error; a new read drops the last
+save's line ("Cleared: …" may no longer hold when it changed elsewhere).
 
 **Noted**: like an address change, a reward address set or cleared, from
 Settings or an agent, is a `setting` row, and Home notes it for 24 h
@@ -258,35 +279,45 @@ Settings or an agent, is a `setting` row, and Home notes it for 24 h
 vault"; [health.md](health.md#address-changes)). Saving the same address
 again is not a change.
 
-**Depends on central**: the Base check is central's change on
-`base-upgrade` (2026-10-19). Until central2 is redeployed with it, central2
-checks for its old address kind and answers 400 to every 0x address, which
-Save shows as the Satori Network's error. The app is tested against the
-stub central (`e2e/stub.js`), which answers as the new route
-(`e2e/reward.spec.js`: not read at load; read when Settings opens, an old
-value shown as not set; a checksum typo and a non-Base address refused
-before any call; Save's steps, the address shortened with its hover, Home's
-note; the same address again is no change; Clear; the agent API; central2's
-refusal today, "Satori Network 400: Invalid Evrmore address"). Unit tests:
-`src/neuron/reward.test.js` (the checks, central's answers, the read and
-the set, a read overtaken by a set), `src/central/central.test.js` (signed
-in, the body, a 401 retried once, a 400's words).
+**Central**: the route's Base check (`base-upgrade` be14949: a 0x address
+stored EIP-55, or an old-kind address only with its pubkey, which this app
+never sends) and the GET's Base answer (8dcc016) are live on central2.
+Tests: the stub central (`e2e/stub.js`) answers as that route
+(`e2e/reward.spec.js`: not read at load; read when Settings opens, its
+words and turning ring meanwhile; a checksum typo, a non-Base address and
+this neuron's identity refused before any call; Save's steps with the ring,
+the address shortened with its hover, Home's note; the same address again
+is no change; Clear; this neuron's vault and identity named; the agent API;
+a refusal in the Satori Network's words; another Satori Network forgets the
+last words). Unit tests: `src/neuron/reward.test.js` (the checks, the
+identity refused, central's answers, an unreadable one never "not set",
+whose, the read and the set, a read overtaken by a set),
+`src/central/central.test.js` (signed in, the body, a 401 retried once, a
+400's words).
 
-<img src="../screenshots/reward-set-phone-light.png" alt="Settings › Reward address on a phone: 0x3a91…B6E7 with Copy, Saved: the Satori Network sends this neuron's rewards to 0x3a91ecc0…" width="240"> <img src="../screenshots/reward-none-phone-dark.png" alt="Settings › Reward address, dark: Not set · rewards go to your vault" width="240">
+<img src="../screenshots/reward-set-phone-light.png" alt="Settings › Reward address on a phone: 0x3a91…B6E7 with Copy, Saved: the Satori Network sends this neuron's rewards to 0x3a91ecc0…" width="240"> <img src="../screenshots/reward-none-phone-dark.png" alt="Settings › Reward address, dark: Not set · rewards go to your vault" width="240"> <img src="../screenshots/reward-identity-phone-light.png" alt="Settings › Reward address: the identity's address, named your identity, with its note" width="240">
 [desktop](../screenshots/reward-set-desktop-light.png),
-[desktop, dark, not set](../screenshots/reward-none-desktop-dark.png).
+[desktop, dark, not set](../screenshots/reward-none-desktop-dark.png),
+[desktop, the identity](../screenshots/reward-identity-desktop-light.png),
+[saving, the ring turning](../screenshots/reward-saving-phone-light.png).
 
-**Live, read only** (2026-10-19, the dev server on :5180 against central2,
-fresh profiles with throwaway keys, nothing saved): register, the first
-poll at once, 84 of 84 accepted; nothing asked of the reward address until
-Settings opened; then the signed `GET /api/v1/peer/reward-address` (Bearer)
-answered 200 `{"reward_address": null}` and the card read "Not set ·
-rewards go to your vault" 0.8 s after the tab opened; `rewardAddress()` the
-same. In the first try Settings opened during the first poll: both logins
-went through, and both calls were answered
+**Live** (2026-10-19, the dev server on :5180 against central2, fresh
+profiles with throwaway keys). Read only, before central2 took the Base
+check: register, the first poll at once, 84 of 84 accepted; nothing asked
+of the reward address until Settings opened; then the signed `GET
+/api/v1/peer/reward-address` (Bearer) answered 200 `{"reward_address":
+null}` and the card read "Not set · rewards go to your vault" 0.8 s after
+the tab opened; `rewardAddress()` the same; in a first try Settings opened
+during the first poll, and both logins and both calls were answered
 ([phone](../screenshots/reward-live-central2-phone.png),
-[desktop](../screenshots/reward-live-central2-desktop.png)). Save was not
-tried live: central2 still runs the old check.
+[desktop](../screenshots/reward-live-central2-desktop.png)). Then on
+central2 with `base-upgrade` 8dcc016 (a reviewer's probe): 84 of 84
+accepted; `setRewardAddress()` with a padded lower-case address answered
+it checksummed in about 1 s, and `rewardAddress()` read it back; a set
+alongside a poll went through; Save in the card said "Saving…" with
+"Signing in to the Satori Network…", then "Saving the reward address…",
+then "Saved: …"; the identity's own address was refused before any call;
+cleared at the end (null). Nothing was sent to prod.
 
 ## The protocol audit
 
@@ -390,7 +421,7 @@ relay list and Base's config are read from the new central at once.
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
 | Prediction numbers are sent as JS prints them (`100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`). | Central reads them with `float()`; nothing depends on the layout ([the protocol audit](#the-protocol-audit)). |
 | The register result checks the vault (`vaultMismatch`, with both Base addresses); Lite ignores register's answer (`server.py:402-405`). | Central keeps the first vault registered for an identity and pays that vault's Base address: a mismatch means this vault is not paid ([the vault in register's answer](#the-vault-in-registers-answer)). |
-| The reward address is read signed in (the login's Bearer token), not by `?wallet_pubkey=`; no copy is kept in the app, and it is read after each register, not synced both ways (Lite: `start.py:5020-5085`). | The owner's call (2026-10-19): read it as the app's other signed calls. The Satori Network is the one source, so nothing local can disagree with it ([the reward address](#the-reward-address)). |
+| The reward address is read signed in (the login's Bearer token), not by `?wallet_pubkey=`; no copy is kept in the app, and it is read when Settings opens (and by `rewardAddress()`), not synced both ways (Lite: `start.py:5020-5085`). | The owner's call (2026-10-19): read it as the app's other signed calls. The Satori Network is the one source, so nothing local can disagree with it ([the reward address](#the-reward-address)). |
 | The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the identity and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
 | Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |
 
