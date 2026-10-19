@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds the deploy image (docs/design/deploy.md):
-#   1. npm ci, if node_modules is missing or older than package-lock.json;
+#   1. npm ci, if node_modules is missing or older than package-lock.json, with TLS verified and no install scripts
+#      (whatever this box's environment says: the lock's sha512s guard the packages, TLS the rest);
 #   2. dist/ with this deployment's defaults (deploy/build.env; a variable already
 #      set in the environment wins), checked for them; DuckDB's wasm also in brotli
 #      (scripts/brotli.mjs: minutes the first time per DuckDB version, then cached);
@@ -10,10 +11,12 @@
 # Exits 2 when docker is not reachable (dist/ is then built and checked, no image).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# This box turns TLS verification off for node and npm (the security review, 2026-10-19): on for this build.
+export NODE_TLS_REJECT_UNAUTHORIZED=1 NPM_CONFIG_STRICT_SSL=true
 
 # 1.
 if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
-  npm ci
+  npm ci --ignore-scripts # the lock's one install script is fsevents' (macOS only)
 fi
 
 # 2.
