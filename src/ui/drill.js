@@ -4,14 +4,13 @@
 // destinations, and In shows the inputs of the output chosen (the only one, today).
 import { fmtNum, fmtWhen, shortHash } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
-import { spanText, markWords, kindLabelOf, descriptionOf } from '../neuron/models.js';
+import { spanText, markWords, kindLabelOf, descriptionOf, DESTS } from '../neuron/models.js';
 
-export { spanText };
+export { spanText, DESTS };
 
 const ARROW = { up: '↑', down: '↓', flat: '→' };
 // by the words people see (docs/intent/ui.md): the Satori Network (free), the Satori contract (uses gas), the Satori relays
 const LABEL = { network: 'Network', contract: 'Contract', relays: 'Relays' };
-export const DESTS = ['network', 'contract', 'relays'];
 const SOURCE = { central: 'Satori Network stream', base: 'Satori contract stream', nostr: 'Stream on the Satori relays' };
 const KINDS = ['bvar', 'bar1', 'bar1d', 'naive', 'echo'];
 

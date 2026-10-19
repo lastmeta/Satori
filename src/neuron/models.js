@@ -6,7 +6,7 @@
 //   modelsOf({ streams, subscriptions, lastBatch, baseFits }) → [model]    pure: from what the app already holds (each
 //     model's backtest is kept with it, by the poll, the Nostr intake, the Base batch or the training pass: train.js)
 //   summaryOf(models), engineStatus({ summary, central, work, now })      the tab's top
-//   sortModels(list, 'quality' | 'name'), filterModels(list, 'all' | 'network' | 'contract' | 'relays')
+//   sortModels(list, 'quality' | 'name'), filterModels(list, ['network', 'contract', 'relays']), toggleDest(selected, to)
 //   await modelDetail({ db, id, streams, subscriptions, lastBatch, baseHistory })   one model, recomputed on demand, with
 //     `retrain`: whether Retrain is offered ({ available, why: null | 'source' | 'history', last: the last result })
 import { MARGIN, explainModel } from '../engine/evolve.js';
@@ -257,12 +257,20 @@ export function sortModels(list, by = 'quality') {
   return [...list].sort((a, b) => rank(a) - rank(b) || ratio(a) - ratio(b) || byName(a, b));
 }
 
-/**
- * The models whose predictions go to `to`, by the words people see: 'network' (the Satori Network, central), 'contract' (the
- * Satori contract, Base), 'relays' (the Satori relays, Nostr); 'all': the list itself.
- */
-export const filterModels = (list, to = 'all') => (to === 'all' ? list
-  : list.filter((m) => m.outputs.some((o) => o.destinations.some((d) => d.to === to))));
+/** Where predictions go, by the words people see: the Satori Network (central), the Satori contract (Base), the Satori relays (Nostr). */
+export const DESTS = ['network', 'contract', 'relays'];
+
+/** The models whose predictions go to any of `to` (the filters that are on). */
+export const filterModels = (list, to = DESTS) =>
+  list.filter((m) => m.outputs.some((o) => o.destinations.some((d) => to.includes(d.to))));
+
+/** A filter tapped: off if on, on if off, in DESTS' order; the last one on stays on, so the filters never empty the list. */
+export function toggleDest(selected, to) {
+  if (!DESTS.includes(to)) return selected;
+  const on = selected.includes(to);
+  if (on && selected.length === 1) return selected;
+  return DESTS.filter((k) => (k === to ? !on : selected.includes(k)));
+}
 
 /** The chart's history: the points from HISTORY_HORIZONS horizons before the forecast was made on, at most HISTORY_POINTS. */
 function recent(points, at, horizon) {

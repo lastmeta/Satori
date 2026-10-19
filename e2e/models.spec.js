@@ -199,18 +199,38 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   expect(base.map((m) => [m.id, m.name, m.kind])).toEqual([['base:1', 'Stream 1', 'naive'], ['base:3', 'Stream 3', 'bar1']]);
   expect(base[1].outputs[0].destinations[0]).toMatchObject({ to: 'contract', status: 'sent', ref: { round: ROUND, tx: expect.stringMatching(/^0x/) } });
 
-  // Filter by where the predictions go; sort by quality or name.
-  await page.locator('[data-test=models-filter-contract]').click();
-  expect(await names(page)).toEqual(['Stream 1', 'Stream 3']);
-  await expect(page.locator('[data-test=models-filter-contract] .n')).toHaveText('2');
-  await page.locator('[data-test=models-filter-relays]').click();
+  // Filter by where the predictions go: three toggles ("All" is gone), all on at first; a tap turns one off or on again
+  // and the list shows the models that go to any one on; the last one on stays on (a tap does nothing), so the filters
+  // never empty the list.
+  const toggle = (k) => page.locator(`[data-test=models-filter-${k}]`);
+  const pressed = async () => Promise.all(['network', 'contract', 'relays'].map((k) => toggle(k).getAttribute('aria-pressed')));
+  await expect(page.locator('[data-test=models-filter-all]')).toHaveCount(0);
+  expect(await pressed()).toEqual(['true', 'true', 'true']);
+  await expect(rows(page)).toHaveCount(list.length);
+  await toggle('network').click();
+  expect(await pressed()).toEqual(['false', 'true', 'true']);
+  expect((await names(page)).sort()).toEqual(['Rain gauge', 'Stream 1', 'Stream 3']);
+  await toggle('contract').click();
   expect(await names(page)).toEqual(['Rain gauge']);
   await expect(rows(page).locator('.mname small')).toHaveText(`publishes ${stream}_pred`); // a word, not an arrow
   // on a phone the input chips say what they are (a computer's column header does): "reads +eth"
   await expect(rows(page).first().locator('.mreads')).toBeHidden();
-  await page.locator('[data-test=models-filter-network]').click();
-  await expect(rows(page)).toHaveCount(8);
-  await page.locator('[data-test=models-filter-all]').click();
+  await toggle('relays').click(); // the last one on: nothing happens
+  expect(await pressed()).toEqual(['false', 'false', 'true']);
+  expect(await names(page)).toEqual(['Rain gauge']);
+  await toggle('contract').click();
+  expect((await names(page)).sort()).toEqual(['Rain gauge', 'Stream 1', 'Stream 3']);
+  await expect(toggle('contract').locator('.n')).toHaveText('2'); // the counts are each destination's, whatever is on
+  await toggle('network').click();
+  await expect(rows(page)).toHaveCount(list.length);
+  // not kept: another visit to the tab starts with all three on
+  await toggle('network').click();
+  await toggle('relays').click();
+  expect(await pressed()).toEqual(['false', 'true', 'false']);
+  await page.evaluate(() => window.satori.go('home'));
+  await page.evaluate(() => window.satori.go('models'));
+  expect(await pressed()).toEqual(['true', 'true', 'true']);
+  await expect(rows(page)).toHaveCount(list.length);
   // Sort: the filters stay on the left; on the right a borderless "Sort" with its current choice, a menu of two with a
   // check on the current one, by keyboard (arrows, Enter, Escape back to the button) or a tap.
   const sortBtn = page.locator('[data-test=models-sort]');

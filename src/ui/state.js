@@ -41,7 +41,7 @@ export const state = reactive({
   modelsRev: 0,
   modelSort: readPref(SORT_KEY, ['quality', 'name'], 'quality'), // quality | name: this device's choice (src/ui/prefs.js)
   sortOpen: false, // the Sort menu is open
-  modelFilter: 'all', // all | central | base | network: where the predictions go
+  modelTo: ['network', 'contract', 'relays'], // the filters on (where predictions go); not kept: each visit to the tab starts with all
   modelOpen: '', // the drill-in's model id (#models/<id>), or ''
   modelRev: 0,
   modelOutput: 0, // whose inputs In shows (a model with several outputs)

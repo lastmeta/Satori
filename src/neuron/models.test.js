@@ -2,7 +2,7 @@
 // engine's status, sort and filter, and one model's drill-in recomputed from the stored history and spec.
 import { describe, expect, test } from 'vitest';
 import {
-  qualityOf, qualityOfAll, centralModels, nostrModels, baseModels, modelsOf, summaryOf, sortModels, filterModels, engineStatus,
+  qualityOf, qualityOfAll, centralModels, nostrModels, baseModels, modelsOf, summaryOf, sortModels, filterModels, toggleDest, DESTS, engineStatus,
   modelDetail, TIE,
 } from './models.js';
 import { runModels } from '../engine/evolve.js';
@@ -171,11 +171,23 @@ describe('the list: every model, named for the stream it predicts', () => {
       games: [{ streamId: 2, gameId: 2, named: false, direction: UP, model: 'bar1', latest: '1', forecast: '2', horizon: 86_400, step: 43_200 }] } });
     expect(sortModels(list, 'quality').map((m) => m.name)).toEqual(['gold', 'oil', 'eth', 'Stream 2']);
     expect(sortModels(list, 'name').map((m) => m.name)).toEqual(['eth', 'gold', 'oil', 'Stream 2']);
-    // by the words people see: the Satori Network, the Satori contract, the Satori relays
-    expect(filterModels(list, 'contract').map((m) => m.name)).toEqual(['Stream 2']);
-    expect(filterModels(list, 'network')).toHaveLength(3);
-    expect(filterModels(list, 'relays')).toEqual([]);
-    expect(filterModels(list, 'all')).toBe(list);
+    // by the words people see: the Satori Network, the Satori contract, the Satori relays; independent toggles, a model
+    // shown when it goes to any one selected
+    expect(DESTS).toEqual(['network', 'contract', 'relays']);
+    expect(filterModels(list, ['contract']).map((m) => m.name)).toEqual(['Stream 2']);
+    expect(filterModels(list, ['network'])).toHaveLength(3);
+    expect(filterModels(list, ['relays'])).toEqual([]);
+    expect(filterModels(list, ['network', 'contract'])).toHaveLength(4);
+    expect(filterModels(list, ['relays', 'contract']).map((m) => m.name)).toEqual(['Stream 2']);
+    expect(filterModels(list, DESTS)).toEqual(list);
+  });
+
+  test('toggleDest: a tap turns one destination off or on again; the last one on stays on (never an empty list by filters)', () => {
+    expect(toggleDest(DESTS, 'network')).toEqual(['contract', 'relays']);
+    expect(toggleDest(['contract', 'relays'], 'network')).toEqual(DESTS); // in the tab's order
+    expect(toggleDest(['relays'], 'contract')).toEqual(['contract', 'relays']);
+    expect(toggleDest(['relays'], 'relays')).toEqual(['relays']); // the last: nothing happens
+    expect(toggleDest(['relays'], 'nope')).toEqual(['relays']);
   });
 });
 

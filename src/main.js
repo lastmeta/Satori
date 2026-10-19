@@ -19,7 +19,7 @@ import {
 import { nsec, nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
-import { modelsOf, modelDetail } from './neuron/models.js';
+import { modelsOf, modelDetail, toggleDest, DESTS } from './neuron/models.js';
 import { createTrainer } from './neuron/train.js';
 import { createRetrain } from './neuron/retrain.js';
 import { box as modelBox, modelHref } from './ui/models.js';
@@ -436,6 +436,7 @@ function go(where, section) {
   if (location.hash !== hash) history.pushState(null, '', hash);
   const changed = state.tab !== tab;
   const opened = tab === 'models' && model !== state.modelOpen; // showModel scrolls
+  if (changed && tab === 'models') state.modelTo = [...DESTS]; // a visit to the tab: every filter on (not kept)
   state.tab = tab;
   if (changed) fillSettings();
   if (tab === 'models') showModel(model);
@@ -448,6 +449,7 @@ function go(where, section) {
 }
 addEventListener('popstate', () => {
   const { tab, model } = routeOf(location.hash);
+  if (tab === 'models' && state.tab !== 'models') state.modelTo = [...DESTS]; // a visit to the tab: every filter on
   state.tab = tab ?? 'home';
   if (state.tab === 'models') showModel(model);
   fillSettings();
@@ -622,9 +624,9 @@ const actions = {
       state.retrainError = err?.message ?? String(err);
     }
   },
-  /** The Models list's filter (where predictions go) and sort; the sort is kept on this device. */
-  setModelView({ filter, sort }) {
-    if (filter) state.modelFilter = filter;
+  /** The Models list's filters (where predictions go: a tap turns one off or on, the last stays on) and sort; the sort is kept on this device. */
+  setModelView({ to, sort }) {
+    if (to) state.modelTo = toggleDest(state.modelTo, to);
     if (sort) {
       state.modelSort = sort;
       writePref(SORT_KEY, sort);

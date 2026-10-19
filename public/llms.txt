@@ -57,6 +57,15 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-18 (the Models filters are toggles; "All" is gone)
+
+- `models-filter-all` is gone. `models-filter-network`, `-contract` and
+  `-relays` are toggles (`aria-pressed`), all on at first: a click turns one
+  off or on again, and the list shows the models whose predictions go to
+  any one that is on. The last one on stays on (a click on it does
+  nothing). Not kept: each visit to the tab starts with all three on.
+  `models()` is unchanged (it is every model, whatever the filters).
+
 ## Changed 2026-10-18 (Retrain: keep training a model until it beats no change)
 
 - New: `await satori.retrain(id)` keeps training one Satori Network model
@@ -107,7 +116,8 @@ Renamed, with no aliases:
   `'contract'`, `'network'` → `'relays'` (reason ids unchanged).
 - `models()` `outputs[].destinations[].to`: `'central' | 'base' | 'network'`
   → `'network' | 'contract' | 'relays'`; the Models filters
-  `models-filter-<all|network|contract|relays>`; the tags read "Network",
+  `models-filter-<network|contract|relays>` (toggles since the entry
+  above); the tags read "Network",
   "Contract", "Relays". Model ids and `source` keep the code's names
   (`central:<uuid>`, `source: 'central' | 'base' | 'nostr'`).
 - Words: the health lines, cards, feed and steps say "the Satori Network",
@@ -1013,7 +1023,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`, `tab-<tab>`,
   `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`. Models:
   `engine` (`data-tone`), `engine-title`, `engine-line`, `engine-kinds`,
-  `engine-quality` (the bar's legend), `engine-median`, `engine-note`, `models-filter-<all|network|contract|relays>`,
+  `engine-quality` (the bar's legend), `engine-median`, `engine-note`, `models-filter-<network|contract|relays>` (toggles, `aria-pressed`, all on at first; the last on stays on),
   `models-sort` (the Sort button: opens a menu, `aria-expanded`), `models-sort-menu`,
   `models-sort-<quality|name>` (its items, `aria-checked`; the choice is kept on this device), `models` (the list) with
   `model-row` (`data-id`, `data-mark`: better, tie, worse or none) and inside

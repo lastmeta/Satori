@@ -435,7 +435,13 @@ a day), the arrow after the forecast saying which way it goes from now (on
 a phone, two short lines: "Now 3,153.92" and "in 24 h 3,141.01 ↓"); where
 its predictions go, as tiny text tags in the chip style ("Network",
 "Contract", "Relays": the pictograms they replaced were unreadable). Above it, on the left, the
-filters **All · Network · Contract · Relays** (with counts); on the right a
+filters **Network · Contract · Relays**, each with its count: three toggles,
+all on at first (the owner, 2026-10-18: "remove the All filter button").
+A tap turns one off or on again (`aria-pressed`, the selected style), and
+the list shows the models whose predictions go to any one that is on; the
+last one on stays on (a tap on it does nothing), so the filters never empty
+the list. The choice is not kept: each visit to the tab (from another tab,
+or a reload) starts with all three on; back from a drill-in keeps it. On the right a
 borderless **Sort** with a sort icon (three stacked lines) that shows its
 choice subtly ("Sort: Quality"). Tapping it opens a small menu, **Quality**
 and **Name**, with a check on the current choice (quality: the lowest ratio
@@ -556,7 +562,7 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
 - `data-test`: `models-tab`, `engine` (`data-tone`), `engine-title`,
   `engine-line`, `engine-kinds`, `engine-quality` (the bar's legend: its items `.qleg`, its `aria-label` the
   whole line), `engine-median`, `engine-note`,
-  `models-filter-<all|network|contract|relays>`, `models-sort` (the Sort button, `aria-expanded`),
+  `models-filter-<network|contract|relays>` (toggles, `aria-pressed`), `models-sort` (the Sort button, `aria-expanded`),
   `models-sort-menu`, `models-sort-<quality|name>` (its items, `aria-checked`),
   `models`, `model-row` (`data-id`, `data-mark`) with `model-mark` (the words; `data-short`: the phone's),
   `model-name`, `model-kind`, `model-inputs`, `model-forecast`, `model-to`;
@@ -595,7 +601,8 @@ agent API reads the tab's state instead of every stream's row again
 - `npm test`: `src/neuron/models.test.js` (the quality classes and their
   edges, naive and not scored, a perfect no change, several outputs' median;
   the list from central rows, Nostr subscriptions and a Base batch with what
-  was left out; the summary; sort and filter; the status's four states;
+  was left out; the summary; sort and filter (any destination on; a tap
+  toggles one, the last one on stays on); the status's four states;
   the drill-in recomputed for a bvar model, a Nostr model, a Base model with
   and without the chain; the Nostr scores cached per seq);
   `src/ui/drill.test.js` (a fabricated **two-output model**: Out draws both
@@ -619,7 +626,8 @@ agent API reads the tab's state instead of every stream's row again
   2 Base models) and subscribed to a stream on a test relay (16
   observations: a Network model). The status (Resting, Working with no
   animation on the tab while a poll is held, the counts by kind and mark),
-  `models()`, filter by destination, sort by name and quality, a row's
+  `models()`, the filters (three toggles, all on; one off and on again; the
+  last one on stays on; a new visit starts with all on), sort by name and quality, a row's
   chips, a bvar drill-in (In ranked and summing to 100%, the Model, Details,
   Out with its chart and Central's acceptance) and `model(id)` against the
   list, back to the list where it was, a Base drill-in, a deep link over a

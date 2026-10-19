@@ -530,7 +530,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .ring { width: 56px; height: 56px; }
   .chan .cost { flex-basis: 100%; margin: 0 0 0 24px; } /* a narrow chip: "free", "uses gas" under the name */
   .mcontrols .segmented { gap: 4px; }
-  .mcontrols .segmented .small-btn { padding: 6px 8px; } /* the four filters on one line, down to 360 px */
+  .mcontrols .segmented .small-btn { padding: 6px 8px; } /* the three filters on one line, down to 360 px */
 }
 
 /* ── a computer: the top nav and the dashboard grid ── */

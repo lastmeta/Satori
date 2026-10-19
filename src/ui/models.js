@@ -16,7 +16,7 @@ export const box = { list: [], detail: null, retrains: {} };
 
 // where predictions go, by the words people see (docs/intent/ui.md): the Satori Network, the Satori contract, the Satori relays
 const TO = { network: 'Network', contract: 'Contract', relays: 'Relays' };
-const FILTERS = [['all', 'All'], ['network', 'Network'], ['contract', 'Contract'], ['relays', 'Relays']];
+const FILTERS = [['network', 'Network'], ['contract', 'Contract'], ['relays', 'Relays']]; // toggles, all on at first
 const SORTS = [['quality', 'Quality'], ['name', 'Name']];
 
 /** The models' hash route: ids are `<source>:<key>`, kept readable. */
@@ -36,7 +36,7 @@ function row(a, v) {
 /** The list's view, read again when the models, the sort or the filter change. */
 const listed = () => {
   void state.modelsRev;
-  return sortModels(filterModels(box.list, state.modelFilter), state.modelSort).map(rowView);
+  return sortModels(filterModels(box.list, state.modelTo), state.modelSort).map(rowView);
 };
 const summary = () => {
   void state.modelsRev;
@@ -44,7 +44,7 @@ const summary = () => {
 };
 const count = (to) => {
   void state.modelsRev;
-  return filterModels(box.list, to).length;
+  return filterModels(box.list, [to]).length;
 };
 
 function status() {
@@ -122,7 +122,7 @@ function sortMenu(a) {
 function controls(a) {
   return html`
   <div class="mcontrols">
-    <div class="segmented" role="group" aria-label="Show the models whose predictions go to">${FILTERS.map(([k, word]) => html`<button class="small-btn" data-test="${`models-filter-${k}`}" aria-pressed="${() => String(state.modelFilter === k)}" @click="${() => a.setModelView({ filter: k })}">${word} <span class="n">${() => count(k)}</span></button>`)}</div>
+    <div class="segmented" role="group" aria-label="Show the models whose predictions go to">${FILTERS.map(([k, word]) => html`<button class="small-btn" data-test="${`models-filter-${k}`}" aria-pressed="${() => String(state.modelTo.includes(k))}" @click="${() => a.setModelView({ to: k })}">${word} <span class="n">${() => count(k)}</span></button>`)}</div>
     ${sortMenu(a)}
   </div>`;
 }
