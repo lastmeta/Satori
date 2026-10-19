@@ -53,6 +53,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let centralUrls = [];
   let relays = new Map(); // url → { url, from: Set, relay, blocked, chunks }
   let timer = null;
+  let lastReconcile = -Infinity; // when the last hourly pass began (s)
+  let reconciling = null;
   const intakeLine = serial();
   const sending = new Set();
   const log = (err) => console.error('[satori] nostr', err);
@@ -204,7 +206,12 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
    * The hourly pass (start.py:200-292): central's relay list again (kept when
    * central fails), connect new and dropped relays, re-announce, NIP-65.
    */
-  async function reconcile() {
+  function reconcile() {
+    lastReconcile = now();
+    reconciling ??= reconcileOnce().finally(() => { reconciling = null; });
+    return reconciling;
+  }
+  async function reconcileOnce() {
     try {
       const list = await central().relays();
       const urls = [...new Set((Array.isArray(list) ? list : []).map((r) => String(r?.relay_url ?? '').trim()).filter(isRelayUrl))];
@@ -321,7 +328,11 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       userRelays = (await db.get('nostr_relays')) ?? defaults.relays;
       centralWrite = (await db.get('nostr_central_write')) ?? defaults.centralWrite;
       await reconcile();
-      if (timer === null) timer = si(() => void reconcile().catch((err) => console.error('[satori] reconcile', err)), RECONCILE_S * 1000);
+      // hourly, unless the catch-up pass ran it within the hour (a minute's slack for the timer)
+      if (timer === null) {
+        timer = si(() => void (now() - lastReconcile >= RECONCILE_S - 60 ? reconcile() : Promise.resolve())
+          .catch((err) => console.error('[satori] reconcile', err)), RECONCILE_S * 1000);
+      }
     },
     stop() {
       ci(timer);
@@ -330,6 +341,23 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       relays = new Map();
     },
     reconcile,
+    /**
+     * The catch-up pass (the device slept, so timers fired late or not at all): each relay whose reconnect is due
+     * connects now, and the hourly pass runs once an hour has gone by since the last. → a promise when it did
+     * something, else null (also before start()).
+     */
+    catchUp() {
+      if (timer === null) return null;
+      let connected = false;
+      for (const e of relays.values()) {
+        if (e.relay?.state === 'closed' && e.relay.retryAt != null && Date.now() >= e.relay.retryAt) {
+          e.relay.connect();
+          connected = true;
+        }
+      }
+      if (!reconciling && now() - lastReconcile >= RECONCILE_S) return reconcile();
+      return connected ? Promise.resolve() : null;
+    },
     idle,
 
     async status() {

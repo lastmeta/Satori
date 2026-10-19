@@ -184,6 +184,8 @@ export function createPoller(run, { db, work = null, now = nowS, setTimeout, cle
   return {
     start: async () => s.start(firstPollAt(await db.get('next_poll_at'), now())),
     poll: s.run,
+    /** The poll now when its time has passed and none runs (the device slept: timers don't count it); else null. */
+    catchUp: s.catchUp,
     idle: s.idle,
     get next() { return s.next; },
     get running() { return s.running; },

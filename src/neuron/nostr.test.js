@@ -147,6 +147,37 @@ describe('relays', () => {
   });
 });
 
+describe('catch-up after the device sleeps (docs/plans/runtime.md#catch-up-pass)', () => {
+  test('a relay whose reconnect is due connects now; the hourly pass runs once an hour has gone by; nothing before start', async () => {
+    db = await memoryDb();
+    const idle = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => fakeCentral(), makeRelay: fakeRelays().make,
+      now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0 });
+    expect(idle.catchUp()).toBeNull(); // not started
+    await boot();
+    expect(central.relays).toHaveBeenCalledTimes(1);
+    expect(nostr.catchUp()).toBeNull(); // nothing due: every relay connecting, the pass just ran
+    const user = relays.get(USER_RELAY);
+    user.drop();
+    user.retryAt = Date.now() + 60_000; // its backoff, not due yet
+    expect(nostr.catchUp()).toBeNull();
+    const connects = user.connects;
+    user.retryAt = Date.now() - 1; // due: its timer slept
+    expect(nostr.catchUp()).toBeInstanceOf(Promise);
+    expect(user.connects).toBe(connects + 1);
+    clock += 3599;
+    user.drop();
+    user.retryAt = null; // closed with no retry pending (stopped): left to the hourly pass
+    expect(nostr.catchUp()).toBeNull();
+    clock += 1; // an hour since the last pass
+    const pass = nostr.catchUp();
+    expect(nostr.catchUp()).toBeNull(); // once
+    await pass;
+    expect(central.relays).toHaveBeenCalledTimes(2);
+    expect(user.connects).toBe(connects + 2); // the pass reconnects what is closed
+    expect(nostr.catchUp()).toBeNull();
+  });
+});
+
 describe('discover', () => {
   test('pages back with until over every open relay; newest per (author, d); tombstones dropped; _pred and subscribed marked', async () => {
     await boot();

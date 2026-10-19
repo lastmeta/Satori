@@ -164,6 +164,25 @@ describe('relay', () => {
     expect(states.slice(0, 9)).toEqual(['connecting', 'open', 'closed', 'connecting', 'closed', 'connecting', 'open', 'closed', 'connecting']);
   });
 
+  test("retryAt: the pending reconnect's deadline (ms), so the catch-up pass can bring it forward after a sleep; null otherwise", () => {
+    vi.setSystemTime(1_000_000);
+    const r = make();
+    expect(r.retryAt).toBeNull();
+    r.connect();
+    last().open();
+    expect(r.retryAt).toBeNull();
+    last().drop(); // 1 s backoff
+    expect(r.retryAt).toBe(1_001_000);
+    vi.setSystemTime(5_000_000); // the device slept: the timer has not fired
+    expect(FakeSocket.all).toHaveLength(1);
+    r.connect(); // brought forward
+    expect([FakeSocket.all.length, r.retryAt, r.state]).toEqual([2, null, 'connecting']);
+    vi.advanceTimersByTime(10_000);
+    expect(FakeSocket.all).toHaveLength(2); // the old timer was cleared
+    r.close();
+    expect(r.retryAt).toBeNull();
+  });
+
   test('a relay that accepts and drops every connection is not hammered (1, 2, 4, 8 s …)', () => {
     const r = make();
     r.connect();

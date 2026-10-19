@@ -1,7 +1,7 @@
 // One relay over a WebSocket (NIP-01), as much of a client as Satori needs
 // (docs/design/nostr.md#relays-and-the-read-only-flag):
 //   const r = createRelay(url, { onEvent(subId, event), onOpen(r), onState(state) })
-//   r.connect()                    // and reconnect with backoff until r.close()
+//   r.connect()                    // and reconnect with backoff until r.close(); r.retryAt: the next try (ms) or null
 //   r.sub(id, filters) / r.unsub(id)   // kept: re-sent after every reconnect
 //   await r.fetch(filters)         // one REQ until EOSE (10 s at most) → events
 //   await r.publish(event)         // → { ok, message } from the relay's OK
@@ -20,13 +20,14 @@ export const backoffMs = (n, random = Math.random) =>
   Math.round(Math.min(BACKOFF_MIN_MS * 2 ** n, BACKOFF_MAX_MS) * (0.8 + 0.4 * random()));
 
 export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = () => {}, onOpen = () => {},
-  onState = () => {}, random = Math.random, onTraffic = () => emit('network') } = {}) {
+  onState = () => {}, random = Math.random, onTraffic = () => emit('network'), now = Date.now } = {}) {
   let ws = null;
   let state = 'closed';
   let error = '';
   let stopped = true;
   let attempt = 0;
   let timer = null;
+  let retryAt = null; // when the pending reconnect is due (ms): a sleeping device's timer fires late (the catch-up pass)
   let stable = null; // resets the backoff once the connection has proved itself
   let n = 0;
   const kept = new Map(); // id → filters
@@ -56,7 +57,9 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
 
   function retry() {
     clearTimeout(timer);
-    timer = setTimeout(open, backoffMs(attempt++, random));
+    const ms = backoffMs(attempt++, random);
+    retryAt = now() + ms;
+    timer = setTimeout(open, ms);
   }
 
   const proven = () => {
@@ -91,6 +94,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
   }
 
   function open() {
+    retryAt = null;
     if (stopped || ws) return;
     setState('connecting');
     let sock;
@@ -123,6 +127,8 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
     url,
     get state() { return state; },
     get error() { return error; },
+    /** When the pending reconnect is due (ms), or null: none pending. */
+    get retryAt() { return retryAt; },
     /** Connect now (a pending retry is brought forward); no-op while connected or connecting. */
     connect() {
       stopped = false;
@@ -134,6 +140,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
       stopped = true;
       clearTimeout(timer);
       timer = null;
+      retryAt = null;
       const sock = ws;
       if (sock) {
         lost('');

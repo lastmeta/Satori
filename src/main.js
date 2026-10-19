@@ -19,6 +19,7 @@ import {
 import { nsec, nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
+import { catchUpAll } from './neuron/schedule.js';
 import { modelsOf, modelDetail, toggleDest, DESTS } from './neuron/models.js';
 import { createTrainer } from './neuron/train.js';
 import { createRetrain } from './neuron/retrain.js';
@@ -221,10 +222,6 @@ async function startNeuron() {
       await refreshModels();
     } });
   state.now = nowS();
-  setInterval(() => {
-    state.now = nowS();
-    activity.beat();
-  }, 30_000);
   const c = await connect();
   poller = createPoller(runCycle, { db, work, onChange: ({ next, running }) => {
     state.central = { ...state.central, nextPoll: next, polling: running };
@@ -249,8 +246,28 @@ async function startNeuron() {
   backfill().then(refresh).catch((err) => console.error('[satori] history', err)); // streams with no history yet get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
+  wakeUps();
   if (state.modelOpen) loadModel(state.modelOpen); // a link to a model (#models/<id>), now that every flow is up
   retrain.resume().catch((err) => console.error('[satori] retrain resume', err)); // pending work: a retrain asked before continues
+}
+
+/**
+ * The heartbeat, and every wake (docs/plans/runtime.md#catch-up-pass): the session's heartbeat first (a late one means
+ * the page did not run: a new session, *Was asleep*), then the catch-up pass. Browser timers don't count the time a
+ * device sleeps, so every job whose time has passed and isn't running runs now: the poll, the Base batch check, the
+ * relays' reconnects and hourly pass, and the training pass. Each job's own single flight keeps it from running twice.
+ */
+async function tick(why) {
+  state.now = nowS();
+  await activity.beat();
+  catchUpAll({ poll: poller.catchUp, base: base.catchUp, relays: nostr.catchUp, train: () => void trainer.run() }, why);
+}
+function wakeUps() {
+  setInterval(() => void tick('tick'), 30_000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void tick('visible'); });
+  document.addEventListener('resume', () => void tick('resume')); // a frozen tab, thawed (Page Lifecycle)
+  addEventListener('pageshow', (e) => { if (e.persisted) void tick('pageshow'); }); // back from the back-forward cache
+  addEventListener('online', () => void tick('online'));
 }
 
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */

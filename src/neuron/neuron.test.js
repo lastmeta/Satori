@@ -441,6 +441,32 @@ describe('createPoller', () => {
   });
 });
 
+describe('createPoller after the device sleeps (docs/plans/runtime.md#catch-up-pass)', () => {
+  test('the wall clock jumps 12 h with the page open: no timer fires; catchUp() polls once, persisted, then 11 h on', async () => {
+    vi.useFakeTimers({ now: T * 1000 });
+    try {
+      const nowS = () => Date.now() / 1000;
+      const ran = [];
+      const poller = createPoller(async () => { ran.push(nowS()); return { poll: { at: nowS() }, submit: null }; }, { db, now: nowS });
+      await db.set('next_poll_at', T + 11 * 3600);
+      await poller.start();
+      expect(poller.catchUp()).toBeNull(); // not due
+      vi.setSystemTime((T + 12 * 3600) * 1000); // asleep 12 h: Date.now() jumps, the 11 h timer has not fired
+      await vi.advanceTimersByTimeAsync(0);
+      expect(ran).toEqual([]);
+      const run = poller.catchUp();
+      expect(poller.catchUp()).toBeNull(); // running: once
+      await run;
+      expect(ran).toEqual([T + 12 * 3600]);
+      expect(poller.next).toBe(T + 23 * 3600);
+      expect(await db.get('next_poll_at')).toBe(T + 23 * 3600);
+      expect(poller.catchUp()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("the poll's work on Home: from its start until the next poll is armed, so the line at rest never says \"next now…\"", () => {
   test('at the exact transitions (fake timers): the timer firing shows the step; the work ends with the next poll armed', async () => {
     vi.useFakeTimers({ now: T * 1000 });
@@ -485,7 +511,9 @@ describe("the poll's work on Home: from its start until the next poll is armed, 
       expect(poller.next).toBe(T + 3 + POLL_EVERY_S);
       expect(work.all()).toEqual({});
       expect(seen.at(-1)).toBe('Sent 82 predictions just now · next in 11 h');
-      expect(seen.filter((x) => !x.startsWith('step '))).toEqual(['Getting its first predictions…', 'Sent 82 predictions just now · next in 11 h']);
+      // armed, its timer not fired yet: nothing runs, so "soon", never "now…" (in the app, the sign-in holds central's work
+      // until the poll starts: "Signing in…")
+      expect(seen.filter((x) => !x.startsWith('step '))).toEqual(['First predictions soon.', 'Sent 82 predictions just now · next in 11 h']);
       expect(seen.join('\n')).not.toMatch(/next now/);
 
       // Poll now at rest: the step at once, never the line with "next now…"; then the next time again

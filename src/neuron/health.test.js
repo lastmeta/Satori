@@ -69,10 +69,16 @@ describe('ok: predicting', () => {
 
 describe('idle: calm, never red for being closed', () => {
   test('starting: a new neuron before its first good cycle, getting its first predictions at once', () => {
-    for (const c of [central({ polling: true }), central({ nextPoll: NOW }), central({ nextPoll: null })]) { // polling, due, not armed yet
-      const h = health({ rows: [open(NOW - M)], central: c });
+    const register = { central: { task: 'central', step: 'register', done: null, total: null, since: 0, critical: false } };
+    for (const [c, work] of [[central({ polling: true }), {}], [central({ nextPoll: null }), register]]) { // polling; registering first
+      const h = health({ rows: [open(NOW - M)], central: c, work });
       expect(h).toMatchObject({ status: 'idle', title: 'Starting', line: 'Getting its first predictions…', action: null });
-      expect(h.channels.network).toEqual({ state: 'idle', tone: 'idle', text: 'First poll now…' });
+      expect(h.channels.network).toMatchObject({ state: 'idle', text: 'First poll now…' });
+    }
+    // due, and nothing runs (a timer that slept, until the catch-up pass): it never claims to be working
+    for (const c of [central({ nextPoll: NOW }), central({ nextPoll: null })]) {
+      const h = health({ rows: [open(NOW - M)], central: c });
+      expect([h.line, h.channels.network.text]).toEqual(['First predictions soon.', 'First poll soon']);
     }
     // a stored time still ahead (none for a new neuron): says when
     expect(health({ rows: [open(NOW - 10 * M)], central: central({ nextPoll: NOW + 12 * M }) }).line).toBe('First predictions in 12 min.');
@@ -85,6 +91,12 @@ describe('idle: calm, never red for being closed', () => {
     expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', line: 'Closed for 3 days. Catching up now…', action: null });
     expect(h.channels.network).toEqual({ state: 'idle', tone: 'idle', text: 'Catching up now…' });
     expect(health({ rows: [...before, woke], central: central({ nextPoll: NOW + 12 * M }) }).line).toBe('Closed for 3 days. Catching up in 12 min.');
+    // "Catching up now…" only while the work runs: a poll due with nothing running (the bug: a device that slept with
+    // the page open, its timer not fired) says soon, until the catch-up pass runs it
+    const stuck = health({ rows: [...before, woke], central: central({ nextPoll: NOW - H }) });
+    expect([stuck.line, stuck.channels.network.text]).toEqual(['Closed for 3 days. Catching up soon.', 'Catching up soon']);
+    const signing = { central: { task: 'central', step: 'register', done: null, total: null, since: 0, critical: false } };
+    expect(health({ rows: [...before, woke], central: central({ nextPoll: null }), work: signing }).line).toBe('Closed for 3 days. Catching up now…');
     // it never counts the closed time: three days closed is not overdue
     expect(ids(h)).toEqual(['asleep']);
 
@@ -543,7 +555,7 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
 
 test('times in a few words', () => {
   expect([fmtAgo(20), fmtAgo(5 * M), fmtAgo(2 * H + 10 * M), fmtAgo(3 * D)]).toEqual(['just now', '5 min ago', '2 h ago', '3 d ago']);
-  expect([fmtIn(-5), fmtIn(30), fmtIn(12 * M), fmtIn(9 * H - 1)]).toEqual(['now', 'in 1 min', 'in 12 min', 'in 9 h']);
+  expect([fmtIn(-5), fmtIn(0), fmtIn(30), fmtIn(12 * M), fmtIn(9 * H - 1)]).toEqual(['soon', 'soon', 'in 1 min', 'in 12 min', 'in 9 h']);
   expect([fmtDur(45 * M), fmtDur(13 * H), fmtDur(D + 2 * H), fmtDur(3 * D - 4 * H)]).toEqual(['45 min', '13 h', '1 day', '3 days']);
   expect(fmtDur(3 * D - 4 * H, true)).toBe('3 d');
 });

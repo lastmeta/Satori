@@ -42,9 +42,9 @@ export function fmtAgo(s) {
   if (s < D) return `${Math.floor(s / H)} h ago`;
   return `${Math.floor(s / D)} d ago`;
 }
-/** 'now', 'in 12 min', 'in 9 h' */
+/** 'soon' (due: the catch-up pass runs it), 'in 12 min', 'in 9 h' */
 export function fmtIn(s) {
-  if (s <= 0) return 'now';
+  if (s <= 0) return 'soon';
   if (s < H) return `in ${Math.ceil(s / M)} min`;
   if (s < D) return `in ${Math.round(s / H)} h`;
   return `in ${Math.round(s / D)} d`;
@@ -94,7 +94,7 @@ export function missedBy(rows, at) {
 const go = (tab, section) => (section ? { do: 'go', tab, section } : { do: 'go', tab });
 const reason = (id, channel, o) => ({ id, status: LEVEL[id], channel, ...o });
 
-function centralReasons({ now, rows, sessions, central, app }) {
+function centralReasons({ now, rows, sessions, central, app, work }) {
   const out = [];
   const cycles = rows.filter((r) => r.kind === 'central');
   const last = cycles.at(-1);
@@ -102,7 +102,9 @@ function centralReasons({ now, rows, sessions, central, app }) {
   let failures = 0;
   for (let i = cycles.length - 1; i >= 0 && isFailed(cycles[i]); i--) failures++;
   const next = fmtIn((central?.nextPoll ?? now) - now);
-  const atOnce = !!central?.polling || !(central?.nextPoll > now); // polling, due, or not armed yet (registering first)
+  // "now" only while central's work runs (the poll, or its sign-in before it): a poll that is due with nothing running
+  // (a timer that slept with the device) is "soon", until the catch-up pass runs it
+  const atOnce = !!central?.polling || !!work?.central;
 
   if (failures) {
     const err = last.data.error ?? `The Satori Network took none of ${last.data.sent} predictions`;
@@ -389,7 +391,7 @@ export function feedOf(rows, n = FEED) {
  */
 export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, since = null, traffic, work = {} }) {
   const sessions = sessionsOf(rows, now);
-  const c = centralReasons({ now, rows, sessions, central, app });
+  const c = centralReasons({ now, rows, sessions, central, app, work });
   const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr })];
   if (storage && storage.persisted === false && !backedUp) {
     reasons.push(reason('backup', null, {

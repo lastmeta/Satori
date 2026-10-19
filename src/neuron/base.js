@@ -349,6 +349,8 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     stop: schedule.stop,
     /** The batch now if due (window.satori.predictBase). */
     predict: schedule.run,
+    /** The check now when its time has passed and none runs (the device slept); else null. */
+    catchUp: schedule.catchUp,
 
     /** Stake with this neuron (docs/design/base.md): needs Unlock. Then a batch check soon. */
     async delegate() {
