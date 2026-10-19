@@ -3,7 +3,7 @@ import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
-  storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText,
+  storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText, openingText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -265,4 +265,11 @@ test('engineText: the engine\'s step while Setup or Home waits for it', () => {
   expect(engineText({ step: 'open' })).toBe('opening the database…');
   expect(engineText({ step: 'ready' })).toBe('');
   expect(engineText(null)).toBe('');
+});
+
+test('openingText: a revisit\'s wait, step by step', () => {
+  expect(openingText(null)).toBe('Opening…');
+  expect(openingText({ step: 'download', loaded: 1_200_000, total: 5_065_391 })).toBe('Opening… downloading the engine, 1.2 of 5.1 MB');
+  expect(openingText({ step: 'open' })).toBe('Opening… opening the database…');
+  expect(openingText({ step: 'ready' })).toBe('Opening… starting the neuron…'); // the database is open; the neuron starts
 });

@@ -5,7 +5,7 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { mark, sparkPath, unlockPrompt } from './parts.js';
-import { fmtNum, modelText, amountText, daysText, claimParts, claimableText, engineText } from './format.js';
+import { fmtNum, modelText, amountText, daysText, claimParts, claimableText, openingText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
 const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
@@ -25,7 +25,7 @@ function hero() {
   if (cachedNow()) {
     const c = h();
     const tone = c.status === 'warn' || c.status === 'bad' ? c.status : 'working';
-    return { status: c.status, tone, title: c.title, key: 'open', working: true, line: `Opening… ${engineText(state.engine)}`.trim() };
+    return { status: c.status, tone, title: c.title, key: 'open', working: true, line: openingText(state.engine) };
   }
   return state.hero ?? { ...h(), key: 'idle', working: false };
 }

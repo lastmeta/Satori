@@ -259,6 +259,9 @@ export function engineText(e) {
   return e.step === 'start' ? 'starting the engine…' : 'opening the database…';
 }
 
+/** What a revisit waits for (the last visit's Home, or "Opening…"): the engine's step, then the neuron's start. */
+export const openingText = (e) => (e ? `Opening… ${engineText(e) || 'starting the neuron…'}` : 'Opening…');
+
 /** One claim's result (base.claim()): claimed, skipped (why) or failed. */
 export function claimLine(name, r) {
   if (!r) return '';

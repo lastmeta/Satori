@@ -321,17 +321,15 @@ const storeKeys = (r) => work.run('keys', async (step) => {
  * first visit the database may still be loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
  */
 async function saveKeys(r, { backedUp = false } = {}) {
-  if (!db) {
-    state.setupWaiting = true;
-    try {
-      db = await dbOpening;
-    } finally {
-      state.setupWaiting = false;
-    }
+  state.setupWaiting = true; // until Home: the engine's step, then "saving your keys…"
+  try {
+    db ??= await dbOpening;
+    await storeKeys(r);
+    if (backedUp) await markBackup();
+    await startNeuron();
+  } finally {
+    state.setupWaiting = false;
   }
-  await storeKeys(r);
-  if (backedUp) await markBackup();
-  await startNeuron();
 }
 
 /** The vault's backup is confirmed (meta.backup_at): Home stops asking for it while storage is not kept. */
