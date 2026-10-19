@@ -229,6 +229,7 @@ async function startNeuron() {
   state.now = nowS();
   const c = await connect();
   poller = createPoller(runCycle, { db, work, onChange: ({ next, running }) => {
+    state.now = nowS(); // Home's "next try in 2 min" from now, not from the last 30 s tick (it read 3 min)
     state.central = { ...state.central, nextPoll: next, polling: running };
   } });
   await refresh();
