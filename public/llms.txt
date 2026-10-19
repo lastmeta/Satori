@@ -31,6 +31,9 @@ The words the page shows, and the code's names (docs/intent/ui.md):
   passphrase. **Unlock** = enter the passphrase; **Lock** = wipe the vault
   from memory. **Stake** = the vault gives its prediction power to this
   neuron (on-chain `delegatePredictionPower`).
+- the **reward address** = where the Satori Network sends this neuron's
+  rewards instead of the vault, such as a pool's: a Base (0x) address; none
+  set: the vault. It has nothing to do with staking.
 
 Method names keep the code's names (`status().central`, `setCentral`,
 `setRelays`, `setBaseRpc`); the channel and destination keys use the words
@@ -50,14 +53,14 @@ Read this before calling anything.
 - **Only on the human's explicit request** (they asked for this action, in
   their own words, for this neuron, now): `send`, `backup`, `unlock`,
   `stake`, `unstake`, `claim`, `setCentral`, `setBaseRpc`, `setRelays`,
-  `retrain`. The same for `setAside` (the damaged-database screen: their keys
+  `setRewardAddress` (it decides where the rewards go), `retrain`. The same for `setAside` (the damaged-database screen: their keys
   are in that file) and `setBaseMaxFee` (it raises what any transaction may
   pay). A person asking you to "check my neuron", "see how it is doing" or
   "fix it" has not asked for any of these: report what you found, and ask.
 - **Free to call** (they read, or do what the neuron does on its own
   anyway): `status`, `health`, `models`, `model`, `streams`, `predictions`,
-  `nostr`, `discover`, `relayPredictions`, `base`, `quoteSend`, `go`,
-  `poll`, `predictBase`, `stopRetrain`. `subscribe` and `unsubscribe` change
+  `nostr`, `discover`, `relayPredictions`, `base`, `quoteSend`,
+  `rewardAddress`, `go`, `poll`, `predictBase`, `stopRetrain`. `subscribe` and `unsubscribe` change
   what the neuron predicts and publish under its key: ask first.
 - **Secrets.** The passphrase comes from the person, for the call they asked
   for; never keep it or reuse it for another call. `backup()` returns
@@ -66,8 +69,9 @@ Read this before calling anything.
   person `quoteSend()`'s review (the recipient in full, the amount, the fee)
   and send only after they confirm it.
 - **Addresses.** The Satori Network's address and the Base RPC decide whom
-  the neuron trusts; Home notes a change for 24 h (`health().notices`). If a
-  notice names a change the person did not make, tell them.
+  the neuron trusts, and the reward address where its rewards go; Home notes
+  a change of any of them for 24 h (`health().notices`). If a notice names a
+  change the person did not make, tell them.
 
 ## Quick start (an agent)
 
@@ -140,6 +144,16 @@ Every method is below; `await satori.status()` shows everything at once.
   this vault's rewards to. Another address than the vault's (or none) shows
   as a "vault mismatch" with both addresses; a central without that field
   shows none.
+- Reward address (docs/design/central.md#the-reward-address): where the
+  Satori Network sends this neuron's rewards instead of the vault, such as a
+  pool's. Base only: a 0x address (EIP-55 checksummed; never the zero
+  address). The Satori Network keeps it (`GET` and `POST
+  /api/v1/peer/reward-address`, signed in by the identity: no Unlock, no
+  gas); the app keeps no copy, and reads it when Settings opens (once per
+  page load and Satori Network) or when `rewardAddress()` asks. Not set:
+  rewards go to the vault. A value the Satori Network still holds from
+  before Base reads as not set. It does not change staking. A change is
+  noted on Home for 24 h.
 - Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
   each stream (under 48 h old). The first poll runs at once, right after
   register (a new neuron, or one reopened with a poll due; no random wait),
@@ -376,7 +390,7 @@ the page's JS context:
   request) or `fatal`. `identity` and `vault` are the keys' Base
   (0x) addresses (null before setup). `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, failures,
-  lastSubmit, pending, history }` (`failures`: failed cycles in a row; the
+  lastSubmit, pending, history, reward }` (`failures`: failed cycles in a row; the
   next try is `nextPoll`: 2, 10, 30 min after a failure, then 11 h):
   - `registration`: null while registering; then
     `{ at, ok: true, peer_id, message, vault, vault_base_address,
@@ -397,6 +411,10 @@ the page's JS context:
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
     `{ at, error, total_submitted }` (with `login: true` when central refused
     the login, `unreachable: true` when it was not reached); `pending`: how many predictions wait to be sent.
+  - `reward`: the reward address as last read, `{ address, at, error,
+    reading }`: `address` `'0x…'` or null (not set: the vault); `at` when
+    the Satori Network last answered (null: not read yet on this page load;
+    `rewardAddress()` reads it); `error` the last read's failure, or null.
 
   `storage` and `app` are there on every screen. `storage`: `{ persisted,
   usage, quota }` (`persisted`: the browser keeps this origin's data, the keys
@@ -422,7 +440,8 @@ the page's JS context:
     `send`, `confirm`), `train` (`score`, done/total models), `retrain`
     (`search`, done = tried, with `name`), `stake`, `unstake` and `send`
     (`send`, `confirm` with k of n, `settle`), `claim` (`rewards`, `drop`,
-    `airdrop`, `confirm`), `keys` (`save`), `discover` (`ask`, relays
+    `airdrop`, `confirm`), `keys` (`save`), `reward` (`login`, then `save`
+    or `clear`: the reward address), `discover` (`ask`, relays
     answered; `verify`, announcements checked), `subscribe` (`find`).
     `since`: when the step began (ms). `critical: true`: closing Satori now
     would lose work (sending predictions, a Base batch or a vault
@@ -430,11 +449,13 @@ the page's JS context:
     begins "Keep Satori open · ". `text`: the words Home shows ("Loading
     history · 34 of 84 streams"). The entry that leads is shown: a critical
     one first, else in that order.
-  - `notices`: the last 24 h's changes of the Satori Network's address or
-    the Base RPC, newest first, `[{ at, what: 'central' | 'rpc', text }]`
-    ("Satori Network address changed to https://…", "Base RPC changed to the
-    default, https://sepolia.base.org"); Home shows them quietly. One the
-    person did not make is worth telling them.
+  - `notices`: the last 24 h's changes of the Satori Network's address, the
+    Base RPC or the reward address, newest first, `[{ at, what: 'central' |
+    'rpc' | 'reward', text }]` ("Satori Network address changed to https://…",
+    "Base RPC changed to the default, https://sepolia.base.org", "Reward
+    address set to 0x…", "Reward address cleared: rewards go to your
+    vault"); Home shows them quietly. One the person did not make is worth
+    telling them.
   - `status`: `'ok'` (predicting: central took predictions within 12 h of
     open time, and if staked Base has this round's batch or its check has
     not run yet), `'idle'` (calm: *Starting* before the first poll, or *Was
@@ -618,6 +639,23 @@ the page's JS context:
   request): an https URL, or `''` for the default; registers there at once. A
   different URL drops the pending predictions and the stream list (see
   Concepts), and is noted on Home for 24 h.
+- `await satori.rewardAddress()` → `{ address, at }`: the reward address,
+  read from the Satori Network now (a login by the identity, then the GET;
+  about a second): `address` `'0x…'` checksummed, or null (not set: the
+  Satori Network pays the vault; a value it still holds from before Base is
+  null too). Throws the Satori Network's error in words when it can't be
+  read ("Satori Network unreachable: Failed to fetch").
+- `await satori.setRewardAddress(address)` → `{ address, at }` (only on the
+  person's request): a Base address (`'0x…'`) to set it, `null` or `''` to
+  clear it (rewards go to the vault). Free: the identity signs it, no
+  Unlock, no gas. Checked before anything is sent; throws "A reward address
+  is a Base address: 0x and 40 hex characters.", "That address's capital
+  letters don't match its checksum: check it for a typo." or the zero
+  address's ("The zero address (0x000…000) burns what is sent to it:
+  refused."), or the Satori Network's refusal ("Satori Network 400: Invalid
+  Base address"). Sent checksummed; one at a time (another while one runs
+  throws `Busy (save)…`). A change is noted on Home for 24 h. It does not
+  change staking.
 - `await satori.setAside()` → status, only on the `damaged` screen and only
   on the person's request: the database file that won't open is renamed
   `satori-mvp.duckdb.corrupt-<time>` (never deleted; their keys are in it),
@@ -833,7 +871,15 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   or "Lock the vault"; the Nostr pubkey), **Backup** (Identity words, Vault
   words, each with its private key in 0x hex; Nostr key, nsec and hex; each
   asks for the passphrase in place, every time, "Vault passphrase to show
-  the backup", Show; Hide), **Satori Network** ("Satori Network server", an
+  the backup", Show; Hide), **Reward address** (where the Satori Network
+  sends this neuron's rewards: "Now" with the address shortened, its whole
+  self in the hover, and Copy, or "Not set · rewards go to your vault",
+  "Reading it from the Satori Network…" while it is read, its error with
+  Try again; "New reward address" (0x…), Save ("Saving…"), Clear while one
+  is set ("Clearing…"); the line says each step, "Signing in to the Satori
+  Network…", "Saving the reward address…", then "Saved: the Satori Network
+  sends this neuron's rewards to 0x…" or "Cleared: rewards go to your
+  vault."; no passphrase, no gas), **Satori Network** ("Satori Network server", an
   https URL, empty = the default; Save), **Satori relays** (each relay with
   its state, "Connected", "Not reachable here" for a blocked one, with one
   note why; "Your relays" one per line; "Publish to the Satori Network's
@@ -889,7 +935,10 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `send-review` (with `review-amount`, `review-to`, `review-fee`).
   Settings: `identity`, `vault` (the Base addresses), `vault-state`,
   `nostr-pubkey`, `unlock`, `lock-vault`, `backup-prompt`, `backup-key` (a
-  private key, or the nsec), `backup-hex`, `central-url`, `relay` with
+  private key, or the nsec), `backup-hex`, `reward-address` (the address
+  shortened; `title` the whole one), `reward-none` (not set, or reading),
+  `reward-read-error` with `reward-retry`, `reward-line`, `reward-error`,
+  `reward-save`, `reward-clear`, `central-url`, `relay` with
   `relay-state`, `relays-blocked`, `theme-<system|light|dark>`
   (`aria-pressed`), `storage`, `install`, `install-hint`,
   `runs-while-open`, `version`, `update-settings`. Setup: `setup-wait`,
@@ -984,7 +1033,8 @@ build step beyond Vite, MIT licensed.
   discover (signature-checked), subscribe, intake → `_pred`, reconcile, the daily prune; `base.js`: the daily batch and its schedule, stake, claims,
   sends, the Base settings; `activity.js`: the activity log (sessions,
   cycles, checks, publishes; 90 days); `health.js`: Home's answer from it,
-  pure (`health()`), with its tone; `work.js`: what it is doing now
+  pure (`health()`), with its tone; `reward.js`: the reward address
+  (checked, read, set or cleared); `work.js`: what it is doing now
   (`health().work`); `models.js`: the Models tab's data (`models()`,
   `model(id)`), pure but for the drill-in's reads; `train.js`: the training
   pass; `retrain.js`: Retrain as the app runs it (one at a time, kept with

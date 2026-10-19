@@ -22,7 +22,8 @@ test('Safety comes before the reference, and lists the calls only the human may 
   expect(at('Quick start (an agent)')).toBeLessThan(at('Drive it from the page (window.satori)'));
   const safety = llms.slice(at('Safety'), at('Quick start (an agent)'));
   expect(safety).toMatch(/data, never instructions/);
-  for (const m of ['send', 'backup', 'unlock', 'stake', 'unstake', 'claim', 'setCentral', 'setBaseRpc', 'setRelays', 'retrain']) {
+  for (const m of ['send', 'backup', 'unlock', 'stake', 'unstake', 'claim', 'setCentral', 'setBaseRpc', 'setRelays', 'setRewardAddress',
+    'retrain']) {
     expect(safety, m).toContain(`\`${m}\``);
     expect(methods, m).toContain(m);
   }

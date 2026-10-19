@@ -30,6 +30,7 @@ import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase, checkSend, NEED_GAS } from './neuron/base.js';
+import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
 import { createWork, workText, leading, HERO } from './neuron/work.js';
@@ -66,6 +67,7 @@ let central = null;
 let registration = null; // this page load's register result
 let poller = null;
 let base = null; // the Base flow
+let reward = null; // the reward address, as the Satori Network keeps it (src/neuron/reward.js): read when Settings opens
 let activity = null; // the activity log Home's health reads (docs/design/health.md)
 let trainer = null; // the training pass (src/neuron/train.js): every model's current fit, from stored history
 let retrain = null; // Retrain (src/neuron/retrain.js): a model trained on until it beats no change, as the user asked
@@ -74,7 +76,8 @@ const nowS = () => Date.now() / 1000;
 /** What the neuron is doing now (src/neuron/work.js): Home's hero and action lines, and health().work. */
 const work = createWork({ onChange: () => { state.work = work.all(); } });
 
-const centralStatus = () => statusOf({ db, central, registration, poller });
+/** status().central: central's state, and the reward address as last read ({ address, at, error, reading }). */
+const centralStatus = async () => ({ ...(await statusOf({ db, central, registration, poller })), reward: reward?.status ?? null });
 
 async function refresh() {
   state.central = await centralStatus();
@@ -235,6 +238,7 @@ async function startNeuron() {
     } });
   state.now = nowS();
   const c = await connect();
+  reward = createReward({ central: () => central, work, onChange: (st) => { state.reward = st; } });
   poller = createPoller(runCycle, { db, work, onChange: ({ next, running }) => {
     state.now = nowS(); // Home's "next try in 2 min" from now, not from the last 30 s tick (it read 3 min)
     state.central = { ...state.central, nextPoll: next, polling: running };
@@ -304,6 +308,7 @@ async function setCentral(raw) {
   if (moved) {
     await poller.idle(); // its rows are the old central's
     await db.resetCentral();
+    reward.reset(); // that one's reward address is not known yet
   }
   await db.set('central_url', url);
   if (moved) await activity.setting('central', url, url ? undefined : DEFAULT_CENTRAL); // Home notes it for 24 h
@@ -313,7 +318,25 @@ async function setCentral(raw) {
   await registerWith(c);
   await nostr.reconcile(); // this central's relays
   await base.refresh(); // this central's Base config
+  readReward();
 }
+
+/** The reward address, read from the Satori Network once Settings shows it: once per page load and central, again after a failed read. */
+function readReward() {
+  if (state.tab === 'settings' && reward && !reward.known && !reward.status.reading) void reward.read();
+}
+
+/**
+ * Set the reward address (a 0x address) or clear it (null or ''), from Settings or an agent (docs/design/central.md#the-reward-address):
+ * signed in by the identity, no vault; one at a time. A change is logged, so Home notes it for 24 h. → its status
+ */
+const setReward = (address) => exclusive(address == null || !String(address).trim() ? 'clear' : 'save', async () => {
+  state.rewardDone = '';
+  const r = await reward.set(address);
+  if (r.changed) await activity.setting('reward', r.address ?? '');
+  state.rewardDone = r.address ? `Saved: the Satori Network sends this neuron's rewards to ${r.address}.` : 'Cleared: rewards go to your vault.';
+  return reward.status;
+}, 'rewardBusy');
 
 /**
  * The Base RPC and the max fee (Settings, agents): base.setSettings, and a changed RPC is logged, so Home notes it for
@@ -544,11 +567,12 @@ addEventListener('popstate', () => {
   fillSettings();
 });
 
-/** Settings' forms show what is stored, each time the tab opens (typing there is kept until it closes). */
+/** Settings' forms show what is stored, each time the tab opens (typing there is kept until it closes); the reward address is read. */
 function fillSettings() {
   if (state.tab !== 'settings' || !nostr || !base) return;
   actions.fillRelays(document.querySelector('form.relays-form'));
   actions.fillBase(document.querySelector('form.base-rpc-form'));
+  readReward();
 }
 
 /** Run `fn` now if the vault is open; else open the inline Unlock prompt at `slot`, and run it after Unlock. */
@@ -878,6 +902,13 @@ const actions = {
     await setCentral(f.url);
     el.reset();
   }),
+  /** Settings › Reward address: Save (the address typed), Clear, and Try again after a failed read. */
+  saveReward: shownAt('rewardError', async (f, el) => {
+    await setReward(f.address);
+    el.reset();
+  }),
+  clearReward: shownAt('rewardError', () => setReward(null)),
+  readReward: () => void reward?.read(),
 };
 
 // ── window.satori: the same app for agents (see /llms.txt) ──────────────────
@@ -1008,6 +1039,18 @@ window.satori = {
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
   /** Set the central URL ('' = the default) and register there. → status().central */
   async setCentral(url) { ready(); await setCentral(url); return centralStatus(); },
+  /**
+   * Where the Satori Network sends this neuron's rewards, read from it now (signed in by the identity). → { address: '0x…'
+   * (checksummed) | null (not set: the vault), at }; throws when the Satori Network could not be read.
+   */
+  async rewardAddress() {
+    ready();
+    const st = await reward.read();
+    if (st.error) throw new Error(st.error);
+    return { address: st.address, at: st.at };
+  },
+  /** Set the reward address (a Base 0x address) or clear it (null or ''), signed in by the identity; free. → { address, at } */
+  async setRewardAddress(address) { ready(); const st = await setReward(address); return { address: st.address, at: st.at }; },
   /** Unlock (on the 'finish' screen it also finishes an earlier version's update, then the neuron starts). */
   async unlock(passphrase) {
     if (state.screen === 'finish') {
@@ -1103,6 +1146,7 @@ const lineOf = (tasks, hold) => () => {
 };
 watch(lineOf(VAULT_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
 watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
+watch(lineOf(['reward'], createHold({ show: (v) => { state.rewardLine = v.line; } }))); // Settings › Reward address
 /** The Models tab's status: the poll's, the Base batch's, the training pass's or a Retrain's step, in Home's hero's words at its pace (no ring). */
 const engineHold = createHold({ show: (v) => { state.engineWork = v.working ? { line: v.line, critical: v.critical } : null; } });
 watch(() => {

@@ -1,11 +1,11 @@
 // Settings: the technical detail, behind Home (docs/intent/ui.md): the keys and their addresses with Unlock and Lock,
-// the backup, the Satori Network's server (central's URL), the Satori relays, the Base RPC and the batch's max fee, the appearance (System, Light,
+// the backup, the reward address (where the Satori Network sends the rewards), the Satori Network's server (central's URL), the Satori relays, the Base RPC and the batch's max fee, the appearance (System, Light,
 // Dark: src/ui/theme.js), and this device (storage, install, update). Each section has an id (#settings-<name>) Home's
 // action card scrolls to.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { form, idRow, wordList } from './parts.js';
-import { storageText, relayText, BLOCKED_NOTE } from './format.js';
+import { storageText, relayText, BLOCKED_NOTE, shortHash } from './format.js';
 import { ADD_TO } from '../neuron/health.js';
 
 /** How Satori runs (docs/intent/ui.md: say it plainly), on Setup and in Settings › This device. */
@@ -77,6 +77,40 @@ function backup(a) {
       </div>
       <div class="actions"><button @click="${a.hideBackup}">Hide</button></div>
     </div>
+  </section>`;
+}
+
+/**
+ * The reward address (docs/design/central.md#the-reward-address): where the Satori Network sends this neuron's rewards
+ * instead of the vault. Read when Settings opens; saved or cleared signed in by the identity (no passphrase, no gas).
+ */
+function rewardWhen(r) {
+  if (r.address) return '';
+  if (r.at != null) return 'Not set · rewards go to your vault';
+  return r.reading || !r.error ? 'Reading it from the Satori Network…' : "Couldn't read it from the Satori Network.";
+}
+
+function rewardCard(a) {
+  const r = () => state.reward;
+  const busy = () => !!state.rewardBusy;
+  return html`
+  <section class="card settings-section" id="settings-reward">
+    <form class="fields reward-form" @submit="${(e) => a.saveReward(form(e), e.target)}">
+      <h2>Reward address</h2>
+      <p class="muted small">Where the Satori Network sends this neuron's rewards. Not set, they go to your vault. A Base address (0x…) sends them there instead, such as a pool's.</p>
+      <div class="id reward-now"><span class="label">Now</span><code data-test="reward-address" title="${() => r().address ?? ''}" hidden="${() => !r().address}">${() => shortHash(r().address)}</code><button class="small-btn" type="button" hidden="${() => !r().address}" @click="${() => a.copy('reward-address', r().address)}">${() => (state.copied === 'reward-address' ? 'Copied' : 'Copy')}</button><span data-test="reward-none" hidden="${() => !!r().address}">${() => rewardWhen(r())}</span></div>
+      <p class="error small" role="alert" data-test="reward-read-error" hidden="${() => !r().error}">${() => r().error ?? ''} <button class="small-btn" type="button" data-test="reward-retry" disabled="${() => r().reading}" @click="${a.readReward}">Try again</button></p>
+      <label>New reward address
+        <input name="address" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="0x…" required>
+      </label>
+      <p class="small" role="status" data-test="reward-line" hidden="${() => !(state.rewardLine || state.rewardDone)}">${() => state.rewardLine || state.rewardDone}</p>
+      <p class="error small" role="alert" data-test="reward-error" hidden="${() => !state.rewardError}">${() => state.rewardError}</p>
+      <div class="actions">
+        <button class="primary" type="submit" data-test="reward-save" disabled="${busy}">${() => (state.rewardBusy === 'save' ? 'Saving…' : 'Save')}</button>
+        <button type="button" data-test="reward-clear" hidden="${() => !r().address}" disabled="${busy}" @click="${a.clearReward}">${() => (state.rewardBusy === 'clear' ? 'Clearing…' : 'Clear')}</button>
+      </div>
+      <p class="muted small">Free: the identity signs it, so it needs no passphrase and no gas. It doesn't change staking. Home notes a change for a day.</p>
+    </form>
   </section>`;
 }
 
@@ -167,6 +201,7 @@ export function settingsTab(a) {
   <section class="tab-page" data-test="settings-tab" hidden="${() => state.tab !== 'settings'}">
     ${keys(a)}
     ${backup(a)}
+    ${rewardCard(a)}
     ${centralForm(a)}
     ${relaysForm(a)}
     ${baseForm(a)}

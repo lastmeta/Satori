@@ -304,6 +304,7 @@ details.tile[open] > summary { margin-bottom: 0; }
 .key p.muted { margin: 4px 0 0; }
 .id { display: grid; grid-template-columns: 64px minmax(0, 1fr) max-content; gap: 10px; align-items: center; padding: 2px 0; }
 .id code { overflow-wrap: anywhere; font-size: 0.85rem; }
+.reward-form p { overflow-wrap: anywhere; } /* "Saved: … to 0x…" with the whole address: it wraps on a phone */
 .unlock { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .unlock input { margin: 0; flex: 1 1 160px; min-width: 0; }
 .key .error { margin: 8px 0 0; }

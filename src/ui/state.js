@@ -69,6 +69,13 @@ export const state = reactive({
   streamOpen: '', // the stream whose detail is open (Streams)
   streamPreds: [], // its latest predictions
   settingsError: '',
+  // the reward address (src/neuron/reward.js; Settings): { address, at, error, reading } as last read, what runs ('' | 'save' |
+  // 'clear'), its step at Home's pace, the last result's words and error
+  reward: { address: null, at: null, error: null, reading: false },
+  rewardBusy: '',
+  rewardLine: '',
+  rewardDone: '',
+  rewardError: '',
   // Nostr (docs/design/nostr.md): the flow's status, the last catalog
   nostr: { pubkey: '', npub: '', maxStreams: 0, centralWrite: false, userRelays: [], relays: [], subscriptions: [] },
   catalog: [],

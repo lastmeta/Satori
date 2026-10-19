@@ -2,12 +2,14 @@
 // (prod is aborted and recorded). It answers register, the observations batch,
 // the login and the predictions batch (checking the identity's signature as
 // central does: EIP-191 only, anything else is a 401), the
-// relay list and config, the merkle proof, and a stream's history when
-// `history` is set (else 404, as central2 today); anything else is a 404, as
-// prod's /base/config is. Satorian and the owner's dev relay (7778) are never
+// relay list and config, the merkle proof, the reward address (signed in,
+// checked for a Base address as central's base-upgrade change does), and a
+// stream's history when `history` is set (else 404, as central2 today);
+// anything else is a 404, as prod's /base/config is. A token is good until the
+// stub ends, as central's last an hour. Satorian and the owner's dev relay (7778) are never
 // reached; /rpc is aborted unless a fake chain is given (e2e/base.spec.js).
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { verifyMessage } from 'viem';
+import { getAddress, isAddress, verifyMessage, zeroAddress } from 'viem';
 import { evmAddress } from '../src/keys/keys.js';
 
 export const CENTRAL = 'https://central2.satorinet.io';
@@ -40,23 +42,28 @@ async function eip191(h) {
  * @returns the stub: set `batch`, `vaults` (vault pubkey → register's `vault_base_address` for it, else null), `otherVault` (the
  *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
  *   predictions batches), `failRegister` (how many registers answer 503: each register() is resent once on a 5xx), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
- *   `history` (stream uuid → its rows, oldest first; null: the route 404s), `historyDelayMs` (the n-th history call answers
+ *   `history` (stream uuid → its rows, oldest first; null: the route 404s), `reward` (the reward address central keeps:
+ *   null, a 0x address, or any old value), `rewardHold` (a promise the reward-address calls wait for), `rewardRefuse` (the
+ *   detail every POST is refused with, a 400: central2 before central's Base check, 'Invalid Evrmore address'), `historyDelayMs` (the n-th history call answers
  *   after n × that: the streams come in one by one); hold(what) keeps the observations batch
  *   (what 'batch', the default: a poll, seen while it runs), register's answer ('register': nothing the neuron does
  *   after it, the poll schedule's write included) or the predictions batch ('submit') until the function it returns is called; read `registered`, `polls` (per observations
- *   batch: how many registers came before it), `logins`, `batches`, `merkleCalls`, `historyCalls`, `prod`, `blocked`.
+ *   batch: how many registers came before it), `logins`, `batches`, `merkleCalls`, `historyCalls`, `rewardCalls` ({ method, body,
+ *   authorization }), `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
   const held = { batch: null, register: null, submit: null };
   const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], failRegister: 0, refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
-    historyDelayMs: 0,
-    registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [],
+    historyDelayMs: 0, reward: null, rewardHold: null, rewardRefuse: null,
+    registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], rewardCalls: [], prod: [], blocked: [],
     hold(what = 'batch') {
       let release;
       held[what] = new Promise((r) => { release = r; });
       return () => { held[what] = null; release(); };
     } };
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
+  const issued = new Set(); // every token a login gave: good until the stub ends (central's last an hour)
+  const signedIn = (h) => issued.has(String(h.authorization ?? '').replace(/^Bearer /, ''));
   await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
     stub.blocked.push(ws.url());
     ws.close();
@@ -85,6 +92,21 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       if (!stub.history) return reply(route, 404, { detail: 'Not Found' });
       const since = Number(q.since ?? -Infinity);
       return reply(route, 200, (stub.history[q.stream_uuid] ?? []).filter((o) => Number(o.observed_at) > since).slice(-Number(q.limit ?? 500)));
+    }
+    if (pathname === '/api/v1/peer/reward-address' && ['GET', 'POST'].includes(req.method())) {
+      const body = req.postData();
+      stub.rewardCalls.push({ method: req.method(), body: body == null ? null : JSON.parse(body), authorization: h.authorization });
+      await stub.rewardHold;
+      if (!signedIn(h)) return reply(route, 401, { detail: 'bad token' });
+      if (req.method() === 'GET') return reply(route, 200, { reward_address: stub.reward });
+      // central base-upgrade: a 20-byte 0x address, not the zero address, stored EIP-55; null clears
+      const a = JSON.parse(body).reward_address;
+      if (stub.rewardRefuse) return reply(route, 400, { detail: stub.rewardRefuse });
+      if (a !== null && !(typeof a === 'string' && isAddress(a, { strict: false }) && a.toLowerCase() !== zeroAddress)) {
+        return reply(route, 400, { detail: 'Invalid Base address' });
+      }
+      stub.reward = a === null ? null : getAddress(a);
+      return reply(route, 200, { reward_address: stub.reward });
     }
     switch (`${req.method()} ${pathname}${search}`) {
       case 'POST /api/v1/peer/register': {
@@ -115,12 +137,13 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       case 'POST /api/v1/auth/login': {
         const ok = !stub.refuseLogin && await eip191(h);
         stub.logins.push({ ...h, ok });
+        if (ok) issued.add(`jwt-${stub.logins.length}`);
         return ok ? reply(route, 200, { access_token: `jwt-${stub.logins.length}`, expires_in: 3600 })
           : reply(route, 401, { detail: 'Invalid signature' });
       }
       case 'POST /api/v1/predictions/batch': {
         await held.submit;
-        if (h.authorization !== `Bearer jwt-${stub.logins.length}`) return reply(route, 401, { detail: 'bad token' });
+        if (!signedIn(h)) return reply(route, 401, { detail: 'bad token' });
         const status = stub.fail.shift();
         if (status) return reply(route, status, { detail: 'boom' });
         const { predictions } = JSON.parse(req.postData());
