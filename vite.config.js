@@ -2,19 +2,20 @@ import { createHash } from 'node:crypto';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
-import { CSP } from './csp.js';
+import { CSP, DEV_CSP } from './csp.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './src/config.js';
 
 // Sends the CSP header on every dev/preview response, 304s included
-// (Vite's `server.headers` option skips 304 revalidations).
-const csp = (_req, res, next) => {
-  res.setHeader('Content-Security-Policy', CSP);
+// (Vite's `server.headers` option skips 304 revalidations): the dev server's
+// (ws: for the ws://localhost test relay), and a build's on `vite preview`.
+const csp = (policy) => (_req, res, next) => {
+  res.setHeader('Content-Security-Policy', policy);
   next();
 };
 const cspHeader = {
   name: 'csp-header',
-  configureServer: (server) => void server.middlewares.use(csp),
-  configurePreviewServer: (server) => void server.middlewares.use(csp),
+  configureServer: (server) => void server.middlewares.use(csp(DEV_CSP)),
+  configurePreviewServer: (server) => void server.middlewares.use(csp(CSP)),
 };
 
 // Dev only: DuckDB's worker is sent as the file it is (773 KB). Through Vite's
