@@ -477,11 +477,11 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   await go(page, 'settings');
   const url = page.getByLabel('Satori Network server');
   await url.fill('http://central.test');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.getByRole('alert').filter({ hasText: 'https://' })).toBeVisible();
   await context.route('https://down.test/**', (route) => route.abort());
   await url.fill('https://down.test');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://down.test');
   await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable: /);
   await go(page, 'streams');
@@ -489,7 +489,7 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   await expect(page.locator('[data-test=last-poll]')).toContainText('failed: Satori Network unreachable');
   await go(page, 'settings');
   await url.fill('');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.locator('[data-test=central-url]')).toHaveText(CENTRAL);
 
   // The imported vault unlocks with the Docker password (reused: 8 characters or more) and shows the same words.
