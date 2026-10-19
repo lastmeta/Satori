@@ -90,16 +90,20 @@ readers depend on, not Lite's bytes. Checked against satorilib
 
 ## Relays and the read-only flag
 
-- **ws vs wss.** The CSP allows `connect-src 'self' https: wss: ws:`. A page on
-  `https://` cannot open `ws://` (mixed content): the browser blocks it before
-  the CSP is asked, so such a relay shows as **blocked** and is not tried
-  (`ws://localhost` and `127.0.0.1` are allowed). A blocked relay is neither
-  down nor counted on Home, and Settings says why once, under the relays
-  ([health.md](health.md#relays-blocked-and-reconnecting)). Central lists only
-  `ws://satorian.satorinet.io:7777` today, so a deployed app needs a `wss://`
-  relay ([issue](../issues/relays-not-wss.md)): the deployment's build sets
-  `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public relay over
-  TLS, as the user's relay by default ([deploy.md](deploy.md#build-variables)). The dev server is plain
+- **ws vs wss.** A build's CSP allows `connect-src 'self' https: wss:`, with
+  no `ws:` (2026-10-19: it only added `ws://localhost` services); the dev
+  server's adds `ws:`, for its test relay. So in a build every `ws://` relay
+  shows as **blocked** and is not tried ("ws:// relays are not allowed in a
+  build: use wss://"); on the dev server's page a `ws://` relay is blocked
+  only from https, where the browser refuses it as mixed content before the
+  CSP is asked (`ws://localhost` and `127.0.0.1` aside). A blocked relay is
+  neither down nor counted on Home, and Settings says why once, under the
+  relays ([health.md](health.md#relays-blocked-and-reconnecting)). Central
+  lists only `ws://satorian.satorinet.io:7777` today, so a deployed app needs a
+  `wss://` relay ([issue](../issues/relays-not-wss.md)): the deployment's build
+  sets `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public relay
+  over TLS, as the user's relay by default
+  ([deploy.md](deploy.md#build-variables)). The dev server is plain
   `http://localhost:5180`, which can open any `ws://`.
 - **Publish to central's relays** (Settings, `meta.nostr_central_write`).
   Off by default on the dev server, on in a build (a build's default is

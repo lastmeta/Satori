@@ -97,9 +97,10 @@ Unlock ─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Sen
 ```
 
 On the dev server the Base RPC is `/rpc`, which Vite proxies to a local
-anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses central's RPC
-(`https://sepolia.base.org`) with publicnode as a fallback, or `VITE_BASE_RPC`
-alone when the build sets it.
+anvil fork of Base Sepolia (`scripts/fork.mjs`); a build uses its pinned
+`VITE_BASE_RPC` (the deployment: `https://sepolia.base.org`) with publicnode
+as a fallback, which central's config never overrides; a build that pins none
+uses central's `rpcUrl`, then publicnode.
 
 ## Parts
 
@@ -107,7 +108,7 @@ alone when the build sets it.
 |---|---|---|
 | keys | `src/keys/` | Satori's two keys and the Nostr key in one record of this app's own, `meta.keys` ([keys.md](keys.md)): the **identity** (plain text, signs on its own), the **vault** (sealed with the passphrase: PBKDF2-SHA256 600,000 and AES-256-GCM, any Unicode passphrase of 8 or more; holds funds; its public key in clear) and the **Nostr key** (random, plain text). Create, restore from words, import a Dockerized Neuron's files (read only, translated: `docker.js`), Unlock/Lock (an earlier version's vault is re-encrypted at its next Unlock; it locks on its own after 5 min without interaction, `autolock.js`), backup and send with the passphrase each time. Each key's Base address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)); the identity's central login signature (EIP-191). |
 | central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `predictionItem` (the payload and its hash); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. `login.js`: central's login signature, EIP-191 by the identity ([central.md](central.md#login-signature)). |
-| chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses with central's config over them (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, stake/unstake, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
+| chain | `src/chain/` | The D6 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses, which central's config is checked against and never overrides (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, stake/unstake, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls, under the max fee; CCIP-read off. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
 | db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`, and `activity` (Home's log, [health.md](health.md)); ordered migrations; every call one at a time; every commit checkpointed; a WAL an older version left set aside before the open (`recover.js`) ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule, recovery). Times are unix seconds. |
 | engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (identity-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). |
@@ -203,10 +204,15 @@ alone when the build sets it.
   the database opens, with a notice when it held changes DuckDB can't replay
   ([storage.md](storage.md#the-checkpoint-rule), [recovery](storage.md#recovery)).
 - The page is sent with a strict CSP header: no inline script,
-  `'wasm-unsafe-eval'` for DuckDB, `connect-src 'self' https: wss: ws:` for the
-  chosen central and the relays. An https page still can't open `ws://`
-  (mixed content), so a deployed app needs `wss://` relays
-  ([issue](../issues/relays-not-wss.md)).
+  `'wasm-unsafe-eval'` for DuckDB, `connect-src 'self' https: wss:` for the
+  chosen central, the RPC and the relays (the dev server adds `ws:` for its
+  test relay), `form-action 'none'`. An https page can't open `ws://` (mixed
+  content), so a deployed app needs `wss://` relays
+  ([issue](../issues/relays-not-wss.md)). The deployment also sends HSTS
+  ([deploy.md](deploy.md#what-it-sends)).
+- A change of the Satori Network's address or the Base RPC, from Settings or
+  an agent, is logged and noted quietly on Home for 24 h
+  ([health.md](health.md#address-changes)).
 - The Nostr key is stored unencrypted like the identity, so the neuron signs
   its events on its own. Its backup needs Unlock, as the others: they are
   private keys.
@@ -215,7 +221,9 @@ alone when the build sets it.
   configured RPC (Settings, `meta.base_rpc_url`: https or a same-origin path);
   the dev server's default is the local fork, so by default a checkout does
   not send to a public chain; an RPC on another chain is refused
-  ([base.md](base.md#config)). The unattended batch has a max-fee ceiling.
+  ([base.md](base.md#config)). Every transaction, the batch's and the
+  vault's, has a max-fee ceiling (Settings, 2 gwei by default). Central's
+  contract addresses are never used, only checked.
 
 ## Icons
 

@@ -54,6 +54,8 @@ Rows older than 90 days are deleted at start and once a day.
 | `base` | `ok` sent, `warn` fixable skip, `idle` other skip, `bad` error | `{ round, hash?, games?, dropped?, skipped?, error? }` | each batch check that sent, skipped or failed, except "already predicted" and "waiting for the batch already sent". The same skip or error again is merged into its row (`count`, `until`) |
 | `nostr` | `ok` | `{ published }` | each `_pred` a relay took, merged per hour |
 | `wallet` | `ok` | `{ action, text }` | Stake, Unstake, Claim, Send |
+| `setting` | `idle` | `{ what: 'central' \| 'rpc', to, default? }` | the Satori Network's address or the Base RPC changed, in Settings or by `window.satori` (`to` `''`: the default, `default` its URL); Home notes it for 24 h ([below](#address-changes)) |
+| `config` | `warn` | `{ url, keys }` | central's `base/config` named contract addresses that are not the app's (`keys`); the app's were kept ([base.md](base.md#config)). Merged per central and keys |
 | `error` | `bad` | `{ where, message }` | an engine or database failure outside central's cycle (a relay stream's intake) |
 
 Times, in `src/neuron/health.js`:
@@ -442,13 +444,14 @@ a failure. Once staked, or once a batch went out, the same error is
 
 ### Relays: blocked and reconnecting
 
-- **Blocked**: a `ws://` relay on an https page (central lists only
-  `ws://satorian…`, [nostr.md](nostr.md#relays-and-the-read-only-flag)) can
-  never open there. It is neither down nor counted: not toward "1 of 2
-  relays down", not in "2 relays", not in the Streams card's "1 of 1 relay
-  connected". Settings › Satori relays says it once, under the list: "A
-  ws:// relay can't be reached from a secure (https) page, so it is left
-  out: it doesn't count as down." (`relays-blocked`); its own line reads
+- **Blocked**: a `ws://` relay on an https page, or anywhere in a build
+  (its CSP has no `ws:`; central lists only `ws://satorian…`,
+  [nostr.md](nostr.md#relays-and-the-read-only-flag)) can never open there.
+  It is neither down nor counted: not toward "1 of 2 relays down", not in "2
+  relays", not in the Streams card's "1 of 1 relay connected". Settings ›
+  Satori relays says it once, under the list: "A ws:// relay can't be
+  reached from this page (only wss:// can), so it is left out: it doesn't
+  count as down." (`relays-blocked`); its own line reads
   "Not reachable here". Only blocked relays left: none can carry the
   streams, so it is "Relays down".
 - **Reconnecting**: a relay counts as down only once it has not been open
@@ -554,6 +557,25 @@ The summary counts the neuron's own days: "12 of 14 full days"; a neuron
 younger than the strip, "1 full day" on its first day, then "2 of 3 full
 days". The legend shows "Before this neuron" only while such a day is shown.
 
+## Address changes
+
+The security review (2026-10-19): whoever changes the Satori Network's
+address or the Base RPC chooses whom the neuron trusts for its data, its
+balances and its transactions' fees, and a browser extension or a misled
+agent can do it through `window.satori` as well as Settings. So each change
+is a `setting` row (only a real change: saving the same address is none),
+and Home shows a quiet line under the hero's for 24 h (`NOTICE_S`), newest
+first, with how long ago:
+
+- "Satori Network address changed to https://central.example · 2 h ago"
+  ("… changed to the default, https://network.satorinet.io" when emptied);
+- "Base RPC changed to https://rpc.example" ("… changed to the default,
+  https://sepolia.base.org").
+
+It never changes the status, the tone, the card or the day strip.
+`health().notices` is the same, `[{ at, what, text }]`; the feed keeps the
+rows for 90 days.
+
 ## The feed
 
 The log, newest first, 20 rows: `{ at, level, text }`. "Sent 83 predictions
@@ -562,8 +584,10 @@ to send), "Caught up: sent 83 predictions" ("Caught up: up to date"), "The
 Satori Network refused the batch: Satori Network 401: Invalid signature",
 "Satori contract batch for round 20742: 1 game", "Satori contract batch
 skipped: gas above the ceiling (×3)", "Published 3 forecasts to the Satori
-relays", "Satori was closed for 2 d", "Staked with this neuron". A
-session that missed nothing is not shown.
+relays", "Satori was closed for 2 d", "Staked with this neuron",
+"Satori Network address changed to https://central.example", "The Satori
+Network's contract addresses differ from the app's (token): the app's are
+used". A session that missed nothing is not shown.
 
 ## Verify
 

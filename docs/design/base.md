@@ -65,23 +65,33 @@ account).
   `lens`, `voting` and Multicall3 from the dapp (`UI/contracts/addresses.ts:199-221`);
   they mirror `contract/satori/deployments/baseSepolia.json` (`voting` =
   `SatoriEngine.satoriVoting()` on D6). `explorerUrl` links tx hashes on the
-  card (not on a local fork). Central's
-  `GET /api/v1/base/config` overlays them (non-empty values only, and only for
-  chain 84532), cached 1 h in memory as BCFG does (`:16,66-88`). central2
-  answers it; prod returns 404, so the bundled addresses are used there.
-  Central's payload has no `lens` or `voting`: they always come from the bundle.
-- **RPC** (Settings, `meta.base_rpc_url`): empty means the default. In a
-  build: central's `rpcUrl` (else `https://sepolia.base.org`), then
-  `https://base-sepolia-rpc.publicnode.com` as a fallback, as the dapp lists
-  them (`UI/contracts/addresses.ts:218-221`; viem's `fallback` transport). On
-  the dev server the default is `/rpc`, which Vite proxies to a local anvil
-  fork of Base Sepolia on `127.0.0.1:8545` (`scripts/fork.mjs`), so by
+  card (not on a local fork). Central's `GET /api/v1/base/config` is read
+  (only for chain 84532), cached 1 h in memory as BCFG does (`:16,66-88`), but
+  **its contract addresses are never used**: the app keeps its own, and an
+  address central names that is not the app's (case aside) is a quiet warning
+  in the activity feed, "The Satori Network's contract addresses differ from
+  the app's (token): the app's are used" (`config` row, merged), and a
+  `console.warn` (the security review, 2026-10-19: Lite takes them, BCFG's
+  overlay, but a central that could point the vault at other contracts would
+  move its funds; a new deployment is a new build). central2 answers with the
+  bundle's own values (`base().config` `'central'`: it answered; the
+  Wallet card's tooltip says its addresses are checked, never used); prod
+  returns 404 (`'bundled'`). Central's payload has no `lens` or `voting`.
+- **RPC** (Settings, `meta.base_rpc_url`): empty means the default. **A build
+  pins its RPC** (`VITE_BASE_RPC`; this deployment `https://sepolia.base.org`),
+  then `https://base-sepolia-rpc.publicnode.com` as a fallback (viem's
+  `fallback` transport); central's `rpcUrl` and `explorerUrl` never override
+  it (2026-10-19). A build that pins none takes central's `rpcUrl` (https
+  only, else `https://sepolia.base.org`), then publicnode, as the dapp lists
+  them (`UI/contracts/addresses.ts:218-221`), and its `explorerUrl`. On the
+  dev server the default is `/rpc`, which Vite proxies to a local anvil fork
+  of Base Sepolia on `127.0.0.1:8545` (`scripts/fork.mjs`), alone, so by
   default a dev checkout does not send to a public chain, the same rule as the
-  dev central and the test relay; a saved RPC replaces the default. A build
-  can fix its own default with `VITE_BASE_RPC`, used alone as `/rpc` is
-  ([deploy.md](deploy.md#build-variables)). The card
-  shows the active RPC as its first fact. A setting is an `https://` URL or a
-  same-origin path; the page's CSP (`connect-src 'self' https:`) allows both.
+  dev central and the test relay; a saved RPC replaces the default
+  ([deploy.md](deploy.md#build-variables)). A changed RPC is noted on Home for
+  24 h ([health.md](health.md#address-changes)). The card shows the active RPC
+  as its first fact. A setting is an `https://` URL or a same-origin path; the
+  page's CSP (`connect-src 'self' https:`) allows both.
 - **Chain id**: a new RPC is asked `eth_chainId` once. Another chain than
   84532 is refused: the card says so, and nothing is read, sent or batched
   until the RPC changes.
@@ -182,7 +192,16 @@ simulate the call first (a revert throws with the contract's error name and
 costs no gas), estimate, send, wait for the receipt, and throw unless its
 status is success. Fees: the tip is the node's `eth_maxPriorityFeePerGas`,
 and `maxFeePerGas = 2 × the latest base fee + the tip` (Lite's 2× margin,
-EVM:74-75, on the base fee instead of the gas price). The gas limit of a
+EVM:74-75, on the base fee instead of the gas price). **Every transaction**
+(Stake's three, Unstake, the three claims, both sends, the batch and its
+replacement) is refused before it is sent when that max fee is over the
+ceiling, Settings' max fee (2 gwei by default; `FeeCeilingError`, "Gas is
+above the max fee: 3 gwei > 2 gwei. Try again later, or raise the max fee in
+Settings › Satori contract."): the RPC quotes the tip, so a hostile or broken
+one must not set what the vault pays (the security review, 2026-10-19). The
+send's review says it before the passphrase. viem's **CCIP-read is off**
+(`ccipRead: false`): a contract revert asking for an EIP-3668 off-chain
+lookup is a revert, and the page fetches nothing it names. The gas limit of a
 contract call is the estimate + 500,000 (`HOOK_GAS`; unused gas is not
 charged): the token runs its transfer hook in a try/catch, so the bare
 estimate starves the hook, and SATORI that reaches a staked vault that way
@@ -280,15 +299,16 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    games on `DuplicatePrediction` (BP:157-174) exist because Lite does not
    simulate; here the simulate already drops such a game, so neither is
    kept.
-7. **The spending ceiling**: the batch runs unattended, so its max fee per
-   gas must be at most the setting (Settings, `meta.base_max_fee_gwei`,
-   default 2 gwei); above it the check skips, says why, and the next one
+7. **The spending ceiling**: the batch's max fee per gas must be at most the
+   setting (Settings, `meta.base_max_fee_gwei`, default 2 gwei), as every
+   transaction's is; above it the check skips, says why, and the next one
    tries again. Base's fees are about 0.01 gwei (Base Sepolia, 2026-10-15:
    base fee 0.005 gwei, tip 0.001 gwei, so a max fee of 0.011 gwei): 2 gwei
    stops only a spike of ~200× or an RPC quoting nonsense, and caps a batch
    at about 0.003 ETH (its 1.5M gas limit). It sits above the 1 gwei tip
-   anvil quotes, so the local fork works. The vault's actions are attended
-   and have no ceiling.
+   anvil quotes, so the local fork works. Since 2026-10-19 the vault's
+   actions have the same ceiling (above): attended or not, a quoted fee over
+   it is not paid.
 8. **Send** `predictMultipleWithPayloads` with the games that passed, and
    keep its hash at once (step 0).
 9. **Persist after the receipt**: `meta.base_last_batch` = `{round, at, hash,
@@ -464,7 +484,9 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | Each game is simulated alone and only passing games are sent; Lite sends all. Lite's named-game wait (24 h since its last submit) and its resend without named games are not kept. | One stale game no longer sinks the batch. Lite needs the wait and the resend because it does not simulate; the simulate applies the contract's own named rule. |
 | The hash is kept when the batch is sent and the batch stored after its receipt; Lite stores its time before sending. | A reverted send no longer loses the day, and a tab closed before the receipt never sends twice. |
 | A batch not mined for 10 min is sent again at its nonce with a quarter more fee, within the ceiling; Lite never replaces one. | A stuck batch holds the identity's nonce: every later batch would wait behind it, silently (the review, 2026-10-19). |
-| A max-fee ceiling for the unattended batch (2 gwei by default); the tip from `eth_maxPriorityFeePerGas`. | Nobody watches the batch; Lite pays whatever the gas price is. |
+| A max-fee ceiling on every transaction, the batch's and the vault's (2 gwei by default); the tip from `eth_maxPriorityFeePerGas`. | Nobody watches the batch, and the RPC quotes the tip: a hostile one must not set what the vault pays. Lite pays whatever the gas price is. |
+| Central's contract addresses are never used (a different one is said in the feed); a build's pinned RPC is never overridden by central's `rpcUrl` or `explorerUrl`. Lite overlays central's config on its defaults (BCFG:66-88). | A central, or whoever controls it, must not choose the contracts the vault talks to or the RPC that quotes its fees (the security review, 2026-10-19). |
+| viem's CCIP-read is off. | A contract's revert must not make the page fetch a URL it names. |
 | An RPC on another chain is refused. | A wrong RPC must not take writes. |
 | `setAllowedDelegator(vault)` is sent by the identity (the dapp); Lite does not. | Only our vault can stake with the identity. |
 | `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's staking earnings. |
@@ -526,7 +548,9 @@ asked at once.
   in-memory Satori behind a custom transport: the status multicall, the lock
   rule, stake and unstake, streams kept by voting weight, per-game
   simulation, payload bytes, fees from `eth_maxPriorityFeePerGas` and the
-  pad, receipts, claims' branches, sends), `src/neuron/base.test.js` (the
+  pad, the max fee on every write and on a send's quote, CCIP-read off (an
+  `OffchainLookup` revert fetches nothing), receipts, claims' branches,
+  sends), `src/neuron/base.test.js` (the
   batch flow: forecast, direction, a named game dropped by its simulate,
   unweighted games left out, the hash kept at send and waited for, the round
   from the block, the fee ceiling, persist only after success, the schedule;
@@ -536,7 +560,10 @@ asked at once.
   the deployed code: every selector, and each view's answer in the shape
   `abi.js` decodes; a local build of the contracts runs ahead of the chain,
   so it is not the reference),
-  `config.test.js`, and the keys' Base addresses against viem.
+  `config.test.js` (central's addresses only when they are the bundle's, the
+  ones that differ listed; its rpcUrl and explorer only without a pinned RPC;
+  a build's pinned RPC then publicnode), and the keys' Base addresses against
+  viem.
 - `npm run e2e`: `e2e/base.spec.js`, the app with the same fake chain behind
   `/rpc` and a stub central serving a merkle proof: status, Unlock, Stake,
   the batch, claims, Unstake, when SATORI can be sent, a send through its

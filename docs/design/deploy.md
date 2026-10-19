@@ -27,7 +27,7 @@ traffic passes through this container.
 | `deploy/Dockerfile` | `nginx:1.30.5-alpine3.24`, pinned by the digest of its index (stable; the amd64 image was built 2026-09-23). Writes `/etc/nginx/csp.conf` from the `CSP` build argument (`add_header Content-Security-Policy "…" always;`) and empties the default site. Copies `deploy/nginx.conf` over `conf.d/default.conf` and `dist/` into the html root. Writes a `.gz` beside each html, js, css, wasm, txt and webmanifest file. Runs `nginx -t`. |
 | `deploy/nginx.conf` | The server ([below](#what-it-sends)). |
 | `deploy/build.env` | This deployment's [build variables](#build-variables). |
-| `scripts/deploy-image.sh` | Runs `npm ci` if `node_modules` is missing or older than the lock file. Builds `dist/` with `deploy/build.env` (a variable already set in the environment wins) and checks the bundle for those values. Writes DuckDB's wasm in brotli beside it (`scripts/brotli.mjs`, [compression](#compression)). Builds `satori-neuron:<git short sha>` (`-dirty` with uncommitted changes) and tags it `:latest`, passing the CSP from `csp.js`. Then checks the image: `nginx -t`, its CSP line equal to `csp.js`'s, and the values in its bundle. Exits 2 if docker is not reachable; `dist/` is then built and checked, but there is no image. |
+| `scripts/deploy-image.sh` | Turns TLS verification back on for its own run (`NODE_TLS_REJECT_UNAUTHORIZED=1`, `NPM_CONFIG_STRICT_SSL=true`: this box's shell turns both off, the security review, 2026-10-19). Runs `npm ci --ignore-scripts` (the lock's one install script is fsevents', macOS only) if `node_modules` is missing or older than the lock file. Builds `dist/` with `deploy/build.env` (a variable already set in the environment wins) and checks the bundle for those values. Writes DuckDB's wasm in brotli beside it (`scripts/brotli.mjs`, [compression](#compression)). Builds `satori-neuron:<git short sha>` (`-dirty` with uncommitted changes) and tags it `:latest`, passing the CSP from `csp.js`. Then checks the image: `nginx -t`, its CSP line equal to `csp.js`'s, and the values in its bundle. Exits 2 if docker is not reachable; `dist/` is then built and checked, but there is no image. |
 | `.dockerignore` | The build context is the repo; only `dist/` and `deploy/nginx.conf` go in. |
 | `e2e/deploy.spec.js` | `npm run e2e:deploy`: the image (or a deployment) at `DEPLOY_URL` ([verify](#verify)). |
 
@@ -40,11 +40,24 @@ Neither file holds a copy. The script refuses a CSP that contains `"`, `$` or
 
 Every response, 404s included, carries:
 
-- `Content-Security-Policy` (`csp.js`). It sits at the server level; the
-  one location with an `add_header` of its own (the wasm's, for brotli,
-  [below](#compression)) includes it again, because an `add_header` in a
-  location drops the server's headers there;
-- `X-Content-Type-Options: nosniff`.
+- `Content-Security-Policy` (`csp.js`'s `CSP`, a build's: `connect-src
+  'self' https: wss:` with no `ws:`, and `form-action 'none'`; the dev
+  server sends `DEV_CSP`, the same with `ws:` for its `ws://localhost` test
+  relay). It sits at the server level; the one location with an
+  `add_header` of its own (the wasm's, for brotli, [below](#compression))
+  includes it again, because an `add_header` in a location drops the
+  server's headers there;
+- `X-Content-Type-Options: nosniff`;
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains` (two
+  years, 2026-10-19, the security review): once a browser has seen it over
+  https it never asks for `http://neuron.satorinet.io` again, so a hostile
+  network can't answer a typed http address with a look-alike page asking for
+  the words. No `preload` (that waits until every satorinet.io name is
+  https-only). Browsers ignore it over plain http, which the container
+  speaks: the front proxy on central terminates TLS and passes it through,
+  as it passes the CSP (nginx's `proxy_pass` keeps upstream headers). The
+  `satori.satorinet.io` 301 is the proxy's own answer and carries none, and
+  `includeSubDomains` here covers only names under `neuron.satorinet.io`.
 
 | Path | Cache-Control | Content-Type |
 |---|---|---|
@@ -107,7 +120,7 @@ means a new build.
 | `VITE_CENTRAL_URL` | central, https only (Settings › Central URL) | `https://network.satorinet.io` | `https://central2.satorinet.io` | `https://central2.satorinet.io` |
 | `VITE_NOSTR_RELAYS` | the user's relays, a comma list of `ws://` or `wss://` URLs (Settings › Nostr relays) | none | `ws://localhost:7778` | `wss://app.satorinet.io/relay` |
 | `VITE_NOSTR_CENTRAL_WRITE` | `true` or `false`: whether central's relays are written to (Settings › Publish to central's relays) | `true` | `false` | unset (`true`) |
-| `VITE_BASE_RPC` | the Base RPC used, alone, when none is saved: `https://…` or a same-origin path (Settings › Base RPC) | none: central's `rpcUrl`, then publicnode | `/rpc` (the local fork) | unset |
+| `VITE_BASE_RPC` | the Base RPC used when none is saved: `https://…` (then publicnode as the fallback), or a same-origin path (alone); central's `rpcUrl` and `explorerUrl` never override it (Settings › Base RPC) | none: central's `rpcUrl`, then publicnode | `/rpc` (the local fork) | `https://sepolia.base.org` (then publicnode) |
 
 - An empty variable counts as unset.
 - A bad value stops `vite build`, because `vite.config.js` runs the same
@@ -123,7 +136,8 @@ means a new build.
   has saved nothing gets a new build's default on the next load.
 
 This deployment uses the dev central until the owner moves to the production
-one. Its relay is Satori's public relay over TLS. Central lists only
+one. Its Base RPC is pinned (2026-10-19), so the central it uses, dev or
+production, can't choose the RPC that quotes the vault's fees. Its relay is Satori's public relay over TLS. Central lists only
 `ws://satorian.satorinet.io:7777`, and an https page can't open `ws://`
 ([issue](../issues/relays-not-wss.md)): the app shows that relay as blocked.
 
@@ -151,15 +165,16 @@ curl -sI http://localhost:8090/sw.js       # CSP, nosniff, no-cache
 
 `e2e/deploy.spec.js` makes two checks:
 
-1. The headers above on each kind of path, the SPA fallback, the 404 for a
-   missing asset, and the gzipped wasm.
+1. The headers above on each kind of path (the CSP, nosniff, HSTS, the cache
+   rule and the type), the SPA fallback, the 404 for a missing asset, and the
+   compressed wasm.
 2. Chrome with a fresh profile, every host but the app's unresolvable. Central
    is the stub, and the build's relays are routed to nothing. The page loads
    under the CSP with no violation and DuckDB opens. The service worker takes
    over, and the manifest is valid and installable. A new neuron gets this
    deployment's central and relays: it registers with the stub and opens the
-   relay. A poll stores and forecasts a stream, and a reload comes from the
-   worker.
+   relay, and its Base RPC is the pinned one, then publicnode. A poll stores
+   and forecasts a stream, and a reload comes from the worker.
 
 After a deploy, run the same spec against the live site:
 `DEPLOY_URL=https://neuron.satorinet.io npm run e2e:deploy`. The neuron it
@@ -226,7 +241,8 @@ database. `S` means `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175`
    `app` and `coined`.
 
 5. Check: `curl -sI https://neuron.satorinet.io/sw.js` (expect the CSP,
-   nosniff and `no-cache`), then
+   nosniff, `strict-transport-security: max-age=63072000; includeSubDomains`
+   and `no-cache`), then
    `DEPLOY_URL=https://neuron.satorinet.io npm run e2e:deploy`.
 
 Live since 2026-10-16. The check passed then, and a real smoke test also
