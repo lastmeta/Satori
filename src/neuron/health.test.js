@@ -707,3 +707,33 @@ describe('the Satori contract unused: its RPC errors are not failures (the day s
     expect(daysOf([open(NOW - 3 * H, NOW), good(NOW - 2 * H), stuck], NOW).at(-1).code).toBe('part');
   });
 });
+
+describe('address changes: a quiet note on Home for 24 h, and in the feed (the security review, 2026-10-19)', () => {
+  const changed = (at, data) => row('setting', at, 'idle', data);
+  test("the Satori Network's address or the Base RPC changed: a note each, newest first, for 24 h; the status, the card and the strip untouched", () => {
+    const rows = [...running(), changed(NOW - 25 * H, { what: 'central', to: 'https://old.example' }),
+      changed(NOW - 3 * H, { what: 'rpc', to: '', default: 'https://sepolia.base.org' }),
+      changed(NOW - 30 * M, { what: 'central', to: 'https://other.example' })];
+    const h = health({ rows });
+    expect(h.notices).toEqual([
+      { at: NOW - 30 * M, what: 'central', text: 'Satori Network address changed to https://other.example' },
+      { at: NOW - 3 * H, what: 'rpc', text: 'Base RPC changed to the default, https://sepolia.base.org' },
+    ]); // the one 25 h old has gone
+    expect([h.status, h.action, h.reasons]).toEqual(['ok', null, []]);
+    expect(h.days).toEqual(health().days);
+    expect(h.feed.filter((f) => /changed/.test(f.text)).map((f) => [f.level, f.text])).toEqual([
+      ['idle', 'Satori Network address changed to https://other.example'],
+      ['idle', 'Base RPC changed to the default, https://sepolia.base.org'],
+      ['idle', 'Satori Network address changed to https://old.example']]); // the feed keeps it
+    expect(health().notices).toEqual([]);
+    const rpc = changed(NOW - M, { what: 'rpc', to: 'https://mine.example' });
+    expect(health({ rows: [...running(), rpc] }).notices[0].text).toBe('Base RPC changed to https://mine.example');
+  });
+  test("central's contract addresses that differ from the app's: a quiet warning in the feed only", () => {
+    const r = row('config', NOW - H, 'warn', { url: 'https://central2.satorinet.io', keys: ['token', 'hub'] });
+    const h = health({ rows: [...running(), r] });
+    expect([h.status, h.notices, h.days]).toEqual(['ok', [], health().days]);
+    expect(h.feed[0]).toEqual({ at: NOW - H, level: 'warn',
+      text: "The Satori Network's contract addresses differ from the app's (token, hub): the app's are used" });
+  });
+});

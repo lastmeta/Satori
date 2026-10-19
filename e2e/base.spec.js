@@ -309,8 +309,8 @@ test('staking out of sync (the token-hook bug): Home red on the Contract chip, t
   await expect(page.evaluate(() => window.satori.unstake())).rejects.toThrow('Staking is out of sync.');
 });
 
-test('the Base settings: the RPC (https or a path on this site; empty is the default) and the batch\'s max fee', async ({ context, page }) => {
-  await setup(context);
+test('the Base settings: the RPC (https or a path on this site; empty is the default, a change noted on Home for 24 h) and the max fee, on every transaction', async ({ context, page }) => {
+  const { rpc } = await setup(context);
   await openApp(page);
   await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   await expect(page.locator('[data-test=identity]')).toHaveText(/^0x[0-9a-fA-F]{40}$/, { timeout: LOAD_TIMEOUT });
@@ -318,19 +318,34 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   await expect(page.evaluate(() => window.satori.setBaseRpc('http://127.0.0.1:8545'))).rejects.toThrow(/https:\/\/ URL or a path/);
   await expect(page.evaluate(() => window.satori.setBaseMaxFee('-1'))).rejects.toThrow(/positive number of gwei/);
   await go(page, 'settings');
-  await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue(''); // only what is stored: the default is the placeholder
+  await expect(page.getByLabel('Max fee (gwei)')).toHaveValue(''); // only what is stored: the default is the placeholder
   await page.getByLabel('Base RPC').fill('https://rpc.example');
-  await page.getByLabel('Daily batch: max fee (gwei)').fill('0');
+  await page.getByLabel('Max fee (gwei)').fill('0');
   await page.getByRole('button', { name: 'Save contract settings' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'positive number of gwei' })).toBeVisible();
   expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpcSetting: '', maxFeeSetting: null }); // neither saved
   await page.getByLabel('Base RPC').fill('/rpc');
-  await page.getByLabel('Daily batch: max fee (gwei)').fill('0.5');
+  await page.getByLabel('Max fee (gwei)').fill('0.5');
   await page.getByRole('button', { name: 'Save contract settings' }).click();
   await expect.poll(() => page.evaluate(async () => (await window.satori.base()).maxFeeGwei)).toBe(0.5); // saved
   expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpc: ['/rpc'], rpcSetting: '/rpc', maxFeeSetting: 0.5, maxFeeGwei: 0.5 });
-  await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue('0.5');
+  await expect(page.getByLabel('Max fee (gwei)')).toHaveValue('0.5');
   expect(await page.evaluate(() => window.satori.setBaseRpc(''))).toMatchObject({ rpc: ['/rpc'], rpcSetting: '' }); // the dev server's default
+
+  // each change of the RPC: a row in the feed, and a quiet note on Home for 24 h (health().notices)
+  const notices = await page.evaluate(async () => (await window.satori.health()).notices.map((n) => n.text));
+  expect(notices).toEqual(['Base RPC changed to the default, /rpc', 'Base RPC changed to /rpc']);
+  await go(page, 'home');
+  await expect(page.locator('[data-test=notice-line]').first()).toHaveText(/^Base RPC changed to the default, \/rpc · just now$/);
+
+  // the max fee holds for the vault's transactions too: above it, Stake and a send's review are refused in plain words
+  await page.evaluate(() => window.satori.unlock('pass phrase'));
+  await page.evaluate(() => window.satori.setBaseMaxFee('0.0001')); // the fake chain asks 0.001 gwei
+  const over = 'Gas is above the max fee: 0.001000002 gwei > 0.0001 gwei. Try again later, or raise the max fee in Settings › Satori contract.';
+  await expect(page.evaluate(() => window.satori.stake())).rejects.toThrow(over);
+  rpc.eth[(await page.evaluate(() => window.satori.status())).vault.toLowerCase()] = 10n ** 17n;
+  await expect(page.evaluate((to) => window.satori.quoteSend({ asset: 'ETH', to, amount: '0.001' }), '0x' + '44'.repeat(20))).rejects.toThrow(over);
+  expect(rpc.sent).toEqual([]);
 });
 
 test('the Satori contract unused (not staked, no batch ever sent): an RPC error stays on its chip, grey; Home green; no failed day', async ({ context, page }) => {

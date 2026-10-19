@@ -8,7 +8,7 @@ import { mark, sparkPath, unlockPrompt } from './parts.js';
 import { fmtNum, modelText, amountText, daysText, claimParts, claimableText, openingText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
-const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
+const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [], notices: [],
   channels: { network: { state: 'idle', tone: 'idle', text: '–' }, contract: { state: 'idle', tone: 'idle', text: '–' },
     relays: { state: 'idle', tone: 'idle', text: '–' } } };
 /** The last visit's Home is on screen (docs/design/health.md#the-last-visit): a revisit, until the neuron's own arrives. */
@@ -96,7 +96,8 @@ export function home(a) {
     <section class="hero" data-test="health" data-s="${() => hero().status}" data-tone="${() => hero().tone}" data-from="${() => hero().from ?? false}" data-work="${() => (hero().working ? hero().key : false)}" aria-busy="${() => (hero().working ? 'true' : false)}">
       <div class="ring" aria-hidden="true"><i class="ico"></i></div>
       <div><h2 data-test="health-title">${() => hero().title}</h2><p data-test="health-line">${() => hero().line}</p>
-        <p class="stale small" data-test="health-stale" hidden="${() => !cachedNow()}">${() => (cachedNow() ? `From your last visit, ${fmtAgo(Date.now() / 1000 - state.cached.at / 1000)}` : '')}</p></div>
+        <p class="stale small" data-test="health-stale" hidden="${() => !cachedNow()}">${() => (cachedNow() ? `From your last visit, ${fmtAgo(Date.now() / 1000 - state.cached.at / 1000)}` : '')}</p>
+        <div class="notes" data-test="notices" hidden="${() => !(h().notices ?? []).length}">${() => (h().notices ?? []).map((n) => html`<p class="note small" data-test="notice-line" data-what="${n.what}">${n.text} · ${fmtAgo(state.now - n.at)}</p>`.key(`${n.at}:${n.text}:${fmtAgo(state.now - n.at)}`))}</div></div>
     </section>
 
     <div class="action" data-test="action" data-action="${() => h().action?.id ?? false}" data-tone="${actionTone}" hidden="${() => !h().action}">

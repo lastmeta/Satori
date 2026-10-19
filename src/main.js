@@ -240,7 +240,7 @@ async function startNeuron() {
     onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err), work });
   await refreshNostr();
   base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
-    onChange: refreshBase, onCheck: (r) => activity.base(r), work });
+    onChange: refreshBase, onCheck: (r) => activity.base(r), onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
   await refreshBase();
   // when a poll is due (a new neuron, or one reopened late) it runs at once, after register: signing in is its first
   // step on Home, set before Home shows
@@ -295,17 +295,30 @@ const pollNow = () => poller.poll();
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
   if (url && !isHttps(url)) throw new Error('The Satori Network server must be an https:// address.');
-  if ((url || DEFAULT_CENTRAL) !== central.url) {
+  const moved = (url || DEFAULT_CENTRAL) !== central.url;
+  if (moved) {
     await poller.idle(); // its rows are the old central's
     await db.resetCentral();
   }
   await db.set('central_url', url);
+  if (moved) await activity.setting('central', url, url ? undefined : DEFAULT_CENTRAL); // Home notes it for 24 h
   await db.checkpoint();
   const c = await connect();
   await refresh();
   await registerWith(c);
   await nostr.reconcile(); // this central's relays
   await base.refresh(); // this central's Base config
+}
+
+/**
+ * The Base RPC and the max fee (Settings, agents): base.setSettings, and a changed RPC is logged, so Home notes it for
+ * 24 h (the security review, 2026-10-19). → base's status
+ */
+async function setBaseSettings(o) {
+  const before = (await db.get('base_rpc_url')) || '';
+  const s = await base.setSettings(o);
+  if (o.rpc !== undefined && s.rpcSetting !== before) await activity.setting('rpc', s.rpcSetting, s.rpcSetting ? undefined : s.rpc[0]);
+  return s;
 }
 
 /** The keys record, stored in one commit (each commit is checkpointed: docs/design/storage.md); critical work. */
@@ -828,7 +841,7 @@ const actions = {
     el.elements.maxFee.value = state.base.maxFeeSetting ?? '';
   },
   saveBase: shownAt('baseRpcError', async (f, el) => {
-    state.base = await base.setSettings({ rpc: f.rpc, maxFee: f.maxFee });
+    state.base = await setBaseSettings({ rpc: f.rpc, maxFee: f.maxFee });
     actions.fillBase(el);
   }),
   saveCentral: shownAt('settingsError', async (f, el) => {
@@ -1005,7 +1018,7 @@ window.satori = {
   /** From the vault, with its passphrase each time: { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5', passphrase } → { hash } */
   async send(o) { ready(); return baseAction('send', () => vaultOps.send(o)); },
   /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
-  async setBaseRpc(url) { ready(); return base.setSettings({ rpc: url }); },
+  async setBaseRpc(url) { ready(); return setBaseSettings({ rpc: url }); },
   /** The unattended batch's ceiling on the max fee per gas, in gwei (null or '' = the default, 2). → base() */
   async setBaseMaxFee(gwei) { ready(); return base.setSettings({ maxFee: gwei }); },
 };

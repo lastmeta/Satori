@@ -2,7 +2,7 @@
 // neuron did, for Home's health. Sessions (a page load, and a wake after the
 // page did not run), with a heartbeat; one row per central cycle; Base checks,
 // the same skip or error merged into one row; Nostr publishes merged per hour;
-// history runs, wallet actions, errors. Kept 90 days. A write that fails is
+// history runs, wallet actions, address changes, central's contract addresses that differ, errors. Kept 90 days. A write that fails is
 // logged, never thrown: the neuron goes on.
 import { serial } from '../util.js';
 import { DAYS, FIXABLE_SKIPS, HEARTBEAT_S, KEEP_S, SLEEP_S, isGood, missedBy } from './health.js';
@@ -140,6 +140,19 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
 
     /** Stake, Unstake, Claim, Send: what was done, in a few words. */
     wallet: safely(async (action, text) => { await add('wallet', 'ok', { action, text }); }),
+
+    /**
+     * The Satori Network's address ('central') or the Base RPC ('rpc') changed, from Settings or an agent: `to` the new
+     * one ('' for the RPC's default, `fallback` its URL). Home notes it for 24 h (healthOf's notices).
+     */
+    setting: safely(async (what, to, fallback) => {
+      await add('setting', 'idle', { what, to, ...(fallback ? { default: fallback } : {}) });
+    }),
+
+    /** Central's contract addresses that differ from the app's (the app's are used): a quiet warning, merged. */
+    configDiffers: safely(async (keys, url) => {
+      await merge('config', 'warn', { url, keys }, `config:${url}:${keys.join()}`);
+    }),
 
     /** An engine or database failure outside central's cycle. */
     error: safely(async (where, err) => { await add('error', 'bad', { where, message: String(err?.message ?? err) }); }),

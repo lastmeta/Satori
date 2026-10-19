@@ -318,6 +318,11 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(await page.evaluate(() => window.satori.streams())).toMatchObject([{ uuid: 'u-btc-2', meta: { unit: 'USD' } }]);
   expect((await page.evaluate(() => window.satori.setCentral(''))).url).toBe(CENTRAL);
   expect(await page.evaluate(() => window.satori.streams())).toEqual([]);
+  // each change is noted on Home for 24 h (health().notices) and in the feed; a save of the same URL is none
+  await page.evaluate(() => window.satori.setCentral(''));
+  expect((await page.evaluate(() => window.satori.health())).notices.map((n) => n.text)).toEqual([
+    `Satori Network address changed to the default, ${CENTRAL}`, 'Satori Network address changed to https://central.test']);
+  await expect(page.locator('[data-test=notice-line]').first()).toContainText(`Satori Network address changed to the default, ${CENTRAL}`);
 
   // A poll still running when the URL changes: its rows land before the reset, never after it.
   stub.batch = [entry('u-late', 'late', T0 + 180, '1.5')];

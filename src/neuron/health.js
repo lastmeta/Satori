@@ -14,6 +14,7 @@ export const KEEP_S = 90 * 86400;
 export const RELAY_GRACE_S = 600; // a relay reconnecting counts as up this long (its backoff reaches 5 min)
 export const DAYS = 30;
 export const FEED = 20;
+export const NOTICE_S = 86400; // an address change is noted on Home this long
 
 /**
  * Each reason's level, highest first (docs/design/health.md#reasons-in-priority-order). bad and warn: something is
@@ -405,6 +406,11 @@ export function daysOf(rows, now, since = null, n = DAYS) {
 // ── the feed ──
 
 const times = (r) => (r.count > 1 ? ` (×${r.count})` : '');
+/** An address change in words: 'Satori Network address changed to https://…', 'Base RPC changed to the default, https://…'. */
+const settingText = (d) => {
+  const to = d.to || (d.default ? `the default, ${d.default}` : 'the default');
+  return d.what === 'rpc' ? `Base RPC changed to ${to}` : `Satori Network address changed to ${to}`;
+};
 const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
 
 function feedText(r) {
@@ -430,6 +436,8 @@ function feedText(r) {
       return `Satori contract batch for round ${d.round}: ${games(d.games?.length ?? 0)}`;
     case 'nostr': return `Published ${d.published} forecast${d.published === 1 ? '' : 's'} to the Satori relays`;
     case 'wallet': return d.text;
+    case 'setting': return settingText(d);
+    case 'config': return `The Satori Network's contract addresses differ from the app's (${(d.keys ?? []).join(', ')}): the app's are used${times(r)}`;
     case 'error': return `${d.where === 'nostr' ? 'A relay forecast failed' : 'Something failed'}: ${d.message}`;
     default: return null;
   }
@@ -447,6 +455,13 @@ export function feedOf(rows, n = FEED) {
   return out;
 }
 
+/**
+ * The address changes of the last 24 h, newest first: Home's quiet notes and health().notices (the security review,
+ * 2026-10-19: a central or an RPC swapped by Settings or an agent is seen).
+ */
+export const noticesOf = (rows, now) => rows.filter((r) => r.kind === 'setting' && now - r.at < NOTICE_S)
+  .sort((a, b) => b.at - a.at).map((r) => ({ at: r.at, what: r.data?.what, text: settingText(r.data ?? {}) }));
+
 // ── it all ──
 
 /**
@@ -461,7 +476,7 @@ export function feedOf(rows, n = FEED) {
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
  * @param {{central, base, network}} [o.traffic] each traffic channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
  * @param {Object<string, object>} [o.work] the work in progress, { [task]: entry } (src/neuron/work.js): the tones, `work`
- * @returns {{status, tone, title, line, action, days, channels, feed, reasons, work}}
+ * @returns {{status, tone, title, line, action, days, channels, feed, reasons, work, notices}}
  */
 export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, installDismissed = false, since = null, traffic, work = {} }) {
   const sessions = sessionsOf(rows, now);
@@ -502,5 +517,6 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
     feed: feedOf(rows),
     reasons: reasons.map((r) => ({ id: r.id, status: r.status, channel: r.channel, text: r.text ?? r.line })),
     work: doing && { ...doing, text: workText(doing) },
+    notices: noticesOf(rows, now),
   };
 }

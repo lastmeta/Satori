@@ -160,6 +160,20 @@ test('history (only a run that loaded or failed; a central without the route is 
   ]);
 });
 
+test("address changes (the Satori Network's, the Base RPC) and central's contract addresses that differ: rows of their own", async () => {
+  const a = make();
+  await a.start();
+  await a.setting('central', 'https://other.example');
+  await a.setting('rpc', '', 'https://sepolia.base.org');
+  await a.configDiffers(['token'], 'https://central2.example');
+  await a.configDiffers(['token'], 'https://central2.example'); // the same again: merged
+  expect(a.rows().slice(1).map((r) => [r.kind, r.level, r.data, r.count])).toEqual([
+    ['setting', 'idle', { what: 'central', to: 'https://other.example' }, 1],
+    ['setting', 'idle', { what: 'rpc', to: '', default: 'https://sepolia.base.org' }, 1],
+    ['config', 'warn', { url: 'https://central2.example', keys: ['token'] }, 2],
+  ]);
+});
+
 test('kept 90 days: pruned at start and once a day', async () => {
   const old = await db.addActivity({ at: T - KEEP_S - 10, kind: 'central', level: 'ok', data: {} });
   await db.addActivity({ at: T - KEEP_S + 3600, kind: 'central', level: 'ok', data: {} }); // gone a day later
