@@ -370,6 +370,22 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     claimMerkle: (vault, { amountWei, proof }, opts) => write(vault, merkle('claimMerkle', [BigInt(amountWei), proof]), opts),
     claimAirdrop: (vault, opts) => write(vault, airdrop('claimAirdrop'), opts),
 
+    /**
+     * A send's fee before it is sent, from the sender's address (no key): the gas limit it would be sent with (ETH:
+     * the estimate; SATORI: the estimate + HOOK_GAS), `about` = the estimate at the latest base fee + the tip, `max`
+     * = the limit at the max fee (2 × the base fee + the tip). Wei. An estimate that reverts (too little, a transfer
+     * lock) throws.
+     */
+    async sendFee(from, { asset, to, wei }) {
+      const [estimate, block, tip] = await Promise.all([
+        asset === 'ETH' ? client.estimateGas({ account: from, to, value: wei })
+          : client.estimateContractGas({ ...token('transfer', [to, wei]), account: from }),
+        client.getBlock(), client.estimateMaxPriorityFeePerGas()]);
+      const base = block.baseFeePerGas ?? 0n;
+      const gas = asset === 'ETH' ? estimate : estimate + HOOK_GAS;
+      return { gas, about: estimate * (base + tip), max: gas * (2n * base + tip) };
+    },
+
     /** SATORI from the vault (the token refuses while transfer-locked: the simulate says Locked). */
     sendSatori: (vault, to, amount, opts) => write(vault, token('transfer', [to, amount]), opts),
     /** ETH from the vault: estimated first (a failure throws before sending); a plain transfer runs no hook, so no pad. */

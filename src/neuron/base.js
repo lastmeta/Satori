@@ -4,7 +4,7 @@
 //   · claims (Unlock: hub.claim, merkle, airdrop) · send (Unlock)
 // The batch goes at the first check of each UTC round: 10 s after start, at
 // the next round's start (chain time) and at least hourly.
-import { fallback, formatEther, formatGwei, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
+import { fallback, formatEther, formatGwei, getAddress, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
 import { createChain, errorText, lockText, panicOf, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
 import { explainForecast as engineForecast, STEP_S } from '../engine/index.js';
@@ -86,6 +86,24 @@ const lowOnGas = (eth, gas) => eth != null && (eth === 0n || (gas != null && eth
 export const PROOF_TTL_S = 3600;
 /** A vault transaction needs Base ETH for gas (Claim says so before it tries). */
 export const NEED_GAS = 'The vault needs a little Base ETH for gas to claim.';
+export const ZERO_ADDRESS = 'The zero address (0x000…000) burns what is sent to it: refused.';
+
+/**
+ * A send's inputs, checked before anything is asked of the chain or the passphrase: { asset: 'ETH' | 'SATORI', to (a
+ * 0x address, not the zero address), amount (a positive decimal string) } → { asset, to, amount, wei }.
+ */
+export function checkSend({ asset, to, amount } = {}) {
+  const kind = String(asset ?? '').toUpperCase();
+  if (kind !== 'ETH' && kind !== 'SATORI') throw new Error("Name the asset: 'ETH' or 'SATORI'.");
+  const address = String(to ?? '').trim();
+  if (!isAddress(address)) throw new Error('The recipient must be a 0x address.');
+  if (same(address, zeroAddress)) throw new Error(ZERO_ADDRESS);
+  const text = String(amount ?? '').trim();
+  let wei;
+  try { wei = parseEther(text); } catch { wei = 0n; }
+  if (!(wei > 0n)) throw new Error('The amount must be a positive number.');
+  return { asset: kind, to: address, amount: text, wei };
+}
 
 /**
  * Central's answer for the vault's merkle proof (merkle.py:45-58), or its error → { state: 'ok', amountWei, proof, root }
@@ -378,6 +396,11 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       await refresh();
     }
   }
+  /** The vault's SATORI can be sent now (the token's transfer lock), else it throws when it can. */
+  async function sendable(chain) {
+    const lock = (await chain.status({ identity: identity.evmAddress, vault: vaultAddress })).vault.lock;
+    if (lock?.locked) throw new Error(`${lockText(lock)}.`);
+  }
   /** A vault write's options: the step 'confirm' once it is sent. */
   const sent = (step) => ({ onSent: () => step('confirm') });
 
@@ -492,24 +515,33 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       });
     },
 
-    /** From the vault: { asset: 'ETH' | 'SATORI', to, amount } (a decimal string). → { hash } */
-    async send({ asset, to, amount } = {}) {
-      const v = needVault();
-      const kind = String(asset ?? '').toUpperCase();
-      if (kind !== 'ETH' && kind !== 'SATORI') throw new Error("Name the asset: 'ETH' or 'SATORI'.");
-      if (!isAddress(String(to ?? ''))) throw new Error('The recipient must be a 0x address.');
-      let wei;
-      try { wei = parseEther(String(amount ?? '').trim()); } catch { wei = 0n; }
-      if (!(wei > 0n)) throw new Error('The amount must be a positive number.');
+    /**
+     * The review before a send (no key needed): the inputs checked, SATORI's transfer lock, and the fee: the gas
+     * estimated from the vault's address, `about` at the base fee + the tip, `max` at the gas limit and the max fee
+     * (decimal ETH). → { asset, to, amount, fee: { gas, about, max } }
+     */
+    async quoteSend(o) {
+      const { asset, to, amount, wei } = checkSend(o);
+      const { chain } = await chainNow();
+      if (asset === 'SATORI') await sendable(chain);
+      const fee = await chain.sendFee(vaultAddress, { asset, to, wei });
+      return { asset, to: getAddress(to), amount, fee: { gas: Number(fee.gas), about: formatEther(fee.about), max: formatEther(fee.max) } };
+    },
+
+    /**
+     * From the vault: { asset: 'ETH' | 'SATORI', to, amount } (a decimal string). `key`: the vault to send with, as the
+     * app opens it from the passphrase for each send (keys' withPassphrase); else the unlocked one. → { hash }
+     */
+    async send(o, key) {
+      const { asset, to, wei } = checkSend(o);
+      const v = key ?? needVault();
       return act('send', async (chain, step) => {
         const tx = { onSent: () => step('confirm', 1, 1) };
-        if (kind === 'ETH') {
+        if (asset === 'ETH') {
           step('send', 1, 1);
           return { hash: (await chain.sendEth(v, to, wei, tx)).hash };
         }
-        const st = await chain.status({ identity: identity.evmAddress, vault: v.evmAddress });
-        const lock = st.vault.lock;
-        if (lock?.locked) throw new Error(`${lockText(lock)}.`);
+        await sendable(chain);
         step('send', 1, 1);
         return { hash: (await chain.sendSatori(v, to, wei, tx)).hash };
       });

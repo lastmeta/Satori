@@ -15,8 +15,10 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockVault, passphraseOk, MIN_PASSPHRASE,
+  withPassphrase, backupKeys,
 } from './keys/index.js';
-import { nsec, nostrSecretOf } from './nostr/event.js';
+import { createAutoLock } from './keys/autolock.js';
+import { nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
 import { catchUpAll } from './neuron/schedule.js';
@@ -27,7 +29,7 @@ import { box as modelBox, modelHref } from './ui/models.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
-import { createBase, NEED_GAS } from './neuron/base.js';
+import { createBase, checkSend, NEED_GAS } from './neuron/base.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
 import { createWork, workText, leading, HERO } from './neuron/work.js';
@@ -265,6 +267,7 @@ async function startNeuron() {
  */
 async function tick(why) {
   state.now = nowS();
+  autoLock.check(); // a device that slept past the vault's deadline locks it now
   await activity.beat();
   catchUpAll({ poll: poller.catchUp, base: base.catchUp, relays: nostr.catchUp, train: () => void trainer.run() }, why);
 }
@@ -336,15 +339,28 @@ async function unlock(passphrase) {
   vault = v;
   state.unlocked = true;
   state.unlockFor = '';
+  autoLock.start();
 }
 
+/** Lock: the vault wiped from memory, and any backup on screen hidden. */
 function lock() {
   lockCount++;
   vault?.lock();
   vault = null;
   afterUnlock = null;
-  Object.assign(state, { unlocked: false, unlockFor: '', backup: '', backupWords: '', backupKey: '', backupHex: '' });
+  autoLock.stop();
+  Object.assign(state, { unlocked: false, unlockFor: '', backup: '', backupWords: '', backupKey: '', backupHex: '', backupAsk: '', backupError: '' });
 }
+
+/**
+ * The vault locks on its own (docs/design/keys.md#the-vault-locks-on-its-own): 5 minutes after the last interaction (a
+ * key, a tap, the wheel, a vault action) while it is unlocked or a backup is on screen, never in the middle of a vault
+ * action, and at once on a wake past the deadline. An action an inline Unlock was opened for locks it when it ends.
+ */
+const autoLock = createAutoLock({ onLock: () => lock(), busy: () => !!state.baseBusy || !!state.busy || state.revealing,
+  onChange: (at) => Object.assign(state, { lockAt: at, lockNow: Date.now() }) });
+for (const type of ['pointerdown', 'keydown', 'wheel']) addEventListener(type, () => autoLock.touch(), { capture: true, passive: true });
+setInterval(() => { if (state.lockAt) state.lockNow = Date.now(); }, 15_000); // "Locks in 4 min" by Lock
 
 /** An earlier version's vault with no public key in clear: its first Unlock stores it in this app's format, then the neuron starts. */
 async function finishUpdate(passphrase) {
@@ -352,21 +368,14 @@ async function finishUpdate(passphrase) {
   await startNeuron();
 }
 
-const BACKUPS = {
-  identity: () => identity.backup(),
-  vault: () => vault.backup(),
-  nostr: () => ({ nsec: nsec(nostrKey.secret), secret: nostrKey.secret }),
-};
-
-/** One key's backup ({ words, privateKey }, or the Nostr key's { nsec, secret }), or all three; needs Unlock. */
-function backupOf(which) {
-  if (which !== undefined && !Object.hasOwn(BACKUPS, which)) {
-    throw new Error("Name the key: 'identity', 'vault' or 'nostr' (or nothing, for all three).");
-  }
-  if (!vault) throw new Error('Unlock the vault first');
+/**
+ * One key's backup ({ words, privateKey }, or the Nostr key's { nsec, secret }), or all three (which null or undefined),
+ * from the passphrase each time, unlocked or not (keys' backupKeys: ~0.3 s; docs/design/keys.md#backup).
+ */
+async function backupOf(which, passphrase) {
+  const b = await backupKeys(record, which, passphrase);
   markBackup().catch((err) => console.warn('[satori] backup_at', err)); // shown: the backup is confirmed
-  if (which !== undefined) return BACKUPS[which]();
-  return Object.fromEntries(Object.entries(BACKUPS).map(([k, f]) => [k, f()]));
+  return b;
 }
 
 /** Subscribe or unsubscribe, then the catalog's mark follows. */
@@ -391,8 +400,11 @@ async function exclusive(what, fn, slot = 'busy') {
   }
 }
 
-/** A Base action, one at a time; then the card is read again. */
-const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => void refreshBase());
+/** A Base action, one at a time; then the card is read again. It counts as an interaction (the vault's 5 minutes). */
+const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => {
+  autoLock.touch();
+  void refreshBase();
+});
 
 /** The vault's Base actions (Unlock), for the UI and agents alike; the activity log says what each did. */
 const vaultOps = {
@@ -412,9 +424,11 @@ const vaultOps = {
     if (sum > 0) activity.wallet('claim', `Claimed ${fmtNum(sum)} SATORI`);
     return r;
   },
+  /** { asset, to, amount, passphrase }: the inputs checked first, then the vault opened from the passphrase for this send alone. */
   async send(o = {}) {
-    const r = await base.send(o);
-    activity.wallet('send', `Sent ${o.amount} ${String(o.asset).toUpperCase()} from the vault`);
+    const { asset, amount } = checkSend(o);
+    const r = await withPassphrase(record, o.passphrase, (v) => base.send(o, v));
+    activity.wallet('send', `Sent ${amount} ${asset} from the vault`);
     return r;
   },
 };
@@ -610,16 +624,21 @@ const actions = {
       return null;
     }, { backedUp: true });
   }),
-  /** Settings' Unlock; an action asked for meanwhile (its inline prompt open) runs after it. */
+  /** Settings' Unlock; an action asked for meanwhile (its inline prompt open) runs after it, and the vault stays unlocked. */
   unlock: shownAt('vaultError', async (f, el) => actions.unlockAndRun(f, el)),
-  /** The inline prompt: Unlock, then the action it was opened for. */
-  unlockThen: shownAt('unlockError', async (f, el) => actions.unlockAndRun(f, el)),
-  async unlockAndRun(f, el) {
+  /** The inline prompt: Unlock, then the action it was opened for, then Lock again (it was unlocked for that alone). */
+  unlockThen: shownAt('unlockError', async (f, el) => actions.unlockAndRun(f, el, { inline: true })),
+  async unlockAndRun(f, el, { inline = false } = {}) {
     await exclusive('unlock', () => unlock(f.pass));
     el.reset();
     const fn = afterUnlock;
     afterUnlock = null;
-    await fn?.();
+    if (!fn) return;
+    try {
+      await fn();
+    } finally {
+      if (inline) lock();
+    }
   },
   cancelUnlock() {
     afterUnlock = null;
@@ -672,7 +691,7 @@ const actions = {
     else if (a.do === 'stake') withVault('card', actions.baseDelegate);
     else if (a.do === 'backup') {
       go('settings', 'backup');
-      withVault('backup', () => actions.showBackup('vault'));
+      actions.askBackup('vault');
     } else if (a.do === 'go') go(a.tab, a.section);
   },
   finishUpdate: shownAt('vaultError', async (f, el) => {
@@ -680,14 +699,29 @@ const actions = {
     el.reset();
   }),
   lock,
-  showBackup(which) {
-    withVault('backup', () => {
-      const b = backupOf(which);
-      Object.assign(state, { backup: which, backupWords: b.words ?? '', backupKey: b.privateKey ?? b.nsec, backupHex: b.secret ?? '' });
-    });
+  /** Backup's buttons: the passphrase is asked each time, in place (docs/design/keys.md#backup). */
+  askBackup(which) {
+    Object.assign(state, { backupAsk: which, backupError: '' });
+    requestAnimationFrame(() => document.querySelector('[data-test=backup-prompt] input')?.focus());
   },
+  cancelBackup() { Object.assign(state, { backupAsk: '', backupError: '' }); },
+  /** The passphrase typed: the key's backup shown, for 5 minutes without interaction at most. */
+  showBackup: shownAt('backupError', async (f, el) => {
+    const which = state.backupAsk;
+    state.revealing = true;
+    try {
+      const b = await backupOf(which, f.pass);
+      el.reset();
+      Object.assign(state, { backupAsk: '', backup: which, backupWords: b.words ?? '', backupKey: b.privateKey ?? b.nsec, backupHex: b.secret ?? '' });
+      if (autoLock.lockAt == null) autoLock.start();
+      else autoLock.touch();
+    } finally {
+      state.revealing = false;
+    }
+  }),
   hideBackup() {
     Object.assign(state, { backup: '', backupWords: '', backupKey: '', backupHex: '' });
+    if (!vault) autoLock.stop();
   },
   async copy(key, text) {
     try {
@@ -747,11 +781,30 @@ const actions = {
     return { text: [claimLine('Rewards', r.rewards), claimLine('Merkle', r.merkle), claimLine('Airdrop', r.airdrop)].join(' · '),
       txs: claimTxs(r) };
   }),
-  baseSend: (f, el) => withVault('wallet', () => baseUi('send', async () => {
-    const r = await vaultOps.send({ asset: f.asset, to: String(f.to ?? '').trim(), amount: f.amount });
+  /**
+   * Send, step one: the review (docs/design/base.md#send-the-passphrase-each-time): the recipient in full, the amount and the asset, the
+   * estimated fee; SATORI that can't be sent is said here, before the passphrase.
+   */
+  reviewSend: shownAt('baseError', async (f) => {
+    Object.assign(state, { baseDid: 'send', baseResult: '', baseTxs: [], sendQuoting: true });
+    try {
+      state.sendReview = await base.quoteSend({ asset: f.asset, to: f.to, amount: f.amount });
+    } finally {
+      state.sendQuoting = false;
+    }
+    requestAnimationFrame(() => document.querySelector('[data-test=send-review] input')?.focus());
+  }),
+  /** Back to the form, as it was typed. */
+  backSend() { Object.assign(state, { sendReview: null, baseError: '' }); },
+  /** Step two: Send, with the vault's passphrase (asked each time, unlocked or not). */
+  confirmSend: (f, el) => baseUi('send', async () => {
+    const q = state.sendReview;
+    const r = await vaultOps.send({ asset: q.asset, to: q.to, amount: q.amount, passphrase: f.pass });
     el.reset();
-    return { text: `Sent ${f.amount} ${f.asset}.`, txs: [{ label: `${f.asset} to ${shortHash(String(f.to).trim())}`, hash: r.hash }] };
-  })),
+    document.querySelector('form.send')?.reset();
+    state.sendReview = null;
+    return { text: `Sent ${q.amount} ${q.asset}.`, txs: [{ label: `${q.asset} to ${shortHash(q.to)}`, hash: r.hash }] };
+  }),
   /** What is stored, not the defaults (those are the placeholders). */
   fillBase(el) {
     el.elements.rpc.value = state.base.rpcSetting;
@@ -790,6 +843,8 @@ window.satori = {
       identity: state.identity || null,
       vault: state.vault || null,
       unlocked: state.unlocked,
+      lockAt: state.lockAt, // when the vault locks on its own (ms), or null
+
       central: home ? await centralStatus() : null,
       nostr: home ? await nostrStatus() : null,
       base: home ? await base.status() : null,
@@ -898,10 +953,10 @@ window.satori = {
   },
   lock() { lock(); return true; },
   /**
-   * Needs Unlock, as Docker's dashboard needs login. 'identity' | 'vault' → { words, privateKey };
-   * 'nostr' → { nsec, secret }; nothing → { identity, vault, nostr }.
+   * The passphrase each time, unlocked or not (~0.3 s). 'identity' | 'vault' → { words, privateKey }; 'nostr' → { nsec,
+   * secret }; null or undefined → { identity, vault, nostr }.
    */
-  backup(which) { ready(); return backupOf(which); },
+  async backup(which, passphrase) { ready(); return backupOf(which, passphrase); },
   /** Nostr: the key, the relays and their state, the subscribed streams with the latest observation and our `_pred`. */
   async nostr() { ready(); return nostrStatus(); },
   /** The relays' stream catalog (newest per provider and stream, no tombstones); `pred` and `subscribed` marked. */
@@ -928,7 +983,9 @@ window.satori = {
   async claim() { ready(); return baseAction('claim', vaultOps.claim); },
   /** The identity's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
-  /** From the vault (needs Unlock): { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' } → { hash } */
+  /** The review before a send, no key needed: { asset, to, amount } → { asset, to, amount, fee: { gas, about, max } } */
+  async quoteSend(o) { ready(); return base.quoteSend(o); },
+  /** From the vault, with its passphrase each time: { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5', passphrase } → { hash } */
   async send(o) { ready(); return baseAction('send', () => vaultOps.send(o)); },
   /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
   async setBaseRpc(url) { ready(); return base.setSettings({ rpc: url }); },

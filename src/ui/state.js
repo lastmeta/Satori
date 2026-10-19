@@ -19,9 +19,14 @@ export const state = reactive({
   identity: '', // the identity's Base address
   vault: '', // the vault's Base address (shown while locked)
   unlocked: false,
+  lockAt: null, // when the vault locks on its own (ms), or null (src/keys/autolock.js)
+  lockNow: 0, // the clock "Locks in 4 min" is counted from (ms; moves every 15 s while unlocked)
   vaultError: '',
-  unlockFor: '', // the inline Unlock prompt that is open: '' | 'card' | 'claim' | 'wallet' | 'backup'
+  unlockFor: '', // the inline Unlock prompt that is open: '' | 'card' | 'claim' | 'wallet'
   unlockError: '',
+  backupAsk: '', // the key whose backup asks for the passphrase (each time): '' | 'identity' | 'vault' | 'nostr'
+  backupError: '',
+  revealing: false, // a backup's passphrase is being checked (~0.3 s)
   backup: '', // '' | 'identity' | 'vault' | 'nostr': which key's backup is shown
   backupWords: '', // identity, vault: the 24 words
   backupKey: '', // identity, vault: the private key (0x hex); nostr: the nsec
@@ -79,6 +84,8 @@ export const state = reactive({
   baseError: '',
   baseResult: '',
   baseTxs: [], // the last action's transactions: [{ label, hash }]
+  sendReview: null, // Send's review step: base.quoteSend()'s { asset, to, amount, fee: { gas, about, max } }, or null
+  sendQuoting: false, // the review is being read (the fee's estimate)
   baseRpcError: '',
   // the installed app (docs/design/pwa.md): status().app, Safari (no install prompt), status().storage
   app: { installed: false, canInstall: false, update: false },

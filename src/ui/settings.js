@@ -5,7 +5,7 @@
 import { html } from '@arrow-js/core';
 import { version } from '../../package.json';
 import { state } from './state.js';
-import { form, idRow, unlockPrompt, wordList } from './parts.js';
+import { form, idRow, wordList } from './parts.js';
 import { storageText, relayText } from './format.js';
 
 /** Install Satori (Chromium's prompt), or Safari's way to add it; hidden once installed (docs/design/pwa.md). */
@@ -49,13 +49,13 @@ function backup(a) {
   <section class="card settings-section" id="settings-backup">
     <h2>Backup</h2>
     <p class="muted small">The identity and the vault are 24 words each; Restore from words brings them back. The Nostr
-      key is random, not from the words, so it is backed up on its own. Showing them needs the vault's passphrase.</p>
+      key is random, not from the words, so it is backed up on its own. Showing them asks for the vault's passphrase each time.</p>
     <div class="backup-row">
-      <button class="small-btn" @click="${() => a.showBackup('identity')}">Identity words</button>
-      <button class="small-btn" @click="${() => a.showBackup('vault')}">Vault words</button>
-      <button class="small-btn" @click="${() => a.showBackup('nostr')}">Nostr key</button>
+      <button class="small-btn" @click="${() => a.askBackup('identity')}">Identity words</button>
+      <button class="small-btn" @click="${() => a.askBackup('vault')}">Vault words</button>
+      <button class="small-btn" @click="${() => a.askBackup('nostr')}">Nostr key</button>
     </div>
-    ${unlockPrompt(a, 'backup', 'back up')}
+    <form class="inline-unlock" data-test="backup-prompt" hidden="${() => !state.backupAsk}" @submit="${(e) => a.showBackup(form(e), e.target)}"><input name="pass" type="password" aria-label="Vault passphrase to show the backup" placeholder="Vault passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => state.revealing}">${() => (state.revealing ? 'Checking…' : 'Show')}</button><button type="button" @click="${a.cancelBackup}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.backupError}">${() => state.backupError}</p></form>
     <div class="backup" hidden="${() => !state.backup}">
       <div hidden="${() => state.backup === 'nostr'}">
         <h3>${() => (state.backup === 'vault' ? 'Vault' : 'Identity')} words</h3>

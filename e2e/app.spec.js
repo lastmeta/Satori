@@ -150,37 +150,59 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await pass.fill(PASS);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
+  await expect(page.locator('[data-test=lock-in]')).toHaveText('Locks in 5 min'); // it locks on its own (src/keys/autolock.js)
 
-  // Backup: the vault's words are the ones from setup; the identity's are its own; each private key is its
-  // address's; the Nostr key (random, not from the words) as nsec and hex. Nothing to download.
+  // Backup: the passphrase each time, unlocked or not (docs/design/keys.md#backup). The vault's words are the ones from
+  // setup; the identity's are its own; each private key is its address's; the Nostr key (random, not from the words) as
+  // nsec and hex. Nothing to download.
   await expect(page.getByRole('button', { name: /^Download/ })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Vault words' }).click();
+  const askBackup = page.getByLabel('Vault passphrase to show the backup');
+  const showBackup = async (name, passphrase = PASS) => {
+    await page.getByRole('button', { name }).click();
+    await askBackup.fill(passphrase);
+    await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
+  };
+  await showBackup('Vault words', 'not the passphrase');
+  await expect(page.locator('[data-test=backup-prompt] [role=alert]')).toHaveText('Wrong passphrase');
+  await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
+  await askBackup.fill(PASS);
+  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await expect(visible(page.locator('ol.words li'))).toHaveText(words);
+  await expect(page.locator('[data-test=backup-prompt]')).toBeHidden();
   const key = page.locator('[data-test=backup-key]');
   await expect(key).toHaveText(/^0x[0-9a-f]{64}$/);
   expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(vaultAddress);
-  await page.getByRole('button', { name: 'Identity words' }).click();
+  await showBackup('Identity words');
+  await expect(page.locator('[data-test=backup-prompt]')).toBeHidden();
+  await expect(visible(page.locator('ol.words li'))).not.toHaveText(words);
   const idWords = await visible(page.locator('ol.words li')).allTextContents();
   expect(idWords).toHaveLength(24);
   expect(idWords).not.toEqual(words);
   const idSecret = hex((await key.textContent()).slice(2));
   expect(wordsOf(idSecret)).toBe(idWords.join(' '));
   expect(publicKey(idSecret)).toBe(reg['wallet-pubkey']);
-  await page.getByRole('button', { name: 'Nostr key' }).click();
+  await showBackup('Nostr key');
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
   await expect(key).toHaveText(/^nsec1[02-9ac-hj-np-z]{58}$/);
   const nostrHex = await page.locator('[data-test=backup-hex]').textContent();
   expect(nostrPubkey(nostrHex)).toBe(reg['nostr-pubkey']);
 
-  // Lock: the vault and the backup are gone (showing it again asks for the passphrase, in place); the neuron
-  // still polls and submits.
+  // Lock: the vault and the backup are gone (showing it again asks for the passphrase, in place, as it always does); the
+  // neuron still polls and submits.
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+  await expect(page.locator('[data-test=lock-in]')).toBeHidden();
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
   await page.getByRole('button', { name: 'Vault words' }).click();
-  await expect(page.getByLabel('Vault passphrase to back up')).toBeVisible();
-  await page.locator('[data-unlock-for=backup]').getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByLabel('Vault passphrase to back up')).toBeHidden();
+  await expect(askBackup).toBeVisible();
+  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Cancel' }).click();
+  await expect(askBackup).toBeHidden();
+  // locked, the passphrase alone shows it (it is asked each time anyway); Hide
+  await showBackup('Vault words');
+  await expect(visible(page.locator('ol.words li'))).toHaveText(words);
+  await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked'); // shown, not unlocked
+  await page.getByRole('button', { name: 'Hide' }).click();
+  await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
   stub.batch = [entry('u-btc', 'bitcoin', T0 + 3600, '67100.5'), BATCH[1]];
   await go(page, 'streams');
   await page.getByRole('button', { name: 'Poll now' }).click();
@@ -309,25 +331,32 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect((await status(page)).central).toMatchObject({ url: 'https://central.test', pending: 0, lastPoll: null });
   await page.evaluate(() => window.satori.setCentral(''));
 
-  // The keys: Unlock, then backup() of one key or all three; file() is gone (no Docker files are made).
-  await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow(/Unlock the vault first/);
+  // The keys: backup(which, passphrase) of one key or all three, the passphrase each time, unlocked or not; file() is
+  // gone (no Docker files are made).
+  await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow("The vault's passphrase is needed: it is asked each time.");
+  await expect(page.evaluate(() => window.satori.backup('vault', 'not the passphrase'))).rejects.toThrow(/Wrong passphrase/);
   await expect(page.evaluate(() => window.satori.unlock('nope'))).rejects.toThrow(/Wrong passphrase/);
   // One Unlock at a time, as the UI's: a second while one runs is refused.
   const unlocks = await page.evaluate(() => Promise.allSettled([window.satori.unlock('pass phrase'), window.satori.unlock('pass phrase')])
     .then((all) => all.map((r) => (r.status === 'fulfilled' ? r.value : r.reason.message))));
   expect(unlocks).toEqual([true, 'Busy (unlock). Try again when it is done.']);
-  expect(await page.evaluate(() => window.satori.backup('vault'))).toEqual({ words: v.words, privateKey: `0x${v.entropyHex}` });
-  const all = await page.evaluate(() => window.satori.backup());
+  const s1 = await status(page);
+  expect(s1.lockAt - Date.now()).toBeGreaterThan(4 * 60_000); // it locks on its own in 5 minutes
+  expect(s1.lockAt - Date.now()).toBeLessThanOrEqual(5 * 60_000);
+  await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow(/passphrase is needed/); // unlocked: still asked
+  expect(await page.evaluate(() => window.satori.backup('vault', 'pass phrase'))).toEqual({ words: v.words, privateKey: `0x${v.entropyHex}` });
+  const all = await page.evaluate(() => window.satori.backup(undefined, 'pass phrase'));
   expect(Object.keys(all)).toEqual(['identity', 'vault', 'nostr']);
   expect(evmAddress(publicKey(hex(all.identity.privateKey.slice(2))))).toBe(s0.identity);
   expect(all.nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: expect.stringMatching(/^[0-9a-f]{64}$/) });
   expect(nostrPubkey(all.nostr.secret)).toBe((await status(page)).nostr.pubkey);
   expect(await page.evaluate(() => typeof window.satori.file)).toBe('undefined');
-  for (const which of ['Vault', 'vaults', '', null, 'wallet.yaml']) {
-    await expect(page.evaluate((w) => window.satori.backup(w), which)).rejects.toThrow(/'identity', 'vault' or 'nostr'/);
+  for (const which of ['Vault', 'vaults', '', 'wallet.yaml']) {
+    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'identity', 'vault' or 'nostr'/);
   }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+  expect((await status(page)).lockAt).toBe(null);
   expect(stub.prod).toEqual([]);
 });
 
@@ -433,6 +462,8 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
   await page.getByRole('button', { name: 'Vault words' }).click();
+  await page.getByLabel('Vault passphrase to show the backup').fill(fx.vaults.password);
+  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await expect(visible(page.locator('ol.words li'))).toHaveText(vault.words.split(' '));
 });
 
@@ -459,7 +490,7 @@ test('import: a Docker vault password under 8 characters asks for a new passphra
   await expect.poll(() => page.evaluate(() => document.body.dataset.screen)).toBe('home');
   await expect(page.evaluate((x) => window.satori.unlock(x), p.passphrase)).rejects.toThrow(/Wrong passphrase/);
   expect(await page.evaluate((x) => window.satori.unlock(x), NEW)).toBe(true);
-  expect((await page.evaluate(() => window.satori.backup('vault'))).words).toBe(wordsOf(hex(p.expect.vault)));
+  expect((await page.evaluate((x) => window.satori.backup('vault', x), NEW)).words).toBe(wordsOf(hex(p.expect.vault)));
 });
 
 test('restore from words', async ({ context, page }) => {

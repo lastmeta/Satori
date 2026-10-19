@@ -60,6 +60,8 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
   // A word list on the page first (as after a setup in the UI): ArrowJS 1.0.6 reuses its <li> for other lists.
   await page.getByRole('button', { name: 'Identity words' }).click();
+  await page.getByLabel('Vault passphrase to show the backup').fill(PASS);
+  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();
   await go(page, 'wallet');
   await page.getByRole('button', { name: 'Stake with this neuron' }).click();
@@ -127,32 +129,68 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'play')).toHaveText(CHOICE);
   await expect(fact(page, 'lock')).toHaveText(`SATORI can be sent from Oct 18, 00:00 UTC (round ${ROUND + 3})`);
   const to = '0x' + '44'.repeat(20);
+  const review = page.locator('[data-test=send-review]');
+  // the zero address burns what it gets: refused before the review
   await page.getByLabel('Amount').fill('1');
+  await page.getByLabel('To (0x address)').fill('0x' + '00'.repeat(20));
+  await page.getByRole('button', { name: 'Send from the vault' }).click();
+  await expect(fact(page, 'action-error')).toHaveText('The zero address (0x000…000) burns what is sent to it: refused.');
+  await expect(review).toBeHidden();
   await page.getByLabel('To (0x address)').fill(to);
   await page.getByRole('button', { name: 'Send from the vault' }).click();
+  // SATORI that can't be sent is said at the review, before the passphrase
   await expect(fact(page, 'action-error')).toContainText(`SATORI can be sent from Oct 18, 00:00 UTC (round ${ROUND + 3}).`);
+  await expect(review).toBeHidden();
   rpc.advance(DAY);
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(fact(page, 'lock')).toContainText(`(round ${ROUND + 3})`); // round N itself still can't send
   rpc.advance(DAY);
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(fact(page, 'lock')).toHaveText('Free to send');
+  // Send's review: the recipient in full, the amount and the asset, the estimated fee; then the passphrase (each time,
+  // unlocked or not) and Send, or Back
   await page.getByRole('button', { name: 'Send from the vault' }).click();
+  await expect(review).toBeVisible();
+  await expect(page.locator('form.send')).toBeHidden();
+  await expect(review.locator('[data-test=review-amount]')).toHaveText('1 SATORI');
+  await expect(review.locator('[data-test=review-to]')).toHaveText('0x4444444444444444444444444444444444444444'); // in full
+  await expect(review.locator('[data-test=review-fee]')).toHaveText(/^about 0\.0+\d+ ETH, at most 0\.0+\d+ ETH \(Base ETH, from the vault\)$/);
+  const sentBefore = rpc.sent.length;
+  await review.getByRole('button', { name: 'Back' }).click(); // back to the form, as typed
+  await expect(review).toBeHidden();
+  await expect(page.getByLabel('To (0x address)')).toHaveValue(to);
+  await page.getByRole('button', { name: 'Send from the vault' }).click();
+  await review.getByLabel('Vault passphrase to send').fill('not the passphrase');
+  await review.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(fact(page, 'action-error')).toHaveText('Wrong passphrase');
+  expect(rpc.sent.length).toBe(sentBefore); // nothing sent
+  await review.getByLabel('Vault passphrase to send').fill(PASS);
+  await review.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(fact(page, 'result')).toContainText('Sent 1 SATORI', { timeout: 30_000 });
+  await expect(review).toBeHidden();
+  await expect(page.getByLabel('Amount')).toHaveValue(''); // the form is cleared after a send
   expect(s.balance[to]).toBe(E18);
 
-  // ETH, from the agent API; then Lock: the vault's actions go, the status stays.
-  expect(await page.evaluate((t) => window.satori.send({ asset: 'ETH', to: t, amount: '0.01' }), to)).toMatchObject({ hash: expect.any(String) });
+  // ETH, from the agent API: the review (quoteSend), then send() with the passphrase, each time even while unlocked;
+  // then Lock: the vault's actions go, the status stays.
+  expect(await page.evaluate((t) => window.satori.quoteSend({ asset: 'ETH', to: t, amount: '0.01' }), to)).toMatchObject({
+    asset: 'ETH', to: '0x4444444444444444444444444444444444444444', amount: '0.01', fee: { gas: expect.any(Number), about: expect.any(String), max: expect.any(String) } });
+  await expect(page.evaluate((t) => window.satori.send({ asset: 'ETH', to: t, amount: '0.01' }), to)).rejects.toThrow(/passphrase is needed/);
+  await expect(page.evaluate(() => window.satori.send({ asset: 'ETH', to: '0x' + '00'.repeat(20), amount: '0.01', passphrase: 'x' })))
+    .rejects.toThrow(/zero address/);
+  expect(await page.evaluate(([t, p]) => window.satori.send({ asset: 'ETH', to: t, amount: '0.01', passphrase: p }), [to, PASS]))
+    .toMatchObject({ hash: expect.any(String) });
   expect(rpc.eth[to]).toBe(10n ** 16n);
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.getByText(ASKS)).toBeVisible();
   await expect(page.evaluate(() => window.satori.claim())).rejects.toThrow('Unlock the vault first');
-  // Claim while locked asks for the passphrase in place, then claims
+  // Claim while locked asks for the passphrase in place, then claims, then the vault locks again: it was unlocked for that
   await page.getByRole('button', { name: 'Claim' }).click();
   await page.getByLabel('Vault passphrase to use the vault').fill(PASS);
   await page.locator('[data-unlock-for=wallet]').getByRole('button', { name: 'Unlock' }).click();
   await expect(fact(page, 'result')).toContainText('Rewards: nothing to claim on-chain', { timeout: 30_000 });
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
+  expect(await page.evaluate(async () => (await window.satori.status()).unlocked)).toBe(false);
   base = (await page.evaluate(() => window.satori.status())).base;
   expect(base).toMatchObject({ vault: { staked: 'none', satori: '114' }, lastBatch: { round: ROUND + 1 } });
   expect(sent(rpc).filter((f) => f === 'predictMultipleWithPayloads')).toHaveLength(2);
@@ -228,7 +266,7 @@ test('staking out of sync (the token-hook bug): Home red on the Contract chip, t
   s.balance[V] = 100n * E18;
   // not staked, with SATORI: the Stake card is advice (the hero stays green) and says the risk before staking
   await page.evaluate((p) => window.satori.unlock(p), PASS);
-  await page.evaluate(() => window.satori.backup('vault')); // the backup shown: its advice gone, the Stake card's turn
+  await page.evaluate((p) => window.satori.backup('vault', p), PASS); // the backup shown: its advice gone, the Stake card's turn
   await page.evaluate(() => window.satori.base());
   let h = await page.evaluate(() => window.satori.health());
   expect(h.reasons.find((r) => r.id === 'stake')).toMatchObject({ status: 'advice' });

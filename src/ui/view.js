@@ -6,6 +6,7 @@ import { html, watch } from '@arrow-js/core';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 import { state } from './state.js';
 import { form, wordList } from './parts.js';
+import { lockInText } from './format.js';
 import { home } from './home.js';
 import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
@@ -139,6 +140,7 @@ export function render(root, a) {
     <nav class="topnav" aria-label="Sections" hidden="${running}">${TABS.map((t) => navLink(a, t))}</nav>
     <div class="top-actions">
       <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
+      <span class="muted small lock-in" data-test="lock-in" hidden="${() => state.screen !== 'home' || !state.unlocked}">${() => lockInText(state.lockAt, state.lockNow)}</span>
       <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
     </div>
   </header>

@@ -63,7 +63,7 @@ for (const p of SHAPES) {
     await pass.fill(p.passphrase);
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked', { timeout: 30_000 });
-    expect((await page.evaluate(() => window.satori.backup('vault'))).words).toBe(wordsOf(hex(p.expect.vault)));
+    expect((await page.evaluate((x) => window.satori.backup('vault', x), p.passphrase)).words).toBe(wordsOf(hex(p.expect.vault)));
 
     await page.goto('/e2e/store/');
     const after = await appMeta(page, 'keys');
@@ -74,7 +74,7 @@ for (const p of SHAPES) {
     expect(await openApp(page)).toBe('home');
     await expect(page.locator('[data-test=identity]')).toHaveText(evmAddress(idPub));
     expect(await page.evaluate((x) => window.satori.unlock(x), p.passphrase)).toBe(true);
-    const b = await page.evaluate(() => window.satori.backup());
+    const b = await page.evaluate((x) => window.satori.backup(undefined, x), p.passphrase);
     expect([b.identity.words, b.vault.words]).toEqual([wordsOf(hex(p.expect.identity)), wordsOf(hex(p.expect.vault))]);
     expect(nostrPubkey(b.nostr.secret)).toBe(nostrPub);
   });

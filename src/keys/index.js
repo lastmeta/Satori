@@ -11,6 +11,8 @@
 //   const record = await recordFromRows({ walletYaml, vaultYaml, nostrYaml? })  // migration 7: earlier rows
 //   const { identity, nostr, vault } = loadKeys(record)   // identity: a signer; vault: { pubkey, evmAddress }
 //   const { vault, record } = await unlockVault(record, passphrase)   // record: store it (an upgrade), or null
+//   await withPassphrase(record, passphrase, (vault) => …)   // the vault for one use (Send), wiped after it
+//   await backupKeys(record, which, passphrase)   // Backup: the passphrase each time, unlocked or not
 //   signer: pubkey, evmAddress, signDigest(hash), backup() → { words, privateKey }, lock();
 //           the identity's also signCentralLogin(challenge) (EIP-191, central's login: src/central/login.js)
 export { generateSecret, secretFromWords, wordsOf, publicKey, evmAddress } from './keys.js';
@@ -20,7 +22,7 @@ import { checkKey, generateSecret, publicKey, wordsOf, evmAddress, signDigest, p
 import { sealSecret, openSecret, checkNewPassphrase } from './vault.js';
 import { readWallet, readNostrYaml, secrecy, vaultPubkey } from './docker.js';
 import { loginSignature } from '../central/login.js';
-import { generateNostrSecret, nostrPubkey } from '../nostr/event.js';
+import { generateNostrSecret, nostrPubkey, nsec } from '../nostr/event.js';
 
 export const RECORD_VERSION = 1;
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -174,4 +176,44 @@ export async function unlockVault(record, passphrase) {
   const sealed = await sealSecret(secret, pass);
   if (!sameKey(await openSecret(sealed, pass), secret)) throw new Error('Re-encrypting the vault failed; it was kept as it was.');
   return { vault: signer(secret), record: { ...r, vault: { pubkey, ...sealed } } };
+}
+
+export const PASSPHRASE_NEEDED = "The vault's passphrase is needed: it is asked each time.";
+
+/**
+ * The vault opened from the passphrase for one use: fn(vault), then it is wiped, whether fn succeeds or throws. Each
+ * call pays the passphrase's derivation (~0.3 s), unlocked or not, so a vault left unlocked can't show its words or
+ * send funds without the passphrase (docs/design/keys.md#backup). An earlier version's vault is opened as at Unlock and
+ * not stored again here (its next Unlock does).
+ */
+export async function withPassphrase(record, passphrase, fn) {
+  if (typeof passphrase !== 'string' || !passphrase) throw new Error(PASSPHRASE_NEEDED);
+  const { vault } = await unlockVault(record, passphrase);
+  try {
+    return await fn(vault);
+  } finally {
+    vault.lock();
+  }
+}
+
+const BACKUP_KEYS = ['identity', 'vault', 'nostr'];
+
+/**
+ * Backup, from the passphrase each time: 'identity' | 'vault' → { words, privateKey }; 'nostr' → { nsec, secret };
+ * null or undefined → { identity, vault, nostr }. The identity and the Nostr key are stored unencrypted, but they are
+ * private keys: they are shown only to someone who knows the passphrase too.
+ */
+export async function backupKeys(record, which, passphrase) {
+  if (which != null && !BACKUP_KEYS.includes(which)) {
+    throw new Error("Name the key: 'identity', 'vault' or 'nostr' (or nothing, for all three).");
+  }
+  return withPassphrase(record, passphrase, (vault) => {
+    const { identity, nostr } = loadKeys(record);
+    try {
+      const all = { identity: identity.backup(), vault: vault.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };
+      return which == null ? all : all[which];
+    } finally {
+      identity.lock();
+    }
+  });
 }

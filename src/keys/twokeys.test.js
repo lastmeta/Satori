@@ -5,7 +5,8 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockVault, publicKey, wordsOf, evmAddress,
+  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockVault, publicKey, wordsOf, evmAddress, withPassphrase, backupKeys,
+  PASSPHRASE_NEEDED,
 } from './index.js';
 import { verifyMessage } from 'viem';
 import { nostrPubkey } from '../nostr/event.js';
@@ -85,6 +86,36 @@ describe('loadKeys and Unlock', () => {
   test('a vault whose stored public key is not its key is refused at Unlock', async () => {
     const r = await newKeys({ vault: hex(b.entropyHex) }, PASS);
     await expect(unlockVault({ ...r, vault: { ...r.vault, pubkey: a.pubkey } }, PASS)).rejects.toThrow(/does not match/);
+  });
+});
+
+describe('the passphrase each time: Backup and Send (docs/design/keys.md#backup)', () => {
+  test('withPassphrase: the vault opened from the passphrase for one use, then wiped; none or a wrong one is refused', async () => {
+    const r = await newKeys({ vault: hex(b.entropyHex) }, PASS);
+    for (const none of [undefined, null, '']) {
+      await expect(withPassphrase(r, none, () => 'ran')).rejects.toThrow(PASSPHRASE_NEEDED);
+    }
+    await expect(withPassphrase(r, 'not it at all', () => 'ran')).rejects.toThrow(/^Wrong passphrase$/);
+    let used;
+    expect(await withPassphrase(r, PASS, (v) => { used = v; return v.evmAddress; })).toBe(b.ethAddress);
+    expect(used.locked).toBe(true); // wiped once fn is done
+    // wiped when fn throws too
+    await expect(withPassphrase(r, PASS, (v) => { used = v; throw new Error('send failed'); })).rejects.toThrow('send failed');
+    expect(used.locked).toBe(true);
+  });
+  test('backupKeys: each key or all three, from the passphrase every time; never without it', async () => {
+    const r = await newKeys({ identity: hex(a.entropyHex), vault: hex(b.entropyHex), nostr: fx.nostr.secretHex }, PASS);
+    await expect(backupKeys(r, 'vault')).rejects.toThrow(PASSPHRASE_NEEDED);
+    await expect(backupKeys(r, 'identity', '')).rejects.toThrow(PASSPHRASE_NEEDED);
+    await expect(backupKeys(r, 'nostr', 'not it at all')).rejects.toThrow(/^Wrong passphrase$/);
+    await expect(backupKeys(r, 'wallet', PASS)).rejects.toThrow(/'identity', 'vault' or 'nostr'/); // the name first, before 0.3 s
+    expect(await backupKeys(r, 'vault', PASS)).toEqual({ words: b.words, privateKey: `0x${b.entropyHex}` });
+    expect(await backupKeys(r, 'identity', PASS)).toEqual({ words: a.words, privateKey: `0x${a.entropyHex}` });
+    const nostr = await backupKeys(r, 'nostr', PASS);
+    expect(nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: fx.nostr.secretHex });
+    expect(await backupKeys(r, null, PASS)).toEqual({ identity: { words: a.words, privateKey: `0x${a.entropyHex}` },
+      vault: { words: b.words, privateKey: `0x${b.entropyHex}` }, nostr });
+    expect(await backupKeys(r, undefined, PASS)).toHaveProperty('vault');
   });
 });
 

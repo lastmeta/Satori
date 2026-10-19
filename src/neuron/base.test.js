@@ -3,15 +3,15 @@
 // transport) and a Map for the database.
 import { forecast } from '../engine/index.js';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { zeroAddress } from 'viem';
+import { formatEther, zeroAddress } from 'viem';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
-import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
+import { UP, DOWN, ROUND_S, INDEFINITE, HOOK_GAS } from '../chain/index.js';
 import { createWork } from './work.js';
 import {
   createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, proofState, dropClaimable,
-  FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S,
+  checkSend, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS,
 } from './base.js';
 
 const signerOf = (hex) => {
@@ -420,10 +420,12 @@ describe('createBase', () => {
     expect(work.current()).toBeNull();
   });
 
-  test('vault actions need Unlock', async () => {
+  test('vault actions need Unlock (a send, the vault opened for it: docs/design/keys.md#backup)', async () => {
     await expect(base.delegate()).rejects.toThrow('Unlock the vault first');
     await expect(base.claim()).rejects.toThrow('Unlock the vault first');
-    await expect(base.send({ asset: 'ETH', to: zeroAddress, amount: '1' })).rejects.toThrow('Unlock the vault first');
+    await expect(base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '1' })).rejects.toThrow('Unlock the vault first');
+    // the app opens the vault from the passphrase for each send (keys' withPassphrase) and hands it over: locked is fine
+    expect(await base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '0.01' }, vaultKey)).toEqual({ hash: expect.any(String) });
   });
 
   test('stake → the identity\'s batch at the next check; unstake → SATORI can be sent once the next round ends', async () => {
@@ -592,5 +594,34 @@ describe('createBase', () => {
     expect(s.balance[to]).toBe(25n * E18 / 10n);
     s.lock[V] = INDEFINITE;
     await expect(base.send({ asset: 'SATORI', to, amount: '1' })).rejects.toThrow("Staked SATORI can't be sent until you unstake.");
+  });
+
+  test('send: the zero address is refused, before anything is asked of the chain', async () => {
+    vault = vaultKey;
+    const before = rpc.log.length;
+    for (const asset of ['ETH', 'SATORI']) {
+      await expect(base.send({ asset, to: zeroAddress, amount: '1' })).rejects.toThrow(ZERO_ADDRESS);
+      await expect(base.quoteSend({ asset, to: zeroAddress, amount: '1' })).rejects.toThrow(ZERO_ADDRESS);
+    }
+    expect(checkSend({ asset: 'eth', to: ` ${'0x' + '44'.repeat(20)} `, amount: ' 1.5 ' })).toEqual({ asset: 'ETH', to: '0x' + '44'.repeat(20),
+      amount: '1.5', wei: 15n * E18 / 10n });
+    expect(() => checkSend({ asset: 'ETH', to: '0x' + '00'.repeat(20), amount: '1' })).toThrow(ZERO_ADDRESS);
+    expect(rpc.log.length).toBe(before);
+  });
+
+  test('quoteSend: the review before a send (no key needed): the recipient in full, the amount, the asset, the fee', async () => {
+    const to = '0x' + '44'.repeat(20);
+    const eth = await base.quoteSend({ asset: 'eth', to, amount: '0.01' });
+    // the fake chain: an estimate of 0x30000 gas, a base fee of 1 wei and a tip of 0.001 gwei
+    const gas = 0x30000n;
+    expect(eth).toEqual({ asset: 'ETH', to: '0x4444444444444444444444444444444444444444', amount: '0.01',
+      fee: { gas: Number(gas), about: formatEther(gas * (1n + 1_000_000n)), max: formatEther(gas * (2n + 1_000_000n)) } });
+    const sat = await base.quoteSend({ asset: 'SATORI', to, amount: '2.5' });
+    expect(sat.fee).toEqual({ gas: Number(gas + HOOK_GAS), about: formatEther(gas * (1n + 1_000_000n)),
+      max: formatEther((gas + HOOK_GAS) * (2n + 1_000_000n)) }); // a contract call's limit has the hook's pad (unused gas is not charged)
+    expect(rpc.sent).toHaveLength(0); // nothing sent
+    s.lock[V] = INDEFINITE; // SATORI that can't be sent: said at the review, before the passphrase
+    await expect(base.quoteSend({ asset: 'SATORI', to, amount: '1' })).rejects.toThrow("Staked SATORI can't be sent until you unstake.");
+    await expect(base.quoteSend({ asset: 'ETH', to, amount: '1000' })).rejects.toThrow(/insufficient funds/);
   });
 });

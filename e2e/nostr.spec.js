@@ -144,10 +144,9 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   expect(last.tags).toContainEqual(['seq', '3']);
   expect(await centralRelay.fetch([{ authors: [me] }])).toEqual([]);
 
-  // The key's backup (needs Unlock, as the others'): nsec and hex; it is random, not from the words.
-  await expect(page.evaluate(() => window.satori.backup('nostr'))).rejects.toThrow(/Unlock/);
-  await page.evaluate((p) => window.satori.unlock(p), PASS);
-  const backup = await page.evaluate(() => window.satori.backup('nostr'));
+  // The key's backup (the vault's passphrase each time, as the others'): nsec and hex; it is random, not from the words.
+  await expect(page.evaluate(() => window.satori.backup('nostr'))).rejects.toThrow(/passphrase is needed/);
+  const backup = await page.evaluate((p) => window.satori.backup('nostr', p), PASS);
   expect(nostrPubkey(backup.secret)).toBe(me);
   expect(backup.nsec).toMatch(/^nsec1/);
 

@@ -5,7 +5,7 @@ import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { fact, form, unlockPrompt } from './parts.js';
 import {
-  amountText, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote,
+  amountText, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
 import { workText } from '../neuron/work.js';
@@ -33,6 +33,7 @@ export function walletTab(a) {
   const lowEth = () => b().identity.lowEth && staked(); // gas matters once the identity has a batch to send
   const busy = () => !!state.baseBusy;
   const play = () => playNote(b().vault.staked);
+  const q = () => state.sendReview;
   return html`
   <section class="tab-page" data-test="wallet-tab" hidden="${() => state.tab !== 'wallet'}">
   <section class="card base">
@@ -61,14 +62,24 @@ export function walletTab(a) {
       <button data-test="base-claim" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
     </div>
     <p class="muted small" data-test="base-stake-note">Staking lets this neuron predict with your vault's SATORI every round. The SATORI stays in the vault and earns; it can't be sent while staked, or through the round after you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.</p>
-    <form class="send" @submit="${(e) => a.baseSend(form(e), e.target)}">
+    <form class="send" hidden="${() => !!state.sendReview}" @submit="${(e) => a.reviewSend(form(e), e.target)}">
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
       <input name="to" aria-label="To (0x address)" placeholder="To: 0x…" autocomplete="off" spellcheck="false" required>
-      <button type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send from the vault')}</button>
+      <button type="submit" disabled="${() => busy() || state.sendQuoting}">${() => (state.sendQuoting ? 'Reading the fee…' : 'Send from the vault')}</button>
     </form>
+    <div class="review" data-test="send-review" hidden="${() => !state.sendReview}">
+      <h3>Check before sending</h3>
+      <dl class="facts">
+        ${fact('Send', 'review-amount', () => (q() ? `${q().amount} ${q().asset}` : ''))}
+        ${fact('To', 'review-to', html`<code class="block">${() => q()?.to ?? ''}</code>`)}
+        ${fact('Fee', 'review-fee', () => (q() ? `about ${ethFeeText(q().fee.about)}, at most ${ethFeeText(q().fee.max)} (Base ETH, from the vault)` : ''))}
+      </dl>
+      <form class="unlock" @submit="${(e) => a.confirmSend(form(e), e.target)}"><input name="pass" type="password" aria-label="Vault passphrase to send" placeholder="Vault passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send')}</button><button type="button" disabled="${busy}" @click="${a.backSend}">Back</button></form>
+    </div>
     ${unlockPrompt(a, 'wallet', 'use the vault')}
     <p class="muted small" hidden="${() => state.unlocked}">Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).</p>
+    <p class="muted small" hidden="${() => !state.unlocked}">Send asks for the vault's passphrase each time.</p>
     <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>

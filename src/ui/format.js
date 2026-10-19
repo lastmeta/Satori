@@ -223,6 +223,19 @@ export function checkText(c, next) {
   return [what, when].filter(Boolean).join(' · ');
 }
 
+/** A fee in ETH (a decimal string): two significant digits, never an exponent ('0.00000013 ETH'). */
+export function ethFeeText(x) {
+  if (x == null) return '–';
+  return `${Number(x).toLocaleString('en-US', { maximumSignificantDigits: 2, maximumFractionDigits: 20 })} ETH`;
+}
+
+/** When the vault locks on its own (ms; null: it is locked), said by Lock: 'Locks in 4 min' (whole minutes, up). */
+export function lockInText(lockAt, now) {
+  if (lockAt == null) return '';
+  const s = (lockAt - now) / 1000;
+  return s < 60 ? 'Locks in under a minute' : `Locks in ${Math.ceil(s / 60)} min`;
+}
+
 /** One claim's result (base.claim()): claimed, skipped (why) or failed. */
 export function claimLine(name, r) {
   if (!r) return '';

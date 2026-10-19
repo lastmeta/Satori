@@ -84,7 +84,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 
 /* ── the header and the tabs ── */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 8px 0; }
-.top-actions { display: flex; gap: 8px; }
+.top-actions { display: flex; gap: 8px; align-items: center; }
+.lock-in { white-space: nowrap; }
 .topnav { display: none; gap: 4px; margin-left: auto; }
 .topnav a, .tabbar a { text-decoration: none; color: var(--muted); }
 .topnav a { font-size: 0.9rem; padding: 10px 14px; border-radius: 10px; min-height: 44px; display: inline-flex; align-items: center; }
@@ -508,6 +509,9 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .send input { margin: 0; flex: 1 1 140px; min-width: 0; }
 .send input[name=to] { flex: 3 1 260px; }
 .send select { margin: 0; }
+.review { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.review h3 { margin: 0; }
+.review code.block { margin-top: 0; overflow-wrap: anywhere; }
 
 /* ── the phone ── */
 @media (max-width: 520px) {

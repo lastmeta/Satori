@@ -3,7 +3,7 @@ import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
-  storageText, playNote, modelText, historyText, daysText,
+  storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -222,4 +222,24 @@ test('historyText: the Satori Network\'s history for our streams (its card on St
   expect(historyText({ at, streams: 2, rows: 10, left: 3, error: 'Satori Network 500: boom', retryAt: null, needed: 3 }))
     .toBe(`${fmtWhen(at)} · 2 streams, 10 rows · failed: Satori Network 500: boom; 3 streams wait for the next poll`);
   expect(historyText({ needed: 5 })).toBe('5 streams wait for the next poll');
+});
+
+test('lockInText: the vault locks on its own, said by Lock (docs/design/keys.md#the-vault-locks-on-its-own)', () => {
+  const now = 1_800_000_000_000;
+  expect(lockInText(null, now)).toBe('');
+  expect(lockInText(now + 5 * 60_000, now)).toBe('Locks in 5 min');
+  expect(lockInText(now + 4 * 60_000 + 1, now)).toBe('Locks in 5 min'); // whole minutes, up
+  expect(lockInText(now + 4 * 60_000, now)).toBe('Locks in 4 min');
+  expect(lockInText(now + 61_000, now)).toBe('Locks in 2 min');
+  expect(lockInText(now + 60_000, now)).toBe('Locks in 1 min');
+  expect(lockInText(now + 59_000, now)).toBe('Locks in under a minute');
+  expect(lockInText(now - 1, now)).toBe('Locks in under a minute'); // due: the catch-up locks it
+});
+
+test('ethFeeText: a fee in ETH, two significant digits, never an exponent', () => {
+  expect(ethFeeText('0.000000196608196608')).toBe('0.0000002 ETH');
+  expect(ethFeeText('0.000000126')).toBe('0.00000013 ETH');
+  expect(ethFeeText('0.0021')).toBe('0.0021 ETH');
+  expect(ethFeeText('0')).toBe('0 ETH');
+  expect(ethFeeText(null)).toBe('–');
 });

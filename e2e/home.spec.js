@@ -190,6 +190,9 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await page.locator('[data-unlock-for=card]').getByRole('button', { name: 'Unlock' }).click();
   await expect(page.locator('[data-test=action]')).toBeHidden({ timeout: 30_000 }); // staked: nothing needs the person
   expect(rpc.sent.map((t) => t.functionName)).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower']);
+  // unlocked in the card for the Stake alone: locked again once it is done
+  await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
+  expect(await page.evaluate(async () => (await window.satori.status()).unlocked)).toBe(false);
   // the identity's batch, on its own, 10 s after staking
   await expect(chip('contract').locator('[data-test=chip-text]')).toHaveText(`Round ${ROUND} sent`, { timeout: 30_000 });
   h = await health(page);
