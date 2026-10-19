@@ -95,6 +95,8 @@ test.describe.serial('a build, in a browser profile', () => {
     await expect(page.locator('#settings-device [data-test=install-hint]')).toHaveText('Keeps your keys, and runs in its own window.');
 
     // Home offers Install as advice, once (not only after "Was asleep"): Install, or Not now, kept on this device
+    stub.noVaultBase = true; // a central that does not say whom it pays: no mismatch's card before it
+    await page.evaluate(() => window.satori.setCentral('')); // registers again
     await page.evaluate(() => window.satori.backup('vault', 'pass phrase')); // the backup's advice first, then Install's
     await page.evaluate(() => window.satori.go('home'));
     await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'install');
@@ -114,7 +116,7 @@ test.describe.serial('a build, in a browser profile', () => {
     expect(await controlled(page)).toBe(true);
     await expect(page.locator('[data-test=action]')).toBeHidden(); // Install's card stays put away
     await expect.poll(() => page.evaluate(() => window.persistCalls)).toBe(s1.storage.persisted ? 0 : 1);
-    expect(stub.registered.length).toBe(2); // central's calls still reach it (the stub) under the worker
+    expect(stub.registered.length).toBe(3); // central's calls still reach it (the stub) under the worker (setup, setCentral, reload)
     expect(await page.evaluate(() => window.violations)).toEqual([]);
   });
 
@@ -131,7 +133,7 @@ test.describe.serial('a build, in a browser profile', () => {
       expect(await loaded(page)).toBe('home'); // DuckDB's worker and wasm from the cache, the keys from OPFS
       await expect(page.locator('[data-test=identity]')).toHaveText(identity);
       await expect(page.locator('[data-test=vault]')).toHaveText(vault);
-      await expect(page.locator('[data-test=streams-count]')).toHaveText('1 from central, with our forecasts');
+      await expect(page.locator('[data-test=streams-count]')).toHaveText('1 from the Satori Network, with our forecasts');
       await expect(page.locator('[data-test=last-poll]')).toContainText('1 streams, 1 new, 1 predicted');
       await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable/);
       await expect(page.locator('[data-test=base-error]')).toContainText('The chain did not answer');
@@ -174,7 +176,7 @@ test('an app window (the window an installed app opens in) and a tab: one neuron
     if (app.url() !== APP) await app.goto(APP); // the window may still be opening
     expect(await loaded(app)).toBe('setup');
     expect(await app.evaluate(() => matchMedia('(display-mode: standalone)').matches)).toBe(true);
-    expect((await status(app)).app).toEqual({ installed: true, canInstall: false, update: false });
+    expect((await status(app)).app).toEqual({ installed: true, canInstall: false, update: false, addTo: null });
     await expect(app.locator('[data-test=install]').filter({ visible: true })).toHaveCount(0);
     await app.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
     await app.evaluate(() => window.satori.go('settings'));
