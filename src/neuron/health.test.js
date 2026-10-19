@@ -3,7 +3,8 @@
 // strip, the chips and the feed.
 import { describe, expect, test } from 'vitest';
 import {
-  healthOf, toneOf, missedBy, openTime, sessionsOf, isGood, daysOf, PRIORITY, LEVEL, WINDOW_S, FIRST_S, CADENCE_S, DAYS, fmtAgo, fmtIn, fmtDur,
+  healthOf, toneOf, missedBy, openTime, sessionsOf, isGood, daysOf, feedOf, PRIORITY, LEVEL, WINDOW_S, FIRST_S, CADENCE_S, DAYS, RELAY_GRACE_S,
+  fmtAgo, fmtIn, fmtDur,
 } from './health.js';
 
 const M = 60;
@@ -205,13 +206,35 @@ describe('bad: predictions are failing', () => {
     expect(h.channels.contract).toEqual({ state: 'bad', tone: 'bad', text: 'Failed 2 times' });
   });
 
-  test('every relay down with a stream subscribed', () => {
+  test('every relay down with a stream subscribed (a blocked one is not counted: none can carry them)', () => {
     const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }, { url: 'ws://b', state: 'blocked' }] });
     const h = health({ nostr: n });
     expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'The Satori Network is fine. Every relay is down.' });
     expect(h.channels.relays).toEqual({ state: 'bad', tone: 'bad', text: 'Relays down' });
     expect(health({ nostr: nostr({ subscriptions: [sub], relays: [] }) }).channels.relays.state).toBe('bad');
+    expect(health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'ws://b', state: 'blocked' }] }) }).channels.relays.state).toBe('bad');
     expect(health({ nostr: nostr({ relays: [{ url: 'wss://a', state: 'closed' }] }) }).status).toBe('ok'); // nothing subscribed
+  });
+
+  test(`a relay reconnecting has ${RELAY_GRACE_S / 60} min before it counts as down: then every relay down is red`, () => {
+    const at = (min) => (NOW - min * M) * 1000; // downSince, ms
+    const relays = (min) => [{ url: 'wss://a', state: 'closed', downSince: at(min) }, { url: 'wss://b', state: 'connecting', downSince: at(min) }];
+    let h = health({ nostr: nostr({ subscriptions: [sub], relays: relays(9) }) });
+    expect([h.status, ids(h), h.channels.relays]).toEqual(['ok', [], { state: 'ok', tone: 'idle', text: '2 relays' }]); // reconnecting
+    h = health({ nostr: nostr({ subscriptions: [sub], relays: relays(10) }) });
+    expect([h.status, ids(h), h.channels.relays.text]).toEqual(['bad', ['relays-down'], 'Relays down']);
+    // one of two past the grace: advice, as before
+    h = health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open', downSince: null }, relays(30)[0]] }) });
+    expect([ids(h), h.channels.relays.text]).toEqual([['relay-down'], '1 of 2 relays down']);
+    h = health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open', downSince: null }, relays(3)[0]] }) });
+    expect(ids(h)).toEqual([]);
+  });
+
+  test('a relay blocked (ws:// on an https page) is neither down nor counted', () => {
+    const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'ws://satorian:7777', state: 'blocked' }] });
+    const h = health({ nostr: n });
+    expect([h.status, ids(h), h.action]).toEqual(['ok', [], null]);
+    expect(h.channels.relays).toEqual({ state: 'ok', tone: 'idle', text: '1 relay' }); // it was "1 of 2 relays down"
   });
 });
 
@@ -255,11 +278,34 @@ describe('warn: predicting, but something needs you', () => {
     expect(health({ base: staked({ lastCheck: { round: 20742, skipped: 'no streams with a game' } }) }).status).toBe('ok');
     expect(health({ base: staked({ lastCheck: { round: 20741, skipped: 'no game passes its simulation' } }) }).status).toBe('ok'); // last round's
   });
-  test("Base unreachable (once, or never used): warn", () => {
-    const h = health({ base: base({ error: 'HTTP request failed', config: null }) });
-    expect(h).toMatchObject({ status: 'warn', line: "The Satori Network is fine. Can't reach Base." });
-    expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Unreachable' });
+  test('Base unreachable while it is in use (staked, or a batch sent before): warn', () => {
+    for (const b of [staked({ error: 'HTTP request failed' }), base({ error: 'HTTP request failed', config: null, lastBatch: { round: 20741 } })]) {
+      const h = health({ base: b });
+      expect(h).toMatchObject({ status: 'warn', line: "The Satori Network is fine. Can't reach Base." });
+      expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Unreachable' });
+    }
     expect(health({ base: base({ config: null }) }).channels.contract).toEqual({ state: 'idle', tone: 'working', text: 'Connecting…' });
+  });
+  test('Base not used (not staked, no batch ever sent): an RPC error is a note on the Contract chip, grey; Home stays green', () => {
+    for (const b of [base({ error: 'HTTP request failed', config: null }), base({ lastCheck: { at: NOW, error: 'HTTP request failed', unused: true } })]) {
+      const h = health({ base: b });
+      expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h', action: null });
+      expect(h.reasons).toEqual([{ id: 'base-unused-unreachable', status: 'note', channel: 'contract', text: expect.stringMatching(/^Can't reach Base/) }]);
+      expect(h.channels.contract).toEqual({ state: 'note', tone: 'off', text: 'Unreachable' });
+    }
+  });
+  test('a Satori contract batch that never mines: amber, retrying with a higher fee; past the max fee, said, with Settings', () => {
+    const pending = (stuck) => staked({ pendingBatch: { round: 20742, hash: '0xab', sentAt: NOW - M, stuck } });
+    let h = health({ base: pending({ at: NOW - M, replaced: 1, fee: '0.025' }) });
+    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Network is fine. The Satori contract batch is stuck; retrying with a higher fee.' });
+    expect(h.action).toEqual({ id: 'base-stuck', text: 'The Satori contract batch was not mined for 10 min, so it was sent again with a higher fee '
+      + '(0.025 gwei), within the max fee. It keeps checking.' });
+    expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Batch stuck' });
+    h = health({ base: pending({ at: NOW - M, ceiling: true, fee: '2.5', max: '2' }) });
+    expect(h.action).toEqual({ id: 'base-stuck', button: 'Open Settings', do: 'go', tab: 'settings', section: 'base',
+      text: 'The Satori contract batch is stuck: a higher fee (2.5 gwei) would pass the max fee (2 gwei), so it waits. Raise the max fee in Settings.' });
+    expect(h.line).toBe('The Satori Network is fine. The Satori contract batch is stuck.');
+    expect(ids(health({ base: pending(null) }))).toEqual([]); // waiting, not stuck yet
   });
   test("central: a vault mismatch, by register's vault_base_address; unknown is none; not registered", () => {
     const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
@@ -329,9 +375,10 @@ test('each reason\'s level (docs/design/health.md): bad, warn, idle (a calm stat
     'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad',
     'stake-out-of-sync': 'bad', 'relays-down': 'bad',
     'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
-    'base-unreachable': 'warn',
+    'base-stuck': 'warn', 'base-unreachable': 'warn',
     asleep: 'idle', starting: 'idle',
     backup: 'advice', stake: 'advice', install: 'advice', 'relay-down': 'advice',
+    'base-unused-unreachable': 'note',
   });
   expect(PRIORITY).toEqual(Object.keys(LEVEL)); // highest first: every advice after every warn and bad
 });
@@ -451,13 +498,15 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'not-registered': reg({ ok: false, error: 'Satori Network unreachable: Failed to fetch' }),
     'gas-low': (i) => ({ ...i, base: staked({ identity: { power: '100', lowEth: true, batchesLeft: 3, eth: '0.00001' } }) }),
     'base-skipped': (i) => ({ ...i, base: staked({ lastCheck: { at: NOW, round: 20742, skipped: 'gas above the ceiling: 3 gwei > 2 gwei' } }) }),
-    'base-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null }) }),
+    'base-stuck': (i) => ({ ...i, base: staked({ pendingBatch: { round: 20742, hash: '0xab', sentAt: NOW - M, stuck: { at: NOW, replaced: 1, fee: '0.02' } } }) }),
+    'base-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null, lastBatch: { round: 20741 } }) }),
     asleep: (i) => i,
     starting: (i) => i,
     backup: (i) => ({ ...i, storage: { persisted: false }, backedUp: false }),
     stake: (i) => ({ ...i, base: base({ vault: { satori: '100', staked: 'none' } }) }),
     install: (i) => ({ ...i, app: { installed: false, canInstall: true } }),
     'relay-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] }) }),
+    'base-unused-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null }) }),
   };
   const TITLE = { S: 'Starting', A: 'Was asleep', P: 'Predicting', B: 'Partly predicting', N: 'Not predicting' };
   const X = '(cannot meet)';
@@ -481,6 +530,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'not-registered':   fixable('not-registered'),
     'gas-low':          fixable('gas-low'),
     'base-skipped':     fixable('base-skipped'),
+    'base-stuck':       fixable('base-stuck'),
     'base-unreachable': fixable('base-unreachable'),
     asleep:             [X,                       'A idle –',              'P idle –',              X,                       X,                       X],
     starting:           ['S idle –',              X,                       X,                       X,                       X,                       X],
@@ -488,6 +538,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     stake:              ['S idle stake',          'A idle stake',          'P idle stake',          'P ok stake',            'P warn central-failed', 'N bad central-failing'],
     install:            ['S idle install',        'A idle install',        'P idle install',        'P ok install',          'P warn central-failed', 'N bad central-failing'],
     'relay-down':       ['S idle relay-down',     'A idle relay-down',     'P idle relay-down',     'P ok relay-down',       'P warn central-failed', 'N bad central-failing'],
+    'base-unused-unreachable': ['S idle –',       'A idle –',              'P idle –',              'P ok –',                'P warn central-failed', 'N bad central-failing'],
   };
   const cells = Object.entries(TABLE).flatMap(([id, row]) => Object.keys(STATES).map((state, k) => [state, id, row[k]]));
   const e = (task, step, critical = false) => ({ task, step, done: null, total: null, since: 0, critical });
@@ -639,4 +690,20 @@ test('times in a few words', () => {
 test('the feed is by time: a cycle logged when it ends sits at its start, after what happened meanwhile', () => {
   const rows = [open(NOW - H), row('base', NOW - 50 * M, 'idle', { skipped: 'no streams with a game' }), good(NOW - 55 * M)];
   expect(health({ rows }).feed.map((f) => f.text)).toEqual(['Satori contract batch skipped: no streams with a game', 'Sent 83 predictions to the Satori Network']);
+});
+
+describe('the Satori contract unused: its RPC errors are not failures (the day strip, the feed)', () => {
+  test('a check that failed while Base was unused does not make a day part, and reads calm in the feed', () => {
+    const day = [open(NOW - 3 * H, NOW), good(NOW - 2 * H)];
+    const unused = row('base', NOW - H, 'idle', { round: null, error: 'HTTP request failed', unused: true }, { count: 3, until: NOW - 10 * M, mkey: 'e' });
+    expect(daysOf([...day, unused], NOW).at(-1).code).toBe('full');
+    const used = row('base', NOW - H, 'bad', { round: 20742, error: 'HTTP request failed' }, { mkey: 'e' });
+    expect(daysOf([...day, used], NOW).at(-1).code).toBe('part'); // in use: a failure, as before
+    expect(feedOf([unused])).toEqual([{ at: NOW - H, level: 'idle', text: "Couldn't reach the Satori contract (not staked): HTTP request failed (×3)" }]);
+  });
+  test('a stuck batch, logged: amber in the feed and a failure on the strip until it mines', () => {
+    const stuck = row('base', NOW - H, 'warn', { round: 20742, skipped: 'stuck: retrying with a higher fee (0.02 gwei)', stuck: { replaced: 1, fee: '0.02' } }, { mkey: 'stuck' });
+    expect(feedOf([stuck])).toEqual([{ at: NOW - H, level: 'warn', text: 'Satori contract batch stuck: sent again with a higher fee (0.02 gwei)' }]);
+    expect(daysOf([open(NOW - 3 * H, NOW), good(NOW - 2 * H), stuck], NOW).at(-1).code).toBe('part');
+  });
 });

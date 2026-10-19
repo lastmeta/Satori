@@ -366,6 +366,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         relays: [...relays.values()].map((e) => ({
           url: e.url, from: [...e.from], write: writes(e), state: e.blocked ? 'blocked' : e.relay.state,
           error: e.blocked ? 'ws:// cannot be opened from an https page' : e.relay.error,
+          downSince: e.blocked ? null : e.relay.downSince ?? null, // ms: Home's reconnect grace (docs/design/health.md)
         })),
         subscriptions: (await db.relayStreams({ active: true })).map(view),
       };

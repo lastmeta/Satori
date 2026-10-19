@@ -183,6 +183,30 @@ describe('relay', () => {
     expect(r.retryAt).toBeNull();
   });
 
+  test('downSince: since when it has not been open (ms), from its first try, kept through reconnects; null while open', () => {
+    const r = make();
+    expect(r.downSince).toBe(null); // never asked to connect
+    const t0 = Date.now();
+    r.connect();
+    expect(r.downSince).toBe(t0); // trying, not open yet
+    vi.advanceTimersByTime(500);
+    last().open();
+    expect(r.downSince).toBe(null);
+    vi.advanceTimersByTime(60_000);
+    const lost = Date.now();
+    last().drop();
+    expect(r.downSince).toBe(lost);
+    vi.advanceTimersByTime(1500); // the reconnect: connecting, then dropped again
+    expect(r.state).toBe('connecting');
+    last().drop();
+    expect(r.downSince).toBe(lost); // still since the first loss: the grace counts from there
+    vi.advanceTimersByTime(5000);
+    last().open();
+    expect(r.downSince).toBe(null);
+    r.close();
+    expect(r.downSince).toBe(null); // closed on purpose: not down
+  });
+
   test('a relay that accepts and drops every connection is not hammered (1, 2, 4, 8 s …)', () => {
     const r = make();
     r.connect();

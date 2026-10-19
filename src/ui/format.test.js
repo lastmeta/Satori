@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
-  fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
+  fmtCadence, shortKey, relayText, relaysText, BLOCKED_NOTE, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
   storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText, openingText,
 } from './format.js';
@@ -91,8 +91,16 @@ test('relayText: the state in a word, and read only', () => {
   expect(relayText({ state: 'open', write: false })).toBe('Connected · read only');
   expect(relayText({ state: 'connecting', write: true })).toBe('Connecting…');
   expect(relayText({ state: 'closed', write: true, error: 'closed (1006)' })).toBe('Disconnected (closed (1006)); retrying');
-  expect(relayText({ state: 'blocked', write: false, error: 'ws:// cannot be opened from an https page' }))
-    .toBe('Blocked: ws:// cannot be opened from an https page');
+  expect(relayText({ state: 'blocked', write: false, error: 'ws:// cannot be opened from an https page' })).toBe('Not reachable here');
+});
+
+test('relaysText: the relays that count (a blocked one is left out), connected of them', () => {
+  const r = (state) => ({ state });
+  expect(relaysText([r('open'), r('blocked')])).toBe('1 of 1 relay connected');
+  expect(relaysText([r('open'), r('closed'), r('blocked')])).toBe('1 of 2 relays connected');
+  expect(relaysText([r('blocked')])).toBe('no relay');
+  expect(relaysText([])).toBe('no relay');
+  expect(BLOCKED_NOTE).toBe("A ws:// relay can't be reached from a secure (https) page, so it is left out: it doesn't count as down.");
 });
 
 test('obsText: a relay value as a number when it has one, as predText; else as sent (a dict as JSON)', () => {

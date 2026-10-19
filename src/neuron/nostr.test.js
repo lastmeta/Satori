@@ -110,8 +110,8 @@ describe('relays', () => {
     const s = await nostr.status();
     expect(s).toMatchObject({ pubkey: ME_PUB, maxStreams: 60, centralWrite: false, userRelays: [USER_RELAY] });
     expect(s.relays).toEqual([
-      { url: CENTRAL_RELAY, from: ['central'], write: false, state: 'connecting', error: '' },
-      { url: USER_RELAY, from: ['user'], write: true, state: 'connecting', error: '' },
+      { url: CENTRAL_RELAY, from: ['central'], write: false, state: 'connecting', error: '', downSince: null },
+      { url: USER_RELAY, from: ['user'], write: true, state: 'connecting', error: '', downSince: null },
     ]);
     expect(s.npub).toMatch(/^npub1/);
   });

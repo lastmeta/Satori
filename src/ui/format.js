@@ -119,13 +119,23 @@ export function fmtCadence(s) {
 /** A Nostr pubkey, shortened: the first 8 and last 4 hex. */
 export const shortKey = (k) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : '');
 
-/** A relay's state (nostr status) in a few words. */
+/** A relay's state (nostr status) in a few words; a blocked one (ws:// on an https page) is said once, BLOCKED_NOTE. */
 export function relayText(r) {
   const ro = r.write ? '' : ' · read only';
   if (r.state === 'open') return `Connected${ro}`;
   if (r.state === 'connecting') return `Connecting…${ro}`;
-  if (r.state === 'blocked') return `Blocked: ${r.error}`;
+  if (r.state === 'blocked') return 'Not reachable here';
   return `Disconnected${r.error ? ` (${r.error})` : ''}; retrying${ro}`;
+}
+
+/** Under the relays, once, when one is blocked (docs/design/nostr.md#relays-and-the-read-only-flag). */
+export const BLOCKED_NOTE = "A ws:// relay can't be reached from a secure (https) page, so it is left out: it doesn't count as down.";
+
+/** The relays in a few words: those that count (not blocked), connected of them. */
+export function relaysText(relays) {
+  const usable = relays.filter((r) => r.state !== 'blocked');
+  const up = usable.filter((r) => r.state === 'open').length;
+  return usable.length ? `${up} of ${usable.length} relay${usable.length === 1 ? '' : 's'} connected` : 'no relay';
 }
 
 /** A relay observation's value as sent (a dict as JSON): the hover title of obsText. */

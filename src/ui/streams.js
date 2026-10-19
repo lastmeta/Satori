@@ -6,7 +6,7 @@ import { state } from './state.js';
 import { fact, sparkPath } from './parts.js';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
-  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText,
+  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText,
 } from './format.js';
 
 export const CATALOG_SHOWN = 50;
@@ -69,11 +69,6 @@ function streamsCard(a) {
   </section>`;
 }
 
-/** The relays in a few words (their addresses and each one's state are in Settings). */
-function relaysText(relays) {
-  const up = relays.filter((r) => r.state === 'open').length;
-  return relays.length ? `${up} of ${relays.length} relay${relays.length === 1 ? '' : 's'} connected` : 'no relay';
-}
 
 function subRow(s, a) {
   // One root node, no whitespace around it (see streamRow).

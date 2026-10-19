@@ -5,7 +5,8 @@
 //   r.sub(id, filters) / r.unsub(id)   // kept: re-sent after every reconnect
 //   await r.fetch(filters)         // one REQ until EOSE (10 s at most) → events
 //   await r.publish(event)         // → { ok, message } from the relay's OK
-// state: 'connecting' | 'open' | 'closed'. Events are passed on unchecked.
+// state: 'connecting' | 'open' | 'closed'. Events are passed on unchecked. downSince: since when it has not been
+// open (ms), while it is to connect (Home gives a reconnect a grace before it counts as down).
 // The backoff starts over only once a connection has worked (an EOSE, or 30 s open).
 // onTraffic(): each message sent or received (Home's glow, src/traffic.js).
 import { emit } from '../traffic.js';
@@ -28,6 +29,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
   let attempt = 0;
   let timer = null;
   let retryAt = null; // when the pending reconnect is due (ms): a sleeping device's timer fires late (the catch-up pass)
+  let downSince = null; // since when it has not been open while asked to connect (ms): Home's reconnect grace
   let stable = null; // resets the backoff once the connection has proved itself
   let n = 0;
   const kept = new Map(); // id → filters
@@ -70,6 +72,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
   function lost(why) {
     clearTimeout(stable);
     ws = null;
+    if (!stopped) downSince ??= now();
     for (const f of [...fetches.values()]) f.done();
     for (const id of [...publishes.keys()]) settle(id, { ok: false, message: 'disconnected' });
     setState('closed');
@@ -110,6 +113,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
       // connection would be reconnected to every second.
       stable = setTimeout(proven, STABLE_MS);
       error = '';
+      downSince = null;
       setState('open');
       for (const [id, filters] of kept) send(['REQ', id, ...filters]);
       onOpen(relay);
@@ -129,10 +133,13 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
     get error() { return error; },
     /** When the pending reconnect is due (ms), or null: none pending. */
     get retryAt() { return retryAt; },
+    /** Since when it has not been open (ms), while it is to connect; null while open or closed on purpose. */
+    get downSince() { return downSince; },
     /** Connect now (a pending retry is brought forward); no-op while connected or connecting. */
     connect() {
       stopped = false;
       if (ws) return;
+      if (state !== 'open') downSince ??= now();
       clearTimeout(timer);
       open();
     },
@@ -141,6 +148,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
       clearTimeout(timer);
       timer = null;
       retryAt = null;
+      downSince = null;
       const sock = ws;
       if (sock) {
         lost('');

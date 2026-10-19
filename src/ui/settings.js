@@ -6,7 +6,7 @@ import { html } from '@arrow-js/core';
 import { version } from '../../package.json';
 import { state } from './state.js';
 import { form, idRow, wordList } from './parts.js';
-import { storageText, relayText } from './format.js';
+import { storageText, relayText, BLOCKED_NOTE } from './format.js';
 import { ADD_TO } from '../neuron/health.js';
 
 /** How Satori runs (docs/intent/ui.md: say it plainly), on Setup and in Settings › This device. */
@@ -104,6 +104,7 @@ function relaysForm(a) {
     <form class="fields relays-form" @submit="${(e) => a.saveRelays(form(e), e.target)}">
       <h2>Satori relays</h2>
       <ul class="relays">${() => state.nostr.relays.map((r) => html`<li class="relay" data-test="relay"><code>${r.url}</code><span class="${r.state === 'open' ? 'badge on' : 'badge'}" data-test="relay-state">${relayText(r)}</span></li>`.key(`${r.url} ${r.state} ${r.write}`))}</ul>
+      <p class="muted small" data-test="relays-blocked" hidden="${() => !state.nostr.relays.some((r) => r.state === 'blocked')}">${BLOCKED_NOTE}</p>
       <label>Your relays (Nostr; one per line, ws:// or wss://)
         <textarea name="relays" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>

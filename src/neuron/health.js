@@ -11,22 +11,25 @@ export const FIRST_S = GRACE_S; // … and the first one (it polls at once)
 export const HEARTBEAT_S = 300;
 export const SLEEP_S = 900; // a heartbeat this late: the page did not run (closed, asleep, frozen)
 export const KEEP_S = 90 * 86400;
+export const RELAY_GRACE_S = 600; // a relay reconnecting counts as up this long (its backoff reaches 5 min)
 export const DAYS = 30;
 export const FEED = 20;
 
 /**
  * Each reason's level, highest first (docs/design/health.md#reasons-in-priority-order). bad and warn: something is
  * wrong for predicting or earning (red, amber); idle: a calm state (starting, catching up), green on Home; advice:
- * nothing is wrong, a suggestion for the card only, never the status, the tone or the line. The status is the worst
- * bad, warn or idle; the card is the first with an action, so advice only when no warn or bad has one.
+ * nothing is wrong, a suggestion for the card only, never the status, the tone or the line; note: words on its
+ * channel's chip only (grey: a channel not used), no card. The status is the worst bad, warn or idle; the card is the
+ * first with an action, so advice only when no warn or bad has one.
  */
 export const LEVEL = {
   'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad',
   'stake-out-of-sync': 'bad', 'relays-down': 'bad',
   'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
-  'base-unreachable': 'warn',
+  'base-stuck': 'warn', 'base-unreachable': 'warn',
   asleep: 'idle', starting: 'idle',
   backup: 'advice', stake: 'advice', install: 'advice', 'relay-down': 'advice',
+  'base-unused-unreachable': 'note',
 };
 export const PRIORITY = Object.keys(LEVEL);
 export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
@@ -187,13 +190,18 @@ function baseReasons({ rows, base }) {
   const out = [];
   if (!base) return out;
   const d = base.vault?.staked;
+  // in use: staked with this neuron, or a batch went out before (the stake may not be read: the RPC down since load)
   const inUse = d === 'identity' || !!base.lastBatch;
   const lastRow = rows.filter((r) => r.kind === 'base').at(-1);
   const repeated = lastRow?.level === 'bad' && lastRow.count >= 2;
   const check = base.lastCheck;
   const failingErr = base.error || check?.error;
-  if (failingErr) {
-    if (inUse && repeated) {
+  if (failingErr && !inUse) {
+    // not used: nothing to predict or earn there, so a note on its chip (grey), never Home's colour (the review, 2026-10-19)
+    out.push(reason('base-unused-unreachable', 'contract', { chip: 'Unreachable', // unused, its check fails only on the RPC
+      line: `Can't reach Base: ${failingErr}. Not staked, so nothing is lost; the Wallet works once it answers.` }));
+  } else if (failingErr) {
+    if (repeated) {
       out.push(reason('base-failing', 'contract', { line: `The Satori contract batch failed ${lastRow.count} times.`, chip: `Failed ${lastRow.count} times`,
         text: `${failingErr}. Check the Base RPC in Settings.`, button: 'Open Settings', act: go('settings', 'base') }));
     } else {
@@ -201,6 +209,17 @@ function baseReasons({ rows, base }) {
         chip: base.error ? 'Unreachable' : 'Batch failed', text: `${failingErr}. Check the Base RPC in Settings.`,
         button: 'Open Settings', act: go('settings', 'base') }));
     }
+  }
+  // a batch sent and not mined for STUCK_S: sent again with a higher fee (base.js), or waiting under the max fee
+  const stuck = base.pendingBatch?.stuck;
+  if (stuck) {
+    out.push(stuck.ceiling
+      ? reason('base-stuck', 'contract', { line: 'The Satori contract batch is stuck.', chip: 'Batch stuck',
+        text: `The Satori contract batch is stuck: a higher fee (${stuck.fee} gwei) would pass the max fee (${stuck.max} gwei), so it waits. `
+          + 'Raise the max fee in Settings.', button: 'Open Settings', act: go('settings', 'base') })
+      : reason('base-stuck', 'contract', { line: 'The Satori contract batch is stuck; retrying with a higher fee.', chip: 'Batch stuck',
+        text: `The Satori contract batch was not mined for 10 min, so it was sent again with a higher fee (${stuck.fee} gwei), within the max fee. `
+          + 'It keeps checking.' }));
   }
   if (base.error || !base.config) return out;
   // advice while the contract bug is live (docs/issues/token-hook-gas-estimate.md): the card offers it and says the risk;
@@ -231,11 +250,19 @@ function baseReasons({ rows, base }) {
   return out;
 }
 
-function networkReasons({ nostr }) {
+/**
+ * A relay that is down: not open for RELAY_GRACE_S (its reconnects get that long; downSince, ms, from src/nostr/relay.js),
+ * or closed when it does not say since when. A blocked one (ws:// on an https page) is neither down nor counted.
+ */
+const relayDown = (r, now) => r.state !== 'open' && (r.downSince == null ? r.state === 'closed' : now - r.downSince / 1000 >= RELAY_GRACE_S);
+/** The relays that count: not blocked (ws:// on an https page can never open there). */
+export const usableRelays = (nostr) => (nostr?.relays ?? []).filter((r) => r.state !== 'blocked');
+
+function networkReasons({ nostr, now }) {
   const out = [];
   if (!nostr?.subscriptions?.length) return out;
-  const relays = nostr.relays ?? [];
-  const down = relays.filter((r) => r.state === 'closed' || r.state === 'blocked');
+  const relays = usableRelays(nostr);
+  const down = relays.filter((r) => relayDown(r, now));
   if (!relays.length || down.length === relays.length) {
     out.push(reason('relays-down', 'relays', { line: 'Every relay is down.', chip: 'Relays down',
       text: "No relay is connected, so subscribed streams aren't predicted. Check the relays in Settings.",
@@ -306,7 +333,7 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
 
   const b = top('contract');
   let baseChip;
-  if (b) baseChip = { state: b.status, text: b.chip };
+  if (b) baseChip = { state: b.status, text: b.chip, off: b.status === 'note' }; // a note: a channel not used, grey
   else if (!base?.config) baseChip = { state: 'idle', text: 'Connecting…', busy: true };
   else if (base.vault?.staked === 'other') baseChip = { state: 'idle', text: 'Staked elsewhere', off: true };
   else if (base.vault?.staked !== 'identity') baseChip = { state: 'idle', text: 'Not staked', off: true };
@@ -316,7 +343,7 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
 
   const n = top('relays');
   const relays = n ? { state: n.status, text: n.chip }
-    : nostr?.subscriptions?.length ? { state: 'ok', text: `${(nostr.relays ?? []).length} relay${(nostr.relays ?? []).length === 1 ? '' : 's'}` }
+    : nostr?.subscriptions?.length ? { state: 'ok', text: `${usableRelays(nostr).length} relay${usableRelays(nostr).length === 1 ? '' : 's'}` }
       : { state: 'idle', text: 'No streams', off: true };
   // the tone: warn and bad as they are; working (its channel has work in progress, or is connecting); off (deliberately
   // not used: Base not staked here, no stream subscribed); else idle (sky: healthy, waiting). Advice is calm: its
@@ -336,7 +363,10 @@ const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 /** What a row says about a channel: ['network' | 'contract' | 'relays', 'ok' | 'fail'], or null. */
 function outcome(r) {
   if (r.kind === 'central') return ['network', isGood(r) ? 'ok' : 'fail'];
-  if (r.kind === 'base') return r.level === 'ok' ? ['contract', 'ok'] : r.level === 'bad' || r.level === 'warn' ? ['contract', 'fail'] : null;
+  if (r.kind === 'base') {
+    if (r.data?.unused) return null; // the contract not used: its RPC's trouble is no failure (docs/design/health.md#the-day-strip)
+    return r.level === 'ok' ? ['contract', 'ok'] : r.level === 'bad' || r.level === 'warn' ? ['contract', 'fail'] : null;
+  }
   if (r.kind === 'nostr') return ['relays', 'ok'];
   if (r.kind === 'error') return [r.data?.where === 'nostr' ? 'relays' : 'network', 'fail'];
   return null;
@@ -390,7 +420,12 @@ function feedText(r) {
       return d.accepted > 0 ? `Sent ${d.accepted} predictions to the Satori Network` : 'Checked the Satori Network: up to date';
     case 'history': return d.error ? `History not loaded: ${d.error}` : `History loaded for ${d.streams} streams`;
     case 'base':
+      if (d.error && d.unused) return `Couldn't reach the Satori contract (not staked): ${d.error}${times(r)}`;
       if (d.error) return `Satori contract batch failed: ${d.error}${times(r)}`;
+      if (d.stuck) {
+        return `Satori contract batch stuck: ${d.stuck.ceiling ? `a higher fee (${d.stuck.fee} gwei) would pass the max fee`
+          : `sent again with a higher fee (${d.stuck.fee} gwei)`}${times(r)}`;
+      }
       if (d.skipped) return `Satori contract batch skipped: ${d.skipped.split(':')[0]}${times(r)}`;
       return `Satori contract batch for round ${d.round}: ${games(d.games?.length ?? 0)}`;
     case 'nostr': return `Published ${d.published} forecast${d.published === 1 ? '' : 's'} to the Satori relays`;
@@ -431,13 +466,13 @@ export function feedOf(rows, n = FEED) {
 export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, installDismissed = false, since = null, traffic, work = {} }) {
   const sessions = sessionsOf(rows, now);
   const c = centralReasons({ now, rows, sessions, central, work });
-  const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr }), ...installReason({ app, installDismissed })];
+  const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr, now }), ...installReason({ app, installDismissed })];
   if (storage && storage.persisted === false && !backedUp) {
     reasons.push(reason('backup', null, {
       text: 'This browser may clear Satori’s storage, your keys with it. Back up your vault’s 24 words.', button: 'Back up', act: { do: 'backup' } }));
   }
   reasons.sort((a, b) => PRIORITY.indexOf(a.id) - PRIORITY.indexOf(b.id));
-  const told = reasons.filter((r) => r.status !== 'advice'); // what the hero says: advice is the card's only
+  const told = reasons.filter((r) => r.status !== 'advice' && r.status !== 'note'); // what the hero says: advice is the card's, a note the chip's
   const status = told[0]?.status ?? 'ok'; // the worst: PRIORITY is by level
   // The title: is the neuron predicting on the channels that pay? Central (Not predicting wins), and Base when it should
   // be predicting: staked with this neuron, or not read (its RPC down) after a batch went out. Nostr never moves it.

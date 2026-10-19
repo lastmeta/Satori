@@ -179,3 +179,64 @@ test('Dockerized Neuron import with nostr.yaml keeps its Nostr key; refused subs
   await expect(page.evaluate((p) => window.satori.subscribe(p, 'never-announced'), fx.nostr.pubkeyHex)).rejects.toThrow(/not announced/);
   await expect(page.evaluate(() => window.satori.setRelays({ relays: ['http://x.test'] }))).rejects.toThrow(/ws:\/\/ or wss:\/\//);
 });
+
+test('an https page: a ws:// relay is blocked, said once, and neither down nor counted; a relay that drops gets its grace', async ({ context, page }) => {
+  test.setTimeout(240_000);
+  const BLOCKED = 'ws://relay.example:7777'; // what central lists today (satorian): an https page can never open it
+  const RELAY = 'wss://relay.test'; // a wss:// relay, this test's proxy to the test relay on 7782
+  const stub = await stubAt(context, { relays: [RELAY, BLOCKED] });
+  // the dev server's files under https://neuron.test (a secure page, as https://neuron.satorinet.io), through this test
+  await context.route('https://neuron.test/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/rpc') return route.fallback();
+    return route.fulfill({ response: await route.fetch({ url: `http://localhost:5180${url.pathname}${url.search}` }) });
+  });
+  // the wss:// relay: proxied to the test relay on 7782 by this test, which can cut it: then every reconnect is refused
+  let cut = false;
+  const sockets = [];
+  await context.routeWebSocket((u) => u.hostname === 'relay.test', (ws) => {
+    if (cut) return ws.close();
+    const upstream = new WebSocket(CENTRAL_RELAY);
+    const queue = [];
+    upstream.on('open', () => queue.splice(0).forEach((m) => upstream.send(m)));
+    upstream.on('message', (d) => ws.send(d.toString()));
+    upstream.on('close', () => ws.close());
+    ws.onMessage((m) => (upstream.readyState === 1 ? upstream.send(m) : queue.push(m)));
+    ws.onClose(() => upstream.close());
+    sockets.push(ws);
+  });
+  const stream = `e2e-https-${Date.now().toString(36)}`;
+  const provider = await connectProvider({ url: CENTRAL_RELAY });
+  await provider.announce({ stream, name: 'E2E https', description: '', cadence: 60, tags: [] });
+  await provider.observe({ stream, value: '7', seq: 1, timestamp: Math.floor(Date.now() / 1000) - 60 });
+
+  expect(await openApp(page, 'https://neuron.test/')).toBe('setup');
+  await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
+  await page.evaluate(() => window.satori.setRelays({ relays: [] })); // central's two only
+  await expect.poll(async () => (await nostr(page)).relays.map((r) => [r.url, r.state, r.error]), { timeout: 20_000 })
+    .toEqual([[RELAY, 'open', ''], [BLOCKED, 'blocked', 'ws:// cannot be opened from an https page']]);
+  await page.evaluate(([p, s]) => window.satori.subscribe(p, s), [provider.pubkey, stream]);
+
+  // the blocked relay is not down: the chip counts the one that can open, nothing amber, no card for it
+  let h = await page.evaluate(() => window.satori.health());
+  expect(h.channels.relays).toMatchObject({ state: 'ok', text: '1 relay' }); // it read "1 of 2 relays down"
+  expect(h.reasons.map((r) => r.id)).not.toContain('relay-down');
+  // said once, in the relays' detail (Settings)
+  await page.evaluate(() => window.satori.go('settings'));
+  await expect(page.locator('[data-test=relay]').filter({ hasText: BLOCKED }).locator('[data-test=relay-state]')).toHaveText('Not reachable here');
+  await expect(page.locator('[data-test=relays-blocked]')).toHaveText("A ws:// relay can't be reached from a secure (https) page, so it is left out: it doesn't count as down.");
+  await page.evaluate(() => window.satori.go('streams'));
+  await expect(page.locator('.card').filter({ hasText: 'Satori relays' }).first()).toContainText('1 of 1 relay connected');
+
+  // the one usable relay drops and refuses reconnects: within the grace it is not red ("Every relay is down" waits 10 min)
+  cut = true;
+  for (const ws of sockets) await ws.close();
+  await expect.poll(async () => (await nostr(page)).relays.find((r) => r.url === RELAY).state).not.toBe('open');
+  const r = (await nostr(page)).relays.find((x) => x.url === RELAY);
+  expect(Date.now() - r.downSince).toBeLessThan(60_000); // since when it is down: the grace counts from there
+  h = await page.evaluate(() => window.satori.health());
+  expect(h.reasons.map((x) => x.id)).not.toContain('relays-down');
+  expect(h.status).not.toBe('bad');
+  expect(stub.prod).toEqual([]);
+  provider.close?.();
+});
