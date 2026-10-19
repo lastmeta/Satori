@@ -2,12 +2,13 @@
 // custom transport to a small stateful D6. Keys are our signers (src/keys),
 // so every transaction here is signed the way the app signs it.
 import { beforeEach, describe, expect, test } from 'vitest';
-import { zeroAddress } from 'viem';
+import { ContractFunctionExecutionError, ContractFunctionRevertedError, encodeErrorResult, zeroAddress } from 'viem';
+import { tokenAbi } from './abi.js';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
 import { fakeSatori, E18 } from '../../test/fake-satori.js';
 
-import { createChain, transferLock, payload, revertName, errorText, UP, DOWN, HOOK_GAS, INDEFINITE } from './index.js';
+import { createChain, transferLock, payload, revertName, errorText, panicOf, UP, DOWN, HOOK_GAS, INDEFINITE } from './index.js';
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
@@ -80,6 +81,22 @@ describe('stake: delegatePredictionPower(identity) (Lite\'s Enable staking + the
     expect(revertName(err)).toBe('AlreadySet');
     expect(errorText(err)).toBe('reverted: AlreadySet');
     expect(rpc.sent).toHaveLength(0);
+  });
+  test('a frozen stake: unstaking underflows (Panic 0x11), named by panicOf; nothing is sent', async () => {
+    await chain.delegate({ identity, vault });
+    rpc.sent.length = 0;
+    s.skipHook(V, 1n);
+    const err = await chain.undelegate({ vault }).catch((e) => e);
+    expect([revertName(err), panicOf(err)]).toEqual(['Panic', 0x11]);
+    expect(rpc.sent).toHaveLength(0);
+    expect(panicOf(new Error('x'))).toBeNull();
+  });
+  test("the next contracts' starved transfer (HookFailedWithoutReason, humble 86e2bdb3): a plain line", () => {
+    const data = encodeErrorResult({ abi: tokenAbi, errorName: 'HookFailedWithoutReason' });
+    const err = new ContractFunctionExecutionError(new ContractFunctionRevertedError({ abi: tokenAbi, data, functionName: 'transfer' }),
+      { abi: tokenAbi, functionName: 'transfer', args: [] });
+    expect(revertName(err)).toBe('HookFailedWithoutReason');
+    expect(errorText(err)).toBe('The transaction ran out of gas; try again');
   });
   test('a lagging read after the receipt: re-read 5 × (Lite), then trust the receipt', async () => {
     let lag = 99;

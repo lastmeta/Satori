@@ -10,7 +10,7 @@ import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
 import { createWork } from './work.js';
 import {
-  createBase, runBatch, stepFor, horizonFor, directionOf, nextCheckAt, toPoints, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
+  createBase, runBatch, stepFor, horizonFor, directionOf, nextCheckAt, toPoints, stakeSync, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
 } from './base.js';
 
 const signerOf = (hex) => {
@@ -76,6 +76,24 @@ describe('rules', () => {
   });
   test('registry history → points: hours to seconds, int232 → number', () => {
     expect(toPoints([{ hour: 10, value: 5n * E18 }])).toEqual([{ ts: 36_000, value: 5e18 }]);
+  });
+});
+
+describe('staking in sync (the token-hook bug: docs/issues/token-hook-gas-estimate.md)', () => {
+  const vault = '0x' + 'aa'.repeat(20);
+  const other = '0x' + 'bb'.repeat(20);
+  test('the identity accepts only this vault, so its power must equal the vault\'s SATORI: equal is in sync, under is out', () => {
+    const base = { staked: 'identity', allowedDelegator: vault.toUpperCase().replace('0X', '0x'), vault, power: 100n * E18, balance: 100n * E18 };
+    expect(stakeSync(base)).toEqual({ inSync: true, shortfall: null });
+    expect(stakeSync({ ...base, balance: 100n * E18 + 1n })).toEqual({ inSync: false, shortfall: '0.000000000000000001' }); // 1 wei, no hook
+    expect(stakeSync({ ...base, power: 200n * E18 })).toEqual({ inSync: true, shortfall: null }); // over: unstaking still works
+  });
+  test('not checked (null): other stakers are possible (another allowed staker, or anyone), not staked here, or not read', () => {
+    const base = { staked: 'identity', allowedDelegator: vault, vault, power: 1n, balance: 2n };
+    expect(stakeSync({ ...base, allowedDelegator: other })).toEqual({ inSync: null, shortfall: null });
+    expect(stakeSync({ ...base, allowedDelegator: zeroAddress })).toEqual({ inSync: null, shortfall: null }); // open to anyone
+    expect(stakeSync({ ...base, staked: 'none' })).toEqual({ inSync: null, shortfall: null });
+    expect(stakeSync({ ...base, power: null })).toEqual({ inSync: null, shortfall: null });
   });
 });
 
@@ -379,6 +397,21 @@ describe('createBase', () => {
     await expect(base.send({ asset: 'SATORI', to: '0x' + '33'.repeat(20), amount: '1' }))
       .rejects.toThrow(`SATORI can be sent from Oct 17, 00:00 UTC (round ${ROUND + 2}).`);
     base.stop();
+  });
+
+  test("out of sync: 1 wei sent to the staked vault with its hook skipped; status says so, and Unstake explains, not 'reverted: Panic'", async () => {
+    vault = vaultKey;
+    await base.delegate();
+    expect((await base.refresh()).vault).toMatchObject({ staked: 'identity', inSync: true, shortfall: null });
+    s.skipHook(V, 1n); // anyone's 1 wei, sent with the bare gas estimate
+    const v = await base.refresh();
+    expect(v.vault).toMatchObject({ satori: '100.000000000000000001', inSync: false, shortfall: '0.000000000000000001' });
+    expect(v.identity.power).toBe('100');
+    await expect(base.undelegate()).rejects.toThrow("Staking is out of sync. Unstaking will fail until the contract fix. Don't add SATORI to the vault.");
+    expect(rpc.sent.filter((t) => t.functionName === 'delegatePredictionPower' && t.args[0] === zeroAddress)).toHaveLength(0); // simulated, never sent
+    // another staker allowed: not checked
+    s.allowed[I] = zeroAddress;
+    expect((await base.refresh()).vault).toMatchObject({ inSync: null });
   });
 
   test('claims: hub.claim when the lens says > 0, the merkle drop with central\'s proof, the airdrop; each on its own', async () => {

@@ -86,7 +86,7 @@ export function home(a) {
 
     <div class="action" data-test="action" data-action="${() => h().action?.id ?? false}" data-tone="${actionTone}" hidden="${() => !h().action}">
       <p data-test="action-text">${() => h().action?.text ?? ''}</p>
-      <button class="primary" data-test="action-button" disabled="${() => !!state.baseBusy}" @click="${() => a.act(h().action)}">${() => (h().action?.do === 'stake' && state.baseBusy === 'stake' ? 'Staking…' : h().action?.button ?? '')}</button>
+      <button class="primary" data-test="action-button" hidden="${() => !h().action?.button}" disabled="${() => !!state.baseBusy}" @click="${() => a.act(h().action)}">${() => (h().action?.do === 'stake' && state.baseBusy === 'stake' ? 'Staking…' : h().action?.button ?? '')}</button>
       ${unlockPrompt(a, 'card', 'stake')}
       <p class="error small" role="alert" hidden="${() => !(state.baseDid === 'stake' && state.baseError)}">${() => state.baseError}</p>
     </div>

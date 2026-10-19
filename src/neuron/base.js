@@ -5,7 +5,7 @@
 // The batch goes at the first check of each UTC round: 10 s after start, at
 // the next round's start (chain time) and at least hourly.
 import { fallback, formatEther, formatGwei, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
-import { createChain, errorText, lockText, same, DOWN, UP, ROUND_S } from '../chain/index.js';
+import { createChain, errorText, lockText, panicOf, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
 import { explainForecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
@@ -60,6 +60,22 @@ export const directionOf = (forecast, latest) => (forecast > latest ? UP : DOWN)
 export const toPoints = (history) => history.map(({ hour, value }) => ({ ts: hour * 3600, value: Number(value) }));
 
 const plainAmount = (wei) => (wei == null ? null : formatEther(wei));
+
+/** What a staking out of sync means, plainly (Home's card, the Wallet card, a refused Unstake). */
+export const OUT_OF_SYNC = "Unstaking will fail until the contract fix. Don't add SATORI to the vault.";
+
+/**
+ * Whether the stake is booked right (the token-hook bug, docs/issues/token-hook-gas-estimate.md): SATORI that reached a
+ * staked vault in a transaction whose hook ran out of gas is in its balance and not in the identity's power, and
+ * unstaking then underflows (Panic 0x11) until the contract fix. Once the identity accepts only this vault
+ * (allowedDelegator == vault) and the vault stakes with it, the vault is its only staker, so the identity's power must
+ * equal the vault's SATORI: under it is out of sync (shortfall: the SATORI not booked). Otherwise other stakers are
+ * possible and nothing is checked (null). → { inSync: true | false | null, shortfall: decimal string | null }
+ */
+export function stakeSync({ staked, allowedDelegator, vault, power, balance }) {
+  if (staked !== 'identity' || !same(allowedDelegator, vault) || power == null || balance == null) return { inSync: null, shortfall: null };
+  return power < balance ? { inSync: false, shortfall: formatEther(balance - power) } : { inSync: true, shortfall: null };
+}
 
 /** A mined batch: stored as the last one, its round from its block (a send at 23:59:59 can land in the next round). */
 async function finish(db, b, mined) {
@@ -229,6 +245,9 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     const gas = s?.gasPrice ? BATCH_GAS * 2n * s.gasPrice : null;
     const batchesLeft = s?.identity.eth != null && gas ? Number(s.identity.eth / gas) : null;
     const vd = s?.vault.delegate; // whom the vault's prediction power goes to (predictionDelegateInfo)
+    const staked = vd == null ? null : same(vd, identity.evmAddress) ? 'identity' : same(vd, zeroAddress) ? 'none' : 'other';
+    const sync = stakeSync({ staked, allowedDelegator: s?.identity.allowedDelegator, vault: vaultAddress, power: s?.identity.power,
+      balance: s?.vault.satori });
     return {
       rpc: made?.rpc ?? [], config: made ? (made.fromCentral ? 'central' : 'bundled') : null,
       localFork: !!made?.local, // a path on this site: the dev server's /rpc, a local fork
@@ -243,7 +262,8 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       vault: {
         address: vaultAddress, eth: plainAmount(s?.vault.eth), satori: plainAmount(s?.vault.satori),
         stakedWith: vd ?? null,
-        staked: vd == null ? null : same(vd, identity.evmAddress) ? 'identity' : same(vd, zeroAddress) ? 'none' : 'other',
+        staked,
+        ...sync, // inSync, shortfall: the stake booked right (stakeSync)
         lock: s?.vault.lock ?? null,
       },
       claimable: { rewards: plainAmount(s?.claimable.rewards), airdrop: plainAmount(s?.claimable.airdrop) },
@@ -359,10 +379,17 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       schedule.arm(now() + FIRST_CHECK_S);
       return r;
     },
-    /** Unstake (needs Unlock). */
+    /** Unstake (needs Unlock). A stake out of sync underflows (Panic 0x11) in the simulate: said plainly, nothing sent. */
     async undelegate() {
       const v = needVault();
-      return act('unstake', (chain, step) => chain.undelegate({ vault: v, onStep: step }));
+      return act('unstake', async (chain, step) => {
+        try {
+          return await chain.undelegate({ vault: v, onStep: step });
+        } catch (err) {
+          if (panicOf(err) === 0x11) throw new Error(`Staking is out of sync. ${OUT_OF_SYNC}`);
+          throw err;
+        }
+      });
     },
 
     /** hub.claim() (the lens says > 0), the merkle drop (central's proof), the airdrop; each on its own. */

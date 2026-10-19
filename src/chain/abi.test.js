@@ -50,8 +50,12 @@ describe(`abi.js matches the deployed contracts (${snapshot.deploy})`, () => {
       for (const item of of(abi[name], 'function')) expect(snapshot.functions[c]).toContain(sig(item));
     });
   }
-  test('every error the ABIs decode is one the contracts raise', () => {
-    for (const item of of(abi.engineAbi, 'error')) expect(snapshot.errors).toContain(sig(item));
+  test('every error the ABIs decode is one the contracts raise (the next release\'s, NEXT_ERRORS, apart)', () => {
+    const next = abi.NEXT_ERRORS.map((e) => e.replace(/^error (\w+)\(\)$/, 'error $1() -> ()'));
+    for (const item of of(abi.engineAbi, 'error')) {
+      if (next.includes(sig(item))) expect(snapshot.errors).not.toContain(sig(item)); // not on D6
+      else expect(snapshot.errors).toContain(sig(item));
+    }
   });
 });
 

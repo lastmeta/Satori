@@ -215,14 +215,29 @@ describe('bad: predictions are failing', () => {
   });
 });
 
-describe('warn: predicting, but something needs you', () => {
-  test('not staked while the vault holds SATORI', () => {
+const STAKE_TEXT = "Stake with this neuron to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. "
+  + 'A known contract issue can block unstaking; a fix is coming in the next contract release.';
+
+describe('staking while the contract bug is live (docs/issues/token-hook-gas-estimate.md)', () => {
+  test('not staked while the vault holds SATORI: advice, the Stake card saying the risk; the hero calm, the chip off', () => {
     const h = health({ base: base({ vault: { satori: '100', staked: 'none' } }) });
-    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Network is fine. The Satori contract needs one step from you.' });
-    expect(h.action).toEqual({ id: 'stake', text: "Your vault's SATORI isn't earning on the Satori contract. Stake with this neuron.",
-      button: 'Stake', do: 'stake' });
-    expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Not staked' });
+    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h' });
+    expect(h.reasons).toEqual([{ id: 'stake', status: 'advice', channel: 'contract', text: STAKE_TEXT }]);
+    expect(h.action).toEqual({ id: 'stake', text: STAKE_TEXT, button: 'Stake', do: 'stake' });
+    expect(h.channels.contract).toEqual({ state: 'idle', tone: 'off', text: 'Not staked' });
   });
+  test('out of sync (power under the vault\'s SATORI): bad, on the Contract chip; the card explains, with no button; still predicting', () => {
+    const h = health({ base: staked({ vault: { satori: '100.000000000000000001', eth: '0.1', staked: 'identity', inSync: false,
+      shortfall: '0.000000000000000001' } }) });
+    expect(h).toMatchObject({ status: 'bad', tone: 'bad', title: 'Predicting', line: 'The Satori Network is fine. Staking is out of sync.' });
+    expect(h.action).toEqual({ id: 'stake-out-of-sync', text: "Unstaking will fail until the contract fix. Don't add SATORI to the vault." });
+    expect(h.channels.contract).toEqual({ state: 'bad', tone: 'bad', text: 'Out of sync' });
+    // in sync, or not checked (other stakers possible): nothing
+    for (const inSync of [true, null]) expect(ids(health({ base: staked({ vault: { satori: '100', staked: 'identity', inSync } }) }))).toEqual([]);
+  });
+});
+
+describe('warn: predicting, but something needs you', () => {
   test("the identity's gas runs low", () => {
     const h = health({ base: staked({ identity: { power: '100', lowEth: true, batchesLeft: 3, eth: '0.00001' } }) });
     expect(h.action).toMatchObject({ id: 'gas-low', text: 'The identity has gas for about 3 daily batches. Send it a little Base ETH.',
@@ -301,18 +316,22 @@ describe('advice: the card, nothing wrong (never the status, the tone or the lin
       action: { id: 'backup', button: 'Back up' } });
   });
   test('a warn or bad reason with a button keeps the card; the advice waits', () => {
-    const h = health({ storage: { persisted: false }, backedUp: false, base: base({ vault: { satori: '5', staked: 'none' } }) });
-    expect([h.status, h.tone, h.action.id, h.line]).toEqual(['warn', 'warn', 'stake', 'The Satori Network is fine. The Satori contract needs one step from you.']);
+    const h = health({ storage: { persisted: false }, backedUp: false, base: staked({ identity: { power: '100', lowEth: true, batchesLeft: 3, eth: '0' } }) });
+    expect([h.status, h.tone, h.action.id, h.line]).toEqual(['warn', 'warn', 'gas-low', "The Satori Network is fine. The identity's gas is running low."]);
+    // two advice reasons: the first in order, the backup before the stake
+    const two = health({ storage: { persisted: false }, backedUp: false, base: base({ vault: { satori: '5', staked: 'none' } }) });
+    expect([two.status, two.action.id]).toEqual(['ok', 'backup']);
   });
 });
 
 test('each reason\'s level (docs/design/health.md): bad, warn, idle (a calm state), advice (the card only)', () => {
   expect(LEVEL).toEqual({
-    'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad', 'relays-down': 'bad',
-    'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', stake: 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
+    'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad',
+    'stake-out-of-sync': 'bad', 'relays-down': 'bad',
+    'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
     'base-unreachable': 'warn',
     asleep: 'idle', starting: 'idle',
-    backup: 'advice', install: 'advice', 'relay-down': 'advice',
+    backup: 'advice', stake: 'advice', install: 'advice', 'relay-down': 'advice',
   });
   expect(PRIORITY).toEqual(Object.keys(LEVEL)); // highest first: every advice after every warn and bad
 });
@@ -322,7 +341,7 @@ test('the action priority: the worst status; one card, the highest reason that h
   const many = { nostr: n, storage: { persisted: false }, backedUp: false, base: base({ vault: { satori: '5', staked: 'none' } }),
     central: central({ registration: { ok: true, vaultMismatch: 'none' } }) };
   let h = health(many);
-  expect(ids(h)).toEqual(['vault-mismatch', 'stake', 'backup', 'relay-down']);
+  expect(ids(h)).toEqual(['vault-mismatch', 'backup', 'stake', 'relay-down']);
   expect([h.status, h.action.id]).toEqual(['warn', 'vault-mismatch']);
   h = health({ ...many, rows: [...running(), failed(NOW - H, 'Satori Network 401: Invalid signature', { login: true })] });
   expect([h.status, h.action.id, h.title]).toEqual(['bad', 'login-refused', 'Not predicting']);
@@ -331,9 +350,9 @@ test('the action priority: the worst status; one card, the highest reason that h
   expect([h.status, h.tone, h.action.id]).toEqual(['ok', 'idle', 'backup']);
   // asleep, Install offered, and a warn below it: the warn's card
   const rows = [open(NOW - 3 * D, NOW - 3 * D + 2 * H), good(NOW - 3 * D + H), open(NOW - 10 * M, NOW, { gap: 3 * D, missed: true })];
-  h = health({ rows, base: base({ vault: { satori: '5', staked: 'none' } }), app: { installed: false, canInstall: true } });
-  expect([h.status, h.title, h.action.id]).toEqual(['warn', 'Was asleep', 'stake']);
-  expect(h.line).toBe('The Satori contract needs one step from you.'); // central is not "fine" while it catches up
+  h = health({ rows, base: staked({ identity: { power: '5', lowEth: true, batchesLeft: 2, eth: '0' } }), app: { installed: false, canInstall: true } });
+  expect([h.status, h.title, h.action.id]).toEqual(['warn', 'Was asleep', 'gas-low']);
+  expect(h.line).toBe("The identity's gas is running low."); // central is not "fine" while it catches up
 });
 
 test("each channel's last traffic (ms) for agents, when given: null before any", () => {
@@ -394,17 +413,18 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'central-overdue': (i) => ({ ...i, now: NOW + WINDOW_S }), // open WINDOW_S more with nothing sent
     'base-failing': (i) => ({ ...rows(row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' }))(i),
       base: staked({ lastCheck: { at: NOW - H, error: 'HTTP request failed' } }) }),
+    'stake-out-of-sync': (i) => ({ ...i, base: staked({ vault: { satori: '101', eth: '0.1', staked: 'identity', inSync: false, shortfall: '1' } }) }),
     'relays-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }] }) }),
     'central-failed': rows(failed(NOW - 10)),
     'vault-mismatch': reg(mismatch),
     'not-registered': reg({ ok: false, error: 'Satori Network unreachable: Failed to fetch' }),
-    stake: (i) => ({ ...i, base: base({ vault: { satori: '100', staked: 'none' } }) }),
     'gas-low': (i) => ({ ...i, base: staked({ identity: { power: '100', lowEth: true, batchesLeft: 3, eth: '0.00001' } }) }),
     'base-skipped': (i) => ({ ...i, base: staked({ lastCheck: { at: NOW, round: 20742, skipped: 'gas above the ceiling: 3 gwei > 2 gwei' } }) }),
     'base-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null }) }),
     asleep: (i) => i,
     starting: (i) => i,
     backup: (i) => ({ ...i, storage: { persisted: false }, backedUp: false }),
+    stake: (i) => ({ ...i, base: base({ vault: { satori: '100', staked: 'none' } }) }),
     install: (i) => ({ ...i, app: { installed: false, canInstall: true } }),
     'relay-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] }) }),
   };
@@ -423,17 +443,18 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'central-failing':  ['N bad central-failing', 'N bad central-failing', 'N bad central-failing', 'N bad central-failing', 'N bad central-failing', 'N bad central-failing'],
     'central-overdue':  ['N bad central-overdue', 'N bad central-overdue', 'N bad central-overdue', 'N bad central-overdue', X,                       X],
     'base-failing':     ['S bad base-failing',    'B bad base-failing',    'B bad base-failing',    'B bad base-failing',    'B bad base-failing',    'N bad central-failing'],
+    'stake-out-of-sync': ['S bad stake-out-of-sync', 'A bad stake-out-of-sync', 'P bad stake-out-of-sync', 'P bad stake-out-of-sync', 'P bad stake-out-of-sync', 'N bad central-failing'],
     'relays-down':      ['S bad relays-down',     'A bad relays-down',     'P bad relays-down',     'P bad relays-down',     'P bad relays-down',     'N bad central-failing'],
     'central-failed':   ['S warn central-failed', 'A warn central-failed', 'P warn central-failed', 'P warn central-failed', 'P warn central-failed', X],
     'vault-mismatch':   fixable('vault-mismatch'),
     'not-registered':   fixable('not-registered'),
-    stake:              fixable('stake'),
     'gas-low':          fixable('gas-low'),
     'base-skipped':     fixable('base-skipped'),
     'base-unreachable': fixable('base-unreachable'),
     asleep:             [X,                       'A idle –',              'P idle –',              X,                       X,                       X],
     starting:           ['S idle –',              X,                       X,                       X,                       X,                       X],
     backup:             ['S idle backup',         'A idle backup',         'P idle backup',         'P ok backup',           'P warn central-failed', 'N bad central-failing'],
+    stake:              ['S idle stake',          'A idle stake',          'P idle stake',          'P ok stake',            'P warn central-failed', 'N bad central-failing'],
     install:            [X,                       'A idle install',        'P idle install',        X,                       X,                       X],
     'relay-down':       ['S idle relay-down',     'A idle relay-down',     'P idle relay-down',     'P ok relay-down',       'P warn central-failed', 'N bad central-failing'],
   };
@@ -493,7 +514,9 @@ describe('the tone: green while all is well (sky at rest, regular while working,
     expect(ch({ base: staked(), work: { base: e('base', 'send', true) } }).contract).toMatchObject({ tone: 'working' });
     expect(ch({ base: base({ config: null }) }).contract).toMatchObject({ text: 'Connecting…', tone: 'working' });
     expect(ch({ base: staked({ vault: { satori: '100', staked: 'other' } }) }).contract).toMatchObject({ tone: 'off', text: 'Staked elsewhere' });
-    expect(ch({ base: base({ vault: { satori: '100', staked: 'none' } }) }).contract).toMatchObject({ state: 'warn', tone: 'warn' });
+    // not staked with SATORI there: the Stake card is advice, and the chip says it plainly, off
+    expect(ch({ base: base({ vault: { satori: '100', staked: 'none' } }) }).contract).toMatchObject({ state: 'idle', tone: 'off', text: 'Not staked' });
+    expect(ch({ base: staked({ vault: { satori: '101', staked: 'identity', inSync: false } }) }).contract).toMatchObject({ state: 'bad', tone: 'bad' });
     expect(ch({ nostr: nostr({ subscriptions: [sub] }) }).relays).toMatchObject({ tone: 'idle', text: '2 relays' });
     const oneDown = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] });
     expect(ch({ nostr: oneDown, work: { subscribe: e('subscribe', 'find') } }).relays).toEqual({ state: 'advice', tone: 'working', text: '1 of 2 relays down' });

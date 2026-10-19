@@ -167,6 +167,50 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   expect(v).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false } });
 });
 
+test('staking out of sync (the token-hook bug): Home red on the Contract chip, the Wallet card says it, Unstake explains', async ({ context, page }) => {
+  test.setTimeout(180_000);
+  const { s, rpc, central } = await setup(context);
+  central.noVaultBase = true; // a central that does not say whom it pays: no mismatch to read past
+  await openApp(page);
+  await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  const base = await page.evaluate(() => window.satori.base());
+  const V = base.vault.address.toLowerCase();
+  rpc.eth[base.identity.address.toLowerCase()] = 10n ** 17n;
+  rpc.eth[V] = 10n ** 17n;
+  s.balance[V] = 100n * E18;
+  // not staked, with SATORI: the Stake card is advice (the hero stays green) and says the risk before staking
+  await page.evaluate((p) => window.satori.unlock(p), PASS);
+  await page.evaluate(() => window.satori.backup('vault')); // the backup shown: its advice gone, the Stake card's turn
+  await page.evaluate(() => window.satori.base());
+  let h = await page.evaluate(() => window.satori.health());
+  expect(h.reasons.find((r) => r.id === 'stake')).toMatchObject({ status: 'advice' });
+  expect(h.reasons.filter((r) => r.status === 'warn' || r.status === 'bad')).toEqual([]); // nothing amber or red
+  await expect(page.locator('[data-test=action-text]')).toContainText('A known contract issue can block unstaking; a fix is coming in the next contract release.');
+  await page.evaluate(() => window.satori.stake());
+  expect((await page.evaluate(() => window.satori.base())).vault).toMatchObject({ staked: 'identity', inSync: true });
+
+  s.skipHook(V, 1n); // anyone sends the staked vault 1 wei with the bare gas estimate: its hook runs out of gas
+  expect((await page.evaluate(() => window.satori.base())).vault).toMatchObject({ inSync: false, shortfall: '0.000000000000000001' });
+  h = await page.evaluate(() => window.satori.health());
+  expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'The Satori Network is fine. Staking is out of sync.',
+    action: { id: 'stake-out-of-sync', text: "Unstaking will fail until the contract fix. Don't add SATORI to the vault." },
+    channels: { contract: { state: 'bad', text: 'Out of sync' } } });
+  expect(h.action).not.toHaveProperty('button');
+  await expect(page.locator('[data-test=chip][data-channel=contract] [data-test=chip-text]')).toHaveText('Out of sync');
+  await expect(page.locator('[data-test=action-button]')).toBeHidden();
+  await go(page, 'wallet');
+  await expect(fact(page, 'sync')).toHaveText("Staking is out of sync. Unstaking will fail until the contract fix. Don't add SATORI to the vault.");
+  await expect(fact(page, 'staking')).toHaveText('Staked: 100 SATORI with this neuron · out of sync');
+  // Unstake: the simulate underflows (Panic 0x11); the plain words, not "reverted: Panic", and nothing sent
+  const before = rpc.sent.length;
+  await page.getByRole('button', { name: 'Unstake' }).click();
+  await expect(fact(page, 'action-error')).toHaveText("Staking is out of sync. Unstaking will fail until the contract fix. Don't add SATORI to the vault.",
+    { timeout: 30_000 });
+  expect(rpc.sent.length).toBe(before);
+  await expect(page.evaluate(() => window.satori.unstake())).rejects.toThrow('Staking is out of sync.');
+});
+
 test('the Base settings: the RPC (https or a path on this site; empty is the default) and the batch\'s max fee', async ({ context, page }) => {
   await setup(context);
   await openApp(page);

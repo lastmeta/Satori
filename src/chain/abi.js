@@ -15,7 +15,13 @@ const ERRORS = [
   'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
   'error ERC20InvalidReceiver(address receiver)',
 ];
-const abi = (...items) => parseAbi([...items, ...ERRORS]);
+/**
+ * Errors the next contracts raise and D6 does not (abi.test.js leaves them out of the D6 check): a transfer whose hook
+ * ran out of gas reverts instead of skipping a staker's sync (contract humble 86e2bdb3, live once D7 deploys;
+ * docs/issues/token-hook-gas-estimate.md).
+ */
+export const NEXT_ERRORS = ['error HookFailedWithoutReason()'];
+const abi = (...items) => parseAbi([...items, ...ERRORS, ...NEXT_ERRORS]);
 
 export const engineAbi = abi(
   'struct Request { uint32 gameId; bytes payload; }',

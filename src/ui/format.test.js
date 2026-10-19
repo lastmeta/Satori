@@ -124,6 +124,7 @@ test('Base: amounts, the stake, the transfer rule (sent from round N + 1 at 00:0
   expect(fmtUtc(20743 * 86400)).toBe('Oct 17, 00:00 UTC');
   const v = { identity: { power: '100' }, vault: { staked: 'identity', stakedWith: '0xI' } };
   expect(delegationText(v)).toBe('Staked: 100 SATORI with this neuron');
+  expect(delegationText({ ...v, vault: { ...v.vault, inSync: false } })).toBe('Staked: 100 SATORI with this neuron · out of sync');
   expect(delegationText({ ...v, vault: { staked: 'none' } })).toBe('Not staked');
   expect(delegationText({ ...v, vault: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this neuron');
   expect(delegationText(null)).toBe('–');

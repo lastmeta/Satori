@@ -20,6 +20,11 @@ const mc3 = [...multicall3Abi, ...parseAbi([ // the app's reads, and aggregate3,
 
 class Revert extends Error {}
 export const revert = (name = '') => { throw Object.assign(new Revert(name || 'revert'), { errorName: name }); };
+/** Solidity's Panic(uint256): 0x11 is an arithmetic underflow or overflow. */
+export const panic = (code) => {
+  const raw = encodeErrorResult({ abi: [{ type: 'error', name: 'Panic', inputs: [{ type: 'uint256', name: 'code' }] }], errorName: 'Panic', args: [BigInt(code)] });
+  throw Object.assign(new Revert(`panic ${code}`), { errorName: 'Panic', raw });
+};
 
 class RpcError extends Error {
   constructor(code, message, data) {
@@ -48,6 +53,7 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
     from: from?.toLowerCase(), write, value, now: now(), round: Math.floor(now() / 86400), hour: Math.floor(now() / 3600),
   });
   const errorData = (c, e) => {
+    if (e.raw) return e.raw;
     if (!e.errorName) return '0x';
     try { return encodeErrorResult({ abi: c.abi, errorName: e.errorName }); } catch { return '0x'; }
   };

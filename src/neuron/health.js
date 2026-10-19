@@ -21,11 +21,12 @@ export const FEED = 20;
  * bad, warn or idle; the card is the first with an action, so advice only when no warn or bad has one.
  */
 export const LEVEL = {
-  'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad', 'relays-down': 'bad',
-  'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', stake: 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
+  'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad',
+  'stake-out-of-sync': 'bad', 'relays-down': 'bad',
+  'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
   'base-unreachable': 'warn',
   asleep: 'idle', starting: 'idle',
-  backup: 'advice', install: 'advice', 'relay-down': 'advice',
+  backup: 'advice', stake: 'advice', install: 'advice', 'relay-down': 'advice',
 };
 export const PRIORITY = Object.keys(LEVEL);
 export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
@@ -207,9 +208,17 @@ function baseReasons({ rows, base }) {
     }
   }
   if (base.error || !base.config) return out;
+  // advice while the contract bug is live (docs/issues/token-hook-gas-estimate.md): the card offers it and says the risk;
+  // the chip keeps the plain "Not staked" (off)
   if (d === 'none' && Number(base.vault.satori) > 0) {
-    out.push(reason('stake', 'contract', { line: 'The Satori contract needs one step from you.', chip: 'Not staked',
-      text: "Your vault's SATORI isn't earning on the Satori contract. Stake with this neuron.", button: 'Stake', act: { do: 'stake' } }));
+    out.push(reason('stake', 'contract', { text: "Stake with this neuron to earn on the Satori contract. While staked, your SATORI can't be "
+      + 'sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.',
+    button: 'Stake', act: { do: 'stake' } }));
+  }
+  // the vault is the identity's only staker, and its SATORI is more than the power booked: unstaking underflows until the fix
+  if (d === 'identity' && base.vault?.inSync === false) {
+    out.push(reason('stake-out-of-sync', 'contract', { line: 'Staking is out of sync.', chip: 'Out of sync',
+      text: "Unstaking will fail until the contract fix. Don't add SATORI to the vault." }));
   }
   if (d === 'identity' && base.identity?.lowEth) {
     const n = base.identity.batchesLeft;
@@ -413,7 +422,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   // The title: is the neuron predicting on the channels that pay? Central (Not predicting wins), and Base when it should
   // be predicting: staked with this neuron, or not read (its RPC down) after a batch went out. Nostr never moves it.
   const d = base?.vault?.staked;
-  const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.channel === 'contract' && r.status === 'bad');
+  const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.id === 'base-failing'); // the batch fails
   const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting' : c.title;
   const top = told[0];
   const centralTop = told.find((r) => r.channel === 'network');
@@ -427,8 +436,9 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
     line = top.channel === 'network' || centralTop ? top.line : `The Satori Network is fine. ${top.line}`;
   }
 
-  const a = reasons.find((r) => r.act);
-  const action = a ? { id: a.id, text: a.text, button: a.button, ...a.act } : null;
+  // the card: the highest reason with words for it, most with a button (one without: what to know, nothing to press)
+  const a = reasons.find((r) => r.text);
+  const action = a ? { id: a.id, text: a.text, ...(a.act ? { button: a.button, ...a.act } : {}) } : null;
   const doing = leading(work);
   return {
     status, tone: toneOf(status, leading(work, HERO)), title, line, action,

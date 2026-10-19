@@ -119,7 +119,7 @@ async function phoneChecks(page, width, height) {
   expect(fold.answer, `Home's first screen at ${width} × ${height}`).toBeLessThanOrEqual(fold.bar);
 }
 
-test('ok, then warn (Stake from the action card, with the inline Unlock), then ok on Base too', async ({ context, page }) => {
+test('ok, then the Stake card (advice, the risk said; the inline Unlock), then ok on Base too, then warn (gas low)', async ({ context, page }) => {
   test.setTimeout(240_000);
   const { s, rpc, central } = await setup(context);
   await seed(page, month(nowS(), { closed: [6, 7], part: [3] }));
@@ -163,17 +163,19 @@ test('ok, then warn (Stake from the action card, with the inline Unlock), then o
   await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Checked the Satori Network: up to date' })).toHaveCount(1);
   await page.setViewportSize({ width: 1280, height: 900 });
 
-  // The vault gets SATORI: Base needs one step from the person. One card, one button.
+  // The vault gets SATORI: staking is offered as advice while the contract bug is live (the hero stays green), and the
+  // card says the risk before staking. One card, one button.
   s.balance[st.vault.address.toLowerCase()] = 100n * E18;
   await page.evaluate(() => window.satori.base());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Network is fine. The Satori contract needs one step from you.',
-    action: { id: 'stake', text: "Your vault's SATORI isn't earning on the Satori contract. Stake with this neuron.", button: 'Stake', do: 'stake' },
-    channels: { contract: { state: 'warn', text: 'Not staked' } } });
-  await expect(hero(page)).toHaveAttribute('data-s', 'warn');
+  expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 11 h',
+    action: { id: 'stake', button: 'Stake', do: 'stake', text: "Stake with this neuron to earn on the Satori contract. While staked, your SATORI "
+      + "can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." },
+    channels: { contract: { state: 'idle', tone: 'off', text: 'Not staked' } } });
+  await expect(hero(page)).toHaveAttribute('data-s', 'ok');
   await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'stake');
   await expect(page.locator('[data-test=claimable-amount]')).toHaveText('0');
-  await shots(page, 'warn');
+  await shots(page, 'stake');
   await phoneChecks(page, 360, 740); // with the action card, the answer still fits
   await page.setViewportSize({ width: 1280, height: 900 });
 
@@ -194,6 +196,17 @@ test('ok, then warn (Stake from the action card, with the inline Unlock), then o
   expect(h).toMatchObject({ status: 'ok', channels: { contract: { state: 'ok', text: `Round ${ROUND} sent` } } });
   const texts = h.feed.map((f) => f.text);
   expect(texts.indexOf(`Satori contract batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Staked with this neuron')); // newest first
+
+  // Staked, the identity's gas runs low: something needs the person (amber), and the card goes to the Wallet.
+  rpc.eth[st.identity.address.toLowerCase()] = 10n ** 12n;
+  await page.evaluate(() => window.satori.base());
+  h = await health(page);
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "The Satori Network is fine. The identity's gas is running low.",
+    action: { id: 'gas-low', button: 'Add gas', do: 'go', tab: 'wallet' } });
+  await expect(hero(page)).toHaveAttribute('data-s', 'warn');
+  await shots(page, 'warn');
+  rpc.eth[st.identity.address.toLowerCase()] = 10n ** 17n;
+  await page.evaluate(() => window.satori.base());
 
   // Base's RPC goes down while central is fine: the batch check fails twice, Base is red, and the neuron predicts
   // only in part (it read a red "Predicting"); Home and health() say the same

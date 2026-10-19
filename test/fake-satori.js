@@ -10,7 +10,7 @@ import { zeroAddress } from 'viem';
 import * as abi from '../src/chain/abi.js';
 import { DEFAULTS } from '../src/chain/config.js';
 import { INDEFINITE, HISTORY } from '../src/chain/index.js';
-import { fakeRpc, revert } from './fake-rpc.js';
+import { fakeRpc, revert, panic } from './fake-rpc.js';
 
 export const E18 = 10n ** 18n;
 
@@ -39,8 +39,16 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     airdrop: {}, // vested and unclaimed
     merkle: { drop: {}, minted: {}, available: null }, // drop: addr → { amount, proof }; available: the lane's reserve (null: plenty)
     weights: { 1: E18 }, // gameId → voting weight (the engine pays only games with weight, SatoriEngine.sol:828)
+    short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
   };
-  const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n);
+  const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n) - (s.short[a] ?? 0n);
+  /** SATORI to a staked address in a transaction whose hook ran out of gas: the balance moves, the booked power does not. */
+  s.skipHook = (to, amount) => {
+    const a = lc(to);
+    s.balance[a] = (s.balance[a] ?? 0n) + amount;
+    const d = s.delegateOf[a];
+    if (d && d !== zeroAddress) s.short[d] = (s.short[d] ?? 0n) + amount;
+  };
   const fee = (a) => ({ 0: 1000, 1000: 0 })[s.feeStored[a] ?? 0] ?? s.feeStored[a];
   const latestHour = (st) => st.history.at(-1)?.hour ?? 0;
 
@@ -92,6 +100,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     const current = s.delegateOf[user] ?? zeroAddress;
     if (current === zeroAddress && (s.lock[user] ?? 0) > ctx.round && d !== zeroAddress) revert('Locked');
     if (current !== zeroAddress && d !== zeroAddress && s.predicted[`${current}:${ctx.round}`]) revert('DelegateActive');
+    // leaving subtracts the live balance from the booked power (SatoriRewards.sol:1884): under it, Panic 0x11
+    if (current !== zeroAddress && (s.short[current] ?? 0n) > 0n) panic(0x11);
     if (!ctx.write) return;
     s.delegateOf[user] = d;
     if (d !== zeroAddress) s.lock[user] = INDEFINITE;

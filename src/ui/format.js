@@ -183,7 +183,7 @@ export function amountText(x, unit) {
 /** The vault's stake in a few words. */
 export function delegationText(v) {
   const d = v?.vault?.staked;
-  if (d === 'identity') return `Staked: ${amountText(v.identity.power, 'SATORI')} with this neuron`;
+  if (d === 'identity') return `Staked: ${amountText(v.identity.power, 'SATORI')} with this neuron${v.vault.inSync === false ? ' · out of sync' : ''}`;
   if (d === 'none') return 'Not staked';
   if (d === 'other') return `Staked with ${v.vault.stakedWith}, not this neuron`;
   return '–';

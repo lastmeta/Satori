@@ -9,6 +9,7 @@ import {
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
 import { workText } from '../neuron/work.js';
+import { OUT_OF_SYNC } from '../neuron/base.js';
 
 const BUSY = { stake: 'Staking…', unstake: 'Unstaking…', claim: 'Claiming…', send: 'Sending…' };
 
@@ -41,6 +42,7 @@ export function walletTab(a) {
     </header>
     <div class="muted small" title="${() => (b().config === 'central' ? 'The Satori contract\'s addresses from the Satori Network' : 'Built-in Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>
+    <p class="error small" role="alert" data-test="base-sync" hidden="${() => b().vault.inSync !== false}">Staking is out of sync. ${OUT_OF_SYNC}</p>
     <dl class="facts">
       ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
       ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}
@@ -58,7 +60,7 @@ export function walletTab(a) {
       <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
       <button data-test="base-claim" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
     </div>
-    <p class="muted small">Staking lets this neuron predict with your vault's SATORI every round. The SATORI stays in the vault and earns; it can't be sent while staked, or through the round after you unstake.</p>
+    <p class="muted small" data-test="base-stake-note">Staking lets this neuron predict with your vault's SATORI every round. The SATORI stays in the vault and earns; it can't be sent while staked, or through the round after you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.</p>
     <form class="send" @submit="${(e) => a.baseSend(form(e), e.target)}">
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>

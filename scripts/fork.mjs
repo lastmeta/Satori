@@ -32,6 +32,9 @@ A local anvil fork of Base Sepolia; the dev server's /rpc goes to 127.0.0.1:8545
   advance [days]                 move chain time forward (1 day by default) and mine a block
   predict [up|down]              the deployer predicts the default game (moves its next value)
   stream [name]                  anyone's new stream (a 0.001 SATORI burn) with one value: its game has no voting weight
+  grief <0x…>                    the token-hook bug: 1 wei of SATORI to the address with the bare gas estimate, as any wallet
+                                 sends it; a staked vault's stake is then out of sync and it can't unstake
+                                 (docs/issues/token-hook-gas-estimate.md)
 
 Fund a neuron to predict on Base (its prediction power is the vault's SATORI, staked with this neuron):
   node scripts/fork.mjs fund <identity 0x…>               gas for the daily batch
@@ -116,6 +119,28 @@ export async function advance(rpc, days = 1) {
 export const predict = (rpc, dir = 'up') =>
   asDeployer(rpc, DEFAULTS.engine, 'predictMultipleWithPayloads', [[{ gameId: 1, payload: encodePacked(['uint8'], [dir === 'down' ? 2 : 1]) }]]);
 
+/**
+ * The token-hook bug (docs/issues/token-hook-gas-estimate.md): 1 wei of SATORI from the deployer to `address`, sent with
+ * the node's bare gas estimate (no HOOK_GAS), as any wallet or library sends it. The hook runs out of gas and is
+ * swallowed, so a staked address's SATORI is no longer all in its delegate's power. → { hash, events }
+ */
+export async function grief(rpc, address) {
+  const { test, pub, deployer } = clients(rpc);
+  await test.impersonateAccount({ address: DEPLOYER });
+  await test.setBalance({ address: DEPLOYER, value: parseEther('10') });
+  const call = { account: DEPLOYER, address: DEFAULTS.token, abi, functionName: 'transfer', args: [address, 1n] };
+  const { request } = await pub.simulateContract(call);
+  const gas = await pub.estimateContractGas(call);
+  const hash = await deployer.writeContract({ ...request, gas });
+  const r = await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+  if (r.status !== 'success') throw new Error(`transfer failed (${hash})`);
+  const events = r.logs.map((l) => ({ address: l.address, topic: l.topics[0] }))
+    .filter((l) => [HOOK_FAILED, CHILD_SYNC_FAILED].includes(l.topic)).map((l) => (l.topic === HOOK_FAILED ? 'TransferHookFailed' : 'ChildSyncFailed'));
+  return { hash, gas: Number(gas), events };
+}
+const HOOK_FAILED = keccak256(new TextEncoder().encode('TransferHookFailed(address,address,uint256)'));
+const CHILD_SYNC_FAILED = keccak256(new TextEncoder().encode('ChildSyncFailed(address,address,address,uint256)'));
+
 /** A new stream from the deployer (hub.createSimpleDataStream burns 0.001 SATORI) with one value. → { streamId, gameId } */
 export async function stream(rpc, name) {
   await asDeployer(rpc, DEFAULTS.token, 'approve', [DEFAULTS.hub, parseEther('1')]);
@@ -189,6 +214,7 @@ async function main() {
     case 'advance': await advance(rpc, args[0] ?? 1); console.log(`advanced ${args[0] ?? 1} day(s)`); break;
     case 'predict': console.log(await predict(rpc, args[0])); break;
     case 'stream': console.log(JSON.stringify(await stream(rpc, args[0] ?? `junk-${Date.now()}`))); break;
+    case 'grief': console.log(JSON.stringify(await grief(rpc, args[0]))); break;
     default:
       console.log(USAGE);
       process.exitCode = cmd ? 1 : 0;

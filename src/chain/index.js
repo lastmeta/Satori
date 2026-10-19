@@ -104,10 +104,21 @@ export function revertName(err) {
   return rev.raw !== undefined || /revert/i.test(rev.reason ?? '') ? 'reverted' : null;
 }
 
-/** An error in a line: the contract's error name, else viem's short message. */
+/** A Solidity panic's code (0x11: an arithmetic underflow or overflow), or null when it is not a panic. */
+export function panicOf(err) {
+  const rev = err instanceof BaseError && err.walk((e) => e instanceof ContractFunctionRevertedError);
+  return rev?.data?.errorName === 'Panic' ? Number(rev.data.args?.[0]) : null;
+}
+
+/** Contract errors said in plain words. */
+const PLAIN = {
+  HookFailedWithoutReason: 'The transaction ran out of gas; try again', // the next contracts' starved transfer (abi.js NEXT_ERRORS)
+};
+
+/** An error in a line: the contract's error name (or its plain words), else viem's short message. */
 export function errorText(err) {
   const name = revertName(err);
-  if (name) return `reverted: ${name}`;
+  if (name) return PLAIN[name] ?? `reverted: ${name}`;
   return String(err?.shortMessage ?? err?.message ?? err).split('\n')[0];
 }
 
