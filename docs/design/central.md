@@ -50,8 +50,9 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 Not used (dropped from Lite): the `checkinCheck` watchdog and restarts
 (`start.py:4883-4892`), `/auth/refresh` and its timer (`server.py:120-140`), the
 10-minute reconnect delay (`start.py:4902-4908`), `setMiningMode` (a route
-central no longer has), the reward address, stake and pool routes, and about 90
-other `server.py` methods for routes central-lite does not serve.
+central no longer has), the stake and pool routes, and about 90
+other `server.py` methods for routes central-lite does not serve. The reward
+address is used ([below](#the-reward-address)).
 
 ## Endpoints
 
@@ -64,6 +65,7 @@ other `server.py` methods for routes central-lite does not serve.
 | `POST /api/v1/auth/login` (headers `wallet-pubkey`, `message`, `signature`: EIP-191) → `{access_token, expires_in: 3600, …}` | signature | `c/auth.py:21-86`, `central/src/utils/auth.py:20-56` | before each submission, once more on a 401 |
 | `POST /api/v1/predictions/batch` → `{total_submitted, successful, failed, prediction_ids, errors}` | Bearer | `c/main.py:483-602`; schema `central/src/models/schemas.py:92-113` | right after each poll, when anything is pending |
 | `GET /api/v1/peer/relays` → `[{relay_url, nostr_pubkey, …}]`; `GET /api/v1/peer/relay-config` → `{max_streams}` | none | `central/src/api/v1/endpoints/peer.py:123-173` | Nostr ([nostr.md](nostr.md)): relays at start and hourly, the config once per start |
+| `GET /api/v1/peer/reward-address` → `{reward_address}`; `POST` the same with `{"reward_address": "0x…" \| null}` → the stored one | Bearer (the login's) | `central/src/api/v1/endpoints/peer.py:26-120`; the Base check is central's change on `base-upgrade` (2026-10-19) | read after each register that succeeds; set and cleared from Settings ([below](#the-reward-address)) |
 
 Central silently maps an unknown `stream_uuid` to its `bitcoin` stream
 (`c/main.py:536-551`), so the browser only submits uuids it received.
@@ -181,6 +183,82 @@ address swapped in by the browser, on a phone:
 [Home](../screenshots/vault-mismatch-phone.png),
 [the Central card](../screenshots/vault-mismatch-central-phone.png).
 
+## The reward address
+
+The owner (2026-10-19, [../intent/INTENT.md](../intent/INTENT.md)): "We need
+to be able to specify a reward address, in the settings or in the wallet."
+It is where the Satori Network sends this neuron's rewards instead of the
+vault, such as a pool. Satori is Base only, so it is a Base (0x) address.
+With none set, rewards go to the vault (register's `vault_base_address`,
+[above](#the-vault-in-registers-answer)). It has nothing to do with staking:
+Stake with this neuron gives the vault's prediction power on the Satori
+contract; the reward address only says where the Satori Network pays.
+
+**Where: Settings › Reward address**, a card of its own after Keys and
+Backup (`#settings-reward`). Not the Wallet: the Wallet is the Base card,
+the vault's balances and its transactions, each one asking for the
+passphrase and using gas. The reward address is none of that: the Satori
+Network keeps it, the identity signs it on its own, it is free, and it is
+set and forgotten. The UI intent puts addresses and endpoints behind
+Settings ([../intent/ui.md](../intent/ui.md)), next to the vault's address
+that it replaces as the payee.
+
+**The calls** (central `peer.py:26-120`): `GET /api/v1/peer/reward-address`
+→ `{"reward_address": "0x…" | null}`, and `POST` the same path with
+`{"reward_address": "0x…"}` to set it (central stores it EIP-55
+checksummed and answers it) or `{"reward_address": null}` to clear it. Both
+are signed in: the identity's login (the challenge, EIP-191,
+[below](#login-signature)), then `Authorization: Bearer`, and a 401 logs in
+again and retries once, as the predictions batch does. Central answers 400
+"Invalid Base address" for anything that is not a 20-byte 0x address, and
+for the zero address. Lite reads it without a login
+(`?wallet_pubkey=`, satorilib `server.py:878`) and keeps a copy in its
+config, synced on each start (`start.py:5020-5085`); this app keeps no copy:
+the Satori Network's answer is the one source.
+
+**When it is read**: after each register that succeeds (every page load, a
+change of the Satori Network's address, the register before a poll after a
+failed one), and by `window.satori.rewardAddress()`. Never in a loop.
+
+**Checked before any call** (`src/neuron/reward.js`, `checkRewardAddress`):
+trimmed; `0x` and 40 hex characters; a mixed-case address must match its
+EIP-55 checksum (viem's `isAddress`, strict, as Send's recipient); not the
+zero address; sent checksummed (viem's `getAddress`). An empty field is not
+a clear: Clear is its own button (and `setRewardAddress(null)` or `''`).
+The words: "A reward address is a Base address: 0x and 40 hex characters.",
+"That address's capital letters don't match its checksum: check it for a
+typo.", the zero address's (as Send's).
+
+**Central's answer** (`rewardFrom`): a 0x address is shown checksummed;
+null, `''` or anything else (central may still hold a value from before
+Base until its migration runs) is **not set**: rewards go to the vault.
+Such an old value is never shown, and it never breaks the card.
+
+**Shown**: "Not set · rewards go to your vault", or the address shortened
+(`0x3a91ec…B6E7`, the full one in its hover) with Copy; while it is read,
+"Reading it from the Satori Network…"; when it could not be read, the error
+with Try again. A field for a new one, **Save**, and **Clear** (only while
+one is set). Save and Clear say "Saving…", "Clearing…", and the card's line
+says each step at Home's pace (`src/ui/hold.js`): "Signing in to the Satori
+Network…", "Saving the reward address…" (or "Clearing the reward
+address…"), then "Saved: the Satori Network sends this neuron's rewards to
+0x…" with the full address, or "Cleared: rewards go to your vault". It is
+the `reward` task in `health().work`, which Home's hero shows too. Errors
+are the check's words, or the Satori Network's ("Satori Network 400:
+Invalid Base address", "Satori Network unreachable: …").
+
+**Noted**: like an address change, a reward address set or cleared, from
+Settings or an agent, is a `setting` row, and Home notes it for 24 h
+("Reward address set to 0x…", "Reward address cleared: rewards go to your
+vault"; [health.md](health.md#address-changes)). Saving the same address
+again is not a change.
+
+**Depends on central**: the Base check is central's change on
+`base-upgrade` (2026-10-19). Until central2 is redeployed with it, central2
+checks for its old address kind and answers 400 to every 0x address, which
+Save shows as the Satori Network's error. The app is tested against the
+stub central (`e2e/stub.js`), which answers as the new route.
+
 ## The protocol audit
 
 The owner's direction of 2026-10-16 ("migrate in, never back"): Satori Lite
@@ -283,6 +361,7 @@ relay list and Base's config are read from the new central at once.
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
 | Prediction numbers are sent as JS prints them (`100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`). | Central reads them with `float()`; nothing depends on the layout ([the protocol audit](#the-protocol-audit)). |
 | The register result checks the vault (`vaultMismatch`, with both Base addresses); Lite ignores register's answer (`server.py:402-405`). | Central keeps the first vault registered for an identity and pays that vault's Base address: a mismatch means this vault is not paid ([the vault in register's answer](#the-vault-in-registers-answer)). |
+| The reward address is read signed in (the login's Bearer token), not by `?wallet_pubkey=`; no copy is kept in the app, and it is read after each register, not synced both ways (Lite: `start.py:5020-5085`). | The owner's call (2026-10-19): read it as the app's other signed calls. The Satori Network is the one source, so nothing local can disagree with it ([the reward address](#the-reward-address)). |
 | The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the identity and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
 | Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |
 

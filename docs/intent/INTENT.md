@@ -55,6 +55,11 @@ Set by the owner; quoted where these are the owner's own words.
   pull requests to github.com/lastmeta/Satori are welcome; it and
   `window.satori` stay current with every step.
 - **MIT** licensed.
+- **A reward address (owner, 2026-10-19).** "We need to be able to specify a
+  reward address, in the settings or in the wallet." It is where the Satori
+  Network sends the neuron's rewards instead of the vault, such as a pool: a
+  Base (0x) address. With none set, rewards go to the vault. It has nothing
+  to do with staking.
 - **The neuron is for automatic play.** It predicts on its own, off-chain
   through central and on-chain through the identity's daily Base batch.
   Manual on-chain play belongs to a separate slim app, **Satori Daily**. A
