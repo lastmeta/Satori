@@ -75,7 +75,7 @@ export const relayListEvent = (urls, now) => ({ created_at: now, kind: KIND.RELA
  * 34600 events → the catalog, as discover_datastreams (client.py:809-882):
  * newest per (author, d), tombstones dropped, newest first. Each entry is the
  * announcement's content with the author as `pubkey`, the event's time, and
- * `pred` for prediction streams. Signatures are not checked here.
+ * `pred` for prediction streams. Signatures are checked before (discover: verifyEvent).
  */
 export function catalog(events) {
   const newest = new Map();

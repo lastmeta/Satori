@@ -44,6 +44,7 @@ const TEXT = {
   'claim:drop': () => 'Claiming the reward drop…',
   'claim:airdrop': () => 'Claiming the airdrop…',
   'discover:ask': (e) => `Asking the relays · ${e.done} of ${e.total}`,
+  'discover:verify': (e) => `Checking the announcements' signatures · ${e.done} of ${e.total}`,
   'subscribe:find': () => 'Finding the stream on the relays…',
   'keys:save': () => 'Saving your keys…',
   'train:score': (e) => `Scoring models · ${e.done} of ${e.total}`,

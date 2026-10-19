@@ -2,7 +2,7 @@
 // BIP-340 schnorr, as nostr-sdk makes them for Satori Lite:
 //   nostrPubkey(secretHex) / generateNostrSecret() / npub(pubkeyHex) / nsec(secretHex) / nostrSecretOf(nsecOrHex)
 //   signEvent({ created_at, kind, tags, content }, secretHex) → event
-//   verifyEvent(event) → id and signature check
+//   verifyEvent(event, seen?) → id and signature check (seen: the signatures already checked, a Set)
 import { schnorr } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
@@ -53,13 +53,23 @@ export function signEvent({ created_at, kind, tags, content }, secretHex) {
   return { id, ...e, sig: bytesToHex(schnorr.sign(id, secretHex)) };
 }
 
-/** True when the event is well formed, its id is its hash and its signature is its pubkey's. */
-export function verifyEvent(e) {
+/**
+ * True when the event is well formed, its id is its hash and its signature is its pubkey's. `seen` (a Set) remembers
+ * the (id, pubkey, signature) triples that checked: the id is recomputed every time (a sha256), the costly schnorr
+ * verify (~4 ms in JS) once.
+ */
+export function verifyEvent(e, seen) {
+  if (!(seen instanceof Set)) seen = null; // as a callback (list.every(verifyEvent)) the second argument is an index
   try {
     const ok = HEX64.test(e.id) && HEX64.test(e.pubkey) && /^[0-9a-f]{128}$/.test(e.sig)
       && Number.isSafeInteger(e.created_at) && Number.isSafeInteger(e.kind) && typeof e.content === 'string'
       && Array.isArray(e.tags) && e.tags.every((t) => Array.isArray(t) && t.every((x) => typeof x === 'string'));
-    return ok && eventId(e) === e.id && schnorr.verify(e.sig, e.id, e.pubkey);
+    if (!ok || eventId(e) !== e.id) return false;
+    const key = e.id + e.pubkey + e.sig;
+    if (seen?.has(key)) return true;
+    const good = schnorr.verify(e.sig, e.id, e.pubkey);
+    if (good) seen?.add(key);
+    return good;
   } catch {
     return false;
   }

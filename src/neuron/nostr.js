@@ -25,6 +25,7 @@ const PAGE = 500; // strfry's maxFilterLimit (client.py:72-75)
 const MAX_FILTERS = 200; // strfry's maxReqFilterSize
 const MAX_PAGES = 100;
 const OUTBOX_MAX = 100; // unsubscribes and tombstones waiting for a relay
+const VERIFY_SLICE = 20; // catalog events checked between yields (~4 ms each): the page stays responsive
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const isLocal = (u) => ['localhost', '127.0.0.1', '[::1]'].includes(new URL(u).hostname);
@@ -57,6 +58,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let lastReconcile = -Infinity; // when the last hourly pass began (s)
   let reconciling = null;
   const intakeLine = serial();
+  const checked = new Set(); // catalog signatures checked this page load (verifyEvent's seen)
   const sending = new Set();
   const log = (err) => console.error('[satori] nostr', err);
 
@@ -294,6 +296,25 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     return out;
   }
 
+  /**
+   * The events whose id and signature check (verifyEvent), each id once, in slices with a yield between them (a
+   * catalog of ~1,000 is seconds of schnorr): a relay can forge any provider's announcement, and agents read what
+   * discover() returns (the security review, 2026-10-19). step(done, total) as it goes.
+   */
+  async function genuine(events, step) {
+    const unique = [...new Map(events.filter((e) => typeof e?.id === 'string').map((e) => [`${e.id}:${e.sig}`, e])).values()];
+    const out = [];
+    step(0, unique.length);
+    for (let i = 0; i < unique.length; i++) {
+      if (verifyEvent(unique[i], checked)) out.push(unique[i]);
+      if ((i + 1) % VERIFY_SLICE === 0 || i + 1 === unique.length) {
+        step(i + 1, unique.length);
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    }
+    return out;
+  }
+
   /** The open relays; right after a load, waits up to 10 s for the ones still connecting. */
   async function readable() {
     const connecting = () => [...relays.values()].some((e) => e.relay?.state === 'connecting');
@@ -377,7 +398,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     },
 
     /**
-     * The relays' catalog: newest per (provider, stream), no tombstones;
+     * The relays' catalog: only announcements whose signature checks, newest per (provider, stream), no tombstones;
      * `pred` and `subscribed` marked, and `relays`: the ones that sent it.
      */
     discover: () => progress.run('discover', async (step) => {
@@ -391,8 +412,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         step('ask', ++answered, asked.length);
         return list;
       }))).flat();
+      const signed = await genuine(events, (done, total) => step('verify', done, total));
       const active = new Set((await db.relayStreams({ active: true })).map((r) => r.uuid));
-      return catalog(events).map(({ event, ...s }) => ({ ...s, relays: from.get(event.id),
+      return catalog(signed).map(({ event, ...s }) => ({ ...s, relays: from.get(event.id),
         subscribed: active.has(relayUuid(s.pubkey, s.stream_name)) }));
     }),
 
