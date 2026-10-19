@@ -207,6 +207,38 @@ describe('submitPredictions', () => {
   });
 });
 
+describe('the reward address (peer.py:26-120): signed in, as the predictions batch', () => {
+  const PATH = '/api/v1/peer/reward-address';
+  const ADDR = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';
+  test('read: challenge → identity signs → login → GET with the token alone; the steps said', async () => {
+    const { fetch, calls } = mockFetch({ ...login(), [`GET ${PATH}`]: json(200, { reward_address: ADDR }) });
+    const steps = [];
+    expect(await client(fetch).rewardAddress({ onStep: (s) => steps.push(s) })).toEqual({ reward_address: ADDR });
+    expect(paths(calls)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/auth/login', `GET ${PATH}`]);
+    expect(calls[2].headers).toEqual({ authorization: 'Bearer jwt' });
+    expect(calls[2].body).toBeUndefined();
+    expect(steps).toEqual(['login', 'read']);
+  });
+  test('set: POST { reward_address } as JSON with the token; clear: null', async () => {
+    const { fetch, calls } = mockFetch({ ...login(), [`POST ${PATH}`]: () => json(200, { reward_address: ADDR }) });
+    const steps = [];
+    expect(await client(fetch).setRewardAddress(ADDR, { onStep: (s) => steps.push(s) })).toEqual({ reward_address: ADDR });
+    expect(calls[2]).toMatchObject({ method: 'POST', path: PATH, headers: { authorization: 'Bearer jwt', 'content-type': 'application/json' } });
+    expect(JSON.parse(calls[2].body)).toEqual({ reward_address: ADDR });
+    await client(fetch).setRewardAddress(null, { onStep: (s) => steps.push(s) });
+    expect(calls[5].body).toBe('{"reward_address":null}');
+    expect(steps).toEqual(['login', 'save', 'login', 'clear']);
+  });
+  test('a 401 logs in again and retries once; central\'s refusal keeps its words', async () => {
+    const { fetch, calls } = mockFetch({ ...login(), [`POST ${PATH}`]: [json(401, { detail: 'expired' }), json(200, { reward_address: null })] });
+    expect(await client(fetch).setRewardAddress(null)).toEqual({ reward_address: null });
+    expect(calls.filter((c) => c.path === '/api/v1/auth/login')).toHaveLength(2);
+    const bad = mockFetch({ ...login(), [`POST ${PATH}`]: () => json(400, { detail: 'Invalid Base address' }) });
+    await expect(client(bad.fetch).setRewardAddress(ADDR)).rejects.toMatchObject({ status: 400, message: 'Satori Network 400: Invalid Base address' });
+    expect(bad.calls.filter((c) => c.path === PATH)).toHaveLength(1); // a 4xx is not resent
+  });
+});
+
 describe('transport', () => {
   test(`every call carries a ${TIMEOUT_MS / 1000} s timeout signal`, async () => {
     expect(TIMEOUT_MS).toBeGreaterThanOrEqual(10_000);

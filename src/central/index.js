@@ -5,6 +5,7 @@
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.history(uuid, { limit, since })  // GET /observations/history: one stream's past (beyond Lite; may 404)
 //   await c.submitPredictions(items)         // login (identity) → POST /predictions/batch; one retry on 401
+//   await c.rewardAddress() / c.setRewardAddress(address | null)   // login → GET / POST /peer/reward-address
 //   await c.baseConfig() / c.merkleProof(address)   // Base (docs/design/base.md); 404 is a CentralError
 // Errors are CentralError: status 0 for a timeout or a network failure. A
 // network error, a timeout or a 5xx is resent once.
@@ -122,6 +123,25 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     }
   }
 
+  /**
+   * `send(token)` signed in: a fresh login, then the call with its Bearer token; a 401 logs in again and retries once
+   * (server.py:210). onStep: 'login', then `step` once signed in (Settings' line, src/neuron/work.js).
+   */
+  async function signedIn(send, step, onStep = () => {}) {
+    onStep('login');
+    const token = await login();
+    onStep(step);
+    try {
+      return await send(token);
+    } catch (err) {
+      if (err instanceof CentralError && err.status === 401) return send(await login());
+      throw err;
+    }
+  }
+  const bearer = (token) => ({ authorization: `Bearer ${token}` });
+  const json = (token) => ({ ...bearer(token), 'content-type': 'application/json' });
+  const REWARD = '/api/v1/peer/reward-address';
+
   return {
     url: base,
 
@@ -152,17 +172,18 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     merkleProof: (address) => call('GET', `/api/v1/merkle/proof/${encodeURIComponent(address)}`),
 
     /** Log in, POST the batch; on a 401 log in again and retry once (server.py:210). */
-    async submitPredictions(predictions) {
+    submitPredictions(predictions) {
       const body = JSON.stringify({ predictions });
-      const post = (token) => call('POST', '/api/v1/predictions/batch',
-        { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body);
-      const token = await login();
-      try {
-        return await post(token);
-      } catch (err) {
-        if (err instanceof CentralError && err.status === 401) return post(await login());
-        throw err;
-      }
+      return signedIn((token) => call('POST', '/api/v1/predictions/batch', json(token), body), 'send');
     },
+
+    /**
+     * Where the Satori Network sends this neuron's rewards, as central answers it: { reward_address } (a 0x address, or
+     * null: the vault; src/neuron/reward.js reads it). Signed in (the owner, 2026-10-19; Lite asks by ?wallet_pubkey=).
+     */
+    rewardAddress: ({ onStep } = {}) => signedIn((token) => call('GET', REWARD, bearer(token)), 'read', onStep),
+    /** Set it (a checked 0x address: src/neuron/reward.js) or clear it (null) → the stored { reward_address }. */
+    setRewardAddress: (address, { onStep } = {}) => signedIn((token) => call('POST', REWARD, json(token),
+      JSON.stringify({ reward_address: address ?? null })), address ? 'save' : 'clear', onStep),
   };
 }
