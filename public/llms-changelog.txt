@@ -1,0 +1,601 @@
+# Satori neuron (browser app): what changed, for agents
+
+The history of what changed for agents and for people driving the page,
+newest first. The current reference is /llms.txt; read that first. An entry's
+"below" or "above" meant /llms.txt as it was then.
+
+## Changed 2026-10-19 (hardening; agents' safety; recovery and housekeeping)
+
+- /llms.txt has a **Safety** section (read it first), the reference before
+  this history, which moved here.
+- `status().version`: `browser-<package version>+<git short sha>`, the
+  build's (it was `browser-0.1.0` for every build); register sends it as
+  `neuron-version`, and Settings › This device shows it (`version`).
+- `health().notices`: `[{ at, what: 'central' | 'rpc', text }]`, newest
+  first: a change of the Satori Network's address or of the Base RPC in the
+  last 24 h, from Settings or `setCentral()` / `setBaseRpc()` ("Satori
+  Network address changed to https://central.example", "Base RPC changed to
+  the default, https://sepolia.base.org"). Home shows them quietly under
+  the hero's line (`notices`, `notice-line`); the feed keeps the rows. They
+  never change `status`, `tone`, the card or the day strip.
+- Every transaction (Stake's three, Unstake, the three claims, both sends,
+  the batch) is refused before it is sent when its max fee per gas is over
+  the max fee (`setBaseMaxFee`, 2 gwei by default; it held for the batch
+  only): "Gas is above the max fee: 3 gwei > 2 gwei. Try again later, or
+  raise the max fee in Settings › Satori contract." `quoteSend()` throws it
+  too. Settings' field is "Max fee (gwei)" (it was "Daily batch: max fee
+  (gwei)").
+- A build pins its Base RPC (`VITE_BASE_RPC`; neuron.satorinet.io:
+  `https://sepolia.base.org`, then publicnode): `base().rpc` is that pair,
+  and central's `rpcUrl` and `explorerUrl` never override it. Central's
+  contract addresses are never used: `base().config` `'central'` now means
+  central answered and its addresses were checked; one that differs is a
+  feed line, "The Satori Network's contract addresses differ from the
+  app's (token): the app's are used". viem's CCIP-read is off.
+- `discover()` returns only announcements whose id and signature check: a
+  forged one (another key's, or a changed description) is dropped, and a
+  forged newer one hides nothing. `health().work` may be `{ task:
+  'discover', step: 'verify', done, total }` ("Checking the announcements'
+  signatures · 400 of 1,061").
+- A build's CSP has no `ws:` and has `form-action 'none'`: in a build every
+  `ws://` relay is `blocked` (`error`: "ws:// relays are not allowed in a
+  build: use wss://"); `relays-blocked` now reads "A ws:// relay can't be
+  reached from this page (only wss:// can), so it is left out: it doesn't
+  count as down." The deployment sends HSTS.
+- `elsewhere` waits: the tab says "This tab takes over when that one
+  closes." and, when the other tab closes, starts the neuron itself
+  (`data-screen` goes `loading`, then `home`), with no reload.
+- A new screen, `damaged`: the database file won't open ("Satori's database
+  can't be opened", DuckDB's words in `damaged-error`).
+  `await satori.setAside()` (the button "Set aside and start again",
+  `set-aside`) renames it `satori-mvp.duckdb.corrupt-<time>` (never
+  deleted), opens a fresh one and shows `setup` (`status().setAside`: the
+  new name; `set-aside-notice`), to restore from words or import. Only on
+  the person's request: their keys are in that file.
+- A newer version's database opens in an older build when every migration
+  that build doesn't know is additive; otherwise `fatal`: "This database was
+  written by a newer version of Satori (schema 15; this version knows 13) in
+  a way this version can't read. Reload to get the newer version; offline,
+  connect first." (it was "This database is from a newer version of the
+  app").
+- Relay streams: the engine reads a stream's last 400 cadences (it read all
+  of it: seconds per observation after a year of a 1-minute stream), and
+  older observations are pruned daily; `nostr().subscriptions[].observations`
+  stays the count received. An observation older than that window is not
+  kept.
+- Import: a file over 64 KB is refused before it is read ("wallet.yaml:
+  over 64 KB, so not a Dockerized Neuron file."); one that is not YAML says
+  only "wallet.yaml: not valid YAML (line 5)" (js-yaml's message quoted the
+  file's lines: its words and keys).
+- The backup's 24 words are fixed slots, blanked in place on Hide and Lock.
+
+## Changed 2026-10-19 (honest colours for the contract and the relays)
+
+- `health()` reasons: a new level `note` (words on one channel's chip, never
+  `status`, `tone`, `title`, `line` or the card): `base-unused-unreachable`,
+  the chain not answering while the Satori contract is unused (not staked
+  here, no batch ever sent): the Contract chip `{ state: 'note', tone:
+  'off', text: 'Unreachable' }`, and Home stays green (it was amber,
+  `base-unreachable`, which now needs the contract in use). Such a check's
+  log row is `idle` with `data.unused`, and the day strip leaves it out.
+  `predictBase()`'s result carries `unused: true` then.
+- Relays: one that is `blocked` (ws:// on an https page) is neither down
+  nor counted ("1 relay", not "1 of 2 relays down"); Settings says it once
+  (`relays-blocked`), its line "Not reachable here". `nostr().relays[]`
+  has `downSince` (ms: since when it has not been open, or null); it counts
+  as down only after 10 minutes, so "Every relay is down" waits for that.
+- A Base batch not mined for 10 minutes: its nonce still pending, it is sent
+  again at that nonce with a quarter more fee, within the max fee (warn
+  reason `base-stuck`: "The Satori contract batch is stuck; retrying with a
+  higher fee.", chip "Batch stuck"); past the max fee it is not sent and the
+  card says so, with `do: 'go'` to Settings. `predictBase()` then returns
+  `{ at, round, stuck: { at, fee, replaced } | { at, ceiling, fee, max },
+  skipped: 'stuck: …', pendingAt? }`. `base().pendingBatch`: the batch sent
+  and not mined (`{ round, hash, hashes?, games, nonce, gas, fees, sentAt,
+  stuck? }`) or null.
+
+## Changed 2026-10-19 (saying how it runs)
+
+- Setup and Settings › This device say "Satori works while it's open.
+  Leave it open, or install it, and it predicts on its own."
+  (`runs-while-open`).
+- On a phone (a coarse pointer, or 640 px wide or less) Home's hero line
+  starts "Keep Satori open · " for every step of work, not only sending
+  (`health().work.text` is the step alone, as before).
+- `status().app.addTo`: how this browser adds Satori without an install
+  prompt: `'ios'` (Share › Add to Home Screen, every iOS browser), `'mac'`
+  (Safari: File › Add to Dock), `'android'` (Firefox's menu), or null.
+- `health()`'s advice `install` comes whenever the browser can add Satori
+  and it is not installed (it came only after *Was asleep*), once per
+  device: `action` `{ id: 'install', button: 'Install', do: 'install',
+  dismiss: 'Not now' }`, or the steps with `{ button: 'Got it', do:
+  'dismiss' }` (a person puts it away: `action-dismiss`, or the button).
+- The Base batch's first check runs at once at load when a batch is due
+  (it waited 10 s).
+
+## Changed 2026-10-19 (a first visit you can watch)
+
+- A fresh browser shows Setup at once (`<body data-screen>` = `setup`
+  within seconds), while DuckDB's engine (5.1 MB in brotli, 7.6 gzipped)
+  downloads in the background. `setup()` there waits for it, then stores
+  the keys; the page says "Finishing setup… downloading the engine, 2.5 of
+  5.1 MB" (`setup-wait`) meanwhile.
+- A revisit paints the last visit's Home at once, marked "From your last
+  visit, 2 h ago" (`health-stale`), its hero saying what it waits for
+  ("Opening… starting the engine…"); `data-screen` stays `loading` until the
+  neuron runs, so wait for it as before. Another tab's route shows
+  "Opening…" with the step (`opening`).
+
+## Changed 2026-10-19 (the vault locks on its own; Backup and Send ask for the passphrase each time)
+
+- The vault locks on its own 5 minutes after the last interaction (a key, a
+  tap, the wheel, or a vault call such as `stake()`; never in the middle of
+  one) while it is unlocked or a backup is on screen, and at once on a wake
+  past that time. `status().lockAt`: when (ms since the epoch), or null.
+  The header shows "Locks in 4 min" beside Lock (`lock-in`). Unlock again
+  (`unlock(passphrase)`) when `stake()`, `unstake()` or `claim()` say
+  "Unlock the vault first".
+- An inline Unlock (the passphrase asked in place for Stake, Unstake or
+  Claim while locked) locks the vault again once that action ends.
+- `backup(which, passphrase)` (it was `backup(which)` while unlocked): the
+  passphrase each time, unlocked or not (~0.3 s); all three:
+  `backup(undefined, passphrase)` (or `null`). Without it: "The vault's
+  passphrase is needed: it is asked each time."; a wrong one: "Wrong
+  passphrase". The UI's Backup asks in place every time (`backup-prompt`,
+  "Vault passphrase to show the backup", Show, Cancel); the `backup` inline
+  Unlock slot is gone.
+- `send({ asset, to, amount, passphrase })` (it needed Unlock): the
+  passphrase each time, unlocked or not; the vault is opened for that send
+  alone. The zero address is refused ("The zero address (0x000…000) burns
+  what is sent to it: refused."). New: `quoteSend({ asset, to, amount })` →
+  `{ asset, to, amount, fee: { gas, about, max } }` (no key: the checks,
+  SATORI's transfer lock, the fee in ETH: `about` at the base fee + tip,
+  `max` at the gas limit and the max fee), the review a person should see
+  before a send. The UI's send form ("Send from the vault") opens that
+  review (`send-review`: `review-amount`, `review-to` in full,
+  `review-fee`), then "Vault passphrase to send", Send or Back.
+
+## Changed 2026-10-19 (the Satori Network's reward drop, before it is claimed)
+
+- `base().claimable` → `{ rewards, drop, airdrop, total }` (decimal SATORI;
+  it was `{ rewards, airdrop }`): `drop` is the Satori Network's reward drop
+  still to claim, `max(0, amountWei − alreadyMintedTo(vault))` from
+  central's merkle proof (asked at most hourly) and the chain; 0 when no
+  drop is published or this vault is not in it; null when the central does
+  not serve the route (prod on `main`): unknown, not 0. `total`: the parts
+  known. Home's Claimable rewards is the total (it left the drop out), with
+  the parts above 0 under it (`claimable-parts`, "from the Satori
+  Network"); the Wallet card's Claimable fact lists all three.
+- `base().vault.lowEth`: the vault's ETH is under one transaction's gas.
+  Claim then says "The vault needs a little Base ETH for gas to claim."
+  before trying (no Unlock asked), and `claim()` throws it.
+
+## Changed 2026-10-19 (a tie on Base follows the stream's last move)
+
+- The daily batch's direction when a game's forecast equals the latest
+  value (a `naive` or no-opinion model): UP if the stream's most recent
+  change was up, DOWN if down; a history with no change at all (flat, or
+  one value) stays DOWN. A forecast above or below the latest is unchanged.
+  The Docker neuron answers DOWN on every tie. D6's default stream (two
+  values, 0 then its first) now gets UP from a `naive` neuron.
+- `base().lastBatch.games[].rule` (and `lastCheck.sent.games[].rule`):
+  `'forecast'`, `'last-move'` or `'flat'`, which rule decided the direction
+  (absent in a batch stored before). `model(id)`'s Base destination `ref`
+  carries it too, and the drill-in says "UP (a tie: its last move)",
+  "DOWN (a tie, flat)".
+
+## Changed 2026-10-19 (staking while the contract bug is live)
+
+The token-hook bug (docs/issues/token-hook-gas-estimate.md) is live on D6
+until D7: SATORI sent to a staked vault with a normal gas estimate (anyone's
+1 wei) is not booked into the identity's power, and unstaking then fails.
+
+- `health()`: the reason `stake` is `advice` (it was `warn`): Home is not
+  amber for an unstaked vault; the card (button "Stake", `do: 'stake'`)
+  says "Stake with this neuron to earn on the Satori contract. While
+  staked, your SATORI can't be sent until you unstake. A known contract
+  issue can block unstaking; a fix is coming in the next contract
+  release." The Contract chip stays "Not staked" (`tone: 'off'`).
+- `base().vault.inSync`: `true` (the identity's power equals the vault's
+  SATORI), `false` (under it: out of sync; `vault.shortfall`, decimal
+  SATORI) or `null` (not checked: the identity accepts other stakers too,
+  not staked here, or not read). `false` is the `bad` reason
+  `stake-out-of-sync`: line "Staking is out of sync.", the Contract chip
+  "Out of sync", and an `action` with only `{ id, text }` ("Unstaking will
+  fail until the contract fix. Don't add SATORI to the vault."): no
+  `button`, no `do`. `action.button` and `do` are absent only there.
+- `unstake()` out of sync rejects with "Staking is out of sync. Unstaking
+  will fail until the contract fix. Don't add SATORI to the vault." (it was
+  "reverted: Panic"); nothing is sent.
+- On D7, a transfer whose hook runs out of gas reverts with
+  `HookFailedWithoutReason`; errors say "The transaction ran out of gas;
+  try again".
+- `node scripts/fork.mjs grief <0x…>`: 1 wei of SATORI with the bare
+  estimate on the local fork (reproduces the freeze).
+- `title` "Partly predicting" comes only from `base-failing` (the batch
+  failing); a stake out of sync still predicts.
+
+## Changed 2026-10-19 (failures retried in minutes; red only after a real cycle)
+
+- A failed cycle (its poll or its submission failed, or central took none
+  of the batch) is tried again 2, 10 and 30 min later, then on the 11 h
+  rhythm (whose try, if it fails, gets the same three); at once when the
+  browser goes back `online`. A good cycle sets the next poll 11 h after it.
+  It used to wait 11 h. `status().central.failures`: failed cycles in a row
+  (0 after a good one); `nextPoll` is the retry's time. Both survive a
+  reload.
+- `status().central.lastPoll` and `lastSubmit` carry `unreachable: true`
+  when central was not reached at all (a network error or a timeout).
+- `health()`: a failure stays `warn` (`central-failed`) while it retries, and
+  is `bad` (`central-failing`) only once nothing good went out for 12 h of
+  open time (1 h for a new neuron's first); two quick failures used to be
+  `bad`. The words name what failed: line "Sending failed; next try in
+  2 min." ("Couldn't reach the Satori Network; …", "The poll failed; …",
+  "…; trying again now…" while it polls), red "Nothing sent for 13 h:
+  sending failed."; the Network chip "Sending failed", "Unreachable",
+  "Poll failed" ("Last poll failed" and "2 failed in a row" are gone).
+  `login-refused` and `db-error` are still `bad` at once.
+- Register: while the last register failed, each poll registers first (its
+  step `register`), until it succeeds. `not-registered`'s action is
+  `do: 'poll'`, button "Try again" (it was `reload`).
+
+## Changed 2026-10-19 (catch-up after the device sleeps)
+
+- A device that sleeps with the page open (a closed lid, a phone's screen
+  off, a suspended tab) catches up within one heartbeat (30 s) of waking,
+  and at once when the tab becomes visible, is restored from the
+  back-forward cache, is thawed, or goes back online: every job whose time
+  has passed and isn't running runs then (central's poll, the Base batch
+  check, a relay's reconnect and the hourly relay pass, the training pass).
+  Browser timers don't count sleep, so before this a due poll could wait up
+  to 11 h of awake time.
+- `health()`: "Catching up now…" and "Getting its first predictions…" (and
+  the chips' "Catching up now…", "First poll now…") only while central's
+  work runs (`status().central.polling`, or `work.task` `central`). Due and
+  not yet running: "Catching up soon." / "First predictions soon." (chips
+  "Catching up soon", "First poll soon"). Any time that has passed reads
+  "soon", never "now": "next soon".
+
+## Changed 2026-10-18 (the Models filters are toggles; "All" is gone)
+
+- `models-filter-all` is gone. `models-filter-network`, `-contract` and
+  `-relays` are toggles (`aria-pressed`), all on at first: a click turns one
+  off or on again, and the list shows the models whose predictions go to
+  any one that is on. The last one on stays on (a click on it does
+  nothing). Not kept: each visit to the tab starts with all three on.
+  `models()` is unchanged (it is every model, whatever the filters).
+
+## Changed 2026-10-18 (Retrain: keep training a model until it beats no change)
+
+- New: `await satori.retrain(id)` keeps training one Satori Network model
+  (central's; `id` as `model(id)` takes it) until a candidate beats no
+  change, then stops; it resolves when it ends with its status. From stored
+  history only: it never predicts, never submits, never calls central. A
+  new champion is used from the next prediction (the next new observation).
+  `await satori.stopRetrain(id)` ends it at its next try and keeps the
+  current model. Both throw for a Relays or Contract model (they read only
+  their own stream: nothing to search yet) or without about four weeks of
+  the stream's history.
+- `model(id).retrain` → `{ available, why (null | 'source' | 'history'),
+  running, waiting (null | 'queue' | 'poll'), after (the model it waits
+  behind), tried, best (the best's error ratio to no change on the older
+  origins the search scores), result }`; `result`: the last one, `{ n, at,
+  outcome: 'found' | 'checked' | 'budget' | 'exhausted' | 'stopped' |
+  'error', kept: 'new' | 'current', ratio (the held-out ratio: the tab's
+  quality), was (the champion's), tried, ms, looked, spec?, from?, note? }`
+  (`note: 'same-data'`: asked again before the stream's next observation;
+  one look at the recent data per observation).
+- How it decides (docs/design/models.md#retrain): it scores candidates on
+  the older backtest origins only, then checks its best once on the newest
+  28 (the tab's), which it never chose on; it keeps it only if it has 20 %
+  less error than no change there (random walks pass that by luck 1.5
+  times in 100).
+- While it runs: `health().work` is `{ task: 'retrain', step: 'search',
+  done (tried), name, text: 'Retraining eth · tried 40' }`; the Models
+  status says the same. A request is kept with the spec (`streams()` rows
+  gain `retrain`: JSON text, `{ n, status: 'running' | 'done', asked_at,
+  state, tried, ms, result }`, migration 13) and continues after a reload.
+  One at a time; it waits while a poll runs.
+- A spec may now be `{ companions: [], lambda1, lambda2, algorithm: 'bar1' }`:
+  the single-stream AR, chosen by a retrain.
+- `data-test`: `model-retrain` (the button, `data-action` `retrain` or
+  `stop`), `model-retrain-line` (its progress, then its result;
+  `data-r`: `working`, `ok`, `bad`), `model-retrain-note` (the fade, or why
+  there is no button).
+
+## Changed 2026-10-18 (the words people see: Network, Contract, Relays)
+
+Renamed, with no aliases:
+- `health().channels`: `{ central, base, network }` → `{ network, contract,
+  relays }` (network: the Satori Network, central; contract: the Satori
+  contract, Base; relays: the Satori relays, Nostr). Home's chips:
+  `data-channel` `network`, `contract`, `relays` (the old `network`, Nostr,
+  is now `relays`).
+- `health().reasons[].channel`: `'central'` → `'network'`, `'base'` →
+  `'contract'`, `'network'` → `'relays'` (reason ids unchanged).
+- `models()` `outputs[].destinations[].to`: `'central' | 'base' | 'network'`
+  → `'network' | 'contract' | 'relays'`; the Models filters
+  `models-filter-<network|contract|relays>` (toggles since the entry
+  above); the tags read "Network",
+  "Contract", "Relays". Model ids and `source` keep the code's names
+  (`central:<uuid>`, `source: 'central' | 'base' | 'nostr'`).
+- Words: the health lines, cards, feed and steps say "the Satori Network",
+  "the Satori contract", "the Satori relays" ("Signing in to the Satori
+  Network…", "Sent 83 predictions to the Satori Network", "Satori contract
+  batch for round 20742: 1 game"); the central client's errors read
+  "Satori Network 500: …", "Satori Network timed out (15 s)", "Satori
+  Network unreachable: …" (in `status().central`). Settings: "Satori
+  Network server" (the one place a URL shows), "Satori relays", "Satori
+  contract". The Streams tab shows no URL.
+
+## Changed 2026-10-18 (the Models tab in plain words)
+
+- Each `models()` entry gains `algorithms` (a list: one today, an ensemble
+  later), `kindLabel` (its algorithm in plain words: "Bayesian VAR · reads 3
+  streams", "Single-stream AR (bar1)", "No change · not enough history yet")
+  and `description` (how it works, one sentence). `quality` gains `text`:
+  "7% better", "Same as no change", "12% worse", "Not scored yet", the
+  words the page shows.
+- `data-test`: `model-mark` holds the words (`data-short` the phone's);
+  `engine-quality` is the bar's legend (`aria-label`: "24 better · 40 same
+  as no change · 19 worse"); new `model-kind-label`, `model-quality`,
+  `model-ahead` (the chart's "12 h", "24 h"). Destinations are text tags.
+
+## Changed 2026-10-18 (the training pass)
+
+- The neuron never rests with a model unscored: a **training pass** fits
+  every model that lacks a current backtest (a spec stored before its score
+  was, new history, a new spec, a changed companion) from stored history
+  only, on load, after a poll and whenever the list changes. It never
+  predicts or submits. While it runs, `health().work` is `{ task: 'train',
+  step: 'score', done, total, text: 'Scoring models · 12 of 81' }` and the
+  Models status says the same (title "Working").
+- `status().train`: the last pass, `{ central, nostr, base, stopped, ms }`,
+  or null.
+- `streams()` rows gain `fit_key` (the data their score was computed on).
+  `nostr().subscriptions[].prediction` gains `score`, `persist`, `tests`
+  (its backtest, kept with it). `base()`'s `lastBatch.games[]` always carry
+  `score`, `persist` and `tests` (null without a backtest).
+- Quality is the neuron's **own backtest** (how its model would have done on
+  past data against no change), not central's scoring of what it sent.
+
+## Changed 2026-10-18 (the Models tab)
+
+The page has five tabs: Home · **Models** · Streams · Wallet · Settings
+(docs/design/models.md). Nothing else moved.
+
+- `satori.models()` now lists **every model the neuron runs**, not only
+  central's specs: central's streams (`bvar`, `bar1`, `bar1d`, `naive`), the
+  Base batch's registry streams and the Nostr `_pred`s. Each is `{ id,
+  source, name, kind, quality, inputs, outputs, trained }`; central's keep
+  every field they had (`uuid`, `name`, `model`, `spec: { companions: [{
+  uuid, name }], lambda1, lambda2 }`, `score`, `generation`, `accepted`), in
+  the same order, first. A central stream with no forecast yet is not listed
+  (it was, with `model: null`, when it had a spec).
+- **`outputs` is a list**: a model's predicted streams, one today (a model
+  of several streams may come; its `name` then reads like "bvar · 3
+  streams"). Each output has its own `influence`, `quality` and
+  `destinations`.
+- New: `satori.model(id)`, a model's drill-in recomputed from its stored
+  spec and history; `satori.go('models')` and `go('models/<id>')` (the URL's
+  `#models`, `#models/<id>`).
+- `streams()` rows gain `persist` (no change's median backtest error on the
+  same origins as `score`), `influence` (JSON text: each input's share of a
+  bvar forecast, the stream itself first) and `spec_at` (when the spec was
+  last stored). Migration 11 adds the first two to `model_specs`; specs
+  stored before have them null until their next poll.
+- `base()`'s `lastBatch.games[]` gain `step`, and `score` and `persist` when
+  the engine had a backtest.
+- `data-test` new: see the Models tab below. The Streams card's `model`
+  (a stream row's Model column) keeps its name; a Models row is `model-row`.
+
+## Changed 2026-10-18 (staking: the words and the agent API)
+
+The vault giving its prediction power to the identity (on-chain, the
+vault's `delegatePredictionPower(identity)`) is called **staking**: "Stake
+with this neuron", "Unstake". The old names are gone, with no aliases:
+
+- `satori.delegate()` → `satori.stake()`, `satori.undelegate()` →
+  `satori.unstake()`; the same results.
+- `base()` (and `status().base`): `vault.delegated` → `vault.staked` (the
+  same values: `'identity'`, `'none'`, `'other'`, null before the first
+  read), `vault.delegate` → `vault.stakedWith` (the address it stakes with),
+  `identity.allowedDelegator` → `identity.allowedStaker`.
+- `health()`: the reason `delegate` → `stake` (and the action card's
+  `data-action`), its action's `do: 'delegate'` → `do: 'stake'`, button
+  "Stake", text "Your vault's SATORI isn't earning on Base. Stake with this
+  neuron."; `work.task` `delegate` / `undelegate` → `stake` / `unstake`; the
+  Base chip "Not staked", "Staked elsewhere", "No SATORI staked".
+- `predictBase()`'s skip `no prediction power delegated to the identity` →
+  `nothing staked with this neuron`.
+- `data-test`: `base-delegation` → `base-staking`, `base-delegate` →
+  `base-stake`, `base-undelegate` → `base-unstake`.
+- Words on the page: "Delegate prediction power" / "Stop delegating" →
+  "Stake with this neuron" / "Unstake" ("Staking…", "Unstaking…"); the
+  Delegation fact → Staking, "Staked: 100 SATORI with this neuron" or "Not
+  staked: Stake with this neuron, below"; Transfers "SATORI transfer-locked
+  while delegated" → "Staked SATORI can't be sent until you unstake", and
+  after Unstake "SATORI can be sent from Oct 17, 00:00 UTC (round 20743)"
+  (it said "transfer-locked until round 20742 (free from …)"; `send()`
+  throws the same words); the batch check "Waits until you stake"; who
+  plays: "Your SATORI is staked with this neuron, so it can't also play
+  Satori Daily by hand. Unstake to play manually." / "Stake with this
+  neuron to let it predict every round, or play Satori Daily by hand.";
+  Home's vault line "· staked"; the inline prompt "Vault passphrase to
+  stake"; the transactions "Vault: stakes with this neuron" / "Vault:
+  unstakes"; the feed "Staked with this neuron" / "Unstaked" (migration 10
+  rewrites the log's earlier rows in these words).
+
+## Changed 2026-10-17 (latest: advice; the hero stays green)
+
+- A reason's level (`health().reasons[].status`) may be `'advice'`: nothing
+  is wrong with the neuron, but there is a good thing to do. Advice never
+  changes `status`, `tone`, `title` or `line`. It is `action` only when no
+  warn or bad reason is present, and it may give its channel's chip its
+  words, with `state: 'advice'` and a green `tone`.
+- The advice reasons: `backup` (it was `warn`: a new neuron whose storage is
+  not kept and whose words were not confirmed read amber, "Central is fine.
+  Back up your keys.", all through its first poll; now it is green, and the
+  card offers Back up), `install` (new: the Install suggestion while *Was
+  asleep*, which was `asleep`'s action; `asleep` has no action now) and
+  `relay-down` (it was `warn`; the Network chip says "1 of 2 relays down",
+  `state: 'advice'`).
+- `reasons` are ordered by level, then as before: bad, warn, idle, advice.
+  `backup` moved from after `central-failed` to after `starting`.
+- `status` keeps its four values, `'ok' | 'idle' | 'warn' | 'bad'`. The
+  action card's `data-tone` is `idle` (sky) for advice.
+
+## Changed 2026-10-17 (later: what it is doing; three greens)
+
+- `health().work`: what the neuron is doing now, or null when idle:
+  `{ task, step, done, total, since, critical, text }`. `task`: `central`
+  (steps `register`, `observations`, `history` with done/total streams,
+  `models` with done/total targets, `send` with total predictions), `base`
+  (`check`, `send`, `confirm`), `delegate` / `undelegate` / `send` (`send`,
+  `confirm` with k of n, `settle`), `claim` (`rewards`, `drop`, `airdrop`,
+  `confirm`), `keys` (`save`), `discover` (`ask`, relays answered), `subscribe`
+  (`find`). `since`: when the step began (ms). `critical: true`: closing Satori
+  now would lose work (sending predictions, a Base batch or transaction not yet
+  confirmed, the keys being written); its `text` begins "Keep Satori open · ".
+  `text`: the words Home shows ("Loading history · 34 of 82 streams"). The
+  entry that leads is shown: a critical one first, else central, base, the
+  vault's actions, keys, discover, subscribe.
+- `health().tone`: the colour Home shows, alongside `status`: `'working'`
+  (regular green: working as expected; starting and catching up are working),
+  `'critical'` (vivid green: closing would lose work), `'idle'` (sky green:
+  all good, waiting for the next cycle), `'warn'`, `'bad'` (they win), `'off'`
+  (grey: only a channel deliberately not used; never the hero). Each
+  `health().channels[x]` has a `tone` too (`working` while its channel has
+  work in progress; `off`: Base not delegated here, or no stream subscribed).
+- Home's hero (`data-test=health`): `data-tone`, `data-work` (the step it
+  shows, `central:history`) and `aria-busy="true"` while working, `data-from`
+  at rest: the tone it turns sky green from (over 2.5 min after work). Its line
+  (`health-line`) says the step while working, then the health's line. One
+  short arc turns around its ring while working, the only animation on the
+  page (none with reduced motion). Chips have `data-tone`; the action card
+  has `data-tone` (it had `data-s`).
+- A new neuron's first poll took 17–19 s on central2 (82 streams); now about
+  8 s: the poll's writes are a few set statements, central's history is
+  fetched 8 at a time and written in a few commits.
+
+## Changed 2026-10-17
+
+- Settings → Appearance: System (default), Light, Dark, and
+  `satori.setTheme(theme)`; `<html data-theme>` when not System.
+- `health().channels[x].lastTraffic`: the channel's last real traffic (ms),
+  or null. Home's Central, Base and Network chips glow, faintly, while their
+  channel talks (`data-live` on the chip); the status's colour and icon are
+  untouched.
+- No start delay: a new neuron polls central at once, right after register
+  (Home: *Starting*, "Getting its first predictions…"), and so does one
+  reopened with a poll due ("Catching up now…"); a poll still ahead is
+  kept. `status().central.nextPoll` is null until register answers. The
+  health windows: 12 h of open time (was 12.5 h), the first poll within 1 h.
+- `health().title` is one of `'Not predicting'`, `'Starting'`,
+  `'Was asleep'`, `'Predicting'` (and `'Partly predicting'`, below), read
+  from the log whichever reason leads:
+  a new neuron with a vault mismatch said "Predicting" and now says
+  "Starting". "Retrying", "Base is failing" and "Network is down" are gone
+  (`status`, `line` and `action` say so), and "Was asleep" ends once it
+  caught up.
+- `health().days[].code` may be `'before'`: a day before this neuron began
+  (a new neuron's strip was 13 grey "closed" days). Its cell has
+  `data-code="before"` and the title "<date>: Before this neuron".
+- The keys record gains `created` (unix seconds) for keys made from now on.
+- `status().central.registration` gains `vault` (this vault's Base address)
+  and `vault_base_address` (central's answer: the Base address it pays this
+  vault's rewards to, or null). `vaultMismatch` compares the two,
+  case-insensitively, and may now be `null`: unknown, a central that does
+  not send `vault_base_address` (prod on `main`); that is not a mismatch.
+  The mismatch text names both addresses.
+- A poll forecasts each stream in its batch whose latest observation has no
+  prediction made from it, not only the streams with a new row: a reload
+  mid-poll (rows stored, not yet forecast) is made up by the next poll, even
+  with nothing new (`lastPoll.new` 0, `predicted` > 0). An observation is
+  still predicted once. Migration 9 adds `streams.predicted_ts`.
+- A poll with nothing new and nothing to send reads "Up to date · next in
+  9 h" (the Central chip and `health().line`; it said "0 sent just now" and
+  "Polled central …, nothing new"), and "Polled central: up to date" /
+  "Caught up: up to date" in the feed. "0 sent" no longer appears.
+- `health().title` may be `'Partly predicting'`: central predicts, but
+  Base, delegated, is red (it read a red "Predicting"). "Not predicting"
+  (central) still wins; Nostr never changes the title.
+
+## Changed 2026-10-16 (Home answers "is it predicting?"; four tabs)
+
+For agents written against the earlier UI and API:
+
+- New: `await satori.health()` → `{ status, title, line, action, days,
+  channels, feed, reasons }` (below) and `satori.go(tab)`, `tab` one of
+  `home`, `streams`, `wallet`, `settings` (also the URL's `#home` …
+  `#settings`; `<body data-tab>` says which is shown). Every other method is
+  unchanged.
+- The page is four tabs. What moved where: the Keys card (addresses, Unlock,
+  Lock), the storage line, Install and Backup → **Settings**; the Central
+  card and the stream list → **Streams** (the list is open there: its
+  `<details>` summary is gone, `streams-count` says how many); Nostr and
+  Network streams → **Streams**; the Base card → **Wallet**; the Settings
+  `<details>` → the **Settings** tab, its forms always open. Elements of a
+  tab not shown are in the DOM but hidden: `go(tab)` first, or query visible
+  elements.
+- Unlock: Settings › Keys keeps "Vault passphrase" and `unlock`. Delegate,
+  Claim, Send and Backup, asked for while locked, open one inline prompt in
+  place (`unlock-prompt`, `data-unlock-for` = `card` | `claim` | `wallet` |
+  `backup`, labelled "Vault passphrase to delegate", "… to claim", "… to use
+  the vault", "… to back up"), then do the action. The Wallet's buttons are
+  shown while locked (they were hidden until Unlock); "Unlock the vault to
+  delegate, claim or send." and "Unlock the vault to back up your keys." are
+  gone. The header's Lock stays (`lock`); Settings adds "Lock the vault"
+  (`lock-vault`). `base-delegation` while not delegated says "Not delegated:
+  Delegate prediction power, below" (it said "Unlock, then …").
+- `status().central.lastPoll` may carry `local: true` (the database or the
+  engine failed, not central); a failed `lastSubmit` is `{ at, error,
+  total_submitted, login? }` (`login: true`: central refused the login).
+- A stream row's name (`.sname`) is a button: it opens the stream's detail
+  (`stream-detail`, its latest predictions as `stream-prediction`).
+- `data-test` new: `home`, `health` (`data-s`: the status), `health-title`,
+  `health-line`, `action` (`data-action`: the reason), `action-text`,
+  `action-button`, `days` with `day` cells (`data-date`, `data-code`),
+  `days-summary`, `channels` with `chip` (`data-channel`: network, contract, relays; `data-state`) and
+  `chip-text`, `claimable`, `claimable-amount`, `claim`, `claim-result`,
+  `home-vault`, `home-gas`, `home-stream`, `activity`, `feed`, `feed-item`
+  (`data-level`), `nav-<tab>` (the computer's top nav) and `tab-<tab>` (the
+  phone's tab bar), `streams-tab`, `wallet-tab`, `settings-tab`,
+  `streams-count`, `stream-detail`, `stream-prediction`, `unlock-prompt`,
+  `lock-vault`, `update-settings`. None removed: every earlier `data-test`
+  keeps its name and meaning (`streams` is now the Streams card itself).
+- Settings' sections have ids: `#settings-keys`, `#settings-backup`,
+  `#settings-central`, `#settings-relays`, `#settings-base`,
+  `#settings-device`.
+- The database has an activity log (migration 8) and `meta.backup_at` (the
+  vault's backup confirmed); docs/design/storage.md.
+
+## Changed 2026-10-16 (the keys in this app's own format; Base only)
+
+For agents written against the earlier API:
+
+- `status().identity` and `status().vault` are the keys' **Base (0x)
+  addresses** (they were Evrmore "E…" addresses). No Evrmore address is
+  shown or returned anywhere.
+- `status().central.registration` has no `wallet_address` or
+  `vault_address`; `vaultMismatch` is `false`, `'other'` (central has
+  another vault for this identity) or `'none'` (it kept none).
+- `setup()`: the passphrase is any Unicode, at least 8 characters (it was 4,
+  Latin-1 only); a new optional `nostrKey` (nsec or hex).
+- `backup('identity' | 'vault')` → `{ words, privateKey }` (`privateKey`:
+  `0x` hex; it was `{ words, wif }`); new: `backup('nostr')` → `{ nsec,
+  secret }` and `backup()` → all three.
+- `file()` is **removed**: no Docker files (`wallet.yaml`, `vault.yaml`,
+  `nostr.yaml`) are made any more. Import still reads them.
+- A new screen, `finish`: an earlier version's vault whose public key was
+  not in clear; `unlock(passphrase)` there finishes the update and starts
+  the neuron.
+- Prediction texts (`value`, `t1_value`, `observed_at`) are JS's number
+  text (`100`, not `100.0`), and Nostr content is compact JSON.
+- Central's login is signed with EIP-191 (Ethereum `personal_sign`) by the
+  identity, as central (base-upgrade f4d72f5) and Satori Lite (satorilib
+  5028913) now do; it was an Evrmore signed message. There is no Evrmore
+  anywhere in the app.
+- `data-test`: `identity` and `vault` now hold the Base addresses;
+  `identity-base`, `vault-base`, `wif` and `download-*` are gone;
+  `backup-key`, `backup-hex`, `pass-note` and `finish` are new.

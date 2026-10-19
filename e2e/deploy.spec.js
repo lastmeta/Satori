@@ -41,6 +41,7 @@ test('every response has the CSP from csp.js, nosniff and HSTS; hashed assets ar
     ['sw.js', 200, /^application\/javascript/, 'no-cache'],
     ['manifest.webmanifest', 200, /^application\/manifest\+json$/, 'no-cache'],
     ['llms.txt', 200, /^text\/plain; charset=utf-8$/, 'no-cache'],
+    ['llms-changelog.txt', 200, /^text\/plain; charset=utf-8$/, 'no-cache'],
     ['icon-192.png', 200, /^image\/png$/, 'no-cache'],
     [js, 200, /^application\/javascript/, IMMUTABLE],
     [worker, 200, /^application\/javascript/, IMMUTABLE],
@@ -57,7 +58,8 @@ test('every response has the CSP from csp.js, nosniff and HSTS; hashed assets ar
   }
   expect(await (await request.get(`${APP}some/path/the/app/has/not`)).text()).toBe(index);
   const text = await request.get(`${APP}llms.txt`);
-  expect(await text.text()).toMatch(/^# Satori neuron/);
+  expect(await text.text()).toMatch(/^# Satori neuron[\s\S]*\n## Safety\n/);
+  expect(await (await request.get(`${APP}llms-changelog.txt`)).text()).toMatch(/^# Satori neuron \(browser app\): what changed/);
 
   // compressed beside itself: DuckDB's wasm goes in brotli where the browser takes it (5.1 MB), else gzipped (7.7 MB),
   // else as it is, the same file each time, with the CSP and the cache rule (docs/design/deploy.md#compression)
