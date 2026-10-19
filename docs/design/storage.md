@@ -264,7 +264,8 @@ Each value is JSON text.
 | `wallet_yaml`, `vault_yaml`, `nostr_yaml` | gone: earlier versions' Docker texts, moved into `keys` by migration 7 (left only where a setup was cut off) | earlier versions |
 | `vault` | the step-1 prototype's sealed key; never read, never deleted | the step-1 prototype |
 | `central_url` | the Settings URL; `''` = the default | Settings, `setCentral` |
-| `next_poll_at` | when the next poll is due, so a reload keeps the 11 h cadence ([central.md](central.md)) | each poll's schedule |
+| `next_poll_at` | when the next poll is due, so a reload keeps the 11 h cadence and a failed cycle's retry ([central.md](central.md#errors)) | each poll's schedule |
+| `poll_failures` | failed cycles in a row (0 after a good one), so a reload keeps the retries' place (2, 10, 30 min, then 11 h) | each poll's schedule |
 | `central_last_poll` | the last poll: `{ at, streams, new, predicted }` or `{ at, error }` (`local: true`: the database or the engine failed, not central) | each cycle; dropped with another central |
 | `central_last_submit` | the last predictions batch: `{ at, total_submitted, successful, failed, errors }` or `{ at, error, total_submitted }` (`login: true`: central refused the login) | each cycle with something pending; dropped with another central |
 | `backup_at` | when the vault's backup was confirmed (its words confirmed at Create, given at Restore, or shown under Backup; a Dockerized Neuron's files): Home stops asking for a backup while storage is not kept ([health.md](health.md)) | setup; Backup |

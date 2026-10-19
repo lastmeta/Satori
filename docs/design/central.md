@@ -38,7 +38,7 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 |---|---|---|
 | Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>`. The vault's public key is in clear in the keys record ([keys.md](keys.md#the-record)), so it is always sent. The result is shown, never retried in a loop. |
 | Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_base_address: null`); an identity conflict is a 409 (`c/main.py:772-907`). | Compares the returned `vault_base_address` (the Base address central pays this vault's rewards to) with our vault's Base address, case-insensitively, and shows a **vault mismatch** with both addresses when they differ, or when central has none ([below](#the-vault-in-registers-answer)). The result is `vaultMismatch: false \| 'other' \| 'none' \| null` (null: a central without the field, unknown). |
-| Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), on every start, then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | The first poll right after register, with no random wait: a new neuron at once, a reopened one at once when a poll came due while it was closed; then 11 h after every poll, as Lite. `meta.next_poll_at` is stored, so a reload keeps a time still ahead (see Deviations). **Poll now** runs a cycle at once. A poll whose time passed while the device slept with the page open runs within one heartbeat of waking ([the catch-up pass](../plans/runtime.md#catch-up-pass)). |
+| Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), on every start, then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | The first poll right after register, with no random wait: a new neuron at once, a reopened one at once when a poll came due while it was closed; then 11 h after every good poll, as Lite; after a failed cycle it tries again 2, 10 and 30 min later, then on the 11 h rhythm ([Errors](#errors)). `meta.next_poll_at` is stored, so a reload keeps a time still ahead (see Deviations). **Poll now** runs a cycle at once. A poll whose time passed while the device slept with the page open runs within one heartbeat of waking ([the catch-up pass](../plans/runtime.md#catch-up-pass)). |
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
 | Store | `value` = float; epoch = `observed_at`, falling back to `ts` (`data_helper.py:40-93`), truncated to whole seconds (`engine.py:669-673`); `INSERT OR IGNORE` on `(stream_uuid, epoch)` (`stream_store.py:48-56,150-170`); the stream's name/meta are upserted (`server.py:1334-1358`). | Same rule into `observations (stream_uuid, ts, value)`, primary key `(stream_uuid, ts)`; `streams (uuid, name, meta)`. Rows with no stream, no finite value or no time are dropped. |
 | Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Each stream in the batch whose latest stored observation has **no prediction made from it** (`db.unpredicted()`: newer than `streams.predicted_ts`, which each prediction sets): a new row, as in Lite, and also a row an interrupted cycle stored but never forecast (a reload mid-poll, a local failure). An observation is still predicted once ([Deviations](#deviations-from-satori-lite-and-why)). |
@@ -57,7 +57,7 @@ other `server.py` methods for routes central-lite does not serve.
 
 | Call | Auth | Central | When |
 |---|---|---|---|
-| `POST /api/v1/peer/register` (headers `wallet-pubkey`, `vault-pubkey`, `nostr-pubkey`, `neuron-version`) → `{success, peer_id, wallet_address, vault_address, vault_base_address, nostr_pubkey, message}` (only `peer_id`, `message` and `vault_base_address` are read) | none | `c/main.py:772-907`; `vault_base_address` since `base-upgrade` d8a2085 | every page load; again when the central URL changes |
+| `POST /api/v1/peer/register` (headers `wallet-pubkey`, `vault-pubkey`, `nostr-pubkey`, `neuron-version`) → `{success, peer_id, wallet_address, vault_address, vault_base_address, nostr_pubkey, message}` (only `peer_id`, `message` and `vault_base_address` are read) | none | `c/main.py:772-907`; `vault_base_address` since `base-upgrade` d8a2085 | every page load; again when the central URL changes; before each poll while the last one failed |
 | `GET /api/v1/observations/batch?limit=100` → `[{id, observed_at, value, hash, stream_id, stream: {uuid, name, meta, …}, ts, stream_uuid}]` | none | `c/main.py:292-341` | each poll |
 | `GET /api/v1/observations/history?stream_uuid=<uuid>&limit=1000&since=<now − 1,000 h>` → `[{id, stream_uuid, observed_at, value, ts}]`, oldest first | none | `central` bc043d2 (the most recent `limit` rows; 404 `Stream not found: <uuid>` for an unknown or malformed uuid, 422 for a bad limit or since); not deployed on central2 yet (404 `Not Found`) | once per stream ([below](#history-an-addition-beyond-lite)) |
 | `GET /api/v1/auth/challenge` → `{challenge}` (a UUID) | none | `c/main.py:268-281` | before each login |
@@ -236,7 +236,27 @@ relay list and Base's config are read from the new central at once.
 - Central's own errors carry `{detail}` and are shown as `central <status>: <detail>`.
 - Register, poll and submit failures are logged to the console, stored in the
   status (last poll, last submission), logged in the activity log and shown on
-  Home ([health.md](health.md)) and on Streams. A local failure in a
+  Home ([health.md](health.md)) and on Streams. A failure that never reached
+  central (a network error or a timeout: status 0) carries `unreachable:
+  true`, so Home names it ("Couldn't reach the Satori Network") apart from
+  a refused batch ("Sending failed") and a refused login.
+- **Retries** (2026-10-19). A failed cycle (its poll or submission failed, a
+  local failure, or central took none of the batch: `failedCycle`) is tried
+  again 2, 10 and 30 min later (`RETRY_S`), then on the 11 h rhythm, whose
+  try, if it fails too, gets the same three; a good cycle sets the next poll
+  11 h after it (`nextPollAfter`). When the browser fires `online` after a
+  failure, the poll runs at once. The time is `meta.next_poll_at` and the
+  count `meta.poll_failures`, so a reload keeps both: a reload 1 min after
+  the second failure still waits the 10 min, and the next failure 30.
+  `status().central.failures` is the count. Before, one failed send waited
+  the full 11 h, and a second failure minutes later (a manual Try again)
+  turned Home red. Home stays amber while it retries, and goes red only once
+  nothing good went out for a cycle's 12 h of open time
+  ([health.md](health.md#reasons-in-priority-order)).
+- **Register again.** While the last register failed, each poll registers
+  first (Home's step "Signing in to the Satori Network…"), until it succeeds;
+  a poll runs whatever register's result. Lite registers on every start, and
+  restarts daily. A local failure in a
   cycle (a database write) is logged with `console.error` and shown as the last
   poll's error. Nothing throws out of the schedule: the next timer is set
   before `next_poll_at` is saved, and a failed save is only logged.
@@ -258,7 +278,8 @@ relay list and Base's config are read from the new central at once.
 | Login signs central's challenge UUID (`GET /auth/challenge`), not `str(time.time())` (`server.py:91`). | Central accepts any signed message today (`c/auth.py:45`); the challenge keeps working when central makes challenges single-use ([issue](../issues/central-login-replayable.md)). |
 | A fresh login for each submission; no stored token, no refresh. | The token lives 1 h and the neuron submits every 11 h. |
 | The observations GET sends no token; satorilib sends one through `_makeAuthenticatedCall` (`server.py:1322`). | Central does not ask for one (`c/main.py:292-293`), and the poll then never needs a login. |
-| Register is not retried in a loop (Lite's `authWithCentral` backs off from 30 s up to 6 h, `start.py:4976-5006`). It runs again on the next load or a central URL change. | In practice Lite does not retry either: `checkin` swallows register errors (`server.py:405-414`) and `_getChallenge` falls back to a timestamp when central is down (`server.py:65-85`), so `checkin` almost never raises and the backoff almost never fires. |
+| A failed register is tried again before each poll until it succeeds (and on the next load or a central URL change), not in a loop of its own (Lite's `authWithCentral` backs off from 30 s up to 6 h, `start.py:4976-5006`). | In practice Lite does not retry in that loop: `checkin` swallows register errors (`server.py:405-414`) and `_getChallenge` falls back to a timestamp when central is down (`server.py:65-85`), so `checkin` almost never raises; Lite registers again on every start, and restarts daily. Before each poll is that cadence, with the retries below. |
+| A failed cycle is tried again 2, 10 and 30 min later, then every 11 h; Lite waits 11 h whatever the result (`start.py:4785-4876`). | A browser neuron runs only while open: a send that failed for a blip (a network change, a 502) would otherwise lose a whole cycle of a short session. The retries are three requests per failure, under central's limits. |
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
 | Prediction numbers are sent as JS prints them (`100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`). | Central reads them with `float()`; nothing depends on the layout ([the protocol audit](#the-protocol-audit)). |
 | The register result checks the vault (`vaultMismatch`, with both Base addresses); Lite ignores register's answer (`server.py:402-405`). | Central keeps the first vault registered for an identity and pays that vault's Base address: a mismatch means this vault is not paid ([the vault in register's answer](#the-vault-in-registers-answer)). |

@@ -57,6 +57,30 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (failures retried in minutes; red only after a real cycle)
+
+- A failed cycle (its poll or its submission failed, or central took none
+  of the batch) is tried again 2, 10 and 30 min later, then on the 11 h
+  rhythm (whose try, if it fails, gets the same three); at once when the
+  browser goes back `online`. A good cycle sets the next poll 11 h after it.
+  It used to wait 11 h. `status().central.failures`: failed cycles in a row
+  (0 after a good one); `nextPoll` is the retry's time. Both survive a
+  reload.
+- `status().central.lastPoll` and `lastSubmit` carry `unreachable: true`
+  when central was not reached at all (a network error or a timeout).
+- `health()`: a failure stays `warn` (`central-failed`) while it retries, and
+  is `bad` (`central-failing`) only once nothing good went out for 12 h of
+  open time (1 h for a new neuron's first); two quick failures used to be
+  `bad`. The words name what failed: line "Sending failed; next try in
+  2 min." ("Couldn't reach the Satori Network; …", "The poll failed; …",
+  "…; trying again now…" while it polls), red "Nothing sent for 13 h:
+  sending failed."; the Network chip "Sending failed", "Unreachable",
+  "Poll failed" ("Last poll failed" and "2 failed in a row" are gone).
+  `login-refused` and `db-error` are still `bad` at once.
+- Register: while the last register failed, each poll registers first (its
+  step `register`), until it succeeds. `not-registered`'s action is
+  `do: 'poll'`, button "Try again" (it was `reload`).
+
 ## Changed 2026-10-19 (catch-up after the device sleeps)
 
 - A device that sleeps with the page open (a closed lid, a phone's screen
@@ -442,8 +466,9 @@ For agents written against the earlier API:
   another (`VITE_CENTRAL_URL`; neuron.satorinet.io
   uses `https://central2.satorinet.io` for now); central2 (the dev central)
   on the dev server. Changeable (https only).
-- Register: on every page load, `POST /api/v1/peer/register` with the
-  identity's and the vault's public keys. Central links the vault to the
+- Register: on every page load (and before each poll while the last one
+  failed), `POST /api/v1/peer/register` with the identity's and the vault's
+  public keys. Central links the vault to the
   identity once and answers `vault_base_address`, the Base address it pays
   this vault's rewards to. Another address than the vault's (or none) shows
   as a "vault mismatch" with both addresses; a central without that field
@@ -451,7 +476,8 @@ For agents written against the earlier API:
 - Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
   each stream (under 48 h old). The first poll runs at once, right after
   register (a new neuron, or one reopened with a poll due; no random wait),
-  then every 11 h; the next time is stored, so a reload keeps it.
+  then every 11 h (after a failed cycle: 2, 10, 30 min, then 11 h, and at
+  once when back online); the next time is stored, so a reload keeps it.
   `satori.poll()` (or "Poll now") runs one at once. A poll whose time passed
   while the device slept with the page open runs within one heartbeat
   (30 s) of waking (the catch-up pass, docs/plans/runtime.md).
@@ -657,8 +683,9 @@ the page's JS context:
   once, then it runs), `elsewhere` (another tab has it open; only one tab
   runs the neuron) or `fatal`. `identity` and `vault` are the keys' Base
   (0x) addresses (null before setup). `central` (on
-  `home`) is `{ url, registration, lastPoll, nextPoll, polling, lastSubmit,
-  pending, history }`:
+  `home`) is `{ url, registration, lastPoll, nextPoll, polling, failures,
+  lastSubmit, pending, history }` (`failures`: failed cycles in a row; the
+  next try is `nextPoll`: 2, 10, 30 min after a failure, then 11 h):
   - `registration`: null while registering; then
     `{ at, ok: true, peer_id, message, vault, vault_base_address,
     vaultMismatch }` or `{ at, ok: false, error }` (central refused or is
@@ -669,15 +696,15 @@ the page's JS context:
     (central has no vault for this identity) or `null` (unknown: a central
     without the field, as prod on `main`; not a mismatch).
   - `lastPoll`: `{ at, streams, new, predicted, engine_ms }` or `{ at, error }`
-    (central's error, or a local one such as a database write, then with
-    `local: true`); `engine_ms`: how long the models took (present when a
+    (central's error, with `unreachable: true` when central was not reached,
+    or a local one such as a database write, then with `local: true`); `engine_ms`: how long the models took (present when a
     stream was forecast).
   - `history`: the last history run `{ at, url, streams, rows, left, error,
     retryAt }` (`retryAt`: the route 404'd, asked again then) and `needed`,
     how many streams have no history yet.
   - `lastSubmit`: `{ at, total_submitted, successful, failed, errors }` or
     `{ at, error, total_submitted }` (with `login: true` when central refused
-    the login); `pending`: how many predictions wait to be sent.
+    the login, `unreachable: true` when it was not reached); `pending`: how many predictions wait to be sent.
 
   `storage` and `app` are there on every screen. `storage`: `{ persisted,
   usage, quota }` (`persisted`: the browser keeps this origin's data, the keys
@@ -727,9 +754,10 @@ the page's JS context:
     predicting or earning), `'idle'` (a calm state) or `'advice'` (nothing
     is wrong: a suggestion, the card only; it never moves `status`, `tone`,
     `title` or `line`). The order, by level: bad `db-error`,
-    `login-refused`, `central-failing` (2 cycles failed), `central-overdue`,
-    `base-failing`, `relays-down`; warn `central-failed` (1 cycle),
-    `vault-mismatch`, `not-registered`, `stake` (the vault holds SATORI,
+    `login-refused`, `central-failing` (failing, nothing good for 12 h of
+    open time), `central-overdue`, `base-failing`, `relays-down`; warn
+    `central-failed` (failing, retrying in minutes), `vault-mismatch`,
+    `not-registered`, `stake` (the vault holds SATORI,
     not staked), `gas-low`, `base-skipped`, `base-unreachable`; idle
     `asleep`, `starting`; advice `backup` (storage not kept, no backup
     confirmed), `install` (was asleep, and the browser offers Install),

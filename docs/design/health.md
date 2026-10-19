@@ -138,13 +138,13 @@ button).
 |---|---|---|---|---|---|---|
 | 1 | `db-error` | bad | nothing is stored or forecast, so nothing goes out | network | the last cycle failed locally (the database or the engine) | Reload |
 | 2 | `login-refused` | bad | central takes nothing from this neuron until it is fixed | network | the last cycle's login was refused (after its one retry) | Open Settings (central) |
-| 3 | `central-failing` | bad | two cycles in a row sent nothing: predictions are failing | network | the last 2 cycles failed | Try again (a poll) |
+| 3 | `central-failing` | bad | the failures span a real cycle: nothing went out for 12 h of open time | network | the last cycle failed, and no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Try again (a poll) |
 | 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | network | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
 | 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | contract | the batch check failed twice in a row while Base is in use (staked, or a batch sent before) | Open Settings (Base) |
 | 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | relays | streams are subscribed and every relay is down | Open Settings (relays) |
-| 7 | `central-failed` | warn | one cycle sent nothing; it retries on its own, but something may need fixing | network | the last cycle failed (once) | Try again |
+| 7 | `central-failed` | warn | it retries in minutes on its own (2, 10, 30 min), but something may need fixing | network | the last cycle failed (once or more), within `WINDOW_S` of open time of the last good one | Try again |
 | 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | network | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
-| 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | network | registering failed | Reload |
+| 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | network | registering failed (each poll registers again first, until it succeeds) | Try again (a poll) |
 | 10 | `stake` | warn | the vault's SATORI earns nothing on Base until it is staked (with no SATORI there is no reason: the Base chip is off, grey) | contract | not staked, and the vault holds SATORI: "Your vault's SATORI isn't earning on Base. Stake with this neuron." | Stake |
 | 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | contract | staked, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
 | 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | contract | staked, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
@@ -154,6 +154,21 @@ button).
 | 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the vault | – | storage is not persistent and no backup is confirmed | Back up |
 | 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | *Was asleep*, and the browser offers Install | Install |
 | 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | relays | streams are subscribed and some relay, not all, is down | Open Settings (relays) |
+
+**Failures, by what failed** (2026-10-19). The line and the chip name it:
+"Sending failed" (central refused the batch, or took none of it), "Couldn't
+reach the Satori Network" (chip "Unreachable": a network error or a
+timeout, the row's `unreachable`), "The poll failed" (central answered the
+observations with an error), "Login refused". While it retries the line says
+when: "Sending failed; next try in 2 min." ("trying again now…" while the
+poll runs), the card the error: "Satori Network 503: boom. It tries again in
+2 min; try now if something was fixed." Red only once the failures span a
+real cycle: "Nothing sent for 13 h: sending failed." A failed login is red
+at once (only the person can fix it), as a database failure is. Before, any
+failure read "The last poll failed; next try in 11 h", and a second one, even
+a manual retry minutes after predictions were accepted, turned Home red
+("Not predicting", "2 failed in a row"); the review saw both
+([central.md](central.md#errors) has the retries).
 
 `asleep` and `starting` are neither warn nor advice: they are the calm
 states the title names (*Was asleep*, *Starting*), their line says what the
@@ -195,8 +210,8 @@ predicting* (it read a red *Predicting*), also while catching up after
 being asleep; not staked, a red Base leaves the title to central. Once
 caught up after being asleep it is *Predicting*, its status still `idle`
 until the next normal cycle (sky green on Home, not grey). `src/neuron/health.test.js` checks every one of these states
-(starting, asleep, caught up, predicting, retrying after one failed poll,
-failing) with every reason (a table).
+(starting, asleep, caught up, predicting, retrying after a failed poll,
+failing for over 12 h of open time) with every reason (a table).
 
 The line is the top reason's short text (advice has none), after "The
 Satori Network is fine." when the network channel has no reason. With no reason, or only advice, it is
@@ -213,7 +228,7 @@ set by the code doing the work; nothing polls:
 
 | task | step | words (Home) | critical |
 |---|---|---|---|
-| `central` | `register` | Signing in to the Satori Network… (only when a poll follows at once: a new neuron, or one reopened with a poll due) | |
+| `central` | `register` | Signing in to the Satori Network… (only when a poll follows at once: a new neuron, or one reopened with a poll due; and in a poll that registers again first, the last register having failed) | |
 | | `observations` | Fetching today's observations… (the batch, stored) | |
 | | `history` | Loading history · 34 of 82 streams (the streams in hand; [central.md](central.md#history-an-addition-beyond-lite)) | |
 | | `models` | Building models · 40 of 82 (the engine yields to the page between targets: the same results) | |
@@ -338,9 +353,10 @@ health.js map them).
 - **Network** (the Satori Network): ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
   the last poll had nothing to send (never "0 sent"); idle "First poll now…",
   "Catching up now…" (while the poll runs; "Catching up soon" when due and
-  not yet running, "… in 2 h" when a poll is still ahead); warn "Last poll failed", "Vault mismatch",
-  "Not registered"; bad "Database error", "Login refused", "2 failed in a
-  row", "Nothing sent for 14 h".
+  not yet running, "… in 2 h" when a poll is still ahead); warn "Sending failed",
+  "Unreachable", "Poll failed", "Vault mismatch", "Not registered"; bad
+  "Database error", "Login refused", the same failure words once they span
+  12 h of open time, "Nothing sent for 14 h".
 - **Contract** (the Satori contract): ok "Round 20742 sent", "Round 20742 due"; idle "Not staked"
   (no SATORI), "Staked elsewhere", "No SATORI staked", "Connecting…"; warn
   "Not staked", "Gas: 3 batches", "Skipped: …", "Unreachable"; bad "Failed 3
@@ -450,8 +466,13 @@ session that missed nothing is not shown.
   sleep, merges, the 90-day prune, caught up, the log's first session.
   `src/db/db.test.js`: the table. `src/ui/format.test.js`: the strip's
   summary.
+- `src/neuron/neuron.test.js`: the retries (2, 10, 30 min, then 11 h; a
+  success resets them; kept over a reload; `online` at once).
 - `e2e/home.spec.js`: the four states in Chrome with the stub central and a
-  fake chain (idle from a seeded log); a new neuron (29 days before it,
+  fake chain (idle from a seeded log); the send failing twice (a poll, then
+  Try again minutes later) and then taken: amber, amber, green, never red
+  (a MutationObserver on the hero), then a refused login red; a register
+  that fails twice, then succeeds before a later poll; a new neuron (29 days before it,
   "0 full days", then "1 full day"); a new neuron with a vault mismatch
   (*Starting* in `health()` and on Home, the mismatch's card; *Predicting*
   after the first poll); a chip glowing while central's stub serves a poll
@@ -544,7 +565,12 @@ each state on a phone (390 × 844, the first screen) and a computer (1280
 wide), light and dark, `docs/screenshots/home-<state>-<phone|desktop>-<light|dark>.png`
 for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 
-<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: central refused two batches" width="240">
+<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: the Satori Network refused the login" width="240">
+
+A failed send, retried (`e2e/home.spec.js`, the second failure minutes
+after the first: amber, "Sending failed; next try in 10 min."; it was red):
+
+<img src="../screenshots/home-retrying-phone-light.png" alt="Sending failed; next try in 10 min." width="240"> <img src="../screenshots/home-retrying-phone-dark.png" alt="the same, dark" width="240">
 
 ![ok on a computer](../screenshots/home-ok-desktop-light.png)
 
