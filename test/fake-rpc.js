@@ -4,6 +4,10 @@
 // handler calls revert('Name') to revert with that custom error (or with no
 // data for a bare revert). ctx = { from, write, value, now, round, hour }:
 // handlers change state only when ctx.write (a mined transaction).
+// Sent transactions go through a pool by sender and nonce, as a node's: mined at
+// once (state.mine), or held until release(); a held one is replaced by one with
+// the same nonce and fees 10 % higher (else 'replacement transaction underpriced'),
+// and the node then forgets it.
 import {
   custom, decodeFunctionData, encodeErrorResult, encodeFunctionResult, keccak256, parseAbi, parseTransaction,
   recoverTransactionAddress, toHex,
@@ -40,10 +44,11 @@ class RpcError extends Error {
 export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {}, gasPrice = 1_000_000n } = {}) {
   const byAddr = Object.fromEntries(Object.entries(contracts).map(([a, c]) => [a.toLowerCase(), c]));
   const balances = Object.fromEntries(Object.entries(eth).map(([a, v]) => [a.toLowerCase(), v]));
-  const sent = []; // mined transactions: { from, to, functionName, args, value, hash, status }
+  const sent = []; // sent transactions: { from, to, functionName, args, value, hash, status, nonce, mined, replaced }
   const receipts = {};
-  const held = {}; // receipts of txs sent while state.mine is false
-  const txs = {}; // sent transactions, as eth_getTransactionByHash answers
+  const txs = {}; // the node's transactions (pending or mined), as eth_getTransactionByHash answers
+  const nonces = {}; // sender → its mined transactions (the 'latest' nonce)
+  const pool = {}; // `${sender}:${nonce}` → { tx, from, hash, entry }: sent, not mined
   const blocks = [{ number: 0, timestamp }];
   const log = []; // every RPC method called
   const state = { down: false, tip: gasPrice, baseFee: 1n, mine: true }; // mine: false holds sent txs unmined (no receipt yet)
@@ -124,7 +129,12 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
         return b ? blockJson(tag === 'latest' || tag === 'pending' ? { ...b, timestamp: now() } : b) : null;
       }
       case 'eth_getBalance': return toHex(balances[params[0].toLowerCase()] ?? 0n);
-      case 'eth_getTransactionCount': return toHex(sent.filter((s) => s.from === params[0].toLowerCase()).length);
+      case 'eth_getTransactionCount': {
+        const from = params[0].toLowerCase();
+        let n = nonces[from] ?? 0;
+        if (params[1] === 'pending') while (pool[`${from}:${n}`]) n++;
+        return toHex(n);
+      }
       case 'eth_gasPrice': return toHex(gasPrice);
       case 'eth_maxPriorityFeePerGas': return toHex(state.tip);
       case 'eth_call': return call(params[0], false);
@@ -134,30 +144,60 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
         const tx = parseTransaction(raw);
         const from = (await recoverTransactionAddress({ serializedTransaction: raw })).toLowerCase();
         const hash = keccak256(raw);
-        let status = '0x1';
-        try { call({ ...tx, from }, true); } catch { status = '0x0'; }
-        const block = { number: blocks.at(-1).number + 1, timestamp: now() };
-        blocks.push(block);
+        const nonce = Number(tx.nonce ?? 0);
+        if (nonce < (nonces[from] ?? 0)) throw new RpcError(-32000, 'nonce too low');
+        const key = `${from}:${nonce}`;
+        const old = pool[key];
+        if (old) { // a replacement: 10 % more on both fees, or refused
+          const up = (a, b) => (b ?? 0n) * 100n >= (a ?? 0n) * 110n;
+          if (!up(old.tx.maxFeePerGas, tx.maxFeePerGas) || !up(old.tx.maxPriorityFeePerGas, tx.maxPriorityFeePerGas)) {
+            throw new RpcError(-32000, 'replacement transaction underpriced');
+          }
+          delete txs[old.hash];
+          old.entry.replaced = true;
+        }
         const c = byAddr[tx.to.toLowerCase()];
         const { functionName, args } = c ? decodeFunctionData({ abi: c.abi, data: tx.data ?? '0x' }) : {};
-        sent.push({ from, to: tx.to.toLowerCase(), functionName, args, value: tx.value ?? 0n, hash, status: status === '0x1',
-          gas: tx.gas, maxFeePerGas: tx.maxFeePerGas, maxPriorityFeePerGas: tx.maxPriorityFeePerGas });
+        const entry = { from, to: tx.to.toLowerCase(), functionName, args, value: tx.value ?? 0n, hash, status: null, nonce, mined: false,
+          gas: tx.gas, maxFeePerGas: tx.maxFeePerGas, maxPriorityFeePerGas: tx.maxPriorityFeePerGas };
+        sent.push(entry);
         txs[hash] = {
-          hash, from, to: tx.to, nonce: toHex(tx.nonce ?? 0), value: toHex(tx.value ?? 0n), gas: toHex(tx.gas ?? 0n),
+          hash, from, to: tx.to, nonce: toHex(nonce), value: toHex(tx.value ?? 0n), gas: toHex(tx.gas ?? 0n),
           input: tx.data ?? '0x', type: '0x2', chainId: toHex(84532), maxFeePerGas: toHex(tx.maxFeePerGas ?? 0n),
           maxPriorityFeePerGas: toHex(tx.maxPriorityFeePerGas ?? 0n), v: '0x0', r: '0x1', s: '0x1', yParity: '0x0',
           blockHash: null, blockNumber: null, transactionIndex: null, accessList: [],
         };
-        (state.mine ? receipts : held)[hash] = {
-          transactionHash: hash, transactionIndex: '0x0', blockHash: keccak256(toHex(block.number)), blockNumber: toHex(block.number),
-          from, to: tx.to, cumulativeGasUsed: '0x1', gasUsed: '0x1', effectiveGasPrice: toHex(gasPrice),
-          logs: [], logsBloom: '0x' + '00'.repeat(256), status, type: '0x2', contractAddress: null,
-        };
+        pool[key] = { tx, from, hash, entry };
+        if (state.mine) mine();
         return hash;
       }
       case 'eth_getTransactionReceipt': return receipts[params[0]] ?? null;
       case 'eth_getTransactionByHash': return txs[params[0]] ?? null;
       default: throw new RpcError(-32601, `fakeRpc: ${method} not faked`);
+    }
+  }
+
+  /** Mine every pooled transaction whose nonce is next for its sender, in nonce order, a block each. */
+  function mine() {
+    for (let again = true; again;) {
+      again = false;
+      for (const [key, p] of Object.entries(pool)) {
+        if (Number(key.split(':')[1]) !== (nonces[p.from] ?? 0)) continue;
+        delete pool[key];
+        nonces[p.from] = (nonces[p.from] ?? 0) + 1;
+        let status = '0x1';
+        try { call({ ...p.tx, from: p.from }, true); } catch { status = '0x0'; }
+        const block = { number: blocks.at(-1).number + 1, timestamp: now() };
+        blocks.push(block);
+        Object.assign(p.entry, { status: status === '0x1', mined: true });
+        Object.assign(txs[p.hash], { blockHash: keccak256(toHex(block.number)), blockNumber: toHex(block.number), transactionIndex: '0x0' });
+        receipts[p.hash] = {
+          transactionHash: p.hash, transactionIndex: '0x0', blockHash: keccak256(toHex(block.number)), blockNumber: toHex(block.number),
+          from: p.from, to: p.tx.to, cumulativeGasUsed: '0x1', gasUsed: '0x1', effectiveGasPrice: toHex(gasPrice),
+          logs: [], logsBloom: '0x' + '00'.repeat(256), status, type: '0x2', contractAddress: null,
+        };
+        again = true;
+      }
     }
   }
 
@@ -190,9 +230,10 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
     advance(seconds) { timestamp += seconds; },
     /** Mine the held transactions (their receipts appear). */
     release() {
-      Object.assign(receipts, held);
-      for (const k of Object.keys(held)) delete held[k];
+      mine();
       blocks.push({ number: blocks.at(-1).number + 1, timestamp }); // a new block: viem's receipt watchers look again
     },
+    /** The pool: sent, not mined. */
+    get pending() { return Object.values(pool).map((p) => p.entry); },
   };
 }

@@ -118,6 +118,18 @@ describe('Base checks', () => {
     expect(base[1]).toMatchObject({ at: T + 86400, until: T + 86400 + 3600 });
     expect(await db.activity(0)).toEqual(a.rows());
   });
+  test('the contract unused: an RPC error is calm (idle) and marked, so the day strip leaves it out; a stuck batch is amber', async () => {
+    const a = make();
+    await a.start();
+    await a.base({ at: T, error: 'HTTP request failed', unused: true });
+    await a.base({ at: T, error: 'HTTP request failed', unused: true });
+    await a.base({ at: T, round: 9, skipped: 'stuck: retrying with a higher fee (0.025 gwei)', stuck: { at: T, replaced: 1, fee: '0.025' }, pendingAt: T });
+    const base = a.rows().filter((r) => r.kind === 'base');
+    expect(base.map((r) => [r.level, r.count, r.data])).toEqual([
+      ['idle', 2, { round: null, error: 'HTTP request failed', unused: true }],
+      ['warn', 1, { round: 9, skipped: 'stuck: retrying with a higher fee (0.025 gwei)', stuck: { at: T, replaced: 1, fee: '0.025' } }],
+    ]);
+  });
 });
 
 test('Nostr: each _pred a relay took, merged per hour', async () => {

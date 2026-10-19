@@ -146,6 +146,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
   // One write at a time, for both keys: the batch and a setup step never race for the identity's nonce.
   const queued = serial();
+  const batchCall = (list) => engine('predictMultipleWithPayloads', [list.map((g) => ({ gameId: g.gameId, payload: payload(g.direction) }))]);
 
   /**
    * EIP-1559 fees: the tip the node suggests (eth_maxPriorityFeePerGas) and a
@@ -160,21 +161,25 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   /**
    * As satorilib's EvmClient.send (evm.py:60-93): simulate and estimate first
    * (a revert throws, naming the error, before any gas), the limit with
-   * HOOK_GAS over the estimate, send (onSent(hash) at once), wait for the
-   * receipt, throw unless it succeeded.
+   * HOOK_GAS over the estimate, send at the account's next nonce (onSent(hash,
+   * { nonce, gas, maxFeePerGas, maxPriorityFeePerGas }) at once: the batch keeps
+   * them to replace it if it never mines), wait for the receipt (`timeout` ms,
+   * viem's 3 min by default), throw unless it succeeded.
    */
-  const write = (key, call, { fees: given, onSent } = {}) => queued(async () => {
+  const write = (key, call, { fees: given, onSent, timeout } = {}) => queued(async () => {
     const account = toAccount(key);
     const { request } = await client.simulateContract({ ...call, account });
-    const [estimate, fee] = await Promise.all([client.estimateContractGas({ ...call, account }), given ?? fees()]);
+    const [estimate, fee, nonce] = await Promise.all([client.estimateContractGas({ ...call, account }), given ?? fees(),
+      client.getTransactionCount({ address: account.address, blockTag: 'pending' })]);
     const wallet = createWalletClient({ account, chain, transport });
-    const hash = await wallet.writeContract({ ...request, gas: estimate + HOOK_GAS, ...fee });
-    await onSent?.(hash);
-    return receiptOf(hash, call.functionName);
+    const gas = estimate + HOOK_GAS;
+    const hash = await wallet.writeContract({ ...request, gas, nonce, ...fee });
+    await onSent?.(hash, { nonce, gas, ...fee });
+    return receiptOf(hash, call.functionName, timeout);
   });
 
-  async function receiptOf(hash, what) {
-    const receipt = await client.waitForTransactionReceipt({ hash, pollingInterval });
+  async function receiptOf(hash, what, timeout) {
+    const receipt = await client.waitForTransactionReceipt({ hash, pollingInterval, ...(timeout ? { timeout } : {}) });
     if (receipt.status !== 'success') throw new Error(`${what} failed on-chain (${hash})`);
     return { hash, receipt };
   }
@@ -189,13 +194,17 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   }
 
   const delegateOf = async (addr) => (await read(rewards('predictionDelegateInfo', [addr])))[0];
+  const minedOf = async (r) => {
+    const block = await client.getBlock({ blockNumber: r.blockNumber });
+    return { status: r.status, at: Number(block.timestamp), blockNumber: Number(r.blockNumber), hash: r.transactionHash };
+  };
 
   return {
     fees,
     /** What the RPC says it is (the app refuses a chain other than the config's). */
     chainId: () => client.getChainId(),
 
-    /** A sent tx's { status, at (its block's time), blockNumber }, or null if it is not mined within `timeout` ms. */
+    /** A sent tx's { status, at (its block's time), blockNumber, hash }, or null if it is not mined within `timeout` ms. */
     async receipt(hash, { timeout = 60_000 } = {}) {
       let r;
       try {
@@ -204,9 +213,23 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
         if (err instanceof WaitForTransactionReceiptTimeoutError) return null;
         throw err;
       }
-      const block = await client.getBlock({ blockNumber: r.blockNumber });
-      return { status: r.status, at: Number(block.timestamp), blockNumber: Number(r.blockNumber) };
+      return minedOf(r);
     },
+
+    /**
+     * The one of `hashes` (a batch and its replacements, all at one nonce) that was mined, as receipt() says it: each
+     * looked up at once, then the latest waited for up to `timeout` ms; null when none is.
+     */
+    async minedAny(hashes, { timeout = 60_000 } = {}) {
+      for (const hash of hashes) {
+        const r = await client.getTransactionReceipt({ hash }).catch(() => null);
+        if (r) return minedOf(r);
+      }
+      return this.receipt(hashes.at(-1), { timeout });
+    },
+
+    /** How many transactions `address` has had mined ('latest'), or sent ('pending'): the next nonce. */
+    nonce: (address, blockTag = 'latest') => client.getTransactionCount({ address, blockTag }),
 
     /**
      * Everything the Base card shows, in one multicall (each read may fail on
@@ -350,16 +373,25 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     },
 
     /**
-     * The day's batch from the identity; onSent(hash) as soon as it is sent,
-     * `fees` as given (the batch checks them against its ceiling).
+     * The day's batch from the identity; onSent(hash, { nonce, gas, fees }) as soon as it is sent, `fees` as given
+     * (the batch checks them against its ceiling), `timeout` for its receipt.
      * → { hash, at (the block's time), blockNumber }
      */
     async sendBatch(identity, list, opts = {}) {
-      const { hash, receipt } = await write(identity,
-        engine('predictMultipleWithPayloads', [list.map((g) => ({ gameId: g.gameId, payload: payload(g.direction) }))]), opts);
+      const { hash, receipt } = await write(identity, batchCall(list), opts);
       const block = await client.getBlock({ blockNumber: receipt.blockNumber });
       return { hash, at: Number(block.timestamp), blockNumber: Number(receipt.blockNumber) };
     },
+
+    /**
+     * A batch sent again in place of one that does not mine: the same games at the same nonce, gas limit and the
+     * given (higher) fees; no simulate (the first is still pending) and no wait (the next check looks). → its hash
+     */
+    replaceBatch: (identity, list, { nonce, gas, fees: fee }) => queued(async () => {
+      const account = toAccount(identity);
+      const wallet = createWalletClient({ account, chain, transport });
+      return wallet.writeContract({ ...batchCall(list), account, chain, nonce, gas, ...fee });
+    }),
 
     // the vault's writes below: opts.onSent(hash) once sent, before the receipt (Home's "Waiting for Base to confirm…")
     /** On-chain rewards: hub.claim() from the vault (the dapp, useDashboard.ts:288-311). */

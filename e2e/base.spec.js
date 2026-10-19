@@ -4,12 +4,17 @@
 // this neuron, the identity's batch on its own, a round later the claims
 // and the next batch, Unstake, when SATORI can be sent, sends; the agent API.
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
+import { createChain } from '../src/chain/index.js';
+import { DEFAULTS } from '../src/chain/config.js';
+import { publicKey, evmAddress, signDigest } from '../src/keys/keys.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
 const PASS = 'correct horse battery';
 const ROUND = 20741;
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
 const DAY = 86400;
 
 async function setup(context) {
@@ -318,4 +323,85 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   expect(await page.evaluate(() => window.satori.base())).toMatchObject({ rpc: ['/rpc'], rpcSetting: '/rpc', maxFeeSetting: 0.5, maxFeeGwei: 0.5 });
   await expect(page.getByLabel('Daily batch: max fee (gwei)')).toHaveValue('0.5');
   expect(await page.evaluate(() => window.satori.setBaseRpc(''))).toMatchObject({ rpc: ['/rpc'], rpcSetting: '' }); // the dev server's default
+});
+
+test('the Satori contract unused (not staked, no batch ever sent): an RPC error stays on its chip, grey; Home green; no failed day', async ({ context, page }) => {
+  const { rpc, central } = await setup(context);
+  central.noVaultBase = true; // no vault mismatch to read past
+  await openApp(page);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, fx.vectors[1].words]);
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  rpc.state.down = true; // the RPC stops answering
+  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ error: expect.any(String), unused: true });
+  await page.evaluate(() => window.satori.base());
+  const h = await page.evaluate(() => window.satori.health());
+  expect(h).toMatchObject({ status: 'ok', title: 'Predicting', action: null, channels: { contract: { state: 'note', tone: 'off', text: 'Unreachable' } } });
+  expect(h.reasons.map((r) => [r.id, r.status])).toEqual([['base-unused-unreachable', 'note']]);
+  expect(h.days.at(-1).code).toBe('full'); // the check's error is no failure: not staked there
+  expect(h.feed[0].text).toMatch(/^Couldn't reach the Satori contract \(not staked\): /);
+  await expect(page.locator('[data-test=health]')).toHaveAttribute('data-s', 'ok'); // it read amber, "Can't reach Base"
+  const chip = page.locator('[data-test=chip][data-channel=contract]');
+  await expect(chip).toHaveAttribute('data-tone', 'off');
+  await expect(chip.locator('[data-test=chip-text]')).toHaveText('Unreachable');
+  expect(central.prod).toEqual([]);
+});
+
+test('a batch that never mines: past the max fee it says so (Settings); within it, sent again at its nonce with a higher fee, amber; mined, green', async ({ context, page }) => {
+  test.setTimeout(240_000);
+  const { s, rpc, central } = await setup(context);
+  central.noVaultBase = true;
+  const [id, vk] = [fx.vectors[0], fx.vectors[1]];
+  await openApp(page);
+  await page.evaluate(([p, i, v]) => window.satori.setup({ passphrase: p, identityWords: i, vaultWords: v }), [PASS, id.words, vk.words]);
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  const I = id.ethAddress.toLowerCase();
+  const V = vk.ethAddress.toLowerCase();
+  rpc.eth[I] = 10n ** 17n;
+  rpc.eth[V] = 10n ** 17n;
+  s.balance[V] = 100n * E18;
+
+  // The app closed; meanwhile the vault stakes with it and its batch goes out while Base mines nothing (from this test's
+  // side, with the same keys), and the app keeps it as sent 11 minutes ago.
+  await page.goto('/e2e/store/');
+  const key = (hex) => { const k = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16)); return { evmAddress: evmAddress(publicKey(k)), signDigest: (h) => signDigest(k, h) }; };
+  const chain = createChain({ config: DEFAULTS, transport: rpc.transport, pollingInterval: 20, settle: { tries: 3, ms: 20 } });
+  await chain.delegate({ identity: key(id.entropyHex), vault: key(vk.entropyHex) });
+  rpc.state.mine = false;
+  const games = [{ streamId: 1, gameId: 1, named: false, direction: 1, rule: 'last-move', model: 'naive', latest: '1', forecast: '1', horizon: 86400, step: 86400 }];
+  let tx;
+  await chain.sendBatch(key(id.entropyHex), games, { timeout: 100, onSent: (hash, t) => { tx = { hash, ...t }; } }).catch(() => {});
+  const pending = { round: ROUND, hash: tx.hash, games, dropped: [], nonce: tx.nonce, gas: String(tx.gas), sentAt: Math.floor(Date.now() / 1000) - 660,
+    fees: { maxFeePerGas: String(tx.maxFeePerGas), maxPriorityFeePerGas: String(tx.maxPriorityFeePerGas) } };
+  await page.evaluate((v) => window.probe({ cmd: 'app-meta', key: 'base_pending_batch', value: v }), pending);
+  await page.evaluate((v) => window.probe({ cmd: 'app-meta', key: 'base_max_fee_gwei', value: v }), Number(tx.maxFeePerGas) / 1e9); // its fee is the ceiling
+
+  // Reopened: the batch is due, so it is checked at once: stuck, and a higher fee would pass the max fee: said, with Settings
+  await openApp(page);
+  const action = page.locator('[data-test=action]');
+  await expect(action).toHaveAttribute('data-action', 'base-stuck', { timeout: 30_000 });
+  await expect(page.locator('[data-test=action-text]')).toHaveText(/^The Satori contract batch is stuck: a higher fee \([\d.]+ gwei\) would pass the max fee \([\d.]+ gwei\), so it waits\. Raise the max fee in Settings\.$/);
+  await expect(page.locator('[data-test=action-button]')).toHaveText('Open Settings');
+  await expect(page.locator('[data-test=health]')).toHaveAttribute('data-s', 'warn');
+  await expect(page.locator('[data-test=chip][data-channel=contract] [data-test=chip-text]')).toHaveText('Batch stuck');
+  expect(rpc.sent.filter((t) => t.functionName === 'predictMultipleWithPayloads')).toHaveLength(1); // not sent again
+
+  // the max fee back to the default: sent again at the same nonce, a quarter more fee: amber, retrying
+  await page.evaluate(() => window.satori.setBaseMaxFee(''));
+  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ stuck: { replaced: 1 }, skipped: expect.stringMatching(/^stuck: retrying with a higher fee/) });
+  const [first, again] = rpc.sent.filter((t) => t.functionName === 'predictMultipleWithPayloads');
+  expect([again.nonce, first.replaced]).toEqual([first.nonce, true]);
+  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Network is fine. The Satori contract batch is stuck; retrying with a higher fee.');
+  expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'base-stuck' });
+  expect((await page.evaluate(() => window.satori.base())).pendingBatch).toMatchObject({ hashes: [first.hash, again.hash], stuck: { replaced: 1 } });
+
+  // Base mines again: the replacement is the round's batch; green
+  rpc.release();
+  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ sent: { round: ROUND, hash: again.hash } });
+  await expect(page.locator('[data-test=chip][data-channel=contract] [data-test=chip-text]')).toHaveText(`Round ${ROUND} sent`);
+  await expect(page.locator('[data-test=health]')).toHaveAttribute('data-s', 'ok');
+  const h = await page.evaluate(() => window.satori.health());
+  expect(h.feed.map((f) => f.text)).toEqual(expect.arrayContaining([ // logged: both, newest first
+    expect.stringMatching(/^Satori contract batch stuck: sent again with a higher fee \([\d.]+ gwei\)$/),
+    expect.stringMatching(/^Satori contract batch stuck: a higher fee \([\d.]+ gwei\) would pass the max fee$/)]));
+  expect(central.prod).toEqual([]);
 });

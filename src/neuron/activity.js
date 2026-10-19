@@ -114,18 +114,23 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
       if (r?.error && !r.retryAt) await add('history', 'warn', { streams: r.streams ?? 0, rows: r.rows ?? 0, error: r.error });
     }),
 
-    /** A Base batch check's result (base.js check()). */
+    /** A Base batch check's result (base.js check()): sent, a stuck batch (amber), a skip, an error (calm when unused). */
     base: safely(async (r) => {
       if (r?.sent) {
         const { round, hash, games, dropped = [] } = r.sent;
         return void (await add('base', 'ok', { round, hash, games: games.map((g) => g.gameId), dropped: dropped.map((g) => g.gameId) }));
+      }
+      if (r?.stuck) {
+        return void (await merge('base', 'warn', { round: r.round ?? null, skipped: r.skipped, stuck: r.stuck }, `stuck:${r.stuck.ceiling ? 'ceiling' : 'retry'}`));
       }
       if (r?.skipped) {
         if (QUIET_SKIPS.test(r.skipped)) return;
         const level = FIXABLE_SKIPS.test(r.skipped) ? 'warn' : 'idle';
         return void (await merge('base', level, { round: r.round ?? null, skipped: r.skipped }, `skip:${r.skipped.split(':')[0]}`));
       }
-      if (r?.error) await merge('base', 'bad', { round: r.round ?? null, error: r.error }, `error:${r.error.slice(0, 120)}`);
+      // the contract unused (not staked, no batch ever sent): its RPC's trouble is calm, and the day strip leaves it out
+      if (r?.error && r.unused) await merge('base', 'idle', { round: r.round ?? null, error: r.error, unused: true }, `unused:${r.error.slice(0, 120)}`);
+      else if (r?.error) await merge('base', 'bad', { round: r.round ?? null, error: r.error }, `error:${r.error.slice(0, 120)}`);
     }),
 
     /** A `_pred` a relay took. */

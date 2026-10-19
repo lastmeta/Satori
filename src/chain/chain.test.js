@@ -1,7 +1,7 @@
 // The chain module (docs/design/base.md) against test/fake-satori.js: viem over a
 // custom transport to a small stateful D6. Keys are our signers (src/keys),
 // so every transaction here is signed the way the app signs it.
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ContractFunctionExecutionError, ContractFunctionRevertedError, encodeErrorResult, zeroAddress } from 'viem';
 import { tokenAbi } from './abi.js';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
@@ -193,9 +193,27 @@ describe('fees, receipts, the chain id', () => {
   });
   test('receipt: the status and the block time of a sent tx; null while it is not mined', async () => {
     const { hash } = await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }]);
-    expect(await chain.receipt(hash)).toEqual({ status: 'success', at: ROUND * 86400 + 9 * 3600, blockNumber: 1 });
+    expect(await chain.receipt(hash)).toEqual({ status: 'success', at: ROUND * 86400 + 9 * 3600, blockNumber: 1, hash });
     expect(await chain.receipt('0x' + '12'.repeat(32), { timeout: 50 })).toBe(null);
   });
+  test('minedAny: the one of a batch and its replacements that was mined; the nonce, mined and sent', async () => {
+    const A = identity.evmAddress;
+    expect([await chain.nonce(A), await chain.nonce(A, 'pending')]).toEqual([0, 0]);
+    rpc.state.mine = false;
+    const sent = [];
+    // its own wait ends (timeout) before the replacement: writes are one at a time, the wait included
+    const p = chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }], { timeout: 300, onSent: (hash, tx) => sent.push({ hash, ...tx }) });
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({ nonce: 0, gas: expect.any(BigInt), maxFeePerGas: expect.any(BigInt), maxPriorityFeePerGas: expect.any(BigInt) });
+    expect([await chain.nonce(A), await chain.nonce(A, 'pending')]).toEqual([0, 1]); // sent, not mined
+    expect(await chain.minedAny([sent[0].hash], { timeout: 50 })).toBe(null);
+    const fees = { maxFeePerGas: sent[0].maxFeePerGas * 2n, maxPriorityFeePerGas: sent[0].maxPriorityFeePerGas * 2n };
+    const again = await chain.replaceBatch(identity, [{ gameId: 1, direction: DOWN }], { nonce: 0, gas: sent[0].gas, fees });
+    expect(rpc.sent.map((t) => [t.nonce, !!t.replaced])).toEqual([[0, true], [0, false]]);
+    rpc.release();
+    expect(await chain.minedAny([sent[0].hash, again], { timeout: 1000 })).toMatchObject({ status: 'success', hash: again });
+    await expect(p).rejects.toThrow(/Timed out/); // the first's own wait: it timed out, then it was replaced
+  }, 20_000);
   test('chainId: what the RPC says', async () => {
     expect(await chain.chainId()).toBe(84532);
   });

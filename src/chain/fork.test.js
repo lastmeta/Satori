@@ -9,6 +9,7 @@ import { generateSecret, publicKey, evmAddress, signDigest } from '../keys/keys.
 import { DEFAULTS } from './config.js';
 import { createChain, revertName, DOWN, INDEFINITE } from './index.js';
 import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/fork.mjs';
+import { runBatch } from '../neuron/base.js';
 
 const RPC = process.env.BASE_FORK;
 const E18 = 10n ** 18n;
@@ -83,5 +84,63 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     const ethBefore = await pub.getBalance({ address: to });
     await chain.sendEth(vault, to, 10n ** 15n);
     expect(await pub.getBalance({ address: to })).toBe(ethBefore + 10n ** 15n);
+  });
+
+  // A batch that never mines (docs/design/base.md#a-batch-that-never-mines): anvil's mining stopped (interval mining off,
+  // no automine), the batch waits in its pool; after STUCK_S (0 here) its nonce is still pending, so it is sent again at
+  // that nonce with a quarter more fee, which the pool takes in its place; mining again, the replacement is mined.
+  test('a batch that never mines: replaced at its nonce with a higher fee, within the ceiling; past it, said and not sent', { timeout: 180_000 }, async () => {
+    const { test: anvil, pub } = clients(RPC);
+    const mem = () => {
+      const m = new Map();
+      return { m, get: async (k) => m.get(k), set: async (k, v) => void m.set(k, structuredClone(v)), checkpoint: async () => {} };
+    };
+    const chain = createChain({ config: DEFAULTS, transport: http(RPC), pollingInterval: 250, settle: { tries: 5, ms: 500 } });
+    const staked = async () => {
+      const identity = signer();
+      const vault = signer();
+      await fund(RPC, [identity.evmAddress], { eth: '0.1' });
+      await fund(RPC, [vault.evmAddress], { eth: '0.1', satori: '10' });
+      await chain.delegate({ identity, vault });
+      return identity;
+    };
+    const flat = () => ({ model: 'naive', value: 1, horizon: 86_400 }); // any forecast: the stuck path is the point
+    const one = await staked();
+    const two = await staked();
+    let t = 1_000;
+    const run = (identity, db, o = {}) => runBatch({ chain, identity, db, forecast: flat, now: () => t, pendingWaitMs: 500, sendWaitMs: 3000,
+      maxFeeWei: 10n ** 9n * 2n, ...o });
+    await anvil.setAutomine(false);
+    await anvil.setIntervalMining({ interval: 0 }); // Base stops mining
+    try {
+      const db = mem();
+      expect(await run(one, db)).toMatchObject({ skipped: expect.stringMatching(/^waiting for the batch already sent/), pendingAt: 1000 });
+      const p = db.m.get('base_pending_batch');
+      expect(await pub.getTransactionCount({ address: one.evmAddress, blockTag: 'latest' })).toBe(p.nonce); // still pending
+      t += 600;
+      const r = await run(one, db);
+      expect(r).toMatchObject({ stuck: { replaced: 1 }, skipped: expect.stringMatching(/^stuck: retrying with a higher fee/) });
+      const q = db.m.get('base_pending_batch');
+      expect(q.hashes).toEqual([p.hash, q.hash]);
+      expect(BigInt(q.fees.maxFeePerGas) * 4n).toBeGreaterThanOrEqual(BigInt(p.fees.maxFeePerGas) * 5n);
+
+      // past the ceiling: nothing sent, said (another identity's batch, stuck the same way)
+      const db2 = mem();
+      await run(two, db2);
+      const p2 = db2.m.get('base_pending_batch');
+      t += 600;
+      const c = await run(two, db2, { maxFeeWei: BigInt(p2.fees.maxFeePerGas) });
+      expect(c).toMatchObject({ stuck: { ceiling: true }, skipped: expect.stringMatching(/would pass the max fee/) });
+      expect(db2.m.get('base_pending_batch').hash).toBe(p2.hash);
+
+      await anvil.mine({ blocks: 1 }); // Base mines again: the replacement, not the first
+      const done = await run(one, db);
+      expect(done).toMatchObject({ sent: { hash: q.hash } });
+      expect((await chain.batchState(one.evmAddress)).predicted).toBe(1);
+      expect(await pub.getTransactionReceipt({ hash: p.hash }).catch(() => null)).toBe(null); // the first never mined
+      expect((await run(two, db2)).sent).toMatchObject({ hash: p2.hash }); // the other, as it was, at the old fee
+    } finally {
+      await anvil.setIntervalMining({ interval: 2 }); // as fork.mjs starts it
+    }
   });
 });

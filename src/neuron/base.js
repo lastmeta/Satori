@@ -4,7 +4,9 @@
 //   · claims (Unlock: hub.claim, merkle, airdrop) · send (Unlock)
 // The batch goes at the first check of each UTC round: 10 s after start (at
 // once when one is due), at the next round's start (chain time) and at least hourly.
-import { fallback, formatEther, formatGwei, getAddress, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
+import {
+  fallback, formatEther, formatGwei, getAddress, http, isAddress, parseEther, parseGwei, zeroAddress, WaitForTransactionReceiptTimeoutError,
+} from 'viem';
 import { createChain, errorText, lockText, panicOf, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
 import { explainForecast as engineForecast, STEP_S } from '../engine/index.js';
@@ -26,6 +28,21 @@ const LOW_BATCHES = 7; // warn below a week of batches
  */
 export const MAX_FEE_GWEI = 2;
 const PENDING_WAIT_MS = 30_000; // how long a check waits for a batch sent earlier
+/** A batch sent and not mined this long (s) is looked at again: its nonce still pending, it is sent again with a higher fee. */
+export const STUCK_S = 600;
+
+/**
+ * A replacement's fees (docs/design/base.md#a-batch-that-never-mines): each a quarter over what the stuck batch pays (a
+ * node takes a replacement at 10 % more on both), or the market's when that is higher.
+ */
+export function bumpFees(old, market) {
+  const up = (x) => (x * 5n + 3n) / 4n;
+  const tip = [up(old.maxPriorityFeePerGas), market.maxPriorityFeePerGas].reduce((a, b) => (a > b ? a : b));
+  const max = [up(old.maxFeePerGas), market.maxFeePerGas, tip].reduce((a, b) => (a > b ? a : b));
+  return { maxFeePerGas: max, maxPriorityFeePerGas: tip };
+}
+const feesOf = (f) => ({ maxFeePerGas: BigInt(f.maxFeePerGas), maxPriorityFeePerGas: BigInt(f.maxPriorityFeePerGas) });
+const feesText = (f) => ({ maxFeePerGas: String(f.maxFeePerGas), maxPriorityFeePerGas: String(f.maxPriorityFeePerGas) });
 
 /** The max fee setting as typed: '' or null for the default, else a positive number of gwei. */
 export function checkMaxFee(raw) {
@@ -159,28 +176,66 @@ async function finish(db, b, mined) {
 }
 
 /**
+ * A batch sent and not mined for STUCK_S (docs/design/base.md#a-batch-that-never-mines): its nonce still pending, it is
+ * sent again at that nonce with fees bumped (bumpFees), within the ceiling; past it, it waits and says so. Its nonce
+ * taken (mined: ours unseen, or another transaction): null, let go.
+ */
+async function unstick({ chain, identity, db, pending, maxFeeWei, now, at, round, report }) {
+  if ((await chain.nonce(identity.evmAddress, 'latest')) > pending.nonce) return null;
+  const fees = bumpFees(feesOf(pending.fees), await chain.fees());
+  const fee = formatGwei(fees.maxFeePerGas);
+  console.warn('[satori] base batch stuck', { hash: pending.hash, nonce: pending.nonce, sentAt: pending.sentAt, fee });
+  const keep = async (p) => {
+    await db.set('base_pending_batch', p);
+    await db.checkpoint();
+  };
+  if (fees.maxFeePerGas > maxFeeWei) {
+    const max = formatGwei(maxFeeWei);
+    const stuck = { at: now(), ceiling: true, fee, max, replaced: pending.stuck?.replaced ?? 0 };
+    await keep({ ...pending, stuck });
+    return { at, round, stuck, skipped: `stuck: a higher fee (${fee} gwei) would pass the max fee (${max} gwei); raise it in Settings` };
+  }
+  report('send');
+  const hash = await chain.replaceBatch(identity, pending.games, { nonce: pending.nonce, gas: BigInt(pending.gas), fees });
+  const stuck = { at: now(), fee, replaced: (pending.stuck?.replaced ?? 0) + 1 };
+  await keep({ ...pending, hash, hashes: [...(pending.hashes ?? [pending.hash]), hash], fees: feesText(fees), sentAt: now(), stuck });
+  report('confirm');
+  return { at, round, stuck, pendingAt: now(), skipped: `stuck: retrying with a higher fee (${fee} gwei)` };
+}
+
+/**
  * The daily batch (start.py:1143-1236 with the fixes in docs/design/base.md).
  * Never throws: the result says what happened. report(step): 'check' (the games, once a batch is due), 'send',
- * 'confirm' (waiting for its receipt, or for one sent before); nothing for a check with nothing to do.
- * @returns {Promise<object>} { at, round, sent: {round, at, hash, games, dropped} } | { at, round?, skipped, dropped? } | { at, error }
+ * 'confirm' (waiting for its receipt, or for one sent before); nothing for a check with nothing to do. A batch still
+ * pending says when it was sent (pendingAt, local seconds): the next check comes STUCK_S after it.
+ * @returns {Promise<object>} { at, round, sent: {round, at, hash, games, dropped} } | { at, round?, skipped, dropped?,
+ *   pendingAt?, stuck? } | { at, error }
  */
 export async function runBatch({ chain, identity, db, forecast = engineForecast, maxFeeWei = parseGwei(String(MAX_FEE_GWEI)),
-  pendingWaitMs = PENDING_WAIT_MS, report = () => {} }) {
+  pendingWaitMs = PENDING_WAIT_MS, sendWaitMs, stuckS = STUCK_S, now = () => Date.now() / 1000, report = () => {} }) {
   let at = null;
   try {
-    // A batch sent before the tab closed (or a check ended) has its hash kept: wait for it, never send twice.
+    // A batch sent before the tab closed (or a check ended) has its hash kept: wait for it, never send twice; one that
+    // does not mine for STUCK_S is sent again with a higher fee (unstick).
     const pending = await db.get('base_pending_batch');
     if (pending) {
       report('confirm');
-      const mined = await chain.receipt(pending.hash, { timeout: pendingWaitMs });
-      if (mined?.status === 'success') return finish(db, pending, mined);
+      const known = pending.nonce != null && pending.sentAt != null; // sent by a version that keeps its nonce
+      const late = known && now() - pending.sentAt >= stuckS; // waited for long enough: a look, not another wait
+      const mined = await chain.minedAny(pending.hashes ?? [pending.hash], { timeout: late ? 1000 : pendingWaitMs });
+      if (mined?.status === 'success') return finish(db, { ...pending, hash: mined.hash }, mined);
       if (!mined) {
         const st = await chain.batchState(identity.evmAddress);
-        if (pending.round === st.round) {
-          return { at: st.chainTime, round: st.round, skipped: `waiting for the batch already sent (${pending.hash})` };
+        if (late) {
+          const r = await unstick({ chain, identity, db, pending, maxFeeWei, now, at: st.chainTime, round: st.round, report });
+          if (r) return r;
+        } else if (known || pending.round === st.round) {
+          return { at: st.chainTime, round: st.round, skipped: `waiting for the batch already sent (${pending.hash})`,
+            ...(known ? { pendingAt: pending.sentAt } : {}) };
         }
       }
-      await db.set('base_pending_batch', null); // reverted, or an earlier round's that never mined
+      // reverted, its nonce taken by another transaction, or an earlier round's (from an older version) that never mined
+      await db.set('base_pending_batch', null);
     }
 
     const state = await chain.batchState(identity.evmAddress);
@@ -218,11 +273,19 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
         skipped: `gas above the ceiling: a max fee of ${formatGwei(fees.maxFeePerGas)} gwei > ${formatGwei(maxFeeWei)} gwei; the next check tries again` };
     }
     report('send');
-    const sent = await chain.sendBatch(identity, games, { fees, onSent: async (hash) => {
-      await db.set('base_pending_batch', { round, hash, games, dropped });
-      await db.checkpoint();
-      report('confirm');
-    } });
+    let sent;
+    try {
+      sent = await chain.sendBatch(identity, games, { fees, timeout: sendWaitMs, onSent: async (hash, tx) => {
+        await db.set('base_pending_batch', { round, hash, games, dropped, nonce: tx.nonce, gas: String(tx.gas), fees: feesText(tx),
+          sentAt: now() });
+        await db.checkpoint();
+        report('confirm');
+      } });
+    } catch (err) {
+      if (!(err instanceof WaitForTransactionReceiptTimeoutError)) throw err;
+      const p = await db.get('base_pending_batch'); // sent, not mined yet: the next check looks again
+      return { at, round, skipped: `waiting for the batch already sent (${p?.hash})`, pendingAt: p?.sentAt ?? null };
+    }
     return finish(db, { hash: sent.hash, games, dropped }, sent);
   } catch (err) {
     console.warn('[satori] base batch', err);
@@ -232,12 +295,17 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
 
 /**
  * When the next check runs (local seconds): the next round's start + 1 min
- * (on the chain's clock, which a fork may run ahead), at most an hour away.
+ * (on the chain's clock, which a fork may run ahead), at most an hour away; a
+ * batch sent and not mined (pendingAt: when), STUCK_S after it was sent, at least
+ * a minute from now.
  */
-export function nextCheckAt({ now, chainTime }) {
-  if (chainTime == null) return now + CHECK_EVERY_S;
-  const roundStart = (Math.floor(chainTime / ROUND_S) + 1) * ROUND_S;
-  return Math.min(now + CHECK_EVERY_S, now + (roundStart - chainTime) + AFTER_ROUND_S);
+export function nextCheckAt({ now, chainTime, pendingAt = null }) {
+  let next = now + CHECK_EVERY_S;
+  if (chainTime != null) {
+    const roundStart = (Math.floor(chainTime / ROUND_S) + 1) * ROUND_S;
+    next = Math.min(next, now + (roundStart - chainTime) + AFTER_ROUND_S);
+  }
+  return pendingAt == null ? next : Math.min(next, Math.max(now + 60, pendingAt + STUCK_S));
 }
 
 /**
@@ -364,8 +432,9 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     };
   }
 
+  /** The last batch mined, and one sent and not mined yet (its stuck state: Home's base-stuck). */
   async function withLast(v) {
-    return { ...v, lastBatch: (await db.get('base_last_batch')) ?? null };
+    return { ...v, lastBatch: (await db.get('base_last_batch')) ?? null, pendingBatch: (await db.get('base_pending_batch')) ?? null };
   }
 
   // ── the batch's schedule: a check runs the batch if due; one at a time; then the next check is armed ──
@@ -373,10 +442,12 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     let result;
     try {
       const { chain } = await chainNow();
-      result = await work.run('base', async (report) => runBatch({ chain, identity, db, forecast, maxFeeWei: await maxFeeWei(), report }));
+      result = await work.run('base', async (report) => runBatch({ chain, identity, db, forecast, maxFeeWei: await maxFeeWei(), now, report }));
     } catch (err) {
       result = { at: null, error: errorText(err) };
     }
+    // the contract unused (nothing staked here, no batch ever sent): its RPC's trouble is calm (docs/design/health.md)
+    if (result.error && !(status?.identity?.power > 0n) && !(await db.get('base_last_batch'))) result.unused = true;
     lastCheck = result;
     onCheck(result); // Home's activity log
     await refresh();
@@ -384,7 +455,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
   }
   const schedule = createSchedule(check, {
     now, setTimeout: st, clearTimeout: ct, name: 'base', onChange: changed,
-    after: () => nextCheckAt({ now: now(), chainTime: lastCheck?.at ?? status?.chainTime ?? null }),
+    after: () => nextCheckAt({ now: now(), chainTime: lastCheck?.at ?? status?.chainTime ?? null, pendingAt: lastCheck?.pendingAt ?? null }),
   });
 
   // ── vault actions (Unlock): each says its steps as work `task` (step(name, k, n)) ──

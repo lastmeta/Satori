@@ -3,7 +3,7 @@
 // transport) and a Map for the database.
 import { forecast } from '../engine/index.js';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { formatEther, zeroAddress } from 'viem';
+import { formatEther, formatGwei, zeroAddress } from 'viem';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
@@ -11,7 +11,7 @@ import { UP, DOWN, ROUND_S, INDEFINITE, HOOK_GAS } from '../chain/index.js';
 import { createWork } from './work.js';
 import {
   createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, proofState, dropClaimable,
-  checkSend, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS,
+  checkSend, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS, STUCK_S,
 } from './base.js';
 
 const signerOf = (hex) => {
@@ -92,6 +92,9 @@ describe('rules', () => {
     expect(nextCheckAt({ now: 1000, chainTime })).toBe(1000 + 1800 + 60);
     expect(nextCheckAt({ now: 1000, chainTime: ROUND * ROUND_S + 9 * 3600 })).toBe(1000 + CHECK_EVERY_S);
     expect(nextCheckAt({ now: 1000, chainTime: null })).toBe(1000 + CHECK_EVERY_S);
+    // a batch sent and not mined: looked at again STUCK_S after it was sent (at least a minute from now)
+    expect(nextCheckAt({ now: 1000, chainTime: null, pendingAt: 900 })).toBe(900 + STUCK_S);
+    expect(nextCheckAt({ now: 1000, chainTime: null, pendingAt: 0 })).toBe(1000 + 60);
   });
   test('registry history → points: hours to seconds, int232 → number', () => {
     expect(toPoints([{ hour: 10, value: 5n * E18 }])).toEqual([{ ts: 36_000, value: 5e18 }]);
@@ -295,6 +298,77 @@ describe('the daily batch', () => {
     expect(rpc.sent).toHaveLength(1);
   });
 
+  test('a batch that never mines (the review, 2026-10-19): after 10 min its nonce is checked; still pending, it is sent again with the same nonce and a higher fee; then it mines', async () => {
+    await staked(); // the identity's two transactions: the batch is its nonce 2
+    rpc.state.mine = false; // Base stops mining it
+    let t = 1000;
+    const run = (o = {}) => runBatch({ chain: chainOf(), identity, db, now: () => t, pendingWaitMs: 20, sendWaitMs: 50, ...o });
+    const first = await run();
+    expect(first).toMatchObject({ round: ROUND, skipped: expect.stringMatching(/^waiting for the batch already sent \(0x/), pendingAt: 1000 });
+    const p = db.m.get('base_pending_batch');
+    expect(p).toMatchObject({ round: ROUND, nonce: 2, sentAt: 1000, gas: expect.stringMatching(/^\d+$/),
+      fees: { maxFeePerGas: expect.stringMatching(/^\d+$/), maxPriorityFeePerGas: expect.stringMatching(/^\d+$/) } });
+    t = 1000 + STUCK_S - 1; // under 10 min: it waits
+    expect(await run()).toMatchObject({ skipped: `waiting for the batch already sent (${p.hash})`, pendingAt: 1000 });
+    expect(batchesSent()).toHaveLength(1);
+
+    t = 1000 + STUCK_S; // 10 min, and the nonce is still pending: sent again, the same nonce, both fees up a quarter
+    const seen = [];
+    const r = await run({ report: (x) => seen.push(x) });
+    expect(r).toMatchObject({ round: ROUND, pendingAt: t, stuck: { at: t, replaced: 1, fee: expect.any(String) },
+      skipped: expect.stringMatching(/^stuck: retrying with a higher fee \([\d.]+ gwei\)$/) });
+    expect(seen).toEqual(['confirm', 'send', 'confirm']);
+    const [a, b] = rpc.sent.filter((x) => x.functionName === 'predictMultipleWithPayloads');
+    expect([b.nonce, a.replaced, b.args]).toEqual([a.nonce, true, a.args]); // the same batch, replacing the first
+    expect(b.maxFeePerGas * 4n).toBeGreaterThanOrEqual(a.maxFeePerGas * 5n);
+    expect(b.maxPriorityFeePerGas * 4n).toBeGreaterThanOrEqual(a.maxPriorityFeePerGas * 5n);
+    expect(db.m.get('base_pending_batch')).toMatchObject({ hash: b.hash, hashes: [a.hash, b.hash], nonce: 2, sentAt: t, stuck: { replaced: 1 } });
+
+    rpc.release(); // Base mines again: the replacement
+    expect(await run()).toMatchObject({ round: ROUND, sent: { round: ROUND, hash: b.hash, games: [{ gameId: 1 }] } });
+    expect(db.m.get('base_pending_batch')).toBe(null);
+    expect(db.m.get('base_last_batch')).toMatchObject({ hash: b.hash });
+    expect(s.predicted[`${I}:${ROUND}`]).toBe(1);
+  });
+
+  test('a stuck batch whose higher fee would pass the max fee: not sent again; it says so and waits for the usual checks', async () => {
+    await staked();
+    rpc.state.mine = false;
+    let t = 1000;
+    await runBatch({ chain: chainOf(), identity, db, now: () => t, sendWaitMs: 50 });
+    const p = db.m.get('base_pending_batch');
+    t += STUCK_S;
+    const ceiling = BigInt(p.fees.maxFeePerGas); // the ceiling is what it pays now: a quarter more is past it
+    const r = await runBatch({ chain: chainOf(), identity, db, now: () => t, pendingWaitMs: 20, maxFeeWei: ceiling });
+    expect(r).toMatchObject({ round: ROUND, stuck: { ceiling: true, fee: expect.any(String), max: formatGwei(ceiling) },
+      skipped: expect.stringMatching(/^stuck: a higher fee \([\d.]+ gwei\) would pass the max fee \([\d.]+ gwei\); raise it in Settings$/) });
+    expect(r.pendingAt).toBeUndefined(); // no quick re-check: the hourly one, or the next round's
+    expect(batchesSent()).toHaveLength(1);
+    expect(db.m.get('base_pending_batch')).toMatchObject({ hash: p.hash, stuck: { ceiling: true } });
+  });
+
+  test("a stuck batch's nonce used by another transaction: let go, and this round's batch sent fresh", async () => {
+    await staked();
+    rpc.state.mine = false;
+    let t = 1000;
+    await runBatch({ chain: chainOf(), identity, db, now: () => t, sendWaitMs: 50 });
+    const p = db.m.get('base_pending_batch');
+    // another wallet with the identity's key sends at the same nonce, higher fees: it takes the nonce
+    const { createWalletClient } = await import('viem');
+    const { privateKeyToAccount } = await import('viem/accounts');
+    const { baseSepolia } = await import('viem/chains');
+    const w = createWalletClient({ account: privateKeyToAccount(`0x${'11'.repeat(32)}`), chain: baseSepolia, transport: rpc.transport });
+    await w.sendTransaction({ to: '0x' + '33'.repeat(20), value: 1n, nonce: p.nonce, gas: 21000n,
+      maxFeePerGas: BigInt(p.fees.maxFeePerGas) * 2n, maxPriorityFeePerGas: BigInt(p.fees.maxPriorityFeePerGas) * 2n });
+    rpc.release();
+    rpc.state.mine = true;
+    t += STUCK_S;
+    const r = await runBatch({ chain: chainOf(), identity, db, now: () => t, pendingWaitMs: 20 });
+    expect(r).toMatchObject({ round: ROUND, sent: { round: ROUND } });
+    expect(r.sent.hash).not.toBe(p.hash);
+    expect(batchesSent()).toHaveLength(2);
+  });
+
   test('a pending batch from an earlier round that never mined is let go', async () => {
     await staked();
     db.m.set('base_pending_batch', { round: ROUND - 1, hash: '0x' + '12'.repeat(32), games: [], dropped: [] });
@@ -433,6 +507,14 @@ describe('createBase', () => {
     await timers.at(-1).fn();
     await vi.waitFor(() => expect(batchesSent()).toHaveLength(1));
     base.stop();
+    // a batch sent before and not mined: at once too (it may be stuck)
+    base.stop();
+    db.m.set('base_pending_batch', { round: ROUND, hash: '0x' + '12'.repeat(32), games: [], dropped: [], nonce: 9, sentAt: at.t - 700 });
+    timers.length = 0;
+    base.start();
+    await vi.waitFor(() => expect(timers.at(-1)?.ms).toBe(0));
+    db.m.delete('base_pending_batch');
+    base.stop();
     // the round's batch sent: the usual 10 s again
     timers.length = 0;
     base.start();
@@ -440,6 +522,25 @@ describe('createBase', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(timers.map((t) => t.ms)).toEqual([FIRST_CHECK_S * 1000]);
     base.stop();
+  });
+
+  test('a check that fails while Base is unused (not staked, no batch ever sent) is marked unused: calm, not a failure', async () => {
+    rpc.state.down = true;
+    expect(await base.predict()).toMatchObject({ error: expect.any(String), unused: true });
+    rpc.state.down = false;
+    await staked();
+    await base.refresh();
+    rpc.state.down = true;
+    const r = await base.predict();
+    expect(r.error).toEqual(expect.any(String));
+    expect(r).not.toHaveProperty('unused'); // staked: a failure
+    rpc.state.down = false;
+  });
+
+  test('status: a batch sent and not mined, with its stuck state (Home says it)', async () => {
+    expect((await base.status()).pendingBatch).toBe(null);
+    db.m.set('base_pending_batch', { round: ROUND, hash: '0xab', sentAt: 5, stuck: { at: 5, replaced: 1, fee: '0.02' } });
+    expect((await base.status()).pendingBatch).toMatchObject({ hash: '0xab', stuck: { replaced: 1 } });
   });
 
   test('vault actions need Unlock (a send, the vault opened for it: docs/design/keys.md#backup)', async () => {
