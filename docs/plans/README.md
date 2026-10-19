@@ -66,8 +66,10 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    are understood. ✅ **Retrain**: a model's drill-in asks the neuron to keep
    training it until one beats no change on recent data it never chose on,
    then stop ([../design/models.md](../design/models.md#retrain)).
-13. **Runtime hardening**: catch-up on resume, the keys in a worker
-   ([runtime.md](runtime.md)).
+13. **Runtime hardening**: ✅ the catch-up pass after the device sleeps,
+   and ✅ failures retried in minutes (2026-10-19,
+   [runtime.md](runtime.md#catch-up-pass), [../design/central.md](../design/central.md#errors));
+   left: the keys in a worker ([runtime.md](runtime.md)).
 14. **Later**, in rough order of value per effort: the Models tab showing
    the real-world score (central's scoring of what was sent) next to the
    backtest, once central serves a neuron's scores
@@ -105,7 +107,9 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   with `eth_estimateGas`'s limit, the token's try/catch hook fails silently
   and the vault can never unstake (Panic 0x11); anyone can do it to any
   staked vault with 1 wei. The app pads its own writes by 500,000 gas,
-  which protects only those; the fix belongs in the contracts
+  which protects only those. Fixed in the contracts (`humble` 86e2bdb3),
+  live once D7 deploys; until then the app offers staking as advice with the
+  risk said and detects a stake out of sync
   ([issue](../issues/token-hook-gas-estimate.md)).
 - ~~Every browser neuron votes DOWN on Base for now.~~ Resolved 2026-10-19:
   a tie (a forecast equal to the latest value) follows the stream's last
