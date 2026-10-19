@@ -28,12 +28,24 @@ describe('loadConfig', () => {
     }
   });
 
-  test('central overlays the bundle; empty, malformed and unknown values are ignored; lens stays bundled', async () => {
-    const remote = { chainId: 84532, token: '0x' + 'aa'.repeat(20), hub: '', engine: 'nope', rpcUrl: 'https://rpc.example',
-      lens: '0x' + 'bb'.repeat(20), evil: 'x' };
-    const { config, cache } = await loadConfig({ fetchCentral: async () => remote, now: 1000 });
-    expect(config).toEqual({ ...DEFAULTS, token: remote.token, rpcUrl: 'https://rpc.example' });
-    expect(cache).toEqual({ remote, at: 1000 });
+  test("central's contract addresses are taken only when they equal the bundle's; one that differs is listed, the bundle's kept", async () => {
+    const remote = { chainId: 84532, token: '0x' + 'aa'.repeat(20), hub: '', engine: 'nope', registry: CENTRAL2.registry.toLowerCase(),
+      rewards: CENTRAL2.rewards, lens: '0x' + 'bb'.repeat(20), evil: 'x' };
+    const { config, cache, differs, fresh } = await loadConfig({ fetchCentral: async () => remote, now: 1000 });
+    expect(config).toEqual(DEFAULTS); // a different token is never used; lens is not central's to say
+    expect(differs).toEqual(['token']); // the same address in lower case is the same; empty and malformed values say nothing
+    expect([cache, fresh]).toEqual([{ remote, at: 1000 }, true]);
+    expect((await loadConfig({ fetchCentral: async () => remote, cache, now: 1001 })).fresh).toBe(false); // from the cache
+  });
+
+  test("central's rpcUrl and explorerUrl: taken (https only) unless the build pins its RPC; pinned, the bundle's", async () => {
+    const remote = { ...CENTRAL2, rpcUrl: 'https://rpc.example', explorerUrl: 'https://scan.example' };
+    const open = await loadConfig({ fetchCentral: async () => remote, now: 1 });
+    expect([open.config.rpcUrl, open.config.explorerUrl, open.differs]).toEqual(['https://rpc.example', 'https://scan.example', []]);
+    const pinned = await loadConfig({ fetchCentral: async () => remote, now: 1, pinned: true });
+    expect([pinned.config.rpcUrl, pinned.config.explorerUrl]).toEqual([DEFAULTS.rpcUrl, DEFAULTS.explorerUrl]);
+    const plain = await loadConfig({ fetchCentral: async () => ({ ...CENTRAL2, rpcUrl: 'http://rpc.example', explorerUrl: 'javascript:x' }), now: 1 });
+    expect([plain.config.rpcUrl, plain.config.explorerUrl]).toEqual([DEFAULTS.rpcUrl, DEFAULTS.explorerUrl]);
   });
 
   test('cached for an hour, as Lite (base_config.py:16,72-73); then fetched again', async () => {
@@ -71,9 +83,11 @@ describe('the RPC', () => {
     expect(rpcUrls({ config: DEFAULTS })).toEqual(['https://sepolia.base.org', FALLBACK_RPC]);
     expect(rpcUrls({ config: { ...DEFAULTS, rpcUrl: FALLBACK_RPC } })).toEqual([FALLBACK_RPC]);
   });
-  test('a fixed default (the dev server\'s local fork, a build\'s VITE_BASE_RPC) alone; a setting wins over both', () => {
+  test("a fixed default: the dev server's local fork alone; a build's VITE_BASE_RPC, then publicnode; never central's; a setting wins over both", () => {
     expect(rpcUrls({ config: DEFAULTS, fixed: '/rpc' })).toEqual(['/rpc']);
-    expect(rpcUrls({ config: DEFAULTS, fixed: 'https://rpc.example' })).toEqual(['https://rpc.example']);
+    const central = { ...DEFAULTS, rpcUrl: 'https://central-says.example' };
+    expect(rpcUrls({ config: central, fixed: 'https://sepolia.base.org' })).toEqual(['https://sepolia.base.org', FALLBACK_RPC]);
+    expect(rpcUrls({ config: central, fixed: FALLBACK_RPC })).toEqual([FALLBACK_RPC]);
     expect(rpcUrls({ config: DEFAULTS, fixed: '/rpc', setting: 'https://mine.example' })).toEqual(['https://mine.example']);
   });
   test('the setting: empty, https, or a same-origin path', () => {

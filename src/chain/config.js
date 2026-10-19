@@ -1,9 +1,12 @@
-// Base config (docs/design/base.md#config): the bundled D6 addresses, with
-// central's /api/v1/base/config over them, cached 1 h, as Satori Lite's
-// base_config.py:16-36,66-88. `lens` and Multicall3 come from the dapp
-// (contract/satori-ui/src/contracts/addresses.ts:199-221); central's payload
-// has no lens. The RPC: the user's setting, else (a build) central's rpcUrl
-// then publicnode as a fallback, as the dapp lists them.
+// Base config (docs/design/base.md#config): the bundled D6 addresses. Central's
+// /api/v1/base/config is read, cached 1 h, as Satori Lite's base_config.py:16-36,66-88,
+// but its contract addresses are taken only when they equal the bundled ones (one
+// that differs is said, and the bundle's kept: a central must not move the app's
+// funds to other contracts), and its rpcUrl and explorerUrl only when the build pins
+// no RPC. `lens` and Multicall3 come from the dapp (contract/satori-ui/src/contracts/addresses.ts:199-221);
+// central's payload has no lens. The RPC: the user's setting; else the build's (VITE_BASE_RPC,
+// then publicnode) or the dev server's local fork; else central's rpcUrl, then publicnode,
+// as the dapp lists them.
 import { isHttps } from '../util.js';
 
 const CHAIN_ID = 84532; // Base Sepolia
@@ -31,28 +34,30 @@ export const SATORI_DAILY_URL = 'https://app.satorinet.io';
 const CONFIG_TTL_S = 3600;
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
-const valid = (k, v) => (ADDRESS.test(DEFAULTS[k]) ? ADDRESS.test(v) : typeof v === 'string' && /^https:\/\//.test(v));
+const CONTRACTS = ['token', 'merkle', 'airdrop', 'rewards', 'engine', 'games', 'registry', 'hub'];
+const https = (v) => typeof v === 'string' && /^https:\/\/[^\s"'<>]+$/.test(v);
 
 /**
- * The config, from a cache of the same central (`url`) younger than 1 h, or a
- * fresh fetch. `fetchCentral` returns central's JSON or throws (prod's 404,
- * central down): the defaults then. Only non-empty values for chain 84532 are
- * taken; addresses must look like addresses.
- * @returns {Promise<{config: typeof DEFAULTS, cache: {remote: object|null, at: number, url?: string}}>}
+ * The config, from a cache of the same central (`url`) younger than 1 h, or a fresh fetch (`fresh`). `fetchCentral`
+ * returns central's JSON or throws (prod's 404, central down): the bundle then. Only a config for chain 84532 is read.
+ * Central's contract addresses are never used: `differs` lists the ones that are addresses and not the bundle's
+ * (case aside). Its rpcUrl and explorerUrl (https only) are used unless `pinned` (the build or the dev server fixed
+ * the RPC: rpcUrls).
+ * @returns {Promise<{config: typeof DEFAULTS, cache: {remote: object|null, at: number, url?: string}, differs: string[], fresh: boolean}>}
  */
-export async function loadConfig({ fetchCentral, url, cache, now }) {
-  if (!(cache && cache.url === url && now - cache.at < CONFIG_TTL_S)) {
+export async function loadConfig({ fetchCentral, url, cache, now, pinned = false }) {
+  const fresh = !(cache && cache.url === url && now - cache.at < CONFIG_TTL_S);
+  if (fresh) {
     let remote = null;
-    try { remote = (await fetchCentral?.()) ?? null; } catch { /* the defaults */ }
+    try { remote = (await fetchCentral?.()) ?? null; } catch { /* the bundle */ }
     cache = { remote, at: now, url };
   }
   const r = cache.remote && typeof cache.remote === 'object' && (cache.remote.chainId ?? CHAIN_ID) === CHAIN_ID
     ? cache.remote : {};
   const config = { ...DEFAULTS };
-  for (const k of ['rpcUrl', 'explorerUrl', 'token', 'merkle', 'airdrop', 'rewards', 'engine', 'games', 'registry', 'hub']) {
-    if (r[k] && valid(k, r[k])) config[k] = r[k];
-  }
-  return { config: Object.freeze(config), cache };
+  if (!pinned) for (const k of ['rpcUrl', 'explorerUrl']) if (https(r[k])) config[k] = r[k];
+  const differs = CONTRACTS.filter((k) => ADDRESS.test(r[k] ?? '') && r[k].toLowerCase() !== DEFAULTS[k].toLowerCase());
+  return { config: Object.freeze(config), cache, differs, fresh };
 }
 
 /** The RPC setting as typed: '' (the default), an https:// URL, or a same-origin path such as /rpc. */
@@ -65,12 +70,12 @@ export function checkRpcSetting(raw) {
 }
 
 /**
- * The RPC URLs to use, in failover order: the setting alone; else the default
- * the build or the dev server fixed (`fixed`: VITE_BASE_RPC, the dev server's local
- * fork), alone; else central's rpcUrl, then publicnode.
+ * The RPC URLs to use, in failover order: the setting alone; else the default the build or the dev server fixed
+ * (`fixed`): a build's VITE_BASE_RPC, then publicnode; the dev server's local fork (a path) alone; else central's
+ * rpcUrl (loadConfig), then publicnode.
  */
 export function rpcUrls({ config, setting, fixed }) {
   if (setting) return [setting];
-  if (fixed) return [fixed];
+  if (fixed) return fixed.startsWith('/') ? [fixed] : [...new Set([fixed, FALLBACK_RPC])];
   return [...new Set([config.rpcUrl, FALLBACK_RPC])];
 }

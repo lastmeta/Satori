@@ -91,7 +91,7 @@ function centralForm(a) {
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>
       <p class="muted small">Now: <code data-test="central-url">${() => state.central.url}</code>. Empty: the default, ${() => state.centralDefault}.
-        Saving registers there at once.</p>
+        Saving registers there at once, and Home notes the change for a day.</p>
       <p class="error" role="alert" hidden="${() => !state.settingsError}">${() => state.settingsError}</p>
       <div class="actions"><button class="primary" type="submit">Save</button></div>
     </form>
@@ -126,13 +126,14 @@ function baseForm(a) {
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>
-      <p class="muted small" title="The default: in a build, the Satori Network's RPC (sepolia.base.org), then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
-        An https:// URL, or a path on this site. Empty: the default (on the dev server, the local test chain). A saved one replaces it.</p>
-      <label>Daily batch: max fee (gwei)
+      <p class="muted small" title="The default: the build's RPC (sepolia.base.org), then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
+        An https:// URL, or a path on this site. Empty: the default (on the dev server, the local test chain). A saved one replaces it,
+        and Home notes the change for a day.</p>
+      <label>Max fee (gwei)
         <input name="maxFee" inputmode="decimal" autocomplete="off" placeholder="2">
       </label>
-      <p class="muted small">The identity sends the batch on its own; above this max fee per gas it waits for the next check.
-        Base's fees are about 0.01 gwei. Empty: 2 gwei.</p>
+      <p class="muted small">The most any transaction pays per gas. Above it the daily batch waits for the next check, and Stake,
+        Claim and Send say so. Base's fees are about 0.01 gwei. Empty: 2 gwei.</p>
       <p class="error" role="alert" hidden="${() => !state.baseRpcError}">${() => state.baseRpcError}</p>
       <div class="actions"><button class="primary" type="submit">Save contract settings</button></div>
     </form>

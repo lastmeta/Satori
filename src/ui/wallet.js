@@ -41,7 +41,7 @@ export function walletTab(a) {
       <h2>Base</h2>
       <button class="small-btn" data-test="base-refresh" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
-    <div class="muted small" title="${() => (b().config === 'central' ? 'The Satori contract\'s addresses from the Satori Network' : 'Built-in Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+    <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Network\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>
     <p class="error small" role="alert" data-test="base-sync" hidden="${() => b().vault.inSync !== false}">Staking is out of sync. ${OUT_OF_SYNC}</p>
     <dl class="facts">

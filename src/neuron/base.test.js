@@ -9,6 +9,7 @@ import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE, HOOK_GAS } from '../chain/index.js';
 import { createWork } from './work.js';
+import { FALLBACK_RPC } from '../chain/config.js';
 import {
   createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, proofState, dropClaimable,
   checkSend, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS, STUCK_S,
@@ -452,6 +453,37 @@ describe('createBase', () => {
     expect((await base.refresh()).config).toBe('central');
     central = { ...central, url: 'https://prod.example', baseConfig: async () => { throw new CentralError(404, 'Not Found'); } };
     expect((await base.refresh()).config).toBe('bundled');
+  });
+
+  test("central's contract addresses that are not the bundle's: said once per fetch of its config, never used", async () => {
+    const said = [];
+    const other = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+      transport: rpc.transport, now: () => at.t, setTimeout: () => 0, clearTimeout: () => {}, onConfigDiffers: (keys, url) => said.push([keys, url]) });
+    central.baseConfig = async () => ({ chainId: 84532, token: '0x' + 'ee'.repeat(20), hub: '0x1EEC7E1443C1065AB78180A14326E5AC8284F143' });
+    const v = await other.refresh();
+    expect([v.error, v.vault.satori, v.config]).toEqual(['', '100', 'central']); // read from the bundle's token: the fake chain knows only it
+    await other.refresh(); // the cached config: not said again
+    expect(said).toEqual([[['token'], 'https://central2.example']]);
+  });
+
+  test("a build's pinned RPC (VITE_BASE_RPC): it, then publicnode; central's rpcUrl and explorer are not used", async () => {
+    central.baseConfig = async () => ({ chainId: 84532, rpcUrl: 'https://rpc.evil.example', explorerUrl: 'https://scan.evil.example' });
+    const pinned = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+      transport: rpc.transport, defaultRpc: 'https://sepolia.base.org', now: () => at.t, setTimeout: () => 0, clearTimeout: () => {} });
+    expect(await pinned.refresh()).toMatchObject({ rpc: ['https://sepolia.base.org', FALLBACK_RPC], explorer: 'https://sepolia.basescan.org' });
+    // a build that pins nothing: central's, as before
+    expect(await base.refresh()).toMatchObject({ rpc: ['https://rpc.evil.example', FALLBACK_RPC], explorer: 'https://scan.evil.example' });
+  });
+
+  test("every vault transaction is under the max fee too (Settings): above it, Stake is refused in plain words, nothing sent", async () => {
+    vault = vaultKey;
+    await base.setSettings({ maxFee: '2' });
+    rpc.state.tip = 3n * 10n ** 9n;
+    await expect(base.delegate()).rejects.toThrow('Gas is above the max fee: 3.000000002 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Satori contract.');
+    await expect(base.quoteSend({ asset: 'ETH', to: '0x' + '44'.repeat(20), amount: '0.01' })).rejects.toThrow(/above the max fee/);
+    expect(rpc.sent).toHaveLength(0);
+    rpc.state.tip = 10n ** 6n;
+    expect((await base.delegate()).steps).toHaveLength(3);
   });
 
   test('settings: the RPC and the max fee are both checked before either is saved; status shows what is stored', async () => {

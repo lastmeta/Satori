@@ -13,6 +13,7 @@ import { loaded, polled } from './load.js';
 import { stubCentral } from './stub.js';
 import { CSP } from '../csp.js';
 import { BUILD_DEFAULTS, defaultsFrom } from '../src/config.js';
+import { FALLBACK_RPC } from '../src/chain/config.js';
 
 const APP = `${(process.env.DEPLOY_URL ?? 'http://localhost:8090').replace(/\/+$/, '')}/`;
 // deploy/build.env, a variable set in the environment winning, as scripts/deploy-image.sh reads it
@@ -20,13 +21,14 @@ const ENV = Object.fromEntries(readFileSync(new URL('../deploy/build.env', impor
   .map((line) => /^(VITE_\w+)=(.*)$/.exec(line)).filter(Boolean).map(([, k, v]) => [k, process.env[k] ?? v]));
 const WANT = defaultsFrom(ENV, BUILD_DEFAULTS);
 const IMMUTABLE = 'public, max-age=31536000, immutable';
+const HSTS = 'max-age=63072000; includeSubDomains'; // two years, no preload (docs/design/deploy.md#what-it-sends)
 const T0 = Math.floor(Date.now() / 1000) - 3600;
 const BATCH = [{
   id: 1, observed_at: `${T0}.5`, value: '67000.5', hash: '', stream_id: 1, stream_uuid: 'u-btc', ts: new Date(T0 * 1000).toISOString().slice(0, -1),
   stream: { id: 1, uuid: 'u-btc', name: 'bitcoin', author: null, secondary: null, target: null, meta: null, description: null },
 }];
 
-test('every response has the CSP from csp.js and nosniff; hashed assets are immutable, the rest revalidated; types; SPA', async ({ request }) => {
+test('every response has the CSP from csp.js, nosniff and HSTS; hashed assets are immutable, the rest revalidated; types; SPA', async ({ request }) => {
   const index = await (await request.get(APP)).text();
   const sw = await (await request.get(`${APP}sw.js`)).text();
   const files = JSON.parse(/start\(self, (\[.*?\]),/.exec(sw)[1]); // the worker's precache list: the build's hashed files
@@ -49,8 +51,8 @@ test('every response has the CSP from csp.js and nosniff; hashed assets are immu
   for (const [path, status, type, cache] of cases) {
     const r = await request.fetch(APP + path, { method: 'HEAD', failOnStatusCode: false });
     const h = r.headers();
-    expect([path, r.status(), h['content-security-policy'], h['x-content-type-options'], h['cache-control']])
-      .toEqual([path, status, CSP, 'nosniff', cache]);
+    expect([path, r.status(), h['content-security-policy'], h['x-content-type-options'], h['strict-transport-security'], h['cache-control']])
+      .toEqual([path, status, CSP, 'nosniff', HSTS, cache]);
     expect(h['content-type'], path).toMatch(type);
   }
   expect(await (await request.get(`${APP}some/path/the/app/has/not`)).text()).toBe(index);
@@ -65,10 +67,10 @@ test('every response has the CSP from csp.js and nosniff; hashed assets are immu
   };
   const br = await encoded('gzip, deflate, br, zstd');
   expect(br.h).toMatchObject({ 'content-encoding': 'br', vary: 'Accept-Encoding', 'content-type': 'application/wasm',
-    'content-security-policy': CSP, 'x-content-type-options': 'nosniff', 'cache-control': IMMUTABLE });
+    'content-security-policy': CSP, 'x-content-type-options': 'nosniff', 'strict-transport-security': HSTS, 'cache-control': IMMUTABLE });
   const gz = await encoded('gzip, deflate');
   expect(gz.h).toMatchObject({ 'content-encoding': 'gzip', vary: 'Accept-Encoding', 'content-type': 'application/wasm',
-    'content-security-policy': CSP, 'cache-control': IMMUTABLE });
+    'content-security-policy': CSP, 'strict-transport-security': HSTS, 'cache-control': IMMUTABLE });
   const plain = await encoded('identity');
   expect(plain.h['content-encoding']).toBeUndefined();
   expect(plain.h['content-type']).toBe('application/wasm');
@@ -122,6 +124,8 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     const s = await page.evaluate(() => window.satori.status());
     expect(s.central.url).toBe(WANT.central);
     expect([s.nostr.userRelays, s.nostr.centralWrite]).toEqual([WANT.relays, WANT.centralWrite]);
+    // the Base RPC the build pins (VITE_BASE_RPC), publicnode after it; never central's (docs/design/base.md#config)
+    expect(s.base.rpc).toEqual(WANT.rpc ? [WANT.rpc, FALLBACK_RPC] : expect.any(Array));
     await expect.poll(() => [...new Set(opened)].sort()).toEqual([...WANT.relays].sort());
 
     // DuckDB writes: the first poll, at once after register, stores central's stream and forecasts it

@@ -2,7 +2,7 @@
 // custom transport to a small stateful D6. Keys are our signers (src/keys),
 // so every transaction here is signed the way the app signs it.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { ContractFunctionExecutionError, ContractFunctionRevertedError, encodeErrorResult, zeroAddress } from 'viem';
+import { ContractFunctionExecutionError, ContractFunctionRevertedError, custom, encodeErrorResult, zeroAddress } from 'viem';
 import { tokenAbi } from './abi.js';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
@@ -257,5 +257,64 @@ describe('claims and sends (the vault)', () => {
     expect(rpc.sent).toHaveLength(0);
     await chain.sendEth(vault, to, 10n ** 15n);
     expect(rpc.eth[to]).toBe(10n ** 15n);
+  });
+});
+
+describe('the max fee on every transaction (the security review, 2026-10-19)', () => {
+  const GWEI = 10n ** 9n;
+  test("above the ceiling, each write is refused before it is sent: stake's three steps, unstake, claims, sends, the batch; and the quote", async () => {
+    const capped = createChain({ config: DEFAULTS, transport: rpc.transport, pollingInterval: 1, settle: { tries: 5, ms: 1 },
+      maxFee: async () => 2n * GWEI });
+    rpc.state.tip = 3n * GWEI; // a max fee of 3 gwei + 2 wei
+    s.rewards[V] = E18;
+    s.airdrop[V] = E18;
+    s.merkle.drop[V] = { amount: E18, proof: ['0x' + 'ab'.repeat(32)] };
+    const to = '0x' + '44'.repeat(20);
+    const over = /above the max fee: 3.000000002 gwei > 2 gwei/;
+    await expect(capped.delegate({ identity, vault })).rejects.toThrow(over); // the identity's setPredictorFee(0), the first step
+    await expect(capped.undelegate({ vault })).resolves.toEqual({ steps: [], settled: true }); // not staked: nothing to send
+    await expect(capped.claimRewards(vault)).rejects.toThrow(over);
+    await expect(capped.claimMerkle(vault, { amountWei: E18.toString(), proof: ['0x' + 'ab'.repeat(32)] })).rejects.toThrow(over);
+    await expect(capped.claimAirdrop(vault)).rejects.toThrow(over);
+    await expect(capped.sendEth(vault, to, 1n)).rejects.toThrow(over);
+    await expect(capped.sendSatori(vault, to, 1n)).rejects.toThrow(over);
+    await expect(capped.sendBatch(identity, [{ gameId: 1, direction: DOWN }])).rejects.toThrow(over);
+    await expect(capped.sendFee(vault.evmAddress, { asset: 'ETH', to, wei: 1n })).rejects.toThrow(over); // the send's review says it
+    expect(rpc.sent).toHaveLength(0);
+    rpc.state.tip = 10n ** 6n; // Base's usual 0.001 gwei
+    await capped.delegate({ identity, vault });
+    await capped.undelegate({ vault });
+    expect(rpc.sent.map((t) => t.functionName)).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower', 'delegatePredictionPower']);
+  });
+  test('no ceiling given (tests, scripts): no check', async () => {
+    rpc.state.tip = 3n * GWEI;
+    s.airdrop[V] = 1n;
+    await chain.claimAirdrop(vault);
+    expect(rpc.sent).toHaveLength(1);
+  });
+});
+
+describe("viem's CCIP-read is off (the security review, 2026-10-19)", () => {
+  test('a revert asking for an off-chain lookup (EIP-3668) is a revert: the page fetches nothing', async () => {
+    const lookup = encodeErrorResult({
+      abi: [{ type: 'error', name: 'OffchainLookup', inputs: [{ name: 'sender', type: 'address' }, { name: 'urls', type: 'string[]' },
+        { name: 'callData', type: 'bytes' }, { name: 'callbackFunction', type: 'bytes4' }, { name: 'extraData', type: 'bytes' }] }],
+      errorName: 'OffchainLookup', args: [DEFAULTS.registry, ['https://evil.example/{sender}/{data}.json'], '0x1234', '0x12345678', '0x'],
+    });
+    const transport = custom({
+      async request({ method }) {
+        if (method === 'eth_chainId') return '0x14a34';
+        if (method === 'eth_call') throw Object.assign(new Error('execution reverted'), { code: 3, data: lookup });
+        throw new Error(`no ${method}`);
+      },
+    });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{"data":"0x"}'));
+    try {
+      const c = createChain({ config: DEFAULTS, transport, pollingInterval: 1 });
+      await expect(c.history(1n)).rejects.toThrow();
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+    }
   });
 });

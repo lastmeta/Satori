@@ -321,11 +321,13 @@ export function nextCheckAt({ now, chainTime, pendingAt = null }) {
  * @param {any} [o.transport] a viem transport (tests); else http to the RPC URLs
  * @param {() => void} [o.onTraffic] each RPC request and its answer (Home's glow, src/traffic.js)
  * @param {(result: object) => void} [o.onCheck] each batch check's result (Home's activity log)
+ * @param {(keys: string[], url: string) => void} [o.onConfigDiffers] central's contract addresses differ from the bundle's
+ *   (which are kept): the keys, once per fetch of its config (Home's activity log, a quiet warning)
  * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): the batch ('base') and the vault's actions say their steps
  */
 export function createBase({ db, identity, vaultAddress, vault, central, defaultRpc, transport, forecast = engineForecast,
-  now = () => Date.now() / 1000, onChange = () => {}, onCheck = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
-  origin = globalThis.location?.href, onTraffic = () => emit('base'), work = createWork() }) {
+  now = () => Date.now() / 1000, onChange = () => {}, onCheck = () => {}, onConfigDiffers = () => {}, setTimeout: st = setTimeout,
+  clearTimeout: ct = clearTimeout, origin = globalThis.location?.href, onTraffic = () => emit('base'), work = createWork() }) {
   let cache = null; // central's config, 1 h
   let made = null; // { key, chain, rpc }
   let status = null; // the last status read
@@ -337,21 +339,26 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
   const resolve = (u) => (u.startsWith('/') && origin ? new URL(u, origin).href : u);
 
   /**
-   * The chain for the current config and RPC (rebuilt when either changes).
+   * The chain for the current config and RPC (rebuilt when either changes), every write under the max fee.
    * A new RPC is asked its chain id once: another chain than the config's is
-   * refused, for reads, writes and the batch alike.
+   * refused, for reads, writes and the batch alike. Central's addresses that are not the bundle's are said
+   * (onConfigDiffers), never used; with an RPC the build fixed, its rpcUrl and explorerUrl are not used either.
    */
   async function chainNow() {
     const c = central();
-    const loaded = await loadConfig({ fetchCentral: () => c.baseConfig(), url: c.url, cache, now: now() });
+    const loaded = await loadConfig({ fetchCentral: () => c.baseConfig(), url: c.url, cache, now: now(), pinned: !!defaultRpc });
     cache = loaded.cache;
+    if (loaded.fresh && loaded.differs.length) {
+      console.warn('[satori] the Satori Network\'s contract addresses differ from the app\'s; the app\'s are used', c.url, loaded.differs);
+      onConfigDiffers(loaded.differs, c.url);
+    }
     const setting = (await db.get('base_rpc_url')) || '';
     const urls = rpcUrls({ config: loaded.config, setting, fixed: defaultRpc });
     const key = JSON.stringify([loaded.config, urls]);
     if (made?.key !== key) {
       const t = traced(transport ?? (urls.length === 1 ? http(resolve(urls[0])) : fallback(urls.map((u) => http(resolve(u))))), onTraffic);
       made = { key, rpc: urls, config: loaded.config, chainId: null,
-        local: urls.every((u) => u.startsWith('/')), chain: createChain({ config: loaded.config, transport: t }) };
+        local: urls.every((u) => u.startsWith('/')), chain: createChain({ config: loaded.config, transport: t, maxFee: maxFeeWei }) };
     }
     made.fromCentral = !!cache.remote; // central2 serves the bundle's own values: the same chain, another source
     made.chainId ??= await made.chain.chainId(); // an RPC that does not answer is asked again next time

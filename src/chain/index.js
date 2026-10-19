@@ -10,7 +10,7 @@
 //   await chain.streams() / chain.history(id) / chain.simulateGame(identity, game) / chain.sendBatch(identity, games)
 //   await chain.claimRewards(vault) / claimMerkle(vault, proof) / claimAirdrop(vault) / sendEth / sendSatori
 import {
-  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, encodePacked, hexToBytes,
+  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, encodePacked, formatGwei, hexToBytes,
   keccak256, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
@@ -110,6 +110,18 @@ export function panicOf(err) {
   return rev?.data?.errorName === 'Panic' ? Number(rev.data.args?.[0]) : null;
 }
 
+/**
+ * The max fee per gas over the ceiling (Settings' max fee): refused before anything is sent, for every transaction,
+ * the vault's and the identity's (the security review, 2026-10-19: an RPC quoting a huge tip must not be paid).
+ */
+export class FeeCeilingError extends Error {
+  constructor(maxFeePerGas, ceiling) {
+    super(`Gas is above the max fee: ${formatGwei(maxFeePerGas)} gwei > ${formatGwei(ceiling)} gwei. `
+      + 'Try again later, or raise the max fee in Settings › Satori contract.');
+    this.name = 'FeeCeilingError'; // no bigint fields: an error crossing to an agent's page.evaluate must serialize
+  }
+}
+
 /** Contract errors said in plain words. */
 const PLAIN = {
   HookFailedWithoutReason: 'The transaction ran out of gas; try again', // the next contracts' starved transfer (abi.js NEXT_ERRORS)
@@ -123,12 +135,15 @@ export function errorText(err) {
 }
 
 /**
- * @param {{config: object, transport: any, pollingInterval?: number, settle?: {tries: number, ms: number}}} opts
- *   settle: re-reads after a write until it shows (Lite: 5 × 1 s, routes.py:1449-1463)
+ * @param {{config: object, transport: any, pollingInterval?: number, settle?: {tries: number, ms: number},
+ *   maxFee?: () => Promise<bigint|null>}} opts
+ *   settle: re-reads after a write until it shows (Lite: 5 × 1 s, routes.py:1449-1463);
+ *   maxFee: the ceiling on every transaction's max fee per gas, in wei (Settings), asked at each write (none: no check)
  */
-export function createChain({ config, transport, pollingInterval = 1000, settle = { tries: 5, ms: 1000 } }) {
+export function createChain({ config, transport, pollingInterval = 1000, settle = { tries: 5, ms: 1000 }, maxFee = async () => null }) {
   const chain = { ...baseSepolia, contracts: { ...baseSepolia.contracts, multicall3: { address: config.multicall3 } } };
-  const client = createPublicClient({ chain, transport, pollingInterval });
+  // ccipRead off: a contract's revert must never make the page fetch a URL it names (EIP-3668 off-chain lookups)
+  const client = createPublicClient({ chain, transport, pollingInterval, ccipRead: false });
   const c = (name, abi) => (functionName, args = []) => ({ address: config[name], abi, functionName, args });
   const engine = c('engine', engineAbi);
   const games = c('games', gamesAbi);
@@ -157,19 +172,26 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     const [block, tip] = await Promise.all([client.getBlock(), client.estimateMaxPriorityFeePerGas()]);
     return { maxFeePerGas: 2n * (block.baseFeePerGas ?? 0n) + tip, maxPriorityFeePerGas: tip };
   }
+  /** `fee`, if its max fee per gas is within the ceiling; else FeeCeilingError. */
+  async function capped(fee) {
+    const ceiling = await maxFee();
+    if (ceiling != null && fee.maxFeePerGas > ceiling) throw new FeeCeilingError(fee.maxFeePerGas, ceiling);
+    return fee;
+  }
 
   /**
    * As satorilib's EvmClient.send (evm.py:60-93): simulate and estimate first
    * (a revert throws, naming the error, before any gas), the limit with
-   * HOOK_GAS over the estimate, send at the account's next nonce (onSent(hash,
-   * { nonce, gas, maxFeePerGas, maxPriorityFeePerGas }) at once: the batch keeps
-   * them to replace it if it never mines), wait for the receipt (`timeout` ms,
-   * viem's 3 min by default), throw unless it succeeded.
+   * HOOK_GAS over the estimate, the fees within the ceiling (maxFee), send at the
+   * account's next nonce (onSent(hash, { nonce, gas, maxFeePerGas,
+   * maxPriorityFeePerGas }) at once: the batch keeps them to replace it if it
+   * never mines), wait for the receipt (`timeout` ms, viem's 3 min by default),
+   * throw unless it succeeded.
    */
   const write = (key, call, { fees: given, onSent, timeout } = {}) => queued(async () => {
     const account = toAccount(key);
     const { request } = await client.simulateContract({ ...call, account });
-    const [estimate, fee, nonce] = await Promise.all([client.estimateContractGas({ ...call, account }), given ?? fees(),
+    const [estimate, fee, nonce] = await Promise.all([client.estimateContractGas({ ...call, account }), (given ? Promise.resolve(given) : fees()).then(capped),
       client.getTransactionCount({ address: account.address, blockTag: 'pending' })]);
     const wallet = createWalletClient({ account, chain, transport });
     const gas = estimate + HOOK_GAS;
@@ -390,7 +412,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     replaceBatch: (identity, list, { nonce, gas, fees: fee }) => queued(async () => {
       const account = toAccount(identity);
       const wallet = createWalletClient({ account, chain, transport });
-      return wallet.writeContract({ ...batchCall(list), account, chain, nonce, gas, ...fee });
+      return wallet.writeContract({ ...batchCall(list), account, chain, nonce, gas, ...await capped(fee) });
     }),
 
     // the vault's writes below: opts.onSent(hash) once sent, before the receipt (Home's "Waiting for Base to confirm…")
@@ -406,7 +428,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * A send's fee before it is sent, from the sender's address (no key): the gas limit it would be sent with (ETH:
      * the estimate; SATORI: the estimate + HOOK_GAS), `about` = the estimate at the latest base fee + the tip, `max`
      * = the limit at the max fee (2 × the base fee + the tip). Wei. An estimate that reverts (too little, a transfer
-     * lock) throws.
+     * lock) throws, and so does a max fee over the ceiling (FeeCeilingError: the send would be refused).
      */
     async sendFee(from, { asset, to, wei }) {
       const [estimate, block, tip] = await Promise.all([
@@ -415,6 +437,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
         client.getBlock(), client.estimateMaxPriorityFeePerGas()]);
       const base = block.baseFeePerGas ?? 0n;
       const gas = asset === 'ETH' ? estimate : estimate + HOOK_GAS;
+      await capped({ maxFeePerGas: 2n * base + tip, maxPriorityFeePerGas: tip });
       return { gas, about: estimate * (base + tip), max: gas * (2n * base + tip) };
     },
 
@@ -423,7 +446,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     /** ETH from the vault: estimated first (a failure throws before sending); a plain transfer runs no hook, so no pad. */
     sendEth: (vault, to, value, { onSent } = {}) => queued(async () => {
       const account = toAccount(vault);
-      const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }), fees()]);
+      const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }), fees().then(capped)]);
       const wallet = createWalletClient({ account, chain, transport });
       const hash = await wallet.sendTransaction({ to, value, gas, ...fee });
       await onSent?.(hash);
