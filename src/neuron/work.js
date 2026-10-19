@@ -54,11 +54,14 @@ const TEXT = {
   settle: () => 'Checking it on Base…',
 };
 
-/** An entry's words, as Home shows them ('' for none); a critical one asks to keep Satori open. */
-export function workText(e) {
+/**
+ * An entry's words, as Home shows them ('' for none); a critical one asks to keep Satori open, and so does every step
+ * when `keepOpen` (Home's hero on a phone, which stops a tab as soon as it leaves the screen).
+ */
+export function workText(e, { keepOpen = false } = {}) {
   if (!e) return '';
   const f = TEXT[`${e.task}:${e.step}`] ?? TEXT[e.step];
-  return `${e.critical ? 'Keep Satori open · ' : ''}${f ? f(e) : 'Working…'}`;
+  return `${e.critical || keepOpen ? 'Keep Satori open · ' : ''}${f ? f(e) : 'Working…'}`;
 }
 
 /**

@@ -37,7 +37,7 @@ import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
-import { writePref, SORT_KEY, snapshotOf, readSnapshot, writeSnapshot } from './ui/prefs.js';
+import { writePref, SORT_KEY, INSTALL_KEY, snapshotOf, readSnapshot, writeSnapshot } from './ui/prefs.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
@@ -698,6 +698,7 @@ const actions = {
     if (a.do === 'reload') location.reload();
     else if (a.do === 'poll') actions.pollNow();
     else if (a.do === 'install') actions.install();
+    else if (a.do === 'dismiss') actions.dismissAdvice(a.id);
     else if (a.do === 'stake') withVault('card', actions.baseDelegate);
     else if (a.do === 'backup') {
       go('settings', 'backup');
@@ -742,6 +743,12 @@ const actions = {
   },
   pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
   install: () => install().catch((err) => console.warn('[satori] install', err)),
+  /** Home's Install card put away (Not now, Got it): once, on this device (docs/design/pwa.md#install). */
+  dismissAdvice(id) {
+    if (id !== 'install') return;
+    state.installDismissed = true;
+    writePref(INSTALL_KEY, 'dismissed');
+  },
   update: applyUpdate,
   dismissNotice() { state.noticeDismissed = true; },
   discover: shownAt('networkError', async () => {
@@ -893,7 +900,7 @@ window.satori = {
     ready();
     return healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
       nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since(),
-      traffic: lastTraffic(), work: work.all() });
+      installDismissed: state.installDismissed, traffic: lastTraffic(), work: work.all() });
   },
   /**
    * Show a tab: 'home' | 'models' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL), or a model's
@@ -1011,7 +1018,8 @@ watch(() => {
   if (state.screen !== 'home' || !activity) return;
   void state.activityRev; // the log changed
   state.health = healthOf({ now: state.now, rows: activity.rows(), central: state.central, base: state.base, nostr: state.nostr,
-    storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since(), work: state.work });
+    storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since(), installDismissed: state.installDismissed,
+    work: state.work });
 });
 
 /**
@@ -1027,12 +1035,17 @@ const heroHold = createHold({ show: (v) => {
   const from = v.tone !== 'idle' ? null : heroWas?.tone === 'idle' ? heroWas.from : heroWas?.tone ?? null;
   state.hero = heroWas = { ...v, from };
 } });
+/** A phone (a coarse pointer, or a small screen) stops a tab as soon as it leaves the screen: the hero says so while it works. */
+const PHONE = matchMedia('(pointer: coarse), (max-width: 640px)');
+state.phone = PHONE.matches;
+PHONE.addEventListener('change', (e) => { state.phone = e.matches; });
 watch(() => {
   const h = state.health;
   if (!h) return;
   const w = leading(state.work, HERO);
   const view = { status: h.status, tone: toneOf(h.status, w), title: h.title };
-  heroHold(w ? { ...view, key: `${w.task}:${w.step}`, working: true, line: workText(w) } : { ...view, key: 'idle', working: false, line: h.line });
+  heroHold(w ? { ...view, key: `${w.task}:${w.step}`, working: true, line: workText(w, { keepOpen: state.phone }) }
+    : { ...view, key: 'idle', working: false, line: h.line });
 });
 const lineOf = (tasks, hold) => () => {
   const w = tasks.map((t) => state.work[t]).find(Boolean);

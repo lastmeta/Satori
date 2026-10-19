@@ -103,7 +103,8 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
 
   // working: regular green; the one animation on the screen is the hero's ring
-  await expect(line(page)).toHaveText(/^Loading history · [1-6] of 8 streams$/, { timeout: LOAD_TIMEOUT });
+  // a phone: every step begins "Keep Satori open · " (a phone stops a tab as soon as it leaves the screen)
+  await expect(line(page)).toHaveText(/^Keep Satori open · Loading history · [1-6] of 8 streams$/, { timeout: LOAD_TIMEOUT });
   await expect(hero(page)).toHaveAttribute('data-work', 'central:history');
   await expect(hero(page)).toHaveAttribute('data-tone', 'working');
   await expect(hero(page)).toHaveAttribute('aria-busy', 'true');
@@ -209,7 +210,7 @@ test('reduced motion: nothing turns; a still working mark, and the words change'
   const release = central.hold(); // the poll's observations batch, held
   await openApp(page);
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
-  await expect(line(page)).toHaveText("Fetching today's observations…", { timeout: LOAD_TIMEOUT });
+  await expect(line(page)).toHaveText("Fetching today's observations…", { timeout: LOAD_TIMEOUT }); // a computer: the words alone
   await expect(hero(page)).toHaveAttribute('data-work', 'central:observations');
   expect(await animations(page)).toEqual([]);
   expect(await page.locator('.ring').evaluate((el) => getComputedStyle(el, '::after').content)).toBe('none');

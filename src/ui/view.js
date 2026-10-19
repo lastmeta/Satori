@@ -11,7 +11,7 @@ import { home } from './home.js';
 import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
 import { walletTab } from './wallet.js';
-import { settingsTab, install } from './settings.js';
+import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
@@ -47,6 +47,7 @@ function setup(a) {
       <p class="muted">A neuron has two keys. The <strong>identity</strong> runs the neuron on its own,
         so it stays unencrypted in this browser. The <strong>vault</strong> holds your funds and is
         encrypted with your passphrase.</p>
+      <p class="muted" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
       <div class="actions">
         <button class="primary" @click="${a.newWords}">Create a new neuron</button>
         <button @click="${() => a.goStep('restore')}">Restore from words</button>

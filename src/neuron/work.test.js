@@ -165,6 +165,12 @@ describe('workText: plain words, from the person\'s side', () => {
     expect(workText({ ...e('central', 'send', null, 82), critical: true })).toBe('Keep Satori open · Sending 82 predictions…');
     expect(workText({ ...e('stake', 'confirm', 2, 3), critical: true })).toBe('Keep Satori open · Step 2 of 3: waiting for Base to confirm…');
   });
+  test('on a phone (keepOpen) every step says it: a phone puts a tab to sleep as soon as it leaves the screen', () => {
+    expect(workText(e('central', 'history', 34, 82), { keepOpen: true })).toBe('Keep Satori open · Loading history · 34 of 82 streams');
+    expect(workText({ ...e('central', 'send', null, 82), critical: true }, { keepOpen: true })).toBe('Keep Satori open · Sending 82 predictions…'); // once
+    expect(workText(e('central', 'history', 34, 82), { keepOpen: false })).toBe('Loading history · 34 of 82 streams');
+    expect(workText(null, { keepOpen: true })).toBe('');
+  });
   test('null and unknown steps', () => {
     expect(workText(null)).toBe('');
     expect(workText(e('central', 'nope'))).toBe('Working…');

@@ -2,6 +2,7 @@
 // on the dev server, where it would serve stale code) and its Update button,
 // Install, and persistent storage, which keeps the keys from eviction.
 import { state } from '../ui/view.js';
+import { addToOf } from './platform.js';
 
 let installPrompt = null; // Chromium's beforeinstallprompt, kept for Install
 let registration = null;
@@ -9,8 +10,10 @@ const setApp = (o) => { state.app = { ...state.app, ...o }; };
 const UA = navigator.userAgent;
 
 export function startPwa() {
-  setApp({ installed: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true });
-  state.safari = /Safari\//.test(UA) && !/Chrom|CriOS|FxiOS|EdgiOS|Android/.test(UA); // no prompt: say how to add it
+  // addTo: how this browser adds Satori without a prompt (iOS, Safari on a Mac, Firefox on Android), said on Setup,
+  // in Settings and once on Home (src/pwa/platform.js)
+  setApp({ installed: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
+    addTo: addToOf(UA, navigator.maxTouchPoints ?? 0) });
   addEventListener('beforeinstallprompt', (e) => {
     if (state.app.installed) return; // an app window opened by --app is offered it too
     e.preventDefault();

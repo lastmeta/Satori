@@ -29,6 +29,7 @@ const running = () => [open(NOW - 3 * H, NOW - 2 * M), good(NOW - 2 * H)];
 const health = (o = {}) => healthOf({ now: NOW, rows: running(), central: central(), base: base(), nostr: nostr(),
   storage: { persisted: true }, app: { installed: false, canInstall: false }, backedUp: true, ...o });
 const ids = (h) => h.reasons.map((r) => r.id);
+const INSTALL_TEXT = "Satori works while it's open. Install it: it stays open in its own window, and keeps your keys.";
 
 describe('ok: predicting', () => {
   test('central took predictions within the window; Base not staked with no SATORI; nothing subscribed', () => {
@@ -104,8 +105,7 @@ describe('idle: calm, never red for being closed', () => {
     const offered = health({ rows: [...before, woke], central: central({ polling: true }), app: { installed: false, canInstall: true } });
     expect(ids(offered)).toEqual(['asleep', 'install']);
     expect(offered.reasons[1]).toMatchObject({ id: 'install', status: 'advice', channel: null });
-    expect(offered.action).toEqual({ id: 'install', text: 'The neuron only runs while Satori is open. Install it so it stays open in its own window.',
-      button: 'Install', do: 'install' });
+    expect(offered.action).toEqual({ id: 'install', text: INSTALL_TEXT, button: 'Install', do: 'install', dismiss: 'Not now' });
     expect(offered).toMatchObject({ status: 'idle', tone: 'idle', title: 'Was asleep', line: 'Closed for 3 days. Catching up now…' });
 
     const caught = good(NOW - 20, 83, { caughtUp: woke.data.gap });
@@ -355,6 +355,37 @@ test('the action priority: the worst status; one card, the highest reason that h
   expect(h.line).toBe("The identity's gas is running low."); // central is not "fine" while it catches up
 });
 
+describe('Install, as advice on Home, once (docs/design/pwa.md#install): wherever the browser can add Satori, not only after it was asleep', () => {
+  const app = (o) => ({ installed: false, canInstall: false, addTo: null, ...o });
+  test('Chromium offers its prompt: Install, or Not now', () => {
+    const h = health({ app: app({ canInstall: true }) });
+    expect(ids(h)).toEqual(['install']);
+    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h' }); // advice: nothing else moves
+    expect(h.action).toEqual({ id: 'install', text: INSTALL_TEXT, button: 'Install', do: 'install', dismiss: 'Not now' });
+  });
+  test.each([
+    ['ios', "Satori works while it's open. Add it to your Home Screen (Share › Add to Home Screen): it opens on its own screen and keeps "
+      + 'your keys. The added app starts empty: set it up there, or restore it from your 24 words.'],
+    ['mac', "Satori works while it's open. Add it to the Dock (File › Add to Dock): it stays open in its own window and keeps your keys. "
+      + 'The added app starts empty: set it up there, or restore it from your 24 words.'],
+    ['android', "Satori works while it's open. Add it to your Home screen (the browser's menu › Add app to Home screen): it opens in "
+      + 'its own window.'],
+  ])('no prompt (%s): how to add it, and Got it', (addTo, text) => {
+    const h = health({ app: app({ addTo }) });
+    expect(h.action).toEqual({ id: 'install', text, button: 'Got it', do: 'dismiss' });
+  });
+  test('once: dismissed, installed, or nothing to offer: none', () => {
+    expect(ids(health({ app: app({ canInstall: true }), installDismissed: true }))).toEqual([]);
+    expect(ids(health({ app: app({ addTo: 'ios' }), installDismissed: true }))).toEqual([]);
+    expect(ids(health({ app: app({ installed: true, addTo: 'ios' }) }))).toEqual([]);
+    expect(ids(health({ app: app({}) }))).toEqual([]); // Firefox on a computer: nothing to offer
+  });
+  test('below the backup and Stake: one card at a time', () => {
+    const h = health({ app: app({ canInstall: true }), storage: { persisted: false }, backedUp: false });
+    expect([ids(h), h.action.id]).toEqual([['backup', 'install'], 'backup']);
+  });
+});
+
 test("each channel's last traffic (ms) for agents, when given: null before any", () => {
   const h = health({ traffic: { central: 1_792_250_000_000, base: null, network: null } });
   expect([h.channels.network.lastTraffic, h.channels.contract.lastTraffic, h.channels.relays.lastTraffic]).toEqual([1_792_250_000_000, null, null]);
@@ -403,7 +434,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     retrying: () => [...running(), failed(NOW - H)], // central-failed: one failed poll, still predicting
     failing: () => [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 6 * H), failed(NOW - H)], // central-failing: over 12 h of open time
   };
-  // Each reason added to a state's input; asleep and starting come only from the states' logs, install only while asleep.
+  // Each reason added to a state's input; asleep and starting come only from the states' logs.
   const rows = (...more) => (i) => ({ ...i, rows: [...i.rows, ...more] });
   const reg = (registration) => (i) => ({ ...i, central: { ...i.central, registration } });
   const ADD = {
@@ -455,7 +486,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     starting:           ['S idle –',              X,                       X,                       X,                       X,                       X],
     backup:             ['S idle backup',         'A idle backup',         'P idle backup',         'P ok backup',           'P warn central-failed', 'N bad central-failing'],
     stake:              ['S idle stake',          'A idle stake',          'P idle stake',          'P ok stake',            'P warn central-failed', 'N bad central-failing'],
-    install:            [X,                       'A idle install',        'P idle install',        X,                       X,                       X],
+    install:            ['S idle install',        'A idle install',        'P idle install',        'P ok install',          'P warn central-failed', 'N bad central-failing'],
     'relay-down':       ['S idle relay-down',     'A idle relay-down',     'P idle relay-down',     'P ok relay-down',       'P warn central-failed', 'N bad central-failing'],
   };
   const cells = Object.entries(TABLE).flatMap(([id, row]) => Object.keys(STATES).map((state, k) => [state, id, row[k]]));

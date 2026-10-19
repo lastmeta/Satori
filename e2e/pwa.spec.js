@@ -79,7 +79,7 @@ test.describe.serial('a build, in a browser profile', () => {
 
     // Setup: Install (Chromium's prompt was offered), no storage request yet.
     const s0 = await status(page);
-    expect(s0.app).toEqual({ installed: false, canInstall: true, update: false });
+    expect(s0.app).toEqual({ installed: false, canInstall: true, update: false, addTo: null });
     expect(s0.storage).toEqual({ persisted: expect.any(Boolean), usage: expect.any(Number), quota: expect.any(Number) });
     await expect(page.locator('[data-test=install]').filter({ visible: true })).toHaveText('Install Satori');
     expect(await page.evaluate(() => window.persistCalls)).toBe(0);
@@ -94,6 +94,16 @@ test.describe.serial('a build, in a browser profile', () => {
     await expect(page.locator('#settings-device [data-test=install]')).toBeVisible();
     await expect(page.locator('#settings-device [data-test=install-hint]')).toHaveText('Keeps your keys, and runs in its own window.');
 
+    // Home offers Install as advice, once (not only after "Was asleep"): Install, or Not now, kept on this device
+    await page.evaluate(() => window.satori.backup('vault', 'pass phrase')); // the backup's advice first, then Install's
+    await page.evaluate(() => window.satori.go('home'));
+    await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'install');
+    await expect(page.locator('[data-test=action-text]')).toHaveText("Satori works while it's open. Install it: it stays open in its own window, and keeps your keys.");
+    await expect(page.locator('[data-test=action-button]')).toHaveText('Install');
+    await page.locator('[data-test=action-dismiss]').click(); // Not now
+    await expect(page.locator('[data-test=action]')).toBeHidden();
+    expect((await page.evaluate(() => window.satori.health())).reasons.map((r) => r.id)).not.toContain('install');
+
     // The first poll runs at once after setup: central's stream stored and forecast.
     expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 });
 
@@ -102,6 +112,7 @@ test.describe.serial('a build, in a browser profile', () => {
     expect(res.fromServiceWorker()).toBe(true);
     expect(await loaded(page)).toBe('home');
     expect(await controlled(page)).toBe(true);
+    await expect(page.locator('[data-test=action]')).toBeHidden(); // Install's card stays put away
     await expect.poll(() => page.evaluate(() => window.persistCalls)).toBe(s1.storage.persisted ? 0 : 1);
     expect(stub.registered.length).toBe(2); // central's calls still reach it (the stub) under the worker
     expect(await page.evaluate(() => window.violations)).toEqual([]);

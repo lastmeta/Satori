@@ -1,7 +1,7 @@
 // The UI's one reactive state (ArrowJS). main.js and src/pwa/ write it; the screens read it.
 import { reactive } from '@arrow-js/core';
 import { themeOf } from './theme.js';
-import { readPref, SORT_KEY } from './prefs.js';
+import { readPref, SORT_KEY, INSTALL_KEY } from './prefs.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | setup | finish (an earlier version's vault: Unlock once) | home
@@ -92,9 +92,11 @@ export const state = reactive({
   sendReview: null, // Send's review step: base.quoteSend()'s { asset, to, amount, fee: { gas, about, max } }, or null
   sendQuoting: false, // the review is being read (the fee's estimate)
   baseRpcError: '',
-  // the installed app (docs/design/pwa.md): status().app, Safari (no install prompt), status().storage
-  app: { installed: false, canInstall: false, update: false },
-  safari: false,
+  // the installed app (docs/design/pwa.md): status().app (addTo: how this browser adds Satori without a prompt, or
+  // null), status().storage; the Install card put away on this device (Not now, Got it)
+  app: { installed: false, canInstall: false, update: false, addTo: null },
+  installDismissed: readPref(INSTALL_KEY, ['dismissed'], '') === 'dismissed',
+  phone: false, // a phone (a coarse pointer, or a small screen): Home's hero says "Keep Satori open · " while it works
   storage: null, // { persisted, usage, quota }
   theme: themeOf(), // Settings → Appearance: 'system' | 'light' | 'dark', this device's (src/ui/theme.js)
   // the database (docs/design/storage.md#recovery): the name a WAL DuckDB could not replay was set aside under

@@ -106,7 +106,7 @@ function failedWhat(d) {
 const go = (tab, section) => (section ? { do: 'go', tab, section } : { do: 'go', tab });
 const reason = (id, channel, o) => ({ id, status: LEVEL[id], channel, ...o });
 
-function centralReasons({ now, rows, sessions, central, app, work }) {
+function centralReasons({ now, rows, sessions, central, work }) {
   const out = [];
   const cycles = rows.filter((r) => r.kind === 'central');
   const last = cycles.at(-1);
@@ -168,15 +168,10 @@ function centralReasons({ now, rows, sessions, central, app, work }) {
   if (woke && after.length < 2) {
     const closed = `Closed for ${fmtDur(woke.data.gap ?? 0)}.`;
     const caught = after[0];
-    const install = app?.canInstall && !app?.installed;
     const catching = atOnce ? 'Catching up now…' : `Catching up ${next}`;
     out.push(reason('asleep', 'network', {
       line: caught ? `${closed} Caught up ${fmtAgo(now - caught.at)}.` : `${closed} ${catching}${atOnce ? '' : '.'}`,
       chip: caught ? null : catching }));
-    if (install) {
-      out.push(reason('install', null, { text: 'The neuron only runs while Satori is open. Install it so it stays open in its own window.',
-        button: 'Install', act: { do: 'install' } }));
-    }
   }
   if (!lastGood && !failed && !overdue) {
     out.push(reason('starting', 'network', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
@@ -251,6 +246,30 @@ function networkReasons({ nostr }) {
       button: 'Open Settings', act: go('settings', 'relays') }));
   }
   return out;
+}
+
+/** How each browser without an install prompt adds Satori (docs/design/pwa.md#install): the card's words. */
+const STARTS_EMPTY = 'The added app starts empty: set it up there, or restore it from your 24 words.';
+export const ADD_TO = {
+  ios: `Add it to your Home Screen (Share › Add to Home Screen): it opens on its own screen and keeps your keys. ${STARTS_EMPTY}`,
+  mac: `Add it to the Dock (File › Add to Dock): it stays open in its own window and keeps your keys. ${STARTS_EMPTY}`,
+  android: "Add it to your Home screen (the browser's menu › Add app to Home screen): it opens in its own window.",
+};
+const WORKS_WHILE_OPEN = "Satori works while it's open.";
+
+/**
+ * Install, as advice, once (docs/design/pwa.md#install): wherever this browser can add Satori (its prompt, or the
+ * steps where it has none) and it is not installed, until the person installs it or puts the card away (Not now,
+ * Got it: installDismissed, kept on this device).
+ */
+function installReason({ app, installDismissed }) {
+  if (!app || app.installed || installDismissed) return [];
+  if (app.canInstall) {
+    return [reason('install', null, { text: `${WORKS_WHILE_OPEN} Install it: it stays open in its own window, and keeps your keys.`,
+      button: 'Install', act: { do: 'install' }, dismiss: 'Not now' })];
+  }
+  if (ADD_TO[app.addTo]) return [reason('install', null, { text: `${WORKS_WHILE_OPEN} ${ADD_TO[app.addTo]}`, button: 'Got it', act: { do: 'dismiss' } })];
+  return [];
 }
 
 // ── the tone: the colour Home shows (docs/design/health.md#the-tone) ──
@@ -401,17 +420,18 @@ export function feedOf(rows, n = FEED) {
  * @param {object[]} o.rows the activity log, oldest first (db.activity)
  * @param {object} o.central status().central; o.base status().base; o.nostr status().nostr
  * @param {{persisted: boolean}|null} o.storage
- * @param {{installed: boolean, canInstall: boolean}} o.app
+ * @param {{installed: boolean, canInstall: boolean, addTo?: string|null}} o.app
+ * @param {boolean} [o.installDismissed] the Install card was put away on this device (Not now, Got it)
  * @param {boolean} o.backedUp the vault's words confirmed (meta.backup_at)
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
  * @param {{central, base, network}} [o.traffic] each traffic channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
  * @param {Object<string, object>} [o.work] the work in progress, { [task]: entry } (src/neuron/work.js): the tones, `work`
  * @returns {{status, tone, title, line, action, days, channels, feed, reasons, work}}
  */
-export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, since = null, traffic, work = {} }) {
+export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, installDismissed = false, since = null, traffic, work = {} }) {
   const sessions = sessionsOf(rows, now);
-  const c = centralReasons({ now, rows, sessions, central, app, work });
-  const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr })];
+  const c = centralReasons({ now, rows, sessions, central, work });
+  const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr }), ...installReason({ app, installDismissed })];
   if (storage && storage.persisted === false && !backedUp) {
     reasons.push(reason('backup', null, {
       text: 'This browser may clear Satori’s storage, your keys with it. Back up your vault’s 24 words.', button: 'Back up', act: { do: 'backup' } }));
@@ -438,7 +458,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
 
   // the card: the highest reason with words for it, most with a button (one without: what to know, nothing to press)
   const a = reasons.find((r) => r.text);
-  const action = a ? { id: a.id, text: a.text, ...(a.act ? { button: a.button, ...a.act } : {}) } : null;
+  const action = a ? { id: a.id, text: a.text, ...(a.act ? { button: a.button, ...a.act } : {}), ...(a.dismiss ? { dismiss: a.dismiss } : {}) } : null;
   const doing = leading(work);
   return {
     status, tone: toneOf(status, leading(work, HERO)), title, line, action,

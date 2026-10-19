@@ -7,13 +7,18 @@ import { version } from '../../package.json';
 import { state } from './state.js';
 import { form, idRow, wordList } from './parts.js';
 import { storageText, relayText } from './format.js';
+import { ADD_TO } from '../neuron/health.js';
 
-/** Install Satori (Chromium's prompt), or Safari's way to add it; hidden once installed (docs/design/pwa.md). */
-const SAFARI_ADD = 'To keep your keys, add Satori to the Dock (File › Add to Dock) or Home Screen (Share › Add to Home Screen). '
-  + 'The added app starts empty: set it up there, or restore it from your 24 words.';
-export const install = (a) => html`<div class="install" hidden="${() => state.app.installed || !(state.app.canInstall || state.safari)}">
+/** How Satori runs (docs/intent/ui.md: say it plainly), on Setup and in Settings › This device. */
+export const RUNS_WHILE_OPEN = "Satori works while it's open. Leave it open, or install it, and it predicts on its own.";
+
+/**
+ * Install Satori (Chromium's prompt), or this browser's way to add it (iOS, Safari on a Mac, Firefox on Android:
+ * src/pwa/platform.js); hidden once installed (docs/design/pwa.md#install).
+ */
+export const install = (a) => html`<div class="install" hidden="${() => state.app.installed || !(state.app.canInstall || ADD_TO[state.app.addTo])}">
   <button class="small-btn primary" data-test="install" hidden="${() => !state.app.canInstall}" @click="${a.install}">Install Satori</button>
-  <span class="muted small" data-test="install-hint">${() => (state.app.canInstall ? 'Keeps your keys, and runs in its own window.' : state.safari ? SAFARI_ADD : '')}</span>
+  <span class="muted small" data-test="install-hint">${() => (state.app.canInstall ? 'Keeps your keys, and runs in its own window.' : ADD_TO[state.app.addTo] ?? '')}</span>
 </div>`;
 
 function keys(a) {
@@ -150,7 +155,8 @@ function device(a) {
     <h2>This device</h2>
     <p class="${() => (state.storage?.persisted ? 'small muted' : 'small')}" data-test="storage">${() => storageText(state.storage)}</p>
     ${install(a)}
-    <p class="muted small">Satori ${version}. The neuron runs while Satori is open, in a tab or as an installed app.</p>
+    <p class="small" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
+    <p class="muted small">Satori ${version}.</p>
     <div class="actions" hidden="${() => !state.app.update}"><button class="primary" data-test="update-settings" @click="${a.update}">Update ready, reload</button></div>
   </section>`;
 }

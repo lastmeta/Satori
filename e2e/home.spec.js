@@ -438,3 +438,44 @@ test("traffic: a chip glows while its channel talks and fades after; the status 
   expect(await chip('network').evaluate((el) => getComputedStyle(el, '::after').transitionDuration)).toBe('0s');
   expect(central.prod).toEqual([]);
 });
+
+test('an iPhone: Setup and Settings say how Satori runs; the hero says Keep Satori open while it works; Home offers Add to Home Screen, once', async ({ browser }) => {
+  const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+  const context = await browser.newContext({ userAgent: UA, viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  const { central } = await setup(context);
+  centralAt(central, nowS() - 60);
+  const RUNS = "Satori works while it's open. Leave it open, or install it, and it predicts on its own.";
+  const ADD = 'Add it to your Home Screen (Share › Add to Home Screen): it opens on its own screen and keeps your keys. '
+    + 'The added app starts empty: set it up there, or restore it from your 24 words.';
+  await openApp(page);
+  await expect(page.locator('.setup [data-test=runs-while-open]')).toHaveText(RUNS);
+  await expect(page.locator('.setup [data-test=install-hint]')).toHaveText(ADD); // no prompt on iOS: how to add it
+  expect((await page.evaluate(() => window.satori.status())).app).toMatchObject({ canInstall: false, addTo: 'ios' });
+
+  // a phone: every step of the work says to keep Satori open, not only the sending
+  const release = central.hold();
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]); // central pays it: no mismatch
+  await expect(page.locator('[data-test=health-line]')).toHaveText("Keep Satori open · Fetching today's observations…");
+  await expect(hero(page)).toHaveAttribute('data-tone', 'working'); // the words, not the colour: vivid stays for what is critical
+  expect((await health(page)).work.text).toBe("Fetching today's observations…"); // agents read the step itself
+  release();
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+
+  // Home: Add to Home Screen as advice (the words given are the backup: no Back up card before it); Got it puts it away, for good
+  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'install');
+  await expect(page.locator('[data-test=action-text]')).toHaveText(`Satori works while it's open. ${ADD}`);
+  await expect(hero(page)).toHaveAttribute('data-s', 'ok'); // advice: the hero stays green
+  await page.locator('[data-test=action-button]').click(); // Got it
+  await expect(page.locator('[data-test=action]')).toBeHidden();
+  await page.reload();
+  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=action]')).toBeHidden();
+
+  // Settings › This device says it too, with the same way to add it
+  await page.evaluate(() => window.satori.go('settings'));
+  await expect(page.locator('#settings-device [data-test=runs-while-open]')).toHaveText(RUNS);
+  await expect(page.locator('#settings-device [data-test=install-hint]')).toHaveText(ADD);
+  expect(central.prod).toEqual([]);
+  await context.close();
+});

@@ -151,9 +151,9 @@ test('Retrain: Stop and a counting line, Home\'s hero, a reload mid-retrain cont
 
   // Home's hero says it, in working green
   await page.evaluate(() => window.satori.go('home'));
-  await expect(page.locator('[data-test=health-line]')).toHaveText(new RegExp(`^Retraining ${worst.name}( · tried \\d+|…)$`));
+  await expect(page.locator('[data-test=health-line]')).toHaveText(new RegExp(`^Keep Satori open · Retraining ${worst.name}( · tried \\d+|…)$`)); // a phone
   await expect(page.locator('[data-test=health]')).toHaveAttribute('data-tone', 'working');
-  const heroes = (await page.evaluate(() => window.__seen)).filter((x) => x.hero.startsWith('Retraining'));
+  const heroes = (await page.evaluate(() => window.__seen)).filter((x) => x.hero.includes('Retraining'));
   expect(heroes.every((x) => x.heroTone === 'working')).toBe(true);
 
   // a reload mid-retrain: it continues where it was (the place it keeps every 2 s), not from the start

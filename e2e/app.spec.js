@@ -559,7 +559,7 @@ test('the dev server has no service worker, and removes one left on its origin; 
   expect(await page.evaluate(() => navigator.serviceWorker.controller)).toBe(null);
 
   const s = await status(page);
-  expect(s.app).toEqual({ installed: false, canInstall: false, update: false }); // no install prompt in a Playwright context
+  expect(s.app).toEqual({ installed: false, canInstall: false, update: false, addTo: null }); // no install prompt in a Playwright context
   expect(s.storage).toEqual({ persisted: expect.any(Boolean), usage: expect.any(Number), quota: expect.any(Number) });
   expect(await page.evaluate(() => window.satori.install())).toBe('unavailable');
   expect(await page.evaluate(() => window.satori.update())).toBe(false);
