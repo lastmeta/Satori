@@ -303,9 +303,12 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 ### When in the round
 
 **At the first check of the round, never held.** Checks run 10 s after the
-page loads and after Stake, then at the next round's start (00:01 UTC on
-the chain's clock) and at least hourly; `window.satori.predictBase()` runs one
-at once. A check whose time passed while the device slept (its timer fires
+page loads, or at once when a batch is due (the identity has power and no
+batch this round, or a batch sent before waits for its receipt: the first
+status read says so; 2026-10-19), and 10 s after Stake (the load-balanced
+RPC lags a block or two behind the stake), then at the next round's start
+(00:01 UTC on the chain's clock) and at least hourly;
+`window.satori.predictBase()` runs one at once. A check whose time passed while the device slept (its timer fires
 late) runs within one heartbeat of waking, by the
 [catch-up pass](../plans/runtime.md#catch-up-pass) (`base.catchUp()`). Why:
 

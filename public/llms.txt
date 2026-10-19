@@ -57,6 +57,25 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (saying how it runs)
+
+- Setup and Settings › This device say "Satori works while it's open.
+  Leave it open, or install it, and it predicts on its own."
+  (`runs-while-open`).
+- On a phone (a coarse pointer, or 640 px wide or less) Home's hero line
+  starts "Keep Satori open · " for every step of work, not only sending
+  (`health().work.text` is the step alone, as before).
+- `status().app.addTo`: how this browser adds Satori without an install
+  prompt: `'ios'` (Share › Add to Home Screen, every iOS browser), `'mac'`
+  (Safari: File › Add to Dock), `'android'` (Firefox's menu), or null.
+- `health()`'s advice `install` comes whenever the browser can add Satori
+  and it is not installed (it came only after *Was asleep*), once per
+  device: `action` `{ id: 'install', button: 'Install', do: 'install',
+  dismiss: 'Not now' }`, or the steps with `{ button: 'Got it', do:
+  'dismiss' }` (a person puts it away: `action-dismiss`, or the button).
+- The Base batch's first check runs at once at load when a batch is due
+  (it waited 10 s).
+
 ## Changed 2026-10-19 (a first visit you can watch)
 
 - A fresh browser shows Setup at once (`<body data-screen>` = `setup`
@@ -817,7 +836,8 @@ the page's JS context:
   browser does not say). `app`: `{ installed, canInstall, update }`
   (`installed`: running as an installed app, or installed from this page;
   `canInstall`: Chromium offered its install prompt; `update`: a new version
-  is waiting, see `update()`). `recovered`: null, or the name a WAL DuckDB
+  is waiting, see `update()`; `addTo`: `'ios'`, `'mac'`, `'android'` or null,
+  how this browser adds Satori without a prompt). `recovered`: null, or the name a WAL DuckDB
   could not replay was set aside under at this page load
   (`satori-mvp.duckdb.wal.unreplayed-<time>`; its changes are not in the
   database; the keys are, as setup checkpoints them). `fatal`: the screen
@@ -853,7 +873,9 @@ the page's JS context:
     `{ id, text, button, do, tab?, section? }` (`stake-out-of-sync`: `{ id,
     text }` only, nothing to press), `do` one of `reload`, `poll` (`satori.poll()`), `stake`
     (`unlock()` then `stake()`), `backup` (`backup('vault', passphrase)`,
-    shown to the person), `install` (`install()`), `go` (`go(tab)`; the fix is
+    shown to the person), `install` (`install()`), `dismiss` (the person
+    puts the card away; `action.dismiss`, when present, names a second
+    button that does the same), `go` (`go(tab)`; the fix is
     at `#<tab>-<section>`).
   - `reasons`: every reason, highest first: `[{ id, status, channel, text }]`,
     `status` the reason's level: `'bad'`, `'warn'` (something is wrong for
@@ -866,7 +888,7 @@ the page's JS context:
     `vault-mismatch`, `not-registered`, `gas-low`, `base-skipped`,
     `base-unreachable`; idle `asleep`, `starting`; advice `backup` (storage
     not kept, no backup confirmed), `stake` (the vault holds SATORI, not
-    staked; the card says the risk), `install` (was asleep, and the browser offers Install),
+    staked; the card says the risk), `install` (the browser can add Satori, not installed, not put away),
     `relay-down` (some relay down, not all). docs/design/health.md says why
     each has its level.
   - `days`: the last 30 local days, oldest first: `{ date: 'YYYY-MM-DD',
@@ -1191,7 +1213,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `data-test` attributes. Home: `home`, `health` (`data-s` = the status,
   `data-tone`, `data-work` and `aria-busy` while working, `data-from` at rest),
   `health-title`, `health-line`, `action` (`data-action` = the reason),
-  `action-text`, `action-button`, `days` with `day` (`data-date`,
+  `action-text`, `action-button`, `action-dismiss` (Not now), `health-stale` (the last visit's Home), `days` with `day` (`data-date`,
   `data-code`), `days-summary`, `channels` with `chip` (`data-channel`,
   `data-state`, and `data-live` while its channel has traffic: until 1.5 s
   after the last, 3 s with reduced motion) and `chip-text`, `claimable` with `claimable-amount`, `claim`
@@ -1230,7 +1252,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   asked each time), `backup-key` (a private key, or
   the nsec), `backup-hex` (the Nostr key's hex), `theme-system`,
   `theme-light`, `theme-dark` (Appearance, `aria-pressed` on the chosen
-  one), `storage`, `install`, `install-hint`, `update-settings`. The inline prompt: `unlock-prompt`
+  one), `storage`, `install`, `install-hint`, `runs-while-open`, `update-settings`. Setup: `setup-wait`
+  (the keys waiting for the engine), `runs-while-open`, `install-hint`. Loading: `opening`. The inline prompt: `unlock-prompt`
   (`data-unlock-for`: `card`, `claim`, `wallet`). Elsewhere: `lock` and
   `lock-in` ("Locks in 4 min"), `update` (the header), `finish`,
   `pass-note`, `notice` (the recovered database's, with Dismiss) and `fatal`

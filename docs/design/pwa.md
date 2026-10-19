@@ -122,23 +122,41 @@ it.
 
 ## Install
 
-- **Chromium** (Chrome, Edge, Android): the page keeps `beforeinstallprompt`
-  and shows **Install Satori** with "Keeps your keys, and runs in its own
-  window." on Setup and in Settings › This device (under the storage line). It calls the
-  browser's prompt, which needs a user gesture (a click; Playwright's
-  `page.evaluate` counts: the prompt opens).
-  The browser's own install menu works as well.
-- **Safari** has no prompt, so Setup and Settings show how: File › Add to Dock
-  (macOS) or Share › Add to Home Screen (iOS, iPadOS), and that the added app
-  starts empty.
-- **Firefox** offers neither, and nothing is shown; the storage line still
-  says to back up the words.
+**How it runs, said plainly** (2026-10-19): Setup and Settings › This
+device say "Satori works while it's open. Leave it open, or install it, and
+it predicts on its own."
+
+- **Chromium** (Chrome, Edge, Samsung Internet; computers and Android): the
+  page keeps `beforeinstallprompt` and shows **Install Satori** with "Keeps
+  your keys, and runs in its own window." on Setup and in Settings › This
+  device (under the storage line). It calls the browser's prompt, which
+  needs a user gesture (a click; Playwright's `page.evaluate` counts: the
+  prompt opens). The browser's own install menu works as well.
+- **No prompt, but a way to add it** (`src/pwa/platform.js`, `app.addTo`),
+  said where Install would be:
+  - `ios`: iPhone and iPad, in Safari and, since iOS 16.4, every other
+    browser's Share menu: Share › Add to Home Screen. iPadOS asks for the
+    desktop site, so a "Macintosh" with a touch screen is an iPad.
+  - `mac`: Safari on macOS 14+: File › Add to Dock.
+  - `android`: Firefox on Android: its menu › Add app to Home screen.
+
+  Safari's added app (iOS and macOS) starts empty, which the words say.
+- **Firefox on a computer** offers nothing (Windows' taskbar tabs aside),
+  and nothing is shown; the storage line still says to back up the words.
+- **On Home, as advice, once** (2026-10-19; it was offered only after *Was
+  asleep*): the card `install` ([health.md](health.md#reasons-in-priority-order))
+  with Install and Not now, or the steps and Got it. Not now and Got it put
+  it away on this device for good (`localStorage` `satori-install-advice`);
+  installing hides it too. It sits below the backup's and Stake's advice:
+  one card at a time.
 - **Installed** is `display-mode: standalone` (or iOS's `navigator.standalone`),
   or the `appinstalled` event in this page; then the Install box is hidden.
   A tab of an installed app cannot tell, so it shows Install only if the
   browser offers it (Chromium does not once installed).
-- `status().app` is `{ installed, canInstall, update }`; `satori.install()`
-  → `'accepted' | 'dismissed' | 'unavailable'`.
+- `status().app` is `{ installed, canInstall, update, addTo }`;
+  `satori.install()` → `'accepted' | 'dismissed' | 'unavailable'`.
+
+<img src="../screenshots/setup-runs-while-open.png" alt="Setup on an iPhone: how it runs, and how to add it" width="240">
 
 ## One neuron
 

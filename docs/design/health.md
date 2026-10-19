@@ -154,7 +154,7 @@ no warn or bad reason is present.
 | 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | network | *Starting* (above) | none |
 | 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the vault | – | storage is not persistent and no backup is confirmed | Back up |
 | 16b | `stake` | advice (warn until 2026-10-19) | nothing is wrong: the vault's SATORI could earn on the Satori contract, and staking carries a known risk until the contract fix, which the card says before staking; the chip stays "Not staked" (off, grey) | contract | not staked, and the vault holds SATORI: "Stake with this neuron to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." | Stake |
-| 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | *Was asleep*, and the browser offers Install | Install |
+| 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | not installed, the browser can add Satori (its prompt, or the steps on iOS, Safari on a Mac, Firefox on Android: `app.addTo`), and the card was not put away on this device; any state, not only *Was asleep* ([pwa.md](pwa.md#install)) | Install and Not now (the prompt); Got it (the steps) |
 | 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | relays | streams are subscribed and some relay, not all, is down | Open Settings (relays) |
 
 **Failures, by what failed** (2026-10-19). The line and the chip name it:
@@ -176,7 +176,9 @@ a manual retry minutes after predictions were accepted, turned Home red
 states the title names (*Was asleep*, *Starting*), their line says what the
 neuron is doing, and they have no button. They keep the status `idle`,
 green on Home. The Install suggestion that `asleep` carried is its own
-advice reason now, `install`, so each reason has one level.
+advice reason now, `install`, so each reason has one level; since
+2026-10-19 it is offered whenever the browser can add Satori, once
+([pwa.md](pwa.md#install)).
 
 ### Staking out of sync
 
@@ -291,7 +293,14 @@ set by the code doing the work; nothing polls:
 | `train` | `score` | Scoring models · 12 of 81 (the [training pass](models.md#the-training-pass): models without a current fit, from stored history; never a prediction) | |
 
 **Critical** means closing Satori now would lose work; its words begin
-"Keep Satori open · ". The load-time history and a poll can both hold
+"Keep Satori open · ". **On a phone** (a coarse pointer, or a screen
+640 px wide or less) every step of the hero begins so (2026-10-19, the
+reliability review): a phone stops a tab as soon as it leaves the screen, so
+any work in progress needs it open. Only the words change: the tone stays
+regular green, vivid for what is critical, and `health().work.text` (for
+agents) says the step alone.
+
+<img src="../screenshots/phone-keep-open.png" alt="An iPhone: Keep Satori open · Fetching today's observations…, and the Add to Home Screen card" width="240"> The load-time history and a poll can both hold
 `central`: it ends with the last. A poll holds it from its start until the
 next poll is armed (`createPoller`, with the cycle's row in the log before
 that), so when the line comes back it reads "Sent 82 predictions just now ·
