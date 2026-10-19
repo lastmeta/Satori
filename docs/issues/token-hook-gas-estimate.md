@@ -1,6 +1,25 @@
 # A staked vault that receives SATORI with an estimated gas limit can never unstake
 
-**Status:** open · **Kind:** fixable flaw (contracts) · **Fix in:** `contract/satori` (a rewards upgrade now; the token and hub at the next redeploy) · **Severity:** anyone can trap any staked vault's SATORI for good, today
+**Status:** Fixed in contracts (humble 86e2bdb3); live once D7 deploys · **Kind:** fixable flaw (contracts) · **Fix in:** `contract/satori` branch `humble` (86e2bdb3, sweep item B1, stamped in 43412a4a) · **Severity:** on D6 (deployed from d9d22632), anyone can trap any staked vault's SATORI for good, until D7
+
+**The fix (contracts, humble 86e2bdb3).** The token reverts a transfer with
+`HookFailedWithoutReason()` when its hook fails with no revert data (out of
+gas), instead of swallowing it; the hub passes an empty-returndata Rewards
+failure up unchanged; the rewards contract's subtraction of the booked amount
+stays as a second layer. Tests: `satori/test/next/DelegationSyncGas.test.js`
+and `SatoriToken.test.js` (MockTransferHook modes 1 to 3). D7, deployed from
+`humble` at or after those commits, fixes the freeze; D6 still has it.
+
+**What the app does until D7** (2026-10-19, [../design/health.md](../design/health.md#staking-out-of-sync)):
+Stake is advice, its card saying the risk before staking; the frozen state
+is detected exactly (the identity accepts only this vault, so its power must
+equal the vault's SATORI) and shown as *Staking is out of sync* on Home, the
+Contract chip and the Wallet card ("Unstaking will fail until the contract
+fix. Don't add SATORI to the vault."); Unstake says the same instead of
+"reverted: Panic". On D7 a starved transfer reverts with
+`HookFailedWithoutReason`, which the app says as "The transaction ran out of
+gas; try again" (`src/chain/abi.js` `NEXT_ERRORS`). `node scripts/fork.mjs
+grief <vault>` reproduces the freeze on the local fork.
 
 Found on the fork while building step 6; confirmed independently on a fork of
 Base Sepolia (block 48160485, round 20741; the deployed D6 bytecode is source

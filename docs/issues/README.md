@@ -20,7 +20,7 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 
 | Issue | Where | Precondition |
 |---|---|---|
-| [token-hook-gas-estimate.md](token-hook-gas-estimate.md) | contracts (a rewards upgrade now; token and hub at the next redeploy) | a staked vault receives SATORI (a claim, a transfer, from anyone: 1 wei is enough) with an estimated gas limit: it can never unstake, and its SATORI can never be sent. The browser app pads only its own writes |
+| [token-hook-gas-estimate.md](token-hook-gas-estimate.md) | contracts: fixed on `humble` (86e2bdb3), live once D7 deploys | on D6, a staked vault receives SATORI (a claim, a transfer, from anyone: 1 wei is enough) with an estimated gas limit: it can't unstake, and its SATORI can't be sent. The app pads its own writes, offers staking as advice with the risk said, and detects the frozen state exactly |
 | [central-login-replayable.md](central-login-replayable.md) | central | someone sees one login header set |
 | [central-register-unauthenticated.md](central-register-unauthenticated.md) | central | someone knows a wallet pubkey (public) |
 | [base-batch-one-bad-game-reverts-all.md](base-batch-one-bad-game-reverts-all.md) | Docker neuron (the browser simulates each game) | a game with no new value since our last prediction on it |

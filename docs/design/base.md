@@ -99,6 +99,7 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 | `rewards.effectivePredictorFee(identity)` | 10 % until set to 0 (`C/SatoriRewards.sol:119-143`) |
 | `hub.allowedDelegator(identity)` | the one vault that may stake with the identity (`C/next/SatoriHub.sol:813-819,1007`) |
 | `token.transferLockedUntil(vault)` | when the vault's SATORI can be sent |
+| (the identity's power and `allowedDelegator`, the vault's SATORI, above) | whether the stake is booked right: `vault.inSync` ([below](#staking-out-of-sync-the-token-hook-bug)) |
 | `token.getCurrentRound()`, `getCurrentBlockTimestamp()` | the round (`block.timestamp / 86400`, `C/next/SatoriToken.sol:329-331`) and chain time |
 | `lens.getTotalClaimableRewards(vault)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
 | `airdrop.claimableAirdrop(vault)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
@@ -133,6 +134,41 @@ plus the dapp's instant-signing setup (`UI/components/GameWalletPanel.tsx:536-59
 
 **Unstake**: the vault sends `delegatePredictionPower(0x0)`
 (BP:292-301). Its SATORI can't be sent through the next round (above).
+
+### Staking out of sync (the token-hook bug)
+
+On D6 (until D7 deploys the fix from `humble` 86e2bdb3), SATORI that reaches
+a staked vault in a transaction sent with the node's gas estimate (anyone's
+1 wei, `claimAirdropFor(vault)`) skips the hook that books it into the
+identity's power, and unstaking then underflows (Panic 0x11) for good
+([issue](../issues/token-hook-gas-estimate.md)). So, while it is live:
+
+- Home offers Stake as advice (not warn), and its card, like the Wallet
+  card's staking note, says the risk before staking: "While staked, your
+  SATORI can't be sent until you unstake. A known contract issue can block
+  unstaking; a fix is coming in the next contract release."
+- `stakeSync` (`src/neuron/base.js`) checks it exactly from the status
+  multicall: once the identity accepts only this vault (`allowedDelegator ==
+  vault`) and the vault stakes with it, the vault is its only staker, so
+  `predictionDelegateInfo(identity).power` must equal `balanceOf(vault)`.
+  `status().base.vault.inSync`: `true`; `false` when the power is under the
+  balance (`shortfall`: the SATORI not booked), Home's bad reason
+  `stake-out-of-sync` ([health.md](health.md#staking-out-of-sync)) and the
+  Wallet card's line; `null` (not checked) when `allowedDelegator` is
+  another address or none (other stakers are possible, so their SATORI
+  could hide or fake a shortfall), when not staked here, or not read.
+- Unstake simulates first: the underflow is said plainly ("Staking is out of
+  sync. Unstaking will fail until the contract fix. Don't add SATORI to the
+  vault.") and nothing is sent.
+- On D7 a starved transfer reverts with `HookFailedWithoutReason()` instead
+  (in `NEXT_ERRORS`, `src/chain/abi.js`, apart from the D6 ABI check), said
+  as "The transaction ran out of gas; try again".
+
+Reproduced on the fork (the real D6 contracts, 2026-10-19): Stake, then
+`node scripts/fork.mjs grief <vault>` (1 wei at the bare estimate, 110,514
+gas, `TransferHookFailed`): power 100, balance 100.000000000000000001,
+`inSync: false`, Home red, Unstake refused in plain words
+([screenshots](health.md#staking-out-of-sync)).
 
 Words: "Stake with this neuron" / "Unstake", "Staked: 100 SATORI with this
 neuron" / "Not staked", as Lite says it ("Stake your vault & predict on
@@ -339,6 +375,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | The vault's Base address is computed from its public key, in clear in the keys record. | Status without Unlock; Lite needs the decrypted vault. |
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
+| Stake is offered as advice with the risk said, and a stake out of sync is detected and shown (Lite and the dapp do neither). | The token-hook bug is live on D6: staking can freeze the vault, through anyone else's transaction. |
 | A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
 
 ## UI and agents
@@ -484,5 +521,9 @@ The Wallet's card staked, with the batch and the Stake transactions
   stream's next value moves (and stakers' rewards can show).
 - `stream [name]`: a new stream from the deployer (a 0.001 SATORI burn) with
   one value; its game has no voting weight, so the batch leaves it out.
+- `grief <address>`: the token-hook bug: 1 wei of SATORI from the deployer
+  with the bare gas estimate, as any wallet sends it; it prints the hook
+  events (`TransferHookFailed` on anvil). A staked vault is then out of
+  sync and can't unstake until D7.
 - `stop [--port 8545]`: stops the fork `start` began (its pid is in
   `.fork.<port>.pid`, its log in `.fork.<port>.log`).

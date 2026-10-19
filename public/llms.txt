@@ -57,6 +57,37 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (staking while the contract bug is live)
+
+The token-hook bug (docs/issues/token-hook-gas-estimate.md) is live on D6
+until D7: SATORI sent to a staked vault with a normal gas estimate (anyone's
+1 wei) is not booked into the identity's power, and unstaking then fails.
+
+- `health()`: the reason `stake` is `advice` (it was `warn`): Home is not
+  amber for an unstaked vault; the card (button "Stake", `do: 'stake'`)
+  says "Stake with this neuron to earn on the Satori contract. While
+  staked, your SATORI can't be sent until you unstake. A known contract
+  issue can block unstaking; a fix is coming in the next contract
+  release." The Contract chip stays "Not staked" (`tone: 'off'`).
+- `base().vault.inSync`: `true` (the identity's power equals the vault's
+  SATORI), `false` (under it: out of sync; `vault.shortfall`, decimal
+  SATORI) or `null` (not checked: the identity accepts other stakers too,
+  not staked here, or not read). `false` is the `bad` reason
+  `stake-out-of-sync`: line "Staking is out of sync.", the Contract chip
+  "Out of sync", and an `action` with only `{ id, text }` ("Unstaking will
+  fail until the contract fix. Don't add SATORI to the vault."): no
+  `button`, no `do`. `action.button` and `do` are absent only there.
+- `unstake()` out of sync rejects with "Staking is out of sync. Unstaking
+  will fail until the contract fix. Don't add SATORI to the vault." (it was
+  "reverted: Panic"); nothing is sent.
+- On D7, a transfer whose hook runs out of gas reverts with
+  `HookFailedWithoutReason`; errors say "The transaction ran out of gas;
+  try again".
+- `node scripts/fork.mjs grief <0x…>`: 1 wei of SATORI with the bare
+  estimate on the local fork (reproduces the freeze).
+- `title` "Partly predicting" comes only from `base-failing` (the batch
+  failing); a stake out of sync still predicts.
+
 ## Changed 2026-10-19 (failures retried in minutes; red only after a real cycle)
 
 - A failed cycle (its poll or its submission failed, or central took none
@@ -743,9 +774,10 @@ the page's JS context:
   - `line`: the top reason's words (advice has none), or with none "Sent 83
     predictions 2 h ago · next in 9 h" ("Up to date · next in 9 h" when the
     last poll had nothing to send).
-  - `action`: null, or the one thing to do, the highest reason with a
-    button (so advice only when no warn or bad reason is present): `{ id,
-    text, button, do, tab?, section? }`, `do` one of `reload`, `poll` (`satori.poll()`), `stake`
+  - `action`: null, or the one thing to do, the highest reason with words
+    for the card (so advice only when no warn or bad reason is present):
+    `{ id, text, button, do, tab?, section? }` (`stake-out-of-sync`: `{ id,
+    text }` only, nothing to press), `do` one of `reload`, `poll` (`satori.poll()`), `stake`
     (`unlock()` then `stake()`), `backup` (`unlock()` then
     `backup('vault')`), `install` (`install()`), `go` (`go(tab)`; the fix is
     at `#<tab>-<section>`).
@@ -755,12 +787,12 @@ the page's JS context:
     is wrong: a suggestion, the card only; it never moves `status`, `tone`,
     `title` or `line`). The order, by level: bad `db-error`,
     `login-refused`, `central-failing` (failing, nothing good for 12 h of
-    open time), `central-overdue`, `base-failing`, `relays-down`; warn
-    `central-failed` (failing, retrying in minutes), `vault-mismatch`,
-    `not-registered`, `stake` (the vault holds SATORI,
-    not staked), `gas-low`, `base-skipped`, `base-unreachable`; idle
-    `asleep`, `starting`; advice `backup` (storage not kept, no backup
-    confirmed), `install` (was asleep, and the browser offers Install),
+    open time), `central-overdue`, `base-failing`, `stake-out-of-sync`,
+    `relays-down`; warn `central-failed` (failing, retrying in minutes),
+    `vault-mismatch`, `not-registered`, `gas-low`, `base-skipped`,
+    `base-unreachable`; idle `asleep`, `starting`; advice `backup` (storage
+    not kept, no backup confirmed), `stake` (the vault holds SATORI, not
+    staked; the card says the risk), `install` (was asleep, and the browser offers Install),
     `relay-down` (some relay down, not all). docs/design/health.md says why
     each has its level.
   - `days`: the last 30 local days, oldest first: `{ date: 'YYYY-MM-DD',
@@ -930,7 +962,7 @@ the page's JS context:
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
   identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
-  vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other',
+  vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other', inSync, shortfall,
   lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
   lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, forecast, horizon, step, score?, persist? }],
   dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
@@ -942,6 +974,10 @@ the page's JS context:
   rounded, both as decimal strings (they pass 2^53; a batch stored before the
   horizon rule has `t2` instead); `lastCheck` is the last batch check:
   `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
+  `inSync`: the stake booked right (the identity's power equals the vault's
+  SATORI, checked once the identity accepts only this vault): `true`,
+  `false` (out of sync: unstaking fails until the contract fix;
+  `shortfall` is the SATORI not booked) or `null` (not checked).
   `rpcSetting` and `maxFeeSetting` are what Settings stored (`''` and null:
   the defaults); `maxFeeGwei` is the ceiling in force. Before the first
   chain read (a second or two after load) `status().base` has `rpc: []`,
@@ -1118,7 +1154,9 @@ to a public chain). `node scripts/fork.mjs --help` lists:
 - `airdrop <0x…> <SATORI>`, `merkle <0x…> <SATORI>` (prints the proof a stub
   central serves), `advance [days]` (chain time; then `predictBase()`),
   `predict [up|down]` (moves the default stream), `stream [name]` (a game
-  with no voting weight, which the batch leaves out).
+  with no voting weight, which the batch leaves out), `grief <0x…>` (1 wei
+  of SATORI with the bare gas estimate: a staked vault goes out of sync,
+  the token-hook bug).
 
 Recipe: `fund <identity 0x…>` (gas for the batch) and
 `fund <vault 0x…> --satori 100` (gas and SATORI to stake), then

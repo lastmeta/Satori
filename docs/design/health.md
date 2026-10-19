@@ -128,11 +128,12 @@ push out the neuron's own news.
 
 ### Reasons, in priority order
 
-The action card shows the highest one that has an action, so there is at
-most one card. Its button does the thing, or goes to the place it is done.
-The order is by level (`LEVEL` in `src/neuron/health.js`), so advice owns
-the card only when no warn or bad reason is present (each of those has a
-button).
+The action card shows the highest one that has words for it (`text`), so
+there is at most one card. Its button does the thing, or goes to the place
+it is done; `stake-out-of-sync` alone has no button (there is nothing to
+press until the contract fix: the card says what to know). The order is by
+level (`LEVEL` in `src/neuron/health.js`), so advice owns the card only when
+no warn or bad reason is present.
 
 | # | Reason | Level | Why this level | Channel | When | Button |
 |---|---|---|---|---|---|---|
@@ -141,17 +142,18 @@ button).
 | 3 | `central-failing` | bad | the failures span a real cycle: nothing went out for 12 h of open time | network | the last cycle failed, and no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Try again (a poll) |
 | 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | network | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
 | 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | contract | the batch check failed twice in a row while Base is in use (staked, or a batch sent before) | Open Settings (Base) |
+| 5b | `stake-out-of-sync` | bad | the vault's SATORI can't be unstaked until the contract fix (the token-hook bug), and more SATORI in the vault only adds to it | contract | staked with this neuron, the identity accepts only this vault, and its power is under the vault's SATORI (`base.vault.inSync === false`, [below](#staking-out-of-sync)) | none: the card says "Unstaking will fail until the contract fix. Don't add SATORI to the vault." |
 | 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | relays | streams are subscribed and every relay is down | Open Settings (relays) |
 | 7 | `central-failed` | warn | it retries in minutes on its own (2, 10, 30 min), but something may need fixing | network | the last cycle failed (once or more), within `WINDOW_S` of open time of the last good one | Try again |
 | 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | network | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
 | 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | network | registering failed (each poll registers again first, until it succeeds) | Try again (a poll) |
-| 10 | `stake` | warn | the vault's SATORI earns nothing on Base until it is staked (with no SATORI there is no reason: the Base chip is off, grey) | contract | not staked, and the vault holds SATORI: "Your vault's SATORI isn't earning on Base. Stake with this neuron." | Stake |
 | 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | contract | staked, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
 | 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | contract | staked, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
 | 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | contract | the chain did not answer | Open Settings (Base) |
 | 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | network | *Was asleep* (above) | none |
 | 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | network | *Starting* (above) | none |
 | 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the vault | – | storage is not persistent and no backup is confirmed | Back up |
+| 16b | `stake` | advice (warn until 2026-10-19) | nothing is wrong: the vault's SATORI could earn on the Satori contract, and staking carries a known risk until the contract fix, which the card says before staking; the chip stays "Not staked" (off, grey) | contract | not staked, and the vault holds SATORI: "Stake with this neuron to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." | Stake |
 | 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | *Was asleep*, and the browser offers Install | Install |
 | 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | relays | streams are subscribed and some relay, not all, is down | Open Settings (relays) |
 
@@ -175,6 +177,50 @@ states the title names (*Was asleep*, *Starting*), their line says what the
 neuron is doing, and they have no button. They keep the status `idle`,
 green on Home. The Install suggestion that `asleep` carried is its own
 advice reason now, `install`, so each reason has one level.
+
+### Staking out of sync
+
+The token-hook bug ([../issues/token-hook-gas-estimate.md](../issues/token-hook-gas-estimate.md),
+live on D6 until D7 deploys): SATORI that reaches a staked vault in a
+transaction sent with a normal gas estimate (anyone can send 1 wei, or call
+`claimAirdropFor(vault)`) lands in its balance but not in the identity's
+booked power, and unstaking then underflows (Panic 0x11), for good, until the
+contract fix. So while it is live:
+
+- **Stake is advice, not warn** (2026-10-19): Home is no longer amber for an
+  unstaked vault, and the card says the risk, short and calm, before
+  anyone stakes. The Wallet card's staking note says it too.
+- **The frozen state is detected exactly.** Once the identity accepts only
+  this vault (`allowedDelegator == vault`, set by Stake) and the vault
+  stakes with it, the vault is the identity's only staker, so
+  `predictionDelegateInfo(identity).power` must equal the vault's SATORI
+  (both in the status multicall, one block). Under it is `stake-out-of-sync`
+  (bad): the hero "Staking is out of sync.", the Contract chip "Out of
+  sync", a card with no button ("Unstaking will fail until the contract fix.
+  Don't add SATORI to the vault."), the Wallet card's line and its Staking
+  fact ("· out of sync"). The batch still goes out (the identity keeps its
+  power), so the title stays *Predicting*: only `base-failing` makes it
+  *Partly predicting*.
+- **Not checked** when `allowedDelegator` is not the vault (another
+  address, or open to anyone): other stakers are possible, and their SATORI
+  in the power would hide or fake a shortfall, so nothing is said
+  (`inSync: null`). Also not when not staked here, or not read.
+- **Unstake** simulates first; the underflow (Panic 0x11) is said in the same
+  plain words ("Staking is out of sync. Unstaking will fail until the
+  contract fix. Don't add SATORI to the vault."), not "reverted: Panic", and
+  nothing is sent.
+
+Checked live on the fork of Base Sepolia (the real D6 contracts; 2026-10-19,
+the dev app, a fresh profile): Stake (three transactions), then `node
+scripts/fork.mjs grief <vault>`: 1 wei at the bare estimate (110,514 gas),
+`TransferHookFailed`; the identity's power 100, the vault's SATORI
+100.000000000000000001: Home red with the reason, the Wallet card and
+Unstake said it, and `satori.unstake()` rejects with it.
+
+<img src="../screenshots/stake-out-of-sync-home.png" alt="Home: Staking is out of sync" width="240"> <img src="../screenshots/stake-out-of-sync-wallet.png" alt="the Wallet card and Unstake's answer" width="240">
+
+The card has no button here: the card is the highest reason with words for
+it (a reason with an action has a button; this one has only what to know).
 
 **Backup confirmed** (`meta.backup_at`) is set when the vault's words are
 confirmed in Create, given at Restore (also `setup({ vaultWords })`), brought
@@ -358,9 +404,9 @@ health.js map them).
   "Database error", "Login refused", the same failure words once they span
   12 h of open time, "Nothing sent for 14 h".
 - **Contract** (the Satori contract): ok "Round 20742 sent", "Round 20742 due"; idle "Not staked"
-  (no SATORI), "Staked elsewhere", "No SATORI staked", "Connecting…"; warn
-  "Not staked", "Gas: 3 batches", "Skipped: …", "Unreachable"; bad "Failed 3
-  times".
+  (off: with SATORI too, since staking is advice), "Staked elsewhere", "No SATORI staked", "Connecting…"; warn
+  "Gas: 3 batches", "Skipped: …", "Unreachable"; bad "Failed 3
+  times", "Out of sync".
 - **Relays** (the Satori relays): idle "No streams" (nothing subscribed); ok "2 relays"; advice
   "1 of 2 relays down" (sky, or green while working); bad "Relays down". A
   relay that is connecting counts as up.
@@ -565,7 +611,11 @@ each state on a phone (390 × 844, the first screen) and a computer (1280
 wide), light and dark, `docs/screenshots/home-<state>-<phone|desktop>-<light|dark>.png`
 for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 
-<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: Base needs one step" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: the Satori Network refused the login" width="240">
+<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: the identity's gas is low" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: the Satori Network refused the login" width="240">
+
+The Stake card, advice (the hero stays green; the risk said before staking):
+
+<img src="../screenshots/home-stake-phone-light.png" alt="the Stake card as advice" width="240">
 
 A failed send, retried (`e2e/home.spec.js`, the second failure minutes
 after the first: amber, "Sending failed; next try in 10 min."; it was red):
