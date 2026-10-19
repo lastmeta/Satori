@@ -57,6 +57,21 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (the Satori Network's reward drop, before it is claimed)
+
+- `base().claimable` → `{ rewards, drop, airdrop, total }` (decimal SATORI;
+  it was `{ rewards, airdrop }`): `drop` is the Satori Network's reward drop
+  still to claim, `max(0, amountWei − alreadyMintedTo(vault))` from
+  central's merkle proof (asked at most hourly) and the chain; 0 when no
+  drop is published or this vault is not in it; null when the central does
+  not serve the route (prod on `main`): unknown, not 0. `total`: the parts
+  known. Home's Claimable rewards is the total (it left the drop out), with
+  the parts above 0 under it (`claimable-parts`, "from the Satori
+  Network"); the Wallet card's Claimable fact lists all three.
+- `base().vault.lowEth`: the vault's ETH is under one transaction's gas.
+  Claim then says "The vault needs a little Base ETH for gas to claim."
+  before trying (no Unlock asked), and `claim()` throws it.
+
 ## Changed 2026-10-19 (a tie on Base follows the stream's last move)
 
 - The daily batch's direction when a game's forecast equals the latest
@@ -979,7 +994,7 @@ the page's JS context:
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
   identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
   vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other', inSync, shortfall,
-  lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
+  lock: { locked, indefinite, untilRound, freeAt }, lowEth }, claimable: { rewards, drop, airdrop, total },
   lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, rule, model, latest, forecast, horizon, step, score?, persist? }],
   dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
   are decimal strings (ETH, SATORI); `fee` is in basis points (1000 = the
@@ -992,6 +1007,10 @@ the page's JS context:
   rounded, both as decimal strings (they pass 2^53; a batch stored before the
   horizon rule has `t2` instead); `lastCheck` is the last batch check:
   `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
+  `claimable`: the staking rewards, the Satori Network's reward drop not
+  claimed yet (`drop`: null when this central does not serve it), the
+  airdrop, and `total` (the parts known); `vault.lowEth`: under one
+  transaction's gas (Claim says so before trying).
   `inSync`: the stake booked right (the identity's power equals the vault's
   SATORI, checked once the identity accepts only this vault): `true`,
   `false` (out of sync: unstaking fails until the contract fix;

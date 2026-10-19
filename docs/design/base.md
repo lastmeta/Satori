@@ -27,7 +27,8 @@ the engine refuses a staked vault's own predictions
 
 ```
 page load ─▶ config (bundled D6 addresses, central's /api/v1/base/config over them, 1 h)
-          └─▶ status: one multicall (ETH ×2, SATORI, stake ×2, fee, allowedDelegator, lock, round, claimable ×2)
+          └─▶ status: one multicall (ETH ×2, SATORI, stake ×2, fee, allowedDelegator, lock, round, claimable ×2, alreadyMintedTo)
+                      + central's merkle proof for the vault (at most hourly)
 Unlock ─▶ Stake with this neuron: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
        └─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH, or SATORI when it can be sent
 each round (the identity, no unlock): a batch already sent? wait for it ─▶ power > 0 and no batch yet
@@ -103,6 +104,7 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 | `token.getCurrentRound()`, `getCurrentBlockTimestamp()` | the round (`block.timestamp / 86400`, `C/next/SatoriToken.sol:329-331`) and chain time |
 | `lens.getTotalClaimableRewards(vault)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
 | `airdrop.claimableAirdrop(vault)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
+| `merkle.alreadyMintedTo(vault)` | the Satori Network's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims-unlock)) |
 
 Each read may fail on its own (`allowFailure`), so one reverting view does
 not hide the rest.
@@ -356,6 +358,29 @@ did, why it skipped, or its error.
 3. **Airdrop**: `airdrop.claimAirdrop()` when `claimableAirdrop(vault)` > 0
    (ROUTES:1394-1440, BC:107-121).
 
+**What can be claimed, before claiming** (2026-10-19; Home said 0 while the
+owner had an unclaimed drop: it summed only the first and the third). The
+status reads all three: the lens's rewards, the airdrop, and the Satori
+Network's reward drop, `max(0, amountWei − alreadyMintedTo(vault))`
+(`dropClaimable`), from central's proof for the vault (`proofState`: cached,
+asked again at most hourly, since central publishes a new drop after its
+daily run, and kept from a claim's own call) and `alreadyMintedTo` in the
+status multicall. No drop published, or this vault not in it: 0. A central
+without the route (prod on `main`): unknown (`null`), not 0; a central that
+did not answer keeps the last answer and is asked again at the next read.
+Nothing is shown as an error. `base().claimable` = `{ rewards, drop, airdrop,
+total }` (`total`: the parts known). Home shows the total, the parts above 0
+under it ("2 from the Satori Network · 1 airdrop"; all three on hover), the
+Wallet card all three ("0 SATORI rewards · 3.6185 SATORI from the Satori
+Network · 0 SATORI airdrop"). Claim stays one button and runs the three.
+Read-only, the owner's vault `0xda47…8c91`: central2's proof 3.61850955
+SATORI, `alreadyMintedTo` 0, so 3.61850955 claimable.
+
+**Gas.** A claim is a vault transaction. While the vault's ETH is under one
+transaction's gas (1.5M gas at twice the gas price, the batch's measure;
+`vault.lowEth`), Claim says "The vault needs a little Base ETH for gas to
+claim." before it tries (before Unlock too), and `claim()` throws it.
+
 ## Send (Unlock)
 
 From the vault: ETH (a plain transfer, estimated first, no pad), or SATORI
@@ -400,7 +425,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
   SATORI with this neuron"; until then "Not staked: Stake with this neuron,
   below"); Transfers ("Staked SATORI can't be sent until you unstake", after
   Unstake "SATORI can be sent from <date> (round N)", then "Free to send");
-  what is claimable; the last batch (round, time, each game's direction, what
+  what is claimable (rewards, from the Satori Network, airdrop: [above](#claims-unlock)); the last batch (round, time, each game's direction, what
   was left out, the tx); the last check and the next ("Waits until you stake"
   until then); under them, who plays (`base-play`): while staked "Your
   SATORI is staked with this neuron, so it can't also play Satori Daily by
