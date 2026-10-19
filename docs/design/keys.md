@@ -308,6 +308,19 @@ time." ([/llms.txt](../../public/llms.txt)).
 
 ![Backup asks for the passphrase each time](../screenshots/backup-passphrase.png)
 
+## Secrets in memory
+
+JavaScript can't wipe a string, nor the curve library's numbers, so a
+secret's traces after Lock are mostly beyond reach. What can be wiped is
+(2026-10-19, the security review's cheap wins): the vault's secret at Lock
+(`signer.lock()`) and after a one-use vault (`withPassphrase`); the
+passphrase's UTF-8 bytes once WebCrypto has taken its copy (`vault.js`, and
+a Docker vault password's in `docker.js`); the copy an Unlock opens again to
+check its re-encryption (`index.js`); Setup's words at the passphrase step.
+On screen, the 24 words are fixed slots (`wordList`, `src/ui/parts.js`), each
+blanked in place when the backup hides or the vault locks: ArrowJS kept a
+list's unmounted `<li>`s, their words in them, to reuse.
+
 ## Code
 
 `src/keys/`:
@@ -351,6 +364,10 @@ time." ([/llms.txt](../../public/llms.txt)).
   translation, and every earlier profile carried forward; `withPassphrase`
   and `backupKeys` refuse no passphrase and a wrong one, and wipe the vault
   after its one use.
+- `wipe.test.js`: the passphrase's bytes zeroed once derived; an earlier
+  version's vault re-encrypted at Unlock, its check's copy zeroed; the vault's
+  own secret zeroed at Lock. `app.spec.js`: the very `<li>`s that showed the
+  words are blank after Hide.
 - `autolock.test.js` (fake timers): 5 minutes with no interaction, each
   interaction restarting them, never in the middle of a vault action, a
   wake past the deadline, Lock by hand.

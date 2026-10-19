@@ -197,6 +197,10 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
   await expect(page.locator('[data-test=lock-in]')).toBeHidden();
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
+  // nothing of the backup is left in the page, hidden or not: every word slot and key blanked in place
+  const leftover = () => page.evaluate(() => [...document.querySelectorAll('ol.words li, [data-test=backup-key], [data-test=backup-hex]')]
+    .map((el) => el.textContent).join(''));
+  expect(await leftover()).toBe('');
   await page.getByRole('button', { name: 'Vault words' }).click();
   await expect(askBackup).toBeVisible();
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Cancel' }).click();
@@ -205,8 +209,12 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await showBackup('Vault words');
   await expect(visible(page.locator('ol.words li'))).toHaveText(words);
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked'); // shown, not unlocked
+  await page.evaluate(() => { window.shown = [...document.querySelectorAll('#settings-backup ol.words li')]; });
   await page.getByRole('button', { name: 'Hide' }).click();
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
+  expect(await leftover()).toBe('');
+  // the very elements that showed the words are blank, not set aside somewhere with their text (ArrowJS reuses a list's)
+  expect(await page.evaluate(() => window.shown.map((li) => li.textContent).join(''))).toBe('');
   stub.batch = [entry('u-btc', 'bitcoin', T0 + 3600, '67100.5'), BATCH[1]];
   await go(page, 'streams');
   await page.getByRole('button', { name: 'Poll now' }).click();

@@ -36,7 +36,13 @@ export async function decryptField(field, password, encoding = 'latin1') {
   const bytes = passwordBytes(password, encoding);
   if (!bytes) throw new Error('Not a Latin-1 password');
   const b = base64.decode(field);
-  const pt = await subtle.decrypt({ name: 'AES-CBC', iv: b.slice(16, 32) }, await cbcKey(bytes, b.slice(0, 16)), b.slice(32));
+  let key;
+  try {
+    key = await cbcKey(bytes, b.slice(0, 16));
+  } finally {
+    bytes.fill(0); // the password's bytes, once WebCrypto has its copy
+  }
+  const pt = await subtle.decrypt({ name: 'AES-CBC', iv: b.slice(16, 32) }, key, b.slice(32));
   return new TextDecoder('utf-8', { fatal: true }).decode(pt);
 }
 

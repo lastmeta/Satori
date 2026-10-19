@@ -24,7 +24,13 @@ export function checkNewPassphrase(p) {
 }
 
 async function aesKey(passphrase, salt, iterations) {
-  const base = await subtle.importKey('raw', new TextEncoder().encode(nfc(passphrase)), 'PBKDF2', false, ['deriveKey']);
+  const bytes = new TextEncoder().encode(nfc(passphrase));
+  let base;
+  try {
+    base = await subtle.importKey('raw', bytes, 'PBKDF2', false, ['deriveKey']); // WebCrypto copies them at the call
+  } finally {
+    bytes.fill(0); // the passphrase's bytes: what JS can wipe (its string can't be)
+  }
   return subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
     base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }

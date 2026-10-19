@@ -8,7 +8,12 @@ export const form = (e) => {
   return Object.fromEntries(new FormData(e.target));
 };
 
-export const wordList = (words) => html`<ol class="words">${() => words().map((w) => html`<li>${w}</li>`)}</ol>`;
+/**
+ * The 24 numbered words (a key's backup, Setup's new vault). Fixed slots, each a reactive text, never list items made
+ * per word: ArrowJS keeps a list's unmounted <li>s, their text in them, to reuse (the security review, 2026-10-19), so
+ * clearing the words here blanks every slot in place.
+ */
+export const wordList = (words, n = 24) => html`<ol class="words">${Array.from({ length: n }, (_, i) => html`<li>${() => words()[i] ?? ''}</li>`)}</ol>`;
 
 export const fact = (label, test, text) => html`<div class="fact"><dt>${label}</dt><dd data-test="${test}">${text}</dd></div>`;
 

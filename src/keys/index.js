@@ -184,7 +184,13 @@ export async function unlockVault(record, passphrase) {
     throw new Error('Wrong passphrase');
   }
   const sealed = await sealSecret(secret, pass);
-  if (!sameKey(await openSecret(sealed, pass), secret)) throw new Error('Re-encrypting the vault failed; it was kept as it was.');
+  const again = await openSecret(sealed, pass);
+  const same = sameKey(again, secret);
+  again.fill(0); // the check's copy of the vault's secret
+  if (!same) {
+    secret.fill(0);
+    throw new Error('Re-encrypting the vault failed; it was kept as it was.');
+  }
   return { vault: signer(secret), record: { ...r, vault: { pubkey, ...sealed } } };
 }
 
