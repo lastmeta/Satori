@@ -374,6 +374,38 @@ origins, but only 18 % on the last two weeks, under the bar: an honest
 - **One writer**: it waits while central's work runs (a poll, its sign-in,
   the history), then continues on the new data, the champion read again.
 
+### Live
+
+2026-10-19 00:50, the dev server on :5180 restarted with this code,
+against central2, a fresh Chrome profile, no stubs (prod blocked, none
+asked): setup → the first poll (84 streams, 54,803 rows of central's
+history, 84 of 84 accepted; 25 better, 32 the same, 27 worse) → the worst
+model's drill-in, **safetrade_cfb, "885% worse"** (its forecast faded all
+the way back to no change) → Retrain:
+
+- the button became Stop; the line read "Retraining…", then "Retraining ·
+  tried 380 · best so far 65% better"; Home's hero "Retraining
+  safetrade_cfb · tried 380";
+- **434 tries, 1.37 s of search, 2.2 s from the tap to the result: 317
+  tries a second**. Its best was 65 % better than no change on the older
+  origins, but not on the last two weeks: "Couldn't find a model that beats
+  no change. Kept the current one." (and the fade line);
+- no poll, no predictions batch, nothing to prod, no page error.
+
+<img src="../screenshots/retrain-live-running-phone-light.png" alt="live: Retraining safetrade_cfb · tried 380 · best so far 65% better" width="240"> <img src="../screenshots/retrain-live-result-phone-light.png" alt="live: Couldn't find a model that beats no change. Kept the current one." width="240"> <img src="../screenshots/retrain-live-result-phone-dark.png" alt="live: the result, dark" width="240">
+
+The same with another fresh profile (another identity, so other specs),
+through `satori.retrain(id)` on its ten worst models: none beat no change
+by 20 % on the last two weeks; four kept a closer one (safetrade_kcn from
+41.6 times no change's error to 28.3, safetrade_btcz 3.79 to 2.50,
+safetrade_cfb 2.17 to 1.00, safetrade_evr 1.86 to 1.39), five kept the
+current one, and gold was refused (it lacks four weeks of back-to-back
+history). Each took 1.6–6.3 s (261–937 tries); **431 tries a second** over
+all. On the older origins their bests read 6–80 % better than no change:
+the recent weeks of central2's thin safetrade streams did not bear them
+out, which is the luck the look is there to catch. In the e2e, on this
+box's busier moments, 105–210 tries a second.
+
 ## Influence: how much each input moves the forecast
 
 For a `bvar` model (a Bayesian VAR(1) of the target and its 1–3 companions,
