@@ -43,8 +43,8 @@ async function eip191(h) {
  *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
  *   predictions batches), `failRegister` (how many registers answer 503: each register() is resent once on a 5xx), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
  *   `history` (stream uuid → its rows, oldest first; null: the route 404s), `reward` (the reward address central keeps:
- *   null, a 0x address, or any old value), `rewardHold` (a promise the reward-address calls wait for), `rewardRefuse` (the
- *   detail every POST is refused with, a 400: central2 before central's Base check, 'Invalid Evrmore address'), `historyDelayMs` (the n-th history call answers
+ *   null or a 0x address, as central answers it since 8dcc016), `rewardHold` (a promise the reward-address calls wait
+ *   for), `rewardRefuse` (the detail every POST is refused with, a 400, e.g. 'Invalid Base address'), `historyDelayMs` (the n-th history call answers
  *   after n × that: the streams come in one by one); hold(what) keeps the observations batch
  *   (what 'batch', the default: a poll, seen while it runs), register's answer ('register': nothing the neuron does
  *   after it, the poll schedule's write included) or the predictions batch ('submit') until the function it returns is called; read `registered`, `polls` (per observations

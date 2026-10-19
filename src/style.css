@@ -305,6 +305,18 @@ details.tile[open] > summary { margin-bottom: 0; }
 .id { display: grid; grid-template-columns: 64px minmax(0, 1fr) max-content; gap: 10px; align-items: center; padding: 2px 0; }
 .id code { overflow-wrap: anywhere; font-size: 0.85rem; }
 .reward-form p { overflow-wrap: anywhere; } /* "Saved: … to 0x…" with the whole address: it wraps on a phone */
+.reward-val { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.reward-val .badge { margin: 0; }
+.reward-step { display: flex; align-items: center; gap: 8px; }
+/* Settings › Reward address while it reads or saves (docs/intent/ui.md: never a silent wait): the hero's ring, small, its
+   arc turning as the hero's does (ring-turn); the only moving thing on Settings. Reduced motion: a still ring. */
+.spin { width: 16px; height: 16px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 3px var(--ok); position: relative; display: inline-block; }
+.spin::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(transparent 0 58%, color-mix(in srgb, var(--card) 90%, transparent) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  animation: ring-turn 1.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spin::after { content: none; animation: none; } }
 .unlock { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .unlock input { margin: 0; flex: 1 1 160px; min-width: 0; }
 .key .error { margin: 8px 0 0; }

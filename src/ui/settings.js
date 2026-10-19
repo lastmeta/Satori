@@ -83,12 +83,15 @@ function backup(a) {
 /**
  * The reward address (docs/design/central.md#the-reward-address): where the Satori Network sends this neuron's rewards
  * instead of the vault. Read when Settings opens; saved or cleared signed in by the identity (no passphrase, no gas).
+ * While it reads or saves, the card's one moving mark turns (the hero's ring, small: style.css .spin) beside the words.
  */
 function rewardWhen(r) {
   if (r.address) return '';
   if (r.at != null) return 'Not set · rewards go to your vault';
   return r.reading || !r.error ? 'Reading it from the Satori Network…' : "Couldn't read it from the Satori Network.";
 }
+const WHOSE = { vault: 'your vault', identity: 'your identity' };
+const spin = (test, hide) => html`<i class="spin" data-test="${test}" aria-hidden="true" hidden="${hide}"></i>`;
 
 function rewardCard(a) {
   const r = () => state.reward;
@@ -98,12 +101,13 @@ function rewardCard(a) {
     <form class="fields reward-form" @submit="${(e) => a.saveReward(form(e), e.target)}">
       <h2>Reward address</h2>
       <p class="muted small">Where the Satori Network sends this neuron's rewards. Not set, they go to your vault. A Base address (0x…) sends them there instead, such as a pool's.</p>
-      <div class="id reward-now"><span class="label">Now</span><code data-test="reward-address" title="${() => r().address ?? ''}" hidden="${() => !r().address}">${() => shortHash(r().address)}</code><button class="small-btn" type="button" hidden="${() => !r().address}" @click="${() => a.copy('reward-address', r().address)}">${() => (state.copied === 'reward-address' ? 'Copied' : 'Copy')}</button><span data-test="reward-none" hidden="${() => !!r().address}">${() => rewardWhen(r())}</span></div>
+      <div class="id reward-now"><span class="label">Now</span><span class="reward-val"><code data-test="reward-address" title="${() => r().address ?? ''}" hidden="${() => !r().address}">${() => shortHash(r().address)}</code><span class="badge" data-test="reward-whose" hidden="${() => !r().whose}">${() => WHOSE[r().whose] ?? ''}</span><span data-test="reward-none" hidden="${() => !!r().address}">${() => rewardWhen(r())}</span>${spin('reward-reading', () => !r().reading || busy())}</span><button class="small-btn" type="button" hidden="${() => !r().address}" @click="${() => a.copy('reward-address', r().address)}">${() => (state.copied === 'reward-address' ? 'Copied' : 'Copy')}</button></div>
+      <p class="error small" data-test="reward-identity" hidden="${() => r().whose !== 'identity'}">That is this neuron's identity: this app claims rewards only from the vault, so rewards sent there aren't claimed here. Save another address, or Clear to send them to your vault.</p>
       <p class="error small" role="alert" data-test="reward-read-error" hidden="${() => !r().error}">${() => r().error ?? ''} <button class="small-btn" type="button" data-test="reward-retry" disabled="${() => r().reading}" @click="${a.readReward}">Try again</button></p>
       <label>New reward address
         <input name="address" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="0x…" required>
       </label>
-      <p class="small" role="status" data-test="reward-line" hidden="${() => !(state.rewardLine || state.rewardDone)}">${() => state.rewardLine || state.rewardDone}</p>
+      <p class="small reward-step" role="status" hidden="${() => !(state.rewardLine || state.rewardDone)}">${spin('reward-saving', () => !busy())}<span data-test="reward-line">${() => state.rewardLine || state.rewardDone}</span></p>
       <p class="error small" role="alert" data-test="reward-error" hidden="${() => !state.rewardError}">${() => state.rewardError}</p>
       <div class="actions">
         <button class="primary" type="submit" data-test="reward-save" disabled="${busy}">${() => (state.rewardBusy === 'save' ? 'Saving…' : 'Save')}</button>

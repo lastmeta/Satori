@@ -238,7 +238,8 @@ async function startNeuron() {
     } });
   state.now = nowS();
   const c = await connect();
-  reward = createReward({ central: () => central, work, onChange: (st) => { state.reward = st; } });
+  reward = createReward({ central: () => central, work, identity: identity.evmAddress, vault: vaultPublic.evmAddress,
+    onChange: (st) => { state.reward = st; } });
   poller = createPoller(runCycle, { db, work, onChange: ({ next, running }) => {
     state.now = nowS(); // Home's "next try in 2 min" from now, not from the last 30 s tick (it read 3 min)
     state.central = { ...state.central, nextPoll: next, polling: running };
@@ -308,7 +309,8 @@ async function setCentral(raw) {
   if (moved) {
     await poller.idle(); // its rows are the old central's
     await db.resetCentral();
-    reward.reset(); // that one's reward address is not known yet
+    reward.reset(); // that one's reward address is not known yet, and the last one's words go with it
+    Object.assign(state, { rewardDone: '', rewardError: '' });
   }
   await db.set('central_url', url);
   if (moved) await activity.setting('central', url, url ? undefined : DEFAULT_CENTRAL); // Home notes it for 24 h
@@ -321,9 +323,15 @@ async function setCentral(raw) {
   readReward();
 }
 
+/** The reward address read now; the last save's words go, as they may no longer hold (it may have changed elsewhere). */
+function readRewardNow() {
+  state.rewardDone = '';
+  return reward.read();
+}
+
 /** The reward address, read from the Satori Network once Settings shows it: once per page load and central, again after a failed read. */
 function readReward() {
-  if (state.tab === 'settings' && reward && !reward.known && !reward.status.reading) void reward.read();
+  if (state.tab === 'settings' && reward && !reward.known && !reward.status.reading) void readRewardNow();
 }
 
 /**
@@ -334,7 +342,8 @@ const setReward = (address) => exclusive(address == null || !String(address).tri
   state.rewardDone = '';
   const r = await reward.set(address);
   if (r.changed) await activity.setting('reward', r.address ?? '');
-  state.rewardDone = r.address ? `Saved: the Satori Network sends this neuron's rewards to ${r.address}.` : 'Cleared: rewards go to your vault.';
+  state.rewardDone = !r.address ? 'Cleared: rewards go to your vault.'
+    : `Saved: the Satori Network sends this neuron's rewards to ${r.address}${r.whose === 'vault' ? ', your vault' : ''}.`;
   return reward.status;
 }, 'rewardBusy');
 
@@ -908,7 +917,7 @@ const actions = {
     el.reset();
   }),
   clearReward: shownAt('rewardError', () => setReward(null)),
-  readReward: () => void reward?.read(),
+  readReward: () => void (reward && readRewardNow()),
 };
 
 // ── window.satori: the same app for agents (see /llms.txt) ──────────────────
@@ -1041,16 +1050,19 @@ window.satori = {
   async setCentral(url) { ready(); await setCentral(url); return centralStatus(); },
   /**
    * Where the Satori Network sends this neuron's rewards, read from it now (signed in by the identity). → { address: '0x…'
-   * (checksummed) | null (not set: the vault), at }; throws when the Satori Network could not be read.
+   * (checksummed) | null (not set: the vault), whose: 'vault' | 'identity' | null, at }; throws when it could not be read.
    */
   async rewardAddress() {
     ready();
-    const st = await reward.read();
+    const st = await readRewardNow();
     if (st.error) throw new Error(st.error);
-    return { address: st.address, at: st.at };
+    return { address: st.address, whose: st.whose, at: st.at };
   },
-  /** Set the reward address (a Base 0x address) or clear it (null or ''), signed in by the identity; free. → { address, at } */
-  async setRewardAddress(address) { ready(); const st = await setReward(address); return { address: st.address, at: st.at }; },
+  /**
+   * Set the reward address (a Base 0x address, not this neuron's identity) or clear it (null or ''), signed in by the
+   * identity; free. → { address, whose, at }
+   */
+  async setRewardAddress(address) { ready(); const st = await setReward(address); return { address: st.address, whose: st.whose, at: st.at }; },
   /** Unlock (on the 'finish' screen it also finishes an earlier version's update, then the neuron starts). */
   async unlock(passphrase) {
     if (state.screen === 'finish') {
