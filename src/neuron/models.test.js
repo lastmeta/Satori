@@ -151,7 +151,11 @@ describe('the list: every model, named for the stream it predicts', () => {
       ['base:1', 'Stream 1', 'naive', 'tie'], ['base:3', 'Named stream 3', 'bar1d', 'better'], ['base:5', 'Named stream 5', 'bar1', null]]);
     expect(list[1].outputs[0]).toMatchObject({ latest: { value: -2, ts: null }, forecast: { value: 4, step: 43_200, horizon: 86_400, at: 9000 },
       direction: 'up', destinations: [{ to: 'contract', status: 'sent', when: 9000, ref: { round: 20743, game: 13, direction: 'up', tx: '0xabc' } }] });
-    expect(list[0].outputs[0].direction).toBe('down'); // a tie is DOWN, as sent
+    expect(list[0].outputs[0].direction).toBe('down'); // as sent (a batch before the tie rule: no rule kept)
+    expect(list[0].outputs[0].destinations[0].ref).not.toHaveProperty('rule');
+    // which rule decided (2026-10-19): a tie that followed the stream's last move, or a flat stream's DOWN
+    const tied = baseModels({ ...batch, games: [{ ...batch.games[0], direction: UP, rule: 'last-move' }], dropped: [] });
+    expect(tied[0].outputs[0]).toMatchObject({ direction: 'up', destinations: [{ ref: { direction: 'up', rule: 'last-move' } }] });
     expect(list[2].outputs[0].destinations[0]).toMatchObject({ status: 'left out', ref: { tx: null, error: 'DuplicatePrediction' } });
     expect(baseModels(null)).toEqual([]);
     // a game from a batch before backtests were kept: the training pass's fit (in memory, by `<hash>:<stream id>`)

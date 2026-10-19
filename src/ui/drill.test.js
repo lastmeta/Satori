@@ -119,6 +119,10 @@ describe('the drill-in', () => {
     expect(destinationView({ to: 'contract', status: 'left out', when: AT, ref: { round: 5, direction: 'down', tx: null, error: 'DuplicatePrediction' } }))
       .toEqual({ to: 'contract', label: 'Contract', text: 'Round 5 · DOWN · left out: DuplicatePrediction', href: null });
     expect(destinationView({ to: 'relays', status: 'waiting', when: AT, ref: { stream: 'x_pred', seq: 1, relays: 0 } }).text).toBe('x_pred #1 · no relay yet');
+    // a tie: the rule that decided (the forecast's own needs no words)
+    const tie = (rule, direction) => destinationView({ to: 'contract', status: 'sent', when: AT, ref: { round: 5, direction, rule, tx: '0x' + 'ab'.repeat(32) } }).text;
+    expect([tie('last-move', 'up'), tie('flat', 'down'), tie('forecast', 'up')]).toEqual(['Round 5 · UP (a tie: its last move) · tx 0xabab…abab',
+      'Round 5 · DOWN (a tie, flat) · tx 0xabab…abab', 'Round 5 · UP · tx 0xabab…abab']);
   });
 });
 

@@ -44,13 +44,15 @@ export function qualityText(q) {
 const markText = (q) => q.text ?? markWords(q);
 const markShort = (q) => (q.mark === 'tie' ? 'Same' : markText(q));
 
+const TIE_RULE = { 'last-move': ' (a tie: its last move)', flat: ' (a tie, flat)' };
+
 /** Where an output went, in words: central accepted or pending, Base's round and direction (and its tx), Nostr's `_pred`. */
 export function destinationView(d, { explorer = null } = {}) {
   const r = d.ref ?? {};
   const view = { to: d.to, label: LABEL[d.to] ?? d.to, text: '', href: null };
   if (d.to === 'network') view.text = d.status === 'accepted' ? `Accepted ${fmtWhen(d.when)}` : `Pending since ${fmtWhen(d.when)}`;
   if (d.to === 'contract') {
-    const dir = String(r.direction ?? '').toUpperCase();
+    const dir = String(r.direction ?? '').toUpperCase() + (TIE_RULE[r.rule] ?? ''); // a tie: the rule that decided
     view.text = d.status === 'sent' ? `Round ${r.round} · ${dir} · tx ${shortHash(r.tx)}` : `Round ${r.round} · ${dir} · left out: ${r.error}`;
     if (d.status === 'sent' && explorer && r.tx) view.href = `${explorer}/tx/${r.tx}`;
   }

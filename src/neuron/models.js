@@ -195,7 +195,7 @@ export function baseModels(batch, baseFits = new Map()) {
   return all.map(([g, sent]) => {
     const name = `${g.named ? 'Named stream' : 'Stream'} ${g.streamId}`;
     const stream = String(g.streamId);
-    const dir = g.direction === UP ? 'up' : 'down'; // as sent: a tie is DOWN
+    const dir = g.direction === UP ? 'up' : 'down'; // as sent (a tie follows the stream's last move: g.rule)
     const fit = 'tests' in g || 'score' in g ? g : baseFits.get(`${batch.hash ?? batch.round}:${g.streamId}`) ?? {};
     const quality = qualityOf({ kind: g.model, score: fit.score ?? null, persist: fit.persist ?? null });
     return modelOf({
@@ -205,7 +205,8 @@ export function baseModels(batch, baseFits = new Map()) {
         forecast: { value: num(g.forecast), step: g.step ?? null, horizon: g.horizon, at: batch.at }, direction: dir,
         influence: [{ stream, name, share: 1 }], quality,
         destinations: [{ to: 'contract', status: sent ? 'sent' : 'left out', when: batch.at,
-          ref: { round: batch.round, game: g.gameId, direction: dir, tx: sent ? batch.hash : null, ...(sent ? {} : { error: g.error }) } }],
+          ref: { round: batch.round, game: g.gameId, direction: dir, ...(g.rule ? { rule: g.rule } : {}), tx: sent ? batch.hash : null,
+            ...(sent ? {} : { error: g.error }) } }],
       }],
     });
   });

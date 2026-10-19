@@ -354,7 +354,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await expect(page.locator('[data-test=model-output]')).toHaveCount(1);
     await fits(page, `a drill-in at ${w} px`);
     await page.evaluate((id) => window.satori.go(`models/${id}`), base[1].id);
-    await expect(page.locator('[data-test=model-destination]')).toHaveText(/Contract\s*Round \d+ · (UP|DOWN) · tx 0x/);
+    await expect(page.locator('[data-test=model-destination]')).toHaveText(/Contract\s*Round \d+ · (UP|DOWN)( \(a tie[^)]*\))? · tx 0x/); // a tie says its rule
     await fits(page, `a Base drill-in at ${w} px`);
     await page.evaluate((id) => window.satori.go(`models/${id}`), base[0].id);
     await expect(page.locator('[data-test=model-kind-label]')).toHaveText('No change · not enough history yet');

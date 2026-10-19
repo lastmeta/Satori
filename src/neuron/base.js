@@ -56,6 +56,25 @@ export function stepFor(cadenceMinutes) {
 /** Lite's direction_from (base_predict.py:141-143): UP if the forecast is above the latest value; a tie is DOWN. */
 export const directionOf = (forecast, latest) => (forecast > latest ? UP : DOWN);
 
+/**
+ * A game's direction and the rule that decided it (the owner, 2026-10-19; docs/design/base.md#the-daily-batch-the-identity-on-its-own):
+ * - 'forecast': UP if the forecast is above the latest value, else DOWN (Lite's rule, for every forecast but a tie);
+ * - 'last-move': a forecast equal to the latest (a naive or no-opinion model) follows the stream's last move, the most
+ *   recent change in its history: up → UP, down → DOWN (Lite answers DOWN);
+ * - 'flat': a tie on a history with no change at all (flat, or one value) stays DOWN, the last fallback.
+ * history: the registry's [{ hour, value: bigint }], oldest first; the moves compare the int232 values exactly.
+ * → { direction, rule }
+ */
+export function directionFor(forecast, history) {
+  const values = history.map((h) => BigInt(h.value));
+  const latest = values.at(-1);
+  if (forecast !== Number(latest)) return { direction: directionOf(forecast, Number(latest)), rule: 'forecast' };
+  for (let i = values.length - 1; i > 0; i--) {
+    if (values[i] !== values[i - 1]) return { direction: values[i] > values[i - 1] ? UP : DOWN, rule: 'last-move' };
+  }
+  return { direction: DOWN, rule: 'flat' };
+}
+
 /** Registry history → the engine's points (the value's scale does not matter to a direction). */
 export const toPoints = (history) => history.map(({ hour, value }) => ({ ts: hour * 3600, value: Number(value) }));
 
@@ -130,7 +149,7 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
       // As decimal strings, as amounts are: an int232 is often beyond 2^53 (the default stream is a ratio × 1e18).
       // score, persist, tests: the engine's backtest (its median error and no change's, null below 5 origins, and its
       // origins), kept with the forecast for the Models tab (scoring is part of training).
-      const game = { ...base, direction: directionOf(f.value, Number(last)), model: f.model, latest: last.toString(),
+      const game = { ...base, ...directionFor(f.value, history), model: f.model, latest: last.toString(),
         forecast: BigInt(Math.round(f.value)).toString(), horizon: f.horizon, step,
         score: f.score ?? null, persist: f.persist ?? null, tests: f.tests ?? null };
       // The contract's own checks, named games' 24 clock hours included (SatoriEngine.sol:791-810).

@@ -10,7 +10,7 @@ import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
 import { createWork } from './work.js';
 import {
-  createBase, runBatch, stepFor, horizonFor, directionOf, nextCheckAt, toPoints, stakeSync, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
+  createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
 } from './base.js';
 
 const signerOf = (hex) => {
@@ -68,6 +68,24 @@ describe('rules', () => {
   test('direction as Lite\'s direction_from: UP above the latest, else DOWN (a tie is DOWN)', () => {
     expect([directionOf(2, 1), directionOf(1, 1), directionOf(0.5, 1)]).toEqual([UP, DOWN, DOWN]);
   });
+  test('the owner\'s tie rule (2026-10-19): a forecast equal to the latest follows the stream\'s last move; flat stays DOWN', () => {
+    const hist = (...v) => v.map((value, i) => ({ hour: i, value: BigInt(value) }));
+    // not a tie: the forecast decides, as before
+    expect(directionFor(12, hist(5, 9, 10))).toEqual({ direction: UP, rule: 'forecast' });
+    expect(directionFor(8, hist(5, 9, 10))).toEqual({ direction: DOWN, rule: 'forecast' });
+    expect(directionFor(8, hist(15, 12, 10))).toEqual({ direction: DOWN, rule: 'forecast' }); // a down move does not overrule a forecast
+    // a tie: the most recent change in the history; repeats after it do not count
+    expect(directionFor(10, hist(5, 9, 10))).toEqual({ direction: UP, rule: 'last-move' });
+    expect(directionFor(10, hist(15, 12, 10))).toEqual({ direction: DOWN, rule: 'last-move' });
+    expect(directionFor(10, hist(3, 12, 10, 10, 10))).toEqual({ direction: DOWN, rule: 'last-move' }); // 12 → 10, then flat
+    expect(directionFor(10, hist(20, 7, 10, 10))).toEqual({ direction: UP, rule: 'last-move' });
+    expect(directionFor(-3, hist(0, -5, -3))).toEqual({ direction: UP, rule: 'last-move' }); // a named stream's signed counter
+    // exact on int232 values beyond 2^53: 59058240589371161 is one above 59058240589371160
+    expect(directionFor(59058240589371161, hist('59058240589371160', '59058240589371161'))).toEqual({ direction: UP, rule: 'last-move' });
+    // a tie with no change at all: DOWN, the last fallback
+    expect(directionFor(10, hist(10, 10, 10))).toEqual({ direction: DOWN, rule: 'flat' });
+    expect(directionFor(10, hist(10))).toEqual({ direction: DOWN, rule: 'flat' });
+  });
   test('the next check: the next round\'s start + 1 min on the chain\'s clock, at most an hour away', () => {
     const chainTime = ROUND * ROUND_S + 23.5 * 3600; // 23:30 on the chain
     expect(nextCheckAt({ now: 1000, chainTime })).toBe(1000 + 1800 + 60);
@@ -104,13 +122,13 @@ describe('the daily batch', () => {
     expect(rpc.sent).toHaveLength(0);
   });
 
-  test('staked: the default stream with the engine (naive on two points → DOWN), one tx, persisted after the receipt', async () => {
+  test('staked: the default stream with the engine (naive on two points: a tie, its last move up → UP), one tx, persisted after the receipt', async () => {
     await staked();
     const r = await runBatch({ chain: chainOf(), identity, db });
-    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }]]);
+    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]); // DOWN under Lite's rule
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
       // latest: the registry's int232, exact; forecast: the engine's at the horizon, as an integer (both decimal strings, as JSON keeps them)
-      games: [{ streamId: 1, gameId: 1, named: false, direction: DOWN, model: 'naive', latest: '59058240589371161',
+      games: [{ streamId: 1, gameId: 1, named: false, direction: UP, rule: 'last-move', model: 'naive', latest: '59058240589371161',
         forecast: '59058240589371160', horizon: 86_400, step: 86_400, score: null, persist: null, tests: 0 }] };
     expect(r).toEqual({ at: batch.at, round: ROUND, sent: batch });
     expect(db.m.get('base_last_batch')).toEqual(batch);
@@ -165,7 +183,16 @@ describe('the daily batch', () => {
     const r = await runBatch({ chain: chainOf(), identity, db, forecast: fake });
     expect(calls).toEqual([{ step: 86_400, horizon: 86_400 }, { step: 43_200, horizon: 86_400 }]); // stream 1 is daily (1440 min)
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }, { gameId: 13, payload: '0x02' }]]);
-    expect(r.sent.games.map((g) => [g.gameId, g.forecast, g.horizon])).toEqual([[1, expect.any(String), 86_400], [13, '5', 86_400]]);
+    expect(r.sent.games.map((g) => [g.gameId, g.forecast, g.horizon, g.rule])).toEqual([[1, expect.any(String), 86_400, 'forecast'], [13, '5', 86_400, 'forecast']]);
+  });
+
+  test('a tie on a flat stream (no change in its history) is DOWN, and the batch says which rule decided', async () => {
+    await staked();
+    s.streams[3] = { game: 13, named: false, cadence: 60, history: [{ hour: H0 - 1, value: 10n }, { hour: H0, value: 10n }] };
+    s.weights[13] = E18;
+    const r = await runBatch({ chain: chainOf(), identity, db });
+    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }, { gameId: 13, payload: '0x02' }]]);
+    expect(r.sent.games.map((g) => [g.gameId, g.model, g.direction, g.rule])).toEqual([[1, 'naive', UP, 'last-move'], [13, 'naive', DOWN, 'flat']]);
   });
 
   test('each game keeps its step and, from the engine\'s backtest, its median error and no change\'s (the Models tab\'s)', async () => {
@@ -185,7 +212,7 @@ describe('the daily batch', () => {
     await staked();
     for (let i = 10; i < 20; i++) s.streams[i] = { game: i + 100, named: false, cadence: 60, history: [{ hour: H0, value: 1000n }] };
     await runBatch({ chain: chainOf(), identity, db });
-    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }]]);
+    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]);
   });
 
   test('nothing passes: no transaction, the reasons listed', async () => {
@@ -386,7 +413,7 @@ describe('createBase', () => {
     await vi.waitFor(() => expect(batchesSent()).toHaveLength(1));
     await vi.waitFor(async () => expect((await base.status()).lastBatch).toMatchObject({ round: ROUND }));
     v = await base.status();
-    expect(v.lastCheck).toMatchObject({ round: ROUND, sent: { games: [{ gameId: 1, direction: DOWN }] } });
+    expect(v.lastCheck).toMatchObject({ round: ROUND, sent: { games: [{ gameId: 1, direction: UP, rule: 'last-move' }] } });
     expect(v.nextCheck).toBe(at.t + CHECK_EVERY_S); // 09:00 on the chain: an hour (the round starts in 15 h)
     expect(await base.predict()).toMatchObject({ skipped: 'already predicted this round' });
     expect(checks).toMatchObject([{ round: ROUND, sent: { round: ROUND } }, { skipped: 'already predicted this round' }]);

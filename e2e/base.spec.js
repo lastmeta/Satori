@@ -79,13 +79,15 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
     /^Vault: stakes with this neuron 0x/]); // plain words; a local fork: no explorer link
   await expect(page.locator('[data-test=base-txs] code').first()).toHaveAttribute('title', /^setPredictorFee\(0\) by the identity · 0x/);
 
-  // The identity's batch, on its own, 10 s after staking: the default game, DOWN (naive on two values).
+  // The identity's batch, on its own, 10 s after staking: the default game, UP (naive on two values: a tie, which
+  // follows the stream's last move, up; Lite's rule said DOWN).
   // Anyone's new stream has a game but no voting weight: the engine pays it nothing, and it is left out.
   s.streams[7] = { game: 70, named: false, cadence: 60, history: [{ hour: ROUND * 24, value: 1000n }] };
   await expect(fact(page, 'last-batch')).toContainText(`Round ${ROUND}`, { timeout: 30_000 });
-  await expect(fact(page, 'last-batch')).toContainText('game 1 ↓');
+  await expect(fact(page, 'last-batch')).toContainText('game 1 ↑');
   const batch = rpc.sent.find((t) => t.functionName === 'predictMultipleWithPayloads');
-  expect(batch).toMatchObject({ from: I, args: [[{ gameId: 1, payload: '0x02' }]] });
+  expect(batch).toMatchObject({ from: I, args: [[{ gameId: 1, payload: '0x01' }]] });
+  expect((await page.evaluate(() => window.satori.base())).lastBatch.games).toMatchObject([{ gameId: 1, direction: 1, rule: 'last-move' }]);
   expect(s.predicted[`${I}:${ROUND}`]).toBe(1);
 
   // A round later: claims (hub.claim, the merkle drop from central's proof, the airdrop) and the next batch.
