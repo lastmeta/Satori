@@ -2,8 +2,8 @@
 // web/routes.py:1321-1529) and as the dapp goes further:
 //   status (no key) · Stake / Unstake (Unlock) · the daily batch (the identity, on its own)
 //   · claims (Unlock: hub.claim, merkle, airdrop) · send (Unlock)
-// The batch goes at the first check of each UTC round: 10 s after start, at
-// the next round's start (chain time) and at least hourly.
+// The batch goes at the first check of each UTC round: 10 s after start (at
+// once when one is due), at the next round's start (chain time) and at least hourly.
 import { fallback, formatEther, formatGwei, getAddress, http, isAddress, parseEther, parseGwei, zeroAddress } from 'viem';
 import { createChain, errorText, lockText, panicOf, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
@@ -459,9 +459,18 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       return this.status();
     },
 
+    /**
+     * The first check FIRST_CHECK_S after the load, or at once when a batch is due: the identity has power and no
+     * batch this round, or one sent before waits for its receipt (docs/design/base.md#when-in-the-round).
+     */
     start() {
       schedule.start(now() + FIRST_CHECK_S);
-      refresh().catch(() => {});
+      refresh().then(async () => {
+        const last = await db.get('base_last_batch');
+        const due = !!(await db.get('base_pending_batch'))
+          || (status?.round != null && status.identity.power > 0n && last?.round !== status.round);
+        if (due && !schedule.running && schedule.next > now()) await schedule.arm(now());
+      }).catch(() => {});
     },
     stop: schedule.stop,
     /** The batch now if due (window.satori.predictBase). */

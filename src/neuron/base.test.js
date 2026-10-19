@@ -420,6 +420,28 @@ describe('createBase', () => {
     expect(work.current()).toBeNull();
   });
 
+  test('start: the first check 10 s after the load; at once when a batch is due (staked, none this round)', async () => {
+    base.start();
+    await vi.waitFor(async () => expect((await base.status()).round).toBe(ROUND));
+    expect(timers.at(-1).ms).toBe(FIRST_CHECK_S * 1000); // not staked: nothing due, the usual 10 s
+    base.stop();
+    await staked();
+    timers.length = 0;
+    base.start();
+    await vi.waitFor(() => expect(timers.at(-1)?.ms).toBe(0)); // staked, no batch this round: at once
+    expect((await base.status()).nextCheck).toBe(at.t);
+    await timers.at(-1).fn();
+    await vi.waitFor(() => expect(batchesSent()).toHaveLength(1));
+    base.stop();
+    // the round's batch sent: the usual 10 s again
+    timers.length = 0;
+    base.start();
+    await vi.waitFor(async () => expect((await base.status()).lastBatch).toMatchObject({ round: ROUND }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(timers.map((t) => t.ms)).toEqual([FIRST_CHECK_S * 1000]);
+    base.stop();
+  });
+
   test('vault actions need Unlock (a send, the vault opened for it: docs/design/keys.md#backup)', async () => {
     await expect(base.delegate()).rejects.toThrow('Unlock the vault first');
     await expect(base.claim()).rejects.toThrow('Unlock the vault first');
