@@ -682,6 +682,24 @@ nothing sent to prod.
 
 <img src="../screenshots/home-advice-backup-live.png" alt="live on central2 at rest: Predicting in green, the Back up card under it" width="240">
 
+Fixes 4–7 of the review, live (2026-10-19 09:42 UTC, the dev server on
+:5180 restarted, a fresh Chrome profile as a phone (390 × 844, touch),
+central2 for real, Base on the local fork; nothing sent to prod): Setup on
+screen at 2.6 s, saying "Satori works while it's open. Leave it open, or
+install it, and it predicts on its own."; the first poll 84 of 84
+accepted in 15.9 s, every hero step on the phone beginning "Keep Satori
+open · " (Signing in, Fetching today's observations, Loading history · 2 of
+84 … 84 of 84, Building models, Sending 84 predictions); Unlock: "Locks in
+5 min"; `backup('vault')` and `send()` without the passphrase refused, with
+it 24 words and a send; the Wallet's review ("0.001 ETH", the recipient in
+full, "about 0.000021 ETH"), then Sent; the zero address refused; the RPC
+broken while unstaked: Home green, the Contract chip "Unreachable" in grey
+(`base-unused-unreachable`, note); the revisit: the last visit's Home at
+2.4 s ("From your last visit, just now", "Opening… downloading the
+engine…"), live at 8.2 s.
+
+<img src="../screenshots/live-contract-unused-note.png" alt="Live: the contract unused and unreachable: grey, Home green; Install as advice" width="240"> <img src="../screenshots/live-revisit-last-visit.png" alt="Live: the revisit's last-visit Home" width="240">
+
 ## Screenshots
 
 What it is doing, and the three greens (`e2e/work.spec.js`, `SHOTS=1`): working
