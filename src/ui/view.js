@@ -6,7 +6,7 @@ import { html, watch } from '@arrow-js/core';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 import { state } from './state.js';
 import { form, wordList } from './parts.js';
-import { lockInText } from './format.js';
+import { lockInText, engineText } from './format.js';
 import { home } from './home.js';
 import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
@@ -127,6 +127,7 @@ function setup(a) {
         <button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy ? 'Encrypting…' : 'Create')}</button>
       </div>
     </form>
+    <p class="small setup-wait" role="status" data-test="setup-wait" hidden="${() => !state.setupWaiting}"><progress max="${() => (state.engine?.step === 'download' && state.engine.total) || false}" value="${() => (state.engine?.step === 'download' && state.engine.total ? state.engine.loaded : false)}"></progress><span>${() => `Finishing setup… ${engineText(state.engine) || 'saving your keys…'}`}</span></p>
   </section>`;
 }
 
@@ -149,7 +150,7 @@ export function render(root, a) {
       <span title="${() => `Kept in this site's storage as ${state.recovered}`}">${RECOVERED_NOTICE}</span>
       <button class="small-btn" @click="${a.dismissNotice}">Dismiss</button>
     </div>
-    <p class="muted center" hidden="${show('loading')}">Opening…</p>
+    <p class="muted center" data-test="opening" hidden="${() => state.screen !== 'loading' || !!state.cached}">${() => `Opening… ${engineText(state.engine)}`.trim()}</p>
     <section class="card narrow" hidden="${show('elsewhere')}">
       <h2>Satori is open in another tab</h2>
       <p class="muted">Only one tab can run the neuron. Switch to that tab, or close it and reload this one.</p>
@@ -175,7 +176,7 @@ export function render(root, a) {
       <p class="error small" role="alert" hidden="${() => !state.vaultError}">${() => state.vaultError}</p>
     </section>
     ${setup(a)}
-    <div hidden="${running}">
+    <div hidden="${() => state.screen !== 'home' && !(state.screen === 'loading' && state.cached)}">
       ${home(a)}
       ${modelsTab(a)}
       ${streamsTab(a)}

@@ -5,15 +5,30 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { mark, sparkPath, unlockPrompt } from './parts.js';
-import { fmtNum, modelText, amountText, daysText, claimParts, claimableText } from './format.js';
+import { fmtNum, modelText, amountText, daysText, claimParts, claimableText, engineText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
 const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
   channels: { network: { state: 'idle', tone: 'idle', text: '–' }, contract: { state: 'idle', tone: 'idle', text: '–' },
     relays: { state: 'idle', tone: 'idle', text: '–' } } };
-const h = () => state.health ?? EMPTY;
-/** The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). */
-const hero = () => state.hero ?? { ...h(), key: 'idle', working: false };
+/** The last visit's Home is on screen (docs/design/health.md#the-last-visit): a revisit, until the neuron's own arrives. */
+const cachedNow = () => !!state.cached && state.screen !== 'home';
+const h = () => state.health ?? (cachedNow() ? { ...EMPTY, ...state.cached.health } : EMPTY);
+/** What the wallet tile reads: the chain's status, or the last visit's. */
+const B = () => (cachedNow() ? { ...state.base, ...state.cached.base, identity: { ...state.base.identity, ...state.cached.base?.identity },
+  vault: { ...state.base.vault, ...state.cached.base?.vault } } : state.base);
+/**
+ * The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). The last
+ * visit's: its title and colour, the ring turning while the neuron opens, the line saying what it waits for.
+ */
+function hero() {
+  if (cachedNow()) {
+    const c = h();
+    const tone = c.status === 'warn' || c.status === 'bad' ? c.status : 'working';
+    return { status: c.status, tone, title: c.title, key: 'open', working: true, line: `Opening… ${engineText(state.engine)}`.trim() };
+  }
+  return state.hero ?? { ...h(), key: 'idle', working: false };
+}
 const HOME_ROWS = 8;
 const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this neuron' };
 // the Satori Network (free to submit to), the Satori contract (uses gas), the Satori relays (docs/intent/ui.md)
@@ -31,17 +46,17 @@ const cell = (d) => html`<div class="${d.today ? 'cell today' : 'cell'}" data-te
 
 function chip(a, key, name, cost = '') {
   const c = () => h().channels[key];
-  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" @click="${(e) => { e.preventDefault(); a.go(CHANNEL_TAB[key]); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
+  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" @click="${(e) => { e.preventDefault(); if (!cachedNow()) a.go(CHANNEL_TAB[key]); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
 }
 
 /** The claimable rewards: the total of the parts known (staking rewards, the Satori Network's drop, the airdrop). */
-const claimable = () => (state.base.claimable.total == null ? '–' : fmtNum(Number(state.base.claimable.total)));
+const claimable = () => (B().claimable?.total == null ? '–' : fmtNum(Number(B().claimable.total)));
 /** The parts behind it, those above 0 ('3.62 from the Satori Network'); all of them on hover. */
-const claimBreakdown = () => claimParts(state.base.claimable).filter(([, x]) => Number(x) > 0).map(([what, x]) => `${fmtNum(Number(x))} ${what}`).join(' · ');
-const claimTitle = () => claimableText(state.base.claimable);
+const claimBreakdown = () => claimParts(B().claimable).filter(([, x]) => Number(x) > 0).map(([what, x]) => `${fmtNum(Number(x))} ${what}`).join(' · ');
+const claimTitle = () => claimableText(B().claimable);
 
 function vaultLine() {
-  const v = state.base.vault;
+  const v = B().vault;
   if (v.satori == null) return '–';
   const d = { identity: 'staked', none: 'not staked', other: 'staked elsewhere' }[v.staked] ?? '';
   return `${amountText(v.satori, 'SATORI')}${d ? ` · ${d}` : ''}`;
@@ -49,7 +64,7 @@ function vaultLine() {
 
 /** The identity's gas as days of daily batches (one a day). */
 const gasLine = () => {
-  const n = state.base.identity.batchesLeft;
+  const n = B().identity.batchesLeft;
   if (n == null) return '–';
   if (n === 0) return 'No ETH on the identity';
   return `${n >= 1000 ? '1,000+' : n} day${n === 1 ? '' : 's'} left`;
@@ -80,7 +95,8 @@ export function home(a) {
   <section class="dash" data-test="home" hidden="${() => state.tab !== 'home'}">
     <section class="hero" data-test="health" data-s="${() => hero().status}" data-tone="${() => hero().tone}" data-from="${() => hero().from ?? false}" data-work="${() => (hero().working ? hero().key : false)}" aria-busy="${() => (hero().working ? 'true' : false)}">
       <div class="ring" aria-hidden="true"><i class="ico"></i></div>
-      <div><h2 data-test="health-title">${() => hero().title}</h2><p data-test="health-line">${() => hero().line}</p></div>
+      <div><h2 data-test="health-title">${() => hero().title}</h2><p data-test="health-line">${() => hero().line}</p>
+        <p class="stale small" data-test="health-stale" hidden="${() => !cachedNow()}">${() => (cachedNow() ? `From your last visit, ${fmtAgo(Date.now() / 1000 - state.cached.at / 1000)}` : '')}</p></div>
     </section>
 
     <div class="action" data-test="action" data-action="${() => h().action?.id ?? false}" data-tone="${actionTone}" hidden="${() => !h().action}">
@@ -98,7 +114,7 @@ export function home(a) {
 
     <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}</section>
 
-    <section class="tile streams-tile desk-only">
+    <section class="tile streams-tile desk-only" hidden="${cachedNow}">
       <div class="tile-h"><b>Streams</b><span>${streamsSummary}</span></div>
       <div class="hrows">
         <div class="hrow head" aria-hidden="true"><span>Stream</span><span class="r">Latest</span><span class="r">Forecast 24 h</span><span>Model</span><span>Trend</span></div>
@@ -114,7 +130,7 @@ export function home(a) {
       <div class="tile-h desk-only"><b>Wallet</b><span>Base</span></div>
       <div class="earn">
         <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div><div class="sub phone-only">${vaultLine}</div></div>
-        <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy}" @click="${() => a.vaultAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
+        <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.vaultAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
       </div>
       ${unlockPrompt(a, 'claim', 'claim')}
       <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>

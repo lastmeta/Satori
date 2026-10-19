@@ -22,10 +22,18 @@ export function startPwa() {
     setApp({ installed: true, canInstall: false });
     keepStorage(); // an installed app's storage is kept
   });
-  const sw = navigator.serviceWorker;
-  if (!sw) return;
   // Dev: a worker left from a build on this origin goes (unregister() takes effect from the next load).
-  if (!import.meta.env.PROD) return void sw.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+  if (!import.meta.env.PROD) navigator.serviceWorker?.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+}
+
+/**
+ * A build's service worker, registered once the database is open: on a first visit its precache (DuckDB's wasm with
+ * the rest) would compete with the page's own download of the engine, and stall its progress behind the browser's
+ * cache lock; after it, the precache takes the wasm from the HTTP cache (docs/design/pwa.md#caching).
+ */
+export function registerWorker() {
+  const sw = navigator.serviceWorker;
+  if (!sw || !import.meta.env.PROD || registration) return;
   sw.register('/sw.js').then((reg) => {
     registration = reg;
     const waiting = () => setApp({ update: !!(reg.waiting && reg.active) });

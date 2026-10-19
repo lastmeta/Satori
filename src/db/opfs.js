@@ -1,6 +1,9 @@
 // Browser opener: DuckDB-WASM 1.32.0 (eh bundle, mvp fallback) on OPFS.
 // DuckDB runs in its own worker; this returns an async connection. A WAL an
 // older version left is settled first (recover.js, docs/design/storage.md#recovery).
+// Its steps (the wasm's download, in bytes on the wire; starting; opening) are
+// reported as they go, so a first visit's wait is never silent
+// (docs/design/storage.md#the-first-visit).
 import * as duckdb from '@duckdb/duckdb-wasm';
 import mvpWasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
@@ -8,19 +11,45 @@ import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import { openDb } from './index.js';
 import { settleWal, setAsideWal, fileBytes } from './recover.js';
+import { transferProgress } from '../ui/format.js';
+
+/* global __DUCKDB_EH_BYTES__ */
+const EH_BYTES = typeof __DUCKDB_EH_BYTES__ === 'number' ? __DUCKDB_EH_BYTES__ : null; // the eh wasm, decoded (vite.config.js)
 
 // Not 'satori.duckdb': the draft/v1-full app left a different schema under that name on this origin.
 export const DB_PATH = 'opfs://satori-mvp.duckdb';
 
-/** DuckDB in its own worker with `path` open → { conn, close }. On a failure the worker is ended, letting go of the files. */
-export async function connectOpfs(path) {
+/** Whether this origin has the database yet: none means a first visit (Setup shows at once, before DuckDB loads). */
+export async function hasDatabase(path = DB_PATH) {
+  const dir = await navigator.storage.getDirectory();
+  try {
+    await dir.getFileHandle(path.slice('opfs://'.length));
+    return true;
+  } catch (err) {
+    if (err?.name === 'NotFoundError') return false;
+    throw err;
+  }
+}
+
+/**
+ * DuckDB in its own worker with `path` open → { conn, close }. On a failure the worker is ended, letting go of the files.
+ * onStep({ step: 'download', loaded, total } | { step: 'start' } | { step: 'open' }): the wasm's download in bytes on
+ * the wire (transferProgress), its start (compiled), the database opening.
+ */
+export async function connectOpfs(path, { onStep = () => {} } = {}) {
   const bundle = await duckdb.selectBundle({
     mvp: { mainModule: mvpWasm, mainWorker: mvpWorker },
     eh: { mainModule: ehWasm, mainWorker: ehWorker },
   });
+  const raw = bundle.mainModule === ehWasm ? EH_BYTES : null;
   const duck = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bundle.mainWorker));
   try {
-    await duck.instantiate(bundle.mainModule);
+    onStep({ step: 'download', loaded: 0, total: null });
+    await duck.instantiate(bundle.mainModule, null, (p) => {
+      const t = transferProgress(p, raw);
+      onStep(t.total && t.loaded >= t.total ? { step: 'start' } : { step: 'download', ...t });
+    });
+    onStep({ step: 'open' });
     await duck.open({ path, accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
     const conn = await duck.connect();
     return { conn, close: async () => { await conn.close(); await duck.terminate(); } };
@@ -32,15 +61,15 @@ export async function connectOpfs(path) {
 
 /**
  * The database, migrated. `recovered`: the name a WAL DuckDB could not replay
- * was set aside under (its changes are not in the database), or null.
+ * was set aside under (its changes are not in the database), or null. onStep: connectOpfs's.
  */
-export async function openOpfsDb(path = DB_PATH) {
+export async function openOpfsDb(path = DB_PATH, { onStep } = {}) {
   const name = path.slice('opfs://'.length);
   const dir = await navigator.storage.getDirectory();
   const recovered = await settleWal({
     walBytes: () => fileBytes(dir, `${name}.wal`),
     async checkpoint() {
-      const { conn, close } = await connectOpfs(path);
+      const { conn, close } = await connectOpfs(path, { onStep });
       try {
         await conn.query('CHECKPOINT');
       } finally {
@@ -49,7 +78,7 @@ export async function openOpfsDb(path = DB_PATH) {
     },
     setAside: (kind) => setAsideWal(dir, name, kind),
   });
-  const { conn, close } = await connectOpfs(path);
+  const { conn, close } = await connectOpfs(path, { onStep });
   const db = await openDb(conn, close).catch(async (err) => {
     await close().catch(() => {});
     throw err;

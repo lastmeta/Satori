@@ -5,6 +5,11 @@ import { readPref, SORT_KEY } from './prefs.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | setup | finish (an earlier version's vault: Unlock once) | home
+  // the database's start (src/db/opfs.js): { step: 'download', loaded, total } (bytes on the wire) | { step: 'start' |
+  // 'open' | 'ready' }; null before it begins (docs/design/storage.md#the-first-visit)
+  engine: null,
+  setupWaiting: false, // Setup's keys wait for the database: "Finishing setup… downloading the engine, 3.2 of 7.6 MB"
+  cached: null, // while loading on a revisit: the last visit's Home (src/ui/prefs.js snapshotOf), painted until live
   tab: 'home', // home | models | streams | wallet | settings (the URL's #home … #settings; #models/<id> opens a model)
   now: Date.now() / 1000, // ticks every 30 s: relative times and the health's thresholds
   fatal: '',

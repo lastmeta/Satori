@@ -12,7 +12,7 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
-import { openOpfsDb } from './db/opfs.js';
+import { openOpfsDb, hasDatabase } from './db/opfs.js';
 import {
   generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockVault, passphraseOk, MIN_PASSPHRASE,
   withPassphrase, backupKeys,
@@ -37,11 +37,11 @@ import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
-import { writePref, SORT_KEY } from './ui/prefs.js';
+import { writePref, SORT_KEY, snapshotOf, readSnapshot, writeSnapshot } from './ui/prefs.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
-import { startPwa, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
+import { startPwa, registerWorker, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
 
 // Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
 // checkout writes nothing to production) or a build's, each replaceable by a VITE_* variable.
@@ -49,6 +49,7 @@ const DEFAULTS = defaultsFrom(import.meta.env, import.meta.env.DEV ? DEV_DEFAULT
 const DEFAULT_CENTRAL = DEFAULTS.central;
 
 let db;
+let dbOpening = null; // the database's open, begun at boot: a first visit's Setup runs meanwhile, and its keys wait for it
 let record = null; // the keys as stored (meta `keys`)
 let identity = null;
 let nostrKey = null; // { secret, pubkey }: plaintext, as the identity
@@ -245,7 +246,7 @@ async function startNeuron() {
   // step on Home, set before Home shows
   const signIn = firstPollAt(await db.get('next_poll_at'), nowS()) <= nowS() ? work.start('central') : null;
   signIn?.step('register');
-  state.screen = 'home';
+  Object.assign(state, { screen: 'home', cached: null }); // live: the last visit's Home gives way
   fillSettings();
   keepStorage(); // after setup and on each load until the browser keeps it: the keys live in this storage
   // register, as Lite does, then the schedule: a new neuron or a due poll polls at once, a time still ahead is kept
@@ -315,8 +316,19 @@ const storeKeys = (r) => work.run('keys', async (step) => {
   record = r;
 });
 
-/** The keys, then the neuron; backedUp: the vault's words were confirmed, given or brought (docs/design/health.md). */
+/**
+ * The keys, then the neuron; backedUp: the vault's words were confirmed, given or brought (docs/design/health.md). On a
+ * first visit the database may still be loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
+ */
 async function saveKeys(r, { backedUp = false } = {}) {
+  if (!db) {
+    state.setupWaiting = true;
+    try {
+      db = await dbOpening;
+    } finally {
+      state.setupWaiting = false;
+    }
+  }
   await storeKeys(r);
   if (backedUp) await markBackup();
   await startNeuron();
@@ -1061,6 +1073,29 @@ function glowChips() {
     apply: (channel, on) => document.querySelector(`[data-test=chip][data-channel=${CHIP_OF[channel]}]`)?.toggleAttribute('data-live', on) }));
 }
 
+/**
+ * The last visit's Home (docs/design/health.md#the-last-visit): painted at once on a revisit, marked "From your last
+ * visit", until the neuron's own health arrives. Kept at most every 10 s while Home's health changes, and when the page
+ * is hidden or left.
+ */
+let snapshotAt = 0;
+const keepSnapshot = () => {
+  if (state.screen !== 'home' || !state.health) return;
+  snapshotAt = Date.now();
+  writeSnapshot(snapshotOf({ health: state.health, base: state.base.config ? state.base : null, at: snapshotAt }));
+};
+watch(() => {
+  if (state.health && state.screen === 'home' && Date.now() - snapshotAt > 10_000) keepSnapshot();
+});
+addEventListener('pagehide', keepSnapshot);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') keepSnapshot(); });
+
+/**
+ * The start (docs/design/storage.md#the-first-visit): DuckDB loads in the background (7.6 MB on a first visit, its
+ * progress in state.engine). A first visit (no database on this origin) shows Setup at once: its first steps need no
+ * database, and writing the keys waits for it. A revisit paints the last visit's Home meanwhile (Home's route only),
+ * else "Opening…" with the engine's step. The service worker is registered once the database is open.
+ */
 async function boot() {
   const root = document.getElementById('app');
   root.replaceChildren(); // index.html's "Opening…", painted before any module loads
@@ -1071,17 +1106,25 @@ async function boot() {
   glowChips();
   startPwa();
   if (!(await claimTab())) return void (state.screen = 'elsewhere');
+  const fresh = await hasDatabase().then((has) => !has, () => false); // OPFS can't say: the usual way
+  dbOpening = openOpfsDb(undefined, { onStep: (e) => { state.engine = e; } });
+  dbOpening.catch(() => {}); // boot's own await reports it
+  if (fresh) state.screen = 'setup';
+  else if (state.tab === 'home') state.cached = readSnapshot();
   try {
-    db = await openOpfsDb();
+    db = await dbOpening;
+    state.engine = { step: 'ready' };
+    registerWorker();
     state.recovered = db.recovered; // a WAL DuckDB could not replay, set aside (docs/design/storage.md#recovery)
+    if (fresh) return; // Setup is on screen: it writes the keys (saveKeys)
     record = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
-    if (!record) return void (state.screen = 'setup');
+    if (!record) return void Object.assign(state, { screen: 'setup', cached: null });
     // an earlier version's vault whose public key was not in clear: the neuron needs it (register, the Base address)
-    if (!loadKeys(record).vault.pubkey) return void (state.screen = 'finish');
+    if (!loadKeys(record).vault.pubkey) return void Object.assign(state, { screen: 'finish', cached: null });
     await startNeuron();
   } catch (err) {
     state.fatal = `The neuron did not start: ${err?.message ?? err}`;
-    state.screen = 'fatal';
+    Object.assign(state, { screen: 'fatal', cached: null });
   }
 }
 

@@ -217,6 +217,11 @@ details.card > summary { color: var(--text); font-weight: 600; }
 }
 .hero h2 { margin: 0; font-size: 1.35rem; line-height: 1.15; color: var(--hero-ink); }
 .hero p { margin: 3px 0 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+/* the last visit's Home (docs/design/health.md#the-last-visit): said in the hero; the rest a little faded until live */
+.hero .stale { font-size: 0.8rem; opacity: 0.8; }
+.dash:has(.hero .stale:not([hidden])) > :not(.hero) { opacity: 0.6; }
+.setup-wait { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0 0; }
+.setup-wait progress { flex: 1 1 120px; max-width: 220px; accent-color: var(--ok); }
 
 .action { border-radius: 16px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line);
   border-left: 4px solid var(--tone); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
