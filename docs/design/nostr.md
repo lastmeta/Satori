@@ -93,7 +93,9 @@ readers depend on, not Lite's bytes. Checked against satorilib
 - **ws vs wss.** The CSP allows `connect-src 'self' https: wss: ws:`. A page on
   `https://` cannot open `ws://` (mixed content): the browser blocks it before
   the CSP is asked, so such a relay shows as **blocked** and is not tried
-  (`ws://localhost` and `127.0.0.1` are allowed). Central lists only
+  (`ws://localhost` and `127.0.0.1` are allowed). A blocked relay is neither
+  down nor counted on Home, and Settings says why once, under the relays
+  ([health.md](health.md#relays-blocked-and-reconnecting)). Central lists only
   `ws://satorian.satorinet.io:7777` today, so a deployed app needs a `wss://`
   relay ([issue](../issues/relays-not-wss.md)): the deployment's build sets
   `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public relay over
@@ -113,7 +115,9 @@ readers depend on, not Lite's bytes. Checked against satorilib
   subscriptions are re-sent after a reconnect. Reconnect backoff: 1 s, doubling
   to 5 min, ±20 % jitter, reset only once a connection has worked (its first
   EOSE, or 30 s open), so a relay that accepts and drops connections is not
-  hammered. `retryAt` is the pending reconnect's time (ms).
+  hammered. `retryAt` is the pending reconnect's time (ms); `downSince`
+  (ms) is since when it has not been open, from its first try or its last
+  drop, kept through its reconnects: Home counts it down only after 10 min.
 - **After the device sleeps** (timers fire late): the
   [catch-up pass](../plans/runtime.md#catch-up-pass) calls `nostr.catchUp()`,
   which connects each closed relay whose `retryAt` has passed (the backoff

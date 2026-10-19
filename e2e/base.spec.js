@@ -26,6 +26,14 @@ const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
 const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
 const ASKS = "Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).";
 const sent = (rpc) => rpc.sent.map((t) => t.functionName);
+/** SHOTS=1: a phone's Home into docs/screenshots (else the test's output). */
+async function phoneShot(page, name) {
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: process.env.SHOTS ? `docs/screenshots/${name}.png` : test.info().outputPath(`${name}.png`) });
+  await page.setViewportSize(size);
+}
 
 test('the Base card: stake, the batch on its own, claims, unstake, when SATORI can be sent, sends', async ({ context, page }) => {
   test.setTimeout(180_000);
@@ -343,6 +351,7 @@ test('the Satori contract unused (not staked, no batch ever sent): an RPC error 
   const chip = page.locator('[data-test=chip][data-channel=contract]');
   await expect(chip).toHaveAttribute('data-tone', 'off');
   await expect(chip.locator('[data-test=chip-text]')).toHaveText('Unreachable');
+  await phoneShot(page, 'home-contract-unused-unreachable');
   expect(central.prod).toEqual([]);
 });
 
@@ -393,6 +402,7 @@ test('a batch that never mines: past the max fee it says so (Settings); within i
   await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Network is fine. The Satori contract batch is stuck; retrying with a higher fee.');
   expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'base-stuck' });
   expect((await page.evaluate(() => window.satori.base())).pendingBatch).toMatchObject({ hashes: [first.hash, again.hash], stuck: { replaced: 1 } });
+  await phoneShot(page, 'home-batch-stuck');
 
   // Base mines again: the replacement is the round's batch; green
   rpc.release();

@@ -57,6 +57,31 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (honest colours for the contract and the relays)
+
+- `health()` reasons: a new level `note` (words on one channel's chip, never
+  `status`, `tone`, `title`, `line` or the card): `base-unused-unreachable`,
+  the chain not answering while the Satori contract is unused (not staked
+  here, no batch ever sent): the Contract chip `{ state: 'note', tone:
+  'off', text: 'Unreachable' }`, and Home stays green (it was amber,
+  `base-unreachable`, which now needs the contract in use). Such a check's
+  log row is `idle` with `data.unused`, and the day strip leaves it out.
+  `predictBase()`'s result carries `unused: true` then.
+- Relays: one that is `blocked` (ws:// on an https page) is neither down
+  nor counted ("1 relay", not "1 of 2 relays down"); Settings says it once
+  (`relays-blocked`), its line "Not reachable here". `nostr().relays[]`
+  has `downSince` (ms: since when it has not been open, or null); it counts
+  as down only after 10 minutes, so "Every relay is down" waits for that.
+- A Base batch not mined for 10 minutes: its nonce still pending, it is sent
+  again at that nonce with a quarter more fee, within the max fee (warn
+  reason `base-stuck`: "The Satori contract batch is stuck; retrying with a
+  higher fee.", chip "Batch stuck"); past the max fee it is not sent and the
+  card says so, with `do: 'go'` to Settings. `predictBase()` then returns
+  `{ at, round, stuck: { at, fee, replaced } | { at, ceiling, fee, max },
+  skipped: 'stuck: …', pendingAt? }`. `base().pendingBatch`: the batch sent
+  and not mined (`{ round, hash, hashes?, games, nonce, gas, fees, sentAt,
+  stuck? }`) or null.
+
 ## Changed 2026-10-19 (saying how it runs)
 
 - Setup and Settings › This device say "Satori works while it's open.
@@ -886,11 +911,12 @@ the page's JS context:
     open time), `central-overdue`, `base-failing`, `stake-out-of-sync`,
     `relays-down`; warn `central-failed` (failing, retrying in minutes),
     `vault-mismatch`, `not-registered`, `gas-low`, `base-skipped`,
-    `base-unreachable`; idle `asleep`, `starting`; advice `backup` (storage
+    `base-stuck` (a batch not mined for 10 min), `base-unreachable` (while
+    the contract is in use); idle `asleep`, `starting`; advice `backup` (storage
     not kept, no backup confirmed), `stake` (the vault holds SATORI, not
     staked; the card says the risk), `install` (the browser can add Satori, not installed, not put away),
-    `relay-down` (some relay down, not all). docs/design/health.md says why
-    each has its level.
+    `relay-down` (some relay down, not all); note `base-unused-unreachable`
+    (the chip's only). docs/design/health.md says why each has its level.
   - `days`: the last 30 local days, oldest first: `{ date: 'YYYY-MM-DD',
     code: 'full' | 'part' | 'error' | 'closed' | 'before', ran, today }`
     (full: predictions went out on every channel active that day; part:
@@ -1030,8 +1056,10 @@ the page's JS context:
   keep or send them anywhere. (`file()` is gone: no Docker files are made.)
 - `await satori.nostr()` (also `status().nostr`) → `{ pubkey, npub,
   maxStreams, centralWrite, userRelays, relays, subscriptions }`. `relays`:
-  `[{ url, from: ['central' | 'user'], write, state, error }]`, state
-  `open` | `connecting` | `closed` (it retries) | `blocked`. `subscriptions`:
+  `[{ url, from: ['central' | 'user'], write, state, error, downSince }]`, state
+  `open` | `connecting` | `closed` (it retries) | `blocked` (ws:// on an
+  https page: never counted on Home); `downSince`: since when it has not
+  been open (ms), or null. `subscriptions`:
   `[{ uuid, stream, provider, name, cadence_seconds, subscribed_at,
   observations, observation: { seq, ts, value, raw, received_at } | null,
   prediction: { stream, seq, value, model, made_at, relays } | null }]`
@@ -1063,7 +1091,9 @@ the page's JS context:
   vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other', inSync, shortfall,
   lock: { locked, indefinite, untilRound, freeAt }, lowEth }, claimable: { rewards, drop, airdrop, total },
   lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, rule, model, latest, forecast, horizon, step, score?, persist? }],
-  dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
+  dropped: [{ …, error }] } | null, pendingBatch, lastCheck, nextCheck, checking }`
+  (`pendingBatch`: a batch sent and not mined, `{ round, hash, hashes?,
+  games, nonce, gas, fees, sentAt, stuck? }`, or null). Amounts
   are decimal strings (ETH, SATORI); `fee` is in basis points (1000 = the
   10 % default); `direction` 1 = UP, 2 = DOWN, and `rule` what decided it:
   `'forecast'` (above or below the latest), `'last-move'` (a tie, the
@@ -1238,7 +1268,7 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `history`, `mismatch`, `poll-now`, `streams` (the card) with
   `streams-count` and `stream` rows (`obs`, `t1`, `t2`, `model`, `status`
   inside), `stream-detail` with `stream-prediction`, `relay` (with
-  `relay-state`), `sub` (a subscribed stream, with `sub-obs`, `sub-pred`,
+  `relay-state`; `relays-blocked`: the note when one is blocked), `sub` (a subscribed stream, with `sub-obs`, `sub-pred`,
   `sub-seq`, `sub-relays`, `unsubscribe`), `network`, `catalog-summary` and
   `catalog-row` (with `catalog-action`: Subscribe or Unsubscribe). Wallet:
   `base-refresh`, `base-rpc`, `base-error`, `base-identity`, `base-vault`,

@@ -340,7 +340,7 @@ describe('the daily batch', () => {
     t += STUCK_S;
     const ceiling = BigInt(p.fees.maxFeePerGas); // the ceiling is what it pays now: a quarter more is past it
     const r = await runBatch({ chain: chainOf(), identity, db, now: () => t, pendingWaitMs: 20, maxFeeWei: ceiling });
-    expect(r).toMatchObject({ round: ROUND, stuck: { ceiling: true, fee: expect.any(String), max: formatGwei(ceiling) },
+    expect(r).toMatchObject({ round: ROUND, stuck: { ceiling: true, fee: expect.any(String), max: String(Number(formatGwei(ceiling)).toPrecision(3) * 1) },
       skipped: expect.stringMatching(/^stuck: a higher fee \([\d.]+ gwei\) would pass the max fee \([\d.]+ gwei\); raise it in Settings$/) });
     expect(r.pendingAt).toBeUndefined(); // no quick re-check: the hourly one, or the next round's
     expect(batchesSent()).toHaveLength(1);

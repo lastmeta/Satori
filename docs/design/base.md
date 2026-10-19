@@ -204,12 +204,14 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 (BP:157-174), with the dapp's predict gate done by simulation
 (`UI/lib/predictGate.ts:14-50`).
 
-0. **A batch already sent**: its hash is kept (`meta.base_pending_batch`)
-   the moment the send returns. A check that finds one waits for its
-   receipt (up to 30 s) instead of simulating and sending again: mined, it
-   becomes the last batch; reverted, or from an earlier round and never
-   mined, it is let go; still pending in this round, the check says so and
-   the next one looks again.
+0. **A batch already sent**: its hash is kept (`meta.base_pending_batch`),
+   with its nonce, gas limit, fees and when it was sent, the moment the send
+   returns. A check that finds one waits for its receipt (up to 30 s) instead
+   of simulating and sending again: mined, it becomes the last batch;
+   reverted, or its nonce taken by another transaction, it is let go; still
+   pending, the check says so and the next one looks again 10 min after it
+   was sent ([a batch that never mines](#a-batch-that-never-mines)). The
+   send's own wait for the receipt ends after viem's 3 min the same way.
 1. **Due** once per UTC round: skip when the identity's incoming power is 0
    (START:1171) or `engine.predictedStreamsCount(identity, round) != 0`
    (START:1174, BP:213-217).
@@ -299,6 +301,41 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    `floor(at / 86400)`: a batch sent at 23:59:59 can land in the next round.
    Lite writes its time before sending (START:1228-1232), so a revert loses
    the day; here a failed send is shown, and the next check tries again.
+
+### A batch that never mines
+
+The reliability review (2026-10-19) found a batch that is never mined was
+silent, and worse: it holds the identity's nonce, so every later batch waits
+behind it. Now (`runBatch`, `unstick`, `src/neuron/base.js`):
+
+1. **10 minutes** (`STUCK_S`) after it was sent, a check looks at the
+   identity's mined nonce (`eth_getTransactionCount(identity, 'latest')`).
+   Above the batch's: its nonce was used (by one of ours, or another
+   transaction): let go, and the round's batch is made afresh.
+2. **Still pending**: logged (`console.warn` and the activity log, amber),
+   and Home says "The Satori contract batch is stuck; retrying with a higher
+   fee." ([health.md](health.md#a-batch-that-never-mines)). The same games
+   are sent again at the same nonce and gas limit, each fee a quarter higher
+   (`bumpFees`: a node replaces a pending transaction at 10 % more on both
+   the max fee and the tip), or the market's when higher, with no simulate
+   (`chain.replaceBatch`). Every hash is kept (`hashes`): whichever is mined
+   is the round's batch (`chain.minedAny`). It looks again 10 min later, and
+   bumps again if it must.
+3. **Within the max fee** only (the batch's ceiling, 2 gwei by default):
+   past it, nothing is sent; Home says so, with Settings ("a higher fee
+   (2.5 gwei) would pass the max fee (2 gwei)"), and the hourly check looks
+   again (sooner after Settings raise it, by `predictBase()`).
+
+A pending batch at load is checked at once ([when in the round](#when-in-the-round)),
+and one already 10 min old is looked at without another 30 s wait. Lite
+sends with its node's nonce and never replaces a stuck batch.
+
+Checked on the fork (`src/chain/fork.test.js`, anvil's interval mining off
+and automine off): the batch waits in the pool; replaced at its nonce with a
+quarter more fee, which anvil's pool takes in its place; a second identity's
+stuck batch past the ceiling is not sent again; mining resumed, the
+replacement is mined (the first never is), and the other batch at its old
+fee.
 
 ### When in the round
 
@@ -426,6 +463,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | Due once per UTC round at the first check, not every 24 h from the last submit (START:1256-1274). | A tab is open part of the day ([when in the round](#when-in-the-round)). |
 | Each game is simulated alone and only passing games are sent; Lite sends all. Lite's named-game wait (24 h since its last submit) and its resend without named games are not kept. | One stale game no longer sinks the batch. Lite needs the wait and the resend because it does not simulate; the simulate applies the contract's own named rule. |
 | The hash is kept when the batch is sent and the batch stored after its receipt; Lite stores its time before sending. | A reverted send no longer loses the day, and a tab closed before the receipt never sends twice. |
+| A batch not mined for 10 min is sent again at its nonce with a quarter more fee, within the ceiling; Lite never replaces one. | A stuck batch holds the identity's nonce: every later batch would wait behind it, silently (the review, 2026-10-19). |
 | A max-fee ceiling for the unattended batch (2 gwei by default); the tip from `eth_maxPriorityFeePerGas`. | Nobody watches the batch; Lite pays whatever the gas price is. |
 | An RPC on another chain is refused. | A wrong RPC must not take writes. |
 | `setAllowedDelegator(vault)` is sent by the identity (the dapp); Lite does not. | Only our vault can stake with the identity. |
@@ -473,7 +511,10 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 
 `meta` keys only, no migration: `base_rpc_url` and `base_max_fee_gwei` (the
 settings), `base_pending_batch` (a batch sent and not yet confirmed: its
-round, hash, games) and `base_last_batch` (the last batch mined, above; a
+round, hash, games, dropped; since 2026-10-19 also `nonce`, `gas`, `fees`
+(wei, decimal strings), `sentAt` (local seconds), and once stuck `hashes`
+(each sent) and `stuck` ({ at, fee, replaced } or { at, ceiling, fee, max });
+`base().pendingBatch`) and `base_last_batch` (the last batch mined, above; a
 game's `latest` and `forecast` as decimal strings; a batch from before the
 horizon rule has `t2` instead) ([storage.md](storage.md)). The
 config cache (1 h) is in memory and per central: another central URL is

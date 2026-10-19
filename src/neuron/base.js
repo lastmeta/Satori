@@ -42,6 +42,8 @@ export function bumpFees(old, market) {
   return { maxFeePerGas: max, maxPriorityFeePerGas: tip };
 }
 const feesOf = (f) => ({ maxFeePerGas: BigInt(f.maxFeePerGas), maxPriorityFeePerGas: BigInt(f.maxPriorityFeePerGas) });
+/** A fee per gas in gwei, three significant digits ('0.00125'), as the stuck batch says it. */
+const gweiText = (wei) => Number(formatGwei(wei)).toLocaleString('en-US', { maximumSignificantDigits: 3, maximumFractionDigits: 20 });
 const feesText = (f) => ({ maxFeePerGas: String(f.maxFeePerGas), maxPriorityFeePerGas: String(f.maxPriorityFeePerGas) });
 
 /** The max fee setting as typed: '' or null for the default, else a positive number of gwei. */
@@ -183,14 +185,14 @@ async function finish(db, b, mined) {
 async function unstick({ chain, identity, db, pending, maxFeeWei, now, at, round, report }) {
   if ((await chain.nonce(identity.evmAddress, 'latest')) > pending.nonce) return null;
   const fees = bumpFees(feesOf(pending.fees), await chain.fees());
-  const fee = formatGwei(fees.maxFeePerGas);
+  const fee = gweiText(fees.maxFeePerGas);
   console.warn('[satori] base batch stuck', { hash: pending.hash, nonce: pending.nonce, sentAt: pending.sentAt, fee });
   const keep = async (p) => {
     await db.set('base_pending_batch', p);
     await db.checkpoint();
   };
   if (fees.maxFeePerGas > maxFeeWei) {
-    const max = formatGwei(maxFeeWei);
+    const max = gweiText(maxFeeWei);
     const stuck = { at: now(), ceiling: true, fee, max, replaced: pending.stuck?.replaced ?? 0 };
     await keep({ ...pending, stuck });
     return { at, round, stuck, skipped: `stuck: a higher fee (${fee} gwei) would pass the max fee (${max} gwei); raise it in Settings` };
