@@ -97,6 +97,8 @@ async function shots(page, name) {
 
 test('Models: the engine\'s status, every model (central, Base, Network), filter and sort, a drill-in and back, a deep link, the phone', async ({ context, page }) => {
   test.setTimeout(300_000);
+  const errors = []; // the page never throws (an open drill-in recomputed after a poll once stopped ArrowJS's queue)
+  page.on('pageerror', (e) => errors.push(String(e)));
   const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
   // a registry stream with a week of hourly history: bar1 in the batch (the default stream has two points: naive)
   s.streams[3] = { game: 13, named: false, cadence: 60,
@@ -374,4 +376,5 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(page.locator('[data-test=model-error]')).toHaveText(/^No such model: central:nope/);
   expect(await page.evaluate(() => window.satori.model('central:nope'))).toBeNull();
   expect(central.prod).toEqual([]);
+  expect(errors).toEqual([]);
 });

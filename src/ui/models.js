@@ -147,12 +147,17 @@ const dv = () => {
   return memo.view;
 };
 const CHART_H = 160;
-let charts = { key: '', list: [] };
-/** Each output's chart at the out block's measured width (px for px: text and dots at their size). */
+let charts = { detail: null, w: 0, list: [] };
+/**
+ * Each output's chart at the out block's measured width (px for px: text and dots at their size). Keyed on the detail
+ * itself, not state.modelRev: the out blocks are rebuilt when it changes (their key holds it), and an expression inside
+ * one that also followed modelRev would be queued and released in the same flush, which stops ArrowJS 1.0.6's queue
+ * ("expressionPool[effect] is not a function") and leaves the rest of that flush's expressions frozen.
+ */
 const chartAt = (i) => {
-  const key = `${state.modelRev}:${state.modelWidth}`;
-  if (charts.key !== key) {
-    charts = { key, list: (box.detail?.outputs ?? []).map((o) => chartOf(o, { w: Math.max(240, state.modelWidth), h: CHART_H })) };
+  const w = state.modelWidth;
+  if (charts.detail !== box.detail || charts.w !== w) {
+    charts = { detail: box.detail, w, list: (box.detail?.outputs ?? []).map((o) => chartOf(o, { w: Math.max(240, w), h: CHART_H })) };
   }
   return charts.list[i] ?? null;
 };
@@ -193,7 +198,7 @@ function step(e, i) {
  * namespace): the made-at hairline, the history, the forecast dashed from the last point, the latest point, one
  * step's point and the endpoint (the value sent, emphasized), the crosshair, the range's labels.
  */
-function chart(i) {
+function chart(o, i) {
   const c = () => chartAt(i);
   const hp = () => (state.modelHover?.out === i ? c()?.hover[state.modelHover.i] : null);
   const pt = (k) => () => { const p = c()?.points ?? []; return k === 'end' ? p.at(-1) : p.length > 1 ? p[0] : null; };
@@ -202,17 +207,14 @@ function chart(i) {
   const y = (k) => () => c()?.yLabels[k];
   const tl = (k) => () => c()?.timeLabels[k]; // how far ahead each forecast point is ("12 h", "24 h")
   const x = (k) => () => c()?.xLabels[k];
-  const label = () => {
-    const o = dv()?.outputs[i];
-    return o ? `${o.name}: recent history and the forecast. Latest ${o.latest}; ${o.forecast}.` : '';
-  };
+  const label = `${o.name}: recent history and the forecast. Latest ${o.latest}; ${o.forecast}.`; // the block's own output (static)
   const top = () => c()?.pad.t ?? 0;
   const bottom = () => CHART_H - (c()?.pad.b ?? 0);
   return html`<svg class="mchart" data-test="model-chart" viewBox="${() => `0 0 ${c()?.w ?? 300} ${CHART_H}`}" height="${CHART_H}" role="img" aria-label="${label}" tabindex="0" @pointermove="${(e) => hover(e, i)}" @pointerleave="${() => { state.modelHover = null; }}" @keydown="${(e) => step(e, i)}"><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[0] ?? -10}" y2="${() => c()?.grid[0] ?? -10}"></line><line class="grid" x1="${() => c()?.pad.l ?? 0}" x2="${() => (c() ? c().w - c().pad.r : 0)}" y1="${() => c()?.grid[1] ?? -10}" y2="${() => c()?.grid[1] ?? -10}"></line><line class="now" x1="${() => c()?.now ?? -10}" x2="${() => c()?.now ?? -10}" y1="${top}" y2="${bottom}"></line><path class="hist" d="${() => c()?.line ?? ''}"></path><path class="ahead" d="${() => c()?.ahead ?? ''}"></path><line class="cross" hidden="${() => !hp()}" x1="${() => hp()?.x ?? -10}" x2="${() => hp()?.x ?? -10}" y1="${top}" y2="${bottom}"></line><circle class="last" r="3.5" hidden="${() => !c()?.last}" cx="${() => c()?.last?.x ?? -10}" cy="${() => c()?.last?.y ?? -10}"></circle><circle class="fpt" r="4" hidden="${() => !mid()}" cx="${() => mid()?.x ?? -10}" cy="${() => mid()?.y ?? -10}"></circle><circle class="fpt end" data-test="model-endpoint" r="5.5" hidden="${() => !end()}" cx="${() => end()?.x ?? -10}" cy="${() => end()?.y ?? -10}"></circle><circle class="hot" r="4.5" hidden="${() => !hp()}" cx="${() => hp()?.x ?? -10}" cy="${() => hp()?.y ?? -10}"></circle><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(0)()?.y ?? -10}">${() => y(0)()?.text ?? ''}</text><text class="ylab" x="${() => c()?.pad.l ?? 0}" y="${() => y(1)()?.y ?? -10}">${() => y(1)()?.text ?? ''}</text><text class="xlab" x="${() => x(0)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(0)()?.text ?? ''}</text><text class="xlab" text-anchor="end" x="${() => x(1)()?.x ?? 0}" y="${CHART_H - 1}">${() => x(1)()?.text ?? ''}</text><text class="elab" text-anchor="end" x="${() => c()?.endLabel?.x ?? -10}" y="${() => c()?.endLabel?.y ?? -10}">${() => c()?.endLabel?.text ?? ''}</text><text class="tlab" data-test="model-ahead" text-anchor="${() => tl(0)()?.anchor ?? 'middle'}" x="${() => tl(0)()?.x ?? -10}" y="${() => tl(0)()?.y ?? -10}">${() => tl(0)()?.text ?? ''}</text><text class="tlab" data-test="model-ahead" text-anchor="${() => tl(1)()?.anchor ?? 'middle'}" x="${() => tl(1)()?.x ?? -10}" y="${() => tl(1)()?.y ?? -10}">${() => tl(1)()?.text ?? ''}</text></svg>`;
 }
 
 function outBlock(o, i) {
-  return html`<div class="oblock" data-test="model-output" data-stream="${o.key}"><div class="ohead"><b data-test="model-output-name">${o.name}</b><small class="muted" hidden="${!o.as}">${`published as ${o.as}`}</small></div><div class="ovals"><span class="olatest">Latest <b>${o.latest}</b><small class="muted">${o.latestWhen ? ` · ${o.latestWhen}` : ''}</small></span><span class="oforecast" data-test="model-output-forecast">${o.forecast} <span class="dir" data-dir="${o.arrow}">${o.arrow}</span></span></div>${chart(i)}<p class="readout muted small" data-test="model-readout">${() => readout(o, i)}</p><ul class="dests">${o.destinations.map(destRow)}</ul></div>`;
+  return html`<div class="oblock" data-test="model-output" data-stream="${o.key}"><div class="ohead"><b data-test="model-output-name">${o.name}</b><small class="muted" hidden="${!o.as}">${`published as ${o.as}`}</small></div><div class="ovals"><span class="olatest">Latest <b>${o.latest}</b><small class="muted">${o.latestWhen ? ` · ${o.latestWhen}` : ''}</small></span><span class="oforecast" data-test="model-output-forecast">${o.forecast} <span class="dir" data-dir="${o.arrow}">${o.arrow}</span></span></div>${chart(o, i)}<p class="readout muted small" data-test="model-readout">${() => readout(o, i)}</p><ul class="dests">${o.destinations.map(destRow)}</ul></div>`;
 }
 
 function drill(a) {
