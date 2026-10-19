@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, obsText, catalogMatch, predText,
-  shortHash, amountText, fmtUtc, delegationText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
+  shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
   storageText, playNote, modelText, historyText, daysText,
 } from './format.js';
 
@@ -125,6 +125,9 @@ test('Base: amounts, the stake, the transfer rule (sent from round N + 1 at 00:0
   const v = { identity: { power: '100' }, vault: { staked: 'identity', stakedWith: '0xI' } };
   expect(delegationText(v)).toBe('Staked: 100 SATORI with this neuron');
   expect(delegationText({ ...v, vault: { ...v.vault, inSync: false } })).toBe('Staked: 100 SATORI with this neuron · out of sync');
+  // what can be claimed, part by part: the Satori Network's drop in plain words; unknown (a central without the route) is '–', not 0
+  expect(claimableText({ rewards: '3', drop: '3.61850955', airdrop: '0' })).toBe('3 SATORI rewards · 3.6185 SATORI from the Satori Network · 0 SATORI airdrop');
+  expect(claimableText({ rewards: '0', drop: null, airdrop: '0' })).toBe('0 SATORI rewards · – from the Satori Network · 0 SATORI airdrop');
   expect(delegationText({ ...v, vault: { staked: 'none' } })).toBe('Not staked');
   expect(delegationText({ ...v, vault: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this neuron');
   expect(delegationText(null)).toBe('–');

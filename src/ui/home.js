@@ -5,7 +5,7 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { mark, sparkPath, unlockPrompt } from './parts.js';
-import { fmtNum, modelText, amountText, daysText } from './format.js';
+import { fmtNum, modelText, amountText, daysText, claimParts, claimableText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
 const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [],
@@ -34,12 +34,11 @@ function chip(a, key, name, cost = '') {
   return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" @click="${(e) => { e.preventDefault(); a.go(CHANNEL_TAB[key]); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
 }
 
-/** The claimable rewards (the hub's and the vested airdrop; the merkle drop is known only when claimed). */
-function claimable() {
-  const c = state.base.claimable;
-  if (c.rewards == null && c.airdrop == null) return '–';
-  return fmtNum(Number(c.rewards ?? 0) + Number(c.airdrop ?? 0));
-}
+/** The claimable rewards: the total of the parts known (staking rewards, the Satori Network's drop, the airdrop). */
+const claimable = () => (state.base.claimable.total == null ? '–' : fmtNum(Number(state.base.claimable.total)));
+/** The parts behind it, those above 0 ('3.62 from the Satori Network'); all of them on hover. */
+const claimBreakdown = () => claimParts(state.base.claimable).filter(([, x]) => Number(x) > 0).map(([what, x]) => `${fmtNum(Number(x))} ${what}`).join(' · ');
+const claimTitle = () => claimableText(state.base.claimable);
 
 function vaultLine() {
   const v = state.base.vault;
@@ -114,7 +113,7 @@ export function home(a) {
     <section class="tile wallet-tile" data-test="claimable">
       <div class="tile-h desk-only"><b>Wallet</b><span>Base</span></div>
       <div class="earn">
-        <div><div class="sub">Claimable rewards</div><div class="big"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub phone-only">${vaultLine}</div></div>
+        <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div><div class="sub phone-only">${vaultLine}</div></div>
         <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy}" @click="${() => a.vaultAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
       </div>
       ${unlockPrompt(a, 'claim', 'claim')}

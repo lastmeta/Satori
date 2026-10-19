@@ -180,6 +180,15 @@ export function amountText(x, unit) {
   return `${fmtNum(Number(x))} ${unit}`;
 }
 
+/**
+ * What the vault can claim, part by part (base().claimable): its staking rewards, the Satori Network's reward drop
+ * ("from the Satori Network"; '–' when this Satori Network does not say), the airdrop.
+ */
+export const claimParts = (c) => [['rewards', c?.rewards], ['from the Satori Network', c?.drop], ['airdrop', c?.airdrop]];
+export function claimableText(c) {
+  return claimParts(c).map(([what, x]) => `${amountText(x, 'SATORI')} ${what}`).join(' · ');
+}
+
 /** The vault's stake in a few words. */
 export function delegationText(v) {
   const d = v?.vault?.staked;

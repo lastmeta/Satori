@@ -27,7 +27,7 @@ import { box as modelBox, modelHref } from './ui/models.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
-import { createBase } from './neuron/base.js';
+import { createBase, NEED_GAS } from './neuron/base.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
 import { createWork, workText, leading, HERO } from './neuron/work.js';
@@ -726,7 +726,12 @@ const actions = {
   }),
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
   /** A vault action from the UI: Unlock first (inline, at `slot`) when the vault is locked. */
-  vaultAction: (slot, name) => withVault(slot, () => actions[name]()),
+  vaultAction(slot, name) {
+    if (name === 'baseClaim' && state.base.vault.lowEth) { // a claim is a vault transaction: said before trying (and before Unlock)
+      return void Object.assign(state, { baseDid: 'claim', baseResult: '', baseTxs: [], baseError: NEED_GAS });
+    }
+    return withVault(slot, () => actions[name]());
+  },
   baseDelegate: () => baseUi('stake', async () => {
     const r = await vaultOps.delegate();
     return { text: r.steps.length ? 'Staked with this neuron.' : 'Already staked with this neuron.',

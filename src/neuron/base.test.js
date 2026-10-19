@@ -10,7 +10,8 @@ import { CentralError } from '../central/index.js';
 import { UP, DOWN, ROUND_S, INDEFINITE } from '../chain/index.js';
 import { createWork } from './work.js';
 import {
-  createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI,
+  createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, proofState, dropClaimable,
+  FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S,
 } from './base.js';
 
 const signerOf = (hex) => {
@@ -112,6 +113,30 @@ describe('staking in sync (the token-hook bug: docs/issues/token-hook-gas-estima
     expect(stakeSync({ ...base, allowedDelegator: zeroAddress })).toEqual({ inSync: null, shortfall: null }); // open to anyone
     expect(stakeSync({ ...base, staked: 'none' })).toEqual({ inSync: null, shortfall: null });
     expect(stakeSync({ ...base, power: null })).toEqual({ inSync: null, shortfall: null });
+  });
+});
+
+describe("the Satori Network's reward drop, before it is claimed", () => {
+  const entry = { root: '0xd97c', address: '0xda47', amountWei: '3618509550000000000', amount: 3.61850955, proof: ['0x' + 'ab'.repeat(32)] };
+  test("central's answer, or its 404s: an entry, no drop published, not in the drop, or a central without the route (unknown)", () => {
+    expect(proofState({ entry })).toEqual({ state: 'ok', amountWei: 3618509550000000000n, proof: entry.proof, root: '0xd97c' });
+    expect(proofState({ error: new CentralError(404, 'no reward drop has been published yet') })).toEqual({ state: 'none' });
+    expect(proofState({ error: new CentralError(404, '0xda47 is not in the current drop (nothing to claim, …)') })).toEqual({ state: 'not-in' });
+    expect(proofState({ error: new CentralError(404, 'Not Found') })).toMatchObject({ state: 'unknown', missing: true }); // prod on main
+    expect(proofState({ error: new CentralError(0, 'network') })).toMatchObject({ state: 'unknown', missing: false });
+    expect(proofState({ entry: { amountWei: 'x' } })).toMatchObject({ state: 'unknown' }); // not an amount
+  });
+  test('claimable = max(0, the entitlement − alreadyMintedTo): none claimed, part, all, over; 0 with no entry; null when unknown', () => {
+    const ok = proofState({ entry });
+    expect(dropClaimable(ok, 0n)).toBe(3618509550000000000n);
+    expect(dropClaimable(ok, 1618509550000000000n)).toBe(2n * E18); // partly claimed (a reserve that paid part)
+    expect(dropClaimable(ok, 3618509550000000000n)).toBe(0n); // claimed in full
+    expect(dropClaimable(ok, 5n * E18)).toBe(0n); // an older, bigger drop claimed: never negative
+    expect(dropClaimable({ state: 'none' }, 0n)).toBe(0n);
+    expect(dropClaimable({ state: 'not-in' }, 7n)).toBe(0n);
+    expect(dropClaimable({ state: 'unknown', missing: true }, 0n)).toBeNull(); // not 0: this central does not say
+    expect(dropClaimable(ok, null)).toBeNull(); // alreadyMintedTo not read
+    expect(dropClaimable(null, 0n)).toBeNull();
   });
 });
 
@@ -439,6 +464,57 @@ describe('createBase', () => {
     // another staker allowed: not checked
     s.allowed[I] = zeroAddress;
     expect((await base.refresh()).vault).toMatchObject({ inSync: null });
+  });
+
+  test("claimable: rewards, the Satori Network's drop (central's proof − alreadyMintedTo, in the status multicall) and the airdrop, and their total", async () => {
+    const proof = ['0x' + 'ab'.repeat(32)];
+    central.root = '0xroot';
+    central.proofs[V] = { root: '0xroot', address: V, amountWei: (5n * E18).toString(), amount: 5, proof };
+    s.merkle.drop[V] = { amount: 5n * E18, proof };
+    s.merkle.minted[V] = 2n * E18; // claimed in part before
+    s.rewards[V] = 3n * E18;
+    s.airdrop[V] = E18 / 2n;
+    let v = await base.refresh();
+    expect(v.claimable).toEqual({ rewards: '3', drop: '3', airdrop: '0.5', total: '6.5' });
+    expect(central.calls).toEqual([vaultKey.evmAddress]);
+    // cached: asked at most hourly (a new drop comes after central's daily run)
+    s.merkle.minted[V] = 5n * E18; // claimed elsewhere: the chain's read follows at once
+    expect((await base.refresh()).claimable).toMatchObject({ drop: '0', total: '3.5' });
+    expect(central.calls).toHaveLength(1);
+    at.t += PROOF_TTL_S;
+    central.proofs[V] = { ...central.proofs[V], amountWei: (8n * E18).toString() }; // the next drop: a bigger lifetime entitlement
+    expect((await base.refresh()).claimable).toMatchObject({ drop: '3', total: '6.5' });
+    expect(central.calls).toHaveLength(2);
+    // not in the drop: 0; no drop published: 0; a central without the route (prod on main): unknown (null), not 0, quietly
+    for (const [root, drop, total] of [['0xroot2', '0', '3.5'], [null, '0', '3.5'], ['none', null, '3.5']]) {
+      central.root = root;
+      if (root === '0xroot2') delete central.proofs[V];
+      at.t += PROOF_TTL_S;
+      v = await base.refresh();
+      expect([v.claimable.drop, v.claimable.total, v.error]).toEqual([drop, total, '']);
+    }
+    // central unreachable: the last answer is kept, and asked again at the next read
+    central.root = '0xroot';
+    central.proofs[V] = { amountWei: (8n * E18).toString(), proof };
+    at.t += PROOF_TTL_S;
+    expect((await base.refresh()).claimable.drop).toBe('3');
+    const ask = central.merkleProof;
+    central.merkleProof = async () => { throw new CentralError(0, 'network', 'Satori Network unreachable: Failed to fetch'); };
+    at.t += PROOF_TTL_S;
+    expect((await base.refresh()).claimable.drop).toBe('3');
+    central.merkleProof = ask;
+  });
+
+  test('Claim needs a little Base ETH on the vault: said before trying, nothing sent', async () => {
+    vault = vaultKey;
+    s.airdrop[V] = 7n * E18;
+    rpc.eth[V] = 0n;
+    expect((await base.refresh()).vault.lowEth).toBe(true);
+    await expect(base.claim()).rejects.toThrow('The vault needs a little Base ETH for gas to claim.');
+    expect(rpc.sent).toHaveLength(0);
+    rpc.eth[V] = 10n ** 17n;
+    expect((await base.refresh()).vault.lowEth).toBe(false);
+    expect((await base.claim()).airdrop).toMatchObject({ hash: expect.any(String), amount: '7' });
   });
 
   test('claims: hub.claim when the lens says > 0, the merkle drop with central\'s proof, the airdrop; each on its own', async () => {

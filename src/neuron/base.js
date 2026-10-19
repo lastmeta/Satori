@@ -79,6 +79,41 @@ export function directionFor(forecast, history) {
 export const toPoints = (history) => history.map(({ hour, value }) => ({ ts: hour * 3600, value: Number(value) }));
 
 const plainAmount = (wei) => (wei == null ? null : formatEther(wei));
+/** ETH under one transaction's gas (none at all when the gas price is not known). */
+const lowOnGas = (eth, gas) => eth != null && (eth === 0n || (gas != null && eth < gas));
+
+/** Central's reward drop is published after its daily run: the vault's proof is asked again at most hourly. */
+export const PROOF_TTL_S = 3600;
+/** A vault transaction needs Base ETH for gas (Claim says so before it tries). */
+export const NEED_GAS = 'The vault needs a little Base ETH for gas to claim.';
+
+/**
+ * Central's answer for the vault's merkle proof (merkle.py:45-58), or its error → { state: 'ok', amountWei, proof, root }
+ * (the lifetime entitlement), 'none' (no drop published yet), 'not-in' (this vault is not in the current drop), or
+ * 'unknown' (missing: a central without the route, as prod on main; else central did not answer), with `error`.
+ */
+export function proofState({ entry, error } = {}) {
+  if (error) {
+    if (error.status === 404 && /no reward drop/i.test(error.detail)) return { state: 'none' };
+    if (error.status === 404 && /not in the current drop/i.test(error.detail)) return { state: 'not-in' };
+    return { state: 'unknown', missing: error.status === 404, error };
+  }
+  try {
+    return { state: 'ok', amountWei: BigInt(entry.amountWei), proof: entry.proof, root: entry.root };
+  } catch {
+    return { state: 'unknown', missing: false, error: new Error('the Satori Network sent no amount') };
+  }
+}
+
+/** The drop still to claim: max(0, the entitlement − alreadyMintedTo); 0 with no entry; null when it is not known. */
+export function dropClaimable(proof, minted) {
+  if (proof?.state === 'none' || proof?.state === 'not-in') return 0n;
+  if (proof?.state !== 'ok' || minted == null) return null;
+  return proof.amountWei > minted ? proof.amountWei - minted : 0n;
+}
+
+/** The vault's merkle proof from central, as proofState says it (never throws). */
+const askProof = (c, address) => c.merkleProof(address).then((entry) => proofState({ entry }), (error) => proofState({ error }));
 
 /** What a staking out of sync means, plainly (Home's card, the Wallet card, a refused Unstake). */
 export const OUT_OF_SYNC = "Unstaking will fail until the contract fix. Don't add SATORI to the vault.";
@@ -207,6 +242,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
   let made = null; // { key, chain, rpc }
   let status = null; // the last status read
   let statusError = '';
+  let proof = null; // the vault's merkle proof from central: proofState, with { at, url } (asked at most hourly)
   let lastCheck = null;
   const changed = () => onChange();
 
@@ -246,10 +282,24 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     return v;
   }
 
+  /**
+   * The vault's merkle proof, asked again once an hour has gone by (or for another central). An answer that did not
+   * come (central down) keeps the last one and is asked again at the next read; a central without the route is unknown.
+   */
+  async function proofNow() {
+    const c = central();
+    if (proof?.url === c.url && now() - proof.at < PROOF_TTL_S) return;
+    keepProof(c, await askProof(c, vaultAddress));
+  }
+  function keepProof(c, p) {
+    if (p.state === 'unknown' && !p.missing && proof?.url === c.url) return; // central did not answer: keep the last
+    proof = { ...p, at: now(), url: c.url };
+  }
+
   async function refresh() {
     try {
       const { chain } = await chainNow();
-      status = await chain.status({ identity: identity.evmAddress, vault: vaultAddress });
+      [status] = await Promise.all([chain.status({ identity: identity.evmAddress, vault: vaultAddress }), proofNow()]);
       statusError = status.round == null ? (status.errors[0] ?? 'no answer') : '';
     } catch (err) {
       statusError = errorText(err);
@@ -261,8 +311,11 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
   /** The status for the UI and agents: plain values, amounts as decimal strings. */
   function view() {
     const s = status;
-    const gas = s?.gasPrice ? BATCH_GAS * 2n * s.gasPrice : null;
+    const gas = s?.gasPrice ? BATCH_GAS * 2n * s.gasPrice : null; // one transaction's worth, at most
     const batchesLeft = s?.identity.eth != null && gas ? Number(s.identity.eth / gas) : null;
+    const c = s?.claimable;
+    const drop = c ? dropClaimable(proof, c.minted) : null;
+    const parts = [c?.rewards, drop, c?.airdrop].filter((x) => x != null);
     const vd = s?.vault.delegate; // whom the vault's prediction power goes to (predictionDelegateInfo)
     const staked = vd == null ? null : same(vd, identity.evmAddress) ? 'identity' : same(vd, zeroAddress) ? 'none' : 'other';
     const sync = stakeSync({ staked, allowedDelegator: s?.identity.allowedDelegator, vault: vaultAddress, power: s?.identity.power,
@@ -284,8 +337,11 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
         staked,
         ...sync, // inSync, shortfall: the stake booked right (stakeSync)
         lock: s?.vault.lock ?? null,
+        lowEth: lowOnGas(s?.vault.eth, gas), // under one transaction's gas: Claim says so before it tries
       },
-      claimable: { rewards: plainAmount(s?.claimable.rewards), airdrop: plainAmount(s?.claimable.airdrop) },
+      // the drop: the Satori Network's reward drop not claimed yet (null: this central does not say)
+      claimable: { rewards: plainAmount(c?.rewards), drop: plainAmount(drop), airdrop: plainAmount(c?.airdrop),
+        total: parts.length ? formatEther(parts.reduce((a, b) => a + b, 0n)) : null },
       lastCheck, nextCheck: schedule.next, checking: schedule.running,
     };
   }
@@ -334,18 +390,17 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
   async function claimMerkle(chain, v, step) {
     step('drop');
     const c = central();
-    let entry;
-    try {
-      entry = await c.merkleProof(v.evmAddress);
-    } catch (err) {
-      if (err?.status !== 404) throw err;
-      if (/no reward drop/i.test(err.detail)) return { skipped: `no merkle drop published on ${c.url}` };
-      if (/not in the current drop/i.test(err.detail)) return { skipped: 'this vault is not in the current drop' };
-      return { skipped: `${c.url} serves no merkle drop (${err.detail})` };
+    const p = await askProof(c, v.evmAddress);
+    keepProof(c, p); // asked just now: the card's drop needs no other call
+    if (p.state === 'none') return { skipped: `no merkle drop published on ${c.url}` };
+    if (p.state === 'not-in') return { skipped: 'this vault is not in the current drop' };
+    if (p.state === 'unknown') {
+      if (!p.missing) throw p.error;
+      return { skipped: `${c.url} serves no merkle drop (${p.error.detail})` };
     }
     const before = await chain.alreadyMinted(v.evmAddress);
-    if (BigInt(entry.amountWei) <= before) return { skipped: 'already claimed: up to date with the drop' };
-    const { hash, receipt } = await chain.claimMerkle(v, entry, sent(step));
+    if (p.amountWei <= before) return { skipped: 'already claimed: up to date with the drop' };
+    const { hash, receipt } = await chain.claimMerkle(v, { amountWei: p.amountWei.toString(), proof: p.proof }, sent(step));
     const after = await chain.alreadyMinted(v.evmAddress, receipt.blockNumber);
     return { hash, amount: formatEther(after - before) };
   }
@@ -416,6 +471,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       const v = needVault();
       return act('claim', async (chain, step) => {
         const st = await chain.status({ identity: identity.evmAddress, vault: v.evmAddress });
+        if (lowOnGas(st.vault.eth, st.gasPrice ? BATCH_GAS * 2n * st.gasPrice : null)) throw new Error(NEED_GAS);
         const each = async (fn) => {
           try { return await fn(); } catch (err) { return { error: errorText(err) }; }
         };

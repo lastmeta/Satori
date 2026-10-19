@@ -220,6 +220,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
         ['vaultEth', mc3('getEthBalance', [vault])], ['satori', token('balanceOf', [vault])],
         ['vaultInfo', rewards('predictionDelegateInfo', [vault])], ['lockedUntil', token('transferLockedUntil', [vault])],
         ['rewards', lens('getTotalClaimableRewards', [vault])], ['airdrop', airdrop('claimableAirdrop', [vault])],
+        ['minted', merkle('alreadyMintedTo', [vault])], // the reward drop paid so far: central's proof says the entitlement
       ];
       const [results, gasPrice] = await Promise.all([
         client.multicall({ contracts: calls.map(([, call]) => call), allowFailure: true }),
@@ -245,7 +246,8 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
           lockedUntil: r.lockedUntil ?? null,
           lock: r.lockedUntil == null || round == null ? null : transferLock(r.lockedUntil, round),
         },
-        claimable: { rewards: r.rewards?.[0] ?? null, rewardsComplete: r.rewards?.[1] ?? null, airdrop: r.airdrop ?? null },
+        claimable: { rewards: r.rewards?.[0] ?? null, rewardsComplete: r.rewards?.[1] ?? null, airdrop: r.airdrop ?? null,
+          minted: r.minted ?? null },
         errors,
       };
     },

@@ -5,7 +5,7 @@ import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { fact, form, unlockPrompt } from './parts.js';
 import {
-  amountText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote,
+  amountText, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote,
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
 import { workText } from '../neuron/work.js';
@@ -45,7 +45,7 @@ export function walletTab(a) {
     <p class="error small" role="alert" data-test="base-sync" hidden="${() => b().vault.inSync !== false}">Staking is out of sync. ${OUT_OF_SYNC}</p>
     <dl class="facts">
       ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
-      ${fact('Claimable', 'base-claimable', () => `${amountText(b().claimable.rewards, 'SATORI')} rewards · ${amountText(b().claimable.airdrop, 'SATORI')} airdrop`)}
+      ${fact('Claimable', 'base-claimable', () => claimableText(b().claimable))}
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this neuron, below' : delegationText(b())))}
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
       ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}

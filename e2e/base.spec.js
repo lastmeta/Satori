@@ -102,7 +102,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'result')).toContainText('Rewards: claimed 3 SATORI', { timeout: 30_000 });
   await expect(fact(page, 'result')).toContainText('Merkle: claimed 5 SATORI');
   await expect(fact(page, 'result')).toContainText('Airdrop: claimed 7 SATORI');
-  expect(central.merkleCalls).toEqual([`/api/v1/merkle/proof/${base.vault.address}`]); // the proof alone, as Lite
+  expect(new Set(central.merkleCalls)).toEqual(new Set([`/api/v1/merkle/proof/${base.vault.address}`])); // the proof alone, as Lite
   await expect(fact(page, 'vault')).toContainText('115 SATORI');
 
   // Above the batch's max-fee ceiling it waits for the next check, and says why.
@@ -167,6 +167,51 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   expect(await page.evaluate(() => window.satori.unstake())).toMatchObject({ steps: [{ step: 'delegatePredictionPower(0x0)', by: 'vault' }], settled: true });
   v = (await page.evaluate(() => window.satori.base())).vault;
   expect(v).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false } });
+});
+
+test("the Satori Network's reward drop before it is claimed: Home's claimable rewards and the Wallet card show it", async ({ context, page }) => {
+  test.setTimeout(180_000);
+  const { s, rpc, central } = await setup(context);
+  central.noVaultBase = true;
+  await openApp(page);
+  await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  let base = await page.evaluate(() => window.satori.base());
+  const V = base.vault.address.toLowerCase();
+  // no drop published yet (central2's 404): 0, quietly
+  expect(base.claimable).toEqual({ rewards: '0', drop: '0', airdrop: '0', total: '0' });
+  expect(base.error).toBe('');
+  // a drop with this vault: 3.6185 SATORI (as central2 serves 0xda47…'s), 1.6185 of it claimed before
+  const proof = ['0x' + 'ab'.repeat(32)];
+  central.root = '0xd97c';
+  central.proofs[V] = { root: '0xd97c', address: V, amountWei: '3618509550000000000', amount: 3.61850955, proof };
+  s.merkle.drop[V] = { amount: 3618509550000000000n, proof };
+  s.merkle.minted[V] = 1618509550000000000n;
+  s.airdrop[V] = E18;
+  await page.reload(); // a new page load asks central again (it is asked at most hourly)
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=claimable-amount]')).toHaveText('3', { timeout: 30_000 });
+  await expect(page.locator('[data-test=claimable-parts]')).toHaveText('2 from the Satori Network · 1 airdrop');
+  base = await page.evaluate(() => window.satori.base());
+  expect(base.claimable).toEqual({ rewards: '0', drop: '2', airdrop: '1', total: '3' });
+  await go(page, 'wallet');
+  await expect(fact(page, 'claimable')).toHaveText('0 SATORI rewards · 2 SATORI from the Satori Network · 1 SATORI airdrop');
+
+  // no ETH on the vault: Claim says so before it tries (and before asking for the passphrase)
+  await go(page, 'home');
+  await page.locator('[data-test=claim]').click();
+  await expect(page.locator('[data-test=claim-result]')).toHaveText('The vault needs a little Base ETH for gas to claim.');
+  await expect(page.locator('[data-unlock-for=claim]')).toBeHidden();
+  expect(rpc.sent).toHaveLength(0);
+
+  // with gas: the one Claim runs every claim; the drop is then 0
+  rpc.eth[V] = 10n ** 17n;
+  await page.evaluate(() => window.satori.base());
+  await page.evaluate((p) => window.satori.unlock(p), PASS);
+  const r = await page.evaluate(() => window.satori.claim());
+  expect(r).toMatchObject({ merkle: { amount: '2' }, airdrop: { amount: '1' }, rewards: { skipped: 'nothing to claim on-chain' } });
+  await expect(page.locator('[data-test=claimable-amount]')).toHaveText('0');
+  expect((await page.evaluate(() => window.satori.base())).claimable).toMatchObject({ drop: '0', total: '0' });
 });
 
 test('staking out of sync (the token-hook bug): Home red on the Contract chip, the Wallet card says it, Unstake explains', async ({ context, page }) => {
