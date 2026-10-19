@@ -97,7 +97,13 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    the import capped and its errors without secrets, the build's version
    stamped, secrets wiped where JS can ([../design/keys.md](../design/keys.md#secrets-in-memory)).
    Left: the keys in a worker ([runtime.md](runtime.md)).
-14. **Later**, in rough order of value per effort: the Models tab showing
+14. ✅ **A reward address** (owner, 2026-10-19: "in the settings or in the
+   wallet"): Settings › Reward address, where the Satori Network sends the
+   rewards instead of the vault (a Base address; checked, signed in by the
+   identity, free), `rewardAddress()` and `setRewardAddress()`, noted on Home
+   ([../design/central.md](../design/central.md#the-reward-address)). Live
+   once central2 runs central's Base check for the route.
+15. **Later**, in rough order of value per effort: the Models tab showing
    the real-world score (central's scoring of what was sent) next to the
    backtest, once central serves a neuron's scores
    ([models.md](../design/models.md#quality-against-no-change)); bounties (the predictor's side first); the gasless relay (needs a

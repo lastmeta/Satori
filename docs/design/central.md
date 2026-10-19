@@ -65,7 +65,7 @@ address is used ([below](#the-reward-address)).
 | `POST /api/v1/auth/login` (headers `wallet-pubkey`, `message`, `signature`: EIP-191) → `{access_token, expires_in: 3600, …}` | signature | `c/auth.py:21-86`, `central/src/utils/auth.py:20-56` | before each submission, once more on a 401 |
 | `POST /api/v1/predictions/batch` → `{total_submitted, successful, failed, prediction_ids, errors}` | Bearer | `c/main.py:483-602`; schema `central/src/models/schemas.py:92-113` | right after each poll, when anything is pending |
 | `GET /api/v1/peer/relays` → `[{relay_url, nostr_pubkey, …}]`; `GET /api/v1/peer/relay-config` → `{max_streams}` | none | `central/src/api/v1/endpoints/peer.py:123-173` | Nostr ([nostr.md](nostr.md)): relays at start and hourly, the config once per start |
-| `GET /api/v1/peer/reward-address` → `{reward_address}`; `POST` the same with `{"reward_address": "0x…" \| null}` → the stored one | Bearer (the login's) | `central/src/api/v1/endpoints/peer.py:26-120`; the Base check is central's change on `base-upgrade` (2026-10-19) | read after each register that succeeds; set and cleared from Settings ([below](#the-reward-address)) |
+| `GET /api/v1/peer/reward-address` → `{reward_address}`; `POST` the same with `{"reward_address": "0x…" \| null}` → the stored one | Bearer (the login's) | `central/src/api/v1/endpoints/peer.py:26-120`; the Base check is central's change on `base-upgrade` (2026-10-19) | read when Settings opens (once per page load and central) and by `rewardAddress()`; set and cleared from Settings or `setRewardAddress()` ([below](#the-reward-address)) |
 
 Central silently maps an unknown `stream_uuid` to its `bitcoin` stream
 (`c/main.py:536-551`), so the browser only submits uuids it received.
@@ -200,8 +200,8 @@ the vault's balances and its transactions, each one asking for the
 passphrase and using gas. The reward address is none of that: the Satori
 Network keeps it, the identity signs it on its own, it is free, and it is
 set and forgotten. The UI intent puts addresses and endpoints behind
-Settings ([../intent/ui.md](../intent/ui.md)), next to the vault's address
-that it replaces as the payee.
+Settings ([../intent/ui.md](../intent/ui.md)); the card comes right after
+the keys, whose vault it replaces as the payee.
 
 **The calls** (central `peer.py:26-120`): `GET /api/v1/peer/reward-address`
 → `{"reward_address": "0x…" | null}`, and `POST` the same path with
@@ -216,26 +216,31 @@ for the zero address. Lite reads it without a login
 config, synced on each start (`start.py:5020-5085`); this app keeps no copy:
 the Satori Network's answer is the one source.
 
-**When it is read**: after each register that succeeds (every page load, a
-change of the Satori Network's address, the register before a poll after a
-failed one), and by `window.satori.rewardAddress()`. Never in a loop.
+**When it is read**: when Settings opens, once per page load and Satori
+Network (again after a read that failed, or with Try again), and by
+`window.satori.rewardAddress()`. Never in a loop, and not at load: a load's
+first poll logs in to send its batch, and a second login at the same moment
+buys nothing while nobody is looking at the address. `status().central.reward`
+is the last read (`at` null: not read yet).
 
 **Checked before any call** (`src/neuron/reward.js`, `checkRewardAddress`):
 trimmed; `0x` and 40 hex characters; a mixed-case address must match its
-EIP-55 checksum (viem's `isAddress`, strict, as Send's recipient); not the
-zero address; sent checksummed (viem's `getAddress`). An empty field is not
+EIP-55 checksum (viem's `isAddress`, strict, as Send's recipient), while
+all lower or all upper case carries no checksum (EIP-55) and is taken as
+it is; not the zero address; sent checksummed (viem's `getAddress`). An empty field is not
 a clear: Clear is its own button (and `setRewardAddress(null)` or `''`).
 The words: "A reward address is a Base address: 0x and 40 hex characters.",
 "That address's capital letters don't match its checksum: check it for a
 typo.", the zero address's (as Send's).
 
 **Central's answer** (`rewardFrom`): a 0x address is shown checksummed;
-null, `''` or anything else (central may still hold a value from before
-Base until its migration runs) is **not set**: rewards go to the vault.
+null, `''`, the zero address or anything else (central may still hold a
+value from before Base until its migration runs) is **not set**: rewards go to the vault.
 Such an old value is never shown, and it never breaks the card.
 
 **Shown**: "Not set · rewards go to your vault", or the address shortened
-(`0x3a91ec…B6E7`, the full one in its hover) with Copy; while it is read,
+(`0x3a91…B6E7`, as the Wallet shortens a recipient; the full one in its
+hover) with Copy; while it is read,
 "Reading it from the Satori Network…"; when it could not be read, the error
 with Try again. A field for a new one, **Save**, and **Clear** (only while
 one is set). Save and Clear say "Saving…", "Clearing…", and the card's line
@@ -257,7 +262,31 @@ again is not a change.
 `base-upgrade` (2026-10-19). Until central2 is redeployed with it, central2
 checks for its old address kind and answers 400 to every 0x address, which
 Save shows as the Satori Network's error. The app is tested against the
-stub central (`e2e/stub.js`), which answers as the new route.
+stub central (`e2e/stub.js`), which answers as the new route
+(`e2e/reward.spec.js`: not read at load; read when Settings opens, an old
+value shown as not set; a checksum typo and a non-Base address refused
+before any call; Save's steps, the address shortened with its hover, Home's
+note; the same address again is no change; Clear; the agent API; central2's
+refusal today, "Satori Network 400: Invalid Evrmore address"). Unit tests:
+`src/neuron/reward.test.js` (the checks, central's answers, the read and
+the set, a read overtaken by a set), `src/central/central.test.js` (signed
+in, the body, a 401 retried once, a 400's words).
+
+<img src="../screenshots/reward-set-phone-light.png" alt="Settings › Reward address on a phone: 0x3a91…B6E7 with Copy, Saved: the Satori Network sends this neuron's rewards to 0x3a91ecc0…" width="240"> <img src="../screenshots/reward-none-phone-dark.png" alt="Settings › Reward address, dark: Not set · rewards go to your vault" width="240">
+[desktop](../screenshots/reward-set-desktop-light.png),
+[desktop, dark, not set](../screenshots/reward-none-desktop-dark.png).
+
+**Live, read only** (2026-10-19, the dev server on :5180 against central2,
+fresh profiles with throwaway keys, nothing saved): register, the first
+poll at once, 84 of 84 accepted; nothing asked of the reward address until
+Settings opened; then the signed `GET /api/v1/peer/reward-address` (Bearer)
+answered 200 `{"reward_address": null}` and the card read "Not set ·
+rewards go to your vault" 0.8 s after the tab opened; `rewardAddress()` the
+same. In the first try Settings opened during the first poll: both logins
+went through, and both calls were answered
+([phone](../screenshots/reward-live-central2-phone.png),
+[desktop](../screenshots/reward-live-central2-desktop.png)). Save was not
+tried live: central2 still runs the old check.
 
 ## The protocol audit
 

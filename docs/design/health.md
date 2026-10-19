@@ -54,7 +54,7 @@ Rows older than 90 days are deleted at start and once a day.
 | `base` | `ok` sent, `warn` fixable skip, `idle` other skip, `bad` error | `{ round, hash?, games?, dropped?, skipped?, error? }` | each batch check that sent, skipped or failed, except "already predicted" and "waiting for the batch already sent". The same skip or error again is merged into its row (`count`, `until`) |
 | `nostr` | `ok` | `{ published }` | each `_pred` a relay took, merged per hour |
 | `wallet` | `ok` | `{ action, text }` | Stake, Unstake, Claim, Send |
-| `setting` | `idle` | `{ what: 'central' \| 'rpc', to, default? }` | the Satori Network's address or the Base RPC changed, in Settings or by `window.satori` (`to` `''`: the default, `default` its URL); Home notes it for 24 h ([below](#address-changes)) |
+| `setting` | `idle` | `{ what: 'central' \| 'rpc' \| 'reward', to, default? }` | the Satori Network's address, the Base RPC or the reward address changed, in Settings or by `window.satori` (`to` `''`: the default, `default` its URL; a reward address cleared); Home notes it for 24 h ([below](#address-changes)) |
 | `config` | `warn` | `{ url, keys }` | central's `base/config` named contract addresses that are not the app's (`keys`); the app's were kept ([base.md](base.md#config)). Merged per central and keys |
 | `error` | `bad` | `{ where, message }` | an engine or database failure outside central's cycle (a relay stream's intake) |
 
@@ -292,6 +292,7 @@ set by the code doing the work; nothing polls:
 | `stake`, `unstake`, `send` | `send`, `confirm` (k of n), `settle` | Step 1 of 3: sending…, Step 1 of 3: waiting for Base to confirm…, Checking it on Base… | yes |
 | `claim` | `rewards`, `drop`, `airdrop`, `confirm` | Claiming rewards…, Claiming the reward drop…, Claiming the airdrop…, Waiting for Base to confirm… | yes |
 | `keys` | `save` | Saving your keys… (an earlier version's record, rewritten at Unlock) | yes |
+| `reward` | `login`, `save`, `clear` | Signing in to the Satori Network…, Saving the reward address…, Clearing the reward address… ([central.md](central.md#the-reward-address); a read is quiet: Settings' row says it) | |
 | `discover` | `ask` (relays answered) | Asking the relays · 1 of 2 | |
 | | `verify` (announcements checked) | Checking the announcements' signatures · 400 of 1,061 | |
 | `subscribe` | `find` | Finding the stream on the relays… | |
@@ -317,7 +318,7 @@ began during a poll never writes it back as still running.
 transitions.
 
 **Home's hero** shows the hero's task: the first critical one among
-`central`, `base`, `train`, the vault's actions and `keys`, else the first of them.
+`central`, `base`, `train`, the vault's actions, `keys` and `reward`, else the first of them.
 While it runs, a short arc of light turns around the ring (1.8 s a turn,
 only its transform changes), the ring's icon is three dots, and the line
 says the step. It is the only animation on the screen (the chips' glow is a
@@ -338,13 +339,13 @@ ring, so the hero's ring stays the one moving indicator
 tones, amber only when the engine itself failed. The Wallet card's line says the vault's action step (the hero is
 on Home only); Home's Stake and Claim buttons say "Staking…",
 "Claiming…"; the Wallet's Unstake says "Unstaking…". The Network streams line says discover's or subscribe's step,
-only once it has lasted 1 s.
+only once it has lasted 1 s. Settings › Reward address's line says its step, and its buttons "Saving…", "Clearing…".
 
 **Reduced motion**: nothing turns; the three dots stay in the ring, and the
 words change.
 
 **Agents**: `health().work` is the entry that leads (a critical one, else
-the first of central, base, the vault's actions, keys, discover, subscribe)
+the first of central, base, the vault's actions, keys, reward, discover, subscribe)
 with its `text`, or null; the hero has `data-work` (`central:history`) and
 `aria-busy` while it shows a step.
 
@@ -562,7 +563,8 @@ days". The legend shows "Before this neuron" only while such a day is shown.
 
 The security review (2026-10-19): whoever changes the Satori Network's
 address or the Base RPC chooses whom the neuron trusts for its data, its
-balances and its transactions' fees, and a browser extension or a misled
+balances and its transactions' fees, and whoever changes the reward address
+where its rewards go; a browser extension or a misled
 agent can do it through `window.satori` as well as Settings. So each change
 is a `setting` row (only a real change: saving the same address is none),
 and Home shows a quiet line under the hero's for 24 h (`NOTICE_S`), newest
@@ -571,7 +573,10 @@ first, with how long ago:
 - "Satori Network address changed to https://central.example · 2 h ago"
   ("… changed to the default, https://network.satorinet.io" when emptied);
 - "Base RPC changed to https://rpc.example" ("… changed to the default,
-  https://sepolia.base.org").
+  https://sepolia.base.org");
+- "Reward address set to 0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7" (the
+  whole address, so a swap is seen), "Reward address cleared: rewards go to
+  your vault" ([central.md](central.md#the-reward-address)).
 
 It never changes the status, the tone, the card or the day strip.
 `health().notices` is the same, `[{ at, what, text }]`; the feed keeps the
