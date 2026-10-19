@@ -69,7 +69,17 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 13. **Runtime hardening**: ✅ the catch-up pass after the device sleeps,
    and ✅ failures retried in minutes (2026-10-19,
    [runtime.md](runtime.md#catch-up-pass), [../design/central.md](../design/central.md#errors));
-   left: the keys in a worker ([runtime.md](runtime.md)).
+   from the review of 2026-10-19 (the owner approved four more): ✅ the vault
+   locks on its own, Backup and Send ask the passphrase each time, Send's
+   review ([../design/keys.md](../design/keys.md#the-vault-locks-on-its-own));
+   ✅ a first visit you can watch: Setup at once, the engine's progress, the
+   last visit's Home, brotli ([../design/storage.md](../design/storage.md#the-first-visit));
+   ✅ saying how it runs, Install offered on every platform
+   ([../design/pwa.md](../design/pwa.md#install)); ✅ honest colours for the
+   contract and the relays, a batch that never mines
+   ([../design/health.md](../design/health.md#the-contract-unused),
+   [../design/base.md](../design/base.md#a-batch-that-never-mines)).
+   Left: the keys in a worker ([runtime.md](runtime.md)).
 14. **Later**, in rough order of value per effort: the Models tab showing
    the real-world score (central's scoring of what was sent) next to the
    backtest, once central serves a neuron's scores
