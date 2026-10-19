@@ -95,9 +95,19 @@ of four levels, and the status is the worst `bad`, `warn` or `idle` one:
   - *Was asleep*: a session missed work. It catches up at once on open
     ("Catching up now…") and shows until the next normal cycle, which is the second
     good cycle after that session (the title says *Predicting* once it
-    caught up).
+    caught up). A device that slept with the page open catches up within
+    one heartbeat ([the catch-up pass](../plans/runtime.md#catch-up-pass)).
   - *Starting*: a new neuron before its first good cycle, within `FIRST_S`:
     "Getting its first predictions…" (it polls at once, after register).
+
+  "Catching up now…" and "Getting its first predictions…" are said only
+  while central's work runs (`central.polling`, or the `central` task: the
+  poll, or its sign-in before it). A poll that is due with nothing running
+  says "Catching up soon." / "First predictions soon." (`fmtIn` of a time
+  passed is "soon"), and a poll still ahead says when: "Catching up in
+  2 min." It used to say "now" whenever the poll was due, so a device that
+  slept with the page open read "Catching up now…" for hours while nothing
+  ran (the review, 2026-10-19).
 - **warn** (needs you, amber): predictions go out, but something is wrong or
   needs fixing for predicting or earning.
 - **bad** (problem, red): predictions are failing.
@@ -327,7 +337,8 @@ health.js map them).
 
 - **Network** (the Satori Network): ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
   the last poll had nothing to send (never "0 sent"); idle "First poll now…",
-  "Catching up now…" ("… in 2 h" when a poll is still ahead); warn "Last poll failed", "Vault mismatch",
+  "Catching up now…" (while the poll runs; "Catching up soon" when due and
+  not yet running, "… in 2 h" when a poll is still ahead); warn "Last poll failed", "Vault mismatch",
   "Not registered"; bad "Database error", "Login refused", "2 failed in a
   row", "Nothing sent for 14 h".
 - **Contract** (the Satori contract): ok "Round 20742 sent", "Round 20742 due"; idle "Not staked"

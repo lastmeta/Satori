@@ -258,7 +258,9 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 **At the first check of the round, never held.** Checks run 10 s after the
 page loads and after Stake, then at the next round's start (00:01 UTC on
 the chain's clock) and at least hourly; `window.satori.predictBase()` runs one
-at once. Why:
+at once. A check whose time passed while the device slept (its timer fires
+late) runs within one heartbeat of waking, by the
+[catch-up pass](../plans/runtime.md#catch-up-pass) (`base.catchUp()`). Why:
 
 - A tab can close at any moment. One batch per round
   (`AlreadyPredicted`, `C/next/SatoriEngine.sol:716`) means a held batch that

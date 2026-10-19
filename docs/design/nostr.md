@@ -113,7 +113,13 @@ readers depend on, not Lite's bytes. Checked against satorilib
   subscriptions are re-sent after a reconnect. Reconnect backoff: 1 s, doubling
   to 5 min, ±20 % jitter, reset only once a connection has worked (its first
   EOSE, or 30 s open), so a relay that accepts and drops connections is not
-  hammered.
+  hammered. `retryAt` is the pending reconnect's time (ms).
+- **After the device sleeps** (timers fire late): the
+  [catch-up pass](../plans/runtime.md#catch-up-pass) calls `nostr.catchUp()`,
+  which connects each closed relay whose `retryAt` has passed (the backoff
+  is kept: a relay not yet due waits) and runs the hourly pass once an hour
+  has gone by since the last one (the hourly timer skips a pass the catch-up
+  ran within the hour).
 
 ## Sending
 

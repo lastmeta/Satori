@@ -57,6 +57,23 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (catch-up after the device sleeps)
+
+- A device that sleeps with the page open (a closed lid, a phone's screen
+  off, a suspended tab) catches up within one heartbeat (30 s) of waking,
+  and at once when the tab becomes visible, is restored from the
+  back-forward cache, is thawed, or goes back online: every job whose time
+  has passed and isn't running runs then (central's poll, the Base batch
+  check, a relay's reconnect and the hourly relay pass, the training pass).
+  Browser timers don't count sleep, so before this a due poll could wait up
+  to 11 h of awake time.
+- `health()`: "Catching up now…" and "Getting its first predictions…" (and
+  the chips' "Catching up now…", "First poll now…") only while central's
+  work runs (`status().central.polling`, or `work.task` `central`). Due and
+  not yet running: "Catching up soon." / "First predictions soon." (chips
+  "Catching up soon", "First poll soon"). Any time that has passed reads
+  "soon", never "now": "next soon".
+
 ## Changed 2026-10-18 (the Models filters are toggles; "All" is gone)
 
 - `models-filter-all` is gone. `models-filter-network`, `-contract` and
@@ -435,7 +452,9 @@ For agents written against the earlier API:
   each stream (under 48 h old). The first poll runs at once, right after
   register (a new neuron, or one reopened with a poll due; no random wait),
   then every 11 h; the next time is stored, so a reload keeps it.
-  `satori.poll()` (or "Poll now") runs one at once.
+  `satori.poll()` (or "Poll now") runs one at once. A poll whose time passed
+  while the device slept with the page open runs within one heartbeat
+  (30 s) of waking (the catch-up pass, docs/plans/runtime.md).
 - Stream: one of central's streams, by uuid, with its name. Observations are
   stored once per (stream, whole second).
 - History: a stream seen for the first time (and, once, every stream already
@@ -1131,8 +1150,8 @@ build step beyond Vite, MIT licensed.
   fetch, Base's RPC transport, each relay message) and `subscribe(fn)`:
   Home's glow (`src/ui/glow.js`) and `lastTraffic`.
 - `src/neuron/`: register, the cycle (poll → store → history → forecast →
-  submit), `history.js` (central's history for new streams), central's status, the schedule (`schedule.js`, shared with Base), the
-  one-tab lock; `nostr.js`: relays, discover, subscribe, intake → `_pred`,
+  submit), `history.js` (central's history for new streams), central's status, the schedule (`schedule.js`, shared with Base, and
+  the catch-up pass), the one-tab lock; `nostr.js`: relays, discover, subscribe, intake → `_pred`,
   reconcile; `base.js`: the daily batch and its schedule, stake, claims,
   sends, the Base settings; `activity.js`: the activity log (sessions,
   cycles, checks, publishes; 90 days); `health.js`: Home's answer from it,

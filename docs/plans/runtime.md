@@ -36,16 +36,50 @@ one-minute tick is enough. "Runs while closed" is inherent and not offered.
 | central-lite poll | +11 h; first 5-30 min after each worker start | `start.py:4766-4800` |
 | Base daily batch | current UTC round has no batch on chain | `start.py:1256-1281` (was last + 24 h) |
 
-Deadlines live in `settings`. One `setTimeout` loop in the neuron worker wakes
-at most every 60 s and runs whatever is due. The batch rule is in
+Deadlines are stored (`meta.next_poll_at`; the Base check's follows the
+chain's round). Each job has one timer (`createSchedule`,
+`src/neuron/schedule.js`), and the catch-up pass below runs what a timer
+missed. The batch rule is in
 [base.md](../design/base.md#the-daily-batch-the-identity-on-its-own): checking
 `predictedStreamsCount` each tick means a tab open at any time during a round
 can earn that round, and catching up can never submit twice in one round.
 
 ## Catch-up pass
 
-On worker start, `visibilitychange` → visible, the Page Lifecycle `resume`
-event and `online`: run every job that is due, in table order.
+Built (2026-10-19). Browser timers don't count the time a device sleeps (a
+closed lid, a phone's screen off, a suspended tab): with the page left open,
+the wall clock jumps and the 11 h poll's `setTimeout` still waits hours. The
+review saw Home say "Was asleep … Catching up now…" while no poll ran
+(`createSchedule` armed one timer; Base's hourly check had the same flaw).
+
+`tick(why)` in `src/main.js` runs on the 30 s heartbeat, on
+`visibilitychange` → visible, on the Page Lifecycle `resume`, on `pageshow`
+from the back-forward cache, and on `online`. It moves the session's
+heartbeat first (a late one opens a new session, so *Was asleep* is logged
+before the work starts), then `catchUpAll` (`src/neuron/schedule.js`) runs
+every job whose time has passed and isn't running:
+
+| Job | Due when | Its catch-up |
+|---|---|---|
+| central's poll | `next_poll_at` has passed | `poller.catchUp()` |
+| the Base batch check | its next check has passed | `base.catchUp()` |
+| the relays | a closed relay's reconnect time (`relay.retryAt`) has passed; an hour since the last hourly pass | `nostr.catchUp()` connects it; runs the hourly pass |
+| the training pass | a model lacks a current fit (it waits for central's work) | `trainer.run()` |
+
+Each job's own single flight keeps it from running twice: a schedule's
+`catchUp()` returns null while its run is in progress (and before `start()`),
+and a catch-up run clears the timer it replaces. A job that fails is logged
+and never stops the others. On wake the poll starts within one heartbeat
+(30 s), at once on `visibilitychange`. Home says "Catching up now…" only
+while central's work runs ([health.md](../design/health.md)).
+
+Tests: `src/neuron/schedule.test.js` (fake timers, a jumped `Date.now()`:
+the timer has not fired, `catchUp()` runs it once, the old timer is
+cleared), the poller's in `src/neuron/neuron.test.js`, the relays' in
+`src/nostr/relay.test.js` and `src/neuron/nostr.test.js`; `e2e/wake.spec.js`
+skews the page's `Date` 12 h with the page open: the poll ran 25.5 s and
+26.9 s after the jump in two runs, and Home read *Predicting*, "Closed for
+12 h. Caught up just now."
 
 ## One neuron per browser
 
@@ -84,8 +118,10 @@ daily batch stay with an open window.
 
 ## What the user sees
 
-A status line: "Neuron active" / "sleeping since HH:MM, will catch up when
-open"; last central batch, last Base batch and this round's state. Setup text:
+Home ([health.md](../design/health.md)): *Was asleep*, "Closed for 12 h.
+Catching up now…" while it catches up (and "Catching up soon." in the
+moment before the pass runs), then "Caught up just now."; the last central
+batch, the Base round's state. Setup text:
 keep a pinned desktop tab; on iPhone the neuron works only while on screen.
 (Install Satori is on Setup and Home already.)
 
