@@ -79,7 +79,7 @@ const login = () => ({
   'GET /api/v1/auth/challenge': () => json(200, { challenge: 'c-uuid' }),
   'POST /api/v1/auth/login': () => json(200, { access_token: 'jwt', expires_in: 3600 }),
 });
-const client = (fetch, url = BASE) => createCentral({ url, fetch, identity, version: '0.1.0' });
+const client = (fetch, url = BASE) => createCentral({ url, fetch, identity, version: 'browser-0.1.0+3f11d8c' });
 const paths = (calls) => calls.map((c) => `${c.method} ${c.path}`);
 
 test('traffic: each request to central and each answer', async () => {
@@ -101,14 +101,14 @@ describe('register', () => {
     const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, res) });
     expect(await client(fetch).register({ vaultPubkey: '03cd' })).toEqual(res);
     expect(paths(calls)).toEqual(['POST /api/v1/peer/register']);
-    expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'neuron-version': 'browser-0.1.0' });
+    expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'neuron-version': 'browser-0.1.0+3f11d8c' });
     expect(calls[0].body).toBeUndefined();
   });
   test('the Nostr pubkey as nostr-pubkey, when there is one (satorilib server.py:394-399)', async () => {
     const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, {}) });
     await client(fetch).register({ vaultPubkey: '03cd', nostrPubkey: 'ee'.repeat(32) });
     expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'nostr-pubkey': 'ee'.repeat(32),
-      'neuron-version': 'browser-0.1.0' });
+      'neuron-version': 'browser-0.1.0+3f11d8c' });
   });
   test('a refusal is a CentralError with the status and detail', async () => {
     const { fetch } = mockFetch({ 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });

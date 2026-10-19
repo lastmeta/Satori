@@ -129,7 +129,7 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     async register({ vaultPubkey, nostrPubkey }) {
       const headers = { 'wallet-pubkey': identity.pubkey, 'vault-pubkey': vaultPubkey };
       if (nostrPubkey) headers['nostr-pubkey'] = nostrPubkey;
-      return call('POST', '/api/v1/peer/register', { ...headers, 'neuron-version': `browser-${version}` });
+      return call('POST', '/api/v1/peer/register', { ...headers, 'neuron-version': version }); // browser-0.1.0+3f11d8c
     },
 
     /** Central's relays, [{relay_url, nostr_pubkey, …}] (peer.py:123-163). */

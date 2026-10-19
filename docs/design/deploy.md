@@ -111,6 +111,11 @@ which the proxy provides.
 
 ## Build variables
 
+Every build (and the dev server, when it starts) stamps the neuron's version,
+`browser-<package version>+<git short sha>` (`vite.config.js`), which
+register sends as `neuron-version` and Settings › This device and
+`status().version` show; `e2e/deploy.spec.js` checks it.
+
 These set the defaults that a user can change under **Settings**. Vite bakes
 them into the bundle when the app is built (`src/config.js`), so changing one
 means a new build.

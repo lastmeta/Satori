@@ -126,6 +126,8 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     expect([s.nostr.userRelays, s.nostr.centralWrite]).toEqual([WANT.relays, WANT.centralWrite]);
     // the Base RPC the build pins (VITE_BASE_RPC), publicnode after it; never central's (docs/design/base.md#config)
     expect(s.base.rpc).toEqual(WANT.rpc ? [WANT.rpc, FALLBACK_RPC] : expect.any(Array));
+    expect(s.version).toMatch(/^browser-\d+\.\d+\.\d+\+[0-9a-f]{7,}$/); // the build's version, stamped with its commit
+    expect(stub.registered[0]['neuron-version']).toBe(s.version);
     await expect.poll(() => [...new Set(opened)].sort()).toEqual([...WANT.relays].sort());
 
     // DuckDB writes: the first poll, at once after register, stores central's stream and forecasts it

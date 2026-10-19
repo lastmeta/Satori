@@ -1,9 +1,16 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import { CSP, DEV_CSP } from './csp.js';
-import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './src/config.js';
+import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './src/config.js';
+
+// The neuron's version, stamped: browser-<package version>+<git short sha> (src/config.js versionOf).
+const sha = (() => {
+  try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; }
+})();
+const VERSION = versionOf(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version, sha);
 
 // Sends the CSP header on every dev/preview response, 304s included
 // (Vite's `server.headers` option skips 304 revalidations): the dev server's
@@ -54,7 +61,7 @@ const serviceWorker = {
 const config = {
   plugins: [cspHeader, rawDuckdbWorker, serviceWorker],
   // DuckDB's eh wasm, decoded: its download's progress is shown in bytes on the wire (src/db/opfs.js, transferProgress)
-  define: { __DUCKDB_EH_BYTES__: statSync(`${DUCKDB_DIST}duckdb-eh.wasm`).size },
+  define: { __DUCKDB_EH_BYTES__: statSync(`${DUCKDB_DIST}duckdb-eh.wasm`).size, __NEURON_VERSION__: JSON.stringify(VERSION) },
   // /rpc: the dev server's default Base RPC, a local anvil fork of Base Sepolia (node scripts/fork.mjs start),
   // on the page's own origin, which the CSP allows ('self'); a build has no proxy and no such default.
   server: {

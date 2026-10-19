@@ -91,7 +91,10 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(reg['wallet-pubkey']).toMatch(/^0[23][0-9a-f]{64}$/);
   expect(reg['vault-pubkey']).toBe(vaultPub);
   expect(evmAddress(reg['wallet-pubkey'])).toBe(identity);
-  expect(reg['neuron-version']).toBe(`browser-${version}`);
+  // the build's version: browser-<package version>+<git short sha>, stamped by vite.config.js (the dev server's at its start)
+  expect(reg['neuron-version']).toMatch(new RegExp(`^browser-${version.replaceAll('.', '\\.')}\\+[0-9a-f]{7,}$`));
+  expect((await status(page)).version).toBe(reg['neuron-version']);
+  await expect(page.locator('[data-test=version]')).toHaveText(`Version ${reg['neuron-version']}`);
   expect(reg.authorization).toBeUndefined();
 
   // The first poll runs at once, right after register (no 5–30 min wait, no Poll now): two streams stored,

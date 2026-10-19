@@ -39,13 +39,17 @@ import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
 import { writePref, SORT_KEY, INSTALL_KEY, snapshotOf, readSnapshot, writeSnapshot } from './ui/prefs.js';
 import { isHttps } from './util.js';
-import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS } from './config.js';
+import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
 import { startPwa, registerWorker, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
 
 // Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
 // checkout writes nothing to production) or a build's, each replaceable by a VITE_* variable.
 const DEFAULTS = defaultsFrom(import.meta.env, import.meta.env.DEV ? DEV_DEFAULTS : BUILD_DEFAULTS);
+/* global __NEURON_VERSION__ */
+/** browser-<package version>+<git short sha>, stamped by vite.config.js: register's neuron-version, Settings, status().version. */
+const VERSION = typeof __NEURON_VERSION__ === 'string' ? __NEURON_VERSION__ : versionOf(version);
+state.version = VERSION;
 const DEFAULT_CENTRAL = DEFAULTS.central;
 
 let db;
@@ -159,7 +163,7 @@ let fromList = false; // the open model was opened from the list: its back link 
 /** The stored (or default) central; a new client means a new register result. */
 async function connect() {
   const url = (await db.get('central_url')) || DEFAULT_CENTRAL;
-  central = createCentral({ url, identity, version });
+  central = createCentral({ url, identity, version: VERSION });
   registration = null;
   return central;
 }
@@ -896,6 +900,7 @@ window.satori = {
     const home = state.screen === 'home';
     return {
       screen: state.screen,
+      version: VERSION, // browser-<package version>+<git short sha>
       identity: state.identity || null,
       vault: state.vault || null,
       unlocked: state.unlocked,

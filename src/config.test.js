@@ -1,6 +1,11 @@
 // The defaults a build bakes in (src/config.js; docs/design/deploy.md#build-variables).
 import { expect, test } from 'vitest';
-import { BUILD_DEFAULTS, DEV_DEFAULTS, defaultsFrom } from './config.js';
+import { BUILD_DEFAULTS, DEV_DEFAULTS, defaultsFrom, versionOf } from './config.js';
+
+test("the neuron's version: browser-<package version>+<git short sha>, as register sends it and Settings shows it", () => {
+  expect(versionOf('0.1.0', '3f11d8c')).toBe('browser-0.1.0+3f11d8c');
+  expect(versionOf('0.1.0', '')).toBe('browser-0.1.0'); // no git (a source tarball)
+});
 
 test("unset, a build keeps today's defaults: prod central, no user relay, central's relays written to, central's RPC", () => {
   expect(defaultsFrom({ DEV: false, PROD: true, MODE: 'production' }, BUILD_DEFAULTS)).toEqual({

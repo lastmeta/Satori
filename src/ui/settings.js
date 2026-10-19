@@ -3,7 +3,6 @@
 // Dark: src/ui/theme.js), and this device (storage, install, update). Each section has an id (#settings-<name>) Home's
 // action card scrolls to.
 import { html } from '@arrow-js/core';
-import { version } from '../../package.json';
 import { state } from './state.js';
 import { form, idRow, wordList } from './parts.js';
 import { storageText, relayText, BLOCKED_NOTE } from './format.js';
@@ -158,7 +157,7 @@ function device(a) {
     <p class="${() => (state.storage?.persisted ? 'small muted' : 'small')}" data-test="storage">${() => storageText(state.storage)}</p>
     ${install(a)}
     <p class="small" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
-    <p class="muted small">Satori ${version}.</p>
+    <p class="muted small" data-test="version">Version ${() => state.version}</p>
     <div class="actions" hidden="${() => !state.app.update}"><button class="primary" data-test="update-settings" @click="${a.update}">Update ready, reload</button></div>
   </section>`;
 }

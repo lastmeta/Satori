@@ -24,6 +24,12 @@ export const BUILD_DEFAULTS = {
 const value = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
 /**
+ * The neuron's version: `browser-<package version>+<git short sha>` (vite.config.js stamps it at build and when the dev
+ * server starts), as register's neuron-version, Settings › This device and status().version say it.
+ */
+export const versionOf = (version, sha) => `browser-${version}${sha ? `+${sha}` : ''}`;
+
+/**
  * `base` with each VITE_* variable of `env` that is set over it. The caller picks
  * `base` with import.meta.env.DEV, which a build replaces by `false`, so the dev
  * server's defaults are not in a build's bundle.

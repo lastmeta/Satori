@@ -28,7 +28,9 @@ first poll at once (unless one is still ahead), then every 11 h (or Poll now):
 ```
 
 1. **Register** on every page load: `wallet-pubkey` (identity), `vault-pubkey`
-   (in clear in the keys record, so it is read while locked), `nostr-pubkey` and `neuron-version`. The result is
+   (in clear in the keys record, so it is read while locked), `nostr-pubkey` and `neuron-version`
+   (`browser-<package version>+<git short sha>`, stamped by `vite.config.js`; also in Settings › This
+   device and `status().version`). The result is
    shown on Streams, and on Home as a **vault mismatch** (with both
    addresses) if central pays this vault's rewards to another Base address,
    or has no vault for this identity (register's `vault_base_address`).

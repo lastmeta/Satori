@@ -98,6 +98,7 @@ export const state = reactive({
   installDismissed: readPref(INSTALL_KEY, ['dismissed'], '') === 'dismissed',
   phone: false, // a phone (a coarse pointer, or a small screen): Home's hero says "Keep Satori open · " while it works
   storage: null, // { persisted, usage, quota }
+  version: '', // browser-<package version>+<git short sha> (main.js; Settings › This device)
   theme: themeOf(), // Settings → Appearance: 'system' | 'light' | 'dark', this device's (src/ui/theme.js)
   // the database (docs/design/storage.md#recovery): the name a WAL DuckDB could not replay was set aside under
   recovered: null,
