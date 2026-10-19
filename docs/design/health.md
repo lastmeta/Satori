@@ -227,9 +227,11 @@ confirmed in Create, given at Restore (also `setup({ vaultWords })`), brought
 by a Dockerized Neuron import, or shown under Backup. The vault holds the
 funds. A lost identity is replaced by a new one, and the vault stakes with it.
 
-An action needing the vault (Stake, Back up, and Home's Claim) opens one
-inline passphrase prompt in place when the vault is locked, then does the
-action.
+An action needing the vault (Stake and Home's Claim) opens one inline
+passphrase prompt in place when the vault is locked, does the action, then
+locks the vault again ([keys.md](keys.md#the-vault-locks-on-its-own)). Back
+up opens Settings › Backup with the passphrase asked there, as it is each
+time ([keys.md](keys.md#backup)).
 
 ### Title and line
 

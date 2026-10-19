@@ -158,12 +158,13 @@ migration re-encrypts the vault with it as it is.
   vault's while locked) and the Nostr pubkey. The neuron runs from page load
   on the identity: it registers both public keys with central and signs
   central's login challenge. The vault has **Unlock** there; while
-  unlocked, **Lock** is in the header (and "Lock the vault" there). An action
-  that needs the vault (Stake, Claim, Send, Backup) asks for the
-  passphrase in place when it is locked: one inline prompt, then the action
-  ([health.md](health.md)).
-- **Backup** (Docker shows it behind login, so here it needs Unlock):
-  [below](#backup).
+  unlocked, **Lock** is in the header with "Locks in 4 min" beside it (and
+  "Lock the vault" there). An action that needs the vault (Stake, Unstake,
+  Claim) asks for the passphrase in place when it is locked: one inline
+  prompt, then the action, then Lock ([health.md](health.md)).
+- **The vault locks on its own**: [below](#the-vault-locks-on-its-own).
+- **Backup and Send** ask for the passphrase each time, unlocked or not:
+  [below](#backup), [base.md](base.md#send-the-passphrase-each-time).
 
 ## Import: translate
 
@@ -245,9 +246,46 @@ had the vault whose public key the record kept), its
 subscriptions and history intact; wrong passphrases left its vault as it was.
 Home: [../screenshots/home.png](../screenshots/home.png).
 
+## The vault locks on its own
+
+An unlocked vault on a phone or a laptop left open is funds anyone at the
+screen can move (the security review, 2026-10-19). So, besides Lock
+(`src/keys/autolock.js`, `src/main.js`):
+
+- **After an action an inline Unlock was opened for.** Stake, Unstake or
+  Claim asked for the passphrase in place because the vault was locked: once
+  that action ends (done or failed), the vault is locked again. Unlock in
+  Settings › Keys is a session: it stays unlocked until Lock or the idle
+  rule.
+- **After 5 minutes without interaction** (`IDLE_MS`) while it is
+  unlocked, or while a backup is on screen. An interaction is a key, a
+  tap or a click (`pointerdown`), the wheel, or a vault action through the
+  UI or `window.satori` (its end counts). A vault action running at the
+  deadline is never cut off: it locks once the action ends (checked every
+  5 s). A device that slept past the deadline (browser timers don't count
+  sleep) locks at the first heartbeat after it wakes (the catch-up pass,
+  [../plans/runtime.md](../plans/runtime.md#catch-up-pass)).
+- **Said by Lock**: "Locks in 4 min" next to the header's Lock (whole
+  minutes, up; "Locks in under a minute"), so the countdown restarts as the
+  person uses the page. `status().lockAt` is the deadline (ms) for agents.
+
+  <img src="../screenshots/lock-in.png" alt="Locks in 5 min, next to Lock" width="300">
+
+Satori Lite's dashboard keeps its login session until logout; this is
+stricter because a browser tab is easier to leave open than a server's
+dashboard.
+
 ## Backup
 
-Behind Unlock, as Docker's dashboard is behind login. **Backup → Show**:
+The passphrase each time (2026-10-19): **Backup → Identity words, Vault
+words, Nostr key** asks for the vault's passphrase in place, every time,
+unlocked or not, and derives the vault from it (`backupKeys`,
+`withPassphrase`: PBKDF2 again, ~0.3 s), so a vault left unlocked can't
+show its words without it. A wrong passphrase shows nothing. A backup on
+screen hides itself after 5 minutes without interaction, as the vault
+locks. Docker shows the keys behind login; here the passphrase is asked
+per showing, the identity's and the Nostr key's too (they are stored
+unencrypted, but they are private keys). It shows:
 
 - **Identity words**, **Vault words**: the 24 words (Restore from words
   brings the key back) and the private key in `0x` hex, which imports into a
@@ -256,8 +294,12 @@ Behind Unlock, as Docker's dashboard is behind login. **Backup → Show**:
   words don't bring it back; Restore from words takes either form.
 
 No files are downloaded: Docker's formats are not written any more.
-`window.satori.backup()` gives all three, `backup('identity' | 'vault' |
-'nostr')` one ([/llms.txt](../../public/llms.txt)).
+`window.satori.backup(undefined, passphrase)` gives all three,
+`backup('identity' | 'vault' | 'nostr', passphrase)` one; without the
+passphrase it throws "The vault's passphrase is needed: it is asked each
+time." ([/llms.txt](../../public/llms.txt)).
+
+![Backup asks for the passphrase each time](../screenshots/backup-passphrase.png)
 
 ## Code
 
@@ -272,12 +314,15 @@ No files are downloaded: Docker's formats are not written any more.
   vaultYaml, nostrYaml?})` (migration 7), `loadKeys(record)` (the identity's
   signer, the Nostr key, the vault's public key and Base address),
   `unlockVault(record, passphrase)` (→ the vault's signer, and the record to
-  store when it was upgraded). A signer: `pubkey`, `evmAddress`,
+  store when it was upgraded), `withPassphrase(record, passphrase, fn)` (the
+  vault for one use, wiped after `fn`: Send), `backupKeys(record, which,
+  passphrase)` (Backup). A signer: `pubkey`, `evmAddress`,
   `signDigest`, `backup()`, `lock()`; the identity's also
   `signCentralLogin(challenge)`.
 - `docker.js`: Docker's files, read only: `readWallet`, `secrecy`,
   `vaultPubkey`, `decryptField`, `readNostrYaml`. Used by the import and by
   the migration only.
+- `autolock.js`: [the vault locks on its own](#the-vault-locks-on-its-own).
 
 `src/central/login.js`: central's login signature (EIP-191).
 
@@ -294,12 +339,20 @@ No files are downloaded: Docker's formats are not written any more.
   that are not read (the WIF, the nested address, `scripthash`), swapped files, `nostr.yaml`), and the UTF-8-era
   vaults.
 - `twokeys.test.js`: the record, Unlock and Lock, backup, the import's
-  translation, and every earlier profile carried forward.
+  translation, and every earlier profile carried forward; `withPassphrase`
+  and `backupKeys` refuse no passphrase and a wrong one, and wipe the vault
+  after its one use.
+- `autolock.test.js` (fake timers): 5 minutes with no interaction, each
+  interaction restarting them, never in the middle of a vault action, a
+  wake past the deadline, Lock by hand.
 - `src/db/db.test.js`: migration 7 on every profile, then the Unlock.
 - `src/central/login.test.js`: central's EIP-191 vector, and a login checked
   by viem's `verifyMessage`.
-- e2e: `app.spec.js` (Create with a non-Latin passphrase, reload, Unlock,
-  Backup, the stored record; Import, with a short Docker password),
+- e2e: `app.spec.js` (Create with a non-Latin passphrase, reload, Unlock
+  with "Locks in 5 min", Backup asking the passphrase each time, unlocked
+  and locked, a wrong one refused, `backup()` without it refused, the stored
+  record; Import, with a short Docker password); `home.spec.js` and
+  `base.spec.js` (an inline Unlock for Stake or Claim locks again after it);
   `migrate.spec.js` (earlier profiles in Chrome: at load, at Unlock, the
   finish screen, the step-1 row).
 
@@ -343,5 +396,7 @@ accept it). The network rows' evidence is in
 | **A file with no entropy is refused**, even with a WIF. | satorilib fails on a WIF-only file too, so no Dockerized Neuron runs on one; reading it would take Evrmore's base58check. |
 | **The identity and the vault must be different keys** (Docker never checks). | The same key twice would put the funds' key unencrypted on disk. |
 | **Ticks run from page load with no login.** Docker's UI needs login. | Its neuron process also runs on `wallet.yaml` alone (`start.py:75`). |
+| **The vault locks on its own** (5 minutes without interaction; after an action an inline Unlock was for); Docker's login lasts until logout. | A browser tab is left open more easily than a server's dashboard (the security review, 2026-10-19). |
+| **Backup and Send ask for the passphrase each time**, unlocked or not; Docker shows the keys and sends behind its login. | A vault left unlocked can't show its words or move funds without the passphrase. |
 | **Nostr key**: random as in Docker (`start.py:120-149`), plain text in the record, imported from `nostr.yaml`, backed up as `nsec`. | [nostr.md](nostr.md). |
 | **Base**: each key's secret is also its EVM key, as satorilib's `ethAddress`. | [base.md](base.md#keys-on-base). |

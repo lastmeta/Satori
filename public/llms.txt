@@ -57,6 +57,35 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (the vault locks on its own; Backup and Send ask for the passphrase each time)
+
+- The vault locks on its own 5 minutes after the last interaction (a key, a
+  tap, the wheel, or a vault call such as `stake()`; never in the middle of
+  one) while it is unlocked or a backup is on screen, and at once on a wake
+  past that time. `status().lockAt`: when (ms since the epoch), or null.
+  The header shows "Locks in 4 min" beside Lock (`lock-in`). Unlock again
+  (`unlock(passphrase)`) when `stake()`, `unstake()` or `claim()` say
+  "Unlock the vault first".
+- An inline Unlock (the passphrase asked in place for Stake, Unstake or
+  Claim while locked) locks the vault again once that action ends.
+- `backup(which, passphrase)` (it was `backup(which)` while unlocked): the
+  passphrase each time, unlocked or not (~0.3 s); all three:
+  `backup(undefined, passphrase)` (or `null`). Without it: "The vault's
+  passphrase is needed: it is asked each time."; a wrong one: "Wrong
+  passphrase". The UI's Backup asks in place every time (`backup-prompt`,
+  "Vault passphrase to show the backup", Show, Cancel); the `backup` inline
+  Unlock slot is gone.
+- `send({ asset, to, amount, passphrase })` (it needed Unlock): the
+  passphrase each time, unlocked or not; the vault is opened for that send
+  alone. The zero address is refused ("The zero address (0x000…000) burns
+  what is sent to it: refused."). New: `quoteSend({ asset, to, amount })` →
+  `{ asset, to, amount, fee: { gas, about, max } }` (no key: the checks,
+  SATORI's transfer lock, the fee in ETH: `about` at the base fee + tip,
+  `max` at the gas limit and the max fee), the review a person should see
+  before a send. The UI's send form ("Send from the vault") opens that
+  review (`send-review`: `review-amount`, `review-to` in full,
+  `review-fee`), then "Vault passphrase to send", Send or Back.
+
 ## Changed 2026-10-19 (the Satori Network's reward drop, before it is claimed)
 
 - `base().claimable` → `{ rewards, drop, airdrop, total }` (decimal SATORI;
@@ -738,8 +767,9 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 (synchronous, kept current; `await satori.status()` says the same). Then, in
 the page's JS context:
 
-- `await satori.status()` → `{ screen, identity, vault, unlocked, central, nostr, base, storage, app, recovered, train }`
-  (`train`: the last training pass, `{ central, nostr, base, stopped, ms }`, or null).
+- `await satori.status()` → `{ screen, identity, vault, unlocked, lockAt, central, nostr, base, storage, app, recovered, train }`
+  (`train`: the last training pass, `{ central, nostr, base, stopped, ms }`, or null; `lockAt`: when the unlocked
+  vault locks on its own, ms, or null).
   `screen` is `setup` (no keys yet), `home` (running), `finish` (an earlier
   version's vault whose public key was not in clear: `unlock(passphrase)`
   once, then it runs), `elsewhere` (another tab has it open; only one tab
@@ -809,8 +839,8 @@ the page's JS context:
     for the card (so advice only when no warn or bad reason is present):
     `{ id, text, button, do, tab?, section? }` (`stake-out-of-sync`: `{ id,
     text }` only, nothing to press), `do` one of `reload`, `poll` (`satori.poll()`), `stake`
-    (`unlock()` then `stake()`), `backup` (`unlock()` then
-    `backup('vault')`), `install` (`install()`), `go` (`go(tab)`; the fix is
+    (`unlock()` then `stake()`), `backup` (`backup('vault', passphrase)`,
+    shown to the person), `install` (`install()`), `go` (`go(tab)`; the fix is
     at `#<tab>-<section>`).
   - `reasons`: every reason, highest first: `[{ id, status, channel, text }]`,
     `status` the reason's level: `'bad'`, `'warn'` (something is wrong for
@@ -951,16 +981,18 @@ the page's JS context:
   another while one runs throws `Busy (unlock)…`); `satori.lock()` → true.
   An earlier version's vault is re-encrypted in this app's format at its
   first Unlock (same passphrase). On the `finish` screen it also starts the
-  neuron.
-- While unlocked: `satori.backup('identity' | 'vault')` → `{ words,
+  neuron. The vault locks on its own 5 minutes after the last interaction
+  (`status().lockAt`; a vault call counts), never in the middle of an action.
+- `await satori.backup('identity' | 'vault', passphrase)` → `{ words,
   privateKey }` (the 24 words; `privateKey` is `0x` and 64 hex, what a Base
   wallet's "Import account" takes: the words follow satorilib's scheme, so a
   standard wallet derives another account from them);
-  `satori.backup('nostr')` → `{ nsec, secret }`; `satori.backup()` → `{
-  identity, vault, nostr }`. Any other name throws. Backup needs Unlock as
-  Docker's dashboard needs login, the identity and the Nostr key too,
-  although they are stored unencrypted: they are private keys. (`file()` is
-  gone: no Docker files are made.)
+  `backup('nostr', passphrase)` → `{ nsec, secret }`; `backup(undefined,
+  passphrase)` → `{ identity, vault, nostr }`. The passphrase each time,
+  unlocked or not (~0.3 s); any other name throws, before the passphrase is
+  checked. The identity and the Nostr key need it too, although they are
+  stored unencrypted: they are private keys. Show them to the person; don't
+  keep or send them anywhere. (`file()` is gone: no Docker files are made.)
 - `await satori.nostr()` (also `status().nostr`) → `{ pubkey, npub,
   maxStreams, centralWrite, userRelays, relays, subscriptions }`. `relays`:
   `[{ url, from: ['central' | 'user'], write, state, error }]`, state
@@ -1027,9 +1059,17 @@ the page's JS context:
   'gas above the ceiling: …' | 'waiting for the batch already sent (0x…)' | … }` or `{ at, error }`.
 - `await satori.claim()` (needs Unlock) → `{ rewards, merkle, airdrop }`, each
   `{ hash, amount }`, `{ skipped: why }` or `{ error }`.
-- `await satori.send({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`
-  (needs Unlock) → `{ hash }`, from the vault. SATORI that can't be sent
-  (staked, or through the round after Unstake) throws, saying when it can.
+- `await satori.quoteSend({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`
+  → `{ asset, to, amount, fee: { gas, about, max } }`: the review before a
+  send, no key needed (`to` checksummed; the fee in ETH, `about` at the
+  latest base fee + the tip, `max` at the gas limit and the max fee). It
+  throws what the send would: a bad asset, address or amount, the zero
+  address, SATORI that can't be sent yet (saying when), too little to send.
+- `await satori.send({ asset, to, amount, passphrase })` → `{ hash }`, from
+  the vault, with its passphrase each time, unlocked or not (the vault is
+  opened for this send alone). The zero address is refused. SATORI that
+  can't be sent (staked, or through the round after Unstake) throws, saying
+  when it can. Show the person `quoteSend()`'s review first.
 - `await satori.setBaseRpc(url)` → `base()`: an https URL, a path on this
   site (such as `/rpc`), or `''` for the default. A saved URL replaces the
   default.
@@ -1111,15 +1151,18 @@ thrown: they are in `status().central` (for example `central 500: …`,
   <date> (round N)", "Free to send"), the identity's ETH as daily batches of
   gas (a low warning once staked), Last batch, Batch check, the RPC, who
   plays (this neuron, or Satori Daily by hand, linked), then "Stake with
-  this neuron" or "Unstake", "Claim", and a send form
-  (asset, Amount, "To (0x address)", "Send from the vault"); while locked
-  each asks for the passphrase in place ("Vault passphrase to use the
-  vault"), then does it.
+  this neuron" or "Unstake", "Claim" (while locked each asks for the
+  passphrase in place, "Vault passphrase to use the vault", does it, then
+  locks the vault again), and a send form (asset, Amount, "To (0x
+  address)", "Send from the vault"), which opens a review ("Check before
+  sending": the amount and asset, the recipient in full, the fee), then
+  "Vault passphrase to send" (each time), Send or Back.
 - **Settings**: **Keys** (each key with Copy: the identity's Base address,
   the vault's with its Locked/Unlocked badge, the "Vault passphrase" field
   and Unlock, or "Lock the vault"; the Nostr pubkey), **Backup** (Identity
   words, Vault words, each with its private key in 0x hex; Nostr key, nsec
-  and hex; asked for while locked, the passphrase in place; no downloads),
+  and hex; each asks for the passphrase in place, every time, "Vault
+  passphrase to show the backup", Show; no downloads),
   **Central** (URL, empty = default; Save), **Nostr relays** (one per line,
   "Publish to central's relays"; Save relays), **Base** (Base RPC, "Daily
   batch: max fee (gwei)"; Save Base settings), **This device** (the storage
@@ -1167,13 +1210,16 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `base-staking`, `base-play` (who plays: this neuron or Satori Daily),
   `base-lock`, `base-claimable`, `base-last-batch`, `base-check`,
   `base-stake`, `base-unstake`, `base-claim`, `base-result`,
-  `base-txs` (the last action's transactions), `base-action-error`.
+  `base-txs` (the last action's transactions), `base-action-error`,
+  `send-review` (with `review-amount`, `review-to`, `review-fee`).
   Settings: `identity`, `vault` (the Base addresses), `vault-state`,
-  `nostr-pubkey`, `unlock`, `lock-vault`, `backup-key` (a private key, or
+  `nostr-pubkey`, `unlock`, `lock-vault`, `backup-prompt` (the passphrase,
+  asked each time), `backup-key` (a private key, or
   the nsec), `backup-hex` (the Nostr key's hex), `theme-system`,
   `theme-light`, `theme-dark` (Appearance, `aria-pressed` on the chosen
   one), `storage`, `install`, `install-hint`, `update-settings`. The inline prompt: `unlock-prompt`
-  (`data-unlock-for`). Elsewhere: `lock`, `update` (the header), `finish`,
+  (`data-unlock-for`: `card`, `claim`, `wallet`). Elsewhere: `lock` and
+  `lock-in` ("Locks in 4 min"), `update` (the header), `finish`,
   `pass-note`, `notice` (the recovered database's, with Dismiss) and `fatal`
   (the error that stopped the start).
 

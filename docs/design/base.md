@@ -381,11 +381,34 @@ transaction's gas (1.5M gas at twice the gas price, the batch's measure;
 `vault.lowEth`), Claim says "The vault needs a little Base ETH for gas to
 claim." before it tries (before Unlock too), and `claim()` throws it.
 
-## Send (Unlock)
+## Send: the passphrase each time
 
 From the vault: ETH (a plain transfer, estimated first, no pad), or SATORI
 (`token.transfer`) when it is not transfer-locked by the rule above (the app
-says until when before it simulates). The card shows the identity's ETH as
+says until when before it simulates). Two steps (2026-10-19, the security
+review):
+
+1. **The review** (`base.quoteSend`, no key): the inputs are checked
+   (`checkSend`: the asset, a 0x address, a positive amount; **the zero
+   address is refused**, "The zero address (0x000…000) burns what is sent to
+   it: refused."), SATORI's transfer lock is said, and the fee is estimated
+   from the vault's address: "about" = the estimate at the latest base fee +
+   the tip, "at most" = the gas limit (SATORI: + `HOOK_GAS`) at the max fee.
+   The card shows **Check before sending**: the amount and the asset ("1.5
+   SATORI"), the recipient in full, the fee ("about 0.00000013 ETH, at most
+   0.0000003 ETH (Base ETH, from the vault)"), the passphrase, **Send** and
+   **Back** (the form again, as typed).
+2. **Send** with the vault's passphrase, asked each time, unlocked or not:
+   the vault is derived for this send alone and wiped after it
+   (`withPassphrase`, [keys.md](keys.md#backup)), so a vault left unlocked
+   can't move funds without it. A wrong passphrase sends nothing.
+
+`window.satori.quoteSend({ asset, to, amount })` is the review for agents
+and `send({ asset, to, amount, passphrase })` the send.
+
+<img src="../screenshots/send-review.png" alt="Check before sending: the amount, the recipient in full, the fee, the passphrase, Send and Back" width="320">
+
+The card shows the identity's ETH as
 daily batches of gas and warns below 7: a batch is counted at 1,500,000 gas
 (the estimate + `HOOK_GAS`, which the node wants covered up front) at 2 × the
 gas price. Measured on the fork: 408k gas for a round's first one-game batch,
@@ -406,6 +429,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's staking earnings. |
 | The transfer lock is shown with `>=` (the token's rule); Lite's display uses `>`. | Lite shows the tokens free one round early. |
 | Words: Lite's "Stake" / "Unstake" (the owner's choice, 2026-10-18), not the dapp's; the token's transfer lock is "can't be sent". | The app's Lock/Unlock is the passphrase. |
+| A send has a review step (the recipient in full, the amount, the asset, the fee), asks for the passphrase each time, and refuses the zero address; Lite sends from its unlocked dashboard. | The security review (2026-10-19): an unlocked tab must not move funds without the passphrase, and a typo should be seen before it is sent. |
 | The vault's Base address is computed from its public key, in clear in the keys record. | Status without Unlock; Lite needs the decrypted vault. |
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
@@ -431,9 +455,10 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
   SATORI is staked with this neuron, so it can't also play Satori Daily by
   hand. Unstake to play manually.", while not "Stake with this neuron to let
   it predict every round, or play Satori Daily by hand.", with Satori Daily
-  linked. Stake with this neuron or Unstake, Claim, and Send from the vault
-  (SATORI or ETH), each asking
-  for the passphrase in place while the vault is locked; each action lists its
+  linked. Stake with this neuron or Unstake and Claim, each asking
+  for the passphrase in place while the vault is locked (and locking it again
+  after, [keys.md](keys.md#the-vault-locks-on-its-own)), and Send from the
+  vault (SATORI or ETH: [the review and the passphrase each time](#send-the-passphrase-each-time)); each action lists its
   transactions in plain words ("Identity: fee to 0"; the call on hover). Tx
   hashes link to the explorer, except on a local fork. **Settings**: Base
   RPC and the batch's max fee (gwei), prefilled with what is stored, both
@@ -470,8 +495,12 @@ asked at once.
   `config.test.js`, and the keys' Base addresses against viem.
 - `npm run e2e`: `e2e/base.spec.js`, the app with the same fake chain behind
   `/rpc` and a stub central serving a merkle proof: status, Unlock, Stake,
-  the batch, claims, Unstake, when SATORI can be sent, a send, and
-  `stake()` / `unstake()` from the agent API.
+  the batch, claims, Unstake, when SATORI can be sent, a send through its
+  review (the zero address refused, the lock said before the passphrase, the
+  recipient in full and the fee, Back, a wrong passphrase sending nothing),
+  `quoteSend()` and `send()` needing the passphrase while unlocked, Claim's
+  inline Unlock locking again after, and `stake()` / `unstake()` from the
+  agent API.
 - Against a fork: `BASE_FORK=http://127.0.0.1:8546 npx vitest run
   src/chain/fork.test.js` runs the chain module against the real D6
   contracts on an anvil fork (`node scripts/fork.mjs start --port 8546`):
