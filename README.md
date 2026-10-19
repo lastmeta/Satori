@@ -99,9 +99,10 @@ node scripts/fork.mjs fund 0xVAULT --satori 100        # gas, and SATORI: the pr
 node scripts/fork.mjs --help                           # airdrop, merkle, advance, predict, stream, stop
 ```
 
-A build uses central's RPC (`https://sepolia.base.org`), then publicnode; any
-https RPC can be set under **Settings**, and so can the daily batch's max fee
-(2 gwei by default).
+A build uses the RPC it pins (`VITE_BASE_RPC`; the deployment's
+`https://sepolia.base.org`), then publicnode, or, pinning none, central's;
+any https RPC can be set under **Settings**, and so can the max fee every
+transaction is held to (2 gwei by default).
 
 ## The installed app (PWA)
 
@@ -138,13 +139,14 @@ variables, when set and not empty, replaces one; a bad value stops the build
 | `VITE_CENTRAL_URL` | `https://network.satorinet.io` | central (https) |
 | `VITE_NOSTR_RELAYS` | none | the user's relays, a comma list (`wss://…`) |
 | `VITE_NOSTR_CENTRAL_WRITE` | `true` | whether central's relays are written to |
-| `VITE_BASE_RPC` | central's RPC, then publicnode | the Base RPC (https, or a path on the site) |
+| `VITE_BASE_RPC` | central's RPC, then publicnode | the Base RPC (https, then publicnode; or a path on the site); central never overrides it |
 
 The app is served at https://neuron.satorinet.io (https://satori.satorinet.io
 redirects there): one static image, `satori-neuron` (nginx), behind
 the nginx-proxy on Satori's central server, which terminates TLS. Its build
-uses `deploy/build.env` (the dev central and `wss://app.satorinet.io/relay`
-for now):
+uses `deploy/build.env` (the dev central, `wss://app.satorinet.io/relay` and
+`https://sepolia.base.org` for now). The image sends the CSP, nosniff and
+HSTS on every response:
 
 ```sh
 ./scripts/deploy-image.sh                  # npm ci if needed, build, satori-neuron:<git sha> and :latest, checked
@@ -174,6 +176,7 @@ launched by hand there needs `--no-sandbox`.
   [docs/design/OVERVIEW.md](docs/design/OVERVIEW.md) (keys, central, engine,
   Nostr, Base, storage, the installed app, the deployment)
 - For agents, and the `window.satori` reference: [public/llms.txt](public/llms.txt)
+  (its Safety section first); what changed for them: [public/llms-changelog.txt](public/llms-changelog.txt)
 - Roadmap and what is left: [docs/plans/README.md](docs/plans/README.md);
   issues outside this repo: [docs/issues/](docs/issues/README.md); questions
   for the owner: [docs/inbox/QUESTIONS.md](docs/inbox/QUESTIONS.md)
