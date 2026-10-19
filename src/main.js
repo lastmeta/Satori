@@ -236,7 +236,8 @@ async function startNeuron() {
     state.central = { ...state.central, nextPoll: next, polling: running };
   } });
   await refresh();
-  nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite },
+  nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, ws: import.meta.env.DEV, // csp.js: only the dev page allows ws:
+    defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite },
     onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err), work });
   await refreshNostr();
   base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,

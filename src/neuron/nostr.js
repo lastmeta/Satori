@@ -42,9 +42,10 @@ const parseRaw = (raw) => {
  * @param {() => object} o.central the current central client (relays(), relayConfig())
  * @param {{relays: string[], centralWrite: boolean}} o.defaults Settings before the user changes them
  * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): discover and subscribe say their steps
+ * @param {boolean} [o.ws] whether the page's CSP allows ws:// (the dev server's does; a build's does not: csp.js)
  */
 export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay,
-  forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:',
+  forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:', ws = true,
   onChange = () => {}, onPublished = () => {}, onError = () => {}, setInterval: si = setInterval, clearInterval: ci = clearInterval,
   openWaitMs = 10_000, work: progress = createWork() }) {
   let maxStreams = MAX_STREAMS;
@@ -177,7 +178,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     for (const [url, from] of want) {
       let e = relays.get(url);
       if (!e) {
-        e = { url, blocked: https && url.startsWith('ws://') && !isLocal(url), relay: null, chunks: 0 };
+        // ws:// can't open from an https page (mixed content; localhost aside), nor anywhere under a build's CSP (csp.js)
+        const why = !url.startsWith('ws://') ? null : !ws ? 'ws:// relays are not allowed in a build: use wss://'
+          : https && !isLocal(url) ? 'ws:// cannot be opened from an https page' : null;
+        e = { url, blocked: !!why, why, relay: null, chunks: 0 };
         if (!e.blocked) {
           e.relay = makeRelay(url, {
             onOpen: (r) => opened(url, r),
@@ -365,7 +369,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         pubkey: key.pubkey, npub: npub(key.pubkey), maxStreams, centralWrite, userRelays: [...userRelays],
         relays: [...relays.values()].map((e) => ({
           url: e.url, from: [...e.from], write: writes(e), state: e.blocked ? 'blocked' : e.relay.state,
-          error: e.blocked ? 'ws:// cannot be opened from an https page' : e.relay.error,
+          error: e.blocked ? e.why : e.relay.error,
           downSince: e.blocked ? null : e.relay.downSince ?? null, // ms: Home's reconnect grace (docs/design/health.md)
         })),
         subscriptions: (await db.relayStreams({ active: true })).map(view),

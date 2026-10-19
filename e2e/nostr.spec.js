@@ -224,7 +224,7 @@ test('an https page: a ws:// relay is blocked, said once, and neither down nor c
   // said once, in the relays' detail (Settings)
   await page.evaluate(() => window.satori.go('settings'));
   await expect(page.locator('[data-test=relay]').filter({ hasText: BLOCKED }).locator('[data-test=relay-state]')).toHaveText('Not reachable here');
-  await expect(page.locator('[data-test=relays-blocked]')).toHaveText("A ws:// relay can't be reached from a secure (https) page, so it is left out: it doesn't count as down.");
+  await expect(page.locator('[data-test=relays-blocked]')).toHaveText("A ws:// relay can't be reached from this page (only wss:// can), so it is left out: it doesn't count as down.");
   await page.evaluate(() => window.satori.go('streams'));
   await expect(page.locator('.card').filter({ hasText: 'Satori relays' }).first()).toContainText('1 of 1 relay connected');
 

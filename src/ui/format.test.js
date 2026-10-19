@@ -100,7 +100,7 @@ test('relaysText: the relays that count (a blocked one is left out), connected o
   expect(relaysText([r('open'), r('closed'), r('blocked')])).toBe('1 of 2 relays connected');
   expect(relaysText([r('blocked')])).toBe('no relay');
   expect(relaysText([])).toBe('no relay');
-  expect(BLOCKED_NOTE).toBe("A ws:// relay can't be reached from a secure (https) page, so it is left out: it doesn't count as down.");
+  expect(BLOCKED_NOTE).toBe("A ws:// relay can't be reached from this page (only wss:// can), so it is left out: it doesn't count as down.");
 });
 
 test('obsText: a relay value as a number when it has one, as predText; else as sent (a dict as JSON)', () => {

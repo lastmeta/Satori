@@ -85,7 +85,7 @@ let nostr;
 let changes;
 let published; // onPublished: each `_pred` a relay took (Home's activity log)
 let failures; // onError: an intake that failed (the database, the engine)
-async function boot({ https = false, centralWrite = false, user = [USER_RELAY], dbOf = (d) => d } = {}) {
+async function boot({ https = false, ws = true, centralWrite = false, user = [USER_RELAY], dbOf = (d) => d } = {}) {
   db = await memoryDb();
   relays = fakeRelays();
   central = fakeCentral();
@@ -93,7 +93,7 @@ async function boot({ https = false, centralWrite = false, user = [USER_RELAY], 
   published = [];
   failures = [];
   nostr = createNostr({ db: dbOf(db), key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
-    makeRelay: relays.make, now, https, defaults: { relays: user, centralWrite }, onChange: () => changes++,
+    makeRelay: relays.make, now, https, ws, defaults: { relays: user, centralWrite }, onChange: () => changes++,
     onPublished: (n) => published.push(n), onError: (err) => failures.push(err.message),
     setInterval: () => 0, clearInterval: () => {}, openWaitMs: 0 });
   await nostr.start();
@@ -120,6 +120,13 @@ describe('relays', () => {
     const s = await nostr.status();
     expect(s.relays.map((r) => [r.url, r.state])).toEqual([[CENTRAL_RELAY, 'blocked'], [USER_RELAY, 'connecting']]);
     expect(relays.get(CENTRAL_RELAY)).toBeUndefined();
+  });
+  test("a build's CSP has no ws: (only the dev server's does): every ws:// relay is blocked there, localhost too, and said why", async () => {
+    await boot({ ws: false });
+    const s = await nostr.status();
+    expect(s.relays.map((r) => [r.url, r.state, r.error])).toEqual([[CENTRAL_RELAY, 'blocked', 'ws:// relays are not allowed in a build: use wss://'],
+      [USER_RELAY, 'blocked', 'ws:// relays are not allowed in a build: use wss://']]);
+    expect(relays.all.size).toBe(0); // none is tried
   });
   test('setRelays: ws/wss only; publish to central relays; a relay listed twice is written to if the user lists it', async () => {
     await boot();
