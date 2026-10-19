@@ -21,6 +21,7 @@ import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
 import { modelsOf, modelDetail } from './neuron/models.js';
 import { createTrainer } from './neuron/train.js';
+import { createRetrain } from './neuron/retrain.js';
 import { box as modelBox, modelHref } from './ui/models.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
@@ -59,6 +60,7 @@ let poller = null;
 let base = null; // the Base flow
 let activity = null; // the activity log Home's health reads (docs/design/health.md)
 let trainer = null; // the training pass (src/neuron/train.js): every model's current fit, from stored history
+let retrain = null; // Retrain (src/neuron/retrain.js): a model trained on until it beats no change, as the user asked
 let afterUnlock = null; // the action an inline Unlock prompt was opened for
 const nowS = () => Date.now() / 1000;
 /** What the neuron is doing now (src/neuron/work.js): Home's hero and action lines, and health().work. */
@@ -115,6 +117,19 @@ const refreshModels = coalesce('models', async () => {
 /** One model's drill-in (model(id)), from the given statuses: recomputed from its stored spec and history. */
 const detailOf = (id, { streams, nostrStatus, baseStatus }) => modelDetail({ db, id, streams, subscriptions: nostrStatus.subscriptions,
   lastBatch: baseStatus.lastBatch, baseHistory: (streamId) => base.history(streamId) });
+/** A central model's uuid from an id as models() gives it ('central:<uuid>'), its bare uuid or its name; else null. */
+function centralUuid(id) {
+  const s = String(id ?? '');
+  if (/^(nostr|base):/.test(s)) return null;
+  const key = s.replace(/^central:/, '');
+  return state.streams.find((r) => r.uuid === key || r.name === key)?.uuid ?? null;
+}
+/** model(id).retrain: whether Retrain is offered, and the runner's status ({ running, waiting, after, tried, best, result }). */
+const retrainOf = (d) => {
+  const uuid = d.source === 'central' ? d.id.slice('central:'.length) : null;
+  const s = uuid && retrain ? retrain.status(uuid) : { running: false, waiting: null, after: null, tried: 0, best: null, result: null };
+  return { available: d.retrain.available, why: d.retrain.why, ...s, result: s.result ?? d.retrain.last };
+};
 let modelAsked = 0; // the latest drill-in asked for wins
 /** The open model, (re)computed; its error is shown in place. */
 async function loadModel(id) {
@@ -194,6 +209,17 @@ async function startNeuron() {
       if (r.nostr) await refreshNostr();
       await refreshModels();
     } });
+  // Retrain (docs/design/models.md#retrain): one at a time, waiting for central's work; the list read again after each
+  retrain = createRetrain({ db, work, seed: () => identity.pubkey, nameOf: (u) => state.streams.find((r) => r.uuid === u)?.name ?? u,
+    onChange: () => {
+      modelBox.retrains = retrain.all();
+      state.retrainRev++;
+    },
+    after: async (uuid, result) => {
+      console.info('[satori] retrain', uuid, result);
+      await refresh();
+      await refreshModels();
+    } });
   state.now = nowS();
   setInterval(() => {
     state.now = nowS();
@@ -224,6 +250,7 @@ async function startNeuron() {
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
   if (state.modelOpen) loadModel(state.modelOpen); // a link to a model (#models/<id>), now that every flow is up
+  retrain.resume().catch((err) => console.error('[satori] retrain resume', err)); // pending work: a retrain asked before continues
 }
 
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
@@ -391,7 +418,7 @@ function showModel(id) {
   if (id && !state.modelOpen) listScroll = scrollY;
   const back = !id && state.modelOpen;
   fromList = false;
-  Object.assign(state, { modelOpen: id, modelOutput: 0, modelHover: null, modelError: '' });
+  Object.assign(state, { modelOpen: id, modelOutput: 0, modelHover: null, modelError: '', retrainError: '' });
   modelBox.detail = null;
   state.modelRev++;
   if (id && db) loadModel(id);
@@ -581,6 +608,19 @@ const actions = {
   closeModel() {
     if (fromList) history.back();
     else go('models');
+  },
+  /** The open model's Retrain button: 'retrain' asks for one (kept, then run), 'stop' ends it (docs/design/models.md#retrain). */
+  async retrainModel(action) {
+    const d = modelBox.detail;
+    const uuid = d?.source === 'central' ? d.id.slice('central:'.length) : null;
+    if (!uuid || !retrain) return;
+    state.retrainError = '';
+    try {
+      if (action === 'stop') retrain.stop(uuid);
+      else await retrain.start(uuid);
+    } catch (err) {
+      state.retrainError = err?.message ?? String(err);
+    }
   },
   /** The Models list's filter (where predictions go) and sort; the sort is kept on this device. */
   setModelView({ filter, sort }) {
@@ -785,7 +825,29 @@ window.satori = {
    */
   async model(id) {
     ready();
-    return detailOf(String(id ?? ''), { streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
+    const d = await detailOf(String(id ?? ''), { streams: state.streams, nostrStatus: state.nostr, baseStatus: state.base });
+    return d && { ...d, retrain: retrainOf(d) };
+  },
+  /**
+   * Retrain a Satori Network model (docs/design/models.md#retrain): keep training it, from stored history, until one
+   * beats no change, then stop; never a prediction. Resolves when it ends (or at once with a note when its last retrain
+   * looked at the same data) → model(id).retrain's status. Throws when it can't: not a Network model, no history.
+   */
+  async retrain(id) {
+    ready();
+    const uuid = centralUuid(id);
+    if (!uuid) throw new Error(`Retrain is for Satori Network models for now (got ${id}).`);
+    if ((await retrain.start(uuid)).running) await retrain.done(uuid);
+    return retrain.status(uuid);
+  },
+  /** Stop a retrain: it ends at its next try and keeps the current model. → its status */
+  async stopRetrain(id) {
+    ready();
+    const uuid = centralUuid(id);
+    if (!uuid) throw new Error(`No Satori Network model: ${id}.`);
+    retrain.stop(uuid);
+    await retrain.done(uuid);
+    return retrain.status(uuid);
   },
   /** One stream's predictions (uuid or name), newest first. */
   async predictions(stream, limit = 20) { ready(); return db.predictions(stream, limit); },
@@ -878,10 +940,10 @@ const lineOf = (tasks, hold) => () => {
 };
 watch(lineOf(VAULT_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
 watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
-/** The Models tab's status: the poll's, the Base batch's or the training pass's step, in Home's hero's words at its pace (no ring). */
+/** The Models tab's status: the poll's, the Base batch's, the training pass's or a Retrain's step, in Home's hero's words at its pace (no ring). */
 const engineHold = createHold({ show: (v) => { state.engineWork = v.working ? { line: v.line, critical: v.critical } : null; } });
 watch(() => {
-  const w = leading(state.work, ['central', 'base', 'train']);
+  const w = leading(state.work, ['central', 'base', 'train', 'retrain']);
   engineHold(w ? { key: `${w.task}:${w.step}`, working: true, line: workText(w), critical: w.critical } : { key: 'idle', working: false, line: '' });
 });
 /** The Models list follows central's streams, the Nostr status and the Base status. */
@@ -891,11 +953,14 @@ watch(() => {
   void state.base;
   if (state.screen === 'home') refreshModels();
 });
-/** The training pass waits while central's work runs (a poll, its sign-in, the history): its end runs it. */
+/** The training pass and a Retrain wait while central's work runs (a poll, its sign-in, the history): its end runs them. */
 let centralWas = false;
 watch(() => {
   const now = !!state.work.central;
-  if (centralWas && !now && state.screen === 'home') trainer?.run();
+  if (centralWas && !now && state.screen === 'home') {
+    trainer?.run();
+    retrain?.wake();
+  }
   centralWas = now;
 });
 

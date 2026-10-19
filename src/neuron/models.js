@@ -7,8 +7,10 @@
 //     model's backtest is kept with it, by the poll, the Nostr intake, the Base batch or the training pass: train.js)
 //   summaryOf(models), engineStatus({ summary, central, work, now })      the tab's top
 //   sortModels(list, 'quality' | 'name'), filterModels(list, 'all' | 'network' | 'contract' | 'relays')
-//   await modelDetail({ db, id, streams, subscriptions, lastBatch, baseHistory })   one model, recomputed on demand
+//   await modelDetail({ db, id, streams, subscriptions, lastBatch, baseHistory })   one model, recomputed on demand, with
+//     `retrain`: whether Retrain is offered ({ available, why: null | 'source' | 'history', last: the last result })
 import { MARGIN, explainModel } from '../engine/evolve.js';
+import { canRetrain } from '../engine/retrain.js';
 import { explainForecast, STEP_S, HORIZON_STEPS, median } from '../engine/index.js';
 import { UP } from '../chain/index.js';
 import { DEFAULT_CADENCE_S } from './nostr.js';
@@ -302,8 +304,11 @@ export async function modelDetail({ db, id, streams = [], subscriptions = [], la
   return d && { ...d, ms: ms(clock() - t0), readMs: ms(read) };
 }
 
+/** Retrain is offered on Satori Network models only, with the history to split (docs/design/models.md#retrain). */
+const NO_RETRAIN = { available: false, why: 'source', last: null };
+
 /** The detail's shape: the list's model, its Model facts, each output with its history; In from the fit when it has one. */
-function detailOf(m, x, model, histories) {
+function detailOf(m, x, model, histories, retrain = NO_RETRAIN) {
   const fit = x && x.model === m.kind; // the same model now as made the forecast (else In and the rows are the list's)
   const names = new Map(m.inputs.map((i) => [i.stream, i.name]));
   const outputs = m.outputs.map((o) => ({
@@ -317,7 +322,7 @@ function detailOf(m, x, model, histories) {
     id: m.id, source: m.source, name: m.name, kind: m.kind, quality, inputs: m.inputs,
     model: { kind: m.kind, rows: fit ? x.rows : null, tests: fit ? x.tests : null, coef: fit ? x.coef ?? null : null,
       trained: m.trained, quality, ...model },
-    outputs,
+    outputs, retrain,
   };
 }
 
@@ -328,9 +333,11 @@ async function centralDetail(db, key, streams) {
   const spec = parse(row.spec);
   const histories = await db.histories([key, ...(spec?.companions ?? [])]); // one read
   const x = explainModel({ target: key, spec, histories });
+  const last = parse(row.retrain)?.result ?? null;
   const model = { step: STEP_S, horizon: CENTRAL_HORIZON, weight: row.weight ?? null, phi: row.phi ?? null,
-    ...(spec ? { lambda1: spec.lambda1, lambda2: spec.lambda2, generation: row.generation, accepted: row.accepted } : {}) };
-  return detailOf(m, x, model, histories);
+    ...(spec ? { lambda1: spec.lambda1, lambda2: spec.lambda2, generation: row.generation, accepted: row.accepted } : {}), retrain: last };
+  const ok = !!spec && canRetrain({ target: key, histories }).ok;
+  return detailOf(m, x, model, histories, { available: ok, why: ok ? null : 'history', last });
 }
 
 async function nostrDetail(db, key, subscriptions) {

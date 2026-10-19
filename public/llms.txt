@@ -57,6 +57,44 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-18 (Retrain: keep training a model until it beats no change)
+
+- New: `await satori.retrain(id)` keeps training one Satori Network model
+  (central's; `id` as `model(id)` takes it) until a candidate beats no
+  change, then stops; it resolves when it ends with its status. From stored
+  history only: it never predicts, never submits, never calls central. A
+  new champion is used from the next prediction (the next new observation).
+  `await satori.stopRetrain(id)` ends it at its next try and keeps the
+  current model. Both throw for a Relays or Contract model (they read only
+  their own stream: nothing to search yet) or without about four weeks of
+  the stream's history.
+- `model(id).retrain` → `{ available, why (null | 'source' | 'history'),
+  running, waiting (null | 'queue' | 'poll'), after (the model it waits
+  behind), tried, best (the best's error ratio to no change on the older
+  origins the search scores), result }`; `result`: the last one, `{ n, at,
+  outcome: 'found' | 'checked' | 'budget' | 'exhausted' | 'stopped' |
+  'error', kept: 'new' | 'current', ratio (the held-out ratio: the tab's
+  quality), was (the champion's), tried, ms, looked, spec?, from?, note? }`
+  (`note: 'same-data'`: asked again before the stream's next observation;
+  one look at the recent data per observation).
+- How it decides (docs/design/models.md#retrain): it scores candidates on
+  the older backtest origins only, then checks its best once on the newest
+  28 (the tab's), which it never chose on; it keeps it only if it has 20 %
+  less error than no change there (random walks pass that by luck 1.5
+  times in 100).
+- While it runs: `health().work` is `{ task: 'retrain', step: 'search',
+  done (tried), name, text: 'Retraining eth · tried 40' }`; the Models
+  status says the same. A request is kept with the spec (`streams()` rows
+  gain `retrain`: JSON text, `{ n, status: 'running' | 'done', asked_at,
+  state, tried, ms, result }`, migration 13) and continues after a reload.
+  One at a time; it waits while a poll runs.
+- A spec may now be `{ companions: [], lambda1, lambda2, algorithm: 'bar1' }`:
+  the single-stream AR, chosen by a retrain.
+- `data-test`: `model-retrain` (the button, `data-action` `retrain` or
+  `stop`), `model-retrain-line` (its progress, then its result;
+  `data-r`: `working`, `ok`, `bad`), `model-retrain-note` (the fade, or why
+  there is no button).
+
 ## Changed 2026-10-18 (the words people see: Network, Contract, Relays)
 
 Renamed, with no aliases:
@@ -770,7 +808,16 @@ the page's JS context:
   origins), each output's `history` (the chart's points, [{ ts, value }],
   the last 7 horizons) and its `influence` from that refit, `ms` (about 70
   ms live) and `readMs` (the history read). A Base model reads its stream's
-  history from the chain.
+  history from the chain. `retrain`: whether Retrain is offered and its
+  status (see the next two).
+- `await satori.retrain(id)` → keeps training a Satori Network model, from
+  stored history only, until one beats no change on recent data it never
+  chose on, then stops (docs/design/models.md#retrain); resolves when it
+  ends → `{ running, waiting, after, tried, best, result }`. A new champion
+  is used from the next prediction. One at a time; it waits while a poll
+  runs; a request continues after a reload.
+- `await satori.stopRetrain(id)` → ends it at its next try, keeping the
+  current model → the same status.
 - `await satori.predictions(stream, limit = 20)` → one stream's predictions
   (by uuid or name), newest first: `[{ id, stream_uuid, name, made_at, model,
   t1, t2, phi, weight, observed_at, hash, status, sent_at }]`. `observed_at`
@@ -977,7 +1024,8 @@ thrown: they are in `status().central` (for example `central 500: …`,
   `model-line` and `model-details`, `model-out` with `model-output`
   (`data-stream`), `model-output-name`, `model-output-forecast`,
   `model-chart`, `model-endpoint`, `model-readout`, `model-destination`
-  (`data-to`). Streams: `central-url`,
+  (`data-to`), `model-retrain` (`data-action`), `model-retrain-line`
+  (`data-r`), `model-retrain-note`. Streams: `central-url`,
   `registered`, `last-poll`, `next-poll`, `last-submit`, `pending`,
   `history`, `mismatch`, `poll-now`, `streams` (the card) with
   `streams-count` and `stream` rows (`obs`, `t1`, `t2`, `model`, `status`
@@ -1064,7 +1112,8 @@ build step beyond Vite, MIT licensed.
   and fallbacks, `influence()`; `evolve.js`: `runModels({ fresh, histories, specs, seed })`,
   each target's identity-seeded spec, one mutation per poll, the forecasts;
   `explainForecast` and `explainModel`: the same with what the Models tab
-  shows.
+  shows; `retrain.js`: Retrain's search (a hill-climb on the older backtest
+  origins, one look at the last two weeks).
 - `src/nostr/`: NIP-01 events and the Nostr key over `@noble/curves`
   (`event.js`), Satori's events and parsing (`satori.js`), one relay over a
   WebSocket with reconnect (`relay.js`).
@@ -1079,7 +1128,9 @@ build step beyond Vite, MIT licensed.
   cycles, checks, publishes; 90 days); `health.js`: Home's answer from it,
   pure (`health()`), with its tone; `work.js`: what it is doing now
   (`health().work`); `models.js`: the Models tab's data (`models()`,
-  `model(id)`), pure but for the drill-in's reads.
+  `model(id)`), pure but for the drill-in's reads; `train.js`: the training
+  pass; `retrain.js`: Retrain as the app runs it (one at a time, kept with
+  the spec, paused for a poll, resumed on open).
 - `src/chain/`: Base over viem: `config.js` (addresses, RPC), `abi.js`,
   `index.js` (`createChain`: status multicall, stake, the batch's pieces,
   claims, sends).

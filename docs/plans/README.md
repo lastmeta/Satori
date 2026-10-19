@@ -63,7 +63,9 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    training pass, so the neuron never rests with a model unscored; Sort as
    a menu; the tab in plain words; the words people see (the Satori
    Network, the Satori contract, the Satori relays); icons only where they
-   are understood.
+   are understood. ✅ **Retrain**: a model's drill-in asks the neuron to keep
+   training it until one beats no change on recent data it never chose on,
+   then stop ([../design/models.md](../design/models.md#retrain)).
 13. **Runtime hardening**: catch-up on resume, the keys in a worker
    ([runtime.md](runtime.md)).
 14. **Later**, in rough order of value per effort: the Models tab showing

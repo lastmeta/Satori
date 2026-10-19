@@ -269,31 +269,42 @@ the Satori Network.
 **The held-out scheme.** The search scores candidates only on the older
 backtest origins, and checks its best once, on the newest 28 (the last two
 weeks, the ones the tab's quality is), which it never chose on; it keeps it
-only if it beats no change there by the tab's 5 % and by 10 % in each of
-those two weeks. On simulated random walks that passes by luck 1–2 times in
-100, where the tab's rule alone over the same 28 would pass 15–19.
+only if it has 20 % less error than no change there. On simulated random
+walks that passes by luck 1.5 times in 100, where the tab's own rule (5 %)
+on the same 28 would pass 19.
 
 Why so: the tab's quality is itself noisy. On a pure random walk a spec
 drawn with no search reads "better" on the 28 origins 11 % of the time,
-and the search's best 22 % of the time (its high-variance specs spread
-both ways), so a split alone is not enough: the check must be one look,
-and its bar must hold against that spread. Measured with
-`retrainer` on synthetic 12 h series, 83 buckets (central's ~41 days), the
-champion a drawn spec, one look:
+and the search's best more often (its high-variance specs spread both
+ways), so a split alone is not enough: the check must be one look, and its
+bar must hold against that spread. Measured with `retrainer` on synthetic
+12 h series of 83 buckets (central's ~41 days), the champion a drawn spec,
+the pool 30 streams, one look (`node scripts/retrain-sim.mjs`: each run's
+looked-at spec scored on the held-out origins, every rule applied to the
+same numbers):
 
-| Rule at the one look | Random walk, pool 7 (200 seeds) | pool 30 (100) | pool 80 (100) | A leader worth ~12 %, pool 7 (100) | pool 80 (50) |
-|---|---:|---:|---:|---:|---:|
-| the tab's rule over the 28 | 15 % | | 19 % | 50 % | 42 % |
-| and each week beats no change | 3 % | | 9 % | 33 % | 24 % |
-| and each week by 5 % | 1.5 % | 5 % | 3 % | 26 % | 14 % |
-| **and each week by 10 % (shipped)** | **1 %** | **2 %** | **2 %** | 22 % | 12 % |
+| Rule at the one look | Random walks accepted (400) | A strong leader confirmed (100) |
+|---|---:|---:|
+| the tab's rule, below 0.95 | 19.0 % | 86 |
+| below 0.90 | 9.3 % | 78 |
+| below 0.85 | 3.3 % | 74 |
+| **below 0.80 (shipped)** | **1.5 %** | **63** |
+| below 0.95 and each week below 1.0 | 8.0 % | 70 |
+| each week below 0.95 | 3.8 % | 63 |
+| each week below 0.90 | 1.0 % | 58 |
 
-(A leader worth ~12 %: the target's 12 h return is 0.6 × another stream's
-last one; the second 12 h step of a 24 h forecast is not predictable, so
-the true edge at 24 h is about 12 %, and 28 origins rarely confirm it. A
-stronger one, such as a thin market trailing a big one, passes; the unit
-test's.) Before the shipped rule, three looks at 0.95 overall accepted 4
-random walks of 20.
+(The strong leader: the target's 12 h return is another stream's last one
+plus a little noise, so the first 12 h step of its 24 h forecast is known
+and the second is not: the true edge is about 30 %, and the search held the
+leader at its look in 95 of 100. With a pool of 80, as on central, the
+shipped rule accepted 3 of 100 random walks and confirmed 20 of 40 such
+leaders, the search holding it in 31.) A week of 14 origins is too noisy
+to ask each to agree: a truly 30 % better model lost to no change in one
+of the two weeks often enough that the weekly rules cost power for the
+same honesty. A weaker leader (worth ~12 %) is confirmed about a time in
+ten: 28 origins can't tell it from luck. Earlier drafts, for the record:
+three looks at the tab's rule accepted 4 random walks of 20; one look at
+the tab's rule, 15–19 in 100.
 
 - **The split**: the held-out origins are the tab's (the last 28 bucket
   positions); the search's are the older ones whose actual (24 h on) came
@@ -308,7 +319,8 @@ random walks of 20.
 
 - **(a) Found**: the one look passes (at the first local optimum that is
   the best so far and beats no change on the search origins, or when the
-  search ends). The spec becomes the champion where evolution keeps it
+  search ends). When the champion already beats no change, the best must
+  also have 20 % less error than the champion there. The spec becomes the champion where evolution keeps it
   (`model_specs`: the spec; its score, no change's, influence and fit key
   as the poll scores them, so the tab shows the held-out number;
   generation + 1, accepted + 1). Written only where the stored spec is
@@ -318,8 +330,9 @@ random walks of 20.
   search score** (more than every neighbour of a three-companion spec in an
   83-stream pool, 3 × 80 swaps + 2 drops + 4 λ steps + 1 = 247, so a
   stalled climb has tried them all), or 3,000 tries in all (about 10 s), or
-  every spec tried (a small pool). The best is kept only if it beats the
-  current champion on the held-out origins by the margin (5 %); else the
+  every spec tried (a small pool). The best is kept only if it has 20 %
+  less error than the current champion on the held-out origins (the same
+  test against it); else the
   champion is untouched: "Couldn't find a model that beats no change. Kept
   the current one." For a model worse than no change, one more line: "Its
   fade already pulls the forecast toward no change." (the weight from the
@@ -335,6 +348,13 @@ next predicts. The spec keeps a small summary of the last retrain:
 `{ n, at, outcome, kept, ratio, was, tried, ms }` (Details: "Last retrain").
 
 ### While it runs
+
+<img src="../screenshots/retrain-running-phone-light.png" alt="Retraining eth: Stop, and the line Retraining · tried 13 · best so far 28% better" width="240"> <img src="../screenshots/retrain-result-phone-light.png" alt="the result: Couldn't find a model that beats no change. Kept the current one; its fade line" width="240"> <img src="../screenshots/retrain-running-phone-dark.png" alt="the same while it runs, dark" width="240"> <img src="../screenshots/retrain-result-phone-dark.png" alt="the result, dark" width="240">
+
+(From `e2e/retrain.spec.js`, `SHOTS=1`. The e2e's eth trails bitcoin by
+12 h; the search found bitcoin, 28 % better than no change on the older
+origins, but only 18 % on the last two weeks, under the bar: an honest
+"Couldn't find".)
 
 - The button reads **Stop**; a line under the header: "Retraining · tried
   40 · best so far 3% worse" (the best on the search origins: what the
@@ -438,8 +458,10 @@ is** in plain words (`kindLabel`): "Bayesian VAR · reads 3 streams",
 "Single-stream AR (bar1)", "Single-stream AR on changes (bar1d)", "No
 change · not enough history yet", "Echo · the value is not a number"; a
 model of several algorithms (`algorithms` is a list) would read "Ensemble ·
-3 algorithms". Beside the name, its mark in words. Then the source ("Satori
-Network stream"). Top to bottom, joined by short arrows:
+3 algorithms". Beside the name, its mark in words, and under the mark the
+**Retrain** button ([Retrain](#retrain)); under them all, Retrain's line
+while it runs and its result after. Then the source ("Satori Network
+stream"). Top to bottom, joined by short arrows:
 
 - **In**: each input with its share as a bar, ranked; for a model of several
   outputs, a choice of whose inputs.
@@ -494,6 +516,17 @@ computer, from the theme's tokens, light and dark. Two constraints shaped
 it: the CSP allows no inline style (`style-src 'self'`), so geometry is SVG
 attributes; and ArrowJS 1.0.6 builds an inserted chunk outside the SVG
 namespace, so a chart's children are fixed and only their attributes move.
+A third, found with Retrain (whose end always recomputes the open model):
+the out blocks are rebuilt when the model is recomputed (their key holds
+`modelRev`), so nothing inside one may follow `modelRev` too; the chart is
+memoized on the detail object and the width instead. An expression that is
+queued and released in the same flush throws inside ArrowJS's queue
+("expressionPool[effect] is not a function"), and the rest of that flush's
+expressions never update again: a poll that recomputed an open drill-in
+threw three of these before the fix (`e2e/models.spec.js` now fails on any
+page error). Retrain's status stays out of the reactive state for a like
+reason (`box.retrains`, `state.retrainRev`): ArrowJS makes nested objects
+reactive in place, and one shared by two parents broke its updates.
 
 **Huge or tiny values** (a Base registry value is often a ratio × 10¹⁸) print
 in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
@@ -511,6 +544,13 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
   generation, accepted, trained, quality }`, each output's `history` (the
   chart's points) and `influence` from the refit, `ms` and `readMs`. `id`:
   models()'s, or a central stream's uuid or name. null when there is none.
+- `await satori.retrain(id)` → keeps training a Satori Network model until
+  it beats no change ([Retrain](#retrain)), resolving when it ends with `{
+  running, waiting, after, tried, best, result }`; `await
+  satori.stopRetrain(id)` → the same, after it stopped. `model(id).retrain`
+  → `{ available, why, running, waiting, after, tried, best, result }`;
+  while one runs, `health().work` is `{ task: 'retrain', step: 'search',
+  done, name }`.
 - `satori.go('models')`, `satori.go('models/<id>')`; the URL's `#models`,
   `#models/<id>`.
 - `data-test`: `models-tab`, `engine` (`data-tone`), `engine-title`,
@@ -525,7 +565,8 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
   `model-details`, `model-out` with `model-output` (`data-stream`),
   `model-output-name`, `model-output-forecast`, `model-chart`,
   `model-endpoint`, `model-ahead` (the forecast points' "12 h", "24 h"), `model-readout`, `model-destination` (`data-to`),
-  `model-kind-label`, `model-quality`;
+  `model-kind-label`, `model-quality`, `model-retrain` (`data-action`
+  `retrain` or `stop`), `model-retrain-line` (`data-r`), `model-retrain-note`;
   `model-loading`, `model-error`.
 
 ## Cost
@@ -595,6 +636,28 @@ agent API reads the tab's state instead of every stream's row again
   the tab (working green, never *Resting* before it), then every score is
   back, equal to the poll's, and *Resting*; no poll, no predictions batch;
   a reload with nothing to do rests at once.
+- Retrain: `src/engine/retrain.test.js` (the neighbours and the space; the
+  split is the tab's 28 held out and older origins searched, the held-out
+  ratio is the poll's score over no change's; a planted leader the champion
+  lacks is found, checked once, has 20 % less error than no change on the
+  held-out origins, and stops; its power on that leader, 8 of 12; 50
+  random walks: 1 lucky acceptance, no lucky swap of the champion, 49 kept
+  the current one; reproducible from
+  the counter; resumes from a stored state to the same result; Stop keeps
+  the champion and looks at nothing); `evolve.test.js` (a `bar1` spec:
+  repair leaves it, the poll proposes only to add a companion back, kept
+  unless that wins); `src/neuron/retrain.test.js` (found and stored as
+  evolution stores a champion, its fit current, never a prediction; Stop;
+  a reload: it continues from the kept place to the same result; it waits
+  while a poll runs, before and mid-search, then compares with the champion
+  the poll left; one look per observation; one at a time; refused without
+  four weeks); `src/ui/drill.test.js` (the button, primary when worse or
+  the same; the running lines; every result in words; the notes);
+  `src/db/db.test.js` (migration 13, `setRetrain`, `saveRetrained`).
+  `npm run e2e`: `e2e/retrain.spec.js` (a healthy neuron's worst model:
+  Retrain, Stop and a counting line, Home's hero in working green, a reload
+  mid-retrain continues from its kept place, a result line, the same data
+  refused; no poll, no predictions batch, no page error).
 
 ## Live
 

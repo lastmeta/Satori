@@ -49,6 +49,8 @@ export const state = reactive({
   modelWidth: 320, // the Out block's width: the charts are drawn at it
   modelHover: null, // { out, i }: the chart point under the pointer
   engineWork: null, // the poll's or the Base batch's step, paced as Home's hero: { line, critical }
+  retrainRev: 0, // Retrain's statuses changed (they live in src/ui/models.js's box.retrains, out of the reactive state)
+  retrainError: '', // why the open model's Retrain could not start
   // central
   central: { url: '', registration: null, lastPoll: null, nextPoll: null, polling: false, lastSubmit: null, pending: 0 },
   centralDefault: '',

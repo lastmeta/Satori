@@ -1,7 +1,7 @@
 // The Models tab's views (src/ui/drill.js): what each row, the status and the drill-in show, from models() and
 // model(id) data. A fabricated model with two outputs proves the drill-in draws every output and its destinations.
 import { describe, expect, test } from 'vitest';
-import { drillView, rowView, statusView, chartOf, pctText, qualityText, destinationView, numText } from './drill.js';
+import { drillView, rowView, statusView, chartOf, pctText, qualityText, destinationView, numText, retrainView, ratioWords } from './drill.js';
 import { summaryOf, qualityOf } from '../neuron/models.js';
 
 const H = 3600;
@@ -192,5 +192,73 @@ describe('the list and the status', () => {
     expect(v.note).toBe("The neuron's own backtest, made as it trains: how each model would have done on past data against no change."
       + " Not the Satori Network's score of the predictions it sent.");
     expect(statusView(summaryOf([])).note).toBe('');
+  });
+});
+
+describe('Retrain in the drill-in\'s header (docs/design/models.md#retrain)', () => {
+  const model = (mark, o = {}) => ({ source: 'central', quality: { mark }, outputs: [{ forecast: { at: AT } }],
+    retrain: { available: true, why: null, last: null }, ...o });
+  const idle = { running: false, waiting: null, after: null, tried: 0, best: null, result: null };
+
+  test('the button: Retrain, the accent one when the model is worse than no change or the same; Stop while it runs', () => {
+    expect(retrainView(model('worse'), idle).button).toEqual({ label: 'Retrain', primary: true, action: 'retrain' });
+    expect(retrainView(model('tie'), idle).button).toEqual({ label: 'Retrain', primary: true, action: 'retrain' });
+    expect(retrainView(model('better'), idle).button).toEqual({ label: 'Retrain', primary: false, action: 'retrain' });
+    expect(retrainView(model(null), idle).button).toEqual({ label: 'Retrain', primary: false, action: 'retrain' });
+    expect(retrainView(model('worse'), { ...idle, running: true }).button).toEqual({ label: 'Stop', primary: false, action: 'stop' });
+    expect(retrainView(model('worse'), undefined)).toMatchObject({ button: { label: 'Retrain' }, line: '', note: '' });
+  });
+
+  test('none for Relays and Contract models, or without the history: one muted line says why', () => {
+    const v = retrainView(model('worse', { source: 'nostr', retrain: { available: false, why: 'source', last: null } }), idle);
+    expect(v).toEqual({ button: null, line: '', tone: '', note: 'Retrain is for Satori Network models for now: this one reads only its own stream.' });
+    expect(retrainView(model('worse', { retrain: { available: false, why: 'history', last: null } }), idle))
+      .toMatchObject({ button: null, note: 'Retrain needs about four weeks of this stream\'s history.' });
+  });
+
+  test('while it runs, a line that changes: the count and the best so far; behind another; waiting for a poll', () => {
+    const run = (o) => retrainView(model('worse'), { ...idle, running: true, ...o });
+    expect(run({}).line).toBe('Retraining…');
+    expect(run({ tried: 40, best: 1.034 })).toMatchObject({ line: 'Retraining · tried 40 · best so far 3% worse', tone: 'working' });
+    expect(run({ tried: 41, best: 0.88 }).line).toBe('Retraining · tried 41 · best so far 12% better');
+    expect(run({ tried: 1, best: 1.001 }).line).toBe('Retraining · tried 1 · best so far the same as no change');
+    expect(run({ waiting: 'queue', after: 'eth' }).line).toBe('Retraining · after eth');
+    expect(run({ waiting: 'poll', tried: 0 }).line).toBe('Retraining · waits for the poll');
+    expect(run({ waiting: 'poll', tried: 40 }).line).toBe('Retraining · waits for the poll · tried 40');
+  });
+
+  test('the result in plain words, until the model next predicts; the fade line for a worse model kept', () => {
+    const done = (result, mark = 'worse') => retrainView(model(mark), { ...idle, result: { at: AT + 60, tried: 340, ...result } });
+    expect(done({ outcome: 'found', kept: 'new', ratio: 0.86, was: 1.12 })).toMatchObject({ line: 'Found one: 14% better. Used from the next prediction.',
+      tone: 'ok', note: '' });
+    expect(done({ outcome: 'checked', kept: 'current', ratio: 1.12, was: 1.12 })).toMatchObject({
+      line: 'Couldn\'t find a model that beats no change. Kept the current one.', tone: '', note: 'Its fade already pulls the forecast toward no change.' });
+    expect(done({ outcome: 'budget', kept: 'current', ratio: 0.99, was: 0.99 }, 'tie')).toMatchObject({
+      line: 'Couldn\'t find a model that beats no change. Kept the current one.', note: '' });
+    expect(done({ outcome: 'budget', kept: 'new', ratio: 1.03, was: 1.2 }).line)
+      .toBe('Couldn\'t find a model that beats no change. Kept a closer one: 3% worse, was 20% worse. Used from the next prediction.');
+    expect(done({ outcome: 'checked', kept: 'current', ratio: 0.8, was: 0.8 }, 'better').line).toBe('Couldn\'t find a better model. Kept the current one.');
+    expect(done({ outcome: 'stopped', kept: 'current', ratio: 1.1, was: 1.1, tried: 1 }).line).toBe('Stopped after 1 try. Kept the current one.');
+    expect(done({ outcome: 'stopped', kept: 'current', ratio: 1.1, was: 1.1 }).line).toBe('Stopped after 340 tries. Kept the current one.');
+    expect(done({ outcome: 'error', kept: 'current', error: 'the database failed' })).toMatchObject({ line: 'Retrain failed: the database failed', tone: 'bad' });
+    expect(done({ outcome: 'found', kept: 'new', ratio: 0.86, was: 1.1, note: 'same-data' }).line)
+      .toBe('Already retrained on this data. Try again after its next observation.');
+    // once the model predicts again (with the new champion or the old), the line goes
+    expect(retrainView(model('better', { outputs: [{ forecast: { at: AT + 120 } }] }),
+      { ...idle, result: { at: AT + 60, outcome: 'found', kept: 'new', ratio: 0.86 } })).toMatchObject({ line: '', note: '' });
+  });
+
+  test('ratioWords: a ratio to no change\'s error in words', () => {
+    expect(ratioWords(0.86)).toBe('14% better');
+    expect(ratioWords(1.2)).toBe('20% worse');
+    expect(ratioWords(1.004)).toBe('the same as no change');
+    expect(ratioWords(Infinity)).toBe('worse');
+    expect(ratioWords(null)).toBe('–');
+  });
+
+  test('Details: the last retrain, in a line', () => {
+    const d = { ...TWO, model: { ...TWO.model, retrain: { at: AT, outcome: 'found', kept: 'new', tried: 340, ms: 2140, ratio: 0.86 } } };
+    const facts = Object.fromEntries(drillView(d, { now: AT + H }).model.details);
+    expect(facts['Last retrain']).toMatch(/^.+ · found one, 14% better · 340 tried in 2.1 s$/);
   });
 });

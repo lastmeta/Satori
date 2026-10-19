@@ -415,10 +415,17 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 
 .drill { max-width: 880px; margin: 0 auto; }
 .back { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; text-decoration: none; }
-/* the drill-in's head: the name and its quality, then what the model is (always shown) and where the stream comes from */
+/* the drill-in's head: the name, then what the model is (always shown) and where the stream comes from; top right its
+   quality and Retrain under it; under them all, Retrain's line (its progress, then its result) and a muted note */
 .drill-h { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 0 12px; margin: 2px 0 12px; }
 .drill-h h2 { margin: 0; font-size: 1.45rem; overflow-wrap: anywhere; }
-.drill-h p { margin: 2px 0 0; grid-column: 1 / -1; }
+.drill-h > p { margin: 2px 0 0; grid-column: 1; }
+.drill-a { grid-column: 2; grid-row: 1 / span 3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.rbtn { padding: 8px 18px; }
+.drill-h > .rline, .drill-h > .rnote { grid-column: 1 / -1; }
+.drill-h > .rline { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.rline[data-r="ok"] { color: var(--ok); font-weight: 600; }
+.rline[data-r="bad"] { color: var(--bad); }
 .q.big { padding-top: 4px; flex: none; }
 .q.big b { font-size: 0.95rem; padding: 4px 12px; }
 .kindlabel { margin: 3px 0 0; font-weight: 600; font-size: 0.95rem; }

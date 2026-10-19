@@ -169,7 +169,68 @@ function modelView(d, now, description) {
   if (m.weight != null) details.push(['Fade weight', dec(m.weight, 2)]);
   if (q?.error != null && q?.noChange != null) details.push(["Median error, no change's", `${pct2(q.error)}, ${pct2(q.noChange)}`]);
   if (m.rows != null && m.tests != null && m.kind !== 'naive') details.push(['Rows, backtests', `${m.rows}, ${m.tests}`]);
+  if (m.retrain?.at) details.push(['Last retrain', lastRetrain(m.retrain)]);
   return { lines, details };
+}
+
+/** A ratio to no change's error in words: '14% better', '3% worse', 'the same as no change'. */
+export function ratioWords(r) {
+  if (r == null || Number.isNaN(r)) return '–';
+  if (!Number.isFinite(r)) return 'worse';
+  const n = Math.round((r - 1) * 100);
+  return n < 0 ? `${-n}% better` : n > 0 ? `${n}% worse` : 'the same as no change';
+}
+const tries = (n) => `${n} ${n === 1 ? 'try' : 'tries'}`;
+const OUTCOME = { found: 'found one', stopped: 'stopped', error: 'failed', history: 'too little history' };
+/** Details' line for the last retrain: 'Oct 18, 21:40 · found one, 14% better · 340 tried in 2.1 s'. */
+function lastRetrain(r) {
+  const what = r.kept === 'new' ? `${OUTCOME[r.outcome] ?? 'kept a closer one'}, ${ratioWords(r.ratio)}` : OUTCOME[r.outcome] ?? 'kept the current one';
+  return `${fmtWhen(r.at)} · ${what} · ${r.tried} tried in ${(r.ms / 1000).toFixed(1)} s`;
+}
+
+const GOAL = 0.95; // better than no change: the tab's rule (src/engine/retrain.js GOAL)
+/** The last retrain's result in plain words (docs/design/models.md#retrain). → { line, tone, note } */
+function resultWords(r) {
+  if (r.note === 'same-data') return { line: 'Already retrained on this data. Try again after its next observation.', tone: '', note: '' };
+  if (r.outcome === 'error') return { line: `Retrain failed: ${r.error}`, tone: 'bad', note: '' };
+  if (r.outcome === 'history') return { line: 'Retrain needs about four weeks of this stream\'s history.', tone: '', note: '' };
+  const next = 'Used from the next prediction.';
+  if (r.kept === 'new' && r.ratio < GOAL) return { line: `Found one: ${Math.round((1 - r.ratio) * 100)}% better. ${next}`, tone: 'ok', note: '' };
+  if (r.outcome === 'stopped') return { line: `Stopped after ${tries(r.tried)}. Kept the current one.`, tone: '', note: '' };
+  if (r.kept === 'new') {
+    return { line: `Couldn't find a model that beats no change. Kept a closer one: ${ratioWords(r.ratio)}, was ${ratioWords(r.was)}. ${next}`,
+      tone: '', note: '' };
+  }
+  if (r.was < GOAL) return { line: 'Couldn\'t find a better model. Kept the current one.', tone: '', note: '' };
+  // a model worse than no change kept: its fade already pulls what it sends toward no change (engine.md)
+  return { line: 'Couldn\'t find a model that beats no change. Kept the current one.', tone: '',
+    note: r.was > 1 ? 'Its fade already pulls the forecast toward no change.' : '' };
+}
+
+/**
+ * Retrain in the drill-in's header (docs/design/models.md#retrain): the button (Retrain, the accent one when the model
+ * is worse than no change or the same; Stop while it runs), a line that changes while it runs, then the result until
+ * the model next predicts, and a muted note (the fade; or why there is no button). `s`: the runner's status for it.
+ * → { button: { label, primary, action } | null, line, tone: 'working' | 'ok' | 'bad' | '', note }
+ */
+export function retrainView(d, s = null) {
+  const r = d?.retrain;
+  if (!r?.available && !s?.running) {
+    const note = !r || r.why === 'source' ? 'Retrain is for Satori Network models for now: this one reads only its own stream.'
+      : 'Retrain needs about four weeks of this stream\'s history.';
+    return { button: null, line: '', tone: '', note };
+  }
+  if (s?.running) {
+    const line = s.waiting === 'queue' ? `Retraining · after ${s.after}`
+      : s.waiting === 'poll' ? `Retraining · waits for the poll${s.tried ? ` · tried ${s.tried}` : ''}`
+        : s.tried ? `Retraining · tried ${s.tried} · best so far ${ratioWords(s.best)}` : 'Retraining…';
+    return { button: { label: 'Stop', primary: false, action: 'stop' }, line, tone: 'working', note: '' };
+  }
+  const button = { label: 'Retrain', primary: d.quality?.mark === 'worse' || d.quality?.mark === 'tie', action: 'retrain' };
+  const res = s?.result;
+  const made = Math.max(...d.outputs.map((o) => o.forecast?.at ?? -Infinity));
+  if (!res || (res.note !== 'same-data' && !(res.at > made))) return { button, line: '', tone: '', note: '' };
+  return { button, ...resultWords(res) };
 }
 
 const IN_NOTE = 'Each bar: how far a typical move of that stream shifts this forecast, as a share of all of them.';

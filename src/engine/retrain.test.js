@@ -6,7 +6,7 @@ import { STEP_S, HOLDOUT, explainForecast } from './index.js';
 import { backtestOf, prepare } from './bvar.js';
 import { fitter, isAlone, seriesOf, errorsOf, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS } from './evolve.js';
 import {
-  retrainer, canRetrain, neighbours, splitOf, ratioOn, keyOf, spaceSize, GOAL, WEEK_BAR, MIN_SEARCH, PATIENCE,
+  retrainer, canRetrain, neighbours, splitOf, ratioOn, keyOf, spaceSize, GOAL, BAR, MIN_SEARCH, PATIENCE,
 } from './retrain.js';
 
 vi.setConfig({ testTimeout: 60_000 }); // 50 random walks searched in full: ~6 s
@@ -149,19 +149,18 @@ describe('the search', () => {
       // the held-out ratio is the tab's: the poll's score over no change's for the new spec
       const f = fitter({ histories: h })('gold', res.spec);
       expect(f.score / f.persist).toBeCloseTo(res.ratio, 12);
-      // and it beats no change by 10 % in each of the last two weeks, which the search never scored
+      // and it beats no change by 20 % on the last two weeks, which the search never scored
       const { bt, held } = splitOf(prepare(h.get('gold')));
-      const e = fitterErrors(h, res.spec);
-      for (const week of [held.slice(0, 14), held.slice(14)]) expect(ratioOn(e, bt.persist, week)).toBeLessThan(WEEK_BAR);
+      expect(ratioOn(fitterErrors(h, res.spec), bt.persist, held)).toBeLessThan(BAR);
       expect(res.tried).toBeLessThan(PATIENCE);
       expect(r.step()).toBe(res); // stopped: the same result from then on
     }
   });
 
-  test('its power on that leader: a 30 % edge at 24 h is confirmed on 28 recent origins about half the time', () => {
+  test('its power on that leader: a 30 % edge at 24 h is confirmed on 28 recent origins most of the time', () => {
     const found = Array.from({ length: 12 }, (_, i) => i + 1).filter((seed) =>
       run(retrainer({ target: 'gold', histories: market(seed, { lead: true }), champion: TIGHT, seed: ID })).outcome === 'found');
-    expect(found).toEqual([3, 6, 8, 10, 11, 12]); // 6 of 12; the rest kept the current one (none lucky)
+    expect(found).toEqual([3, 4, 5, 6, 8, 10, 11, 12]); // 8 of 12; the rest kept the current one
   });
 
   test('a pure random walk: no lucky acceptance (50 seeds); it stops by its budget and keeps the champion', () => {

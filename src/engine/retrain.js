@@ -8,8 +8,7 @@
 //
 // The split: the held-out origins are the tab's own (the last HOLDOUT bucket positions: their median ratio is the
 // quality the tab shows); the search scores candidates only on the older origins whose actual came before the first
-// held-out origin. The held-out origins are looked at once per retrain: the best must beat no change there by the
-// tab's rule as a whole, and by 10 % in each half (each of the last two weeks).
+// held-out origin. The held-out origins are looked at once per retrain: the best must beat no change there by 20 %.
 import { seeded, drawSpec, isAlone, ALONE, LAMBDA1_GRID, LAMBDA2_GRID, MAX_COMPANIONS, MARGIN, seriesOf, poolFor, errorsOf } from './evolve.js';
 import { backtestOf } from './bvar.js';
 import { STEP_S, HORIZON_STEPS, MIN_SAMPLES, median } from './index.js';
@@ -28,11 +27,10 @@ export const MAX_TRIES = 3000;
 /** Looks at the held-out origins per retrain: one, so nothing the search saw leaks into the check. */
 export const MAX_CHECKS = 1;
 /**
- * The bar in each half of the held-out origins (each of the last two weeks): 10 % less error than no change. On
- * simulated random walks the look passes by luck 1–2 times in 100 at any pool size; at the tab's 5 % in each week 1.5–5,
- * and with the tab's rule alone over the 28, 15–19 (docs/design/models.md#retrain).
+ * The look's bar on the held-out origins: 20 % less error than no change (and than the champion, against it). On
+ * simulated random walks it passes by luck 1.5 times in 100; the tab's own 5 % would pass 19 (docs/design/models.md#retrain).
  */
-export const WEEK_BAR = 0.9;
+export const BAR = 0.8;
 
 /** A spec's identity in the search: its companions as a set and its λ's; every single-stream spec is one. */
 export const keyOf = (s) => (isAlone(s) ? ALONE : `${[...s.companions].sort().join(',')}|${s.lambda1}|${s.lambda2}`);
@@ -122,8 +120,8 @@ export function canRetrain({ target, histories, step = STEP_S }) {
  * it), from the champion, with a seeded random restart (drawSpec) at each local optimum. Seeded by identity + target +
  * `n` (the target's retrain counter), so a retrain is reproducible. The held-out origins are looked at once: at the
  * first local optimum that is the best so far and beats no change on the search origins, or when the search ends.
- * The best is accepted ('found') when it beats no change there (beats(): by the tab's margin over them all, by WEEK_BAR
- * in each half) and, when the champion already does, the champion by the same test. Otherwise it ends (b): the look
+ * The best is accepted ('found') when it beats no change there by BAR (beats()) and, when the champion already beats no
+ * change, the champion by the same test. Otherwise it ends (b): the look
  * used ('checked'), `patience` tries without a better search score or `maxTries` in all ('budget'), every spec tried
  * ('exhausted'), and the best is kept only if it beats the champion by the same test; or (c) end('stopped'), which keeps
  * the champion. looked: the held-out origins were read for a candidate (so the next retrain waits for new data).
@@ -138,7 +136,6 @@ export function retrainer({ target, histories, champion, seed, n = 1, from = nul
   const split = T && splitOf(T);
   if (!split || !enough(split)) return { ok: false, search: split?.search.length ?? 0, held: split?.held.length ?? 0 };
   const { bt, search, held, heldEnd } = split;
-  const halves = [held.slice(0, held.length >> 1), held.slice(held.length >> 1)];
   const { aligned } = poolFor(target, T, histories, series);
   const space = spaceSize(aligned.length);
   const cache = new Map(); // key → { s: the search ratio, errors }
@@ -153,15 +150,11 @@ export function retrainer({ target, histories, champion, seed, n = 1, from = nul
     }
     return c;
   };
-  /** A ratio on held-out origins: read only in the look and the keep rule, and for the champion (the tab's own number). */
-  const heldOn = (spec, idx = held) => ratioOn(scored(spec).errors, bt.persist, idx);
+  /** A ratio on the held-out origins: read only in the look and the keep rule, and for the champion (the tab's own number). */
+  const heldOn = (spec) => ratioOn(scored(spec).errors, bt.persist, held);
   const h0 = heldOn(champion);
-  /**
-   * The held-out test: `spec` beats `ref` (null: no change) by the tab's margin over the held-out origins and by
-   * WEEK_BAR in each half (each of the last two weeks). Against the champion: its errors over the champion's.
-   */
-  const beats = (spec, ref = null) => [held, ...halves].every((idx, i) =>
-    heldOn(spec, idx) < (i ? WEEK_BAR : GOAL) * (ref ? heldOn(ref, idx) : 1));
+  /** The held-out test: `spec`'s error is under BAR × `ref`'s there (null: no change's). */
+  const beats = (spec, ref = null) => heldOn(spec) < BAR * (ref ? heldOn(ref) : 1);
   const st = { tried: 0, idle: 0, moves: 0, j: 0, checks: 0, current: champion, best: champion, ...(from ?? {}) };
   let order = null;
   let result = null;

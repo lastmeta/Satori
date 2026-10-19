@@ -237,6 +237,14 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
     expect((await modelDetail({ db, id: 'gold', streams: rows })).id).toBe('central:u-gold');
     expect((await modelDetail({ db, id: 'u-gold', streams: rows })).id).toBe('central:u-gold');
     expect(await modelDetail({ db, id: 'central:nope', streams: rows })).toBeNull();
+    // Retrain is offered: a Satori Network model with the history to split (docs/design/models.md#retrain)
+    expect(d.retrain).toEqual({ available: true, why: null, last: null });
+    const last2 = { n: 2, at: 9, outcome: 'found', kept: 'new', ratio: 0.8, was: 1.1, tried: 40 };
+    const asked = rows.map((r) => (r.uuid === 'u-gold' ? { ...r, retrain: JSON.stringify({ n: 2, status: 'done', result: last2 }) } : r));
+    expect((await modelDetail({ db, id: 'u-gold', streams: asked })).retrain).toEqual({ available: true, why: null, last: last2 });
+    // not with less than about four weeks of back-to-back history
+    const young = { histories: async (us) => new Map(us.map((u) => [u, (histories.get(u) ?? []).slice(-40)])) };
+    expect((await modelDetail({ db: young, id: 'u-gold', streams: rows })).retrain).toEqual({ available: false, why: 'history', last: null });
   });
 
   test('Nostr: the stream alone at its cadence; Base: from the chain\'s history when it answers, else Out alone', async () => {
@@ -256,5 +264,8 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
     expect(b.outputs[0].history.length).toBeGreaterThan(0);
     const offline = await modelDetail({ db, id: 'base:3', lastBatch: batch, baseHistory: async () => { throw new Error('down'); } });
     expect(offline).toMatchObject({ model: { kind: 'bar1', rows: null }, outputs: [{ history: [] }] });
+    // no Retrain for Relays and Contract models: they read only their own stream (nothing to search, no spec)
+    expect(n.retrain).toEqual({ available: false, why: 'source', last: null });
+    expect(b.retrain).toEqual({ available: false, why: 'source', last: null });
   });
 });

@@ -2,16 +2,17 @@
 // of each kind, when it last trained and runs next, how good they are against no change), then every model, each
 // named for the stream it predicts; a tap opens its drill-in (#models/<id>): In, the Model, Out, top to bottom, the
 // neuron's pipeline without a canvas. What each part says comes from ./drill.js (pure, tested); this places it.
-// The data stays out of the reactive state (box.list, box.detail; state.modelsRev and modelRev say it changed).
+// The data stays out of the reactive state (box.list, box.detail, box.retrains; state.modelsRev, modelRev and retrainRev
+// say it changed): ArrowJS 1.0.6 makes nested objects reactive in place, and shared ones break its expressions.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { summaryOf, engineStatus, sortModels, filterModels } from '../neuron/models.js';
-import { rowView, statusView, drillView, chartOf, numText } from './drill.js';
+import { rowView, statusView, drillView, chartOf, numText, retrainView } from './drill.js';
 import { fmtWhen } from './format.js';
 import { menuKey } from './prefs.js';
 
-/** The models (models()) and the open model (model(id)), set by main.js. */
-export const box = { list: [], detail: null };
+/** The models (models()), the open model (model(id)) and Retrain's statuses (central uuid → status), set by main.js. */
+export const box = { list: [], detail: null, retrains: {} };
 
 // where predictions go, by the words people see (docs/intent/ui.md): the Satori Network, the Satori contract, the Satori relays
 const TO = { network: 'Network', contract: 'Contract', relays: 'Relays' };
@@ -217,6 +218,17 @@ function outBlock(o, i) {
   return html`<div class="oblock" data-test="model-output" data-stream="${o.key}"><div class="ohead"><b data-test="model-output-name">${o.name}</b><small class="muted" hidden="${!o.as}">${`published as ${o.as}`}</small></div><div class="ovals"><span class="olatest">Latest <b>${o.latest}</b><small class="muted">${o.latestWhen ? ` · ${o.latestWhen}` : ''}</small></span><span class="oforecast" data-test="model-output-forecast">${o.forecast} <span class="dir" data-dir="${o.arrow}">${o.arrow}</span></span></div>${chart(o, i)}<p class="readout muted small" data-test="model-readout">${() => readout(o, i)}</p><ul class="dests">${o.destinations.map(destRow)}</ul></div>`;
 }
 
+/** Retrain in the header (docs/design/models.md#retrain): the open model's runner status (box.retrains), or an error starting it. */
+const rv = () => {
+  void state.modelRev;
+  void state.retrainRev;
+  const d = box.detail;
+  if (!d) return null;
+  const uuid = d.source === 'central' ? d.id.slice('central:'.length) : null;
+  const view = retrainView(d, uuid ? box.retrains[uuid] : null);
+  return state.retrainError ? { ...view, line: state.retrainError, tone: 'bad' } : view;
+};
+
 function drill(a) {
   const v = () => dv();
   return html`
@@ -227,9 +239,14 @@ function drill(a) {
     <div class="stages" hidden="${() => !v()}">
       <header class="drill-h">
         <h2 data-test="model-title">${() => v()?.title ?? ''}</h2>
-        <span class="q big" data-test="model-quality" data-q="${() => v()?.quality.mark ?? 'none'}" title="${() => (v() ? `vs no change: ${v().quality.text}` : '')}"><b>${() => v()?.quality.short ?? ''}</b></span>
+        <div class="drill-a">
+          <span class="q big" data-test="model-quality" data-q="${() => v()?.quality.mark ?? 'none'}" title="${() => (v() ? `vs no change: ${v().quality.text}` : '')}"><b>${() => v()?.quality.short ?? ''}</b></span>
+          <button class="${() => (rv()?.button?.primary ? 'primary rbtn' : 'rbtn')}" data-test="model-retrain" data-action="${() => rv()?.button?.action ?? ''}" hidden="${() => !rv()?.button}" @click="${() => a.retrainModel(rv()?.button?.action)}">${() => rv()?.button?.label ?? ''}</button>
+        </div>
         <p class="kindlabel" data-test="model-kind-label">${() => v()?.kindLabel ?? ''}</p>
         <p class="muted small sub">${() => v()?.sub ?? ''}</p>
+        <p class="rline" role="status" data-test="model-retrain-line" data-r="${() => rv()?.tone ?? ''}" hidden="${() => !rv()?.line}"><span class="state" data-tone="working" hidden="${() => rv()?.tone !== 'working'}"><i class="ico"></i></span><span>${() => rv()?.line ?? ''}</span></p>
+        <p class="muted small rnote" data-test="model-retrain-note" hidden="${() => !rv()?.note}">${() => rv()?.note ?? ''}</p>
       </header>
       <section class="tile stage" data-test="model-in">
         <div class="stage-h"><b>In</b><span>${() => v()?.note ?? ''}</span></div>

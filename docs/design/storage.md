@@ -234,6 +234,15 @@ entry is never edited: a change is a new entry. A database from a newer app
    computed, a `_pred` kept before, which the pass scores, `db.setRelayFit`).
    A Base batch's games now always carry `score`, `persist` and `tests`
    (null when there is no backtest).
+13. **Retrain** (2026-10-18, [models.md](models.md#retrain)):
+   `model_specs.retrain`, JSON: the user's request to retrain that target,
+   `{ n (its retrain counter), status: 'running' | 'done', asked_at, state
+   (the search's place: its count, the climb's spec and position, the best),
+   tried, ms, result (the last one's summary) }`, written when asked
+   (`db.setRetrain`), every 2 s while it runs, and with a new champion in one
+   statement (`db.saveRetrained`: the spec and its fit, generation + 1,
+   accepted + 1, only where the spec is still the one compared with). The
+   poll's own store never touches it. Null: never asked.
 
 The Models tab's drill-in reads its streams' history with `db.histories(uuids)`:
 one statement for the target and its companions (one per stream took ~100 ms
