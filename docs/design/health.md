@@ -293,6 +293,7 @@ set by the code doing the work; nothing polls:
 | `claim` | `rewards`, `drop`, `airdrop`, `confirm` | Claiming rewards…, Claiming the reward drop…, Claiming the airdrop…, Waiting for Base to confirm… | yes |
 | `keys` | `save` | Saving your keys… (an earlier version's record, rewritten at Unlock) | yes |
 | `discover` | `ask` (relays answered) | Asking the relays · 1 of 2 | |
+| | `verify` (announcements checked) | Checking the announcements' signatures · 400 of 1,061 | |
 | `subscribe` | `find` | Finding the stream on the relays… | |
 | `train` | `score` | Scoring models · 12 of 81 (the [training pass](models.md#the-training-pass): models without a current fit, from stored history; never a prediction) | |
 
