@@ -316,3 +316,23 @@ no stubs:
 Nothing was sent to prod.
 
 <img src="../screenshots/central-reloaded-mid-poll.png" alt="Home after a reload mid-poll: 82 sent" width="240">
+
+## Live: a failed send, retried in 2 min
+
+2026-10-19, the dev server on :5180 (restarted) against central2, fresh
+browser profiles, no stubs, nothing sent to prod:
+
+- A new profile: register, the first poll at once: 84 streams, 84 of 84
+  accepted, `failures` 0, the next poll 11 h out; Home *Predicting*. Its
+  `base().claimable` was `{ rewards: '0', drop: '0', airdrop: '0', total:
+  '0' }` with no error (a new peer has no entry in central2's drop).
+- Another new profile, its predictions batch answered 503 twice by network
+  interception (the send and its one resend): `lastSubmit.error` "Satori
+  Network 503: a test outage", `failures` 1, 84 pending, the next poll
+  120 s out; Home amber, "Sending failed; next try in 2 min." (*Starting*:
+  no good cycle yet). With no hook and no Poll now, the retry ran 123 s after
+  the failure: 84 of 84 accepted, `failures` 0, the next poll 11 h out, Home
+  green. (The first run showed "next try in 3 min": Home's clock was the
+  last 30 s tick; it now moves with the schedule.)
+
+<img src="../screenshots/retry-live-amber.png" alt="live: Sending failed; next try in 2 min." width="240"> <img src="../screenshots/retry-live-green.png" alt="live: the retry sent 84, green" width="240">
