@@ -1339,9 +1339,11 @@ build step beyond Vite, MIT licensed.
   `VITE_NOSTR_CENTRAL_WRITE`, `VITE_BASE_RPC`); `src/util.js`: `serial()`
   (one at a time, in order), `isHttps()` and `isRelayUrl()`.
 - `src/keys/`: the keys record (`index.js`: create, import, migrate, load,
-  Unlock), the vault encryption and the passphrase rule (`vault.js`), a
-  key's words, public key, Base address and signatures (`keys.js`), Docker's
-  files read for import and migration (`docker.js`).
+  Unlock, the vault for one use and Backup from the passphrase), the vault
+  encryption and the passphrase rule (`vault.js`), a key's words, public
+  key, Base address and signatures (`keys.js`), Docker's files read for
+  import and migration (`docker.js`), the vault locking on its own
+  (`autolock.js`).
 - `src/central/`: central's API (register, observations, login, predictions
   batch); `login.js`: central's login signature, EIP-191 by the identity.
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations, small async API; every
@@ -1387,8 +1389,10 @@ build step beyond Vite, MIT licensed.
   `public/theme.js` applies it before the first paint); `src/style.css` (the
   tokens: light, dark by the system, dark when chosen).
 - `src/pwa/`: the installed app: `sw.js` (the service worker; a build writes
-  it to `dist/sw.js` with the files to precache, `vite.config.js`) and
-  `index.js` (register it in a build, Update, Install, persistent storage);
+  it to `dist/sw.js` with the files to precache, `vite.config.js`),
+  `index.js` (register it in a build once the database is open, Update,
+  Install, persistent storage) and `platform.js` (how a browser without the
+  install prompt adds Satori);
   `public/manifest.webmanifest` and the icons.
 - `deploy/`: the static image (nginx serving `dist/` behind central's
   nginx-proxy, which terminates TLS): `Dockerfile`, `nginx.conf` (the CSP
