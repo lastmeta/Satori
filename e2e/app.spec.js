@@ -122,10 +122,11 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   const after = await status(page);
   expect(after.central.nextPoll - after.central.lastPoll.at).toBeCloseTo(11 * 3600, -1);
 
-  // Second tab: told to use the first one.
+  // Second tab: told to use the first one, and waiting for it (the test after this one: it takes over).
   const other = await context.newPage();
   expect(await openApp(other)).toBe('elsewhere');
   await expect(other.getByText('Satori is open in another tab')).toBeVisible();
+  await expect(other.getByText('This tab takes over when that one closes.')).toBeVisible();
   await other.close();
 
   // Reload: running at once with no passphrase; registered again; the schedule and the data are kept; the tab too.
@@ -223,6 +224,24 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(keys).toMatchObject({ v: 1, identity: Buffer.from(idSecret).toString('hex'), nostr: nostrHex,
     vault: { pubkey: vaultPub, kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000 }, cipher: { name: 'AES-GCM' } } });
   expect(Object.keys(keys.vault).sort()).toEqual(['cipher', 'data', 'kdf', 'pubkey']);
+});
+
+test('a second tab waits, and becomes the neuron when the first closes: no reload; it polls (docs/design/pwa.md#one-neuron)', async ({ context, page }) => {
+  const stub = await stubCentral(context, CENTRAL);
+  await openApp(page);
+  await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
+  await polled(page);
+  const other = await context.newPage();
+  expect(await openApp(other)).toBe('elsewhere');
+  await page.close(); // the leader goes: its lock is let go, and the waiting tab's request is granted
+  await expect(other.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  await expect(other.getByText('Satori is open in another tab')).toBeHidden();
+  const before = stub.polls.length;
+  const r = await other.evaluate(() => window.satori.poll());
+  expect(r.poll).toMatchObject({ streams: 2 });
+  expect(r.poll.error).toBeUndefined();
+  expect(stub.polls.length).toBe(before + 1);
+  expect((await other.evaluate(() => window.satori.status())).identity).toMatch(ADDRESS);
 });
 
 test('agent API: poll, dedupe, a kept queue resent, the central URL setting', async ({ context, page }) => {

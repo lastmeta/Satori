@@ -240,15 +240,21 @@ export async function centralStatus({ db, central, registration, poller }) {
 }
 
 /**
- * Holds a Web Lock for the life of the tab so only one tab opens the database.
- * @returns {Promise<boolean>} false when another tab holds it
+ * The one tab that runs the neuron (docs/design/pwa.md#one-neuron): a Web Lock, held for the life of the page, so only
+ * one tab opens the database. The request is queued (no ifAvailable): a second tab waits (onWait, once it has not got the
+ * lock within waitMs) and becomes the neuron as soon as the first closes. → resolves once this tab holds it.
  */
-export function claimTab(name = 'satori-neuron', locks = globalThis.navigator?.locks) {
-  if (!locks) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    locks.request(name, { ifAvailable: true }, (lock) => {
-      resolve(!!lock);
-      return lock ? new Promise(() => {}) : undefined;
+export async function claimTab(name = 'satori-neuron', locks = globalThis.navigator?.locks, { onWait = () => {}, waitMs = 300 } = {}) {
+  if (!locks) return;
+  let held = false;
+  const got = new Promise((resolve) => {
+    locks.request(name, () => {
+      held = true;
+      resolve();
+      return new Promise(() => {}); // kept until the page goes
     });
   });
+  await Promise.race([got, new Promise((r) => setTimeout(r, waitMs))]);
+  if (!held) onWait();
+  await got;
 }

@@ -161,11 +161,16 @@ it predicts on its own."
 ## One neuron
 
 The app window and a tab are one origin in one browser profile, so they share
-the `satori-neuron` Web Lock: the second one to open says "Satori is open in
-another tab". The e2e opens an app window (`chrome --app`, the kind of window
-an installed app opens in: `display-mode: standalone`) and a tab: one runs the
-neuron, the tab waits, and runs it once the window is closed and it is
-reloaded. Safari's web apps cannot meet a Safari tab at all: their storage,
+the `satori-neuron` Web Lock (`claimTab`, `src/neuron/index.js`): the second
+one to open says "Satori is open in another tab. … This tab takes over when
+that one closes." Its request for the lock is queued (no `ifAvailable`,
+2026-10-19, the reliability review), so when the first closes, the waiting
+tab gets the lock, opens the database and starts the neuron there, with no
+reload (before, it kept saying "open in another tab" and nothing ran). The
+e2e opens an app window (`chrome --app`, the kind of window an installed app
+opens in: `display-mode: standalone`) and a tab: one runs the neuron, the tab
+waits, and runs it once the window is closed; `e2e/app.spec.js` closes the
+first tab and the second runs a poll. Safari's web apps cannot meet a Safari tab at all: their storage,
 and so their database, is their own.
 
 ## The dev server
@@ -224,4 +229,5 @@ mode too (one colour per manifest).
   too) the page, DuckDB and the stored keys and streams load, while central
   says "unreachable", Base "did not answer" and `/llms.txt` fails; a new
   `sw.js` waits for **Update ready, reload** with no reload on its own, then
-  takes over on the click; an app window and a tab run one neuron.
+  takes over on the click; an app window and a tab run one neuron, and the
+  tab takes over when the window closes.

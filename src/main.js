@@ -1130,7 +1130,9 @@ async function boot() {
   applyTheme(state.theme); // public/theme.js set data-theme before the first paint; this, the browser bar's color too
   glowChips();
   startPwa();
-  if (!(await claimTab())) return void (state.screen = 'elsewhere');
+  // one tab runs the neuron; another waits, says so, and takes over when that one closes (no reload)
+  await claimTab(undefined, undefined, { onWait: () => { state.screen = 'elsewhere'; } });
+  if (state.screen === 'elsewhere') state.screen = 'loading';
   const fresh = await hasDatabase().then((has) => !has, () => false); // OPFS can't say: the usual way
   dbOpening = openOpfsDb(undefined, { onStep: (e) => { state.engine = e; } });
   dbOpening.catch(() => {}); // boot's own await reports it

@@ -154,7 +154,8 @@ export function render(root, a) {
     <p class="muted center" data-test="opening" hidden="${() => state.screen !== 'loading' || !!state.cached}">${() => openingText(state.engine)}</p>
     <section class="card narrow" hidden="${show('elsewhere')}">
       <h2>Satori is open in another tab</h2>
-      <p class="muted">Only one tab can run the neuron. Switch to that tab, or close it and reload this one.</p>
+      <p class="muted">Only one tab can run the neuron. Switch to that tab, or close it.</p>
+      <p class="muted">This tab takes over when that one closes.</p>
     </section>
     <section class="card narrow" hidden="${show('fatal')}">
       <h2>Satori could not start</h2>

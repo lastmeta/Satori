@@ -617,13 +617,40 @@ test('centralStatus: the URL, the register result, the last poll and submission,
   expect(await centralStatus({ db })).toMatchObject({ url: null, nextPoll: null, polling: false });
 });
 
-test('claimTab: the first claim wins, a second gets false', async () => {
-  const held = new Set();
-  const locks = { request: (name, opts, cb) => {
-    if (held.has(name)) return cb(null);
-    held.add(name);
-    return cb({ name });
-  } };
-  expect(await claimTab('x', locks)).toBe(true);
-  expect(await claimTab('x', locks)).toBe(false);
+/** navigator.locks, as far as claimTab uses it: requests queue per name; close(name) is the holder's tab going. */
+function fakeLocks() {
+  const holders = new Set();
+  const queues = new Map();
+  const grant = (name, cb) => {
+    holders.add(name);
+    setTimeout(() => cb({ name }), 1);
+  };
+  return {
+    request(name, a, b) {
+      const [opts, cb] = typeof a === 'function' ? [{}, a] : [a, b];
+      if (opts.ifAvailable) throw new Error('claimTab queues its request: no ifAvailable');
+      if (holders.has(name)) queues.set(name, [...(queues.get(name) ?? []), cb]);
+      else grant(name, cb);
+      return new Promise(() => {});
+    },
+    close(name) {
+      holders.delete(name);
+      const [next, ...rest] = queues.get(name) ?? [];
+      queues.set(name, rest);
+      if (next) grant(name, next);
+    },
+  };
+}
+
+test('claimTab: the first tab holds the lock; a second is told to wait (onWait), and holds it once the first closes', async () => {
+  const locks = fakeLocks();
+  const waits = [];
+  await claimTab('x', locks, { onWait: () => waits.push('first'), waitMs: 50 });
+  let second = false;
+  const p = claimTab('x', locks, { onWait: () => waits.push('second'), waitMs: 50 }).then(() => { second = true; });
+  await new Promise((r) => setTimeout(r, 120));
+  expect([waits, second]).toEqual([['second'], false]); // the first never waited
+  locks.close('x'); // the first tab closes
+  await p;
+  expect(second).toBe(true);
 });

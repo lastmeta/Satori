@@ -186,8 +186,7 @@ test('an app window (the window an installed app opens in) and a tab: one neuron
     await tab.goto(APP);
     expect(await loaded(tab)).toBe('elsewhere');
     await app.close();
-    await tab.reload();
-    expect(await loaded(tab)).toBe('home'); // the app window gone, the tab runs it
+    await expect(tab.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: 60_000 }); // the app window gone, the tab runs it: no reload
   } finally {
     await context.close();
   }
