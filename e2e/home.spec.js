@@ -253,7 +253,7 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   expect(central.prod).toEqual([]);
 });
 
-test('bad: central refuses two batches in a row, then the login; the card goes to the fix', async ({ context, page }) => {
+test('a failed send: amber, named, retried in minutes; a second quick failure stays amber, then green, never red; then the login refused is red', async ({ context, page }) => {
   test.setTimeout(240_000);
   const { central } = await setup(context);
   await seed(page, month(nowS(), { closed: [12], part: [5] }));
@@ -261,38 +261,81 @@ test('bad: central refuses two batches in a row, then the login; the card goes t
   await start(page);
   await polled(page); // the first poll, at once
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
+  // every status the hero shows from here on
+  await page.evaluate(() => {
+    const el = document.querySelector('[data-test=health]');
+    window.seenStatus = [];
+    new MutationObserver(() => window.seenStatus.push(el.dataset.s)).observe(el, { attributes: true, attributeFilter: ['data-s'] });
+  });
+  const network = page.locator('[data-test=chip][data-channel=network] [data-test=chip-text]');
+  const central_ = async () => (await page.evaluate(() => window.satori.status())).central;
 
-  // Once: retrying (warn), still predicting. Twice in a row: not predicting (bad).
+  // The send fails (a 503 and its one resend): amber, the line names it, the next try in 2 min (it said "poll", 11 h).
   centralAt(central, nowS() - 2 * H, 601);
-  central.fail.push(500, 500); // a 5xx is resent once
+  central.fail.push(503, 503);
   await page.evaluate(() => window.satori.poll());
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'central-failed', button: 'Try again', do: 'poll' } });
-  expect(h.line).toMatch(/^The last poll failed; next try in 11 h\.$/);
-  centralAt(central, nowS() - H, 602);
-  central.fail.push(500, 500);
-  await page.evaluate(() => window.satori.poll());
-  await expect(hero(page)).toHaveAttribute('data-s', 'bad');
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Not predicting');
-  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Network refused the last 2 batches.');
-  await expect(page.locator('[data-test=action-text]')).toHaveText("Satori Network 500: boom. Try again now, or check the Satori Network's address in Settings.");
-  await expect(page.locator('[data-test=chip][data-channel=network] [data-test=chip-text]')).toHaveText('2 failed in a row');
-  await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full'); // today's first poll went out
-  await shots(page, 'bad');
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Sending failed; next try in 2 min.',
+    action: { id: 'central-failed', button: 'Try again', do: 'poll' } });
+  expect(await central_()).toMatchObject({ failures: 1, pending: 8 });
+  await expect(network).toHaveText('Sending failed');
 
-  // Try again: central takes the kept batch; then it refuses the login (bad at once), and the card opens Settings there.
+  // Try again minutes later, and it fails again: still amber (it turned red here), the next try in 10 min.
+  central.fail.push(503, 503);
   await page.locator('[data-test=action-button]').click();
-  await expect(hero(page)).toHaveAttribute('data-s', 'ok');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('Sending failed; next try in 10 min.', { timeout: LOAD_TIMEOUT });
+  await expect(hero(page)).toHaveAttribute('data-s', 'warn');
+  expect(await central_()).toMatchObject({ failures: 2 });
+  await shots(page, 'retrying');
+
+  // Then central takes it: green, the kept predictions sent, 11 h from this success.
+  await page.locator('[data-test=action-button]').click();
+  await expect(hero(page)).toHaveAttribute('data-s', 'ok', { timeout: LOAD_TIMEOUT });
+  const c = await central_();
+  expect(c).toMatchObject({ failures: 0, pending: 0 });
+  expect(c.nextPoll - nowS()).toBeGreaterThan(11 * H - 60);
+  expect(central.batches.at(-1)).toHaveLength(8);
+  expect(await page.evaluate(() => window.seenStatus)).not.toContain('bad');
+  await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
+
+  // The login refused: red at once (only the person can fix it), and the card opens Settings there.
   centralAt(central, nowS() - 30, 603);
   central.refuseLogin = true;
   await page.evaluate(() => window.satori.poll());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'bad', line: "The Satori Network refused this neuron's login.",
+  expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Network refused this neuron's login.",
     action: { id: 'login-refused', button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' },
     channels: { network: { state: 'bad', text: 'Login refused' } } });
+  await expect(hero(page)).toHaveAttribute('data-s', 'bad');
+  await shots(page, 'bad');
   await page.locator('[data-test=action-button]').click();
   await expect(page).toHaveURL(/#settings$/);
   await expect(page.getByLabel('Satori Network server')).toBeInViewport();
+  expect(central.prod).toEqual([]);
+});
+
+test('register fails, then succeeds: it registers again before each poll until it does', async ({ context, page }) => {
+  const { central } = await setup(context);
+  centralAt(central, nowS() - 60);
+  central.failRegister = 4; // the load's register and the one before the first poll, each resent once
+  await start(page);
+  await polled(page); // the first poll runs anyway
+  expect(central.registered).toHaveLength(4);
+  let h = await health(page);
+  expect(h.action).toMatchObject({ id: 'not-registered', button: 'Try again', do: 'poll' });
+  expect(h.action.text).toMatch(/It registers again before each poll until it succeeds\.$/);
+  await expect(page.locator('[data-test=chip][data-channel=network] [data-test=chip-text]')).toHaveText('Not registered');
+
+  // Try again: the poll registers first, and central takes it this time
+  await page.locator('[data-test=action-button]').click();
+  await expect.poll(async () => (await health(page)).reasons.map((r) => r.id), { timeout: LOAD_TIMEOUT }).not.toContain('not-registered');
+  expect((await page.evaluate(() => window.satori.status())).central.registration).toMatchObject({ ok: true, vaultMismatch: false });
+  await polled(page); // that poll, done
+  // registered: the next poll does not register again
+  await page.evaluate(() => window.satori.poll());
+  expect(central.polls).toEqual([4, 5, 5]); // how many registers came before each poll
+  h = await health(page);
+  expect(h).toMatchObject({ status: 'ok', title: 'Predicting' });
   expect(central.prod).toEqual([]);
 });
 

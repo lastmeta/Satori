@@ -185,6 +185,11 @@ const backfill = coalesce('history', () => work.run('central', async (step) => {
 
 /** A poll (createPoller's run): its steps are central's work on Home, which ends once the next poll is armed. */
 async function runCycle(report) {
+  // the last register failed: again before each poll until it succeeds (Lite registers on every start, and restarts daily)
+  if (!registration?.ok) {
+    report('register');
+    await registerWith(central);
+  }
   // never throws: errors are in r and in the status; seed: the identity draws each target's spec
   const r = await cycle({ db, central, seed: identity.pubkey, backfill, report });
   console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
@@ -267,7 +272,10 @@ function wakeUps() {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void tick('visible'); });
   document.addEventListener('resume', () => void tick('resume')); // a frozen tab, thawed (Page Lifecycle)
   addEventListener('pageshow', (e) => { if (e.persisted) void tick('pageshow'); }); // back from the back-forward cache
-  addEventListener('online', () => void tick('online'));
+  addEventListener('online', () => {
+    poller.online()?.catch((err) => console.error('[satori] poll', err)); // after a failed cycle, the poll now: no 2 min wait
+    void tick('online');
+  });
 }
 
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */

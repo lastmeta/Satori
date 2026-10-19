@@ -149,18 +149,38 @@ describe('bad: predictions are failing', () => {
     expect(health({ rows: [open(NOW - FIRST_S - M)] }).reasons[0].id).toBe('central-overdue');
   });
 
-  test('a failed cycle: once is warn (retrying, still predicting), twice in a row is bad', () => {
-    let h = health({ rows: [...running(), failed(NOW - H)] });
-    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The last poll failed; next try in 9 h.' });
-    expect(h.action).toEqual({ id: 'central-failed', text: 'Satori Network 500: boom. It tries again on its own; try now if something was fixed.',
+  test('a failed cycle: amber while it retries in minutes, named for what failed; two quick failures stay amber', () => {
+    let h = health({ rows: [...running(), failed(NOW - H)], central: central({ nextPoll: NOW + 2 * M, failures: 1 }) });
+    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Sending failed; next try in 2 min.' });
+    expect(h.action).toEqual({ id: 'central-failed', text: 'Satori Network 500: boom. It tries again in 2 min; try now if something was fixed.',
       button: 'Try again', do: 'poll' });
-    expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Last poll failed' });
-    h = health({ rows: [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)] });
-    expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: 'The Satori Network refused the last 2 batches.' });
-    expect(h.channels.network).toEqual({ state: 'bad', tone: 'bad', text: '2 failed in a row' });
-    const polls = [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H, 'Satori Network unreachable: Failed to fetch', { sent: 0 }),
-      failed(NOW - H, 'Satori Network unreachable: Failed to fetch', { sent: 0 })];
-    expect(health({ rows: polls }).line).toBe('The last 2 polls failed.');
+    expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Sending failed' });
+    // the bug: a second failure minutes later (a manual retry) turned Home red, though predictions went out minutes before
+    h = health({ rows: [...running(), failed(NOW - 10 * M), failed(NOW - 2 * M)], central: central({ nextPoll: NOW + 8 * M, failures: 2 }) });
+    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Sending failed; next try in 8 min.' });
+    expect(ids(h)).toEqual(['central-failed']);
+    // named for what failed: not reached at all, or central answered the poll with an error; trying again now
+    const unreached = failed(NOW - M, 'Satori Network unreachable: Failed to fetch', { sent: 0, unreachable: true });
+    h = health({ rows: [...running(), unreached], central: central({ nextPoll: NOW + 9 * M }) });
+    expect([h.line, h.channels.network.text]).toEqual(["Couldn't reach the Satori Network; next try in 9 min.", 'Unreachable']);
+    h = health({ rows: [...running(), failed(NOW - M, 'Satori Network 502: Bad Gateway', { sent: 0 })], central: central({ nextPoll: NOW + 9 * M }) });
+    expect([h.line, h.channels.network.text]).toEqual(['The poll failed; next try in 9 min.', 'Poll failed']);
+    const unsent = failed(NOW - M, undefined, { error: undefined }); // central answered, and took none of the batch
+    expect(health({ rows: [...running(), unsent], central: central({ polling: true }) }).line).toBe('Sending failed; trying again now…');
+  });
+
+  test('red only once failures span a real cycle: nothing good for more than 12 h of open time', () => {
+    const h = health({ rows: [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 6 * H), failed(NOW - H)] });
+    expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: 'Nothing sent for 13 h: sending failed.' });
+    expect(h.action).toEqual({ id: 'central-failing', button: 'Try again', do: 'poll',
+      text: "Satori Network 500: boom. Nothing went out for 13 h while Satori was open. It keeps trying; try now, or check the Satori Network's address in Settings." });
+    expect(h.channels.network).toEqual({ state: 'bad', tone: 'bad', text: 'Sending failed' });
+    expect(ids(h)).toEqual(['central-failing']); // not also overdue
+    // the same failures within 11.5 h of open time: amber
+    expect(health({ rows: [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)] }).status).toBe('warn');
+    // a new neuron: no good cycle within FIRST_S of open time, its tries failing
+    const fresh = [open(NOW - 2 * H), failed(NOW - 110 * M, 'Satori Network unreachable: Failed to fetch', { sent: 0, unreachable: true })];
+    expect(health({ rows: fresh }).line).toBe("Nothing sent for 2 h: couldn't reach the Satori Network.");
   });
 
   test('login refused: bad at once', () => {
@@ -244,7 +264,8 @@ describe('warn: predicting, but something needs you', () => {
       expect([h.status, ids(h), h.channels.network.state]).toEqual(['ok', [], 'ok']);
     }
     h = health({ central: central({ registration: { ok: false, error: 'Satori Network unreachable: Failed to fetch' } }) });
-    expect(h.action).toMatchObject({ id: 'not-registered', do: 'reload' });
+    expect(h.action).toEqual({ id: 'not-registered', button: 'Try again', do: 'poll', // a poll registers again first
+      text: 'Registering with the Satori Network failed: Satori Network unreachable: Failed to fetch. It registers again before each poll until it succeeds.' });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Not registered' });
   });
 });
@@ -340,7 +361,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     // central's last poll failed once: still predicting, so partly
     expect(failing(staked(check), [...running(), failed(NOW - 30 * M)])).toMatchObject({ status: 'bad', title: 'Partly predicting' });
     // central failing wins; a new neuron with no good cycle yet is starting; Nostr never moves the title
-    expect(failing(staked(check), [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)]).title).toBe('Not predicting');
+    expect(failing(staked(check), [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 6 * H), failed(NOW - H)]).title).toBe('Not predicting');
     expect(failing(staked(check), [open(NOW - 10 * M)]).title).toBe('Starting');
     const down = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }] });
     expect(health({ nostr: down })).toMatchObject({ status: 'bad', title: 'Predicting' });
@@ -361,7 +382,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     caughtUp: () => [...slept, good(NOW - 5 * M, 83, { caughtUp: 3 * D })], // …and has: the asleep reason stays, predicting
     predicting: running,
     retrying: () => [...running(), failed(NOW - H)], // central-failed: one failed poll, still predicting
-    failing: () => [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)], // central-failing
+    failing: () => [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 6 * H), failed(NOW - H)], // central-failing: over 12 h of open time
   };
   // Each reason added to a state's input; asleep and starting come only from the states' logs, install only while asleep.
   const rows = (...more) => (i) => ({ ...i, rows: [...i.rows, ...more] });
@@ -369,7 +390,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
   const ADD = {
     'db-error': rows(failed(NOW - 10, 'IO Error: Could not write file', { local: true, sent: 0 })),
     'login-refused': rows(failed(NOW - 10, 'Satori Network 401: Invalid signature', { login: true })),
-    'central-failing': rows(failed(NOW - 20), failed(NOW - 10)),
+    'central-failing': (i) => ({ ...rows(failed(NOW + WINDOW_S - 10))(i), now: NOW + WINDOW_S }), // failing, open WINDOW_S more
     'central-overdue': (i) => ({ ...i, now: NOW + WINDOW_S }), // open WINDOW_S more with nothing sent
     'base-failing': (i) => ({ ...rows(row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' }))(i),
       base: staked({ lastCheck: { at: NOW - H, error: 'HTTP request failed' } }) }),
@@ -400,10 +421,10 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'db-error':         ['N bad db-error',        'N bad db-error',        'N bad db-error',        'N bad db-error',        'N bad db-error',        'N bad db-error'],
     'login-refused':    ['N bad login-refused',   'N bad login-refused',   'N bad login-refused',   'N bad login-refused',   'N bad login-refused',   'N bad login-refused'],
     'central-failing':  ['N bad central-failing', 'N bad central-failing', 'N bad central-failing', 'N bad central-failing', 'N bad central-failing', 'N bad central-failing'],
-    'central-overdue':  ['N bad central-overdue', 'N bad central-overdue', 'N bad central-overdue', 'N bad central-overdue', 'N bad central-overdue', 'N bad central-failing'],
+    'central-overdue':  ['N bad central-overdue', 'N bad central-overdue', 'N bad central-overdue', 'N bad central-overdue', X,                       X],
     'base-failing':     ['S bad base-failing',    'B bad base-failing',    'B bad base-failing',    'B bad base-failing',    'B bad base-failing',    'N bad central-failing'],
     'relays-down':      ['S bad relays-down',     'A bad relays-down',     'P bad relays-down',     'P bad relays-down',     'P bad relays-down',     'N bad central-failing'],
-    'central-failed':   ['S warn central-failed', 'A warn central-failed', 'P warn central-failed', 'P warn central-failed', X,                       X],
+    'central-failed':   ['S warn central-failed', 'A warn central-failed', 'P warn central-failed', 'P warn central-failed', 'P warn central-failed', X],
     'vault-mismatch':   fixable('vault-mismatch'),
     'not-registered':   fixable('not-registered'),
     stake:              fixable('stake'),
@@ -431,7 +452,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
 
   test.each(cells)('%s + %s → %s', (state, id, cell) => {
     const [h, ...busy] = WORK.map((work) => healthOf({ ...ADD[id](input(state)), work }));
-    if (cell === X) return expect(ids(h)).not.toContain(id); // e.g. a third failure is still central-failing, not central-failed
+    if (cell === X) return expect(ids(h)).not.toContain(id); // e.g. a failure after 12 h of open time with none good is central-failing
     const [title, status, action] = cell.split(' ');
     expect(ids(h)).toContain(id);
     expect(h.reasons.find((r) => r.id === id).status).toBe(LEVEL[id]);
@@ -477,7 +498,8 @@ describe('the tone: green while all is well (sky at rest, regular while working,
     const oneDown = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] });
     expect(ch({ nostr: oneDown, work: { subscribe: e('subscribe', 'find') } }).relays).toEqual({ state: 'advice', tone: 'working', text: '1 of 2 relays down' });
     expect(ch({ work: { discover: e('discover', 'ask') } }).relays).toMatchObject({ tone: 'working', text: 'No streams' });
-    expect(ch({ rows: [...running(), failed(NOW - 20), failed(NOW - 10)], work: WORK.working }).network).toMatchObject({ tone: 'bad' });
+    expect(ch({ rows: [...running(), failed(NOW - 20), failed(NOW - 10)], work: WORK.working }).network).toMatchObject({ tone: 'warn' });
+    expect(ch({ rows: [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 10)], work: WORK.working }).network).toMatchObject({ tone: 'bad' });
   });
 });
 

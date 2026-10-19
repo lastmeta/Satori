@@ -72,18 +72,24 @@ describe('sessions', () => {
   });
 });
 
-test('central: one row per cycle with its counts; errors tagged (login, local); a failed submission is bad', async () => {
+test('central: one row per cycle with its counts; errors tagged (login, local, unreachable); a failed submission is bad', async () => {
   const a = make();
   await a.start();
   await a.central({ poll: { at: T + 1, streams: 83, new: 83, predicted: 83, engine_ms: 900 }, submit: { at: T + 2, total_submitted: 83, successful: 83 } }, 0);
   await a.central({ poll: { at: T + 3, streams: 83, new: 1, predicted: 1 }, submit: { at: T + 4, error: 'central 401: Invalid signature', total_submitted: 84, login: true } }, 84);
   await a.central({ poll: { at: T + 5, error: 'IO Error', local: true }, submit: null }, 84);
   await a.central({ poll: { at: T + 6, streams: 83, new: 0, predicted: 0 }, submit: { at: T + 7, total_submitted: 84, successful: 0, failed: 84 } }, 84);
+  await a.central({ poll: { at: T + 8, streams: 83, new: 0, predicted: 0 },
+    submit: { at: T + 9, error: 'Satori Network unreachable: Failed to fetch', total_submitted: 84, unreachable: true } }, 84);
+  await a.central({ poll: { at: T + 10, error: 'Satori Network timed out (15 s)', unreachable: true }, submit: null }, 84);
   expect(a.rows().slice(1).map((r) => [r.at, r.level, r.data])).toEqual([
     [T + 1, 'ok', { streams: 83, new: 83, predicted: 83, sent: 83, accepted: 83, pending: 0 }],
     [T + 3, 'bad', { streams: 83, new: 1, predicted: 1, sent: 84, accepted: 0, pending: 84, error: 'central 401: Invalid signature', login: true }],
     [T + 5, 'bad', { streams: 0, new: 0, predicted: 0, sent: 0, accepted: 0, pending: 84, error: 'IO Error', local: true }],
     [T + 6, 'bad', { streams: 83, new: 0, predicted: 0, sent: 84, accepted: 0, pending: 84 }],
+    // not reached at all (a network error, a timeout): Home says "Couldn't reach the Satori Network"
+    [T + 8, 'bad', { streams: 83, new: 0, predicted: 0, sent: 84, accepted: 0, pending: 84, error: 'Satori Network unreachable: Failed to fetch', unreachable: true }],
+    [T + 10, 'bad', { streams: 0, new: 0, predicted: 0, sent: 0, accepted: 0, pending: 84, error: 'Satori Network timed out (15 s)', unreachable: true }],
   ]);
 });
 

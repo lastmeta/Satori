@@ -39,7 +39,7 @@ async function eip191(h) {
  * @param {{url?: string, relays?: string[], rpc?: {http: Function}}} [o] relays: central's relay list
  * @returns the stub: set `batch`, `vaults` (vault pubkey → register's `vault_base_address` for it, else null), `otherVault` (the
  *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
- *   predictions batches), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
+ *   predictions batches), `failRegister` (how many registers answer 503: each register() is resent once on a 5xx), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
  *   `history` (stream uuid → its rows, oldest first; null: the route 404s), `historyDelayMs` (the n-th history call answers
  *   after n × that: the streams come in one by one); hold(what) keeps the observations batch
  *   (what 'batch', the default: a poll, seen while it runs), register's answer ('register': nothing the neuron does
@@ -48,7 +48,7 @@ async function eip191(h) {
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
   const held = { batch: null, register: null, submit: null };
-  const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
+  const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], failRegister: 0, refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
     historyDelayMs: 0,
     registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], prod: [], blocked: [],
     hold(what = 'batch') {
@@ -90,6 +90,10 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       case 'POST /api/v1/peer/register': {
         stub.registered.push(h);
         await held.register;
+        if (stub.failRegister > 0) { // central down for a moment: a 503 (the client resends it once)
+          stub.failRegister--;
+          return reply(route, 503, { detail: 'unavailable' });
+        }
         // central base-upgrade d8a2085's answer; wallet_address and vault_address are its other forms, never read
         const answer = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer registered successfully' };
         if (!stub.noVaultBase) answer.vault_base_address = stub.otherVault ?? stub.vaults[h['vault-pubkey']] ?? null;

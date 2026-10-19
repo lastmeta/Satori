@@ -99,6 +99,7 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
       if (error) data.error = error;
       if (submit?.login) data.login = true;
       if (poll.local) data.local = true;
+      if (poll.unreachable || submit?.unreachable) data.unreachable = true;
       const good = isGood({ kind: 'central', data });
       if (good && catchUp != null) {
         data.caughtUp = catchUp;

@@ -91,6 +91,17 @@ export function missedBy(rows, at) {
 
 // ── the reasons (docs/design/health.md#reasons-in-priority-order) ──
 
+/**
+ * What a failed cycle's row says failed, in words and as the chip says it: central refused the login, was not reached
+ * at all (a network error, a timeout), took none of a batch or refused it (sending), or answered the poll with an error.
+ */
+function failedWhat(d) {
+  if (d.login) return ['Login refused', 'Login refused'];
+  if (d.unreachable) return ["Couldn't reach the Satori Network", 'Unreachable'];
+  if (d.sent > 0) return ['Sending failed', 'Sending failed'];
+  return ['The poll failed', 'Poll failed'];
+}
+
 const go = (tab, section) => (section ? { do: 'go', tab, section } : { do: 'go', tab });
 const reason = (id, channel, o) => ({ id, status: LEVEL[id], channel, ...o });
 
@@ -99,38 +110,36 @@ function centralReasons({ now, rows, sessions, central, app, work }) {
   const cycles = rows.filter((r) => r.kind === 'central');
   const last = cycles.at(-1);
   const lastGood = cycles.filter(isGood).at(-1);
-  let failures = 0;
-  for (let i = cycles.length - 1; i >= 0 && isFailed(cycles[i]); i--) failures++;
+  const failed = !!last && isFailed(last);
   const next = fmtIn((central?.nextPoll ?? now) - now);
   // "now" only while central's work runs (the poll, or its sign-in before it): a poll that is due with nothing running
   // (a timer that slept with the device) is "soon", until the catch-up pass runs it
   const atOnce = !!central?.polling || !!work?.central;
-
-  if (failures) {
-    const err = last.data.error ?? `The Satori Network took none of ${last.data.sent} predictions`;
-    const batches = last.data.sent > 0;
-    if (last.data.local) {
-      out.push(reason('db-error', 'network', { line: 'The database failed.', chip: 'Database error',
-        text: `Saving or forecasting failed: ${err}. Reload Satori; your keys are safe.`, button: 'Reload', act: { do: 'reload' } }));
-    } else if (last.data.login) {
-      out.push(reason('login-refused', 'network', { line: "The Satori Network refused this neuron's login.", chip: 'Login refused',
-        text: "The Satori Network rejects this neuron's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
-    } else if (failures >= 2) {
-      out.push(reason('central-failing', 'network', {
-        line: batches ? `The Satori Network refused the last ${failures} batches.` : `The last ${failures} polls failed.`,
-        chip: `${failures} failed in a row`, text: `${err}. Try again now, or check the Satori Network's address in Settings.`,
-        button: 'Try again', act: { do: 'poll' } }));
-    } else {
-      out.push(reason('central-failed', 'network', { line: `The last poll failed; next try ${next}.`,
-        chip: 'Last poll failed', text: `${err}. It tries again on its own; try now if something was fixed.`,
-        button: 'Try again', act: { do: 'poll' } }));
-    }
-  }
-
+  // open time with nothing good: red once failures (or no tries) span a real cycle, not after two quick failures
   const since = lastGood?.at ?? sessions[0]?.at;
   const ran = since == null ? 0 : openTime(sessions, since, now);
   const overdue = ran > (lastGood ? WINDOW_S : FIRST_S);
-  if (overdue) {
+
+  if (failed) {
+    const d = last.data;
+    const err = d.error ?? `The Satori Network took none of ${d.sent} predictions`;
+    const [what, chip] = failedWhat(d);
+    if (d.local) {
+      out.push(reason('db-error', 'network', { line: 'The database failed.', chip: 'Database error',
+        text: `Saving or forecasting failed: ${err}. Reload Satori; your keys are safe.`, button: 'Reload', act: { do: 'reload' } }));
+    } else if (d.login) {
+      out.push(reason('login-refused', 'network', { line: "The Satori Network refused this neuron's login.", chip: 'Login refused',
+        text: "The Satori Network rejects this neuron's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
+    } else if (overdue) {
+      out.push(reason('central-failing', 'network', { line: `Nothing sent for ${fmtDur(ran)}: ${what[0].toLowerCase()}${what.slice(1)}.`, chip,
+        text: `${err}. Nothing went out for ${fmtDur(ran)} while Satori was open. It keeps trying; try now, or check the Satori Network's address in Settings.`,
+        button: 'Try again', act: { do: 'poll' } }));
+    } else {
+      out.push(reason('central-failed', 'network', { line: `${what}; ${central?.polling ? 'trying again now…' : `next try ${next}.`}`, chip,
+        text: `${err}. It tries again ${next}; try now if something was fixed.`, button: 'Try again', act: { do: 'poll' } }));
+    }
+  }
+  if (overdue && !out.some((r) => r.id === 'central-failing')) {
     out.push(reason('central-overdue', 'network', { line: `Nothing sent for ${fmtDur(ran)}.`, chip: `Nothing sent for ${fmtDur(ran)}`,
       text: `No predictions went out for ${fmtDur(ran)} while Satori was open. Try a poll now.`, button: 'Poll now', act: { do: 'poll' } }));
   }
@@ -148,7 +157,8 @@ function centralReasons({ now, rows, sessions, central, app, work }) {
   }
   if (reg && !reg.ok) {
     out.push(reason('not-registered', 'network', { line: "The Satori Network didn't register this neuron.", chip: 'Not registered',
-      text: `Registering with the Satori Network failed: ${reg.error}. It registers again on the next load.`, button: 'Reload', act: { do: 'reload' } }));
+      text: `Registering with the Satori Network failed: ${reg.error}. It registers again before each poll until it succeeds.`,
+      button: 'Try again', act: { do: 'poll' } }));
   }
 
   // was asleep: the latest session that missed work, until the next normal cycle (the second good one after it)
@@ -167,7 +177,7 @@ function centralReasons({ now, rows, sessions, central, app, work }) {
         button: 'Install', act: { do: 'install' } }));
     }
   }
-  if (!lastGood && !failures && !overdue) {
+  if (!lastGood && !failed && !overdue) {
     out.push(reason('starting', 'network', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
       chip: atOnce ? 'First poll now…' : `First poll ${next}` }));
   }

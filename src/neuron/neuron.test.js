@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { memoryDb } from '../../test/memory-db.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
-  cycle, register, firstPollAt, createPoller, centralStatus, claimTab, POLL_EVERY_S, BATCH_LIMIT,
+  cycle, register, firstPollAt, createPoller, centralStatus, claimTab, POLL_EVERY_S, BATCH_LIMIT, RETRY_S, nextPollAfter, failedCycle,
 } from './index.js';
 import { createWork, leading, HERO } from './work.js';
 import { lacking } from './train.js';
@@ -166,7 +166,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
 
     central.batch = [entry('u-a', 'a', T + 1, 2)];
     central.results = [new CentralError(0, 'network', 'Satori Network unreachable: Failed to fetch')];
-    expect((await run()).submit).toEqual({ at: clock, error: 'Satori Network unreachable: Failed to fetch', total_submitted: 2 });
+    expect((await run()).submit).toEqual({ at: clock, error: 'Satori Network unreachable: Failed to fetch', total_submitted: 2, unreachable: true });
     expect(await db.pendingCount()).toBe(2);
     const refused = Object.assign(new CentralError(401, 'Invalid signature'), { login: true });
     central.results = [refused];
@@ -198,7 +198,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     await run();
     central.batch = new CentralError(0, 'timeout', 'Satori Network timed out (15 s)');
     const r = await run();
-    expect(r).toEqual({ poll: { at: clock, error: 'Satori Network timed out (15 s)' }, submit: null });
+    expect(r).toEqual({ poll: { at: clock, error: 'Satori Network timed out (15 s)', unreachable: true }, submit: null }); // status 0: not reached
     expect(central.submitPredictions).toHaveBeenCalledTimes(1);
     expect(await db.get('central_last_poll')).toEqual(r.poll);
     expect(await db.pendingCount()).toBe(1);
@@ -418,12 +418,79 @@ describe('createPoller', () => {
     expect(h.ran).toHaveLength(1);
   });
 
-  test('a run that throws still schedules the next one', async () => {
+  test('a run that throws still schedules the next one: a failure, retried in 2 min', async () => {
     const h = harness(() => { throw new Error('db gone'); });
     await h.poller.start();
     await expect(h.poller.poll()).rejects.toThrow('db gone');
-    expect(h.poller.next).toBe(clock + POLL_EVERY_S);
+    expect(h.poller.next).toBe(clock + RETRY_S[0]);
     expect(h.live()).toHaveLength(1);
+  });
+
+  test('a failed cycle is retried after 2, 10 and 30 min, then on the 11 h rhythm (each of its tries retried the same way)', () => {
+    expect(RETRY_S).toEqual([120, 600, 1800]);
+    expect([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => nextPollAfter(n, 1000) - 1000))
+      .toEqual([POLL_EVERY_S, 120, 600, 1800, POLL_EVERY_S, 120, 600, 1800, POLL_EVERY_S, 120]);
+  });
+
+  test('failedCycle: a failed poll or submission, a local failure, or a batch central took none of; nothing to send is good', () => {
+    expect(failedCycle({ poll: { at: 1, error: 'boom' }, submit: null })).toBe(true);
+    expect(failedCycle({ poll: { at: 1 }, submit: { error: 'Satori Network 503: boom' } })).toBe(true);
+    expect(failedCycle({ poll: { at: 1 }, submit: { total_submitted: 3, successful: 0 } })).toBe(true);
+    expect(failedCycle({ poll: { at: 1 }, submit: { total_submitted: 3, successful: 2 } })).toBe(false);
+    expect(failedCycle({ poll: { at: 1 }, submit: null })).toBe(false);
+    expect(failedCycle(undefined)).toBe(false);
+  });
+
+  test('the retry schedule: 2, 10, 30 min, 11 h after failures; a success restores 11 h from it; persisted, so a reload keeps it', async () => {
+    const outcomes = [];
+    const h = harness(() => outcomes.shift());
+    const sendFailed = { poll: { at: clock }, submit: { at: clock, error: 'Satori Network 503: boom', total_submitted: 8 } };
+    const ok = { poll: { at: clock }, submit: { at: clock, total_submitted: 8, successful: 8 } };
+    await h.poller.start();
+    const steps = [];
+    for (const r of [sendFailed, sendFailed, sendFailed, sendFailed, sendFailed]) {
+      outcomes.push(r);
+      await h.poller.poll();
+      steps.push([h.poller.next - clock, h.poller.failures]);
+      clock += 60;
+    }
+    expect(steps).toEqual([[120, 1], [600, 2], [1800, 3], [POLL_EVERY_S, 4], [120, 5]]);
+    expect(await db.get('next_poll_at')).toBe(clock - 60 + 120);
+    expect(await db.get('poll_failures')).toBe(5);
+
+    // a reload: the retry time and the count are kept, so the next failure waits 10 min, not 2
+    const again = harness(() => outcomes.shift());
+    await again.poller.start();
+    expect([again.poller.next, again.poller.failures]).toEqual([clock - 60 + 120, 5]);
+    expect(again.live()[0].ms).toBe((clock - 60 + 120 - clock) * 1000);
+    outcomes.push(sendFailed);
+    await again.poller.poll();
+    expect(again.poller.next).toBe(clock + 600);
+
+    // a success: 11 h from it, the count reset
+    outcomes.push(ok);
+    await again.poller.poll();
+    expect([again.poller.next, again.poller.failures]).toEqual([clock + POLL_EVERY_S, 0]);
+    expect(await db.get('poll_failures')).toBe(0);
+  });
+
+  test('online: after a failure, a poll at once; with none, or while one runs, nothing', async () => {
+    const outcomes = [];
+    let release = null;
+    const h = harness(() => (outcomes.length ? outcomes.shift() : new Promise((r) => { release = r; })));
+    await h.poller.start();
+    expect(h.poller.online()).toBeNull(); // no failure
+    outcomes.push({ poll: { at: clock, error: 'Satori Network unreachable: Failed to fetch', unreachable: true }, submit: null });
+    await h.poller.poll();
+    expect(h.poller.next).toBe(clock + 120);
+    const run = h.poller.online(); // back online: no 2 min wait
+    expect(run).toBeInstanceOf(Promise);
+    expect(h.poller.online()).toBeNull(); // running
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    release({ poll: { at: clock }, submit: null });
+    await run;
+    expect([h.poller.failures, h.poller.next]).toEqual([0, clock + POLL_EVERY_S]);
+    expect(h.ran).toHaveLength(2);
   });
 
   test('saving next_poll_at fails: the timer is set anyway and the error is logged', async () => {
@@ -542,8 +609,8 @@ test('centralStatus: the URL, the register result, the last poll and submission,
   central.batch = [entry('u-btc', 'btc', T, 1)];
   const r = await run();
   const registration = { at: T, ok: true, peer_id: 7 };
-  expect(await centralStatus({ db, central, registration, poller: { next: T + 60, running: false } })).toEqual({
-    url: 'https://central2.example', registration, lastPoll: r.poll, nextPoll: T + 60, polling: false, lastSubmit: r.submit, pending: 1,
+  expect(await centralStatus({ db, central, registration, poller: { next: T + 60, running: false, failures: 0 } })).toEqual({
+    url: 'https://central2.example', registration, lastPoll: r.poll, nextPoll: T + 60, polling: false, failures: 0, lastSubmit: r.submit, pending: 1,
     history: { at: clock, url: 'https://central2.example', streams: 0, rows: 0, left: 1, error: 'Satori Network 404: Not Found',
       retryAt: clock + 86_400, needed: 1 },
   });

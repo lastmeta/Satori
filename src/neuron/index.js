@@ -13,9 +13,25 @@ import { fitKey, statsFrom } from './train.js';
 export const POLL_EVERY_S = 11 * 3600; // start.py:4785-4876
 export const BATCH_LIMIT = 100;
 export const KEEP_PENDING_S = 2 * POLL_EVERY_S; // the cap on the kept queue (Lite's in-memory queue has none)
+/** After a failed cycle: tries again 2, 10 and 30 min later, then on the 11 h rhythm (docs/design/central.md#errors). */
+export const RETRY_S = [120, 600, 1800];
+
+/**
+ * When the next poll is due after a cycle that ended at `at`, with `failures` failed cycles in a row: 11 h after a good
+ * one; after a failure, the next of RETRY_S, then 11 h, and that try's failure starts the retries again.
+ */
+export function nextPollAfter(failures, at) {
+  if (!failures) return at + POLL_EVERY_S;
+  return at + (RETRY_S[(failures - 1) % (RETRY_S.length + 1)] ?? POLL_EVERY_S);
+}
+
+/** A cycle that failed: its poll or submission had an error (a local one too), or central took none of the batch. */
+export const failedCycle = (r) => !!(r?.poll?.error || r?.submit?.error || (r?.submit && !(r.submit.successful > 0)));
 
 const nowS = () => Date.now() / 1000;
 const errorText = (err) => String(err?.message ?? err);
+/** Central was not reached at all (a network error or a timeout: CentralError status 0), as Home names it. */
+const reach = (err) => (err?.status === 0 ? { unreachable: true } : {});
 
 /**
  * Register with central (on every start). Never throws: the result says what
@@ -60,7 +76,7 @@ async function submit(db, central, now, report) {
     if (result.successful > 0) await db.markSent(pending.map((p) => p.id), result.at);
   } catch (err) {
     // how many it tried to send, and whether central refused the login (docs/design/health.md)
-    result = { at: now(), error: errorText(err), total_submitted: pending.length, ...(err?.login ? { login: true } : {}) };
+    result = { at: now(), error: errorText(err), total_submitted: pending.length, ...(err?.login ? { login: true } : {}), ...reach(err) };
   }
   await db.set('central_last_submit', result);
   return result;
@@ -73,7 +89,7 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill, rep
     batch = await central.observations(BATCH_LIMIT);
     if (!Array.isArray(batch)) throw new Error('the Satori Network sent no list of observations');
   } catch (err) {
-    const poll = { at, error: errorText(err) };
+    const poll = { at, error: errorText(err), ...reach(err) };
     await db.set('central_last_poll', poll);
     return { poll, submit: null };
   }
@@ -152,18 +168,27 @@ export function firstPollAt(stored, now) {
 
 /**
  * The schedule: start() arms the first poll (meta.next_poll_at); each poll,
- * from the timer or poll(), runs `run` and arms the next one 11 h after it
- * ends, whatever the result. One run at a time: poll() during a run returns
- * it; idle() waits for it without starting one. onChange({ next, running })
- * follows both. With `work` (src/neuron/work.js), each poll is central's work
- * from its start until the next one is armed, so Home shows its steps
+ * from the timer or poll(), runs `run` and arms the next one when it ends:
+ * 11 h after a good cycle, and after a failed one (failedCycle, or a run that
+ * threw) 2, 10, 30 min, then 11 h (nextPollAfter). The time and the count of
+ * failures in a row are stored (meta.next_poll_at, meta.poll_failures), so a
+ * reload keeps the retries. One run at a time: poll() during a run returns
+ * it; idle() waits for it without starting one; online() polls at once after
+ * a failure (the network is back). onChange({ next, running }) follows them.
+ * With `work` (src/neuron/work.js), each poll is central's work from its
+ * start until the next one is armed, so Home shows its steps
  * (run(report): report(step, done, total)) and, after them, the next time,
  * never "next now…".
  */
 export function createPoller(run, { db, work = null, now = nowS, setTimeout, clearTimeout, onChange = () => {} }) {
   let job = null; // the poll in progress, as central's work
+  let failures = 0; // failed cycles in a row
   const s = createSchedule(() => run(job?.step ?? (() => {})), {
-    now, setTimeout, clearTimeout, name: 'poll', after: () => now() + POLL_EVERY_S,
+    now, setTimeout, clearTimeout, name: 'poll',
+    after: ({ result, error } = {}) => {
+      failures = error || failedCycle(result) ? failures + 1 : 0;
+      return nextPollAfter(failures, now());
+    },
     onChange: () => {
       if (s.running) job ??= work?.start('central') ?? null;
       onChange({ next: s.next, running: s.running });
@@ -175,6 +200,7 @@ export function createPoller(run, { db, work = null, now = nowS, setTimeout, cle
     async onArm(at) {
       try {
         await db.set('next_poll_at', at);
+        await db.set('poll_failures', failures);
         await db.checkpoint(); // OPFS keeps what is checkpointed; a tab may close at any time
       } catch (err) {
         console.error('[satori] saving the next poll time', err);
@@ -182,13 +208,20 @@ export function createPoller(run, { db, work = null, now = nowS, setTimeout, cle
     },
   });
   return {
-    start: async () => s.start(firstPollAt(await db.get('next_poll_at'), now())),
+    start: async () => {
+      failures = Number(await db.get('poll_failures')) || 0;
+      return s.start(firstPollAt(await db.get('next_poll_at'), now()));
+    },
     poll: s.run,
+    /** Back online after a failed cycle: the poll now (not in 2 min); else null (no failure, or one is running). */
+    online: () => (failures > 0 && !s.running ? s.run() : null),
     /** The poll now when its time has passed and none runs (the device slept: timers don't count it); else null. */
     catchUp: s.catchUp,
     idle: s.idle,
     get next() { return s.next; },
     get running() { return s.running; },
+    /** Failed cycles in a row (0 after a good one). */
+    get failures() { return failures; },
   };
 }
 
@@ -202,8 +235,8 @@ export async function centralStatus({ db, central, registration, poller }) {
   const pending = await db.pendingCount();
   // central's history (history.js): the last backfill, and how many streams still have none
   const history = { ...((await db.get('central_history')) ?? {}), needed: (await db.needHistory()).length };
-  return { url: central?.url ?? null, registration, lastPoll, nextPoll: poller?.next ?? null, polling: !!poller?.running, lastSubmit,
-    pending, history };
+  return { url: central?.url ?? null, registration, lastPoll, nextPoll: poller?.next ?? null, polling: !!poller?.running,
+    failures: poller?.failures ?? 0, lastSubmit, pending, history };
 }
 
 /**
