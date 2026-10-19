@@ -4,7 +4,7 @@ import { themeOf } from './theme.js';
 import { readPref, SORT_KEY, INSTALL_KEY } from './prefs.js';
 
 export const state = reactive({
-  screen: 'loading', // loading | elsewhere | fatal | setup | finish (an earlier version's vault: Unlock once) | home
+  screen: 'loading', // loading | elsewhere | fatal | damaged (the database file won't open) | setup | finish (an earlier version's vault: Unlock once) | home
   // the database's start (src/db/opfs.js): { step: 'download', loaded, total } (bytes on the wire) | { step: 'start' |
   // 'open' | 'ready' }; null before it begins (docs/design/storage.md#the-first-visit)
   engine: null,
@@ -101,5 +101,7 @@ export const state = reactive({
   theme: themeOf(), // Settings → Appearance: 'system' | 'light' | 'dark', this device's (src/ui/theme.js)
   // the database (docs/design/storage.md#recovery): the name a WAL DuckDB could not replay was set aside under
   recovered: null,
+  setAside: null, // the name a database file that would not open was set aside under ("Set aside and start again"), this page load
+  setAsideError: '',
   noticeDismissed: false,
 });

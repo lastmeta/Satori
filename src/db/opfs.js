@@ -10,7 +10,7 @@ import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url
 import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import { openDb } from './index.js';
-import { settleWal, setAsideWal, fileBytes } from './recover.js';
+import { settleWal, setAsideWal, setAsideDatabase, fileBytes } from './recover.js';
 import { transferProgress } from '../ui/format.js';
 
 /* global __DUCKDB_EH_BYTES__ */
@@ -32,6 +32,20 @@ export async function hasDatabase(path = DB_PATH) {
 }
 
 /**
+ * A failure of the database file itself (DuckDB's open, or the migrations; not the engine's download, not a newer
+ * version's database): the app offers "Set aside and start again" (docs/design/storage.md#recovery). `dbFile: true`.
+ */
+function fileError(err) {
+  const e = err instanceof Error ? err : new Error(String(err));
+  // DuckDB-WASM's worker sends "Opening the database failed with error: {…"exception_message":"Corrupt database file: …"}"
+  const m = /"exception_message":"((?:[^"\\]|\\.)*)"/.exec(e.message);
+  if (m) {
+    try { e.message = JSON.parse(`"${m[1]}"`); } catch { /* as it was */ }
+  }
+  return Object.assign(e, { dbFile: true });
+}
+
+/**
  * DuckDB in its own worker with `path` open → { conn, close }. On a failure the worker is ended, letting go of the files.
  * onStep({ step: 'download', loaded, total } | { step: 'start' } | { step: 'open' }): the wasm's download in bytes on
  * the wire (transferProgress), its start (compiled), the database opening.
@@ -50,8 +64,13 @@ export async function connectOpfs(path, { onStep = () => {} } = {}) {
       onStep(t.total && t.loaded >= t.total ? { step: 'start' } : { step: 'download', ...t });
     });
     onStep({ step: 'open' });
-    await duck.open({ path, accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
-    const conn = await duck.connect();
+    let conn;
+    try {
+      await duck.open({ path, accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
+      conn = await duck.connect();
+    } catch (err) {
+      throw fileError(err);
+    }
     return { conn, close: async () => { await conn.close(); await duck.terminate(); } };
   } catch (err) {
     await duck.terminate().catch(() => {});
@@ -81,7 +100,16 @@ export async function openOpfsDb(path = DB_PATH, { onStep } = {}) {
   const { conn, close } = await connectOpfs(path, { onStep });
   const db = await openDb(conn, close).catch(async (err) => {
     await close().catch(() => {});
-    throw err;
+    throw err?.newer ? err : fileError(err); // a newer version's database is no damage: its words, and Reload
   });
   return Object.assign(db, { recovered });
+}
+
+/**
+ * "Set aside and start again": the database file (and its WAL) renamed `…corrupt-<time>`, never deleted
+ * (recover.js setAsideDatabase). Only once DuckDB has let go of it: after a failed open, its worker is ended.
+ * → the file's new name
+ */
+export async function setAsideOpfsDb(path = DB_PATH) {
+  return setAsideDatabase(await navigator.storage.getDirectory(), path.slice('opfs://'.length));
 }

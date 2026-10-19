@@ -1,4 +1,4 @@
-// A WAL an older version of the app left (docs/design/storage.md#recovery).
+// A WAL an older version of the app left, and a database file that will not open (docs/design/storage.md#recovery).
 // On OPFS, DuckDB-WASM 1.32.0 never truncates the WAL at a checkpoint, and a
 // WAL the database has moved past can be replayed again; it cannot replay one
 // that holds migration 3 at all, an ALTER TABLE … ADD COLUMN on a table with a
@@ -32,6 +32,35 @@ export async function settleWal({ walBytes, checkpoint, setAside }) {
   return null;
 }
 
+/** A file renamed in an OPFS directory, tried `tries` times 100 ms apart while an ended worker still holds it. */
+async function moveWhenFree(dir, from, to, { tries = 50, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const handle = await dir.getFileHandle(from);
+  for (let i = 1; ; i++) {
+    try {
+      await handle.move(to);
+      return to;
+    } catch (err) {
+      if (i >= tries) throw err;
+      await wait(100);
+    }
+  }
+}
+const stamp = (now) => now.toISOString().replace(/[:.]/g, '-');
+
+/**
+ * A database file DuckDB will not open (damaged: "Corrupt database file"), set aside so the app can start again
+ * (docs/design/storage.md#recovery): renamed `<name>.corrupt-<time>`, never deleted, with its WAL, if any, as
+ * `<name>.wal.corrupt-<time>` (a fresh file must not replay another's WAL). The person asked for it ("Set aside and
+ * start again"). → the database file's new name
+ */
+export async function setAsideDatabase(dir, name, { now = new Date(), tries, wait } = {}) {
+  const at = stamp(now);
+  const to = await moveWhenFree(dir, name, `${name}.corrupt-${at}`, { tries, wait });
+  const wal = await dir.getFileHandle(`${name}.wal`).then(() => true, () => false);
+  if (wal) await moveWhenFree(dir, `${name}.wal`, `${name}.wal.corrupt-${at}`, { tries, wait });
+  return to;
+}
+
 /**
  * Rename `<name>.wal` to `<name>.wal.<kind>-<time>` in the OPFS directory
  * `dir` (FileSystemFileHandle.move: Chrome 102, Firefox 111, Safari 15.2).
@@ -39,18 +68,8 @@ export async function settleWal({ walBytes, checkpoint, setAside }) {
  * fails, so it is tried again every 100 ms, `tries` times.
  * @returns {Promise<string>} the new name
  */
-export async function setAsideWal(dir, name, kind, { now = new Date(), tries = 50, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
-  const to = `${name}.wal.${kind}-${now.toISOString().replace(/[:.]/g, '-')}`;
-  const wal = await dir.getFileHandle(`${name}.wal`);
-  for (let i = 1; ; i++) {
-    try {
-      await wal.move(to);
-      return to;
-    } catch (err) {
-      if (i >= tries) throw err;
-      await wait(100);
-    }
-  }
+export async function setAsideWal(dir, name, kind, { now = new Date(), tries, wait } = {}) {
+  return moveWhenFree(dir, `${name}.wal`, `${name}.wal.${kind}-${stamp(now)}`, { tries, wait });
 }
 
 /** A file's size in the OPFS directory `dir`; 0 when there is none. */

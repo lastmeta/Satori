@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { settleWal, setAsideWal, fileBytes } from './recover.js';
+import { settleWal, setAsideWal, setAsideDatabase, fileBytes } from './recover.js';
 
 // DuckDB-WASM 1.32.0's error on the owner's profile, as its worker sends it
 const REPLAY = new Error('Opening the database failed with error: {"exception_type":"INTERNAL","exception_message":"Failure while replaying WAL file \\"opfs://satori-mvp.duckdb.wal\\": Calling DatabaseManager::GetDefaultDatabase with no default database set","stack_trace_pointers":""}');
@@ -74,6 +74,24 @@ describe('setAsideWal', () => {
     const dir = fakeDir({ 'n.wal': 1 }, 99);
     await expect(setAsideWal(dir, 'n', 'unreplayed', { now, wait, tries: 5 })).rejects.toThrow(/locked/);
     expect([...dir.files.keys()]).toEqual(['n.wal']);
+  });
+});
+
+describe('setAsideDatabase: a database file that will not open, set aside to start again (never deleted)', () => {
+  const now = new Date('2026-10-19T09:30:00.500Z');
+  const wait = async () => {};
+  test('renames the file to <name>.corrupt-<time>, and a WAL beside it with it (a fresh file must not replay it)', async () => {
+    const dir = fakeDir({ 'satori-mvp.duckdb': 9437184, 'satori-mvp.duckdb.wal': 512, 'satori-mvp.duckdb.wal.unreplayed-x': 6250 });
+    expect(await setAsideDatabase(dir, 'satori-mvp.duckdb', { now, wait })).toBe('satori-mvp.duckdb.corrupt-2026-10-19T09-30-00-500Z');
+    expect(Object.fromEntries(dir.files)).toEqual({ 'satori-mvp.duckdb.corrupt-2026-10-19T09-30-00-500Z': 9437184,
+      'satori-mvp.duckdb.wal.corrupt-2026-10-19T09-30-00-500Z': 512, 'satori-mvp.duckdb.wal.unreplayed-x': 6250 });
+  });
+  test("no WAL: the file alone; waits while DuckDB's ended worker still holds it", async () => {
+    const dir = fakeDir({ n: 10 }, 2);
+    const w = vi.fn(wait);
+    expect(await setAsideDatabase(dir, 'n', { now, wait: w })).toBe('n.corrupt-2026-10-19T09-30-00-500Z');
+    expect([...dir.files.keys()]).toEqual(['n.corrupt-2026-10-19T09-30-00-500Z']);
+    expect(w).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -12,7 +12,7 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
-import { openOpfsDb, hasDatabase } from './db/opfs.js';
+import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockVault, passphraseOk, MIN_PASSPHRASE,
   withPassphrase, backupKeys,
@@ -402,6 +402,27 @@ async function backupOf(which, passphrase) {
   return b;
 }
 
+/**
+ * "Set aside and start again" (the database file won't open, docs/design/storage.md#recovery): the file renamed, never
+ * deleted; a fresh database; Setup, which offers Restore from words and Import. The UI's button and setAside().
+ */
+const setAsideDb = () => exclusive('setAside', async () => {
+  if (state.screen !== 'damaged') throw new Error(`Nothing to set aside (screen: ${state.screen}).`);
+  state.setAsideError = '';
+  try {
+    state.setAside = await setAsideOpfsDb();
+    console.warn('[satori] the database file that would not open was set aside as', state.setAside);
+    dbOpening = openOpfsDb(undefined, { onStep: (e) => { state.engine = e; } });
+    db = await dbOpening;
+  } catch (err) {
+    state.setAsideError = `It could not be set aside: ${err?.message ?? err}`;
+    throw err;
+  }
+  state.engine = { step: 'ready' };
+  registerWorker();
+  Object.assign(state, { screen: 'setup', step: 'choose', fatal: '', cached: null });
+});
+
 /** Subscribe or unsubscribe, then the catalog's mark follows. */
 async function setSubscribed(pubkey, stream, on) {
   const r = on ? await nostr.subscribe(pubkey, stream) : await nostr.unsubscribe(pubkey, stream);
@@ -765,6 +786,7 @@ const actions = {
   },
   update: applyUpdate,
   dismissNotice() { state.noticeDismissed = true; },
+  setAside: () => setAsideDb().catch((err) => console.error('[satori] set aside', err)),
   discover: shownAt('networkError', async () => {
     state.discovering = true;
     try {
@@ -882,6 +904,7 @@ window.satori = {
       storage: await storage(),
       app: { ...state.app },
       recovered: state.recovered,
+      setAside: state.setAside, // a database file that would not open, set aside under this name (this page load), or null
       // the last training pass (docs/design/models.md#the-training-pass): { central, nostr, base, stopped, ms }, or null
       train: trainer?.last ?? null,
     };
@@ -890,6 +913,11 @@ window.satori = {
   install() { return install(); },
   /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */
   update() { return applyUpdate(); },
+  /**
+   * On the 'damaged' screen (the database file won't open): set it aside (renamed, never deleted) and start again on
+   * Setup, to restore from words or import. Only on the person's request: their keys are in that file. → status()
+   */
+  async setAside() { await setAsideDb(); return window.satori.status(); },
   /** Create a neuron (random keys unless words, or the Nostr key's nsec or hex, are given). The vault stays locked. */
   async setup({ passphrase, vaultWords, identityWords, nostrKey } = {}) {
     await setup(async () => {
@@ -1150,8 +1178,9 @@ async function boot() {
     if (!loadKeys(record).vault.pubkey) return void Object.assign(state, { screen: 'finish', cached: null });
     await startNeuron();
   } catch (err) {
-    state.fatal = `The neuron did not start: ${err?.message ?? err}`;
-    Object.assign(state, { screen: 'fatal', cached: null });
+    // the database file itself won't open (damaged): offer to set it aside; anything else, "could not start"
+    state.fatal = err?.dbFile ? `The database file could not be opened: ${err?.message ?? err}` : `The neuron did not start: ${err?.message ?? err}`;
+    Object.assign(state, { screen: err?.dbFile ? 'damaged' : 'fatal', cached: null });
   }
 }
 

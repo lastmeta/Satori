@@ -195,20 +195,50 @@ writes the old version already lost on a reload (the first point above).
 row is checkpointed as it is written. The set-aside files stay in this
 site's storage (a few kB each).
 
-Any other failure to open, the database file itself included, is not
-touched. The WAL stays where it is, and the "Satori could not start" screen
-shows the error with a way forward. It says nothing was deleted, offers
-Reload, links to the issue tracker, and points to the backup (the 24 words,
-or the Dockerized Neuron files) for another browser. Nothing is ever deleted
-on its own.
+**A database file that won't open** (2026-10-19, the reliability review: 64
+bytes damaged in the file's header or middle gave "Corrupt database file: …
+checksum …" at every load, a dead end). Any failure of DuckDB's open, its
+connection or the migrations (`dbFile`, `src/db/opfs.js`; not the engine's
+download, not a newer version's database, below) shows **"Satori's database
+can't be opened"** with DuckDB's own words, Reload, and **Set aside and start
+again** (`window.satori.setAside()`, only on the person's request: the keys
+are in that file). It renames the file `satori-mvp.duckdb.corrupt-<time>`, and
+its WAL, if any, `satori-mvp.duckdb.wal.corrupt-<time>` (a fresh file must
+never replay another's WAL), never deleting either (`setAsideDatabase`,
+`src/db/recover.js`, retried while DuckDB's ended worker lets go), opens a
+fresh database, and shows Setup with a notice ("The old database was set
+aside as satori-mvp.duckdb.corrupt-…, in this site's storage. Restore this
+neuron from your words, or import its files."): Restore from words (the
+vault's, the identity's and the Nostr key) or Import. `status().setAside` is
+the new name for that page load. Any other failure (the engine's download,
+OPFS itself) still shows "Satori could not start", which says nothing was
+deleted, offers Reload, links to the issue tracker, and points to the backup.
+Nothing is ever deleted on its own.
+
+<img src="../screenshots/database-damaged.png" alt="Satori's database can't be opened: Corrupt database file …; Set aside and start again" width="240"> <img src="../screenshots/database-set-aside.png" alt="Setup after the set-aside, with its notice" width="240">
 
 ## Migrations
 
 `src/db/schema.js` holds an ordered list; `meta.schema_version` says how many
 have run, each in its own transaction. An entry is SQL, or a function given
 the `meta` rows (`get`, `set`, `remove`) for what SQL can't do. A shipped
-entry is never edited: a change is a new entry. A database from a newer app
-(a higher version) is refused, not migrated.
+entry is never edited: a change is a new entry.
+
+**A database from a newer app** (a higher version) is not migrated. Since
+2026-10-19 (the reliability review: a deploy rolled back, or the old cached
+build opened offline after a newer one migrated, stopped the neuron until the
+next roll-forward) an older build opens it as it is when every migration it
+doesn't know is **additive**: `ADDITIVE` in `schema.js` marks the migrations
+that only add what older code can live without (a new table, or a nullable
+column no earlier code reads, whose null means "not yet": 3, 4, 6, 8, 11,
+12, 13), and each open stores `meta.schema_min`, how many migrations a build
+must know to use the database (up to the last one that is not additive: 10
+today). A build that knows at least that many opens it, migrating nothing
+and writing nothing of the schema; otherwise it is refused in plain words,
+"This database was written by a newer version of Satori (schema 15; this
+version knows 13) in a way this version can't read. Reload to get the newer
+version; offline, connect first." A new migration says whether it is
+additive; a later build keeps `schema_min` current.
 
 1. **Step 1**: URL-fetched streams, their observations and signed predictions
    (times in ms). Replaced by 2.
@@ -316,6 +346,7 @@ Each value is JSON text.
 | Key | Holds | Written by |
 |---|---|---|
 | `schema_version` | how many migrations have run | the migrations |
+| `schema_min` | how many migrations a build must know to open this database: up to the last one that is not additive (`ADDITIVE`, [migrations](#migrations)) | each open that migrated it, or found it missing |
 | `keys` | the keys record, local format our own ([keys.md](keys.md#the-record)): `{ v: 1, identity, nostr, vault: { pubkey, kdf, cipher, data } }`; an earlier version's vault keeps `{ pubkey, yaml }` until its next Unlock | setup; migration 7; an Unlock that re-encrypts an earlier version's vault |
 | `wallet_yaml`, `vault_yaml`, `nostr_yaml` | gone: earlier versions' Docker texts, moved into `keys` by migration 7 (left only where a setup was cut off) | earlier versions |
 | `vault` | the step-1 prototype's sealed key; never read, never deleted | the step-1 prototype |

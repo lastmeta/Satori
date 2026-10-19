@@ -1,6 +1,6 @@
 // The shell: the header, the tabs (Home · Models · Streams · Wallet · Settings: a tab bar on a phone, a top nav on a
 // computer; hash routes #home … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
-// "open in another tab", "could not start". ArrowJS. Every screen and tab is built once and shown or hidden, so
+// "open in another tab", "could not start", "the database can't be opened". ArrowJS. Every screen and tab is built once and shown or hidden, so
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, watch } from '@arrow-js/core';
 import { MIN_PASSPHRASE } from '../keys/index.js';
@@ -151,6 +151,9 @@ export function render(root, a) {
       <span title="${() => `Kept in this site's storage as ${state.recovered}`}">${RECOVERED_NOTICE}</span>
       <button class="small-btn" @click="${a.dismissNotice}">Dismiss</button>
     </div>
+    <div class="notice small" role="status" data-test="set-aside-notice" hidden="${() => !state.setAside || state.screen !== 'setup'}">
+      <span>${() => `The old database was set aside as ${state.setAside}, in this site's storage. Restore this neuron from your words, or import its files.`}</span>
+    </div>
     <p class="muted center" data-test="opening" hidden="${() => state.screen !== 'loading' || !!state.cached}">${() => openingText(state.engine)}</p>
     <section class="card narrow" hidden="${show('elsewhere')}">
       <h2>Satori is open in another tab</h2>
@@ -165,6 +168,19 @@ export function render(root, a) {
         <a href="https://github.com/lastmeta/Satori/issues" target="_blank" rel="noopener">github.com/lastmeta/Satori/issues</a>.
         Meanwhile your 24 words (or the Dockerized Neuron files) can set the neuron up in another browser.</p>
       <div class="actions"><button class="primary" @click="${() => location.reload()}">Reload</button></div>
+    </section>
+    <section class="card narrow" hidden="${show('damaged')}">
+      <h2>Satori's database can't be opened</h2>
+      <p class="error" data-test="damaged-error">${() => state.fatal}</p>
+      <p class="muted small">It may be damaged. You can set it aside and start again: the file is kept in this browser's
+        storage for this site under another name, never deleted. Your keys are in it too, so you then restore this neuron
+        from your vault's 24 words (and the identity's, and the Nostr key from Backup), or import the Dockerized Neuron files.
+        Reload first if you want to try again.</p>
+      <div class="actions">
+        <button class="primary" data-test="set-aside" disabled="${() => state.busy === 'setAside'}" @click="${a.setAside}">${() => (state.busy === 'setAside' ? 'Setting aside…' : 'Set aside and start again')}</button>
+        <button @click="${() => location.reload()}">Reload</button>
+      </div>
+      <p class="error small" role="alert" hidden="${() => !state.setAsideError}">${() => state.setAsideError}</p>
     </section>
     <section class="card narrow" hidden="${show('finish')}">
       <h2>Unlock to finish the update</h2>

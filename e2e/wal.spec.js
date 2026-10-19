@@ -199,3 +199,39 @@ test('keys checkpointed and an unreplayable WAL on top: only the WAL\'s changes 
   expect(meta).not.toHaveProperty('error');
   expect(meta.value).toBeUndefined();
 });
+
+test('a database file that will not open (damaged): "Set aside and start again" renames it, never deletes it; a fresh one; Setup; restore from words', async ({ context, page }) => {
+  await stubCentral(context);
+  expect(await openApp(page)).toBe('setup');
+  const { vault } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+  const { words } = await page.evaluate(() => window.satori.backup('vault', 'pass phrase'));
+  await expect(page.evaluate(() => window.satori.setAside())).rejects.toThrow('Nothing to set aside (screen: home).');
+  await page.goto('/e2e/store/'); // the app gone: DuckDB's worker lets go of the file
+  const size = await page.evaluate(async (name) => { // 64 bytes over the file's header, as the reliability review did
+    const h = await (await navigator.storage.getDirectory()).getFileHandle(name);
+    const w = await h.createWritable({ keepExistingData: true });
+    await w.seek(4096 + 8);
+    await w.write(new Uint8Array(64).fill(0xab));
+    await w.close();
+    return (await h.getFile()).size;
+  }, DB);
+  expect(await openApp(page)).toBe('damaged');
+  await expect(page.getByRole('heading', { name: "Satori's database can't be opened" })).toBeVisible();
+  await expect(page.locator('[data-test=damaged-error]')).toContainText(/database file could not be opened: .*(Corrupt|checksum|IO Error|Serialization)/i);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/database-damaged.png' : test.info().outputPath('damaged.png') });
+  await page.getByRole('button', { name: 'Set aside and start again' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'setup', { timeout: 60_000 });
+  const files = await opfsFiles(page);
+  const aside = files.find(([f]) => f.startsWith(`${DB}.corrupt-`));
+  expect(aside?.[1]).toBe(size); // the whole file, kept under its new name
+  expect(files.map(([f]) => f)).toContain(DB); // a fresh one
+  await expect(page.locator('[data-test=set-aside-notice]')).toContainText(aside[0]);
+  await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/database-set-aside.png' : test.info().outputPath('set-aside.png') });
+  expect((await page.evaluate(() => window.satori.status())).setAside).toBe(aside[0]);
+  // Setup offers Restore from words (and the Nostr key) and Import; the same vault comes back
+  await expect(page.getByRole('button', { name: 'Restore from words' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import Dockerized Neuron files' })).toBeVisible();
+  const s = await page.evaluate((w) => window.satori.setup({ passphrase: 'pass phrase', vaultWords: w }), words);
+  expect([s.screen, s.vault]).toEqual(['home', vault]);
+});
