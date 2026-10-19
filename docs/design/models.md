@@ -401,7 +401,7 @@ by 20 % on the last two weeks; four kept a closer one (safetrade_kcn from
 safetrade_cfb 2.17 to 1.00, safetrade_evr 1.86 to 1.39), five kept the
 current one, and gold was refused (it lacks four weeks of back-to-back
 history). Each took 1.6–6.3 s (261–937 tries); **431 tries a second** over
-all. On the older origins their bests read 6–80 % better than no change:
+all. On the older origins their bests read 0–80 % better than no change:
 the recent weeks of central2's thin safetrade streams did not bear them
 out, which is the luck the look is there to catch. In the e2e, on this
 box's busier moments, 105–210 tries a second.
