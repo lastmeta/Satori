@@ -1,8 +1,17 @@
 // Ordered migrations. Never edit a shipped entry: append a new one.
 // meta.schema_version holds how many have run. An entry is SQL, or a function
 // given the meta rows ({ get, set, remove }) for what SQL can't do; each runs
-// in its own transaction.
+// in its own transaction. Mark each new one in ADDITIVE when it is.
 import { recordFromRows } from '../keys/index.js';
+
+/**
+ * The migrations (by number, from 1) that only add what an older build can live without: a new table, or a nullable
+ * column that no code before it reads and whose null means "not yet" (computed again, asked again). An older build
+ * may open a database whose newer migrations are all additive (docs/design/storage.md#migrations): a rollback, or an
+ * old cache offline, does not dead-end. Not additive: a table dropped or recreated (1, 2), a column the code must keep
+ * in step at every write (5's obs_*, 9's predicted_ts), the keys' move (7), rows rewritten (10).
+ */
+export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13]);
 
 export const MIGRATIONS = [
   // 1 (step 1): streams fetched from a URL; times in ms.

@@ -19,7 +19,7 @@
 //   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / firstSession() / pruneActivity(before)
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
-import { MIGRATIONS } from './schema.js';
+import { MIGRATIONS, ADDITIVE } from './schema.js';
 import { serial } from '../util.js';
 
 const plain = (v) => (typeof v === 'bigint' ? Number(v) : v);
@@ -74,12 +74,25 @@ async function query(conn, sql, params = []) {
   }
 }
 
+/** How many migrations a build must know to use a database migrated this far: up to the last one that is not additive. */
+const readableBy = (n) => Math.max(0, ...Array.from({ length: n }, (_, i) => i + 1).filter((k) => !ADDITIVE.has(k)));
+
 async function migrate(conn) {
   await conn.query('CREATE TABLE IF NOT EXISTS meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
-  const [row] = toRows(await conn.query("SELECT value FROM meta WHERE key = 'schema_version'"));
-  let version = row ? JSON.parse(row.value) : 0;
+  const metaOf = async (key) => {
+    const [r] = toRows(await query(conn, 'SELECT value FROM meta WHERE key = ?', [key]));
+    return r ? JSON.parse(r.value) : undefined;
+  };
+  let version = (await metaOf('schema_version')) ?? 0;
   if (version > MIGRATIONS.length) {
-    throw new Error(`This database is from a newer version of the app (schema ${version}, this app knows ${MIGRATIONS.length}).`);
+    // a newer build's: opened as it is when what it added is additive only (it says how much a reader must know)
+    const min = await metaOf('schema_min');
+    if (Number.isInteger(min) && min <= MIGRATIONS.length) {
+      console.warn(`[satori] a newer version's database (schema ${version}; this version knows ${MIGRATIONS.length}): its later migrations are additive, so it opens as it is`);
+      return version;
+    }
+    throw Object.assign(new Error(`This database was written by a newer version of Satori (schema ${version}; this version knows `
+      + `${MIGRATIONS.length}) in a way this version can't read. Reload to get the newer version; offline, connect first.`), { newer: true });
   }
   const meta = {
     get: async (key) => {
@@ -100,6 +113,9 @@ async function migrate(conn) {
       await conn.query('ROLLBACK');
       throw err;
     }
+  }
+  if ((await metaOf('schema_min')) !== readableBy(version)) {
+    await conn.query(`INSERT OR REPLACE INTO meta VALUES ('schema_min', '${readableBy(version)}')`);
   }
   return version;
 }

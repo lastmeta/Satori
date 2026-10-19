@@ -3,7 +3,7 @@ import { mkdtempSync, statSync, existsSync, rmSync, readFileSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { memoryDb, memoryConn } from '../../test/memory-db.js';
-import { MIGRATIONS } from './schema.js';
+import { MIGRATIONS, ADDITIVE } from './schema.js';
 import { openDb } from './index.js';
 import { loadKeys, unlockVault, wordsOf } from '../keys/index.js';
 import { nostrPubkey } from '../nostr/event.js';
@@ -41,10 +41,26 @@ test('every commit is checkpointed at once: a database file keeps nothing in its
   }
 });
 
-test('a database from a newer app version is refused, not migrated', async () => {
+test('a database from a newer app version is refused, not migrated, unless its later migrations are additive only', async () => {
   const conn = await memoryConn();
-  await (await openDb(conn)).set('schema_version', MIGRATIONS.length + 1);
-  await expect(openDb(conn)).rejects.toThrow(/newer version/);
+  const first = await openDb(conn);
+  // what a reader must know: the migrations up to the last one that is not additive (schema.js ADDITIVE)
+  const need = Math.max(...MIGRATIONS.map((_, i) => i + 1).filter((n) => !ADDITIVE.has(n)));
+  expect(await first.get('schema_min')).toBe(need);
+  expect(need).toBe(10);
+  // a newer build ran two more migrations, both additive: this build opens it as it is (a rollback, an offline old cache)
+  await first.set('schema_version', MIGRATIONS.length + 2);
+  const newer = await openDb(conn);
+  expect(newer.version).toBe(MIGRATIONS.length + 2);
+  expect([await newer.get('schema_version'), await newer.get('schema_min')]).toEqual([MIGRATIONS.length + 2, need]); // nothing written
+  await newer.set('central_url', 'w'); // and it works
+  // one of them was not additive (the reader must know more than this build does), or an older newer build said nothing: refused
+  for (const min of [MIGRATIONS.length + 1, undefined]) {
+    if (min === undefined) await conn.query("DELETE FROM meta WHERE key = 'schema_min'");
+    else await newer.set('schema_min', min);
+    await expect(openDb(conn)).rejects.toThrow(`This database was written by a newer version of Satori (schema ${MIGRATIONS.length + 2}; `
+      + `this version knows ${MIGRATIONS.length}) in a way this version can't read. Reload to get the newer version; offline, connect first.`);
+  }
 });
 
 test('a step-2 database: the URL streams go, meta stays', async () => {
