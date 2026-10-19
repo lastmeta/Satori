@@ -12,7 +12,7 @@
 //   createTrainer({ db, work, read, after, baseHistory }) → { run(), last, baseFits }: one pass at a time, as Home's work
 import { fitter } from '../engine/evolve.js';
 import { explainForecast } from '../engine/index.js';
-import { DEFAULT_CADENCE_S } from './nostr.js';
+import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
 
 /** Bumped when the engine's scoring changes, so every stored fit is computed again. */
 export const FIT_VERSION = 1;
@@ -112,7 +112,7 @@ export async function trainPass({ db, streams = [], subscriptions = [], lastBatc
   }
   for (const x of out.stopped ? [] : todo.nostr) {
     tried.add(x.id);
-    const e = explainForecast(await db.relayHistory(x.uuid), { step: x.cadence, horizon: x.cadence });
+    const e = explainForecast(await db.relayHistory(x.uuid, x.cadence * RELAY_WINDOW), { step: x.cadence, horizon: x.cadence });
     await db.setRelayFit(x.uuid, x.seq, { score: e?.score ?? null, persist: e?.persist ?? null, tests: e?.tests ?? 0 });
     out.nostr++;
     if (!(await next())) break;

@@ -14,7 +14,7 @@
 //   await db.streams() / db.predictions(uuidOrName, limit) / db.sparks(n)   // for the UI and agents
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
 //   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
-//   db.addRelayObservation(o) → new? / relayHistory(uuid) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
+//   db.addRelayObservation(o) → new? / relayHistory(uuid, windowS?) / pruneRelay({ buckets }) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
 //   db.setRelayFit(uuid, seq, { score, persist, tests }): a `_pred`'s backtest, kept later (the training pass)
 //   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / firstSession() / pruneActivity(before)
 //   await db.checkpoint() / db.close()
@@ -133,6 +133,15 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
   const inOrder = (fn) => (...args) => line(() => fn(...args));
   const rows = async (sql, ...params) => toRows(await query(conn, sql, params));
   const run = async (sql, ...params) => void (await query(conn, sql, params));
+  const pruneRelayBatch = inOrder(async (buckets, batch) => {
+    const [{ Count }] = await rows(`DELETE FROM relay_observations WHERE rowid IN (
+        SELECT o.rowid FROM relay_observations o JOIN (
+          SELECT s.uuid, n.newest - ? * (CASE WHEN s.cadence_seconds > 0 THEN s.cadence_seconds ELSE 86400 END) AS cutoff
+          FROM relay_streams s JOIN (SELECT stream_uuid, max(ts) AS newest FROM relay_observations GROUP BY stream_uuid) n
+            ON n.stream_uuid = s.uuid) c ON c.uuid = o.stream_uuid
+        WHERE coalesce(o.ts, o.received_at) < c.cutoff LIMIT ?)`, buckets, batch);
+    return Number(Count);
+  });
 
   return {
     version,
@@ -406,9 +415,29 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
         throw err;
       }
     }),
-    /** The engine's input for a relay stream: [{ts, value}] with a number and a time, oldest first. */
-    relayHistory: inOrder((uuid) => rows(`SELECT ts, value FROM relay_observations
-      WHERE stream_uuid = ? AND value IS NOT NULL AND ts IS NOT NULL ORDER BY ts, seq`, uuid)),
+    /**
+     * The engine's input for a relay stream: [{ts, value}] with a number and a time, oldest first; with `windowS`, only
+     * those within that many seconds of its newest (the engine's window, docs/design/nostr.md#data-growth: a year of a
+     * 1-minute stream read whole took seconds per observation).
+     */
+    relayHistory: inOrder((uuid, windowS) => (windowS == null
+      ? rows(`SELECT ts, value FROM relay_observations WHERE stream_uuid = ? AND value IS NOT NULL AND ts IS NOT NULL ORDER BY ts, seq`, uuid)
+      : rows(`SELECT ts, value FROM relay_observations WHERE stream_uuid = ? AND value IS NOT NULL AND ts IS NOT NULL
+          AND ts >= (SELECT max(ts) FROM relay_observations WHERE stream_uuid = ? AND value IS NOT NULL) - ? ORDER BY ts, seq`,
+        uuid, uuid, windowS))),
+    /**
+     * Each relay stream's observations older than its window (`buckets` of its cadence, a day when it has none, back
+     * from its newest time; a row with no time of its own by its arrival), deleted `batch` at a time, each batch its own
+     * statement in the queue so other calls go between. The streams' counts stay what was received. → how many went
+     */
+    async pruneRelay({ buckets, batch = 10_000 }) {
+      let total = 0;
+      for (;;) {
+        const n = await pruneRelayBatch(buckets, batch);
+        total += n;
+        if (n < batch) return total;
+      }
+    },
     /** The `_pred` seq for the next publish: last + 1, kept (network_db.py:835-848). */
     nextPredSeq: inOrder(async (uuid) =>
       (await rows('UPDATE relay_streams SET pred_seq = pred_seq + 1 WHERE uuid = ? RETURNING pred_seq', uuid))[0].pred_seq),

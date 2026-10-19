@@ -18,6 +18,12 @@ import { EPOCH } from '../central/index.js';
 
 export const MAX_STREAMS = 100; // network_db.py:14-36, until central says (relay-config)
 export const DEFAULT_CADENCE_S = 86_400; // a stream that announces none: a day, the owner's default (docs/intent/engine.md)
+/**
+ * The engine's window for a relay stream, in its cadences (docs/design/nostr.md#data-growth): the intake, the training
+ * pass and the Models tab read only this much back from the stream's newest observation, and the daily prune keeps no
+ * more (a daily stream ~400 days; a 1-minute one ~7 h). The engine needs 6 lag pairs and 28 backtest origins.
+ */
+export const RELAY_WINDOW = 400;
 export const RECONCILE_S = 3600; // start.py:292
 export const RELAY_LIST_S = 86_400; // start.py:291
 export const FOLLOW_ID = 'satori-follow'; // client.py:76
@@ -59,6 +65,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let reconciling = null;
   const intakeLine = serial();
   const checked = new Set(); // catalog signatures checked this page load (verifyEvent's seen)
+  let prunedAt = -Infinity; // the last prune of the relay streams' observations (s)
   const sending = new Set();
   const log = (err) => console.error('[satori] nostr', err);
 
@@ -230,7 +237,15 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     for (const e of relays.values()) if (e.relay?.state === 'closed' && !added.includes(e)) e.relay.connect();
     await connectNew(added);
     onChange();
-    await Promise.all([background(announce()), background(relayList())]);
+    await Promise.all([background(announce()), background(relayList()), background(prune())]);
+  }
+
+  /** At most daily, in the hourly pass: each stream's observations older than its window go (db.pruneRelay, batched). */
+  async function prune() {
+    if (now() - prunedAt < RELAY_LIST_S) return;
+    prunedAt = now();
+    const n = await db.pruneRelay({ buckets: RELAY_WINDOW });
+    if (n) console.info(`[satori] relay observations pruned to each stream's window: ${n}`);
   }
 
   /**
@@ -245,14 +260,16 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const sub = await db.relayStream(uuid);
     if (!sub?.active || !verifyEvent(e)) return;
     const ts = safeEpoch(o.timestamp);
+    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
+    const windowS = cadence * RELAY_WINDOW;
+    if (ts !== null && sub.obs_ts != null && ts < sub.obs_ts - windowS) return; // older than the window: a replay, never kept
     const n = numericValue(o.value);
     const value = ts !== null && Number.isFinite(n) ? n : null;
     const fresh = await db.addRelayObservation({ stream_uuid: uuid, seq: o.seq, ts, value,
       raw: JSON.stringify(o.value) ?? 'null', event_id: e.id, received_at: t() });
     if (!fresh) return;
-    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
-    // one cadence ahead (docs/intent/engine.md): steps of the cadence, one of them
-    const f = value === null ? null : forecast(await db.relayHistory(uuid), { step: cadence, horizon: cadence });
+    // one cadence ahead (docs/intent/engine.md): steps of the cadence, one of them; from the engine's window
+    const f = value === null ? null : forecast(await db.relayHistory(uuid, windowS), { step: cadence, horizon: cadence });
     const pub = predValue(f, o.value);
     const seq = await db.nextPredSeq(uuid);
     const at = t();

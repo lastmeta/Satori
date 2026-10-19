@@ -13,7 +13,7 @@ import { MARGIN, explainModel } from '../engine/evolve.js';
 import { canRetrain } from '../engine/retrain.js';
 import { explainForecast, STEP_S, HORIZON_STEPS, median } from '../engine/index.js';
 import { UP } from '../chain/index.js';
-import { DEFAULT_CADENCE_S } from './nostr.js';
+import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
 import { fmtAgo, fmtIn } from './health.js';
 
 /** Within ±5 % of no change's error is a tie: the margin evolution keeps a challenger by (src/engine/evolve.js). */
@@ -303,7 +303,7 @@ export async function modelDetail({ db, id, streams = [], subscriptions = [], la
     const t = clock();
     try { return await fn(...args); } finally { read += clock() - t; }
   };
-  const reads = { histories: timed((u) => db.histories(u)), relayHistory: timed((u) => db.relayHistory(u)) };
+  const reads = { histories: timed((u) => db.histories(u)), relayHistory: timed((u, windowS) => db.relayHistory(u, windowS)) };
   const [source, key] = parseId(id, streams);
   let d = null;
   if (source === 'central') d = await centralDetail(reads, key, streams);
@@ -354,7 +354,7 @@ async function nostrDetail(db, key, subscriptions) {
   const [m] = s ? nostrModels([s]) : [];
   if (!m) return null;
   const cadence = cadenceOf(s);
-  const points = await db.relayHistory(key);
+  const points = await db.relayHistory(key, cadence * RELAY_WINDOW); // the engine's window, as the intake reads it
   const x = explainForecast(points, { step: cadence, horizon: cadence });
   const scored = nostrModels([{ ...s, prediction: { ...s.prediction, score: x?.score, persist: x?.persist } }])[0];
   return detailOf(scored, x && { ...x, inputs: [key], influence: [1] }, { step: cadence, horizon: cadence, weight: x?.weight ?? null,

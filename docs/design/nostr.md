@@ -156,6 +156,41 @@ one that never answers (10 s timeout), delays nothing else.
   per stream (a scan of every observation took 0.6 s at 86k rows and 5 s at
   1.3M).
 
+## Data growth
+
+The reliability review (2026-10-19) measured a 1-minute relay stream: every
+observation read the stream's whole history and forecast on all of it, and
+nothing was ever deleted, so a year in, each observation cost seconds and the
+file grew without end. Now (`RELAY_WINDOW`, `src/neuron/nostr.js`):
+
+- **The engine's window**: 400 of the stream's cadences back from its newest
+  observation (a daily stream ~400 days, the default; a 1-minute one ~7 h).
+  The intake, the training pass and the Models tab read only that
+  (`db.relayHistory(uuid, seconds)`): the engine needs 6 lag pairs and 28
+  backtest origins, and 400 buckets is about what central's history gives a
+  12 h model. An observation older than the window (a relay replaying an old
+  event) is neither kept nor forecast.
+- **The prune**: in the hourly pass, at most daily (the first at start),
+  each stream's observations older than its window are deleted
+  (`db.pruneRelay`; a row with no time of its own by its arrival), 10,000 to
+  a statement, each its own call in the database's queue so a poll's writes go
+  between them. The stream's count (`observations`) stays what was received.
+
+**Measured** (Chrome on OPFS, this box at load ~7.5, one 1-minute stream,
+the app's own opener and schema; `relaybench/bench.mjs` in the session's
+scratchpad):
+
+| | before: read + forecast per observation | after: the window (401 rows) | after the prune |
+|---|---|---|---|
+| 1 year (525,600 rows, 32 MB) | 2.18 s + 2.98 s = **5.2 s** | 114 ms + 5 ms = **0.12 s** | 24 ms + 5 ms; 10.5 MB |
+| 2 years (1,051,200 rows, 61 MB) | 3.23 s + 9.99 s = **13.2 s** | 144 ms + 5 ms = **0.15 s** | 20 ms + 6 ms; 36.5 MB |
+
+The first prune of such a backlog is slow: 51 s for a year's 525,199 rows,
+101 s for two (about 1 s per 10,000-row batch; the indexes' deletes dominate:
+one DELETE took 42 s, a copy-truncate-reinsert 39 s). It runs once, in the
+background, and a poll waits at most one batch; afterwards a day of a
+1-minute stream is 1,440 rows.
+
 ## The engine's step
 
 `forecast(points, { step, horizon })` buckets history by `step` instead of
@@ -213,8 +248,9 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   other's OK is false, so that publish counts 0 relays. Lite stamps
   `created_at` the same way; with cadences of a minute or more it needs two
   observations of one stream within a second (the stored one and a live one).
-- History is what the neuron received while the tab was open: a reopened tab
-  gets each stream's latest observation, not the ones it missed. For the same
+- History is what the neuron received while the tab was open, within the
+  engine's window ([above](#data-growth)): a reopened tab gets each stream's
+  latest observation, not the ones it missed. For the same
   reason the first observation after subscribing is the relays' stored latest
   one (34601 is replaceable: one per stream), however old.
 

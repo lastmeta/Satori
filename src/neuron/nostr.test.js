@@ -2,12 +2,13 @@
 // relays and the read-only flag, discover, subscribe, intake → forecast → `_pred`,
 // announce on open, reconcile, NIP-65, unsubscribe.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { memoryDb } from '../../test/memory-db.js';
+import { memoryDb, memoryConn } from '../../test/memory-db.js';
+import { openDb } from '../db/index.js';
 import { signEvent, verifyEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../nostr/satori.js';
 import { forecast, explainForecast } from '../engine/index.js';
 import { createWork } from './work.js';
-import { createNostr, FOLLOW_ID, MAX_STREAMS } from './nostr.js';
+import { createNostr, FOLLOW_ID, MAX_STREAMS, RELAY_WINDOW } from './nostr.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -85,8 +86,10 @@ let nostr;
 let changes;
 let published; // onPublished: each `_pred` a relay took (Home's activity log)
 let failures; // onError: an intake that failed (the database, the engine)
+let conn; // the database's own connection: a test's bulk rows in one statement
 async function boot({ https = false, ws = true, centralWrite = false, user = [USER_RELAY], dbOf = (d) => d } = {}) {
-  db = await memoryDb();
+  conn = await memoryConn();
+  db = await openDb(conn);
   relays = fakeRelays();
   central = fakeCentral();
   changes = 0;
@@ -379,6 +382,53 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const f = forecast(points, { step: 60, horizon: 60 });
     expect(f).toMatchObject({ model: 'bar1', horizon: 60 });
     expect(JSON.parse(u.published.at(-1).content)).toMatchObject({ stream_name: 'fast_pred', value: String(f.value) });
+  });
+
+  test(`the engine reads a stream's window, ${RELAY_WINDOW} cadences back from its newest; an observation older than that is not kept`, async () => {
+    await boot();
+    openAll();
+    await settle();
+    const c = relays.get(CENTRAL_RELAY);
+    const u = relays.get(USER_RELAY);
+    c.stored.push(announce('fast', { cadence: 60 }));
+    await nostr.subscribe(PROV_PUB, 'fast');
+    const uuid = relayUuid(PROV_PUB, 'fast');
+    const t0 = clock - 1000 * 60;
+    await conn.query(`INSERT INTO relay_observations SELECT '${uuid}', k + 1, ${t0} + k * 60, 100 + sin(k / 7) + k / 500, '1', 'x' || k,
+      ${t0} + k * 60 FROM range(1000) t(k)`);
+    await conn.query(`UPDATE relay_streams SET observations = 1000, obs_seq = 1000, obs_ts = ${t0 + 999 * 60} WHERE uuid = '${uuid}'`);
+    clock = t0 + 1000 * 60;
+    u.published = [];
+    await c.deliver(observe('fast', '102', 1001, clock));
+    await settle();
+    const all = await db.relayHistory(uuid);
+    const win = all.filter((p) => p.ts >= clock - RELAY_WINDOW * 60);
+    expect(win).toHaveLength(RELAY_WINDOW + 1);
+    const f = forecast(win, { step: 60, horizon: 60 });
+    expect(f.value).not.toBe(forecast(all, { step: 60, horizon: 60 }).value); // the window changes the fit: the test can tell
+    expect(JSON.parse(u.published.at(-1).content).value).toBe(String(f.value));
+    // an observation older than the window (a relay replaying an old event): neither kept nor forecast
+    await c.deliver(observe('fast', '7', 5000, clock - (RELAY_WINDOW + 5) * 60));
+    await settle();
+    expect(u.published).toHaveLength(1);
+    expect((await db.relayStream(uuid)).observations).toBe(1001);
+  });
+
+  test('the hourly pass prunes each stream to its window, at most daily (the first at start)', async () => {
+    await boot();
+    openAll();
+    await settle();
+    relays.get(CENTRAL_RELAY).stored.push(announce('fast', { cadence: 60 }));
+    await nostr.subscribe(PROV_PUB, 'fast');
+    const uuid = relayUuid(PROV_PUB, 'fast');
+    await conn.query(`INSERT INTO relay_observations SELECT '${uuid}', k + 1, ${clock} + k * 60, 1, '1', 'x' || k, ${clock} FROM range(500) t(k)`);
+    await nostr.reconcile(); // within a day of the start's pass: not again
+    await settle();
+    expect(await db.relayHistory(uuid)).toHaveLength(500);
+    clock += 86_400;
+    await nostr.reconcile();
+    await settle();
+    expect(await db.relayHistory(uuid)).toHaveLength(RELAY_WINDOW + 1);
   });
 
   test('intake skips: the same event from another relay, the same seq again, unsubscribed streams, bad signatures, heartbeats', async () => {

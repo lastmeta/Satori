@@ -609,6 +609,26 @@ describe('relay streams (Nostr), apart from central', () => {
     expect(await db.streams()).toEqual([]);
   });
 
+  test("the engine's window: relayHistory(uuid, seconds) reads only what is that close to the stream's newest time", async () => {
+    await db.subscribeRelay(sub());
+    for (let k = 0; k < 10; k++) await db.addRelayObservation(robs({ seq: k, ts: 1000 + k * 60, value: k, event_id: `e${k}` }));
+    expect((await db.relayHistory('r-1', 180)).map((p) => p.value)).toEqual([6, 7, 8, 9]); // 1540 − 180 = 1360 on
+    expect(await db.relayHistory('r-1')).toHaveLength(10); // no window: all of it
+  });
+
+  test("pruneRelay: each relay stream's rows older than its window (buckets × its cadence; a day without one) go, in batches", async () => {
+    await db.subscribeRelay(sub()); // cadence 900
+    await db.subscribeRelay(sub({ uuid: 'r-2', stream_name: 'eth', cadence_seconds: null }));
+    for (let k = 0; k < 30; k++) await db.addRelayObservation(robs({ seq: k, ts: 100_000 + k * 900, value: k, event_id: `a${k}` }));
+    for (let k = 0; k < 5; k++) await db.addRelayObservation(robs({ stream_uuid: 'r-2', seq: k, ts: 100_000 + k * 86_400, value: k, event_id: `b${k}` }));
+    await db.addRelayObservation(robs({ seq: 99, ts: null, value: 1, event_id: 'a99', received_at: 1 })); // no time of its own: its arrival's
+    expect(await db.pruneRelay({ buckets: 10, batch: 4 })).toBe(19 + 1); // r-1 keeps ts ≥ newest − 9000 (and the timeless row goes); r-2 all
+    expect((await db.relayHistory('r-1')).map((p) => p.value)).toEqual([19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
+    expect((await db.relayHistory('r-2')).map((p) => p.value)).toEqual([0, 1, 2, 3, 4]); // 4 days: all inside 10
+    expect(await db.pruneRelay({ buckets: 10, batch: 4 })).toBe(0);
+    expect(await db.relayStream('r-1')).toMatchObject({ observations: 31, obs_seq: 99 }); // the count is what was received
+  });
+
   test("relayStreams: each with its latest observation and our latest _pred", async () => {
     await db.subscribeRelay(sub());
     await db.subscribeRelay(sub({ uuid: 'r-2', stream_name: 'eth', name: 'Ether', now: 150 }));

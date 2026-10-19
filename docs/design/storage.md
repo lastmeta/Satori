@@ -337,7 +337,9 @@ of a ~110 ms drill-in on this box; [models.md](models.md#cost)).
 Columns kept but no longer written: `relay_streams.meta` (the announcement
 at subscribe time) and `unsubscribed_at`; nothing read them. Kept and written,
 though only the latest is read (from `obs_*`): `relay_observations.raw` and
-`received_at`, the only record of what each provider sent and when.
+`received_at`, the only record of what each provider sent and when, for the
+engine's window: each relay stream keeps 400 of its cadences of observations,
+pruned daily ([nostr.md](nostr.md#data-growth)).
 
 ## meta keys
 
