@@ -299,7 +299,8 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(page.locator('[data-test=model-title]')).toHaveText(bvar.name);
   const inputs = page.locator('[data-test=model-in] [data-test=model-input]');
   await expect(inputs).toHaveCount(1 + bvar.spec.companions.length);
-  const pcts = (await inputs.locator('.ipct').allTextContents()).map((x) => Number(x.replace('%', '')));
+  // "<1%": a share under half a percent (which model this is depends on how the clock falls on the 12 h buckets)
+  const pcts = (await inputs.locator('.ipct').allTextContents()).map((x) => (x === '<1%' ? 0.5 : Number(x.replace('%', ''))));
   expect(pcts).toEqual([...pcts].sort((a, b) => b - a)); // ranked
   expect(Math.abs(pcts.reduce((a, b) => a + b, 0) - 100)).toBeLessThanOrEqual(pcts.length); // rounding
   // what it is, under its name, and how it works, first in the Model
