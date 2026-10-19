@@ -13,6 +13,62 @@ Only the tab that holds the `satori-neuron` Web Lock opens it. The API is
 `src/util.js`). No DuckDB extension is loaded (`autoload_known_extensions =
 false`): JSON is kept as text and parsed in JS. Times are unix seconds.
 
+## The first visit
+
+DuckDB-WASM's engine is a 34 MB wasm: 7.6 MB gzipped, 5.1 MB in brotli
+([deploy.md](deploy.md#compression)). On a phone's Slow 4G that is half a
+minute, and before 2026-10-19 the app opened the database before anything
+else, so a first visit sat on "Opening…" for about 59 s (the reliability
+review, live). Now (`boot()` in `src/main.js`, `src/db/opfs.js`):
+
+- **The database opens in the background** from the first moment, and says
+  its steps (`state.engine`): `download` with the bytes on the wire (DuckDB's
+  instantiate progress counts the decoded wasm against the Content-Length,
+  which is the compressed size, so `transferProgress` scales it by the wasm's
+  decoded size, `__DUCKDB_EH_BYTES__`, set by `vite.config.js`), `start`
+  (compiled), `open` (the database and its migrations), `ready`.
+- **A first visit** (no `satori-mvp.duckdb` in this origin's OPFS,
+  `hasDatabase()`) shows **Setup at once**: its first steps (Create and the
+  words, their check, the passphrase; Restore's words; the Docker files)
+  need no database. Writing the keys waits for it (`saveKeys`), and Setup
+  says so in one line with a progress bar, "Finishing setup… downloading the
+  engine, 2.5 of 5.1 MB", then "starting the engine…", "opening the
+  database…", "saving your keys…", until Home. An agent's `setup()` on that
+  screen waits the same way.
+- **A revisit** paints the last visit's Home at once
+  ([health.md](health.md#the-last-visit)), or, on another tab's route,
+  "Opening… downloading the engine, 1.2 of 5.1 MB" (from the worker's cache)
+  … "starting the neuron…".
+- **The service worker registers once the database is open**
+  ([pwa.md](pwa.md#caching)): on a first visit its precache would download
+  the same wasm beside the page's, and the browser's cache lock can hold the
+  page's download (and its progress) until the worker's is done.
+
+A database that can't open still ends on "Satori could not start", from
+Setup too (nothing was stored).
+
+![A first visit on Slow 4G: Setup, and the keys waiting for the engine](../screenshots/first-visit-setup-wait.png)
+
+**Measured** (2026-10-19), as the review did: its Slow 4G link (DevTools'
+numbers, 1.44 Mb/s down, 675 kb/s up, 562.5 ms round trip, one link for
+every byte the page, its workers and its service worker send or take,
+through a proxy), an emulated Pixel 7a (CPU × 4), a fresh profile; the deploy
+image of each version on `http://localhost` (a secure context, as https),
+central2 for real, production relays refused at the proxy; `setup()` called
+the moment Setup shows:
+
+| | before (99edf5a) | after (40623ac) |
+|---|---|---|
+| First visit: Setup on screen | 51.9 s (the review, live: 59 s) | **4.3 s** |
+| The keys stored, `setup()` at once | 53.5 s | 40.6 s (the engine: 5.1 MB in brotli, was 7.6) |
+| Bytes from the app's host | 8.10 MB | 5.53 MB |
+| First predictions sent | 81.7 s | 70.0 s |
+| Revisit: Home on screen | 10.9 s (live) | **3.0 s** (the last visit's, marked; its ring and steps moving) |
+| Revisit: live Home | 10.9 s | 11.7 s |
+
+A person reading and checking 24 words takes longer than the download, so
+on a first visit the keys usually find the engine ready.
+
 ## The checkpoint rule
 
 OPFS keeps what DuckDB has **checkpointed** in the database file. A tab may

@@ -442,6 +442,29 @@ Close up (live on central2, a poll):
 
 <img src="../screenshots/glow-chip-light.png" alt="the Central chip glowing, light" width="160"> <img src="../screenshots/glow-chip-dark.png" alt="the Central chip glowing, dark" width="160">
 
+## The last visit
+
+A revisit waits seconds for DuckDB and the neuron (11 s on Slow 4G with a
+phone's CPU, [storage.md](storage.md#the-first-visit)). Meanwhile Home
+shows the **last visit's** at once: a small snapshot of the last health
+(`snapshotOf`, `src/ui/prefs.js`: the title, the status and tone, the line,
+the day strip, the chips' words, the feed, and the claimable rewards, the
+vault and the gas; never the card, whose buttons need the neuron, the work,
+or keys), kept in `localStorage` (`satori-home`, read and written in
+try/catch; storage blocked: no snapshot) at most every 10 s while Home's
+health changes, and when the page is hidden or left.
+
+- Only on Home's route; another tab's shows "Opening…" with the step.
+- **Marked**: the hero says "From your last visit, 2 h ago", the rest of
+  Home is faded, the ring turns and the line says the step ("Opening…
+  downloading the engine, 1.2 of 5.1 MB", "starting the engine…", "opening
+  the database…", "starting the neuron…"). No tab bar and no card yet; the
+  chips and Claim do nothing.
+- The neuron's own Home replaces it as soon as it starts; for agents
+  `<body data-screen>` stays `loading` until then.
+
+<img src="../screenshots/revisit-last-visit.png" alt="A revisit: the last visit's Home, marked, while the engine loads" width="240">
+
 ## The day strip
 
 Local days, newest last: 14 on the phone, 30 on a computer (`health().days`

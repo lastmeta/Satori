@@ -27,7 +27,7 @@ traffic passes through this container.
 | `deploy/Dockerfile` | `nginx:1.30.5-alpine3.24`, pinned by the digest of its index (stable; the amd64 image was built 2026-09-23). Writes `/etc/nginx/csp.conf` from the `CSP` build argument (`add_header Content-Security-Policy "…" always;`) and empties the default site. Copies `deploy/nginx.conf` over `conf.d/default.conf` and `dist/` into the html root. Writes a `.gz` beside each html, js, css, wasm, txt and webmanifest file. Runs `nginx -t`. |
 | `deploy/nginx.conf` | The server ([below](#what-it-sends)). |
 | `deploy/build.env` | This deployment's [build variables](#build-variables). |
-| `scripts/deploy-image.sh` | Runs `npm ci` if `node_modules` is missing or older than the lock file. Builds `dist/` with `deploy/build.env` (a variable already set in the environment wins) and checks the bundle for those values. Builds `satori-neuron:<git short sha>` (`-dirty` with uncommitted changes) and tags it `:latest`, passing the CSP from `csp.js`. Then checks the image: `nginx -t`, its CSP line equal to `csp.js`'s, and the values in its bundle. Exits 2 if docker is not reachable; `dist/` is then built and checked, but there is no image. |
+| `scripts/deploy-image.sh` | Runs `npm ci` if `node_modules` is missing or older than the lock file. Builds `dist/` with `deploy/build.env` (a variable already set in the environment wins) and checks the bundle for those values. Writes DuckDB's wasm in brotli beside it (`scripts/brotli.mjs`, [compression](#compression)). Builds `satori-neuron:<git short sha>` (`-dirty` with uncommitted changes) and tags it `:latest`, passing the CSP from `csp.js`. Then checks the image: `nginx -t`, its CSP line equal to `csp.js`'s, and the values in its bundle. Exits 2 if docker is not reachable; `dist/` is then built and checked, but there is no image. |
 | `.dockerignore` | The build context is the repo; only `dist/` and `deploy/nginx.conf` go in. |
 | `e2e/deploy.spec.js` | `npm run e2e:deploy`: the image (or a deployment) at `DEPLOY_URL` ([verify](#verify)). |
 
@@ -40,9 +40,10 @@ Neither file holds a copy. The script refuses a CSP that contains `"`, `$` or
 
 Every response, 404s included, carries:
 
-- `Content-Security-Policy` (`csp.js`). It sits at the server level and no
-  location has an `add_header`, because an `add_header` in a location would
-  drop the server's headers there;
+- `Content-Security-Policy` (`csp.js`). It sits at the server level; the
+  one location with an `add_header` of its own (the wasm's, for brotli,
+  [below](#compression)) includes it again, because an `add_header` in a
+  location drops the server's headers there;
 - `X-Content-Type-Options: nosniff`.
 
 | Path | Cache-Control | Content-Type |
@@ -58,11 +59,39 @@ Every response, 404s included, carries:
 
 `no-cache` means revalidate each time: nginx answers 304 on a matching ETag.
 Only 2xx and 3xx responses get a Cache-Control, so a 404 is never cached for a
-year. The `.gz` copies go to any client that accepts gzip (`gzip_static`), so
-DuckDB's 34 MB wasm is sent as 7.6 MB, with `Vary: Accept-Encoding`. Two
-settings keep this working behind a proxy: `gzip_proxied any` and
-`gzip_http_version 1.0`. The second matters because nginx's `proxy_pass`
-speaks HTTP/1.0 unless the proxy sets `proxy_http_version 1.1`.
+year.
+
+### Compression
+
+The `.gz` copies go to any client that accepts gzip (`gzip_static`), with
+`Vary: Accept-Encoding`. Two settings keep this working behind a proxy:
+`gzip_proxied any` and `gzip_http_version 1.0`. The second matters because
+nginx's `proxy_pass` speaks HTTP/1.0 unless the proxy sets
+`proxy_http_version 1.1`.
+
+**DuckDB's wasm in brotli** (2026-10-19): 34.2 MB raw, 7.64 MB gzipped,
+**5.07 MB in brotli** (quality 11, a 16 MB window: −34 %), the largest part
+of a first visit ([storage.md](storage.md#the-first-visit)). The pinned
+nginx has no brotli module (its image ships acme, geoip, image-filter, njs
+and xslt; `brotli_static` needs ngx_brotli), so:
+
+- `scripts/brotli.mjs` (run by `deploy-image.sh` after the build) writes
+  `dist/assets/duckdb-eh-*.wasm.br` with node's zlib. Quality 11 takes
+  about 6 minutes on this box, so each is kept by the wasm's sha256 in
+  `node_modules/.cache/satori-brotli` and made once per DuckDB version.
+- `deploy/nginx.conf`: a `map` on `Accept-Encoding` picks the `.br` copy
+  (`try_files $uri$satori_br $uri`), a second `map` on the file actually
+  served sets `Content-Encoding: br` only for a `.br` (DuckDB's mvp wasm has
+  no copy and falls back to its `.gz`), the type stays `application/wasm`,
+  and `Vary: Accept-Encoding` is said once (`gzip_vary off` there). Its
+  location repeats the server's headers (the CSP, nosniff, Cache-Control),
+  since an `add_header` in a location drops them.
+- Checked by `e2e/deploy.spec.js`: br, gzip and identity each give the same
+  wasm with the CSP and the cache rule; br under 70 % of gzip; the mvp
+  wasm's gzip.
+
+The proxy in front passes `Accept-Encoding` through (nginx's `proxy_pass`
+does by default) and does not recompress an encoded response.
 
 This covers what [pwa.md](pwa.md#csp-and-hosting) asks of a host, except https,
 which the proxy provides.

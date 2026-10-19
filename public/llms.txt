@@ -57,6 +57,19 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (a first visit you can watch)
+
+- A fresh browser shows Setup at once (`<body data-screen>` = `setup`
+  within seconds), while DuckDB's engine (5.1 MB in brotli, 7.6 gzipped)
+  downloads in the background. `setup()` there waits for it, then stores
+  the keys; the page says "Finishing setup… downloading the engine, 2.5 of
+  5.1 MB" (`setup-wait`) meanwhile.
+- A revisit paints the last visit's Home at once, marked "From your last
+  visit, 2 h ago" (`health-stale`), its hero saying what it waits for
+  ("Opening… starting the engine…"); `data-screen` stays `loading` until the
+  neuron runs, so wait for it as before. Another tab's route shows
+  "Opening…" with the step (`opening`).
+
 ## Changed 2026-10-19 (the vault locks on its own; Backup and Send ask for the passphrase each time)
 
 - The vault locks on its own 5 minutes after the last interaction (a key, a

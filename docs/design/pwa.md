@@ -81,10 +81,13 @@ lines of code.
 - Cached files are matched with `ignoreVary`: a module script is sent with an
   `Origin` header, so a host's `Vary: Origin` (`vite preview` sends one)
   would otherwise miss and fail offline.
-- On a first visit the page and the worker's precache both fetch the wasm; a
-  host that sends hashed files as cacheable lets the second come from the
-  HTTP cache. The first visit is not controlled by the worker (no
-  `clients.claim()`); the next load is.
+- **The worker registers once the database is open** (`registerWorker()`,
+  2026-10-19): on a first visit its precache would fetch DuckDB's wasm beside
+  the page's own download, and the browser's cache lock could hold the
+  page's (and its progress, [storage.md](storage.md#the-first-visit)) until
+  the worker's was done. After it, the precache's revalidation of the
+  immutable wasm is a 304. The first visit is not controlled by the worker
+  (no `clients.claim()`); the next load is.
 
 ## Updates
 
