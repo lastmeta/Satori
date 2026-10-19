@@ -176,9 +176,10 @@ file grew without end. Now (`RELAY_WINDOW`, `src/neuron/nostr.js`):
   a statement, each its own call in the database's queue so a poll's writes go
   between them. The stream's count (`observations`) stays what was received.
 
-**Measured** (Chrome on OPFS, this box at load ~7.5, one 1-minute stream,
-the app's own opener and schema; `relaybench/bench.mjs` in the session's
-scratchpad):
+**Measured** (2026-10-19, Chrome on OPFS through the app's own opener and
+schema, this shared box at load ~7.5: one 1-minute stream seeded for a year
+and two, then `db.relayHistory` and `forecast` timed, best of 3, before and
+after this change on the same file):
 
 | | before: read + forecast per observation | after: the window (401 rows) | after the prune |
 |---|---|---|---|

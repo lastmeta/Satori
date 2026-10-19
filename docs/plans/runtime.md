@@ -83,15 +83,14 @@ skews the page's `Date` 12 h with the page open: the poll ran 25.5 s and
 
 ## One neuron per browser
 
-- On load, each tab probes with
-  `navigator.locks.request('satori-neuron', {ifAvailable:true}, cb)`. Granted →
-  this tab is the leader: spawn the neuron worker and hold the lock until close.
-  `null` → follower.
-- A follower shows "Satori is running in another tab" and nothing else, and
-  makes a second, **queued** request without `ifAvailable`. When that grant
-  arrives the leader has gone, and the follower promotes itself. Never `steal`.
-  (With `ifAvailable` alone nothing queues and nothing takes over: MDN
-  `LockManager.request`.)
+✅ Built (2026-10-19, [../design/pwa.md](../design/pwa.md#one-neuron)): each
+tab makes one **queued** request, `navigator.locks.request('satori-neuron',
+cb)` (no `ifAvailable`), held until the page goes. Not granted within 300 ms,
+the tab says "Satori is open in another tab … This tab takes over when that
+one closes."; when the grant arrives the leader has gone, and this tab opens
+the database and starts the neuron, with no reload. Never `steal`. (With
+`ifAvailable` alone nothing queues and nothing takes over: MDN
+`LockManager.request`.) Still open: the neuron in a worker, below.
 - Only the leader opens the OPFS database.
 - No SharedWorker: DuckDB's `AsyncDuckDB` spawns its own nested Worker, which
   SharedWorkers cannot do in Chrome or Safari (browser-compat-data

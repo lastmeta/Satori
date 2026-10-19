@@ -78,7 +78,24 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    ([../design/pwa.md](../design/pwa.md#install)); ✅ honest colours for the
    contract and the relays, a batch that never mines
    ([../design/health.md](../design/health.md#the-contract-unused),
-   [../design/base.md](../design/base.md#a-batch-that-never-mines)).
+   [../design/base.md](../design/base.md#a-batch-that-never-mines)); and
+   the last three (the owner approved them 2026-10-19): ✅ hardening where
+   the code and the network come from: HSTS, the Base RPC pinned in the
+   build, central's contract addresses checked never used, a max fee on
+   every transaction, CCIP-read off, address changes noted on Home, the
+   build's CSP without `ws:` and with `form-action 'none'`
+   ([../design/deploy.md](../design/deploy.md#what-it-sends),
+   [../design/base.md](../design/base.md#config),
+   [../design/health.md](../design/health.md#address-changes)); ✅ agents: a
+   Safety section and a cleaner `/llms.txt`, its history in
+   `/llms-changelog.txt`, the relays' catalog signature-checked
+   ([../design/nostr.md](../design/nostr.md)); ✅ recovery and housekeeping:
+   the second tab takes over ([../design/pwa.md](../design/pwa.md#one-neuron)),
+   a database file that won't open set aside on request, a newer additive
+   schema opened ([../design/storage.md](../design/storage.md#recovery)),
+   relay data kept to the engine's window ([../design/nostr.md](../design/nostr.md#data-growth)),
+   the import capped and its errors without secrets, the build's version
+   stamped, secrets wiped where JS can ([../design/keys.md](../design/keys.md#secrets-in-memory)).
    Left: the keys in a worker ([runtime.md](runtime.md)).
 14. **Later**, in rough order of value per effort: the Models tab showing
    the real-world score (central's scoring of what was sent) next to the
