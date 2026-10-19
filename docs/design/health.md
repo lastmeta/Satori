@@ -637,6 +637,16 @@ used". A session that missed nothing is not shown.
 
 ## Live
 
+2026-10-19, after the review's last three fixes, the restarted dev server on
+:5180 against central2, fresh profiles, no stubs, nothing to prod: setup to
+84 of 84 accepted in 14.6 s (54,869 history rows), *Predicting*, Settings'
+"Version browser-0.1.0+223cef2"
+([phone](../screenshots/live-final-phone.png)); on another, Base RPC set to
+`/rpc` and back: two quiet notes under the hero, newest first, the status
+untouched; Stake on the fork refused above a 0.0001 gwei max fee, then sent;
+the identity's batch for round 20745
+([computer](../screenshots/live-home-hardening.png)).
+
 2026-10-17, the dev server on :5180 against central2, a fresh browser
 profile, no stubs: Create (the words confirmed) → Home *Starting* ("First
 predictions in 18 min", every chip idle) → Poll now: 82 streams, central's
