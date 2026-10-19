@@ -729,6 +729,17 @@ describe('address changes: a quiet note on Home for 24 h, and in the feed (the s
     const rpc = changed(NOW - M, { what: 'rpc', to: 'https://mine.example' });
     expect(health({ rows: [...running(), rpc] }).notices[0].text).toBe('Base RPC changed to https://mine.example');
   });
+  test('the reward address set or cleared: a note too, with the whole address; the status untouched', () => {
+    const to = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';
+    const rows = [...running(), changed(NOW - 2 * H, { what: 'reward', to }), changed(NOW - H, { what: 'reward', to: '' })];
+    const h = health({ rows });
+    expect(h.notices).toEqual([
+      { at: NOW - H, what: 'reward', text: 'Reward address cleared: rewards go to your vault' },
+      { at: NOW - 2 * H, what: 'reward', text: `Reward address set to ${to}` },
+    ]);
+    expect([h.status, h.action, h.reasons]).toEqual(['ok', null, []]);
+    expect(h.feed.slice(0, 2).map((f) => f.text)).toEqual(['Reward address cleared: rewards go to your vault', `Reward address set to ${to}`]);
+  });
   test("central's contract addresses that differ from the app's: a quiet warning in the feed only", () => {
     const r = row('config', NOW - H, 'warn', { url: 'https://central2.satorinet.io', keys: ['token', 'hub'] });
     const h = health({ rows: [...running(), r] });

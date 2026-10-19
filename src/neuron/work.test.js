@@ -119,6 +119,19 @@ describe('createWork', () => {
     expect(w.of('train')).toMatchObject({ critical: false });
   });
 
+  test("the reward address (`reward`) is the hero's after the keys, never critical: it is saved or it is not", () => {
+    const e = (task, step) => ({ task, step, done: null, total: null, since: 0, critical: false });
+    expect(ORDER.slice(ORDER.indexOf('keys'), ORDER.indexOf('keys') + 2)).toEqual(['keys', 'reward']);
+    expect(HERO).toContain('reward');
+    expect(leading({ reward: e('reward', 'save'), central: e('central', 'observations') }, HERO)).toMatchObject({ task: 'central' });
+    expect(leading({ reward: e('reward', 'save') }, HERO)).toMatchObject({ task: 'reward' });
+    const w = createWork();
+    for (const step of ['login', 'save', 'clear']) {
+      w.start('reward').step(step);
+      expect(w.of('reward')).toMatchObject({ critical: false });
+    }
+  });
+
   test('Retrain (`retrain`) is the hero\'s after the training pass, never critical; its entry carries the model\'s name', () => {
     const e = (task, step) => ({ task, step, done: 3, total: null, since: 0, critical: false });
     expect(ORDER.slice(0, 4)).toEqual(['central', 'base', 'train', 'retrain']);
@@ -155,6 +168,9 @@ describe('workText: plain words, from the person\'s side', () => {
     [e('discover', 'ask', 1, 2), 'Asking the relays · 1 of 2'],
     [e('subscribe', 'find'), 'Finding the stream on the relays…'],
     [e('keys', 'save'), 'Saving your keys…'],
+    [e('reward', 'login'), 'Signing in to the Satori Network…'],
+    [e('reward', 'save'), 'Saving the reward address…'],
+    [e('reward', 'clear'), 'Clearing the reward address…'],
     [e('train', 'score', 12, 81), 'Scoring models · 12 of 81'],
     [{ ...e('retrain', 'search', 0), name: 'eth' }, 'Retraining eth…'],
     [{ ...e('retrain', 'search', 40), name: 'eth' }, 'Retraining eth · tried 40'],

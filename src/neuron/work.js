@@ -1,6 +1,6 @@
 // What the neuron is doing now (docs/design/health.md#work): one entry per task in progress, { task, step, done, total,
 // since, critical }, set by the poll cycle (its history, engine and submission), the Base batch and the vault's and the
-// network's actions, and the training pass. Home draws it: the hero's ring turns and its line says the step, slowly enough to read
+// network's actions, the reward address, and the training pass. Home draws it: the hero's ring turns and its line says the step, slowly enough to read
 // (src/ui/hold.js); agents read health().work. since: when the step began (ms); a count ticking keeps it. critical:
 // closing Satori now would lose work (the hero goes vivid green and says to keep it open).
 //
@@ -8,12 +8,13 @@
 //   job.step('search', 40, null, { name: 'eth' })                                 // extra fields on the entry (a Retrain's model)
 
 /**
- * The tasks, the neuron's own first; HERO: the ones Home's hero shows (the network's show on the Streams tab). `train`:
+ * The tasks, the neuron's own first; HERO: the ones Home's hero shows (the network's show on the Streams tab). `reward`:
+ * the reward address saved or cleared (Settings, setRewardAddress()), never critical. `train`:
  * the training pass (src/neuron/train.js), after a poll and the Base batch, which it waits for; `retrain`: a model's
  * Retrain (src/neuron/retrain.js), which waits for a poll too.
  */
-export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'discover', 'subscribe'];
-export const HERO = ORDER.slice(0, 9);
+export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'reward', 'discover', 'subscribe'];
+export const HERO = ORDER.slice(0, 10);
 const VAULT = new Set(['stake', 'unstake', 'claim', 'send', 'keys']);
 /**
  * Closing now would lose work: predictions being sent, a Base batch or a vault transaction sent and not yet confirmed,
@@ -47,6 +48,10 @@ const TEXT = {
   'discover:verify': (e) => `Checking the announcements' signatures · ${e.done} of ${e.total}`,
   'subscribe:find': () => 'Finding the stream on the relays…',
   'keys:save': () => 'Saving your keys…',
+  // the reward address saved or cleared (src/neuron/reward.js): signed in first; a read is quiet (Settings' row says it)
+  'reward:login': () => 'Signing in to the Satori Network…',
+  'reward:save': () => 'Saving the reward address…',
+  'reward:clear': () => 'Clearing the reward address…',
   'train:score': (e) => `Scoring models · ${e.done} of ${e.total}`,
   'retrain:search': (e) => (e.done ? `Retraining ${e.name} · tried ${e.done}` : `Retraining ${e.name}…`),
   // a vault action's steps (Stake, Unstake, Send; Claim's confirm)

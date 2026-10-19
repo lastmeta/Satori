@@ -406,8 +406,12 @@ export function daysOf(rows, now, since = null, n = DAYS) {
 // ── the feed ──
 
 const times = (r) => (r.count > 1 ? ` (×${r.count})` : '');
-/** An address change in words: 'Satori Network address changed to https://…', 'Base RPC changed to the default, https://…'. */
+/**
+ * An address change in words: 'Satori Network address changed to https://…', 'Base RPC changed to the default,
+ * https://…', 'Reward address set to 0x…' (the whole address: a swap is seen), 'Reward address cleared: …'.
+ */
 const settingText = (d) => {
+  if (d.what === 'reward') return d.to ? `Reward address set to ${d.to}` : 'Reward address cleared: rewards go to your vault';
   const to = d.to || (d.default ? `the default, ${d.default}` : 'the default');
   return d.what === 'rpc' ? `Base RPC changed to ${to}` : `Satori Network address changed to ${to}`;
 };
