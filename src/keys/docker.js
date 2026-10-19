@@ -44,9 +44,17 @@ const str = (v) => (typeof v === 'string' ? v : '');
 const wrong = () => new Error('Wrong passphrase');
 const PUBKEY = /^0[23][0-9a-f]{64}$/;
 
-/** The yaml as a plain object; {} for an empty file. */
+/**
+ * The yaml as a plain object; {} for an empty file. A file that is not YAML says only where: js-yaml's own message
+ * quotes the lines around the fault, and a wallet's lines are its secrets (the security review, 2026-10-19).
+ */
 export function parse(text) {
-  const doc = String(text ?? '').trim() ? load(text) : {};
+  let doc;
+  try {
+    doc = String(text ?? '').trim() ? load(text) : {};
+  } catch (err) {
+    throw new Error(`not valid YAML (line ${Number.isInteger(err?.mark?.line) ? err.mark.line + 1 : '?'})`);
+  }
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new Error('not a wallet file');
   return doc;
 }

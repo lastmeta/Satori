@@ -197,6 +197,13 @@ this app's record. The files themselves are not kept.
   `evr.address`, `scripthash`) are not read.
 - **Wrong password**: AES-CBC's padding fails, or the text is not a 44-char
   entropy: `vault.yaml: Wrong passphrase`.
+- **Not a wallet file** (2026-10-19, the security review): a file over 64 KB
+  (`IMPORT_MAX`; satorilib's are under 2 KB) is refused before it is read,
+  "wallet.yaml: over 64 KB, so not a Dockerized Neuron file." (a file of
+  gigabytes froze the tab). A file that is not YAML says only where,
+  "wallet.yaml: not valid YAML (line 5)": js-yaml's own message quotes the
+  lines around the fault, which in a wallet are its words and keys, and Setup
+  showed them.
 - **This app's passphrase**: by default the Docker vault password is reused
   ("Use it as this app's passphrase too", ticked) when it meets the
   [rule](#passphrases); otherwise, or unticked, the passphrase step asks for
@@ -334,6 +341,8 @@ time." ([/llms.txt](../../public/llms.txt)).
 - `vault.test.js`: round trips; the record's parameters; another
   implementation (node:crypto) opening it; wrong passphrase and changed bytes;
   non-Latin and emoji passphrases; NFC; the passphrase rule.
+- `twokeys.test.js` also: a file that is not YAML names only its line (no
+  secret in the error), and one over 64 KB is refused.
 - `docker.test.js`: every Docker fixture shape (current and old vaults, a
   Latin-1 password, a file with no entropy, a mismatched file, wrong fields
   that are not read (the WIF, the nested address, `scripthash`), swapped files, `nostr.yaml`), and the UTF-8-era

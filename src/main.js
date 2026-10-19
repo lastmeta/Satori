@@ -15,7 +15,7 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockVault, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys,
+  withPassphrase, backupKeys, IMPORT_MAX,
 } from './keys/index.js';
 import { createAutoLock } from './keys/autolock.js';
 import { nostrSecretOf } from './nostr/event.js';
@@ -644,6 +644,9 @@ const actions = {
   importDocker: shownAt('error', async (el) => {
     const f = new FormData(el);
     await setup(async () => {
+      for (const [field, name] of [['wallet', 'wallet.yaml'], ['vault', 'vault.yaml'], ['nostr', 'nostr.yaml']]) {
+        if (f.get(field)?.size > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Dockerized Neuron file.`); // not read at all
+      }
       const n = f.get('nostr');
       const password = String(f.get('pass') ?? '');
       const reuse = f.get('reuse') === 'on';

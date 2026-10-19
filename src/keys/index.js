@@ -25,6 +25,8 @@ import { loginSignature } from '../central/login.js';
 import { generateNostrSecret, nostrPubkey, nsec } from '../nostr/event.js';
 
 export const RECORD_VERSION = 1;
+/** The largest Dockerized Neuron file read (bytes): satorilib's are under 2 KB; a bigger one is refused before parsing. */
+export const IMPORT_MAX = 65_536;
 const HEX64 = /^[0-9a-f]{64}$/;
 const PUBKEY = /^0[23][0-9a-f]{64}$/;
 
@@ -86,7 +88,15 @@ export async function newKeys({ identity = generateSecret(), vault, nostr = gene
  * @returns {Promise<{identity: Uint8Array, vault: Uint8Array, nostr?: string}>}
  */
 export async function readDockerFiles({ walletText, vaultText, password, nostrText }) {
-  const [w, v] = [secrecy(walletText), secrecy(vaultText)];
+  const named = (name, fn) => {
+    try { return fn(); } catch (err) { throw new Error(err.message.startsWith(name) ? err.message : `${name}: ${err.message}`); }
+  };
+  for (const [name, text] of [['wallet.yaml', walletText], ['vault.yaml', vaultText], ['nostr.yaml', nostrText]]) {
+    // UTF-8 never has fewer bytes than UTF-16 units: a long text is refused before it is encoded
+    const t = String(text ?? '');
+    if (t.length > IMPORT_MAX || new TextEncoder().encode(t).length > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Dockerized Neuron file.`);
+  }
+  const [w, v] = [named('wallet.yaml', () => secrecy(walletText)), named('vault.yaml', () => secrecy(vaultText))];
   if (w === 'encrypted' && v === 'plain') {
     throw new Error('The files are swapped: wallet.yaml is the unencrypted one, vault.yaml the encrypted one.');
   }
@@ -96,7 +106,7 @@ export async function readDockerFiles({ walletText, vaultText, password, nostrTe
   if (v === 'plain' || v === 'mixed') {
     throw new Error('vault.yaml: this file is not encrypted, so it is not a vault. Choose the encrypted vault.yaml.');
   }
-  const nostr = nostrText ? readNostrYaml(nostrText).secret : undefined;
+  const nostr = nostrText ? named('nostr.yaml', () => readNostrYaml(nostrText)).secret : undefined;
   const read = async (name, text, opts) => {
     try {
       const r = await readWallet(text, opts);

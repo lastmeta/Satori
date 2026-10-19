@@ -5,7 +5,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockVault, publicKey, wordsOf, evmAddress, withPassphrase, backupKeys,
+  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockVault, publicKey, wordsOf, evmAddress, withPassphrase, backupKeys, IMPORT_MAX,
   PASSPHRASE_NEEDED,
 } from './index.js';
 import { verifyMessage } from 'viem';
@@ -163,6 +163,30 @@ describe('readDockerFiles: a Dockerized Neuron\'s files, translated', () => {
   test('a vault Docker saved unencrypted (password outside Latin-1) is refused', async () => {
     await expect(readDockerFiles({ walletText: a.walletYaml, vaultText: edges.nonLatin1Password.savedYaml, password: 'p€ss' }))
       .rejects.toThrow(/vault\.yaml: .*not encrypted/i);
+  });
+  test('a file that is not valid YAML: "not valid YAML (line N)", its text never in the error (the security review, 2026-10-19)', async () => {
+    const leaky = `entropy: c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0c2VjcmV0MTI=
+words: abandon ability able about above absent absorb abstract absurd abuse access accident
+privateKey: KxSECRETWIFSECRETWIFSECRETWIFSECRETWIFSECRETWIF12
+publicKey: 02aa
+  bad: : indentation
+`;
+    for (const [files, name] of [[{ walletText: leaky, vaultText: fx.vaults.current.yaml }, 'wallet.yaml'],
+      [{ walletText: a.walletYaml, vaultText: leaky }, 'vault.yaml'],
+      [{ walletText: a.walletYaml, vaultText: fx.vaults.current.yaml, nostrText: `secret_hex: ${'ab'.repeat(32)}
+  x: : y
+` }, 'nostr.yaml']]) {
+      const err = await readDockerFiles({ ...files, password }).catch((e) => e);
+      expect(err.message).toMatch(new RegExp(`^${name.replace('.', '\\.')}: not valid YAML \\(line \\d+\\)$`));
+      expect(err.message).not.toMatch(/SECRET|abandon|ab{4}|c2Vj/);
+    }
+  });
+  test('a file over 64 KB is refused before it is read: no Dockerized Neuron file is that big', async () => {
+    const big = `entropy: ${'A'.repeat(70_000)}\n`;
+    await expect(readDockerFiles({ walletText: big, vaultText: fx.vaults.current.yaml, password })).rejects.toThrow('wallet.yaml: over 64 KB, so not a Dockerized Neuron file.');
+    await expect(readDockerFiles({ walletText: a.walletYaml, vaultText: fx.vaults.current.yaml, password, nostrText: big }))
+      .rejects.toThrow('nostr.yaml: over 64 KB, so not a Dockerized Neuron file.');
+    expect(IMPORT_MAX).toBe(65_536);
   });
   test('the same key twice, and a bad nostr.yaml, are refused', async () => {
     const files = { walletText: current.walletYaml, vaultText: fx.vaults.current.yaml, password };
