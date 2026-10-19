@@ -337,7 +337,22 @@ The deploy image added none to npm; it is
   checked before either is saved; claims' and sends' branches); the CSP; ui
   text; `serial()`; the service worker's routing (`src/pwa/sw.test.js`); the
   build variables: unset keeps each default, set replaces it, a bad one is
-  refused (`src/config.test.js`).
+  refused (`src/config.test.js`). Since the review's last fixes
+  (2026-10-19): the build's CSP and the dev server's (`src/csp.test.js`);
+  central's contract addresses checked never used, a pinned RPC, the max fee
+  on every write and quote, CCIP-read off (`src/chain/*.test.js`,
+  `src/neuron/base.test.js`); address changes noted (`health.test.js`,
+  `activity.test.js`); forged catalog events dropped, the relay window and
+  its prune (`nostr.test.js`, `db.test.js`); the queued tab lock
+  (`neuron.test.js`); a newer additive schema opened, a damaged file set
+  aside (`db.test.js`, `recover.test.js`); the import's cap and its YAML
+  errors, secrets wiped (`twokeys.test.js`, `wipe.test.js`); the version
+  (`config.test.js`, `central.test.js`); every `window.satori` method in
+  /llms.txt and its Safety section (`src/llms.test.js`). In the e2e: the
+  max fee and the RPC's notice (`base.spec.js`), the central's notice, the
+  version, the second tab taking over, the backup's words blanked
+  (`app.spec.js`), a damaged database set aside (`wal.spec.js`), HSTS, the
+  pinned RPC and the version on the image (`deploy.spec.js`).
 - The Models tab ([models.md](models.md#verify)): `npm test` (quality,
   the list, the status, the drill-in recomputed, a two-output model drawn,
   influence, `explainForecast`, `explainModel`, migration 11) and
