@@ -107,11 +107,11 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   staked vault with 1 wei. The app pads its own writes by 500,000 gas,
   which protects only those; the fix belongs in the contracts
   ([issue](../issues/token-hook-gas-estimate.md)).
-- **Every browser neuron votes DOWN on Base for now.** When a forecast equals
-  the latest value (`naive`, or `bar1` with weight or φ 0), Lite's rule
-  (UP if t2 > the latest, else DOWN) votes DOWN; D6's one stream has two
-  values, so every browser neuron is `naive` there. A seeded slope rule is
-  parked as an option ([engine.md](engine.md)).
+- ~~Every browser neuron votes DOWN on Base for now.~~ Resolved 2026-10-19:
+  a tie (a forecast equal to the latest value) follows the stream's last
+  move, and only a flat history is DOWN
+  ([../design/base.md](../design/base.md#the-daily-batch-the-identity-on-its-own)).
+  The seeded slope rule stays parked ([engine.md](engine.md)).
 - **`StaleValue` every other round.** When a daily stream is written later in
   hour 0 than the 00:01 batch, the contract (which compares clock hours)
   refuses the game every other round; the batch still goes at the first check

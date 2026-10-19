@@ -245,12 +245,21 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    (`solidityPacked(['uint8'])`). This is Lite's
    `direction_from(forecast, latest)` (BP:141-143), where `forecast` is
    Lite's latest relay `_pred` for the stream (START:1200-1206), t2 at the
-   stream's cadence ([nostr.md](nostr.md#the-engines-step)). As in Lite, a forecast equal to the latest value is DOWN, so a
-   `naive` forecast (too little history: D6's daily default stream has two
-   values) always votes DOWN, and so does every browser neuron. Fixable, not
-   inherent: the parked alternative (a seeded slope rule,
-   [../plans/engine.md](../plans/engine.md)) was set aside
-   for Lite's rule (owner, 2026-10-15). A **named** stream's value is a
+   stream's cadence ([nostr.md](nostr.md#the-engines-step)).
+   **A tie follows the stream's last move** (the owner, 2026-10-19;
+   `directionFor`, `src/neuron/base.js`): a forecast equal to the latest
+   value (a `naive` or no-opinion model: too little history, or `bar1` with
+   weight or φ 0) answers UP if the most recent change in the stream's
+   registry history was up, DOWN if it was down; the int232 values are
+   compared exactly. **The last fallback:** a history with no change at all
+   (flat, or a single value) stays DOWN. A forecast above or below the latest
+   is decided as before. Each stored game says which rule decided it,
+   `rule: 'forecast' | 'last-move' | 'flat'` (`base_last_batch`, the Models
+   drill-in: "UP (a tie: its last move)"). Lite answers DOWN on every tie, so
+   a `naive` neuron voted DOWN forever (D6's daily default stream has two
+   values, 0 then its first, so a browser neuron now votes UP there). The
+   parked seeded slope rule ([../plans/engine.md](../plans/engine.md)) stays
+   set aside. A **named** stream's value is a
    signed counter that starts at 0; the engine models any series with a
    value ≤ 0 on changes (`bar1d`, [engine.md](engine.md#bar1d-a-series-with-values--0-step-6)),
    where before it fell back to `naive` and so voted DOWN forever.
@@ -280,7 +289,7 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    keep its hash at once (step 0).
 9. **Persist after the receipt**: `meta.base_last_batch` = `{round, at, hash,
    games: [{streamId, gameId, named, direction, model, latest, forecast,
-   horizon, step, score?, persist?}], dropped:
+   horizon, step, rule, score?, persist?}], dropped:
    [{streamId, gameId, error}]}`. `step` is the engine's step; `score` and
    `persist` (when the engine had 5 backtest origins) are its median error
    and no change's, which the Models tab shows ([models.md](models.md)); the
@@ -377,6 +386,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
 | Stake is offered as advice with the risk said, and a stake out of sync is detected and shown (Lite and the dapp do neither). | The token-hook bug is live on D6: staking can freeze the vault, through anyone else's transaction. |
 | A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
+| A tie (the forecast equals the latest value) follows the stream's last move; only a flat history is DOWN. Lite answers DOWN on every tie (`direction_from`, BP:141-143). | The owner's choice (2026-10-19): a no-opinion model should not cast the same DOWN on every stream and every neuron. |
 
 ## UI and agents
 

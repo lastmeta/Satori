@@ -3,12 +3,6 @@
 Open questions the code can't settle on its own. Each says what the app does
 today, so nothing waits on an answer.
 
-1. **Base direction: keep Lite's rule?** UP if the forecast > the latest
-   value, else DOWN, so a forecast equal to the latest (`naive`, or `bar1` with weight or
-   φ 0) always votes DOWN, and today every browser neuron is `naive` on D6's
-   one stream. A seeded slope rule, with a seeded coin flip on a flat series,
-   is parked as an option ([../plans/engine.md](../plans/engine.md)). Switch,
-   or keep parity with Lite?
 2. **The token hook: the rewards upgrade.** A staked vault that receives
    SATORI in a transaction sent with a bare gas estimate can never unstake
    (Panic 0x11), and anyone can cause it with 1 wei. A rewards UUPS upgrade
@@ -43,6 +37,15 @@ today, so nothing waits on an answer.
    - *Today:* the old scheme for all keys; nothing changes until you decide.
 
 ## Resolved
+
+- **Base direction on a tie** (was item 1). Decided 2026-10-19: **on a tie,
+  follow the stream's last move.** When a game's forecast equals the latest
+  value (a `naive` or no-opinion model), the batch answers UP if the most
+  recent change in the stream's history was up, DOWN if down; a history with
+  no change at all (flat, or one value) stays DOWN, the last fallback. A
+  forecast above or below the latest is unchanged. Each stored game records
+  its `rule` (`forecast`, `last-move`, `flat`). Lite answers DOWN on every
+  tie; the deviation is in [../design/base.md](../design/base.md#deviations-from-lite-and-the-dapp-and-why).
 
 - **Central login accepts EIP-191** (was item 5). Done 2026-10-16: central
   `base-upgrade` f4d72f5 verifies EIP-191 (`personal_sign`) at

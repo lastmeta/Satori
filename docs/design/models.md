@@ -518,7 +518,8 @@ stream"). Top to bottom, joined by short arrows:
 - **Out**: per output: the forecast (t1 and t2, or the one value), the
   latest value, a chart, and where it went: Network ("Accepted Oct 18,
   16:23", or "Pending since …"), Contract ("Round 20743 · UP · tx 0xab…cd",
-  linked to the explorer; or "left out: …"), Relays ("`btc_pred` #12 · 2
+  linked to the explorer; or "left out: …"; a tie says its rule: "UP (a tie:
+  its last move)", "DOWN (a tie, flat)", [base.md](base.md#the-daily-batch-the-identity-on-its-own)), Relays ("`btc_pred` #12 · 2
   relays").
 
 **Computed on demand** (`modelDetail`): the stored spec and the stored

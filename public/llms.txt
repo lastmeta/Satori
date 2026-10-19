@@ -57,6 +57,20 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 
 Every method is below; `await satori.status()` shows everything at once.
 
+## Changed 2026-10-19 (a tie on Base follows the stream's last move)
+
+- The daily batch's direction when a game's forecast equals the latest
+  value (a `naive` or no-opinion model): UP if the stream's most recent
+  change was up, DOWN if down; a history with no change at all (flat, or
+  one value) stays DOWN. A forecast above or below the latest is unchanged.
+  The Docker neuron answers DOWN on every tie. D6's default stream (two
+  values, 0 then its first) now gets UP from a `naive` neuron.
+- `base().lastBatch.games[].rule` (and `lastCheck.sent.games[].rule`):
+  `'forecast'`, `'last-move'` or `'flat'`, which rule decided the direction
+  (absent in a batch stored before). `model(id)`'s Base destination `ref`
+  carries it too, and the drill-in says "UP (a tie: its last move)",
+  "DOWN (a tie, flat)".
+
 ## Changed 2026-10-19 (staking while the contract bug is live)
 
 The token-hook bug (docs/issues/token-hook-gas-estimate.md) is live on D6
@@ -661,8 +675,10 @@ For agents written against the earlier API:
   floor(horizon / max(12 h, cadence))) equal steps: an hourly stream in two
   12 h steps, a 13–24 h cadence and the daily default stream in one 24 h
   step; a named stream, a signed counter, as `bar1d`); direction UP
-  (payload `0x01`) if that forecast > the latest value, else DOWN (`0x02`),
-  as the Docker neuron. Each game is simulated alone first (the contract's own
+  (payload `0x01`) if that forecast > the latest value, DOWN (`0x02`) if
+  below, as the Docker neuron; a tie follows the stream's last move (its
+  most recent change, up or down), and only a flat history is DOWN (the
+  Docker neuron answers DOWN on every tie). Each game is simulated alone first (the contract's own
   checks, named games' 24 clock hours included) and only the ones that pass
   are sent, in one `engine.predictMultipleWithPayloads`, if the max fee per
   gas is within the ceiling (`setBaseMaxFee`, 2 gwei by default; above it the
@@ -964,10 +980,12 @@ the page's JS context:
   identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
   vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other', inSync, shortfall,
   lock: { locked, indefinite, untilRound, freeAt } }, claimable: { rewards, airdrop },
-  lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, model, latest, forecast, horizon, step, score?, persist? }],
+  lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, rule, model, latest, forecast, horizon, step, score?, persist? }],
   dropped: [{ …, error }] } | null, lastCheck, nextCheck, checking }`. Amounts
   are decimal strings (ETH, SATORI); `fee` is in basis points (1000 = the
-  10 % default); `direction` 1 = UP, 2 = DOWN; a game's `latest` is the
+  10 % default); `direction` 1 = UP, 2 = DOWN, and `rule` what decided it:
+  `'forecast'` (above or below the latest), `'last-move'` (a tie, the
+  stream's last move) or `'flat'` (a tie with no move: DOWN); a game's `latest` is the
   registry's last value (an `int232` in the stream's own units: the default
   stream, id 1, is the capital deployed in predictions ÷ the supply × 1e18)
   and `forecast` the engine's at `horizon` seconds ahead, in the same units,

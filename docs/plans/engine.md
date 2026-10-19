@@ -12,10 +12,10 @@ here is for later steps.
 Step 6 follows Satori Lite, by the owner's direction (2026-10-15): UP(1) if
 t2 > the latest registry value, else DOWN(2)
 (`neuron/neuron-lite/satorineuron/base_predict.py:141-143`;
-[../design/base.md](../design/base.md)). Its consequence stays: a
-forecast equal to the last value votes DOWN, so `naive` always does, and so
-does `bar1` when its weight or φ is 0; every browser neuron then casts the
-same vote. A fixable flaw, not a browser limit. The alternative studied:
+[../design/base.md](../design/base.md)). Its consequence, a forecast equal
+to the last value voting DOWN (so `naive` always did), is resolved by the
+owner's tie rule (2026-10-19): a tie follows the stream's last move, and only
+a flat history is DOWN. The alternative studied, still set aside:
 
 1. Direction = sign of an OLS slope over the last *k* registry values, *k* drawn
    once per (node, stream) from the identity seed in [5, 20] (Docker's Starter
