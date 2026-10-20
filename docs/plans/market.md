@@ -207,7 +207,9 @@ can charge" doesn't work.
    neurons on `wss://app.satorinet.io/relay` with central's watcher able to
    reach it. Without it, browser and Lite neurons can't trade at all
    ([issue](../issues/relays-not-wss.md)). Every design needs it, so it is
-   not a fix that a redesign would undo.
+   not a fix that a redesign would undo. Done 2026-10-20 for the browser:
+   `wss://relay.satorinet.io` fronts satorian, and the app maps central's
+   `ws://` entry to it, so Lite and browser neurons share one relay.
 1. **Track record for prediction streams**, free ones first, on the Streams
    tab. Useful on its own, and the base the market stands on.
 2. **The channel contract:** TDD, an adversarial review, then Base Sepolia

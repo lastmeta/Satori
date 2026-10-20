@@ -13,10 +13,11 @@ references and every deviation). This file keeps only what is still to do.
 
 ## Still to do
 
-- **A wss relay.** A deployed (https) app can't open `ws://`, and central
-  lists only `ws://satorian.satorinet.io:7777`
-  ([issue](../issues/relays-not-wss.md)). Until then Nostr works from the dev
-  server (plain http) and against `ws://localhost`.
+- **A wss relay from central.** A deployed (https) app can't open `ws://`,
+  and central lists only `ws://satorian.satorinet.io:7777`. Worked around
+  2026-10-20: the app reaches it through its wss stand-in,
+  `wss://relay.satorinet.io`; central listing a `wss://` address itself
+  waits on the relay redesign ([issue](../issues/relays-not-wss.md)).
 - **Paid and encrypted streams.** Per-subscriber NIP-04 events, a payment on
   Base (to design: Lite pays over Evrmore payment channels, 34603-34606, which
   this app does not take up), the `#p` personal filter and kind 34604 in the

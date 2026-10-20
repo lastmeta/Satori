@@ -216,7 +216,9 @@ uses central's `rpcUrl`, then publicnode.
   chosen central, the RPC and the relays (the dev server adds `ws:` for its
   test relay), `form-action 'none'`. An https page can't open `ws://` (mixed
   content), so a deployed app needs `wss://` relays
-  ([issue](../issues/relays-not-wss.md)). The deployment also sends HSTS
+  ([issue](../issues/relays-not-wss.md)): central's `ws://satorian…` is
+  reached through its wss stand-in, `wss://relay.satorinet.io`
+  ([nostr.md](nostr.md#relays-and-the-read-only-flag)). The deployment also sends HSTS
   ([deploy.md](deploy.md#what-it-sends)).
 - A change of the Satori Network's address, the Base RPC or the reward
   address, from Settings or an agent, is logged and noted quietly on Home for

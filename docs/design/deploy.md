@@ -116,22 +116,26 @@ Every build (and the dev server, when it starts) stamps the neuron's version,
 register sends as `neuron-version` and Settings › This device and
 `status().version` show; `e2e/deploy.spec.js` checks it.
 
-These set the defaults that a user can change under **Settings**. Vite bakes
-them into the bundle when the app is built (`src/config.js`), so changing one
-means a new build.
+These set the defaults that a user can change under **Settings**, and one
+setting that is not a user's (`VITE_NOSTR_WSS`). Vite bakes them into the
+bundle when the app is built (`src/config.js`), so changing one means a new
+build.
 
 | Variable | Sets | A build's default | The dev server's default | This deployment (`deploy/build.env`) |
 |---|---|---|---|---|
 | `VITE_CENTRAL_URL` | central, https only (Settings › Central URL) | `https://network.satorinet.io` | `https://central2.satorinet.io` | `https://central2.satorinet.io` |
 | `VITE_NOSTR_RELAYS` | the user's relays, a comma list of `ws://` or `wss://` URLs (Settings › Nostr relays) | none | `ws://localhost:7778` | `wss://app.satorinet.io/relay` |
+| `VITE_NOSTR_WSS` | relays' wss stand-ins, a comma list of `ws://…=wss://…` pairs: a `ws://` relay the page can't open (a build, an https page) is reached at its `wss://` address, as that same relay ([nostr.md](nostr.md#relays-and-the-read-only-flag)); set, it replaces the default map; not in Settings | `ws://satorian.satorinet.io:7777=wss://relay.satorinet.io` | the same (unused on its plain-http page, which opens `ws://`) | unset (the default) |
 | `VITE_NOSTR_CENTRAL_WRITE` | `true` or `false`: whether central's relays are written to (Settings › Publish to central's relays) | `true` | `false` | unset (`true`) |
 | `VITE_BASE_RPC` | the Base RPC used when none is saved: `https://…` (then publicnode as the fallback), or a same-origin path (alone); central's `rpcUrl` and `explorerUrl` never override it (Settings › Base RPC) | none: central's `rpcUrl`, then publicnode | `/rpc` (the local fork) | `https://sepolia.base.org` (then publicnode) |
 
 - An empty variable counts as unset.
 - A bad value stops `vite build`, because `vite.config.js` runs the same
   check as the app. A bad value is an http central, a relay that is not
-  ws/wss, a `VITE_NOSTR_CENTRAL_WRITE` other than true or false, or an RPC
-  that is neither https nor a path.
+  ws/wss, a `VITE_NOSTR_WSS` pair that is not `ws://…=wss://…` (the left
+  a `ws://` address, the right a `wss://` one, each left once), a
+  `VITE_NOSTR_CENTRAL_WRITE` other than true or false, or an RPC that is
+  neither https nor a path.
 - The dev server reads these variables too, so set them only for a build.
   `scripts/deploy-image.sh` sets them for its own run only.
 - A build has only its own defaults in the bundle: the dev server's
@@ -139,12 +143,18 @@ means a new build.
   script's check for `central2.satorinet.io` in the bundle is a real check.
 - These are defaults. A value the user has saved in Settings wins. A user who
   has saved nothing gets a new build's default on the next load.
+  `VITE_NOSTR_WSS` has no Settings: the build's map is the one used.
 
 This deployment uses the dev central until the owner moves to the production
 one. Its Base RPC is pinned (2026-10-19), so the central it uses, dev or
-production, can't choose the RPC that quotes the vault's fees. Its relay is Satori's public relay over TLS. Central lists only
-`ws://satorian.satorinet.io:7777`, and an https page can't open `ws://`
-([issue](../issues/relays-not-wss.md)): the app shows that relay as blocked.
+production, can't choose the RPC that quotes the vault's fees. Central
+lists only `ws://satorian.satorinet.io:7777`, which an https page can't open
+([issue](../issues/relays-not-wss.md)): the app reaches it through its wss
+stand-in, `wss://relay.satorinet.io` (a TLS front on central's nginx-proxy,
+2026-10-20; the default map, so `deploy/build.env` doesn't set
+`VITE_NOSTR_WSS`), as central's relay, written to as a build writes to
+central's relays. Its user relay is Satori's public relay over TLS,
+`wss://app.satorinet.io/relay`.
 
 ## Two names, two origins
 

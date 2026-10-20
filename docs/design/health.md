@@ -447,8 +447,10 @@ a failure. Once staked, or once a batch went out, the same error is
 ### Relays: blocked and reconnecting
 
 - **Blocked**: a `ws://` relay on an https page, or anywhere in a build
-  (its CSP has no `ws:`; central lists only `ws://satorian…`,
-  [nostr.md](nostr.md#relays-and-the-read-only-flag)) can never open there.
+  (its CSP has no `ws:`), that has no wss stand-in can never open there.
+  Central's `ws://satorian…` has one, `wss://relay.satorinet.io`
+  ([nostr.md](nostr.md#relays-and-the-read-only-flag)): it is reached there
+  and counted like any relay, so it is not blocked.
   It is neither down nor counted: not toward "1 of 2 relays down", not in "2
   relays", not in the Streams card's "1 of 1 relay connected". Settings ›
   Satori relays says it once, under the list: "A ws:// relay can't be

@@ -12,6 +12,7 @@ only to Nostr, never to central.
 ```
 page load ─▶ Nostr key (the keys record; made once) ─▶ register with central (nostr-pubkey header)
          └─▶ relays = central's /peer/relays + Settings (+ ws://localhost:7778 on the dev server)
+                      (a ws:// one this page can't open ─▶ its wss stand-in, as that relay)
 connect each relay ─▶ REQ follow: per provider {kinds:[34601], authors:[p], #d:[streams]}
                    └─▶ announce each `<stream>_pred` (34600)
 34601 in ─▶ subscribed? (stream_name, author) ─▶ verify ─▶ store once (event id; stream, provider, seq)
@@ -33,7 +34,7 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 | Key | `_initNostrKeys` (START:120-149): `nostr.yaml` `{pubkey_hex, secret_hex}`, a **random** key (nostr-sdk `Keys.generate()`), not derived from the identity or the vault; plaintext, so the neuron runs on its own. | A random key the same way, kept in plain text in the keys record (`meta.keys.nostr`, local format: our own, [keys.md](keys.md#the-record)) beside the identity. Made at setup; an install from before step 5 got one at its update (migration 7). Imported from a Dockerized Neuron's `nostr.yaml` (translated); backed up under Backup as `nsec` and hex. |
 | Register | `checkin` sends the pubkey as the `nostr-pubkey` header of `POST /peer/register` (satorilib `server.py:384-402`). | Same header (64 lowercase hex). |
 | Events | nostr-sdk 0.45 builds and signs (BIP-340 Schnorr); `CLIENT:203-219`. | Hand-rolled NIP-01 (`src/nostr/event.js`): id = sha256 of `[0,pubkey,created_at,kind,tags,content]`, signed with `@noble/curves` schnorr. Checked against events made by satorilib's own client (fixture below). |
-| Relays | Reconcile fetches `GET /peer/relays` (PEER:123-163) every pass and falls back to the relays of known subscriptions (START:4464-4476); user-added relays are used for publishing (START:304-337). | Central's list (fetched at start and hourly; the last one is kept in `meta.nostr_central_relays` and used while central is down) plus the user's relays (Settings). On the dev server the user list defaults to the test relay `ws://localhost:7778`. |
+| Relays | Reconcile fetches `GET /peer/relays` (PEER:123-163) every pass and falls back to the relays of known subscriptions (START:4464-4476); user-added relays are used for publishing (START:304-337). | Central's list (fetched at start and hourly; the last one is kept in `meta.nostr_central_relays` and used while central is down) plus the user's relays (Settings). On the dev server the user list defaults to the test relay `ws://localhost:7778`. A `ws://` relay the page can't open is reached through its wss stand-in when it has one ([below](#relays-and-the-read-only-flag)). |
 | Stream cap | `max_streams` from `GET /peer/relay-config` (PEER:166-173, `{max_streams: 60}`), fetched once per start (START:236-246); fallback 100 (NDB:14-36). Active subscriptions + own non-`_pred` publications must stay under it (ROUTES:2611-2622). | The same fetch and fallback; the browser has no publications of its own, so active subscriptions < cap. |
 | Discover | `discover_datastreams` (CLIENT:809-882): `{kinds:[34600], limit:500}`, paged back with `until` (strfry returns at most 500 per filter); newest first, first per (author, d) wins; tombstones (`status=deleted`) dropped. | The same paging on every connected relay; each event's id and signature checked (a forged one is dropped, so it can't hide the real one), then merged by (author, d), newest wins. `_pred` streams are marked and hidden from the UI's list. |
 | Subscribe | The UI stores the subscription (ROUTES:2592-2667, NDB:451-494); a separate action starts predicting (adds the `<stream>_pred` publication, ROUTES:2690-2711). Reconcile then finds the stream on a relay and publishes the 34602 (`subscribe_datastream`, CLIENT:1102-1154, called at START:4526). | One action: subscribe = predict. The announcement taken is the newest one signed by that provider with that name (anything else a relay sends is ignored). The 34602 and the `_pred` 34600 are published at once. Paid, encrypted and approval-gated streams and `_pred` streams are refused (later scope), and so is a second provider's stream with a name already predicted: there is one `<name>_pred` per name, as Lite's publications are unique by `stream_name` (NDB:751-789). |
@@ -92,19 +93,50 @@ readers depend on, not Lite's bytes. Checked against satorilib
 
 - **ws vs wss.** A build's CSP allows `connect-src 'self' https: wss:`, with
   no `ws:` (2026-10-19: it only added `ws://localhost` services); the dev
-  server's adds `ws:`, for its test relay. So in a build every `ws://` relay
-  shows as **blocked** and is not tried ("ws:// relays are not allowed in a
-  build: use wss://"); on the dev server's page a `ws://` relay is blocked
-  only from https, where the browser refuses it as mixed content before the
-  CSP is asked (`ws://localhost` and `127.0.0.1` aside). A blocked relay is
-  neither down nor counted on Home, and Settings says why once, under the
-  relays ([health.md](health.md#relays-blocked-and-reconnecting)). Central
-  lists only `ws://satorian.satorinet.io:7777` today, so a deployed app needs a
-  `wss://` relay ([issue](../issues/relays-not-wss.md)): the deployment's build
-  sets `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public relay
-  over TLS, as the user's relay by default
-  ([deploy.md](deploy.md#build-variables)). The dev server is plain
-  `http://localhost:5180`, which can open any `ws://`.
+  server's adds `ws:`, for its test relay. So in a build a `ws://` relay
+  can't open, nor from an https page, where the browser refuses it as mixed
+  content before the CSP is asked (`ws://localhost` and `127.0.0.1` aside).
+  Such a relay goes to its **wss stand-in** when it has one (below);
+  otherwise it shows as **blocked** and is not tried ("ws:// relays are not
+  allowed in a build: use wss://", "ws:// cannot be opened from an https
+  page"). A blocked relay is neither down nor counted on Home, and Settings
+  says why once, under the relays
+  ([health.md](health.md#relays-blocked-and-reconnecting)). The dev server is
+  plain `http://localhost:5180`, which can open any `ws://`: there nothing
+  is blocked and no stand-in is used.
+- **A relay's wss stand-in** (2026-10-20). Central lists one relay,
+  `ws://satorian.satorinet.io:7777`, the one every Satori Lite neuron uses
+  (~350 live streams, Lite's `_pred` among them), and a deployed (https)
+  app could not reach it ([issue](../issues/relays-not-wss.md)).
+  `wss://relay.satorinet.io` is a TLS front for it (nginx on central's
+  nginx-proxy, proxying to port 7777): the same relay, the same events. The
+  app keeps an explicit map from a `ws://` relay to the `wss://` address
+  that serves the same relay (`src/config.js`, the build variable
+  `VITE_NOSTR_WSS`, [deploy.md](deploy.md#build-variables); not a user
+  setting). Its default, on the dev server and in a build alike, is the one
+  pair satorian → `wss://relay.satorinet.io` (the dev server never needs it,
+  but one default is simpler). Where the neuron would block a `ws://` relay
+  and the map has a stand-in for it, it connects to the stand-in instead, as
+  that same relay:
+  - it keeps the original's roles: central's relay stays central's (read
+    only unless "Publish to central's relays", below), a user relay stays the
+    user's; if the stand-in is also in the user's list, the one entry has
+    both roles and one connection;
+  - the entry says which address it stands in for (`for`, on each relay in
+    `nostr()`), and Settings shows it under the address in small words: "for
+    ws://satorian.satorinet.io:7777";
+  - everything else keys on the address actually connected: the follow REQ,
+    the announcements, the outbox, NIP-65's list (the relays we are on);
+  - `meta.nostr_central_relays` keeps central's list as central sent it
+    (the `ws://` address), so a central that later lists a `wss://` address
+    itself just works, with no stand-in.
+
+  Without a stand-in a blocked relay is blocked as before. The proper fix is
+  central listing a `wss://` address itself, which waits on the relay
+  redesign ([issue](../issues/relays-not-wss.md)). The deployment's build
+  also sets `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public
+  relay over TLS, as the user's relay by default
+  ([deploy.md](deploy.md#build-variables)).
 - **Publish to central's relays** (Settings, `meta.nostr_central_write`).
   Off by default on the dev server, on in a build (a build's default is
   `VITE_NOSTR_CENTRAL_WRITE` when set). When off, central's relays
@@ -226,6 +258,7 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
 | The relay connection, NIP-65 and the `_pred` announcement go to relays we write to; with "Publish to central's relays" off, central's relays are read only. | A dev checkout must not write to production (satorian). |
 | Content is compact JSON, and numbers are JS's text (`82234`, not `82234.0`). | Readers parse JSON and take `float()` of values ([the protocol audit](#the-protocol-audit)); Lite's byte layout is not something any reader depends on. |
 | The key is stored in this app's keys record, not as `nostr.yaml`; Backup shows it as `nsec` and hex, with no file. | Local format: our own ("migrate in, never back"); a Dockerized Neuron's `nostr.yaml` is still imported (translated). |
+| A `ws://` relay the page can't open (a build, an https page) is reached through its wss stand-in, `wss://relay.satorinet.io` for satorian ([above](#relays-and-the-read-only-flag)); Lite connects to `ws://` directly. | A browser on an https page can't open `ws://`. The stand-in is the same relay behind TLS, so the network sees the same relay and events; the map is explicit (a build variable), never guessed from the address. |
 | Built without nostr-tools. | Signing and verifying are ~30 lines over `@noble/curves` (already a dependency), and the relay client is specific (Satori's filters, OK counts); nostr-tools would add its own `@noble`/`@scure` versions and a general pool we don't need. |
 
 ## Test relay and demo provider (dev)
@@ -241,6 +274,9 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   that announces a stream (34600) and publishes a random walk (34601) on it.
 - The e2e runs two of these relays (7781 as the user's, 7782 as central's) and
   checks that nothing of the app's reaches central's while it is read only.
+  Its https page routes satorian's stand-in, `wss://relay.satorinet.io`, to
+  7782, and every other e2e routes it to nothing: no test reaches the real
+  one.
 
 ## Inherent, as in Lite
 
@@ -272,8 +308,9 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
 - **Network streams**: Discover (on opening), a search over name, stream,
   description and tags, the first 50 matches; prediction streams are hidden
   and counted; paid or gated streams show but can't be subscribed.
-- **Settings**: the user's relays (one per line) and "Publish to central's
-  relays". **Backup** (after the passphrase): **Nostr key** shows its `nsec` and hex
+- **Settings**: each relay with its state, a stand-in with "for ws://…"
+  under its address in small words; the user's relays (one per line) and
+  "Publish to central's relays". **Backup** (after the passphrase): **Nostr key** shows its `nsec` and hex
   (it is random, so the 24 words don't bring it back). **Import Dockerized
   Neuron files**: an optional `nostr.yaml`, translated.
 - Agents: `window.satori`'s Nostr methods and their shapes are in

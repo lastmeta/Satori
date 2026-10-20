@@ -86,7 +86,8 @@ node scripts/provider.mjs ws://localhost:7778 demo-walk 60   # a demo stream, a 
 Open **Streams on the relays**, search `demo-walk`, **Subscribe**: the Satori
 relays card shows the latest observation and our `_pred`. Tick **Publish to
 the Satori Network's relays** under Settings to write to satorian too (a build does by default).
-An https deployment needs a `wss://` relay ([issue](docs/issues/relays-not-wss.md)).
+An https page can't open `ws://`: there the app reaches satorian through its wss stand-in,
+`wss://relay.satorinet.io`, as central's relay ([docs/design/nostr.md](docs/design/nostr.md#relays-and-the-read-only-flag)).
 
 **Base.** The dev server's RPC is `/rpc`, proxied to the anvil fork on
 127.0.0.1:8545 (the real D6 addresses; by default a dev checkout sends
@@ -138,6 +139,7 @@ variables, when set and not empty, replaces one; a bad value stops the build
 |---|---|---|
 | `VITE_CENTRAL_URL` | `https://network.satorinet.io` | central (https) |
 | `VITE_NOSTR_RELAYS` | none | the user's relays, a comma list (`wss://…`) |
+| `VITE_NOSTR_WSS` | `ws://satorian.satorinet.io:7777=wss://relay.satorinet.io` | relays' wss stand-ins, a comma list of `ws://…=wss://…` pairs: where a page can't open the `ws://` relay, it opens the `wss://` one as that relay |
 | `VITE_NOSTR_CENTRAL_WRITE` | `true` | whether central's relays are written to |
 | `VITE_BASE_RPC` | central's RPC, then publicnode | the Base RPC (https, then publicnode; or a path on the site); central never overrides it |
 

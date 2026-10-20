@@ -16,7 +16,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    Since step 10 in this app's own format, with no export back.
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
 4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence; then `bvar`, each central stream's own Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved after each poll, with history from central ([../design/engine.md](../design/engine.md)); left for later: [engine.md](engine.md).
-5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [transport.md](transport.md). A deployed app needs a wss relay ([issue](../issues/relays-not-wss.md)).
+5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [transport.md](transport.md). A deployed app reaches central's satorian through its wss stand-in, `wss://relay.satorinet.io` ([issue](../issues/relays-not-wss.md)).
 6. ✅ **Base**: stake with this neuron, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [chain.md](chain.md). A local fork for the dev server: `scripts/fork.mjs`.
 7. ✅ **Finishing pass**: simpler code that follows what Lite and satorilib
    already do (one schedule, one serial line, one stub central, shared
