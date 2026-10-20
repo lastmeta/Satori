@@ -11,6 +11,8 @@ Component docs: [health.md](health.md) (Home: is the neuron predicting, is
 anything broken), [models.md](models.md) (the Models tab: the engine's
 status, every model, a model's In, Model and Out), [keys.md](keys.md), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
+[market.md](market.md) (paid streams, step 3 of the market: so far the
+payment-channel client, `src/chain/channels.js`),
 [storage.md](storage.md), [track-record.md](track-record.md) (every
 prediction stream on the relays scored against no change from what this
 neuron saw arrive), [pwa.md](pwa.md) (the installed app),
