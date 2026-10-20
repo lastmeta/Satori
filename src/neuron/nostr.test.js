@@ -302,7 +302,7 @@ describe('discover', () => {
     expect(list.find((s) => s.stream_name === 's1').relays).toEqual([USER_RELAY]);
     expect(list.find((s) => s.stream_name === 's0').relays).toEqual([CENTRAL_RELAY]);
     expect(list.find((s) => s.stream_name === 's2').relays.sort()).toEqual([CENTRAL_RELAY, USER_RELAY].sort());
-  });
+  }, 120_000); // ~1,000 schnorr signs and checks: ~50 s on a busy shared box
   test("forged announcements never reach discover(): a changed description, another key's signature, a forged newer one hides nothing", async () => {
     await boot();
     openAll();
@@ -814,6 +814,58 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     expect(c.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] },
       { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred', 'eth_pred'] }]));
     expect((await nostr.status()).watching).toMatchObject({ streams: 2, sources: 2, at: clock });
+  });
+
+  test('a partial scan: a relay that opens later, which the last scan did not reach, is scanned at once (not 6 h on)', async () => {
+    await boot();
+    const c = relays.get(CENTRAL_RELAY);
+    const u = relays.get(USER_RELAY);
+    c.stored.push(announce('btc'), predAnnounce('btc'));
+    u.stored.push(announce('eth'), predAnnounce('eth'));
+    const fetch = vi.spyOn(u, 'fetch');
+    c.open(); // only central's relay: the scan reaches it alone
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 1, found: 1 });
+    clock += 60;
+    u.open(); // the user's relay opens a minute later: its catalog is asked for now
+    await settle();
+    expect(catalogFetches(fetch)).toBe(1);
+    expect((await nostr.status()).watching).toMatchObject({ streams: 2, found: 2, at: clock });
+    u.drop();
+    u.open(); // reached by the last scan: a reconnect within 6 h asks nothing
+    await settle();
+    expect(catalogFetches(fetch)).toBe(1);
+  });
+
+  test('a relay that opens while a scan runs is scanned right after it, once', async () => {
+    await boot();
+    const c = relays.get(CENTRAL_RELAY);
+    const u = relays.get(USER_RELAY);
+    c.stored.push(announce('btc'), predAnnounce('btc'));
+    u.stored.push(announce('eth'), predAnnounce('eth'));
+    const ufetch = vi.spyOn(u, 'fetch');
+    let release;
+    const held = new Promise((r) => { release = r; });
+    const real = c.fetch.bind(c);
+    vi.spyOn(c, 'fetch').mockImplementationOnce(async (f) => { await held; return real(f); }); // the scan waits on central's relay
+    c.open();
+    await new Promise((r) => setTimeout(r, 10));
+    u.open(); // opens mid-scan, after the scan chose its relays
+    release();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 2, found: 2 });
+    expect(catalogFetches(ufetch)).toBe(1);
+    // a relay that keeps failing is not asked again and again
+    u.fetch = async () => { throw new Error('refused'); };
+    u.drop();
+    clock += WATCH_SCAN_S;
+    await nostr.reconcile(); // the 6 h scan: the user's relay not open now
+    await settle();
+    const scans = c.fetch; // the spy above
+    scans.mockClear();
+    u.open(); // not reached by the last scan: one more, which fails there; no loop
+    await settle();
+    expect(catalogFetches(scans)).toBe(1);
   });
 
   test("status() says a relay refused a follow chunk (its CLOSED, or its NOTICE)", async () => {

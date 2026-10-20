@@ -81,6 +81,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let watchedAt = -Infinity; // when the last scan for prediction streams worked (s)
   let watchInfo = { found: 0, left: 0, error: null };
   let watching = null; // the scan in flight
+  let reached = new Set(); // the relays whose catalog the last scan that worked got
+  const missed = new Set(); // relays that opened while a scan ran: scanned right after it when it did not reach them
 
   /** Intake runs one event at a time, in order; one that fails (the database, the engine) is reported (onError). */
   const work = (fn) => intakeLine(fn).catch((err) => {
@@ -188,7 +190,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     if (writes(e)) background(announce([e]));
     background(flushOutbox(e));
     background(relayList());
-    scanDue();
+    scanDue(url);
     onChange();
   }
 
@@ -292,12 +294,13 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
    * unsubscribed from (a relay may still hold its announcement until our tombstone reaches it).
    */
   const applyLine = serial();
-  const applyWatch = ({ list, gone = new Set() }) => applyLine(async () => {
+  const applyWatch = ({ list, gone = new Set(), reached: got = [] }) => applyLine(async () => {
     const all = await db.relayStreams();
     const live = new Set(all.filter((r) => r.active).map((r) => r.stream_name)); // one `<name>_pred` per name: another provider's may be live
     const retired = all.filter((r) => !r.active && !live.has(r.stream_name)).map((r) => `${key.pubkey}:${r.stream_name}${PRED}`);
     const r = await watch.apply(list, { gone: new Set([...gone, ...retired]) });
     watchedAt = now();
+    reached = new Set(got);
     watchInfo = { found: r.found, left: r.left, error: null };
     if (r.changed) await refollow();
     onChange();
@@ -312,12 +315,26 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         // no relay open is expected now and then (it is tried again at the next relay open or hourly pass); anything else is worth a warning
         console[/No relay is connected/.test(watchInfo.error) ? 'info' : 'warn']('[satori] scan for prediction streams: tried again at the next relay open or hourly pass;', watchInfo.error);
       }
-    }).finally(() => { watching = null; });
+    }).finally(() => {
+      watching = null;
+      // a relay that opened while it ran and that it did not reach: once more now (one that keeps failing waits for its next open)
+      const again = [...missed].some((u) => relays.get(u)?.relay?.state === 'open' && !reached.has(u));
+      missed.clear();
+      if (again) background(scanWatch());
+    });
     return watching;
   }
-  /** The scan, in the background, when none has worked in 6 h and none is running. */
-  function scanDue() {
-    if (!watching && now() - watchedAt >= WATCH_SCAN_S) background(scanWatch());
+  /**
+   * The scan, in the background, when none has worked in 6 h and none is running; or when relay `url` opens and the
+   * last scan that worked did not reach it (a partial scan does not count as done for that relay). One opening while a
+   * scan runs is looked at when it ends.
+   */
+  function scanDue(url) {
+    if (watching) {
+      if (url) missed.add(url);
+      return;
+    }
+    if (now() - watchedAt >= WATCH_SCAN_S || (url && Number.isFinite(watchedAt) && !reached.has(url))) background(scanWatch());
   }
 
   /**
@@ -400,7 +417,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   /**
    * The relays' catalog, for discover() and the scan for prediction streams: one run at a time, shared by whoever asks
    * while it runs (each one's step(step, done, total) told as it goes). → { list: catalog() entries with their events,
-   * from: event id → the relays that sent it }
+   * gone: the streams tombstoned (`pubkey:d`), from: event id → the relays that sent it, reached: the relays whose
+   * catalog came back }
    */
   let scanning = null;
   const scanSteps = new Set();
@@ -410,16 +428,17 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       const tell = (...a) => { for (const f of scanSteps) f(...a); };
       const from = new Map(); // event id → the relays that sent it
       const asked = await readable();
+      const got = []; // the relays whose catalog came back whole
       let answered = 0;
       tell('ask', 0, asked.length);
       const events = (await Promise.all(asked.map(async (e) => {
-        const list = await pages(e.relay).catch(() => []);
+        const list = await pages(e.relay).then((x) => (got.push(e.url), x), () => []);
         for (const ev of list) from.set(ev.id, [...(from.get(ev.id) ?? []), e.url]);
         tell('ask', ++answered, asked.length);
         return list;
       }))).flat();
       const signed = await genuine(events, (done, total) => tell('verify', done, total));
-      return { list: catalog(signed), gone: tombstoned(signed), from };
+      return { list: catalog(signed), gone: tombstoned(signed), from, reached: got };
     })().finally(() => {
       scanning = null;
       scanSteps.clear();

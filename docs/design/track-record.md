@@ -73,9 +73,14 @@ unannounced one for what it is.
   after the page loads starts it, and it waits up to 10 s for the others
   still connecting, as `discover()` does. Then again in the hourly pass,
   at most every 6 h after the last one that worked. A scan that fails (no
-  relay open) is tried again at the next relay open or hourly pass. The
-  person's Discover and this scan share one run when they overlap, and a
-  Discover also refreshes the watched set from its catalog.
+  relay open) is tried again at the next relay open or hourly pass. A
+  **partial** scan (a relay still connecting, or one whose catalog did not
+  come back) does not count as done for the relays it missed: when one of
+  them opens, it is scanned at once, and one that opens while a scan runs
+  is looked at right after it (once: a relay that keeps failing waits for
+  its next open). The person's Discover and this scan share one run when
+  they overlap, and a Discover also refreshes the watched set from its
+  catalog.
 - **Dropped.** A watched stream missing from the catalog for 7 days (its
   announcement gone) is dropped with its observations. One a scan sees
   **tombstoned** goes at once, and so does our own `_pred` when we
