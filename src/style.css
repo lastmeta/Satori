@@ -365,8 +365,16 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 .rstatus { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; }
 .rstatus .spin { width: 14px; height: 14px; }
 .rrows { margin-top: 6px; }
-.ritem { border-top: 1px solid var(--line); }
-.rrow { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.8fr) 170px 64px 60px; gap: 10px; align-items: center;
+.badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+/* a source's group: its name, its author, "not announced"; its prediction streams under it, set in a little */
+.rgroup { border-top: 1px solid var(--line); padding-bottom: 4px; }
+.rsrc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 10px 0 2px; }
+.rsrc b { font-weight: 600; overflow-wrap: anywhere; }
+.rsrc .badge { margin: 0; }
+.rgroup .ritem { margin-left: 14px; border-top: 1px solid var(--line); }
+.rgroup .ritem:first-of-type { border-top: 0; }
+.rname .badge { margin: 0 0 0 8px; font-weight: 500; }
+.rrow { display: grid; grid-template-columns: minmax(0, 1fr) 170px 64px 60px; gap: 10px; align-items: center;
   width: 100%; min-height: 44px; padding: 6px 0; margin: 0; border: 0; border-radius: 0; background: none; color: var(--text);
   font: inherit; font-size: 0.9rem; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer; }
 .rrow.head { min-height: 0; padding: 4px 0; cursor: default; color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
@@ -541,13 +549,13 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   /* the phone: "Same", not "Same as no change" (the full words stay the element's text) */
   .mrow .q b[data-short="Same"], .rrow .q b[data-short="Same"] { font-size: 0; }
   .mrow .q b[data-short="Same"]::after, .rrow .q b[data-short="Same"]::after { content: "Same" / ""; font-size: 0.78rem; }
-  /* a prediction stream: its name on the first line; the pill, the predictor, from N and the cadence under it */
+  /* a prediction stream under its source: the predictor on the first line; the pill, from N and the cadence under it */
   .rrow.head { display: none; }
-  .rrow { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "name name name name" "q by from cad";
+  .rrow { grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "name name name" "q from cad";
     gap: 4px 10px; padding: 9px 0; }
+  .rgroup .ritem { margin-left: 10px; }
   .rname { grid-area: name; white-space: normal; }
   .rrow > .q { grid-area: q; }
-  .rby { grid-area: by; }
   .rfrom { grid-area: from; }
   .rcad { grid-area: cad; }
   .mval { flex-direction: column; align-items: flex-end; }

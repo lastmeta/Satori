@@ -243,30 +243,43 @@ stream or its source arrives (one read for every stream that changed).
 A **Prediction streams** card, after the Satori relays card:
 
 - the status line: "Watching 112 prediction streams · 23 with a record"
-  ("· none with a record yet"; past the cap, "(the newest announced; 14
-  more not watched)"); while a scan runs, its step instead, beside the
-  small turning ring Settings uses ("Finding prediction streams · checking
-  signatures 400 of 1,061", at Home's reading pace: `src/ui/hold.js`);
-  before the first scan, "Finding prediction streams…", or "Not watching
-  yet: No relay is connected…" when it could not run; none found, "No
-  prediction streams on the relays yet."
-- a row per stream, best first: "Predictions for <the source's name>", the
-  predictor as a short key or "you", the record pill (the Models tab's `q`
-  pill: its colours and words; "Same" on a phone), "from 21" scored (not
+  ("· none with a record yet"; past the cap, "(14 more on the relays not
+  watched)"); the count is the records list's once it is read, so the
+  status, the rows and "Show all N" say the same; while a scan runs, its
+  step instead, beside the small turning ring Settings uses ("Finding
+  prediction streams · checking signatures 400 of 1,061", at Home's reading
+  pace: `src/ui/hold.js`); before the first scan, "Finding prediction
+  streams…", or "Not watching yet: No relay is connected…" when it could
+  not run; none found, "No prediction streams on the relays yet."
+- **grouped by source** (`recordGroups` in `src/ui/record.js`): a buyer
+  picks the source first. Each group's header is the source's name (its own
+  announcement's, else its stream id), "by" its author's short key, and a
+  "not announced" pill (amber) when it has no announcement of its own.
+  Announced sources first, then by each one's best record, then by name: a
+  perfect record against a source nobody announced comes after the
+  announced ones, its author in view.
+- under it, a row per prediction stream, best first: the predictor as a
+  short key or "you" (with a "predicts its own stream" pill when its key is
+  the source's author), the record pill (the Models tab's `q` pill: its
+  colours and words; "Same" on a phone), "from 21" outcomes scored (not
   scored yet: "3 of 5", or nothing), the cadence; its tooltip in words
   ("12% less error than no change, over the last 21 predictions this
-  neuron received before the outcome"). A phone: the name, then the pill,
-  the predictor, from N and the cadence on one line; a computer: columns
-  under a header. The first 25, then "Show all 112".
+  neuron received before the outcome"), the row's "Predictions for Bitcoin
+  by e5e6ce94…503d". A phone: the predictor, then the pill, from N and the
+  cadence on one line; a computer: columns under a header. The first 25
+  rows across the groups (a group cut where the limit falls), then "Show
+  all 112".
 - a tap opens the stream's detail in place, under its row: who and how
-  often ("btc_pred by 1fc7ebf5…bfdd · every 15 min"), the record in words
-  ("12% less error than no change over the last 21 predictions (median
-  error 0.88; no change 1)"), the direction ("Right way 15 of 20"), the
-  pairs as a chart (the outcomes as a line, the predictions dashed, on one
-  scale, `sparkPath` with a shared range; "Actual" and "Predicted" beside
-  their lines; "the last 21 outcomes, from 98.2 to 104"), and in plain
-  words: "Seen by this neuron since Oct 20, 14:05. It counts only
-  predictions this neuron received before the outcome."
+  often ("btc_pred by 1fc7ebf5…bfdd · every 15 min"), its source ("Source:
+  Bitcoin (btc) by e5e6ce94…503d", ", not announced", or ": it predicts its
+  own stream"), the record in words ("12% less error than no change over
+  the last 21 predictions (median error 0.88; no change 1)"), the direction
+  ("Right way 15 of 20"), the pairs as a chart (the outcomes as a line, the
+  predictions dashed, on one scale, `sparkPath` with a shared range;
+  "Actual" and "Predicted" beside their lines; "the last 21 outcomes, from
+  98.2 to 104"), and in plain words: "Seen by this neuron since Oct 20,
+  14:05. It counts only predictions this neuron received before the
+  outcome."
 - records are read again while Streams shows, when a watched stream gets
   an observation or the watched set changes, at most about once a second.
 

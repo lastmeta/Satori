@@ -4,6 +4,25 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-20 (the track record's review: fixes)
+
+- A prediction counts only if it arrived here before its outcome arrived
+  here (both on this device's clock), as well as before the outcome's
+  timestamp, and within the first half of the interval after its baseline
+  arrived here; one prediction per outcome (the earliest received that
+  qualifies), so `scored` counts outcomes; a pair whose error is not a
+  finite number is not scored.
+- `records()` / `record()`: `source.name` is the source's own
+  announcement's name, else its stream id (it was the predictor's words
+  when the source had none); new `source.announced` (the source has an
+  announcement of its own) and `sameAuthor` (the predictor's key is the
+  source's author).
+- Streams › Prediction streams is grouped by source (`record-source`
+  groups with `record-source-name`, `record-source-by`,
+  `record-source-note`); a row shows the predictor (`record-by`, and
+  `record-own`: "predicts its own stream"); `record-name` is gone; the
+  detail says its source (`record-source-line`).
+
 ## Changed 2026-10-20 (the track record: how a buyer knows who's good)
 
 - The neuron now watches every prediction stream on the relays on its own
