@@ -1,0 +1,48 @@
+{
+  "deploy": "PaymentChannels at 0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c, Base Sepolia 2026-10-20 (block 48351055), contract humble 523af9a6",
+  "functions": [
+    "function CLOSE_GRACE_PERIOD() -> (uint64) view",
+    "function VOUCHER_TYPEHASH() -> (bytes32) view",
+    "function cancelClose(bytes32) -> () nonpayable",
+    "function close(bytes32,uint96,bytes) -> () nonpayable",
+    "function computeChannelId(address,address,address,address,bytes32) -> (bytes32) pure",
+    "function domainSeparator() -> (bytes32) view",
+    "function eip712Domain() -> (bytes1,string,string,uint256,address,bytes32,uint256[]) view",
+    "function getChannel(bytes32) -> ((address,uint96,address,uint96,address,uint64,bool,address)) view",
+    "function open(address,address,address,address,uint96,bytes32) -> (bytes32) nonpayable",
+    "function openWithPermit(address,address,address,address,uint96,bytes32,uint256,uint8,bytes32,bytes32) -> (bytes32) nonpayable",
+    "function requestClose(bytes32) -> () nonpayable",
+    "function settle(bytes32,uint96,bytes) -> () nonpayable",
+    "function settleMany(bytes32[],uint96[],bytes[]) -> (uint256) nonpayable",
+    "function topUp(bytes32,uint96) -> () nonpayable",
+    "function voucherDigest(bytes32,uint96) -> (bytes32) view",
+    "function withdraw(bytes32) -> () nonpayable"
+  ],
+  "events": [
+    "event CloseCancelled(bytes32 indexed,address indexed,address indexed)",
+    "event CloseRequested(bytes32 indexed,address indexed,address indexed,address,uint64)",
+    "event Closed(bytes32 indexed,address indexed,address indexed,address,uint96,uint96)",
+    "event EIP712DomainChanged()",
+    "event Opened(bytes32 indexed,address indexed,address indexed,address,address,address,bytes32,uint96)",
+    "event Settled(bytes32 indexed,address indexed,address indexed,uint96,uint96,uint96)",
+    "event ToppedUp(bytes32 indexed,address indexed,address indexed,address,uint96,uint96)"
+  ],
+  "errors": [
+    "error BadInput() -> ()",
+    "error BadSignature() -> ()",
+    "error ChannelClosed() -> ()",
+    "error ChannelExists() -> ()",
+    "error CloseNotReady() -> ()",
+    "error CloseNotRequested() -> ()",
+    "error InvalidShortString() -> ()",
+    "error NotPayee() -> ()",
+    "error NotPayer() -> ()",
+    "error NotPayerOrSigner() -> ()",
+    "error NothingToSettle() -> ()",
+    "error ReentrancyGuardReentrantCall() -> ()",
+    "error SafeERC20FailedOperation(address) -> ()",
+    "error StringTooLong(string) -> ()",
+    "error UnknownChannel() -> ()",
+    "error UnsupportedToken() -> ()"
+  ]
+}

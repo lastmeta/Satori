@@ -78,3 +78,53 @@ export const multicall3Abi = parseAbi([
   'function getEthBalance(address addr) view returns (uint256 balance)',
   'function getCurrentBlockTimestamp() view returns (uint256 timestamp)',
 ]);
+
+/**
+ * PaymentChannels (contract/satori/contracts/channels/PaymentChannels.sol, deployed at config.js PAYMENT_CHANNELS;
+ * docs/design/market.md). abi.test.js checks its own items against test/fixtures/abi-channels.json, a snapshot of its
+ * build. The token's errors a call can bubble up (SATORI's lock and hook, OpenZeppelin's ERC-20 errors) come after.
+ */
+export const CHANNEL_ERRORS = [
+  'error BadInput()', 'error ChannelExists()', 'error UnknownChannel()', 'error ChannelClosed()', 'error NotPayee()',
+  'error NotPayer()', 'error NotPayerOrSigner()', 'error BadSignature()', 'error NothingToSettle()', 'error CloseNotRequested()',
+  'error CloseNotReady()', 'error UnsupportedToken()', 'error SafeERC20FailedOperation(address token)',
+];
+export const channelsAbi = parseAbi([
+  'struct Channel { address payer; uint96 deposit; address payee; uint96 settled; address token; uint64 closeRequestedAt; bool closed; address signer; }',
+  'function open(address payer, address payee, address token, address signer, uint96 deposit, bytes32 salt) returns (bytes32)',
+  'function openWithPermit(address payer, address payee, address token, address signer, uint96 deposit, bytes32 salt, uint256 deadline, uint8 v, bytes32 r, bytes32 s) returns (bytes32)',
+  'function topUp(bytes32 channelId, uint96 amount)',
+  'function settle(bytes32 channelId, uint96 cumulativeAmount, bytes signature)',
+  'function settleMany(bytes32[] channelIds, uint96[] cumulativeAmounts, bytes[] signatures) returns (uint256 settledCount)',
+  'function close(bytes32 channelId, uint96 cumulativeAmount, bytes signature)',
+  'function requestClose(bytes32 channelId)',
+  'function cancelClose(bytes32 channelId)',
+  'function withdraw(bytes32 channelId)',
+  'function getChannel(bytes32 channelId) view returns (Channel)',
+  'function computeChannelId(address payer, address payee, address token, address signer, bytes32 salt) pure returns (bytes32)',
+  'function voucherDigest(bytes32 channelId, uint96 cumulativeAmount) view returns (bytes32)',
+  'function CLOSE_GRACE_PERIOD() view returns (uint64)',
+  'event Opened(bytes32 indexed channelId, address indexed payer, address indexed payee, address token, address signer, address funder, bytes32 salt, uint96 deposit)',
+  'event ToppedUp(bytes32 indexed channelId, address indexed payer, address indexed payee, address funder, uint96 amount, uint96 deposit)',
+  'event Settled(bytes32 indexed channelId, address indexed payer, address indexed payee, uint96 cumulativeAmount, uint96 paid, uint96 settled)',
+  'event CloseRequested(bytes32 indexed channelId, address indexed payer, address indexed payee, address by, uint64 graceEnds)',
+  'event CloseCancelled(bytes32 indexed channelId, address indexed payer, address indexed payee)',
+  'event Closed(bytes32 indexed channelId, address indexed payer, address indexed payee, address by, uint96 settled, uint96 refunded)',
+  ...CHANNEL_ERRORS,
+  'error Locked()', 'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
+  'error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)', ...NEXT_ERRORS,
+]);
+
+/**
+ * Any ERC-20 a channel holds: the allowance, and ERC-2612's permit with its EIP-712 domain (ERC-5267's eip712Domain,
+ * else name() and version "1", either checked against DOMAIN_SEPARATOR()). Standard signatures; SATORI has them all.
+ */
+export const erc20PermitAbi = parseAbi([
+  'function approve(address spender, uint256 value) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function nonces(address owner) view returns (uint256)',
+  'function name() view returns (string)',
+  'function DOMAIN_SEPARATOR() view returns (bytes32)',
+  'function eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)',
+  'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)', 'error Locked()', ...NEXT_ERRORS,
+]);

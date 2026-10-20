@@ -10,10 +10,17 @@
 //   ABI_SNAPSHOT=write npx vitest run src/chain/abi.test.js
 // rewrites the snapshot from its out/ (ABI_OUT=<dir> for another build). Set `deploy` in it, review the diff, and
 // fix abi.js where a test then fails; config.js DEFAULTS take the new addresses.
+//
+// PaymentChannels (channelsAbi) has its own snapshot, test/fixtures/abi-channels.json: every function, event and error
+// of the build it was deployed from (its Hardhat artifact, whose code is the deployed code but for its immutables).
+// It is immutable; a new version is a new address (a new CREATE2 salt). Then
+//   ABI_SNAPSHOT=channels npx vitest run src/chain/abi.test.js
+// rewrites it from the artifact (CHANNELS_ARTIFACT=<file> for another); set `deploy`, and config.js PAYMENT_CHANNELS.
 import { describe, expect, test } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
-  createPublicClient, decodeFunctionResult, encodeFunctionData, encodeFunctionResult, http, toFunctionSelector, zeroAddress,
+  createPublicClient, decodeFunctionResult, encodeFunctionData, encodeFunctionResult, http, parseAbiItem, toFunctionSelector,
+  toEventSelector, zeroAddress, zeroHash,
 } from 'viem';
 import * as abi from './abi.js';
 import { DEFAULTS } from './config.js';
@@ -44,6 +51,19 @@ if (process.env.ABI_SNAPSHOT === 'write') {
 
 const snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8'));
 
+const CHANNELS_SNAPSHOT = new URL('../../test/fixtures/abi-channels.json', import.meta.url);
+const CHANNELS_ARTIFACT = process.env.CHANNELS_ARTIFACT
+  ?? '/code/Satori/contract/satori/artifacts/contracts/channels/PaymentChannels.sol/PaymentChannels.json';
+// an event's signature with its indexed inputs: a wrong `indexed` decodes the wrong words
+const evSig = (i) => `event ${i.name}(${i.inputs.map((p) => `${t(p)}${p.indexed ? ' indexed' : ''}`)})`;
+if (process.env.ABI_SNAPSHOT === 'channels') {
+  const all = JSON.parse(readFileSync(CHANNELS_ARTIFACT, 'utf8')).abi;
+  const { deploy = '' } = existsSync(CHANNELS_SNAPSHOT) ? JSON.parse(readFileSync(CHANNELS_SNAPSHOT, 'utf8')) : {};
+  writeFileSync(CHANNELS_SNAPSHOT, `${JSON.stringify({ deploy, functions: of(all, 'function').map(sig).sort(),
+    events: of(all, 'event').map(evSig).sort(), errors: of(all, 'error').map(sig).sort() }, null, 2)}\n`);
+}
+const channels = JSON.parse(readFileSync(CHANNELS_SNAPSHOT, 'utf8'));
+
 describe(`abi.js matches the deployed contracts (${snapshot.deploy})`, () => {
   for (const [name, [c]] of Object.entries(CONTRACTS)) {
     test(`${name}: every function as ${c} has it`, () => {
@@ -56,6 +76,22 @@ describe(`abi.js matches the deployed contracts (${snapshot.deploy})`, () => {
       if (next.includes(sig(item))) expect(snapshot.errors).not.toContain(sig(item)); // not on D6
       else expect(snapshot.errors).toContain(sig(item));
     }
+  });
+});
+
+describe(`channelsAbi matches PaymentChannels as deployed (${channels.deploy})`, () => {
+  test('every function and event, as it has them (events with their indexed inputs)', () => {
+    for (const item of of(abi.channelsAbi, 'function')) expect(channels.functions).toContain(sig(item));
+    for (const item of of(abi.channelsAbi, 'event')) expect(channels.events).toContain(evSig(item));
+  });
+  test("every error of its own is one it raises (the token's, which a call bubbles up, apart)", () => {
+    for (const e of abi.CHANNEL_ERRORS) expect(channels.errors).toContain(sig(parseAbiItem(e)));
+  });
+  test('what the market calls and watches is all there', () => {
+    const names = (type) => of(abi.channelsAbi, type).map((i) => i.name).sort();
+    expect(names('function')).toEqual(['CLOSE_GRACE_PERIOD', 'cancelClose', 'close', 'computeChannelId', 'getChannel', 'open',
+      'openWithPermit', 'requestClose', 'settle', 'settleMany', 'topUp', 'voucherDigest', 'withdraw']);
+    expect(names('event')).toEqual(['CloseCancelled', 'CloseRequested', 'Closed', 'Opened', 'Settled', 'ToppedUp']);
   });
 });
 
@@ -89,6 +125,27 @@ describe.skipIf(!online)(`live: the deployed contracts on Base Sepolia (${DEFAUL
       }
     });
   }
+});
+
+describe.skipIf(!online)(`live: PaymentChannels at ${DEFAULTS.channels} on Base Sepolia (read-only)`, () => {
+  const client = createPublicClient({ transport: http(DEFAULTS.rpcUrl, { batch: true }) });
+  const pushed = (selector) => { // as above: PUSH4, or shorter for leading zero bytes
+    const s = selector.slice(2).replace(/^(00)+/, '');
+    return (0x5f + s.length / 2).toString(16) + s;
+  };
+  test("its code has each function's selector and each event's topic; its views answer in channelsAbi's shape", { timeout: 60_000 }, async () => {
+    const code = await client.getCode({ address: DEFAULTS.channels });
+    for (const f of of(abi.channelsAbi, 'function')) expect(code.includes(pushed(toFunctionSelector(f))), sig(f)).toBe(true);
+    for (const e of of(abi.channelsAbi, 'event')) expect(code.includes(toEventSelector(e).slice(2)), evSig(e)).toBe(true);
+    const views = { getChannel: [zeroHash], computeChannelId: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroHash],
+      voucherDigest: [zeroHash, 0n], CLOSE_GRACE_PERIOD: [] };
+    for (const [functionName, args] of Object.entries(views)) {
+      const call = { abi: abi.channelsAbi, functionName };
+      const { data } = await client.call({ to: DEFAULTS.channels, data: encodeFunctionData({ ...call, args }) });
+      expect(encodeFunctionResult({ ...call, result: decodeFunctionResult({ ...call, data }) }), functionName).toBe(data);
+    }
+    expect(await client.readContract({ address: DEFAULTS.channels, abi: abi.channelsAbi, functionName: 'CLOSE_GRACE_PERIOD' })).toBe(7n * 86400n);
+  });
 });
 
 describe('selectors and calldata (Lite\'s and the brief\'s)', () => {

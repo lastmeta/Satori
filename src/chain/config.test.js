@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
-import { DEFAULTS, FALLBACK_RPC, loadConfig, checkRpcSetting, rpcUrls } from './config.js';
+import { DEFAULTS, FALLBACK_RPC, PAYMENT_CHANNELS, loadConfig, checkRpcSetting, rpcUrls } from './config.js';
 
 // central2's answer on 2026-10-15
 const CENTRAL2 = {
@@ -26,6 +26,12 @@ describe('loadConfig', () => {
     for (const k of ['token', 'merkle', 'airdrop', 'rewards', 'engine', 'games', 'registry', 'hub', 'rpcUrl']) {
       expect(DEFAULTS[k], k).toBe(CENTRAL2[k]); // = base_config.py DEFAULTS = central2
     }
+  });
+
+  test('PaymentChannels: the address its CREATE2 deploy recorded (the same on every chain)', () => {
+    const f = '/code/Satori/contract/satori/deployments/payment-channels.json';
+    if (existsSync(f)) expect(PAYMENT_CHANNELS).toBe(JSON.parse(readFileSync(f, 'utf8')).address);
+    expect(DEFAULTS.channels).toBe('0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c');
   });
 
   test("central's contract addresses are taken only when they equal the bundle's; one that differs is listed, the bundle's kept", async () => {

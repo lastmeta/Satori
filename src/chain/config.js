@@ -10,6 +10,11 @@
 import { isHttps } from '../util.js';
 
 const CHAIN_ID = 84532; // Base Sepolia
+/**
+ * PaymentChannels (contract/satori/contracts/channels/PaymentChannels.sol; docs/design/market.md), deployed by CREATE2:
+ * the same address on every chain (contract/satori/deployments/payment-channels.json). Not central's to say.
+ */
+export const PAYMENT_CHANNELS = '0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c';
 
 export const DEFAULTS = Object.freeze({
   chainId: CHAIN_ID,
@@ -26,6 +31,7 @@ export const DEFAULTS = Object.freeze({
   lens: '0x9BF5266F60092F1bFbd5F16d21d0bE9673c0F91F',
   voting: '0x5A56279215684A8088234799FfD56f806AcFBb6e', // SatoriEngine.satoriVoting() on D6
   multicall3: '0xcA11bde05977b3631167028862bE2a173976CA11',
+  channels: PAYMENT_CHANNELS,
 });
 
 export const FALLBACK_RPC = 'https://base-sepolia-rpc.publicnode.com';
