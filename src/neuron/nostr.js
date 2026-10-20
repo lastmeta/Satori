@@ -284,14 +284,15 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   }
 
   // ── the track record (docs/design/track-record.md) ──
-  /** A scan's catalog: the watched set kept from it, the follow REQ sent again when that changed. */
-  async function applyWatch(entries) {
+  /** A scan's catalog: the watched set kept from it, the follow REQ sent again when that changed; one at a time (a Discover's and the scan's). */
+  const applyLine = serial();
+  const applyWatch = (entries) => applyLine(async () => {
     const r = await watch.apply(entries);
     watchedAt = now();
     watchInfo = { found: r.found, left: r.left, error: null };
     if (r.changed) await refollow();
     onChange();
-  }
+  });
   /** The scan for prediction streams (the work list's `watch`), one at a time; a failure is kept for status() and tried again. */
   function scanWatch() {
     watching ??= progress.run('watch', async (step) => {
