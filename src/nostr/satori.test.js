@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { signEvent, verifyEvent } from './event.js';
 import {
   KIND, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
-  catalog, parseObservation, numericValue, pyFloat, relayUuid, predValue,
+  catalog, tombstoned, parseObservation, numericValue, pyFloat, relayUuid, predValue,
 } from './satori.js';
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
@@ -130,6 +130,12 @@ describe('the catalog (discover)', () => {
       ['a', 's3', 'S3', false], ['a', 's1', 'newer', false], ['b', 's1_pred', 'S1_PRED', true], ['b', 's1', 'S1', false],
     ]);
     expect(list[1]).toMatchObject({ cadence_seconds: 900, price_per_obs: 0, tags: ['x'], created_at: 20 });
+  });
+  test('tombstoned: the (author, d) whose newest announcement is a tombstone, as `pubkey:d`', () => {
+    expect(tombstoned([
+      ann(A, 's1', 10), ann(A, 's2', 30), ann(A, 's2', 40, {}, [['status', 'deleted']]),
+      ann(A, 's3', 50, {}, [['status', 'deleted']]), ann(A, 's3', 60), ann(B, 's1_pred', 6, {}, [['status', 'deleted']]), null,
+    ])).toEqual(new Set([`${A}:s2`, `${B}:s1_pred`]));
   });
   test('a malformed event is skipped, not a crash: tags not arrays of strings, a d that is not a string', () => {
     const good = ann(A, 'ok', 5);

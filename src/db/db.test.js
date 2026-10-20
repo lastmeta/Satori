@@ -629,6 +629,16 @@ describe('relay streams (Nostr), apart from central', () => {
     expect(await db.relayStream('r-1')).toMatchObject({ observations: 31, obs_seq: 99 }); // the count is what was received
   });
 
+  test('pruneRelay: the window is counted back from the newest time not in the future; a far-future row (more than max(cadence, 300 s) ahead) goes', async () => {
+    await db.subscribeRelay(sub()); // cadence 900
+    const now = 1_792_000_000;
+    for (let k = 0; k < 20; k++) await db.addRelayObservation(robs({ seq: k, ts: now - (19 - k) * 900, value: k, event_id: `a${k}` }));
+    await db.addRelayObservation(robs({ seq: 20, ts: now + 600, value: 20, event_id: 'a20' })); // a little ahead: kept, not the newest
+    await db.addRelayObservation(robs({ seq: 21, ts: 4_000_000_000, value: 21, event_id: 'a21' })); // stamped 2096: stored before the guard
+    expect(await db.pruneRelay({ buckets: 10, now })).toBe(9 + 1); // keeps ts ≥ now − 9000, and the 2096 row goes
+    expect((await db.relayHistory('r-1')).map((p) => p.value)).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+  });
+
   test("relayStreams: each with its latest observation and our latest _pred", async () => {
     await db.subscribeRelay(sub());
     await db.subscribeRelay(sub({ uuid: 'r-2', stream_name: 'eth', name: 'Ether', now: 150 }));
@@ -744,6 +754,7 @@ describe('the track record (migration 14; docs/design/track-record.md)', () => {
   });
 
   test('addWatchObservation: insert or ignore on (stream, seq) and on the event id, the first copy kept; nulls kept as null', async () => {
+    await db.saveWatch([ws()]);
     expect(await db.addWatchObservation(wo())).toBe(true);
     expect(await db.addWatchObservation(wo({ value: 9, received_at: 5000 }))).toBe(false); // the same seq: the first stays
     expect(await db.addWatchObservation(wo({ seq: 2 }))).toBe(false); // the same event id
@@ -754,15 +765,45 @@ describe('the track record (migration 14; docs/design/track-record.md)', () => {
       { seq: 3, ts: null, value: null, received_at: 3000 }]);
   });
 
-  test("dropWatch: the streams not seen since then and their observations; pruneWatch: each one's rows past its window", async () => {
+  test('addWatchObservation: only while its stream is watched (a stream dropped meanwhile gets nothing)', async () => {
+    expect(await db.addWatchObservation(wo())).toBe(false);
+    expect((await db.watchObservations(['w-p'])).get('w-p')).toEqual([]);
+    await db.saveWatch([ws()]);
+    expect(await db.addWatchObservation(wo())).toBe(true);
+  });
+
+  test("retainWatch: every watched stream not kept goes, with its observations, in one commit; pruneWatch: each one's rows past its window", async () => {
     await db.saveWatch([ws(), ws({ uuid: 'w-old', stream_name: 'eth_pred', seen_at: 10, cadence_seconds: null })]);
     for (let k = 0; k < 20; k++) await db.addWatchObservation(wo({ seq: k, ts: 10_000 + 60 * k, event_id: `p${k}` }));
     await db.addWatchObservation(wo({ seq: 99, ts: null, received_at: 1, event_id: 'p99' })); // no time of its own: its arrival's
     await db.addWatchObservation(wo({ stream_uuid: 'w-old', event_id: 'o1' }));
     expect(await db.pruneWatch({ buckets: 10, batch: 3 })).toBe(9 + 1); // w-p keeps ts ≥ 11,140 − 600 (and its timeless row goes); w-old keeps its one row (a day's window)
     expect((await db.watchObservations(['w-p'])).get('w-p').map((o) => o.seq)).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
-    expect(await db.dropWatch(100)).toBe(1);
+    expect(await db.retainWatch(['w-p'])).toBe(1);
     expect((await db.watchStreams()).map((r) => r.uuid)).toEqual(['w-p']);
     expect((await db.watchObservations(['w-old'])).get('w-old')).toEqual([]);
+    expect(await db.retainWatch(['w-p'])).toBe(0);
+    expect(await db.retainWatch([])).toBe(1);
+    expect(await db.watchStreams()).toEqual([]);
+  });
+
+  test('pruneWatch: counted back from the newest time not in the future; a far-future row goes, the history stays', async () => {
+    await db.saveWatch([ws({ cadence_seconds: 900 })]);
+    const now = 1_792_000_000;
+    for (let k = 0; k < 40; k++) await db.addWatchObservation(wo({ seq: k, ts: now - (39 - k) * 900, event_id: `p${k}` }));
+    await db.addWatchObservation(wo({ seq: 40, ts: 4_000_000_000, event_id: 'future' })); // 2096, stored before the guard
+    expect(await db.pruneWatch({ buckets: 400, now })).toBe(1); // only the 2096 row: 40 cadences are well inside 400
+    expect((await db.watchObservations(['w-p'])).get('w-p')).toHaveLength(40);
+  });
+
+  test('watchObservations(uuids, { last }): only the last n of each stream, by time; watchCounts: how many each holds', async () => {
+    await db.saveWatch([ws(), ws({ uuid: 'w-s', kind: 'source', source_uuid: null })]);
+    for (let k = 0; k < 10; k++) await db.addWatchObservation(wo({ seq: k, ts: 5000 + 60 * k, event_id: `p${k}` }));
+    await db.addWatchObservation(wo({ stream_uuid: 'w-s', seq: 1, event_id: 's1' }));
+    const got = await db.watchObservations(['w-p', 'w-s', 'none'], { last: 3 });
+    expect(got.get('w-p').map((o) => o.seq)).toEqual([7, 8, 9]); // oldest first
+    expect(got.get('w-s').map((o) => o.seq)).toEqual([1]);
+    expect(got.get('none')).toEqual([]);
+    expect(await db.watchCounts(['w-p', 'w-s', 'none'])).toEqual(new Map([['w-p', 10], ['w-s', 1], ['none', 0]]));
   });
 });

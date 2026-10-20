@@ -1,12 +1,13 @@
 // The track record (docs/design/track-record.md): which prediction streams are watched, the follow filters, the
 // verified-order scoring and the records, pure; then the watched set over a real (in-memory) db.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { memoryDb } from '../../test/memory-db.js';
+import { memoryConn } from '../../test/memory-db.js';
+import { openDb } from '../db/index.js';
 import { signEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, tombstoneEvent, observationEvent, catalog, parseObservation, relayUuid } from '../nostr/satori.js';
 import {
   sourceOf, selectWatched, watchRows, followFilters, scoreRecord, sortRecords, createWatch,
-  WATCH_CAP, WATCH_DROP_S, RECORD_N, MIN_SCORED,
+  WATCH_CAP, WATCH_DROP_S, WATCH_SCAN_S, RECORD_N, RECORD_READ, MIN_SCORED,
 } from './records.js';
 import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
 
@@ -312,9 +313,12 @@ describe('the watched set (createWatch) over the db', () => {
   let clock;
   let changes;
   let watch;
+  let connection;
+  const conn = () => connection; // the db's own connection: a test's bulk rows in one statement
   const now = () => clock;
   beforeEach(async () => {
-    db = await memoryDb();
+    connection = await memoryConn();
+    db = await openDb(connection);
     clock = 1_792_000_000;
     changes = 0;
     watch = createWatch({ db, me: ME_PUB, now, onChange: () => changes++ });
@@ -412,6 +416,129 @@ describe('the watched set (createWatch) over the db', () => {
     await take(obsEvent(SRC, 'btc', '1', 500, clock)); // the newest
     expect(await watch.prune()).toBe(10); // t0 … t0 + 540 are more than 400 cadences before it
     expect((await db.watchObservations([relayUuid(SRC_PUB, 'btc')])).get(relayUuid(SRC_PUB, 'btc')).map((o) => o.seq)).toEqual([11, 12, 500]);
+  });
+
+  test('the cap holds for the stored set across scans: watched ones still announced stay ahead of newcomers (no hourly churn)', async () => {
+    const keys = Array.from({ length: 300 }, (_, i) => (i + 1).toString(16).padStart(64, '0'));
+    // scan 1: keys 0…199 announced most recently; scan 2, 6 h later: 100…299 (Lite announces again on each connection)
+    const scanAt = (order, only = () => true) => catalog([srcAnn('btc', { at: clock - 5000 }),
+      ...keys.filter((_, i) => only(i)).map((k, i) => predAnn(k, btc, { at: clock - 1000 - order(i) }))]);
+    const preds = async () => new Set((await db.watchStreams()).filter((r) => r.kind === 'pred').map((r) => r.pubkey));
+    expect(await watch.apply(scanAt((i) => i))).toMatchObject({ found: 300, left: 100 });
+    const first = await preds();
+    expect(watch.count()).toEqual({ streams: 200, sources: 1 });
+    clock += 6 * 3600;
+    expect(await watch.apply(scanAt((i) => 299 - i))).toEqual({ found: 300, left: 100, changed: false });
+    expect(watch.count()).toEqual({ streams: 200, sources: 1 });
+    expect(await preds()).toEqual(first);
+    expect((await watch.list())).toHaveLength(200);
+    // 50 of them missing from a scan (a relay down, an announcement lost): they keep their place for 7 days, ahead of newcomers
+    const k0 = new Set([...first].slice(0, 50));
+    clock += 6 * 3600;
+    const without = catalog([srcAnn('btc', { at: clock - 5000 }),
+      ...keys.filter((k) => !k0.has(nostrPubkey(k))).map((k, i) => predAnn(k, btc, { at: clock - 1000 - i }))]);
+    expect(await watch.apply(without)).toMatchObject({ found: 250, left: 100, changed: false });
+    expect(watch.count()).toEqual({ streams: 200, sources: 1 });
+    clock += WATCH_DROP_S;
+    expect(await watch.apply(without)).toMatchObject({ found: 250, left: 50, changed: true }); // gone after 7 days; 50 newcomers in
+    expect(watch.count()).toEqual({ streams: 200, sources: 1 });
+    expect([...(await preds())].some((p) => k0.has(p))).toBe(false);
+  }, 120_000);
+
+  test('a tombstoned prediction stream seen by a scan goes at once, with its source when nothing else names it', async () => {
+    await watch.apply(catalog([srcAnn('btc'), srcAnn('eth'), predAnn(A, btc, { at: 2 }), predAnn(B, { pubkey: SRC_PUB, stream: 'eth' }, { at: 3 })]));
+    await take(obsEvent(B, 'eth_pred', '5', 1, clock - 10));
+    const r = await watch.apply(catalog([srcAnn('btc'), srcAnn('eth'), predAnn(A, btc, { at: 2 }), signEvent(tombstoneEvent('eth_pred', B_PUB, 4), B)]),
+      { gone: new Set([`${B_PUB}:eth_pred`]) });
+    expect(r).toMatchObject({ found: 1, changed: true });
+    expect(watch.count()).toEqual({ streams: 1, sources: 1 });
+    expect(watch.has(relayUuid(SRC_PUB, 'eth'))).toBe(false);
+    expect((await db.watchObservations([relayUuid(B_PUB, 'eth_pred')])).get(relayUuid(B_PUB, 'eth_pred'))).toEqual([]);
+  });
+
+  test('drop(): a prediction stream leaves at once (our own, unsubscribed), its source too when nothing else names it', async () => {
+    await watch.apply(catalog([srcAnn('btc'), predAnn(ME, btc, { at: 2 }), predAnn(A, btc, { at: 3 }), srcAnn('eth'),
+      predAnn(ME, { pubkey: SRC_PUB, stream: 'eth' }, { at: 4 })]));
+    expect(watch.count()).toEqual({ streams: 3, sources: 2 });
+    expect(await watch.drop([[ME_PUB, 'eth_pred']])).toBe(true);
+    expect(watch.count()).toEqual({ streams: 2, sources: 1 });
+    expect(await watch.drop([[ME_PUB, 'btc_pred']])).toBe(true);
+    expect(watch.count()).toEqual({ streams: 1, sources: 1 }); // btc stays: A's names it
+    expect(await watch.drop([[ME_PUB, 'btc_pred']])).toBe(false);
+    // a scan with our old announcement still on a relay (the tombstone not there yet) does not bring it back when named gone
+    await watch.apply(catalog([srcAnn('btc'), predAnn(ME, btc, { at: 2 }), predAnn(A, btc, { at: 3 })]), { gone: new Set([`${ME_PUB}:btc_pred`]) });
+    expect(watch.count()).toEqual({ streams: 1, sources: 1 });
+  });
+
+  test('intake: an observation without a numeric timestamp is not kept (it could never be pruned)', async () => {
+    await watch.apply(catalog([srcAnn('iso', { cadence: 60 }), predAnn(A, { pubkey: SRC_PUB, stream: 'iso' }, { at: 2, cadence: 60 })]));
+    for (const timestamp of ['2026-10-20T00:00:00Z', null, 'soon', 5]) { // 5: 1970, outside 2000–2100
+      expect(await take(signEvent(observationEvent({ stream: 'iso', value: '1', seq: 1, timestamp, now: clock }), SRC))).toBe(false);
+    }
+    expect((await db.watchObservations([relayUuid(SRC_PUB, 'iso')])).get(relayUuid(SRC_PUB, 'iso'))).toEqual([]);
+    expect(changes).toBe(0);
+  });
+
+  test('intake: a timestamp more than max(cadence, 300 s) ahead of its arrival is not kept', async () => {
+    await watch.apply(catalog([srcAnn('btc', { cadence: 60 }), predAnn(A, btc, { at: 2, cadence: 3600 })]));
+    expect(await take(obsEvent(SRC, 'btc', '1', 1, clock + 301))).toBe(false); // cadence 60: 300 s is the limit
+    expect(await take(obsEvent(SRC, 'btc', '1', 2, clock + 299))).toBe(true);
+    expect(await take(obsEvent(A, 'btc_pred', '1', 1, clock + 3601))).toBe(false); // cadence 1 h: an hour is the limit
+    expect(await take(obsEvent(A, 'btc_pred', '1', 2, clock + 3500))).toBe(true);
+    expect(await take(obsEvent(SRC, 'btc', '1', 3, 4_000_000_000))).toBe(false); // 2096
+  });
+
+  test('prune: a far-future observation (stored before the guard) neither wipes the history nor stays', async () => {
+    await watch.apply(catalog([srcAnn('btc'), predAnn(A, btc, { at: 2 })]));
+    const t0 = clock - 900 * 40;
+    for (let k = 0; k < 40; k++) {
+      clock = t0 + 900 * k;
+      await take(obsEvent(SRC, 'btc', String(100 + (k % 3)), k + 1, clock));
+      clock += 5;
+      await take(obsEvent(A, 'btc_pred', String(100 + ((k + 1) % 3)), k + 1, clock - 1));
+    }
+    const before = (await watch.list())[0];
+    expect(before).toMatchObject({ scored: 28, markText: '100% better' });
+    await db.addWatchObservation({ stream_uuid: relayUuid(SRC_PUB, 'btc'), seq: 41, ts: 4_000_000_000, value: 1, received_at: clock, event_id: 'f' });
+    expect(await watch.prune()).toBe(1);
+    expect((await db.watchObservations([relayUuid(SRC_PUB, 'btc')])).get(relayUuid(SRC_PUB, 'btc'))).toHaveLength(40);
+  });
+
+  test('an observation arriving while apply() drops its stream is not kept after the drop', async () => {
+    await watch.apply(catalog([srcAnn('btc'), predAnn(A, btc, { at: 2 })]));
+    const uuid = relayUuid(A_PUB, 'btc_pred');
+    const retain = db.retainWatch;
+    let late;
+    db.retainWatch = (...args) => {
+      const p = retain(...args);
+      late = take(obsEvent(A, 'btc_pred', '5', 1, clock - 10)); // its insert queued right after the drop, while the stream still shows as watched
+      return p;
+    };
+    await watch.apply(catalog([srcAnn('btc'), predAnn(A, btc, { at: 2 })]), { gone: new Set([`${A_PUB}:btc_pred`]) });
+    expect(await late).toBe(false);
+    expect((await db.watchObservations([uuid])).get(uuid)).toEqual([]);
+  });
+
+  test('records read only the last 60 observations of each stream; a scan or a Discover with nothing new reads nothing again', async () => {
+    const cat = catalog([srcAnn('btc'), predAnn(A, btc, { at: 2 })]);
+    await watch.apply(cat);
+    const spy = vi.spyOn(db, 'watchObservations');
+    await watch.list();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][1]).toEqual({ last: RECORD_READ });
+    expect(RECORD_READ).toBe(60);
+    clock += WATCH_SCAN_S;
+    await watch.apply(cat); // the next scan: the same set
+    await watch.list();
+    expect(spy).toHaveBeenCalledTimes(1);
+    await watch.apply(catalog([srcAnn('btc'), predAnn(A, btc, { at: 2 }), predAnn(B, btc, { at: 3 })])); // a newcomer
+    await watch.list();
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy.mock.calls[1][0].sort()).toEqual([relayUuid(B_PUB, 'btc_pred'), relayUuid(SRC_PUB, 'btc')].sort()); // only it and its source
+    // received: every prediction held, though only the last 60 are read
+    await conn().query(`INSERT INTO watch_observations SELECT '${relayUuid(A_PUB, 'btc_pred')}', k + 1, ${clock} - 900 * (100 - k), 1, ${clock}, 'x' || k FROM range(100) t(k)`);
+    await take(obsEvent(A, 'btc_pred', '1', 500, clock - 5));
+    expect((await watch.one(A_PUB, 'btc_pred')).received).toBe(101);
   });
 
   test('load: the watched set read back from the db (a reload)', async () => {

@@ -22,6 +22,14 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   `record-source-note`); a row shows the predictor (`record-by`, and
   `record-own`: "predicts its own stream"); `record-name` is gone; the
   detail says its source (`record-source-line`).
+- The cap of 200 prediction streams holds for the whole watched set, not
+  per scan: the ones already watched and still announced stay ahead of
+  newcomers (`nostr().watching.left`: found by the last scan and not
+  watched). A tombstoned `_pred` leaves at once, and so does our own when
+  we unsubscribe.
+- An observation stamped more than max(its cadence, 300 s) ahead of its
+  arrival is not kept (nor forecast, for a subscription), and a watched
+  stream's observation without a numeric timestamp is not kept.
 
 ## Changed 2026-10-20 (the track record: how a buyer knows who's good)
 

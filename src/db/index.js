@@ -14,15 +14,19 @@
 //   await db.streams() / db.predictions(uuidOrName, limit) / db.sparks(n)   // for the UI and agents
 //   relay (Nostr) streams, apart from central's (docs/design/nostr.md):
 //   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
-//   db.addRelayObservation(o) → new? / relayHistory(uuid, windowS?) / pruneRelay({ buckets }) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
+//   db.addRelayObservation(o) → new? / relayHistory(uuid, windowS?) / pruneRelay({ buckets, now }) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
 //   db.setRelayFit(uuid, seq, { score, persist, tests }): a `_pred`'s backtest, kept later (the training pass)
-//   the track record (docs/design/track-record.md): db.watchStreams() / saveWatch(rows) / dropWatch(before) → streams dropped
-//   db.addWatchObservation(o) → new? / watchObservations(uuids) → Map(uuid → [{seq, ts, value, received_at}]) / pruneWatch({ buckets })
+//   the track record (docs/design/track-record.md): db.watchStreams() / saveWatch(rows) / retainWatch(uuids) → streams dropped
+//   db.addWatchObservation(o) → new? / watchObservations(uuids, { last }) → Map(uuid → [{seq, ts, value, received_at}]) / watchCounts(uuids)
+//   db.pruneWatch({ buckets, now })
 //   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / firstSession() / pruneActivity(before)
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
 import { MIGRATIONS, ADDITIVE } from './schema.js';
 import { serial } from '../util.js';
+
+/** How far ahead of its arrival an observation's timestamp may be: max(its stream's cadence, this) s (docs/design/nostr.md#data-growth). */
+export const AHEAD_S = 300;
 
 const plain = (v) => (typeof v === 'bigint' ? Number(v) : v);
 /**
@@ -135,24 +139,32 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
   const inOrder = (fn) => (...args) => line(() => fn(...args));
   const rows = async (sql, ...params) => toRows(await query(conn, sql, params));
   const run = async (sql, ...params) => void (await query(conn, sql, params));
-  const pruneWatchBatch = inOrder(async (buckets, batch) => {
-    const [{ Count }] = await rows(`DELETE FROM watch_observations WHERE rowid IN (
-        SELECT o.rowid FROM watch_observations o JOIN (
-          SELECT s.uuid, n.newest - ? * (CASE WHEN s.cadence_seconds > 0 THEN s.cadence_seconds ELSE 86400 END) AS cutoff
-          FROM watch_streams s JOIN (SELECT stream_uuid, max(ts) AS newest FROM watch_observations GROUP BY stream_uuid) n
+  /**
+   * One batch of a prune (pruneRelay, pruneWatch): each stream's rows older than its window, `buckets` of its cadence (a
+   * day without one) back from its newest time that is not in the future (`now`), a row with no time by its arrival;
+   * and any row more than max(cadence, AHEAD_S) ahead of `now` (stored before the intake refused them: one such row
+   * would otherwise move the window past the whole history).
+   */
+  const pruneBatch = (obsTable, streamTable) => inOrder(async (buckets, batch, now) => {
+    const cadence = `(CASE WHEN s.cadence_seconds > 0 THEN s.cadence_seconds ELSE 86400 END)`;
+    const [{ Count }] = await rows(`DELETE FROM ${obsTable} WHERE rowid IN (
+        SELECT o.rowid FROM ${obsTable} o JOIN (
+          SELECT s.uuid, n.newest - ? * ${cadence} AS cutoff, ? + greatest(${cadence}, ?) AS ahead
+          FROM ${streamTable} s JOIN (SELECT stream_uuid, max(ts) FILTER (WHERE ts <= ?) AS newest FROM ${obsTable} GROUP BY stream_uuid) n
             ON n.stream_uuid = s.uuid) c ON c.uuid = o.stream_uuid
-        WHERE coalesce(o.ts, o.received_at) < c.cutoff LIMIT ?)`, buckets, batch);
+        WHERE coalesce(o.ts, o.received_at) < c.cutoff OR o.ts > c.ahead LIMIT ?)`, buckets, Math.floor(now), AHEAD_S, Math.floor(now), batch);
     return Number(Count);
   });
-  const pruneRelayBatch = inOrder(async (buckets, batch) => {
-    const [{ Count }] = await rows(`DELETE FROM relay_observations WHERE rowid IN (
-        SELECT o.rowid FROM relay_observations o JOIN (
-          SELECT s.uuid, n.newest - ? * (CASE WHEN s.cadence_seconds > 0 THEN s.cadence_seconds ELSE 86400 END) AS cutoff
-          FROM relay_streams s JOIN (SELECT stream_uuid, max(ts) AS newest FROM relay_observations GROUP BY stream_uuid) n
-            ON n.stream_uuid = s.uuid) c ON c.uuid = o.stream_uuid
-        WHERE coalesce(o.ts, o.received_at) < c.cutoff LIMIT ?)`, buckets, batch);
-    return Number(Count);
-  });
+  const pruneWatchBatch = pruneBatch('watch_observations', 'watch_streams');
+  const pruneRelayBatch = pruneBatch('relay_observations', 'relay_streams');
+  const prune = async (batchOf, { buckets, batch = 10_000, now = Date.now() / 1000 }) => {
+    let total = 0;
+    for (;;) {
+      const n = await batchOf(buckets, batch, now);
+      total += n;
+      if (n < batch) return total;
+    }
+  };
 
   return {
     version,
@@ -438,17 +450,11 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
         uuid, uuid, windowS))),
     /**
      * Each relay stream's observations older than its window (`buckets` of its cadence, a day when it has none, back
-     * from its newest time; a row with no time of its own by its arrival), deleted `batch` at a time, each batch its own
-     * statement in the queue so other calls go between. The streams' counts stay what was received. → how many went
+     * from its newest time not after `now`; a row with no time of its own by its arrival), and any more than
+     * max(cadence, AHEAD_S) ahead of `now`, deleted `batch` at a time, each batch its own statement in the queue so other
+     * calls go between. The streams' counts stay what was received. → how many went
      */
-    async pruneRelay({ buckets, batch = 10_000 }) {
-      let total = 0;
-      for (;;) {
-        const n = await pruneRelayBatch(buckets, batch);
-        total += n;
-        if (n < batch) return total;
-      }
-    },
+    pruneRelay: (o) => prune(pruneRelayBatch, o),
     /** The `_pred` seq for the next publish: last + 1, kept (network_db.py:835-848). */
     nextPredSeq: inOrder(async (uuid) =>
       (await rows('UPDATE relay_streams SET pred_seq = pred_seq + 1 WHERE uuid = ? RETURNING pred_seq', uuid))[0].pred_seq),
@@ -489,12 +495,13 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       col('uuid'), col('pubkey'), col('stream_name'), col('kind'), col('source_uuid'), col('name'), col('cadence_seconds', nums),
       col('meta'), col('seen_at', nums));
     }),
-    /** Every watched stream not seen since `before`, and its observations, in one commit. → how many streams went */
-    dropWatch: inOrder(async (before) => {
+    /** Every watched stream not in `uuids`, and its observations, in one commit. → how many streams went */
+    retainWatch: inOrder(async (uuids) => {
+      const keep = `(SELECT ${TXT('c0')} FROM ${rowsOf(1)} WHERE c0 <> '')`;
       await run('BEGIN TRANSACTION');
       try {
-        await run('DELETE FROM watch_observations WHERE stream_uuid IN (SELECT uuid FROM watch_streams WHERE seen_at < ?)', before);
-        const [{ Count }] = await rows('DELETE FROM watch_streams WHERE seen_at < ?', before);
+        await run(`DELETE FROM watch_observations WHERE stream_uuid NOT IN ${keep}`, texts(uuids));
+        const [{ Count }] = await rows(`DELETE FROM watch_streams WHERE uuid NOT IN ${keep}`, texts(uuids));
         await run('COMMIT');
         return Number(Count);
       } catch (err) {
@@ -502,29 +509,42 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
         throw err;
       }
     }),
-    /** Insert or ignore (the stream's seq, or the event id, seen before: the first copy and its arrival stay). → true when new */
-    addWatchObservation: inOrder(async (o) => (await rows(`INSERT OR IGNORE INTO watch_observations VALUES (?, ?, ?, ${D}, ?, ?) RETURNING seq`,
-      o.stream_uuid, o.seq, o.ts ?? null, dbl(o.value), o.received_at, o.event_id)).length > 0),
-    /** Some watched streams' observations in one read: Map(uuid → [{seq, ts, value, received_at}]), each by time (then seq), in the order asked. */
-    watchObservations: inOrder(async (uuids) => {
+    /**
+     * Insert or ignore (the stream's seq, or the event id, seen before: the first copy and its arrival stay), only while
+     * its stream is watched: one that arrives as a scan drops its stream is not kept after the drop. → true when new
+     */
+    addWatchObservation: inOrder(async (o) => (await rows(`INSERT OR IGNORE INTO watch_observations SELECT ?, ?, ?, ${D}, ?, ?
+        WHERE EXISTS (SELECT 1 FROM watch_streams WHERE uuid = ?) RETURNING seq`,
+      o.stream_uuid, o.seq, o.ts ?? null, dbl(o.value), o.received_at, o.event_id, o.stream_uuid)).length > 0),
+    /**
+     * Some watched streams' observations in one read: Map(uuid → [{seq, ts, value, received_at}]), each by time (then
+     * seq), in the order asked; with `last`, only each stream's last `last` by time (a record reads ~60, not 400 cadences).
+     */
+    watchObservations: inOrder(async (uuids, { last = null } = {}) => {
       const out = new Map(uuids.map((u) => [u, []]));
       if (!uuids.length) return out;
       const t = await query(conn, `SELECT stream_uuid, seq::DOUBLE AS seq, ts::DOUBLE AS ts, value, received_at::DOUBLE AS received_at
-        FROM watch_observations WHERE stream_uuid IN (SELECT ${TXT('c0')} FROM ${rowsOf(1)}) ORDER BY stream_uuid, ts NULLS LAST, seq`, [texts(uuids)]);
+        FROM watch_observations WHERE stream_uuid IN (SELECT ${TXT('c0')} FROM ${rowsOf(1)})
+        ${last == null ? '' : 'QUALIFY row_number() OVER (PARTITION BY stream_uuid ORDER BY ts DESC NULLS LAST, seq DESC) <= ?'}
+        ORDER BY stream_uuid, ts NULLS LAST, seq`, last == null ? [texts(uuids)] : [texts(uuids), last]);
       // get(i), not toArray(): ts and value may be null, which a typed array would read as 0
       const [u, seq, ts, value, at] = ['stream_uuid', 'seq', 'ts', 'value', 'received_at'].map((k) => t.getChild(k));
       for (let i = 0; i < t.numRows; i++) out.get(u.get(i))?.push({ seq: seq.get(i), ts: ts.get(i), value: value.get(i), received_at: at.get(i) });
       return out;
     }),
-    /** Each watched stream's observations older than its window (`buckets` of its cadence back from its newest), `batch` at a time. → how many went */
-    async pruneWatch({ buckets, batch = 10_000 }) {
-      let total = 0;
-      for (;;) {
-        const n = await pruneWatchBatch(buckets, batch);
-        total += n;
-        if (n < batch) return total;
-      }
-    },
+    /** How many observations each watched stream holds: Map(uuid → n), in the order asked. */
+    watchCounts: inOrder(async (uuids) => {
+      const out = new Map(uuids.map((u) => [u, 0]));
+      if (!uuids.length) return out;
+      for (const r of await rows(`SELECT stream_uuid, count(*) AS n FROM watch_observations
+        WHERE stream_uuid IN (SELECT ${TXT('c0')} FROM ${rowsOf(1)}) GROUP BY stream_uuid`, texts(uuids))) out.set(r.stream_uuid, r.n);
+      return out;
+    }),
+    /**
+     * Each watched stream's observations older than its window (`buckets` of its cadence back from its newest time not
+     * after `now`), and any more than max(cadence, AHEAD_S) ahead of `now`, `batch` at a time. → how many went
+     */
+    pruneWatch: (o) => prune(pruneWatchBatch, o),
 
     // ── the activity log (docs/design/health.md) ──
     /** One event: { at, kind, level, data, until?, mkey? } → its id. */

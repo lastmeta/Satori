@@ -77,13 +77,22 @@ export const relayListEvent = (urls, now) => ({ created_at: now, kind: KIND.RELA
  * announcement's content with the author as `pubkey`, the event's time, and
  * `pred` for prediction streams. Signatures are checked before (discover: verifyEvent).
  */
-export function catalog(events) {
+/** The newest 34600 per `pubkey:d` (well formed). */
+function newestAnnouncements(events) {
   const newest = new Map();
   for (const e of events) {
     if (e?.kind !== KIND.ANNOUNCE || !wellTagged(e) || typeof e.pubkey !== 'string' || !Number.isFinite(e.created_at)) continue;
     const key = `${e.pubkey}:${tag(e, 'd') ?? ''}`;
     if (!newest.has(key) || e.created_at > newest.get(key).created_at) newest.set(key, e);
   }
+  return newest;
+}
+
+/** The streams whose newest announcement is a tombstone, as `pubkey:d` (the track record drops a watched one at once). */
+export const tombstoned = (events) => new Set([...newestAnnouncements(events)].filter(([, e]) => tag(e, 'd') && isDeleted(e)).map(([k]) => k));
+
+export function catalog(events) {
+  const newest = newestAnnouncements(events);
   const out = [];
   for (const e of newest.values()) {
     const d = tag(e, 'd');

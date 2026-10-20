@@ -733,9 +733,11 @@ the page's JS context:
   observations, observation: { seq, ts, value, raw, received_at } | null,
   prediction: { stream, seq, value, model, made_at, relays } | null }]`;
   `watching`: `{ streams, sources, found, left, at, error }` (the
-  prediction streams and sources watched for the track record, how many
-  the last scan found and left out past the cap of 200, when it last
-  worked (s) or null, its last failure or null)
+  prediction streams and sources watched for the track record, at most 200
+  prediction streams in all (ours first, then the ones already watched,
+  then the newest announced); how many the last scan found and how many of
+  those are not watched; when it last worked (s) or null, its last failure
+  or null)
   (`value` is the number taken from the observation or null; `raw` is what
   the provider sent; `observations` is how many were received, older ones
   pruned; `prediction.relays` is how many relays took our latest `_pred`;

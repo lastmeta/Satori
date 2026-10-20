@@ -58,11 +58,17 @@ real BTC, by its known provider) and judges a record against an unknown,
 unannounced one for what it is.
 - **Our own `_pred` streams** are among them, marked `mine`: our own events
   come back to us through the follow REQ like anyone's.
-- **The cap: 200 prediction streams.** Past it, ours first, then the most
-  recently announced (a live Lite neuron announces again on every
-  connection, so recent means active). Satorian has 112 today
-  (2026-10-20), from 24 authors; `nostr().watching.left` says how many a
-  bigger catalog left out.
+- **The cap: 200 prediction streams, for the whole watched set** (not per
+  scan). The order: ours first; then the ones already watched that are still
+  announced; then the watched ones missing from this scan's catalog, seen in
+  the last 7 days (a relay down, an announcement lost for a while: they keep
+  their place); then newcomers, the most recently announced first (a live
+  Lite neuron announces again on every connection, so recent means active).
+  Keeping the watched ones ahead of newcomers means the set doesn't churn
+  every 6 h as Lite neurons announce again, so records build up. Satorian
+  has 112 today (2026-10-20), from 24 authors; `nostr().watching.left`
+  says how many prediction streams the last scan found that are not
+  watched.
 - **When.** The scan runs once relays are open: the first relay to open
   after the page loads starts it, and it waits up to 10 s for the others
   still connecting, as `discover()` does. Then again in the hourly pass,
@@ -70,11 +76,13 @@ unannounced one for what it is.
   relay open) is tried again at the next relay open or hourly pass. The
   person's Discover and this scan share one run when they overlap, and a
   Discover also refreshes the watched set from its catalog.
-- **Dropped after 7 days.** A watched stream that no scan has selected for
-  7 days (its announcement gone, tombstoned, or pushed past the cap) is
-  dropped with its observations; a source goes when no selected prediction
-  names it. Only a scan that worked drops anything: relays that are down
-  say nothing about the catalog.
+- **Dropped.** A watched stream missing from the catalog for 7 days (its
+  announcement gone) is dropped with its observations. One a scan sees
+  **tombstoned** goes at once, and so does our own `_pred` when we
+  unsubscribe (with its tombstone, before the relays have it; a scan that
+  still finds our old announcement leaves it out). A source goes when no
+  watched prediction stream names it. Only a scan that worked drops
+  anything by age: relays that are down say nothing about the catalog.
 - **Never silent.** The scan is the `watch` task in the work list:
   "Finding prediction streams · asking the relays 1 of 2", then
   "Finding prediction streams · checking signatures 400 of 1,061". The
@@ -118,17 +126,28 @@ writers do.
   `pred`'s `announced_at`; a source's `announced`), `seen_at` (the last scan
   that selected it, or a prediction stream naming it), `added_at`.
 - `watch_observations`: `stream_uuid`, `seq`, `ts` (the content's
-  timestamp, null outside 2000–2100), `value` (`numericValue`, null when
-  there is no number), `received_at` (this device's clock, whole seconds,
-  rounded **up**, so a row never claims to have arrived earlier than it
-  did), `event_id` (unique). `received_at` is taken when the relay
-  delivered the event, before the intake's queue: a queue held up by a
-  poll's writes is this neuron's own delay, not the event's. Primary key
-  (`stream_uuid`, `seq`), insert or ignore: the first copy wins, from
-  whichever relay sent it first, and so does its `received_at`.
+  timestamp), `value` (`numericValue`, null when there is no number),
+  `received_at` (this device's clock, whole seconds, rounded **up**, so a
+  row never claims to have arrived earlier than it did), `event_id`
+  (unique). `received_at` is taken when the relay delivered the event,
+  before the intake's queue: a queue held up by a poll's writes is this
+  neuron's own delay, not the event's. Primary key (`stream_uuid`, `seq`),
+  insert or ignore: the first copy wins, from whichever relay sent it
+  first, and so does its `received_at`. An insert happens only while its
+  stream is still in `watch_streams` (in the same statement), so an
+  observation arriving as a scan drops its stream is not kept after the
+  drop.
+- **Kept only with a time**: an observation without a numeric timestamp
+  (2000–2100) is not stored (a row without one could never be pruned), nor
+  one stamped more than max(its cadence, 300 s) (`AHEAD_S`) ahead of its
+  arrival: one such row would move the prune's window past the whole
+  history. The subscriptions' intake refuses the far-ahead ones too
+  ([nostr.md](nostr.md#data-growth)).
 - **The prune**: with the relay streams' (in the hourly pass, at most
   daily), each watched stream's observations older than `RELAY_WINDOW` (400)
-  of its cadences back from its newest go (`db.pruneWatch`, in batches).
+  of its cadences back from its newest timestamp **not in the future** go,
+  and any row more than max(cadence, 300 s) ahead of now (stored before the
+  guard) (`db.pruneWatch`, in batches).
 
 ## Scoring: the verified-order rule
 
@@ -235,8 +254,12 @@ prediction that arrived just before an outcome, never credit one after it.
   left out past the cap, when it worked, its last failure).
 - `health().work` may be `{ task: 'watch', step: 'ask' | 'verify' }`.
 
-Records are computed when asked and kept until a new observation of the
-stream or its source arrives (one read for every stream that changed).
+Records are computed when asked, from each stream's last 60 observations
+(`RECORD_READ`: 28 outcomes with their baselines, and room) and how many it
+holds, and kept until a new observation of the stream or its source
+arrives: one read for every stream that changed. A scan or a Discover that
+finds the same streams reads nothing again; a newcomer reads only itself
+and its source.
 
 ## UI (Streams)
 
@@ -321,7 +344,10 @@ whatever their kind. Nothing of it is built now.
   stream (a few seconds of intake at start, in the intake's queue); then a
   few events a minute at satorian's cadences (15 min to a day).
 - Storage: 400 cadences per stream, so ~160,000 small rows at 200
-  prediction streams and their sources of 15 min.
+  prediction streams and their sources of 15 min; the watched set never
+  passes 200 prediction streams.
+- Records: the last 60 rows of each stream that changed (and a count), not
+  its 400 cadences; nothing for a scan that found the same streams.
 
 ## Verify
 

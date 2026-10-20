@@ -12,8 +12,9 @@ import { signEvent, verifyEvent, npub } from '../nostr/event.js';
 import { createRelay } from '../nostr/relay.js';
 import {
   KIND, PRED, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
-  catalog, parseObservation, numericValue, predValue, relayUuid,
+  catalog, tombstoned, parseObservation, numericValue, predValue, relayUuid,
 } from '../nostr/satori.js';
+import { AHEAD_S } from '../db/index.js';
 import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
 import { createWatch, followFilters, WATCH_SCAN_S } from './records.js';
@@ -277,17 +278,24 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   async function prune() {
     if (now() - prunedAt < RELAY_LIST_S) return;
     prunedAt = now();
-    const n = await db.pruneRelay({ buckets: RELAY_WINDOW });
+    const n = await db.pruneRelay({ buckets: RELAY_WINDOW, now: now() });
     if (n) console.info(`[satori] relay observations pruned to each stream's window: ${n}`);
     const w = await watch.prune();
     if (w) console.info(`[satori] watched streams' observations pruned to each stream's window: ${w}`);
   }
 
   // ── the track record (docs/design/track-record.md) ──
-  /** A scan's catalog: the watched set kept from it, the follow REQ sent again when that changed; one at a time (a Discover's and the scan's). */
+  /**
+   * A scan's catalog: the watched set kept from it, the follow REQ sent again when that changed; one at a time (a
+   * Discover's and the scan's). Gone at once: what the scan saw tombstoned, and our own `_pred` of a stream we
+   * unsubscribed from (a relay may still hold its announcement until our tombstone reaches it).
+   */
   const applyLine = serial();
-  const applyWatch = (entries) => applyLine(async () => {
-    const r = await watch.apply(entries);
+  const applyWatch = ({ list, gone = new Set() }) => applyLine(async () => {
+    const all = await db.relayStreams();
+    const live = new Set(all.filter((r) => r.active).map((r) => r.stream_name)); // one `<name>_pred` per name: another provider's may be live
+    const retired = all.filter((r) => !r.active && !live.has(r.stream_name)).map((r) => `${key.pubkey}:${r.stream_name}${PRED}`);
+    const r = await watch.apply(list, { gone: new Set([...gone, ...retired]) });
     watchedAt = now();
     watchInfo = { found: r.found, left: r.left, error: null };
     if (r.changed) await refollow();
@@ -297,7 +305,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   function scanWatch() {
     watching ??= progress.run('watch', async (step) => {
       try {
-        await applyWatch((await scan(step)).list);
+        await applyWatch(await scan(step));
       } catch (err) {
         watchInfo = { ...watchInfo, error: err?.message ?? String(err) };
         // no relay open is expected now and then (it is tried again at the next relay open or hourly pass); anything else is worth a warning
@@ -324,17 +332,19 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const sub = await db.relayStream(uuid);
     if ((!sub?.active && !watched) || !verifyEvent(e)) return;
     if (watched) await watch.intake(uuid, o, e, at);
-    if (sub?.active) await predict(e, o, uuid, sub);
+    if (sub?.active) await predict(e, o, uuid, sub, at);
   }
 
   /**
-   * A subscription's verified 34601: stored once; a new one is forecast and published as `<stream>_pred`
-   * (start.py:1276-1327, 3549-3617).
+   * A subscription's verified 34601 that arrived `at`: stored once; a new one is forecast and published as
+   * `<stream>_pred` (start.py:1276-1327, 3549-3617). One stamped more than max(its cadence, AHEAD_S) ahead of its
+   * arrival is neither kept nor forecast (it would move the engine's window and the prune's past the whole history).
    */
-  async function predict(e, o, uuid, sub) {
+  async function predict(e, o, uuid, sub, at = now()) {
     const ts = safeEpoch(o.timestamp);
     const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
     const windowS = cadence * RELAY_WINDOW;
+    if (ts !== null && ts > at + Math.max(cadence, AHEAD_S)) return; // far ahead of its arrival: never kept
     if (ts !== null && sub.obs_ts != null && ts < sub.obs_ts - windowS) return; // older than the window: a replay, never kept
     const n = numericValue(o.value);
     const value = ts !== null && Number.isFinite(n) ? n : null;
@@ -345,11 +355,11 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const f = value === null ? null : forecast(await db.relayHistory(uuid, windowS), { step: cadence, horizon: cadence });
     const pub = predValue(f, o.value);
     const seq = await db.nextPredSeq(uuid);
-    const at = t();
-    const ev = sign(observationEvent({ stream: sub.stream_name + PRED, value: pub, seq, timestamp: at }));
+    const made = t();
+    const ev = sign(observationEvent({ stream: sub.stream_name + PRED, value: pub, seq, timestamp: made }));
     // with its backtest (the forecast's, kept for the Models tab: scoring is part of training)
     await db.addRelayPrediction({ stream_uuid: uuid, seq, value: pub, model: f?.model ?? 'echo', obs_seq: o.seq,
-      made_at: at, event_id: ev.id, relays: 0, score: f?.score ?? null, persist: f?.persist ?? null, tests: f?.tests ?? null });
+      made_at: made, event_id: ev.id, relays: 0, score: f?.score ?? null, persist: f?.persist ?? null, tests: f?.tests ?? null });
     await db.checkpoint(); // the seq, the observation and the prediction are kept before anything is sent, as Lite commits first
     onChange();
     background(publish(ev).then(async (n) => {
@@ -408,7 +418,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         return list;
       }))).flat();
       const signed = await genuine(events, (done, total) => tell('verify', done, total));
-      return { list: catalog(signed), from };
+      return { list: catalog(signed), gone: tombstoned(signed), from };
     })().finally(() => {
       scanning = null;
       scanSteps.clear();
@@ -527,8 +537,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
      * `pred` and `subscribed` marked, and `relays`: the ones that sent it.
      */
     discover: () => progress.run('discover', async (step) => {
-      const { list, from } = await scan(step);
-      background(applyWatch(list)); // the watched set, from the same catalog
+      const scanned = await scan(step);
+      const { list, from } = scanned;
+      background(applyWatch(scanned)); // the watched set, from the same catalog
       const active = new Set((await db.relayStreams({ active: true })).map((r) => r.uuid));
       return list.map(({ event, ...s }) => ({ ...s, relays: from.get(event.id),
         subscribed: active.has(relayUuid(s.pubkey, s.stream_name)) }));
@@ -587,6 +598,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       if (!(await db.relayStream(uuid))?.active) throw new Error(`Not subscribed to ${s} from ${p.slice(0, 8)}….`);
       const at = t();
       await db.unsubscribeRelay(uuid);
+      await watch.drop([[key.pubkey, s + PRED]]); // our `_pred` leaves the track record with its tombstone
       await refollow();
       await db.checkpoint();
       await sendKept([sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at, unsubscribe: true })),

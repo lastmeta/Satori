@@ -1,24 +1,26 @@
 // The track record (docs/design/track-record.md): every prediction stream on the Satori relays watched on its own and
 // scored against no change from what this neuron saw arrive. Watching only reads: nothing is published.
 //
-//   selectWatched(catalog, { me, cap }) → { list, found, left }   which `_pred` streams to watch, from discover's catalog
+//   selectWatched(catalog, { me, cap, watched, gone, since }) → { list, lingering, found, left }   which `_pred` streams to watch
 //   watchRows(list, now) → watch_streams rows: each prediction stream and each source once
 //   followFilters([[author, stream]]) → the follow REQ's filters: one per author, its #d sorted
 //   scoreRecord({ predictions, observations, n }) → a record: the verified-order rule, the last 28, the Models tab's mark
 //   sortRecords(list) → best first
-//   createWatch({ db, me, now, onChange }) → the watched set: load, apply(catalog), has, pairs, count, intake, prune,
-//     list() (records()), one(pubkey, stream) (record(): with its pairs)
+//   createWatch({ db, me, now, onChange }) → the watched set: load, apply(catalog, { gone }), drop(pairs), has, pairs,
+//     count, intake, prune, list() (records()), one(pubkey, stream) (record(): with its pairs)
 // Pure but createWatch. Scoring takes plain { value, ts, received_at } predictions, so a paid stream's revealed value,
 // with its commitment's arrival, fits later (step 3).
 import { PRED, relayUuid, numericValue } from '../nostr/satori.js';
 import { EPOCH } from '../central/index.js';
 import { qualityOf } from './quality.js';
 import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
+import { AHEAD_S } from '../db/index.js';
 
 export const WATCH_CAP = 200; // prediction streams watched at most: ours first, then the newest announced
 export const WATCH_SCAN_S = 6 * 3600; // the catalog scanned again at most this often (the hourly pass)
 export const WATCH_DROP_S = 7 * 86_400; // a stream no scan selected for this long goes, with its observations
 export const RECORD_N = 28; // the record: the last 28 scored, as the Models tab's backtest has 28 origins
+export const RECORD_READ = 60; // observations read per stream for a record: 28 outcomes with their baselines, and room
 export const MIN_SCORED = 5; // fewer: "Not scored yet" (the Models tab's 5 origins)
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -44,21 +46,30 @@ export function sourceOf(entry) {
 
 /**
  * Which prediction streams to watch, from the relays' verified catalog (catalog() of the signed 34600s: newest per
- * author and `d`, no tombstones; each with its `event`): every `_pred` that names its source; ours (`me`) first, then
- * the most recently announced; at most `cap`. Cadence: the prediction stream's, else its source's, else a day; a source
- * not announced takes its prediction stream's. A source's name: its own announcement's, else its stream id as it is,
- * never the prediction stream's words (a predictor could name a stream it controls under another key "BTC");
- * `announced`: whether the source has an announcement of its own in the catalog.
- * @returns {{list: object[], found: number, left: number}} found: every prediction stream that names a source; left: past the cap
+ * author and `d`, no tombstones; each with its `event`): every `_pred` that names its source, but those `gone` (keys
+ * `pubkey:stream`: tombstoned on a relay, or our own we unsubscribed from). The cap holds for the whole watched set:
+ * ours (`me`) first, then those already `watched` that are still announced, then the watched ones missing from this
+ * catalog but seen since `since` (they keep their place: a relay down or an announcement lost for a while), then the
+ * newcomers, most recently announced first; at most `cap` in all. Cadence: the prediction stream's, else its source's,
+ * else a day; a source not announced takes its prediction stream's. A source's name: its own announcement's, else its
+ * stream id as it is, never the prediction stream's words (a predictor could name a stream it controls under another
+ * key "BTC"); `announced`: whether the source has an announcement of its own in the catalog.
+ * @param {object[]} entries catalog()
+ * @param {{me?: string|null, cap?: number, watched?: {pubkey: string, stream: string, seen_at: number}[], gone?: Set<string>, since?: number}} [o]
+ * @returns {{list: object[], lingering: {pubkey: string, stream: string}[], found: number, left: number}} list: from
+ *   this catalog; lingering: watched ones kept though missing from it; found: every prediction stream that names a source
+ *   (not gone); left: found and not watched (past the cap)
  */
-export function selectWatched(entries, { me = null, cap = WATCH_CAP } = {}) {
-  const announced = new Map(entries.map((s) => [`${s.pubkey}:${s.stream_name}`, s]));
+export function selectWatched(entries, { me = null, cap = WATCH_CAP, watched = [], gone = new Set(), since = -Infinity } = {}) {
+  const key = (pubkey, stream) => `${pubkey}:${stream}`;
+  const announced = new Map(entries.map((s) => [key(s.pubkey, s.stream_name), s]));
+  const was = new Set(watched.map((w) => key(w.pubkey, w.stream)));
   const found = [];
   for (const s of entries) {
-    if (!s.stream_name?.endsWith(PRED)) continue;
+    if (!s.stream_name?.endsWith(PRED) || gone.has(key(s.pubkey, s.stream_name))) continue;
     const src = sourceOf(s);
     if (!src) continue;
-    const own = announced.get(`${src.pubkey}:${src.stream}`);
+    const own = announced.get(key(src.pubkey, src.stream));
     const cadence = cadenceOf(s.cadence_seconds) ?? cadenceOf(own?.cadence_seconds) ?? DEFAULT_CADENCE_S;
     found.push({
       pubkey: s.pubkey, stream: s.stream_name, name: s.name || `${PREFIX}${src.stream}`, cadence_seconds: cadence,
@@ -66,9 +77,15 @@ export function selectWatched(entries, { me = null, cap = WATCH_CAP } = {}) {
       source: { ...src, name: own?.name || src.stream, announced: !!own, cadence_seconds: cadenceOf(own?.cadence_seconds) ?? cadence },
     });
   }
-  found.sort((a, b) => (b.mine - a.mine) || (b.announced_at - a.announced_at)
-    || (a.pubkey < b.pubkey ? -1 : a.pubkey > b.pubkey ? 1 : a.stream < b.stream ? -1 : a.stream > b.stream ? 1 : 0));
-  return { list: found.slice(0, cap), found: found.length, left: Math.max(0, found.length - cap) };
+  const tier = (x) => (x.mine ? 0 : was.has(key(x.pubkey, x.stream)) ? 1 : 2);
+  const byKey = (a, b) => (a.pubkey < b.pubkey ? -1 : a.pubkey > b.pubkey ? 1 : a.stream < b.stream ? -1 : a.stream > b.stream ? 1 : 0);
+  found.sort((a, b) => tier(a) - tier(b) || (b.announced_at - a.announced_at) || byKey(a, b));
+  const here = new Set(found.map((x) => key(x.pubkey, x.stream)));
+  const firm = found.filter((x) => tier(x) < 2).slice(0, cap);
+  const lingering = watched.filter((w) => !here.has(key(w.pubkey, w.stream)) && !gone.has(key(w.pubkey, w.stream)) && w.seen_at >= since)
+    .sort((a, b) => (b.seen_at - a.seen_at) || byKey(a, b)).slice(0, cap - firm.length).map(({ pubkey, stream }) => ({ pubkey, stream }));
+  const fresh = found.filter((x) => tier(x) === 2).slice(0, Math.max(0, cap - firm.length - lingering.length));
+  return { list: [...firm, ...fresh], lingering, found: found.length, left: found.length - firm.length - fresh.length };
 }
 
 /**
@@ -183,25 +200,32 @@ export const sortRecords = (list) => [...list].sort(compareRecords);
 
 /**
  * The watched set, kept in the db (watch_streams, watch_observations: migration 14) and in memory for the intake's
- * routing. Records are computed when asked, and kept until their stream or its source gets something new.
+ * routing. Records are computed when asked, from each stream's last RECORD_READ observations, and kept until their
+ * stream or its source gets something new (a scan that finds the same streams reads nothing again).
  * @param {{db: object, me: string, now?: () => number, onChange?: () => void}} o me: our Nostr pubkey (`mine`); onChange: an observation kept
  */
 export function createWatch({ db, me, now = () => Date.now() / 1000, onChange = () => {} }) {
   let rows = new Map(); // uuid → watch_streams row
   let predsOf = new Map(); // source uuid → the prediction streams naming it
-  const cache = new Map(); // pred uuid → its record, with its pairs
+  const cache = new Map(); // pred uuid → { rec (scoreRecord's), received, last }
   const dirty = new Set();
   const preds = () => [...rows.values()].filter((r) => r.kind === 'pred');
   const pairsKey = () => [...rows.values()].map((r) => `${r.pubkey}:${r.stream_name}`).sort().join('|');
 
+  /** The watched set read back: a record kept while its stream is still a prediction stream with the same source; the others computed when asked. */
   function index(list) {
+    const was = rows;
     rows = new Map(list.map((r) => [r.uuid, r]));
     predsOf = new Map();
     for (const r of preds()) if (r.source_uuid) (predsOf.get(r.source_uuid) ?? predsOf.set(r.source_uuid, new Set()).get(r.source_uuid)).add(r.uuid);
-    cache.clear();
-    dirty.clear();
-    for (const r of preds()) dirty.add(r.uuid);
+    for (const u of [...cache.keys()]) if (rows.get(u)?.kind !== 'pred' || rows.get(u).source_uuid !== was.get(u)?.source_uuid) cache.delete(u);
+    for (const u of [...dirty]) if (rows.get(u)?.kind !== 'pred') dirty.delete(u);
+    for (const r of preds()) if (!cache.has(r.uuid)) dirty.add(r.uuid);
   }
+  const reindex = async () => {
+    await db.checkpoint(); // as the other writers do (every commit is checkpointed already: storage.md)
+    index(await db.watchStreams());
+  };
 
   async function compute() {
     if (!dirty.size) return;
@@ -209,22 +233,27 @@ export function createWatch({ db, me, now = () => Date.now() / 1000, onChange = 
     dirty.clear();
     const want = new Set(asked);
     for (const u of asked) if (rows.get(u).source_uuid) want.add(rows.get(u).source_uuid);
-    const observed = await db.watchObservations([...want]);
+    const [observed, held] = await Promise.all([db.watchObservations([...want], { last: RECORD_READ }), db.watchCounts(asked)]);
     for (const u of asked) {
       const r = rows.get(u);
       const mine = observed.get(u) ?? [];
-      const src = rows.get(r.source_uuid);
-      const rec = scoreRecord({ predictions: mine, observations: observed.get(r.source_uuid) ?? [] });
       const latest = mine.reduce((a, x) => (!a || x.seq > a.seq ? x : a), null);
-      cache.set(u, {
-        pubkey: r.pubkey, stream: r.stream_name, name: r.name, mine: r.pubkey === me, sameAuthor: !!src && src.pubkey === r.pubkey,
-        source: { pubkey: src?.pubkey ?? null, stream: src?.stream_name ?? null, name: src?.name || src?.stream_name || null,
-          announced: announcedOf(src) },
-        cadence_seconds: r.cadence_seconds, received: mine.length, scored: rec.scored, error: rec.error, noChange: rec.noChange,
-        ratio: rec.ratio, mark: rec.mark, markText: rec.markText, direction: rec.direction, since: rec.since,
-        last: latest ? { value: latest.value, received_at: latest.received_at } : null, pairs: rec.pairs,
-      });
+      cache.set(u, { rec: scoreRecord({ predictions: mine, observations: observed.get(r.source_uuid) ?? [] }), received: held.get(u) ?? mine.length,
+        last: latest ? { value: latest.value, received_at: latest.received_at } : null });
     }
+  }
+  /** A prediction stream's record (record()'s: with its pairs), from its row, its source's and its cached score. */
+  function viewOf(r) {
+    const c = cache.get(r.uuid);
+    if (!c) return null;
+    const src = rows.get(r.source_uuid);
+    const { rec } = c;
+    return {
+      pubkey: r.pubkey, stream: r.stream_name, name: r.name, mine: r.pubkey === me, sameAuthor: !!src && src.pubkey === r.pubkey,
+      source: { pubkey: src?.pubkey ?? null, stream: src?.stream_name ?? null, name: src?.name || src?.stream_name || null, announced: announcedOf(src) },
+      cadence_seconds: r.cadence_seconds, received: c.received, scored: rec.scored, error: rec.error, noChange: rec.noChange,
+      ratio: rec.ratio, mark: rec.mark, markText: rec.markText, direction: rec.direction, since: rec.since, last: c.last, pairs: rec.pairs,
+    };
   }
   const withoutPairs = ({ pairs, ...r }) => r;
 
@@ -238,53 +267,81 @@ export function createWatch({ db, me, now = () => Date.now() / 1000, onChange = 
     /** How many prediction streams and sources are watched. */
     count: () => ({ streams: preds().length, sources: rows.size - preds().length }),
     /**
-     * A scan's catalog (catalog() entries, with their events): the selection kept, seen now; whatever no scan selected
-     * for 7 days dropped with its observations. → { found, left, changed: whether the followed set changed }
+     * A scan's catalog (catalog() entries, with their events) and what it saw `gone` (keys `pubkey:stream`: tombstoned,
+     * or our own we unsubscribed from): the selection (selectWatched: at most WATCH_CAP in all, the watched ones first)
+     * kept, seen now; a watched one missing from the catalog kept until no scan has seen it for 7 days; everything else
+     * (gone, past the cap, a source nothing names) dropped now with its observations.
+     * → { found, left, changed: whether the followed set changed }
      */
-    async apply(entries) {
+    async apply(entries, { gone = new Set() } = {}) {
       const at = Math.floor(now());
       const was = pairsKey();
-      const { list, found, left } = selectWatched(entries, { me });
-      await db.saveWatch(watchRows(list, at));
-      await db.dropWatch(at - WATCH_DROP_S);
-      await db.checkpoint(); // as the other writers do (every commit is checkpointed already: storage.md)
-      index(await db.watchStreams());
+      const { list, lingering, found, left } = selectWatched(entries, { me, gone, since: at - WATCH_DROP_S,
+        watched: preds().map((r) => ({ pubkey: r.pubkey, stream: r.stream_name, seen_at: r.seen_at })) });
+      const stay = new Set(lingering.map((x) => relayUuid(x.pubkey, x.stream)));
+      const saved = watchRows(list, at).filter((r) => !(r.kind === 'source' && stay.has(r.uuid))); // a lingering pred stays a pred
+      const keep = new Set([...saved.map((r) => r.uuid), ...stay, ...[...stay].map((u) => rows.get(u)?.source_uuid).filter(Boolean)]);
+      await db.saveWatch(saved);
+      await db.retainWatch([...keep]);
+      await reindex();
       return { found, left, changed: pairsKey() !== was };
+    },
+    /**
+     * Prediction streams ([author, stream]) that leave now, with their observations (our own, unsubscribed: its
+     * tombstone may take a while to reach the relays); a source goes with them when nothing else names it.
+     * → whether any was watched
+     */
+    async drop(list) {
+      const out = new Set(list.map(([p, st]) => relayUuid(String(p ?? '').trim().toLowerCase(), String(st ?? ''))));
+      const kept = preds().filter((r) => !out.has(r.uuid));
+      if (kept.length === preds().length) return false;
+      const keep = new Set([...kept.map((r) => r.uuid), ...kept.map((r) => r.source_uuid).filter(Boolean)]);
+      // one that a kept prediction stream predicts stays, as its source
+      const demoted = [...out].filter((u) => keep.has(u) && rows.get(u)?.kind === 'pred').map((u) => ({ ...rows.get(u), kind: 'source', source_uuid: null,
+        meta: JSON.stringify({ announced: false }) }));
+      if (demoted.length) await db.saveWatch(demoted);
+      await db.retainWatch([...keep]);
+      await reindex();
+      return true;
     },
     /**
      * A verified 34601 of a watched stream (o: parseObservation's) that arrived `at` (this clock, s: when the relay
      * delivered it, before the intake's queue): kept once, `at` in whole seconds rounded up (never earlier than it
-     * arrived); never forecast, never published. → whether it was new
+     * arrived), and only with a timestamp (2000–2100) no more than max(its cadence, AHEAD_S) ahead of its arrival (a row
+     * without one could never be pruned; one far ahead would move the prune's window past the whole history); never
+     * forecast, never published. → whether it was new
      */
     async intake(uuid, o, e, at = now()) {
-      if (!rows.has(uuid)) return false;
+      const row = rows.get(uuid);
+      if (!row) return false;
       const ts = Number.isFinite(o.timestamp) && o.timestamp > EPOCH[0] && o.timestamp < EPOCH[1] ? Math.floor(o.timestamp) : null; // as the relay intake's
+      if (ts === null || ts > at + Math.max(cadenceOf(row.cadence_seconds) ?? DEFAULT_CADENCE_S, AHEAD_S)) return false;
       const n = numericValue(o.value);
-      const fresh = await db.addWatchObservation({ stream_uuid: uuid, seq: o.seq, ts, value: ts !== null && Number.isFinite(n) ? n : null,
-        received_at: Math.ceil(at), event_id: e.id });
+      const fresh = await db.addWatchObservation({ stream_uuid: uuid, seq: o.seq, ts, value: Number.isFinite(n) ? n : null,
+        received_at: Math.ceil(at), event_id: e.id }); // only while its stream is still watched (a scan may drop it meanwhile)
       if (!fresh) return false;
-      if (rows.get(uuid).kind === 'pred') dirty.add(uuid);
+      if (rows.get(uuid)?.kind === 'pred') dirty.add(uuid);
       for (const p of predsOf.get(uuid) ?? []) dirty.add(p);
       onChange();
       return true;
     },
-    /** Each watched stream's observations older than its window (RELAY_WINDOW of its cadences) go. → how many */
+    /** Each watched stream's observations older than its window (RELAY_WINDOW of its cadences, back from its newest time not in the future) go, and any far ahead. → how many */
     async prune() {
-      const n = await db.pruneWatch({ buckets: RELAY_WINDOW });
+      const n = await db.pruneWatch({ buckets: RELAY_WINDOW, now: now() });
       if (n) await db.checkpoint();
       return n;
     },
     /** records(): every watched prediction stream's record, best first. */
     async list() {
       await compute();
-      return sortRecords(preds().map((r) => cache.get(r.uuid)).filter(Boolean).map(withoutPairs));
+      return sortRecords(preds().map(viewOf).filter(Boolean).map(withoutPairs));
     },
     /** record(pubkey, stream): one, with its last 28 scored pairs; null when it is not watched. */
     async one(pubkey, stream) {
       const uuid = relayUuid(String(pubkey ?? '').trim().toLowerCase(), String(stream ?? ''));
       if (rows.get(uuid)?.kind !== 'pred') return null;
       await compute();
-      return cache.get(uuid) ?? null;
+      return rows.get(uuid) ? viewOf(rows.get(uuid)) : null;
     },
   };
 }

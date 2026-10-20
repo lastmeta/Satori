@@ -910,7 +910,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
   test("the hourly pass prunes the watched streams to their window too, at most daily", async () => {
     await watching(['btc']);
     const uuid = relayUuid(PROV_PUB, 'btc'); // cadence 900
-    await conn.query(`INSERT INTO watch_observations SELECT '${uuid}', k + 1, ${clock} + k * 900, 1, ${clock}, 'x' || k FROM range(500) t(k)`);
+    await conn.query(`INSERT INTO watch_observations SELECT '${uuid}', k + 1, ${clock} - (499 - k) * 900, 1, ${clock}, 'x' || k FROM range(500) t(k)`);
     await nostr.reconcile();
     await settle();
     expect((await db.watchObservations([uuid])).get(uuid)).toHaveLength(500); // within a day of the start's pass
@@ -918,6 +918,70 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     await nostr.reconcile();
     await settle();
     expect((await db.watchObservations([uuid])).get(uuid)).toHaveLength(RELAY_WINDOW + 1);
+  });
+
+  test('a tombstoned `_pred` seen by a scan is dropped at once, not after 7 days', async () => {
+    const c = await watching(['btc', 'eth']);
+    expect((await nostr.status()).watching).toMatchObject({ streams: 2, sources: 2 });
+    c.stored.push(signEvent(tombstoneEvent('eth_pred', P_PUB, clock), P));
+    clock += WATCH_SCAN_S;
+    await nostr.reconcile();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 1, sources: 1, found: 1 });
+    expect(c.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc'] },
+      { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred'] }]));
+  });
+
+  test('unsubscribe: our own `_pred` leaves the watched set with its tombstone, and a scan still seeing our announcement does not bring it back', async () => {
+    const c = await watching(['btc'], { centralWrite: false });
+    const u = relays.get(USER_RELAY);
+    c.stored.push(announce('btc'));
+    await nostr.subscribe(PROV_PUB, 'btc');
+    u.stored.push(...u.published.filter((e) => e.kind === 34600)); // our `btc_pred` announcement, as a relay keeps it
+    await nostr.scanWatch();
+    expect((await nostr.records()).map((r) => r.mine).sort()).toEqual([false, true]);
+    await nostr.unsubscribe(PROV_PUB, 'btc');
+    expect((await nostr.status()).watching).toMatchObject({ streams: 1, sources: 1 });
+    expect((await nostr.records()).map((r) => r.pubkey)).toEqual([P_PUB]);
+    expect(c.subs.get(FOLLOW_ID).find((f) => f.authors[0] === ME_PUB)).toBeUndefined(); // unfollowed
+    await nostr.scanWatch(); // the relay still has our announcement (the tombstone not there yet)
+    expect((await nostr.records()).map((r) => r.pubkey)).toEqual([P_PUB]);
+  });
+
+  test("a far-future observation is not kept: a watched stream's, and a subscription's (neither stored nor forecast)", async () => {
+    const c = await watching(['btc', 'eth']);
+    await nostr.subscribe(PROV_PUB, 'eth'); // cadence 900
+    for (const r of relays.all.values()) r.published = [];
+    await c.deliver(observe('eth', '5', 1, clock + 901)); // more than max(900, 300) s ahead of its arrival
+    await c.deliver(observe('btc', '5', 1, 4_000_000_000)); // 2096
+    await settle();
+    expect(await db.relayStream(relayUuid(PROV_PUB, 'eth'))).toMatchObject({ observations: 0 });
+    expect(relays.get(USER_RELAY).published).toEqual([]);
+    const w = await db.watchObservations([relayUuid(PROV_PUB, 'eth'), relayUuid(PROV_PUB, 'btc')]);
+    expect([...w.values()].flat()).toEqual([]);
+    await c.deliver(observe('eth', '6', 2, clock + 899)); // within: kept and forecast
+    await settle();
+    expect(await db.relayStream(relayUuid(PROV_PUB, 'eth'))).toMatchObject({ observations: 1 });
+    expect(kinds(relays.get(USER_RELAY))).toEqual([[34601, 'eth_pred']]);
+  });
+
+  test("the hourly prune counts each subscription's window back from its newest time not in the future", async () => {
+    await boot();
+    openAll();
+    await settle();
+    relays.get(CENTRAL_RELAY).stored.push(announce('fast', { cadence: 60 }));
+    await nostr.subscribe(PROV_PUB, 'fast');
+    const uuid = relayUuid(PROV_PUB, 'fast');
+    await conn.query(`INSERT INTO relay_observations SELECT '${uuid}', k + 1, ${clock} - (499 - k) * 60, 1, '1', 'x' || k, ${clock} FROM range(500) t(k)`);
+    await conn.query(`INSERT INTO relay_observations VALUES ('${uuid}', 999, 4000000000, 1, '1', 'future', ${clock})`); // stored before the guard
+    clock += 60;
+    await nostr.reconcile();
+    await settle();
+    clock += 86_400;
+    await nostr.reconcile();
+    await settle();
+    // a day on, the newest not in the future is the last real one: 400 cadences back from it (the 2096 row gone)
+    expect(await db.relayHistory(uuid)).toHaveLength(RELAY_WINDOW + 1);
   });
 
   test('a scan with no relay open fails quietly, says so, and runs at the next open; discover() refreshes the watched set too', async () => {
