@@ -722,12 +722,16 @@ the page's JS context:
   keep or send them anywhere. (`file()` is gone: no Docker files are made.)
 - `await satori.nostr()` (also `status().nostr`) → `{ pubkey, npub,
   maxStreams, centralWrite, userRelays, relays, subscriptions }`. `relays`:
-  `[{ url, from: ['central' | 'user'], write, state, error, downSince, for }]`,
+  `[{ url, from: ['central' | 'user'], write, state, error, downSince, for, refused, notice }]`,
   state `open` | `connecting` | `closed` (it retries) | `blocked` (a ws://
   relay with no wss stand-in, in a build or on an https page: never tried,
   never counted on Home); `downSince`: since when it has not been open (ms),
   or null; `for`: on a wss stand-in, the `ws://` relay it is reached for
-  (`url` is the address connected, `from` the original's roles), else null.
+  (`url` is the address connected, `from` the original's roles), else null;
+  `refused`: the subscriptions the relay closed, `[{ id, message }]` (a
+  follow chunk it would not take: `satori-follow`, `satori-follow-2`, …;
+  until it is sent again or the relay answers it), else `[]`; `notice`:
+  the relay's last NOTICE text, or null.
   `userRelays` stays as the person gave it. `subscriptions`:
   `[{ uuid, stream, provider, name, cadence_seconds, subscribed_at,
   observations, observation: { seq, ts, value, raw, received_at } | null,

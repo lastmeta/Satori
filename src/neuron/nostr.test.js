@@ -114,8 +114,8 @@ describe('relays', () => {
     const s = await nostr.status();
     expect(s).toMatchObject({ pubkey: ME_PUB, maxStreams: 60, centralWrite: false, userRelays: [USER_RELAY] });
     expect(s.relays).toEqual([
-      { url: CENTRAL_RELAY, from: ['central'], write: false, state: 'connecting', error: '', downSince: null, for: null },
-      { url: USER_RELAY, from: ['user'], write: true, state: 'connecting', error: '', downSince: null, for: null },
+      { url: CENTRAL_RELAY, from: ['central'], write: false, state: 'connecting', error: '', downSince: null, for: null, refused: [], notice: null },
+      { url: USER_RELAY, from: ['user'], write: true, state: 'connecting', error: '', downSince: null, for: null, refused: [], notice: null },
     ]);
     expect(s.npub).toMatch(/^npub1/);
   });
@@ -168,7 +168,7 @@ describe("a relay's wss stand-in (docs/design/nostr.md#relays-and-the-read-only-
     await boot({ ws: false, wss: WSS, user: [] });
     const s = await nostr.status();
     expect(s.relays).toEqual([{ url: STAND_IN, from: ['central'], write: false, state: 'connecting', error: '', downSince: null,
-      for: CENTRAL_RELAY }]);
+      for: CENTRAL_RELAY, refused: [], notice: null }]);
     expect([...relays.all.keys()]).toEqual([STAND_IN]); // the ws:// address is never tried
     expect(relays.get(STAND_IN).connects).toBe(1);
     expect(await db.get('nostr_central_relays')).toEqual([CENTRAL_RELAY]); // central's list as central sent it
@@ -814,6 +814,15 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     expect(c.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] },
       { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred', 'eth_pred'] }]));
     expect((await nostr.status()).watching).toMatchObject({ streams: 2, sources: 2, at: clock });
+  });
+
+  test("status() says a relay refused a follow chunk (its CLOSED, or its NOTICE)", async () => {
+    const c = await watching(['btc']);
+    expect((await nostr.status()).relays.find((r) => r.url === CENTRAL_RELAY)).toMatchObject({ refused: [], notice: null });
+    c.refused = [{ id: `${FOLLOW_ID}-2`, message: 'error: too many filters' }];
+    c.notice = 'ERROR: bad req: too many filters';
+    expect((await nostr.status()).relays.find((r) => r.url === CENTRAL_RELAY)).toMatchObject({
+      refused: [{ id: `${FOLLOW_ID}-2`, message: 'error: too many filters' }], notice: 'ERROR: bad req: too many filters' });
   });
 
   test('the cap (200, the newest announced) and the follow REQ chunked at 200 filters', async () => {

@@ -1,12 +1,14 @@
 // One relay over a WebSocket (NIP-01), as much of a client as Satori needs
 // (docs/design/nostr.md#relays-and-the-read-only-flag):
-//   const r = createRelay(url, { onEvent(subId, event), onOpen(r), onState(state) })
+//   const r = createRelay(url, { onEvent(subId, event), onOpen(r), onState(state), onRefused() })
 //   r.connect()                    // and reconnect with backoff until r.close(); r.retryAt: the next try (ms) or null
 //   r.sub(id, filters) / r.unsub(id)   // kept: re-sent after every reconnect
 //   await r.fetch(filters)         // one REQ until EOSE (10 s at most) → events
 //   await r.publish(event)         // → { ok, message } from the relay's OK
 // state: 'connecting' | 'open' | 'closed'. Events are passed on unchecked. downSince: since when it has not been
 // open (ms), while it is to connect (Home gives a reconnect a grace before it counts as down).
+// refused: the kept subscriptions the relay CLOSED ([{ id, message }]: a follow chunk it would not take), until one is
+// sent again or answered with EOSE; notice: its last NOTICE. Both logged, and onRefused() told.
 // The backoff starts over only once a connection has worked (an EOSE, or 30 s open).
 // onTraffic(): each message sent or received (Home's glow, src/traffic.js).
 import { emit } from '../traffic.js';
@@ -21,7 +23,7 @@ export const backoffMs = (n, random = Math.random) =>
   Math.round(Math.min(BACKOFF_MIN_MS * 2 ** n, BACKOFF_MAX_MS) * (0.8 + 0.4 * random()));
 
 export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = () => {}, onOpen = () => {},
-  onState = () => {}, random = Math.random, onTraffic = () => emit('network'), now = Date.now } = {}) {
+  onState = () => {}, onRefused = () => {}, random = Math.random, onTraffic = () => emit('network'), now = Date.now } = {}) {
   let ws = null;
   let state = 'closed';
   let error = '';
@@ -33,6 +35,8 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
   let stable = null; // resets the backoff once the connection has proved itself
   let n = 0;
   const kept = new Map(); // id → filters
+  const refused = new Map(); // a kept subscription's id → the message of the relay's CLOSED
+  let notice = null; // the relay's last NOTICE
   const fetches = new Map(); // id → { events, done }
   const publishes = new Map(); // event id → [resolve]
 
@@ -89,8 +93,19 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
       if (fetches.has(a)) fetches.get(a).events.push(b);
       else if (kept.has(a)) onEvent(a, b);
     } else if (type === 'EOSE' || type === 'CLOSED') {
-      if (type === 'EOSE') proven();
+      if (type === 'EOSE') {
+        proven();
+        refused.delete(a);
+      } else if (kept.has(a)) {
+        refused.set(a, String(b ?? ''));
+        console.warn(`[satori] relay ${url} closed subscription ${a}: ${b ?? ''}`);
+        onRefused();
+      }
       fetches.get(a)?.done();
+    } else if (type === 'NOTICE') {
+      notice = String(a ?? '');
+      console.warn(`[satori] relay ${url} notice: ${notice}`); // NIP-01's NOTICE names no subscription (strfry's "bad req" is one)
+      onRefused();
     } else if (type === 'OK') {
       settle(a, { ok: b === true, message: String(c ?? '') });
     }
@@ -115,6 +130,7 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
       error = '';
       downSince = null;
       setState('open');
+      refused.clear();
       for (const [id, filters] of kept) send(['REQ', id, ...filters]);
       onOpen(relay);
     };
@@ -135,6 +151,10 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
     get retryAt() { return retryAt; },
     /** Since when it has not been open (ms), while it is to connect; null while open or closed on purpose. */
     get downSince() { return downSince; },
+    /** The kept subscriptions the relay closed: [{ id, message }] (a follow chunk refused). */
+    get refused() { return [...refused].map(([id, message]) => ({ id, message })); },
+    /** The relay's last NOTICE, or null. */
+    get notice() { return notice; },
     /** Connect now (a pending retry is brought forward); no-op while connected or connecting. */
     connect() {
       stopped = false;
@@ -158,9 +178,11 @@ export function createRelay(url, { WebSocket = globalThis.WebSocket, onEvent = (
     sub(id, filters) {
       if (kept.has(id)) send(['CLOSE', id]);
       kept.set(id, filters);
+      refused.delete(id);
       send(['REQ', id, ...filters]);
     },
     unsub(id) {
+      refused.delete(id);
       if (kept.delete(id)) send(['CLOSE', id]);
     },
     fetch(filters, { timeoutMs = TIMEOUT_MS } = {}) {

@@ -225,6 +225,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
             onOpen: (r) => opened(url, r),
             onEvent: (_id, ev) => { const at = now(); return work(() => intake(ev, at)); }, // when it arrived: before the queue
             onState: () => onChange(),
+            onRefused: () => onChange(), // a follow chunk closed, or a NOTICE: status() says it
           });
         }
       }
@@ -524,6 +525,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
           error: e.blocked ? e.why : e.relay.error,
           downSince: e.blocked ? null : e.relay.downSince ?? null, // ms: Home's reconnect grace (docs/design/health.md)
           for: e.for, // the ws:// relay this wss stand-in is reached for, or null
+          refused: e.blocked ? [] : e.relay.refused ?? [], // the subscriptions it closed ([{ id, message }]: a follow chunk it would not take)
+          notice: e.blocked ? null : e.relay.notice ?? null, // its last NOTICE
         })),
         subscriptions: (await db.relayStreams({ active: true })).map(view),
         // the track record: the watched prediction streams and sources, the last scan's finds (left: past the cap), when it worked

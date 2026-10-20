@@ -226,6 +226,37 @@ describe('relay', () => {
     expect(FakeSocket.all).toHaveLength(6);
   });
 
+  test("a CLOSED on a kept subscription (a follow chunk refused) is logged with its id and kept on the relay's state; a NOTICE too", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let told = 0;
+    const r = make({ onRefused: () => told++ });
+    r.sub('satori-follow', [{ kinds: [34601] }]);
+    r.sub('satori-follow-2', [{ kinds: [34601] }]);
+    r.connect();
+    last().open();
+    expect(r.refused).toEqual([]);
+    last().msg(['CLOSED', 'satori-follow-2', 'error: too many filters']);
+    last().msg(['CLOSED', 'f9', 'auth-required: no']); // not a kept subscription (a fetch's): not kept
+    expect(r.refused).toEqual([{ id: 'satori-follow-2', message: 'error: too many filters' }]);
+    expect(told).toBe(1);
+    expect(warn.mock.calls.flat().join(' ')).toMatch(/satori-follow-2.*too many filters/);
+    last().msg(['NOTICE', 'ERROR: bad req: too many filters']);
+    expect(r.notice).toBe('ERROR: bad req: too many filters');
+    expect(warn.mock.calls.flat().join(' ')).toMatch(/ws:\/\/relay\.test.*ERROR: bad req/);
+    expect(told).toBe(2);
+    r.sub('satori-follow-2', [{ kinds: [34601] }]); // sent again: no longer refused until the relay says so
+    expect(r.refused).toEqual([]);
+    last().msg(['CLOSED', 'satori-follow-2', 'error: too many filters']);
+    last().drop(); // a new connection sends every kept REQ again
+    vi.advanceTimersByTime(2000);
+    last().open();
+    expect(r.refused).toEqual([]);
+    last().msg(['CLOSED', 'satori-follow', 'blocked']);
+    last().msg(['EOSE', 'satori-follow']); // a relay that answers EOSE took it after all
+    expect(r.refused).toEqual([]);
+    warn.mockRestore();
+  });
+
   test('close() stops for good; a socket that cannot be made is retried', () => {
     const r = make();
     r.connect();

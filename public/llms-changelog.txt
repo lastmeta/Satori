@@ -30,6 +30,9 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 - An observation stamped more than max(its cadence, 300 s) ahead of its
   arrival is not kept (nor forecast, for a subscription), and a watched
   stream's observation without a numeric timestamp is not kept.
+- `nostr().relays[]` has `refused` (the subscriptions the relay closed:
+  `[{ id, message }]`, a follow chunk it would not take) and `notice` (its
+  last NOTICE, or null).
 
 ## Changed 2026-10-20 (the track record: how a buyer knows who's good)
 

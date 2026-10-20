@@ -99,7 +99,11 @@ per subscribed provider. It is now one filter per author over the union of
 the subscriptions and the watched streams, each `#d` list sorted, chunked at
 most 200 filters per REQ as before (`followFilters` in
 `src/neuron/records.js`). It is sent again only when the set changes, so a
-scan that finds the same streams costs no re-REQ.
+scan that finds the same streams costs no re-REQ. A relay that refuses a
+chunk (a `CLOSED` for `satori-follow-2`, or a `NOTICE` such as strfry's
+"bad req") is logged with the subscription's id and kept on the relay's
+state: `nostr().relays[].refused` (`[{ id, message }]`) and `notice` say
+it, until the chunk is sent again or answered.
 
 The intake verifies each 34601 once, then routes it by (author, stream):
 
