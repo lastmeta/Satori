@@ -24,7 +24,9 @@ records() ─▶ each prediction scored against its source's next observation, o
 The code: the selection, the follow list, the scoring and the records in
 `src/neuron/records.js` (pure, plus `createWatch`, the stateful part);
 the relays, the scan and the intake routing in `src/neuron/nostr.js`; the
-tables in `src/db/` (migration 14).
+tables in `src/db/` (migration 14); the mark's rule, shared with the Models
+tab, in `src/neuron/quality.js`; the card's views in `src/ui/record.js`,
+placed by `src/ui/streams.js`.
 
 ## What is watched
 
@@ -105,9 +107,11 @@ writers do.
   timestamp, null outside 2000–2100), `value` (`numericValue`, null when
   there is no number), `received_at` (this device's clock, whole seconds,
   rounded **up**, so a row never claims to have arrived earlier than it
-  did), `event_id` (unique). Primary key (`stream_uuid`, `seq`), insert or
-  ignore: the first copy wins, from whichever relay sent it first, and so
-  does its `received_at`.
+  did), `event_id` (unique). `received_at` is taken when the relay
+  delivered the event, before the intake's queue: a queue held up by a
+  poll's writes is this neuron's own delay, not the event's. Primary key
+  (`stream_uuid`, `seq`), insert or ignore: the first copy wins, from
+  whichever relay sent it first, and so does its `received_at`.
 - **The prune**: with the relay streams' (in the hourly pass, at most
   daily), each watched stream's observations older than `RELAY_WINDOW` (400)
   of its cadences back from its newest go (`db.pruneWatch`, in batches).
@@ -199,21 +203,42 @@ stream or its source arrives (one read for every stream that changed).
 
 A **Prediction streams** card, after the Satori relays card:
 
-- the status line: "Watching 112 prediction streams · 23 with a record";
-  while a scan runs, its moving step instead ("Finding prediction streams ·
-  checking signatures 400 of 1,061", at Home's reading pace); before the
-  first scan, "Finding prediction streams…".
+- the status line: "Watching 112 prediction streams · 23 with a record"
+  ("· none with a record yet"; past the cap, "(the newest announced; 14
+  more not watched)"); while a scan runs, its step instead, beside the
+  small turning ring Settings uses ("Finding prediction streams · checking
+  signatures 400 of 1,061", at Home's reading pace: `src/ui/hold.js`);
+  before the first scan, "Finding prediction streams…", or "Not watching
+  yet: No relay is connected…" when it could not run; none found, "No
+  prediction streams on the relays yet."
 - a row per stream, best first: "Predictions for <the source's name>", the
   predictor as a short key or "you", the record pill (the Models tab's `q`
-  pill: its colours and words; "Same" on a phone), "from N" scored, the
-  cadence. The first 25, then "Show all 112".
-- a tap opens the stream's detail: the pairs as a chart (the actual
-  outcomes as a line, the predictions dashed, on one scale; "Actual" and
-  "Predicted" labelled), the direction ("Right way 15 of 22"), the medians,
-  and in plain words: "Seen by this neuron since Oct 20, 14:05. It counts
-  only predictions this neuron received before the outcome."
+  pill: its colours and words; "Same" on a phone), "from 21" scored (not
+  scored yet: "3 of 5", or nothing), the cadence; its tooltip in words
+  ("12% less error than no change, over the last 21 predictions this
+  neuron received before the outcome"). A phone: the name, then the pill,
+  the predictor, from N and the cadence on one line; a computer: columns
+  under a header. The first 25, then "Show all 112".
+- a tap opens the stream's detail in place, under its row: who and how
+  often ("btc_pred by 1fc7ebf5…bfdd · every 15 min"), the record in words
+  ("12% less error than no change over the last 21 predictions (median
+  error 0.88; no change 1)"), the direction ("Right way 15 of 20"), the
+  pairs as a chart (the outcomes as a line, the predictions dashed, on one
+  scale, `sparkPath` with a shared range; "Actual" and "Predicted" beside
+  their lines; "the last 21 outcomes, from 98.2 to 104"), and in plain
+  words: "Seen by this neuron since Oct 20, 14:05. It counts only
+  predictions this neuron received before the outcome."
+- records are read again while Streams shows, when a watched stream gets
+  an observation or the watched set changes, at most about once a second.
 
 The words people see: the Satori relays, never central or server.
+
+<img src="../screenshots/streams-records-phone-light.png" alt="Prediction streams on a phone (the e2e): Watching 3 prediction streams · 2 with a record; 75% better from 9, 100% worse from 9, Not scored yet 2 of 5" width="240"> <img src="../screenshots/streams-record-detail-phone-light.png" alt="One opened: 75% less error than no change over the last 9 predictions, Right way 9 of 9, the outcomes and the predictions (dashed), Seen by this neuron since …" width="240">
+
+**Measured live** (2026-10-20, the dev server: satorian read only and the
+dev relay): 120 prediction streams and 77 sources watched 2 s after a
+reload; each holds the relays' stored latest at first, and a 60 s demo
+stream on the dev relay had 8 scored within 9 minutes.
 
 ## Home
 
@@ -259,8 +284,15 @@ follow REQ with watched streams, intake routing: watched, subscribed, both,
 never a forecast or a publish for a watched one; drop after 7 days; the
 prune), `src/db/db.test.js` (migration 14, additive; the tables' insert or
 ignore, the prune, the drop), `src/neuron/health.test.js` (the chip),
-`src/neuron/work.test.js` (the words), `src/ui/streams.test.js` (the rows
-and the detail). `e2e/records.spec.js`: a provider's stream and two
-predictors' `_pred` streams on a test relay at a 3 s cadence; a fresh
-neuron finds them, follows them and shows their records on the Streams tab
-(`SHOTS=1` writes `docs/screenshots/streams-records-*.png`).
+`src/neuron/work.test.js` (the words), `src/ui/record.test.js` (the status
+line, the rows, the detail and its chart). `e2e/records.spec.js`: a
+provider's stream on a test relay at a 4 s cadence and three predictors'
+`_pred` streams (one most of the way to the next value, one the wrong way,
+one only twice); a fresh neuron finds them on its own, follows them,
+scores them ("75% better", "100% worse", "Not scored yet" 2 of 5), leaves
+out a backdated prediction received after its outcome, publishes nothing
+for watching, and shows them on Streams (`SHOTS=1` writes
+`docs/screenshots/streams-records-phone-light.png` and
+`streams-record-detail-phone-light.png`). `node scripts/provider.mjs
+ws://localhost:7778 demo-walk 60 --pred` gives the dev app a predictor to
+watch.

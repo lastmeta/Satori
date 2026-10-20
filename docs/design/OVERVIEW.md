@@ -286,6 +286,9 @@ Every icon and symbol in the UI, 2026-10-18, by the rule above:
 | The day strip's colours | Home | keep | the summary says it in words ("11 of 14 full days"), a computer shows the legend, each day's tooltip names it |
 | Sparklines | Home (a computer), Streams | keep | under "Trend", or beside the stream |
 | The engine's state disc | Models | keep | beside "Resting", "Working" |
+| The track record's pill | Streams' Prediction streams | keep | the Models tab's: words in the mark's colour ("12% better") |
+| The chart's solid and dashed lines | a prediction stream's detail | **paired** | "Actual" and "Predicted" beside their lines |
+| The small turning ring | Streams' Prediction streams | keep | beside the scan's step, "Finding prediction streams · …" |
 
 Settings, Wallet and Streams have no other icons: their buttons and badges
 are words ("Copy", "Lock", "Sent", "Connected").

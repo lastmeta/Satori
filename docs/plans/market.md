@@ -4,8 +4,9 @@
 
 **Status:** approved by the owner, 2026-10-20 ("Let's do it"). Step 0 (a
 relay everyone can reach) and step 2 (the channel contract, deployed on Base
-Sepolia) are done; step 1 (the track record) is being built
-([../design/track-record.md](../design/track-record.md)); step 3 is next.
+Sepolia) are done; step 1 (the track record) is built, 2026-10-20, not yet
+deployed ([../design/track-record.md](../design/track-record.md)); step 3
+is next.
 
 ## The goal
 
@@ -236,7 +237,13 @@ can charge" doesn't work.
    on neuron.satorinet.io: a fresh profile discovers 925 streams from 44
    providers.
 1. **Track record for prediction streams**, free ones first, on the Streams
-   tab. Useful on its own, and the base the market stands on.
+   tab. Useful on its own, and the base the market stands on. Built
+   2026-10-20 (not yet deployed; [../design/track-record.md](../design/track-record.md)):
+   every `_pred` on the relays naming its source (up to 200) is watched on
+   its own with its source; each prediction is scored against the source's
+   next observation, only if this neuron received it first; the last 28
+   against no change in the Models tab's words, on the Streams tab and in
+   `records()`. Satorian's 120 are watched 2 s after a load.
 2. **The channel contract:** TDD, an adversarial review, then Base Sepolia
    and the local fork. It is independent of D7. Done 2026-10-20 (above):
    30 Hardhat tests and six Foundry invariants. Two review passes found the

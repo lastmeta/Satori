@@ -277,8 +277,12 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   most per filter, as strfry), replaceable kinds by (pubkey, kind) for 0, 3 and
   10000–19999, and by (pubkey, kind, d) for 30000–39999. A filter of the wrong
   shape is answered with CLOSED; no message takes it down.
-- `node scripts/provider.mjs [relay] [stream] [seconds]`: a throwaway provider
-  that announces a stream (34600) and publishes a random walk (34601) on it.
+- `node scripts/provider.mjs [relay] [stream] [seconds] [--pred]`: a throwaway provider
+  that announces a stream (34600) and publishes a random walk (34601) on it;
+  with `--pred`, a second throwaway key also announces `<stream>_pred` (as
+  Lite names it, the source in its tags and metadata) and publishes a
+  forecast a moment after each value, most of the way to the next one: a
+  prediction stream to watch ([track-record.md](track-record.md)).
 - The e2e runs two of these relays (7781 as the user's, 7782 as central's) and
   checks that nothing of the app's reaches central's while it is read only.
   Its https page routes satorian's stand-in, `wss://relay.satorinet.io`, to
