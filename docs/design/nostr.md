@@ -17,7 +17,8 @@ connect each relay ─▶ REQ follow: per provider {kinds:[34601], authors:[p], 
                    └─▶ announce each `<stream>_pred` (34600)
 34601 in ─▶ subscribed? (stream_name, author) ─▶ verify ─▶ store once (event id; stream, provider, seq)
           ─▶ forecast (one cadence ahead) ─▶ publish `<stream>_pred` 34601 (seq + 1) to every relay we write to
-hourly: refetch the relay list, reconnect, re-announce; daily: NIP-65 (10002)
+         └▶ watched? (a prediction stream or its source) ─▶ verify ─▶ watch_observations (track-record.md)
+hourly: refetch the relay list, reconnect, re-announce; daily: NIP-65 (10002); at most every 6 h: scan for prediction streams
 ```
 
 Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
@@ -38,8 +39,8 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 | Stream cap | `max_streams` from `GET /peer/relay-config` (PEER:166-173, `{max_streams: 60}`), fetched once per start (START:236-246); fallback 100 (NDB:14-36). Active subscriptions + own non-`_pred` publications must stay under it (ROUTES:2611-2622). | The same fetch and fallback; the browser has no publications of its own, so active subscriptions < cap. |
 | Discover | `discover_datastreams` (CLIENT:809-882): `{kinds:[34600], limit:500}`, paged back with `until` (strfry returns at most 500 per filter); newest first, first per (author, d) wins; tombstones (`status=deleted`) dropped. | The same paging on every connected relay; each event's id and signature checked (a forged one is dropped, so it can't hide the real one), then merged by (author, d), newest wins. `_pred` streams are marked and hidden from the UI's list. |
 | Subscribe | The UI stores the subscription (ROUTES:2592-2667, NDB:451-494); a separate action starts predicting (adds the `<stream>_pred` publication, ROUTES:2690-2711). Reconcile then finds the stream on a relay and publishes the 34602 (`subscribe_datastream`, CLIENT:1102-1154, called at START:4526). | One action: subscribe = predict. The announcement taken is the newest one signed by that provider with that name (anything else a relay sends is ignored). The 34602 and the `_pred` 34600 are published at once. Paid, encrypted and approval-gated streams and `_pred` streams are refused (later scope), and so is a second provider's stream with a name already predicted: there is one `<name>_pred` per name, as Lite's publications are unique by `stream_name` (NDB:751-789). |
-| Follow | `set_followed_authors` (CLIENT:1687-1714): `{kinds:[34601,34604], authors:[…]}`, id `satori-follow`, 200 authors per filter; reconcile fetches each stream's latest by `{authors:[a], #d:[names]}` (CLIENT:944-983). | One REQ `satori-follow` of per-provider filters `{kinds:[34601], authors:[p], #d:[streams]}` (≤ 200 per REQ): the latest stored event of each subscribed stream, then live ones, and nothing of the provider's other streams. |
-| Intake | `_networkListen` drops streams not subscribed by (stream_name, author) (START:1112-1137); empty content is a heartbeat (CLIENT:1818-1820); content is `DatastreamObservation` JSON (MODELS:105-140). `save_observation` dedupes by round, event id, then (stream, provider, seq) (NDB:597-636); only a new row runs the engine (START:621-667). | Same order: empty → skip; JSON with `stream_name, timestamp, value, seq_num`; subscribed by (stream_name, author); id and signature verified; insert or ignore on event id and (stream, provider, seq). Only a new row is forecast. |
+| Follow | `set_followed_authors` (CLIENT:1687-1714): `{kinds:[34601,34604], authors:[…]}`, id `satori-follow`, 200 authors per filter; reconcile fetches each stream's latest by `{authors:[a], #d:[names]}` (CLIENT:944-983). | One REQ `satori-follow` of per-author filters `{kinds:[34601], authors:[p], #d:[streams]}` (≤ 200 per REQ): the latest stored event of each subscribed **or watched** stream ([track-record.md](track-record.md#following)), then live ones, and nothing of the author's other streams. Sent again only when the set changes. |
+| Intake | `_networkListen` drops streams not subscribed by (stream_name, author) (START:1112-1137); empty content is a heartbeat (CLIENT:1818-1820); content is `DatastreamObservation` JSON (MODELS:105-140). `save_observation` dedupes by round, event id, then (stream, provider, seq) (NDB:597-636); only a new row runs the engine (START:621-667). | Same order: empty → skip; JSON with `stream_name, timestamp, value, seq_num`; subscribed or watched by (stream_name, author); id and signature verified once; a subscription's: insert or ignore on event id and (stream, provider, seq), and only a new row is forecast; a watched stream's (a prediction stream or its source): kept in `watch_observations` with when it arrived, never forecast or published; both: both ([track-record.md](track-record.md#following)). |
 | Value | `_numericObservationValue` (START:1365-1410): a scalar → `float()`; a dict → `value`, else `raw` unless `unit == 'tick'`; anything else none (the prediction echoes). Timestamps outside 2000–2100 give no forecast (`_safeEpoch`, START:1413-1424). | `numericValue` (`src/nostr/satori.js`), with Python's `float()` rules for strings; checked against Lite's own function on 17 values (fixture). |
 | Model id | `uuid5(DNS, "satori-relay:<lowercase pubkey>:<stream>:")` (`satorineuron/relay_ids.py`), pinned in `neuron/tests/test_relay_ids.py:23-28`. | Same uuid keys the relay tables; the vector is Lite's pinned one. |
 | Forecast | `predictForRelay` → `str(firstPredictionOf(_runForecast(…)))` (`engine-lite/engine.py:714-739`); `_runForecast` returns the second, autoregressed forecast (the first with its value appended), falling back to the first (`:1153-1186`): t2. With little data the StarterAdapter forecasts the last value, as a float (`"82234.0"`). No model, a bad timestamp or a non-numeric value echoes the value (`json.dumps` unless a string) (START:1276-1310, 1413-1424). | `forecast(history, { step: cadence, horizon: cadence })`; value = `String(value)` (JS's text; readers take `float()` of it, [the protocol audit](#the-protocol-audit)), **one cadence ahead** (the owner's rule; Lite sends t2, two steps ahead); `naive` gives the last value; echo as Lite when there is no number (`JSON.stringify` unless a string). |
@@ -184,6 +185,9 @@ one that never answers (10 s timeout), delays nothing else.
   `raw` the value as JSON.
 - `relay_predictions` (stream_uuid, seq, value, model, obs_seq, made_at,
   event_id, relays): NDB's `predictions`, plus how many relays took it.
+- Migration 14: `watch_streams` and `watch_observations`, the watched
+  prediction streams and their sources, apart from the subscriptions
+  ([track-record.md](track-record.md#storage-migration-14-additive)).
 - Migration 5: each `relay_streams` row also keeps its latest observation
   (`obs_*`, the highest seq), our latest `_pred` (`p_*`) and its observation
   count, set at insert time, so the status read on every change is one row
@@ -205,7 +209,8 @@ file grew without end. Now (`RELAY_WINDOW`, `src/neuron/nostr.js`):
   12 h model. An observation older than the window (a relay replaying an old
   event) is neither kept nor forecast.
 - **The prune**: in the hourly pass, at most daily (the first at start),
-  each stream's observations older than its window are deleted
+  each stream's observations older than its window are deleted, the
+  watched streams' too (`db.pruneWatch`)
   (`db.pruneRelay`; a row with no time of its own by its arrival), 10,000 to
   a statement, each its own call in the database's queue so a poll's writes go
   between them. The stream's count (`observations`) stays what was received.
@@ -307,6 +312,9 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   latest observation (formatted as our `_pred` is; what the provider sent on
   hover), when it was observed, our latest `_pred` value, its seq and how
   many relays took it, and Unsubscribe.
+- **Prediction streams**: every prediction stream on the relays, watched
+  on its own, with its verified track record against no change
+  ([track-record.md](track-record.md#ui-streams)).
 - **Network streams**: Discover (on opening), a search over name, stream,
   description and tags, the first 50 matches; prediction streams are hidden
   and counted; paid or gated streams show but can't be subscribed.

@@ -296,6 +296,7 @@ set by the code doing the work; nothing polls:
 | `discover` | `ask` (relays answered) | Asking the relays · 1 of 2 | |
 | | `verify` (announcements checked) | Checking the announcements' signatures · 400 of 1,061 | |
 | `subscribe` | `find` | Finding the stream on the relays… | |
+| `watch` | `ask` (relays answered), `verify` (announcements checked) | Finding prediction streams · asking the relays 1 of 2, Finding prediction streams · checking signatures 400 of 1,061 (the scan for prediction streams to watch, [track-record.md](track-record.md#what-is-watched); on the Streams tab's Prediction streams card, not the hero) | |
 | `train` | `score` | Scoring models · 12 of 81 (the [training pass](models.md#the-training-pass): models without a current fit, from stored history; never a prediction) | |
 
 **Critical** means closing Satori now would lose work; its words begin
@@ -339,13 +340,14 @@ ring, so the hero's ring stays the one moving indicator
 tones, amber only when the engine itself failed. The Wallet card's line says the vault's action step (the hero is
 on Home only); Home's Stake and Claim buttons say "Staking…",
 "Claiming…"; the Wallet's Unstake says "Unstaking…". The Network streams line says discover's or subscribe's step,
-only once it has lasted 1 s. Settings › Reward address's line says its step, and its buttons "Saving…", "Clearing…".
+only once it has lasted 1 s; the Prediction streams card's line says the
+watch scan's. Settings › Reward address's line says its step, and its buttons "Saving…", "Clearing…".
 
 **Reduced motion**: nothing turns; the three dots stay in the ring, and the
 words change.
 
 **Agents**: `health().work` is the entry that leads (a critical one, else
-the first of central, base, the vault's actions, keys, reward, discover, subscribe)
+the first of central, base, the vault's actions, keys, reward, discover, subscribe, watch)
 with its `text`, or null; the hero has `data-work` (`central:history`) and
 `aria-busy` while it shows a step.
 
@@ -360,13 +362,13 @@ what is deliberately off. `health().tone` and each `channels[x].tone`:
 | `critical` | vivid green (`--vivid`), "Keep Satori open · …" | closing now would lose work (the critical steps above) |
 | `idle` | sky green (`--sky`) | all good, nothing to do, waiting for the next cycle |
 | `warn`, `bad` | amber, red | something is wrong for predicting or earning; they win over every green (advice never does: it is not a status) |
-| `off` | grey | a channel deliberately not used (Base not staked here, no stream subscribed), and the strip's closed days; never the hero |
+| `off` | grey | a channel deliberately not used (Base not staked here, no stream subscribed or watched), and the strip's closed days; never the hero |
 
 `toneOf(status, work)`: `warn` and `bad` from the status; else `critical`
 or `working` while the hero's task runs; else `idle`. A chip: its state's
 `warn` or `bad` (an `advice` state is green); `working` while its channel has work in progress (central's
-poll; Base's batch and the vault's actions; the network's discover and
-subscribe) or is connecting; `off` as above; else `idle`.
+poll; Base's batch and the vault's actions; the network's discover,
+subscribe and watch scan) or is connecting; `off` as above; else `idle`.
 
 **The greens**, worked out in OKLCH from `--ok` (the comment in
 `src/style.css`): **sky** is to `--ok` as sky blue is to blue (oklch(0.55
@@ -425,9 +427,16 @@ health.js map them).
   "Unreachable" (off, grey: the contract unused); warn
   "Gas: 3 batches", "Skipped: …", "Batch stuck", "Unreachable" (in use); bad "Failed 3
   times", "Out of sync".
-- **Relays** (the Satori relays): idle "No streams" (nothing subscribed); ok "2 relays" (a blocked one is not
+- **Relays** (the Satori relays): idle "No streams" (nothing subscribed or watched); ok "2 relays" (a blocked one is not
   counted); advice "1 of 2 relays down" (sky, or green while working); bad "Relays down". A
   relay that is connecting, or reconnecting within 10 min, counts as up.
+  **Watching** (2026-10-20, [track-record.md](track-record.md#home)): with
+  nothing subscribed but prediction streams watched (`nostr().watching.streams`),
+  ok "Watching 112" (sky; green while the watch scan runs). Watching is use
+  of the relays, so it is not "off"; but it predicts nothing, so it never
+  colours the hero: with every relay down for 10 min the chip alone says
+  "Relays down" in amber (no reason, no card), and Home's answer stays what
+  the predicting says. With subscriptions the chip is as above.
 
 ### The contract unused
 

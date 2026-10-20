@@ -4,7 +4,8 @@
 
 **Status:** approved by the owner, 2026-10-20 ("Let's do it"). Step 0 (a
 relay everyone can reach) and step 2 (the channel contract, deployed on Base
-Sepolia) are done; steps 1 and 3 are next.
+Sepolia) are done; step 1 (the track record) is being built
+([../design/track-record.md](../design/track-record.md)); step 3 is next.
 
 ## The goal
 

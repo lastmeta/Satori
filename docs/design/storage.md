@@ -231,7 +231,7 @@ next roll-forward) an older build opens it as it is when every migration it
 doesn't know is **additive**: `ADDITIVE` in `schema.js` marks the migrations
 that only add what older code can live without (a new table, or a nullable
 column no earlier code reads, whose null means "not yet": 3, 4, 6, 8, 11,
-12, 13), and each open stores `meta.schema_min`, how many migrations a build
+12, 13, 14), and each open stores `meta.schema_min`, how many migrations a build
 must know to use the database (up to the last one that is not additive: 10
 today). A build that knows at least that many opens it, migrating nothing
 and writing nothing of the schema; otherwise it is refused in plain words,
@@ -329,6 +329,17 @@ additive; a later build keeps `schema_min` current.
    statement (`db.saveRetrained`: the spec and its fit, generation + 1,
    accepted + 1, only where the spec is still the one compared with). The
    poll's own store never touches it. Null: never asked.
+14. **The track record** (2026-10-20, additive,
+   [track-record.md](track-record.md#storage-migration-14-additive)):
+   `watch_streams (uuid, pubkey, stream_name, kind 'pred' | 'source',
+   source_uuid, name, cadence_seconds, meta, seen_at, added_at)`, the
+   prediction streams the neuron watches and their sources, and
+   `watch_observations (stream_uuid, seq, ts, value, received_at, event_id)`,
+   primary key (stream, seq), the event id unique, insert or ignore: what
+   each one sent and when it arrived here (whole seconds, rounded up).
+   Pruned with the relay streams to 400 cadences; a stream no scan has
+   selected for 7 days goes with its rows. Two new tables, so an older
+   build opens the database and never reads them.
 
 The Models tab's drill-in reads its streams' history with `db.histories(uuids)`:
 one statement for the target and its companions (one per stream took ~100 ms
