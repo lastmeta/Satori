@@ -300,7 +300,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         await applyWatch((await scan(step)).list);
       } catch (err) {
         watchInfo = { ...watchInfo, error: err?.message ?? String(err) };
-        console.warn('[satori] scan for prediction streams (tried again at the next relay open or hourly pass)', watchInfo.error);
+        // no relay open is expected now and then (it is tried again at the next relay open or hourly pass); anything else is worth a warning
+        console[/No relay is connected/.test(watchInfo.error) ? 'info' : 'warn']('[satori] scan for prediction streams: tried again at the next relay open or hourly pass;', watchInfo.error);
       }
     }).finally(() => { watching = null; });
     return watching;
