@@ -11,7 +11,7 @@ import { recordFromRows } from '../keys/index.js';
  * old cache offline, does not dead-end. Not additive: a table dropped or recreated (1, 2), a column the code must keep
  * in step at every write (5's obs_*, 9's predicted_ts), the keys' move (7), rows rewritten (10).
  */
-export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13]);
+export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13, 14]);
 
 export const MIGRATIONS = [
   // 1 (step 1): streams fetched from a URL; times in ms.
@@ -135,4 +135,14 @@ export const MIGRATIONS = [
   // the user, kept with its spec: { n (the retrain counter), status 'running' | 'done', asked_at, state (the search's
   // place, to resume), result (the last one's summary) }; null: never asked.
   `ALTER TABLE model_specs ADD COLUMN retrain VARCHAR;`,
+  // 14 (2026-10-20, additive): the track record (docs/design/track-record.md). watch_streams: every prediction stream the
+  // neuron watches and each one's source (uuid = relayUuid; kind 'pred' | 'source'; source_uuid: a pred's source; meta:
+  // JSON, a pred's announced_at; seen_at: the last scan that selected it; added_at). watch_observations: what each sent
+  // and when it arrived here (received_at: this clock, whole seconds rounded up), insert or ignore on (stream, seq) and
+  // on the event id. Two new tables: an older build never reads them.
+  `CREATE TABLE watch_streams (uuid VARCHAR PRIMARY KEY, pubkey VARCHAR NOT NULL, stream_name VARCHAR NOT NULL,
+     kind VARCHAR NOT NULL, source_uuid VARCHAR, name VARCHAR, cadence_seconds BIGINT, meta VARCHAR,
+     seen_at BIGINT NOT NULL, added_at BIGINT NOT NULL);
+   CREATE TABLE watch_observations (stream_uuid VARCHAR NOT NULL, seq BIGINT NOT NULL, ts BIGINT, value DOUBLE,
+     received_at BIGINT NOT NULL, event_id VARCHAR NOT NULL UNIQUE, PRIMARY KEY (stream_uuid, seq));`,
 ];

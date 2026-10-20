@@ -16,6 +16,8 @@
 //   db.subscribeRelay(s) / unsubscribeRelay(uuid) / relayStream(uuid) / relayStreams({active}) / countActiveRelay()
 //   db.addRelayObservation(o) → new? / relayHistory(uuid, windowS?) / pruneRelay({ buckets }) / nextPredSeq(uuid) / addRelayPrediction(p) / relayPredictions(uuid, limit)
 //   db.setRelayFit(uuid, seq, { score, persist, tests }): a `_pred`'s backtest, kept later (the training pass)
+//   the track record (docs/design/track-record.md): db.watchStreams() / saveWatch(rows) / dropWatch(before) → streams dropped
+//   db.addWatchObservation(o) → new? / watchObservations(uuids) → Map(uuid → [{seq, ts, value, received_at}]) / pruneWatch({ buckets })
 //   the activity log (docs/design/health.md): db.addActivity(row) → id / updateActivity(id, fields) / activity(since) / firstSession() / pruneActivity(before)
 //   await db.checkpoint() / db.close()
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
@@ -133,6 +135,15 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
   const inOrder = (fn) => (...args) => line(() => fn(...args));
   const rows = async (sql, ...params) => toRows(await query(conn, sql, params));
   const run = async (sql, ...params) => void (await query(conn, sql, params));
+  const pruneWatchBatch = inOrder(async (buckets, batch) => {
+    const [{ Count }] = await rows(`DELETE FROM watch_observations WHERE rowid IN (
+        SELECT o.rowid FROM watch_observations o JOIN (
+          SELECT s.uuid, n.newest - ? * (CASE WHEN s.cadence_seconds > 0 THEN s.cadence_seconds ELSE 86400 END) AS cutoff
+          FROM watch_streams s JOIN (SELECT stream_uuid, max(ts) AS newest FROM watch_observations GROUP BY stream_uuid) n
+            ON n.stream_uuid = s.uuid) c ON c.uuid = o.stream_uuid
+        WHERE coalesce(o.ts, o.received_at) < c.cutoff LIMIT ?)`, buckets, batch);
+    return Number(Count);
+  });
   const pruneRelayBatch = inOrder(async (buckets, batch) => {
     const [{ Count }] = await rows(`DELETE FROM relay_observations WHERE rowid IN (
         SELECT o.rowid FROM relay_observations o JOIN (
@@ -459,6 +470,61 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
     }),
     relayPredictions: inOrder((uuid, limit = 20) =>
       rows('SELECT * FROM relay_predictions WHERE stream_uuid = ? ORDER BY seq DESC LIMIT ?', uuid, limit)),
+
+    // ── the track record (docs/design/track-record.md): watched prediction streams and their sources ──
+    /** Every watched stream (watch_streams rows), preds first. */
+    watchStreams: inOrder(() => rows('SELECT * FROM watch_streams ORDER BY kind, uuid')),
+    /**
+     * A scan's selection (watchRows: { uuid, pubkey, stream_name, kind, source_uuid, name, cadence_seconds, meta, seen_at }),
+     * one statement: new ones added (added_at = seen_at), known ones updated; added_at kept.
+     */
+    saveWatch: inOrder(async (list) => {
+      if (!list.length) return;
+      const col = (k, f = texts) => f(list.map((r) => r[k]));
+      await run(`INSERT INTO watch_streams (uuid, pubkey, stream_name, kind, source_uuid, name, cadence_seconds, meta, seen_at, added_at)
+          SELECT ${TXT('c0')}, ${TXT('c1')}, ${TXT('c2')}, ${TXT('c3')}, ${TXT('c4')}, ${TXT('c5')}, ${NUM('c6', 'BIGINT')}, ${TXT('c7')},
+            ${NUM('c8', 'BIGINT')}, ${NUM('c8', 'BIGINT')} FROM ${rowsOf(9)}
+        ON CONFLICT (uuid) DO UPDATE SET kind = excluded.kind, source_uuid = excluded.source_uuid, name = excluded.name,
+          cadence_seconds = excluded.cadence_seconds, meta = excluded.meta, seen_at = excluded.seen_at`,
+      col('uuid'), col('pubkey'), col('stream_name'), col('kind'), col('source_uuid'), col('name'), col('cadence_seconds', nums),
+      col('meta'), col('seen_at', nums));
+    }),
+    /** Every watched stream not seen since `before`, and its observations, in one commit. → how many streams went */
+    dropWatch: inOrder(async (before) => {
+      await run('BEGIN TRANSACTION');
+      try {
+        await run('DELETE FROM watch_observations WHERE stream_uuid IN (SELECT uuid FROM watch_streams WHERE seen_at < ?)', before);
+        const [{ Count }] = await rows('DELETE FROM watch_streams WHERE seen_at < ?', before);
+        await run('COMMIT');
+        return Number(Count);
+      } catch (err) {
+        await run('ROLLBACK');
+        throw err;
+      }
+    }),
+    /** Insert or ignore (the stream's seq, or the event id, seen before: the first copy and its arrival stay). → true when new */
+    addWatchObservation: inOrder(async (o) => (await rows(`INSERT OR IGNORE INTO watch_observations VALUES (?, ?, ?, ${D}, ?, ?) RETURNING seq`,
+      o.stream_uuid, o.seq, o.ts ?? null, dbl(o.value), o.received_at, o.event_id)).length > 0),
+    /** Some watched streams' observations in one read: Map(uuid → [{seq, ts, value, received_at}]), each by time (then seq), in the order asked. */
+    watchObservations: inOrder(async (uuids) => {
+      const out = new Map(uuids.map((u) => [u, []]));
+      if (!uuids.length) return out;
+      const t = await query(conn, `SELECT stream_uuid, seq::DOUBLE AS seq, ts::DOUBLE AS ts, value, received_at::DOUBLE AS received_at
+        FROM watch_observations WHERE stream_uuid IN (SELECT ${TXT('c0')} FROM ${rowsOf(1)}) ORDER BY stream_uuid, ts NULLS LAST, seq`, [texts(uuids)]);
+      // get(i), not toArray(): ts and value may be null, which a typed array would read as 0
+      const [u, seq, ts, value, at] = ['stream_uuid', 'seq', 'ts', 'value', 'received_at'].map((k) => t.getChild(k));
+      for (let i = 0; i < t.numRows; i++) out.get(u.get(i))?.push({ seq: seq.get(i), ts: ts.get(i), value: value.get(i), received_at: at.get(i) });
+      return out;
+    }),
+    /** Each watched stream's observations older than its window (`buckets` of its cadence back from its newest), `batch` at a time. → how many went */
+    async pruneWatch({ buckets, batch = 10_000 }) {
+      let total = 0;
+      for (;;) {
+        const n = await pruneWatchBatch(buckets, batch);
+        total += n;
+        if (n < batch) return total;
+      }
+    },
 
     // ── the activity log (docs/design/health.md) ──
     /** One event: { at, kind, level, data, until?, mkey? } → its id. */

@@ -709,3 +709,60 @@ test("sparks: each central stream's last n observations, oldest first (Home's tr
   expect(await db.sparks(2)).toEqual({ 'u-btc': [2, 3], 'u-eth': [9] });
   expect(await db.sparks()).toEqual({ 'u-btc': [1, 2, 3], 'u-eth': [9] });
 });
+
+describe('the track record (migration 14; docs/design/track-record.md)', () => {
+  const ws = (o) => ({ uuid: 'w-p', pubkey: 'aa', stream_name: 'btc_pred', kind: 'pred', source_uuid: 'w-s', name: 'Predictions for BTC',
+    cadence_seconds: 60, meta: '{"announced_at":5}', seen_at: 1000, ...o });
+  const wo = (o) => ({ stream_uuid: 'w-p', seq: 1, ts: 2000, value: 1.5, received_at: 2001, event_id: 'e1', ...o });
+
+  test('a step-13 database gains the two tables, empty; additive (an older build may open it); nothing else changes', async () => {
+    expect(ADDITIVE.has(14)).toBe(true);
+    const conn = await memoryConn();
+    await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+    for (const m of MIGRATIONS.slice(0, 13)) if (typeof m === 'string') await conn.query(m);
+    await conn.query(`INSERT INTO meta VALUES ('schema_version', '13'), ('central_url', '"w"')`);
+    await conn.query(`INSERT INTO relay_streams (uuid, stream_name, provider_pubkey, active, subscribed_at, pred_created_at) VALUES ('r-1', 'btc', 'e5', true, 1, 1)`);
+    const up = await openDb(conn);
+    expect(up.version).toBe(MIGRATIONS.length);
+    expect(await up.get('central_url')).toBe('w');
+    expect(await up.relayStreams()).toMatchObject([{ uuid: 'r-1' }]);
+    expect(await up.watchStreams()).toEqual([]);
+    expect((await up.watchObservations(['x'])).get('x')).toEqual([]);
+    expect(await up.get('schema_min')).toBe(Math.max(...MIGRATIONS.map((_, i) => i + 1).filter((n) => !ADDITIVE.has(n))));
+  });
+
+  test('saveWatch: new rows added (added_at = seen_at), known ones updated (kind, name, cadence, seen_at), added_at kept', async () => {
+    await db.saveWatch([ws(), ws({ uuid: 'w-s', pubkey: 'bb', stream_name: 'btc', kind: 'source', source_uuid: null, name: 'BTC, "the" coin', meta: null })]);
+    await db.saveWatch([ws({ seen_at: 2000, name: 'Predictions for Bitcoin', cadence_seconds: 120 })]);
+    expect(await db.watchStreams()).toEqual([
+      { uuid: 'w-p', pubkey: 'aa', stream_name: 'btc_pred', kind: 'pred', source_uuid: 'w-s', name: 'Predictions for Bitcoin', cadence_seconds: 120,
+        meta: '{"announced_at":5}', seen_at: 2000, added_at: 1000 },
+      { uuid: 'w-s', pubkey: 'bb', stream_name: 'btc', kind: 'source', source_uuid: null, name: 'BTC, "the" coin', cadence_seconds: 60,
+        meta: null, seen_at: 1000, added_at: 1000 },
+    ]);
+    await db.saveWatch([]);
+  });
+
+  test('addWatchObservation: insert or ignore on (stream, seq) and on the event id, the first copy kept; nulls kept as null', async () => {
+    expect(await db.addWatchObservation(wo())).toBe(true);
+    expect(await db.addWatchObservation(wo({ value: 9, received_at: 5000 }))).toBe(false); // the same seq: the first stays
+    expect(await db.addWatchObservation(wo({ seq: 2 }))).toBe(false); // the same event id
+    expect(await db.addWatchObservation(wo({ seq: 3, ts: null, value: null, event_id: 'e3', received_at: 3000 }))).toBe(true);
+    expect(await db.addWatchObservation(wo({ seq: 4, ts: 1500, value: 0.1 + 0.2, event_id: 'e4' }))).toBe(true);
+    expect((await db.watchObservations(['w-p', 'none'])).get('w-p')).toEqual([ // by time, a row with none last
+      { seq: 4, ts: 1500, value: 0.1 + 0.2, received_at: 2001 }, { seq: 1, ts: 2000, value: 1.5, received_at: 2001 },
+      { seq: 3, ts: null, value: null, received_at: 3000 }]);
+  });
+
+  test("dropWatch: the streams not seen since then and their observations; pruneWatch: each one's rows past its window", async () => {
+    await db.saveWatch([ws(), ws({ uuid: 'w-old', stream_name: 'eth_pred', seen_at: 10, cadence_seconds: null })]);
+    for (let k = 0; k < 20; k++) await db.addWatchObservation(wo({ seq: k, ts: 10_000 + 60 * k, event_id: `p${k}` }));
+    await db.addWatchObservation(wo({ seq: 99, ts: null, received_at: 1, event_id: 'p99' })); // no time of its own: its arrival's
+    await db.addWatchObservation(wo({ stream_uuid: 'w-old', event_id: 'o1' }));
+    expect(await db.pruneWatch({ buckets: 10, batch: 3 })).toBe(9 + 1); // w-p keeps ts ≥ 11,140 − 600 (and its timeless row goes); w-old keeps its one row (a day's window)
+    expect((await db.watchObservations(['w-p'])).get('w-p').map((o) => o.seq)).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    expect(await db.dropWatch(100)).toBe(1);
+    expect((await db.watchStreams()).map((r) => r.uuid)).toEqual(['w-p']);
+    expect((await db.watchObservations(['w-old'])).get('w-old')).toEqual([]);
+  });
+});

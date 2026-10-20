@@ -9,15 +9,15 @@
 //   sortModels(list, 'quality' | 'name'), filterModels(list, ['network', 'contract', 'relays']), toggleDest(selected, to)
 //   await modelDetail({ db, id, streams, subscriptions, lastBatch, baseHistory })   one model, recomputed on demand, with
 //     `retrain`: whether Retrain is offered ({ available, why: null | 'source' | 'history', last: the last result })
-import { MARGIN, explainModel } from '../engine/evolve.js';
+import { explainModel } from '../engine/evolve.js';
+import { TIE, classify, worded, markWords, qualityOf } from './quality.js';
 import { canRetrain } from '../engine/retrain.js';
 import { explainForecast, STEP_S, HORIZON_STEPS, median } from '../engine/index.js';
 import { UP } from '../chain/index.js';
 import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
 import { fmtAgo, fmtIn } from './health.js';
 
-/** Within ±5 % of no change's error is a tie: the margin evolution keeps a challenger by (src/engine/evolve.js). */
-export const TIE = MARGIN;
+export { TIE, markWords, qualityOf };
 /** The chart's history: this many horizons back from when the forecast was made, at most HISTORY_POINTS. */
 export const HISTORY_HORIZONS = 7;
 export const HISTORY_POINTS = 400;
@@ -29,7 +29,6 @@ const parse = (text) => {
 const num = (x) => (x == null || x === '' ? null : Number.isFinite(Number(x)) ? Number(x) : null);
 const direction = (forecast, latest) => (forecast == null || latest == null ? null
   : forecast > latest ? 'up' : forecast < latest ? 'down' : 'flat');
-const classify = (ratio) => (ratio < 1 - TIE ? 'better' : ratio > 1 + TIE ? 'worse' : 'tie');
 
 /** A span of time in a word or two: '45 min', '12 h', '24 h', '3 days'. */
 export function spanText(s) {
@@ -38,35 +37,6 @@ export function spanText(s) {
   if (s <= 48 * 3600 && s % 3600 === 0) return `${s / 3600} h`;
   const n = Math.round(s / 86400);
   return n === 1 ? '1 day' : `${n} days`;
-}
-
-/**
- * The mark in short words (the owner, 2026-10-18: a symbol beside an icon was not read): '7% better', 'Same as no
- * change', '12% worse' ('Worse' when no change was perfect), 'Not scored yet'. The list row, the drill-in's header and
- * the status's legend say the same.
- */
-export function markWords({ mark, ratio }) {
-  if (mark == null) return 'Not scored yet';
-  if (mark === 'tie') return 'Same as no change';
-  if (ratio == null) return mark === 'worse' ? 'Worse' : 'Better';
-  return mark === 'better' ? `${Math.round((1 - ratio) * 100)}% better` : `${Math.round((ratio - 1) * 100)}% worse`;
-}
-const worded = (q) => ({ ...q, text: markWords(q) });
-
-/**
- * A model against no change, from its backtest: score (its median error) and persist (no change's, on the same
- * origins). ratio = score / persist; better below 0.95, worse above 1.05, else a tie. naive is no change itself: a
- * tie. No backtest yet (fewer than 5 origins), or no model (an echoed value): mark null.
- * @returns {{mark: 'better'|'tie'|'worse'|null, ratio: number|null, error: number|null, noChange: number|null}}
- */
-export function qualityOf({ kind, score = null, persist = null }) {
-  if (kind === 'naive') return worded({ mark: 'tie', ratio: 1, error: null, noChange: null });
-  if (score == null || persist == null || kind === 'echo') return worded({ mark: null, ratio: null, error: score ?? null, noChange: persist ?? null });
-  if (!(persist > 0)) {
-    return worded(score > 0 ? { mark: 'worse', ratio: null, error: score, noChange: persist } : { mark: 'tie', ratio: 1, error: score, noChange: persist });
-  }
-  const ratio = score / persist;
-  return worded({ mark: classify(ratio), ratio, error: score, noChange: persist });
 }
 
 /** A model with several outputs: the median of their ratios (one output: its own). */
