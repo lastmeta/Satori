@@ -1,6 +1,7 @@
 // Streams: the Satori Network's (central: the data flow's facts and Poll now; each stream with its forecast, model and
-// companions, and its history on a tap), the subscriptions on the Satori relays (Nostr), and the relays' streams to
-// discover. The words people see (docs/intent/ui.md); the addresses are Settings'.
+// companions, and its history on a tap), the subscriptions on the Satori relays (Nostr), every prediction stream on the
+// relays with its verified track record (docs/design/track-record.md#ui-streams), and the relays' streams to discover.
+// The words people see (docs/intent/ui.md); the addresses are Settings'.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { fact, sparkPath } from './parts.js';
@@ -8,6 +9,7 @@ import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
   fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText,
 } from './format.js';
+import { watchText, recordRow, recordDetail, SHOWN } from './record.js';
 
 export const CATALOG_SHOWN = 50;
 
@@ -92,6 +94,35 @@ function nostrCard(a) {
   </section>`;
 }
 
+// ── the track record: every prediction stream on the relays, watched on its own ──
+
+/** An open stream's detail, in place under its row: the record in words, the pairs as a chart, since when and what counts. */
+function recordOpen(a) {
+  const d = () => (state.recordDetail ? recordDetail(state.recordDetail) : null);
+  const c = () => d()?.chart;
+  return html`<div class="detail rdetail" data-test="record-detail"><div class="card-head"><h3>${() => d()?.title ?? ''}</h3><button class="small-btn" @click="${() => a.openRecord('')}">Close</button></div><p class="muted small">${() => d()?.sub ?? (state.recordError || 'Reading its record…')}</p><ul class="rlines">${() => (d()?.lines ?? []).map((l) => html`<li>${l}</li>`.key(l))}</ul><figure class="rchart" hidden="${() => !c()}"><svg viewBox="0 0 300 80" preserveAspectRatio="none" role="img" aria-label="${() => (c() ? `The last ${c().n} outcomes and what was predicted for each, from ${c().bottom} to ${c().top}` : '')}"><path class="ra" d="${() => c()?.actual ?? ''}"></path><path class="rp" d="${() => c()?.predicted ?? ''}"></path></svg><figcaption class="small muted"><span class="lg la">Actual</span><span class="lg lp">Predicted</span><span>${() => (c() ? `the last ${c().n} outcomes, from ${c().bottom} to ${c().top}` : '')}</span></figcaption></figure><p class="small muted" data-test="record-note">${() => d()?.note ?? ''}</p></div>`;
+}
+
+function recordItem(v, a) {
+  // One root node, no whitespace around it (see streamRow); the detail opens in place under the row.
+  return html`<div class="ritem" data-test="record" data-key="${v.key}" data-mark="${v.mark}"><button class="rrow" aria-expanded="${() => String(state.recordOpen === v.key)}" @click="${() => a.openRecord(state.recordOpen === v.key ? '' : v.key)}"><span class="rname"><b data-test="record-name">${v.title}</b></span><span class="rby muted small" data-test="record-by" title="${v.byTitle}">${v.by}</span><span class="q" data-q="${v.mark}" title="${v.markTitle}"><b data-test="record-mark" data-short="${v.markShort}">${v.markText}</b></span><span class="rfrom muted small" data-test="record-from">${v.from}</span><span class="rcad muted small">${v.cadence}</span></button>${() => (state.recordOpen === v.key ? recordOpen(a) : '')}</div>`;
+}
+
+function recordsCard(a) {
+  const rows = () => state.records.map(recordRow);
+  const shown = () => (state.recordsAll ? rows() : rows().slice(0, SHOWN));
+  return html`
+  <section class="card records" data-test="records">
+    <header class="card-head"><h2>Prediction streams</h2></header>
+    <p class="muted small rstatus" data-test="records-status"><i class="spin" aria-hidden="true" hidden="${() => !state.watchLine}"></i><span>${() => state.watchLine || watchText(state.nostr.watching, state.records)}</span></p>
+    <div class="rrows" hidden="${() => !state.records.length}">
+      <div class="rrow head" aria-hidden="true"><span>Predictions</span><span>Predictor</span><span>Against no change</span><span class="rfrom">Scored</span><span>Cadence</span></div>
+      <div>${() => shown().map((v) => recordItem(v, a).key(`${v.key}|${v.markText}|${v.from}|${v.by}`))}</div>
+    </div>
+    <button class="small-btn" data-test="records-all" hidden="${() => state.recordsAll || state.records.length <= SHOWN}" @click="${() => { state.recordsAll = true; }}">${() => `Show all ${state.records.length}`}</button>
+  </section>`;
+}
+
 function catRow(s, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
   const paid = s.price_per_obs > 0 || s.encrypted || s.approval_required;
@@ -128,6 +159,7 @@ export function streamsTab(a) {
     ${centralCard(a)}
     ${streamsCard(a)}
     ${nostrCard(a)}
+    ${recordsCard(a)}
     ${network(a)}
   </section>`;
 }

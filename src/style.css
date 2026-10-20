@@ -360,6 +360,36 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 .crow .sname { font-weight: 550; }
 .crow .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crow button { flex: none; }
+/* the track record (docs/design/track-record.md#ui-streams): a row per prediction stream, its pill the Models tab's (.q);
+   a tap opens its detail in place: the record in words, the outcomes as a line and the predictions dashed */
+.rstatus { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; }
+.rstatus .spin { width: 14px; height: 14px; }
+.rrows { margin-top: 6px; }
+.ritem { border-top: 1px solid var(--line); }
+.rrow { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.8fr) 170px 64px 60px; gap: 10px; align-items: center;
+  width: 100%; min-height: 44px; padding: 6px 0; margin: 0; border: 0; border-radius: 0; background: none; color: var(--text);
+  font: inherit; font-size: 0.9rem; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer; }
+.rrow.head { min-height: 0; padding: 4px 0; cursor: default; color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.06em; }
+button.rrow:hover .rname b, button.rrow[aria-expanded="true"] .rname b { color: var(--accent); }
+.rname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rname b { font-weight: 550; }
+.rby, .rcad { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rfrom { white-space: nowrap; text-align: right; }
+.rrow .q b { white-space: nowrap; }
+.rdetail { margin: 0 0 10px; }
+.rdetail .card-head h3 { margin: 0; }
+.rdetail > p { margin: 4px 0 0; }
+.rlines { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.9rem; }
+.rdetail .rlines li { display: block; padding: 2px 0; border-top: 0; }
+.rchart { margin: 10px 0 0; }
+.rchart svg { display: block; width: 100%; height: 96px; }
+.rchart path { fill: none; stroke-width: 1.75; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.rchart .ra { stroke: var(--text); }
+.rchart .rp { stroke: var(--accent); stroke-dasharray: 5 4; }
+.rchart figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; }
+.lg::before { content: ""; display: inline-block; width: 18px; margin-right: 6px; vertical-align: middle; border-top: 2px solid var(--text); }
+.lg.lp::before { border-top: 2px dashed var(--accent); }
 
 /* ── Models (docs/design/models.md): the engine's status, the list, a model's drill-in ── */
 .models-page { max-width: none; }
@@ -509,8 +539,17 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
     gap: 6px 8px; align-items: center; padding-top: 10px; padding-bottom: 10px; }
   .mrow > .q { grid-area: q; align-self: start; }
   /* the phone: "Same", not "Same as no change" (the full words stay the element's text) */
-  .mrow .q b[data-short="Same"] { font-size: 0; }
-  .mrow .q b[data-short="Same"]::after { content: "Same" / ""; font-size: 0.78rem; }
+  .mrow .q b[data-short="Same"], .rrow .q b[data-short="Same"] { font-size: 0; }
+  .mrow .q b[data-short="Same"]::after, .rrow .q b[data-short="Same"]::after { content: "Same" / ""; font-size: 0.78rem; }
+  /* a prediction stream: its name on the first line; the pill, the predictor, from N and the cadence under it */
+  .rrow.head { display: none; }
+  .rrow { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "name name name name" "q by from cad";
+    gap: 4px 10px; padding: 9px 0; }
+  .rname { grid-area: name; white-space: normal; }
+  .rrow > .q { grid-area: q; }
+  .rby { grid-area: by; }
+  .rfrom { grid-area: from; }
+  .rcad { grid-area: cad; }
   .mval { flex-direction: column; align-items: flex-end; }
   .mnext::before { content: none; }
   .mrow > .mname { grid-area: name; }

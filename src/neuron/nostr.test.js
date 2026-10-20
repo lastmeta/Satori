@@ -853,6 +853,12 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     expect(w.get(uuids.sol)).toEqual([]);
     expect(await db.relayStream(uuids.btc)).toBeNull(); // watched, not subscribed: no relay row, no forecast
     expect((await db.relayStream(uuids.eth)).observations).toBe(1);
+    // its arrival is when the relay delivered it, not when the intake's queue got to it
+    const arrived = clock;
+    void c.deliver(predict('btc', '102', 2, t + 1));
+    clock += 30; // a queue held up (a poll's writes)
+    await settle();
+    expect((await db.watchObservations([uuids.pred])).get(uuids.pred)[1]).toMatchObject({ seq: 2, received_at: Math.ceil(arrived) });
   });
 
   test('records(): each prediction scored as its outcome arrives; ours marked mine (our own `_pred` comes back through the follow)', async () => {

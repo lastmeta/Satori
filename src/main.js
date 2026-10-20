@@ -107,6 +107,17 @@ function coalesce(name, fn) {
 
 /** The Nostr and Base cards: their status, read again on each change. */
 const refreshNostr = coalesce('nostr status', async () => { state.nostr = await nostr.status(); });
+/**
+ * The track record (docs/design/track-record.md): records() and the open stream's record(), read again when a watched
+ * stream gets an observation, only while Streams shows, at most about once a second.
+ */
+const recordOf = (key) => nostr.record(key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1));
+const refreshRecords = coalesce('records', async () => {
+  if (state.tab !== 'streams' || state.screen !== 'home' || !nostr) return;
+  state.records = await nostr.records();
+  if (state.recordOpen) state.recordDetail = await recordOf(state.recordOpen);
+  await new Promise((r) => setTimeout(r, 1000));
+});
 const refreshBase = coalesce('base status', async () => { state.base = await base.status(); });
 
 // ── the Models tab (docs/design/models.md) ──
@@ -247,7 +258,8 @@ async function startNeuron() {
   await refresh();
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, ws: import.meta.env.DEV, // csp.js: only the dev page allows ws:
     defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite, wss: DEFAULTS.wss }, // wss: relays' stand-ins (config.js)
-    onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err), work });
+    onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err),
+    onRecords: refreshRecords, work });
   await refreshNostr();
   base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase, onCheck: (r) => activity.base(r), onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
@@ -763,6 +775,17 @@ const actions = {
     }
   },
   /** Streams: a stream's detail (its trend, its model, its latest predictions), or none (''). */
+  /** A prediction stream's detail on Streams (its record, with its pairs), in place under its row; '' closes it. */
+  async openRecord(key) {
+    Object.assign(state, { recordOpen: key, recordDetail: null, recordError: '' });
+    if (!key) return;
+    try {
+      const r = await recordOf(key);
+      if (state.recordOpen === key) Object.assign(state, r ? { recordDetail: r } : { recordError: 'No longer watched.' });
+    } catch (err) {
+      if (state.recordOpen === key) state.recordError = `Its record could not be read: ${err?.message ?? err}`;
+    }
+  },
   async openStream(uuid) {
     state.streamOpen = uuid;
     state.streamPreds = uuid ? await db.predictions(uuid, 10) : [];
@@ -1093,6 +1116,14 @@ window.satori = {
     return (await db.relayPredictions(relayUuid(String(pubkey ?? '').trim().toLowerCase(), String(stream ?? '')), limit))
       .map(({ stream_uuid, ...p }) => p);
   },
+  /**
+   * The track record (docs/design/track-record.md): every prediction stream on the relays, watched on its own, best first:
+   * [{ pubkey, stream, name, mine, source: { pubkey, stream, name }, cadence_seconds, received, scored, error, noChange,
+   * ratio, mark, markText, direction: { right, total }, since, last }]. Only predictions this neuron received before the outcome count.
+   */
+  async records() { ready(); return nostr.records(); },
+  /** One watched prediction stream's record, with `pairs`: the last 28 scored { ts, predicted, actual, baseline }; null when not watched. */
+  async record(pubkey, stream) { ready(); return nostr.record(pubkey, stream); },
   /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
   /** Base: a fresh read of the chain (one multicall) and the last batch. */
@@ -1158,6 +1189,12 @@ const lineOf = (tasks, hold) => () => {
 };
 watch(lineOf(VAULT_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
 watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
+watch(lineOf(['watch'], createHold({ show: (v) => { state.watchLine = v.line; } }))); // Streams › Prediction streams: the scan's step
+/** Streams › Prediction streams: read when the tab shows, and when the watched set changes (nostr's status). */
+watch(() => {
+  void state.nostr.watching;
+  if (state.tab === 'streams' && state.screen === 'home') refreshRecords();
+});
 watch(lineOf(['reward'], createHold({ show: (v) => { state.rewardLine = v.line; } }))); // Settings › Reward address
 /** The Models tab's status: the poll's, the Base batch's, the training pass's or a Retrain's step, in Home's hero's words at its pace (no ring). */
 const engineHold = createHold({ show: (v) => { state.engineWork = v.working ? { line: v.line, critical: v.critical } : null; } });

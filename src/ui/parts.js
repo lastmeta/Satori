@@ -33,11 +33,4 @@ export function unlockPrompt(a, slot, verb) {
 /** A health state's mark: a colored disc with its icon (the shape from the state, in CSS). */
 export const mark = (s) => html`<span class="state" data-s="${s}"><i class="ico"></i></span>`;
 
-/** A trend line of values (oldest first) in a 70 × 20 box. */
-export function sparkPath(values = [], w = 70, h = 20) {
-  if (values.length < 2) return '';
-  const lo = Math.min(...values);
-  const hi = Math.max(...values);
-  const y = (v) => (hi === lo ? h / 2 : h - 2 - ((v - lo) / (hi - lo)) * (h - 4));
-  return values.map((v, i) => `${i ? 'L' : 'M'}${((i / (values.length - 1)) * w).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
-}
+export { sparkPath } from './format.js'; // a trend line (pure, so the views that draw one are tested without a page)

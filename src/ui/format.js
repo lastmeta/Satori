@@ -7,6 +7,17 @@ export function fmtNum(n) {
   return n.toLocaleString('en-US', { maximumFractionDigits: a >= 1 ? 4 : 6 });
 }
 
+/**
+ * A trend line of values (oldest first) in a w × h box (70 × 20 by default), on its own scale or on `range` ([lo, hi]:
+ * two lines on one scale, as the track record's actual and predicted).
+ */
+export function sparkPath(values = [], w = 70, h = 20, range = null) {
+  if (values.length < 2) return '';
+  const [lo, hi] = range ?? [Math.min(...values), Math.max(...values)];
+  const y = (v) => (hi === lo ? h / 2 : h - 2 - ((v - lo) / (hi - lo)) * (h - 4));
+  return values.map((v, i) => `${i ? 'L' : 'M'}${((i / (values.length - 1)) * w).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+}
+
 export function fmtWhen(s) {
   if (s == null) return '–';
   return new Date(s * 1000).toLocaleString('en-US',

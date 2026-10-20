@@ -77,8 +77,17 @@ export const state = reactive({
   rewardDone: '',
   rewardError: '',
   // Nostr (docs/design/nostr.md): the flow's status, the last catalog
-  nostr: { pubkey: '', npub: '', maxStreams: 0, centralWrite: false, userRelays: [], relays: [], subscriptions: [] },
+  nostr: { pubkey: '', npub: '', maxStreams: 0, centralWrite: false, userRelays: [], relays: [], subscriptions: [],
+    watching: { streams: 0, sources: 0, found: 0, left: 0, at: null, error: null } },
   catalog: [],
+  // the track record (docs/design/track-record.md): records() as last read (while Streams shows), the scan's step at a
+  // readable pace, the open stream's key and its record() (with its pairs), the whole list asked for
+  records: [],
+  watchLine: '',
+  recordOpen: '',
+  recordDetail: null,
+  recordError: '',
+  recordsAll: false,
   catalogQuery: '',
   discovering: false,
   subscribing: '', // `${pubkey}:${stream}` in flight

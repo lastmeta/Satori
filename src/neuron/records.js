@@ -215,15 +215,16 @@ export function createWatch({ db, me, now = () => Date.now() / 1000, onChange = 
       return { found, left, changed: pairsKey() !== was };
     },
     /**
-     * A verified 34601 of a watched stream (o: parseObservation's): kept once, with when it arrived (this clock, whole
-     * seconds rounded up: never earlier than it did); never forecast, never published. → whether it was new
+     * A verified 34601 of a watched stream (o: parseObservation's) that arrived `at` (this clock, s: when the relay
+     * delivered it, before the intake's queue): kept once, `at` in whole seconds rounded up (never earlier than it
+     * arrived); never forecast, never published. → whether it was new
      */
-    async intake(uuid, o, e) {
+    async intake(uuid, o, e, at = now()) {
       if (!rows.has(uuid)) return false;
       const ts = Number.isFinite(o.timestamp) && o.timestamp > EPOCH[0] && o.timestamp < EPOCH[1] ? Math.floor(o.timestamp) : null; // as the relay intake's
       const n = numericValue(o.value);
       const fresh = await db.addWatchObservation({ stream_uuid: uuid, seq: o.seq, ts, value: ts !== null && Number.isFinite(n) ? n : null,
-        received_at: Math.ceil(now()), event_id: e.id });
+        received_at: Math.ceil(at), event_id: e.id });
       if (!fresh) return false;
       if (rows.get(uuid).kind === 'pred') dirty.add(uuid);
       for (const p of predsOf.get(uuid) ?? []) dirty.add(p);

@@ -222,7 +222,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         if (!e.blocked) {
           e.relay = makeRelay(url, {
             onOpen: (r) => opened(url, r),
-            onEvent: (_id, ev) => work(() => intake(ev)),
+            onEvent: (_id, ev) => { const at = now(); return work(() => intake(ev, at)); }, // when it arrived: before the queue
             onState: () => onChange(),
           });
         }
@@ -314,14 +314,14 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
    * (start.py:1112-1137, 621-667); a watched stream's (a prediction stream or its source) is kept for the track record,
    * never forecast or published; one that is both, both (docs/design/track-record.md#following).
    */
-  async function intake(e) {
+  async function intake(e, at = now()) {
     const o = parseObservation(e);
     if (!o) return;
     const uuid = relayUuid(o.provider, o.stream_name);
     const watched = watch.has(uuid);
     const sub = await db.relayStream(uuid);
     if ((!sub?.active && !watched) || !verifyEvent(e)) return;
-    if (watched) await watch.intake(uuid, o, e);
+    if (watched) await watch.intake(uuid, o, e, at);
     if (sub?.active) await predict(e, o, uuid, sub);
   }
 
