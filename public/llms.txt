@@ -92,13 +92,14 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
 5. `await satori.models()`: every model, how it does against no change, what
    it reads and where its forecasts go; `await satori.model(id)` opens one.
 6. Relays: `await satori.discover()` lists the streams the relays announce
-   (signature-checked). On neuron.satorinet.io that is the one wss relay,
-   `wss://app.satorinet.io/relay` (4 streams on 2026-10-19): the Satori
-   Network lists only `ws://satorian.satorinet.io:7777`, which an https page
-   can't open (`blocked`). On the dev server it is satorian's full catalog,
-   read only (about 930 announcements, 119 of them `_pred`; about 9 s the
-   first time, checking their signatures), and the test relay
-   `ws://localhost:7778`.
+   (signature-checked). The Satori Network lists one relay,
+   `ws://satorian.satorinet.io:7777` (about 930 announcements, 119 of them
+   `_pred`; about 9 s the first time, checking their signatures). On
+   neuron.satorinet.io, an https page that can't open `ws://`, it is reached
+   at its wss stand-in, `wss://relay.satorinet.io` (the same relay behind
+   TLS; `for` says so), and written to, beside the user's relay
+   `wss://app.satorinet.io/relay`. On the dev server it is read over
+   `ws://`, read only, beside the test relay `ws://localhost:7778`.
    With the person's go-ahead, `await satori.subscribe(pubkey, stream_name)`
    for a free stream: each observation is forecast and published as
    `<stream>_pred`.
@@ -255,8 +256,13 @@ Every method is below; `await satori.status()` shows everything at once.
   `ws://localhost:7778`; a build writes to central's relays too, and its
   user relays default to the build's `VITE_NOSTR_RELAYS` (neuron.satorinet.io:
   `wss://app.satorinet.io/relay`). A build opens only `wss://` relays (its
-  CSP has no `ws:`; an https page can't open `ws://` anyway): any `ws://` one
-  is shown as blocked and not counted. The dev server opens both.
+  CSP has no `ws:`; an https page can't open `ws://` anyway). There a `ws://`
+  relay with a **wss stand-in** (the `wss://` address of the same relay, from
+  the build's map: satorian → `wss://relay.satorinet.io` by default) is
+  reached at the stand-in instead, as that same relay: central's stays
+  central's, a user's stays the user's, and its `for` says which `ws://`
+  relay it is. Any other `ws://` one is shown as blocked and not counted.
+  The dev server (plain http) opens both, and uses no stand-in.
 - Network streams: the relays' catalog of stream announcements (kind 34600),
   each one's id and signature checked (a forged one is dropped), newest per
   (provider pubkey, stream name), deleted ones dropped. A provider is a
@@ -689,10 +695,13 @@ the page's JS context:
   keep or send them anywhere. (`file()` is gone: no Docker files are made.)
 - `await satori.nostr()` (also `status().nostr`) → `{ pubkey, npub,
   maxStreams, centralWrite, userRelays, relays, subscriptions }`. `relays`:
-  `[{ url, from: ['central' | 'user'], write, state, error, downSince }]`, state
-  `open` | `connecting` | `closed` (it retries) | `blocked` (a ws:// relay in
-  a build, or on an https page: never tried, never counted on Home);
-  `downSince`: since when it has not been open (ms), or null. `subscriptions`:
+  `[{ url, from: ['central' | 'user'], write, state, error, downSince, for }]`,
+  state `open` | `connecting` | `closed` (it retries) | `blocked` (a ws://
+  relay with no wss stand-in, in a build or on an https page: never tried,
+  never counted on Home); `downSince`: since when it has not been open (ms),
+  or null; `for`: on a wss stand-in, the `ws://` relay it is reached for
+  (`url` is the address connected, `from` the original's roles), else null.
+  `userRelays` stays as the person gave it. `subscriptions`:
   `[{ uuid, stream, provider, name, cadence_seconds, subscribed_at,
   observations, observation: { seq, ts, value, raw, received_at } | null,
   prediction: { stream, seq, value, model, made_at, relays } | null }]`
@@ -720,8 +729,9 @@ the page's JS context:
   took it; 0 until they answer).
 - `await satori.setRelays({ relays?: ['wss://…'], centralWrite?: boolean })`
   → `nostr()` (only on the person's request): the user's relays (ws:// or
-  wss://, though a build opens only wss://; they replace the list) and
-  whether central's relays are written to.
+  wss://, though a build opens only wss://, a ws:// one with a stand-in at
+  its stand-in; they replace the list) and whether central's relays are
+  written to.
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
   identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
@@ -895,7 +905,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   no passphrase, no gas), **Satori Network** ("Satori Network server", an
   https URL, empty = the default; Save), **Satori relays** (each relay with
   its state, "Connected", "Not reachable here" for a blocked one, with one
-  note why; "Your relays" one per line; "Publish to the Satori Network's
+  note why; a wss stand-in with "for ws://…" under its address; "Your
+  relays" one per line; "Publish to the Satori Network's
   relays"; Save relays), **Satori contract** ("Base RPC", "Max fee (gwei)",
   the most any transaction pays per gas; Save contract settings),
   **Appearance** (System, Light, Dark), **This device** (the storage line,
@@ -954,7 +965,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   set, or reading), `reward-reading` and `reward-saving` (the turning ring),
   `reward-read-error` with `reward-retry`, `reward-line`, `reward-error`,
   `reward-save`, `reward-clear`, `central-url`, `relay` with
-  `relay-state`, `relays-blocked`, `theme-<system|light|dark>`
+  `relay-state`, `relay-for`, `relays-blocked`, `theme-<system|light|dark>`
   (`aria-pressed`), `storage`, `install`, `install-hint`,
   `runs-while-open`, `version`, `update-settings`. Setup: `setup-wait`,
   `runs-while-open`, `install-hint`, `set-aside-notice` (after a set-aside).
@@ -1010,7 +1021,8 @@ build step beyond Vite, MIT licensed.
 - `src/main.js`: app wiring and `window.satori`; `src/config.js`: Settings'
   defaults, the dev server's or a build's, each replaced by a `VITE_*`
   variable at build time (`VITE_CENTRAL_URL`, `VITE_NOSTR_RELAYS`,
-  `VITE_NOSTR_CENTRAL_WRITE`, `VITE_BASE_RPC`), and the version's shape; `src/util.js`: `serial()`
+  `VITE_NOSTR_CENTRAL_WRITE`, `VITE_BASE_RPC`; `VITE_NOSTR_WSS`, the relays'
+  wss stand-ins, is not a Settings value), and the version's shape; `src/util.js`: `serial()`
   (one at a time, in order), `isHttps()` and `isRelayUrl()`.
 - `src/keys/`: the keys record (`index.js`: create, import, migrate, load,
   Unlock, the vault for one use and Backup from the passphrase), the vault

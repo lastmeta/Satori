@@ -4,6 +4,23 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-20 (a relay's wss stand-in)
+
+- The Satori Network lists one relay, `ws://satorian.satorinet.io:7777`,
+  which a build or an https page can't open: it showed as `blocked` on
+  neuron.satorinet.io. `wss://relay.satorinet.io` is the same relay behind
+  TLS, and the app now connects there instead, as that same relay (the
+  Satori Network's relay: read and, in a build, written to).
+- `nostr().relays[]` has `for`: on a wss stand-in, the `ws://` relay it is
+  reached for (`url` is the address connected; `from` keeps the original's
+  roles, merged when the person lists the stand-in too), else null.
+  `blocked` now means a `ws://` relay with no stand-in.
+- Settings › Satori relays shows "for ws://satorian.satorinet.io:7777" under
+  the stand-in's address (`relay-for`).
+- The map is the build's (`VITE_NOSTR_WSS`, `ws://…=wss://…` pairs; default
+  satorian → `wss://relay.satorinet.io`), not a setting. The dev server's
+  plain-http page opens `ws://` itself and is unchanged.
+
 ## Changed 2026-10-19 (the reward address)
 
 - A **reward address**: where the Satori Network sends this neuron's
