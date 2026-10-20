@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  nostrPubkey, generateNostrSecret, npub, nsec, nostrSecretOf, eventId, signEvent, verifyEvent,
+  nostrPubkey, generateNostrSecret, npub, nsec, nostrSecretOf, eventId, signEvent, verifyEvent, SeenSet,
 } from './event.js';
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
@@ -73,4 +73,18 @@ describe('events', () => {
   test('events from a live relay verify', () => {
     for (const e of live.events) expect(verifyEvent(e)).toBe(true);
   });
+});
+
+test('SeenSet: the signatures checked, at most `max`, the least recently used going first; verifyEvent takes it as its seen set', () => {
+  const secret = 'dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4';
+  const [a, b, c] = [1, 2, 3].map((n) => signEvent({ created_at: n, kind: 1, tags: [], content: String(n) }, secret));
+  const seen = new SeenSet(2);
+  expect(seen).toBeInstanceOf(Set);
+  for (const e of [a, b]) expect(verifyEvent(e, seen)).toBe(true);
+  expect(seen.size).toBe(2);
+  expect(verifyEvent(a, seen)).toBe(true); // a used again: b is now the oldest
+  expect(verifyEvent(c, seen)).toBe(true);
+  expect(seen.size).toBe(2);
+  expect([...seen].map((k) => k.slice(0, 64))).toEqual([a.id, c.id]);
+  expect(new SeenSet().max).toBe(5000);
 });

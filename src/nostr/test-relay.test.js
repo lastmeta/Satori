@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import WebSocket from 'ws';
 import { startRelay } from '../../scripts/test-relay.mjs';
+import { connectProvider, PRODUCTION } from '../../scripts/provider.mjs';
 import { createRelay } from './relay.js';
 import { signEvent } from './event.js';
 import { announceEvent, observationEvent, tombstoneEvent } from './satori.js';
@@ -81,4 +82,13 @@ test('a malformed REQ or EVENT is refused, and the relay lives on', async () => 
   expect(raw.readyState).toBe(1);
   expect((await relay.fetch([{ kinds: [34600], limit: 1 }])).length).toBe(1);
   raw.close();
+});
+
+test("scripts/provider.mjs refuses the production relays: satorian, its wss front, and the app's relay", async () => {
+  for (const url of ['ws://satorian.satorinet.io:7777', 'wss://relay.satorinet.io', 'wss://relay.satorinet.io/',
+    'wss://app.satorinet.io/relay', 'WSS://Relay.Satorinet.io']) {
+    expect(PRODUCTION.test(url)).toBe(true);
+    await expect(connectProvider({ url })).rejects.toThrow(/Not on the production relay/);
+  }
+  for (const url of ['ws://localhost:7778', 'ws://127.0.0.1:7781']) expect(PRODUCTION.test(url)).toBe(false);
 });

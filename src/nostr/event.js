@@ -2,7 +2,7 @@
 // BIP-340 schnorr, as nostr-sdk makes them for Satori Lite:
 //   nostrPubkey(secretHex) / generateNostrSecret() / npub(pubkeyHex) / nsec(secretHex) / nostrSecretOf(nsecOrHex)
 //   signEvent({ created_at, kind, tags, content }, secretHex) → event
-//   verifyEvent(event, seen?) → id and signature check (seen: the signatures already checked, a Set)
+//   verifyEvent(event, seen?) → id and signature check (seen: the signatures already checked, a Set; SeenSet bounds it)
 import { schnorr } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
@@ -51,6 +51,31 @@ export function signEvent({ created_at, kind, tags, content }, secretHex) {
   const e = { pubkey: nostrPubkey(secretHex), created_at, kind, tags, content };
   const id = eventId(e);
   return { id, ...e, sig: bytesToHex(schnorr.sign(id, secretHex)) };
+}
+
+/**
+ * The signatures already checked (verifyEvent's `seen`), at most `max` (5,000 by default), the least recently used
+ * going first: a long-open page that scans the relays' catalog every 6 h doesn't keep every signature it ever saw.
+ */
+export class SeenSet extends Set {
+  constructor(max = 5000) {
+    super();
+    this.max = max;
+  }
+
+  has(key) {
+    if (!super.has(key)) return false;
+    super.delete(key); // used again: the newest
+    super.add(key);
+    return true;
+  }
+
+  add(key) {
+    super.delete(key);
+    super.add(key);
+    while (this.size > this.max) super.delete(super.values().next().value);
+    return this;
+  }
 }
 
 /**

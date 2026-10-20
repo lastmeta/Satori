@@ -8,7 +8,7 @@
 // Relay streams are apart from central's: own tables, and nothing goes to central.
 // Intake runs one event at a time; sending (which waits for each relay's OK)
 // runs beside it, so a slow or mute relay holds nothing up.
-import { signEvent, verifyEvent, npub } from '../nostr/event.js';
+import { signEvent, verifyEvent, npub, SeenSet } from '../nostr/event.js';
 import { createRelay } from '../nostr/relay.js';
 import {
   KIND, PRED, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
@@ -72,7 +72,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let lastReconcile = -Infinity; // when the last hourly pass began (s)
   let reconciling = null;
   const intakeLine = serial();
-  const checked = new Set(); // catalog signatures checked this page load (verifyEvent's seen)
+  const checked = new SeenSet(5000); // catalog signatures checked this page load (verifyEvent's seen), the 5,000 last used
   let prunedAt = -Infinity; // the last prune of the relay streams' observations (s)
   const sending = new Set();
   const log = (err) => console.error('[satori] nostr', err);
