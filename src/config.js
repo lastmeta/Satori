@@ -3,8 +3,10 @@
 // and not empty, replaces its default; unset, the dev server keeps its own (the
 // dev central, the test relay, central's relays read only, the local fork) and a
 // build its own (prod central, no user relay, central's relays written to,
-// central's RPC). main.js reads them from import.meta.env; vite.config.js
-// checks them before a build, so a bad value stops the build.
+// central's RPC). Both have the same relays' wss stand-ins (`wss`,
+// VITE_NOSTR_WSS), which are not a user setting. main.js reads them from
+// import.meta.env; vite.config.js checks them before a build, so a bad value
+// stops the build.
 import { isHttps, isRelayUrl } from './util.js';
 import { checkRpcSetting } from './chain/config.js';
 
@@ -15,13 +17,37 @@ import { checkRpcSetting } from './chain/config.js';
 // (Plain objects: a build drops the one it does not use, which it can't do with Object.freeze's call.)
 export const DEV_DEFAULTS = {
   central: 'https://central2.satorinet.io', relays: ['ws://localhost:7778'], centralWrite: false, rpc: '/rpc',
+  wss: { 'ws://satorian.satorinet.io:7777': 'wss://relay.satorinet.io' },
 };
 // A build: prod central (satorilib's default); its relays, written to; its Base RPC, then publicnode.
+// wss: a relay's wss stand-in (docs/design/nostr.md#relays-and-the-read-only-flag): where the page can't open the ws://
+// relay (a build's CSP, an https page), it opens the wss:// address of the same relay instead. Central lists satorian
+// as ws:// only, and wss://relay.satorinet.io is its TLS front. The dev server's plain-http page opens ws:// and never
+// needs it, but one default for both is simpler.
 export const BUILD_DEFAULTS = {
   central: 'https://network.satorinet.io', relays: [], centralWrite: true, rpc: undefined,
+  wss: { 'ws://satorian.satorinet.io:7777': 'wss://relay.satorinet.io' },
 };
 
 const value = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+/**
+ * VITE_NOSTR_WSS's `ws://…=wss://…` pairs, comma separated → { 'ws://…': 'wss://…' }: each ws:// relay and the wss://
+ * address of the same relay. A pair splits at the `=` before the right's scheme, so an address may hold an `=`.
+ */
+function standIns(list) {
+  const map = {};
+  for (const pair of list.split(',').map((p) => p.trim()).filter(Boolean)) {
+    const m = /^(.*?)=([a-z][a-z\d+.-]*:\/\/.*)$/i.exec(pair);
+    if (!m) throw new Error(`VITE_NOSTR_WSS: a pair is ws://…=wss://… (a relay, then the wss:// address of the same relay): ${pair}`);
+    const [, ws, wss] = m;
+    if (!isRelayUrl(ws) || !ws.startsWith('ws://')) throw new Error(`VITE_NOSTR_WSS: the left of a pair must be a ws:// address: ${pair}`);
+    if (!isRelayUrl(wss) || !wss.startsWith('wss://')) throw new Error(`VITE_NOSTR_WSS: the right of a pair must be a wss:// address: ${pair}`);
+    if (Object.hasOwn(map, ws)) throw new Error(`VITE_NOSTR_WSS: ${ws} is given twice`);
+    map[ws] = wss;
+  }
+  return map;
+}
 
 /**
  * The neuron's version: `browser-<package version>+<git short sha>` (vite.config.js stamps it at build and when the dev
@@ -35,7 +61,7 @@ export const versionOf = (version, sha) => `browser-${version}${sha ? `+${sha}` 
  * server's defaults are not in a build's bundle.
  * @param {Record<string, any>} env import.meta.env, or loadEnv's VITE_* variables
  * @param {typeof BUILD_DEFAULTS} base DEV_DEFAULTS or BUILD_DEFAULTS
- * @returns {{central: string, relays: string[], centralWrite: boolean, rpc: string|undefined}}
+ * @returns {{central: string, relays: string[], centralWrite: boolean, rpc: string|undefined, wss: Record<string, string>}}
  */
 export function defaultsFrom(env, base) {
   const central = value(env.VITE_CENTRAL_URL)?.replace(/\/+$/, '') ?? base.central;
@@ -54,5 +80,8 @@ export function defaultsFrom(env, base) {
   if (value(env.VITE_BASE_RPC)) {
     try { rpc = checkRpcSetting(env.VITE_BASE_RPC); } catch (err) { throw new Error(`VITE_BASE_RPC: ${err.message}`); }
   }
-  return { central, relays, centralWrite, rpc };
+  const pairs = value(env.VITE_NOSTR_WSS);
+  const wss = pairs ? standIns(pairs) : { ...base.wss };
+
+  return { central, relays, centralWrite, rpc, wss };
 }

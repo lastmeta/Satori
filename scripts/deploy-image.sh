@@ -27,11 +27,13 @@ done < deploy/build.env
 npm run build
 node scripts/brotli.mjs dist/assets # DuckDB's wasm in brotli beside it (deploy/nginx.conf; cached per DuckDB version)
 
-# Each set default, as it must appear in the bundle: the central URL and each relay.
+# Each set default, as it must appear in the bundle: the central URL, each relay, each stand-in pair's two addresses.
 expected=()
 [ -z "${VITE_CENTRAL_URL:-}" ] || expected+=("${VITE_CENTRAL_URL%/}")
 IFS=',' read -ra relays <<< "${VITE_NOSTR_RELAYS:-}"
 for r in "${relays[@]}"; do r="${r// /}"; [ -z "$r" ] || expected+=("$r"); done
+IFS=',' read -ra pairs <<< "${VITE_NOSTR_WSS:-}" # ws://…=wss://…, checked by the build (src/config.js)
+for p in "${pairs[@]}"; do p="${p// /}"; [ -z "$p" ] || expected+=("${p%%=wss://*}" "wss://${p#*=wss://}"); done
 [ -z "${VITE_BASE_RPC:-}" ] || expected+=("$VITE_BASE_RPC")
 for s in "${expected[@]}"; do
   grep -qF "$s" dist/assets/*.js || { echo "dist/: the bundle lacks $s" >&2; exit 1; }
