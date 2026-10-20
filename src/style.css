@@ -350,6 +350,8 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 .relays { list-style: none; margin: 10px 0 4px; padding: 0; }
 .relay { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 3px 0; flex-wrap: wrap; }
 .relay .badge { margin: 0; }
+.relay-name { min-width: 0; }
+.relay-for { display: block; overflow-wrap: anywhere; } /* a wss stand-in: the ws:// relay it is reached for, under its address */
 .search { display: flex; gap: 10px; margin-top: 12px; }
 .search input { margin: 0; flex: 1; min-width: 0; }
 .crows { margin-top: 4px; }

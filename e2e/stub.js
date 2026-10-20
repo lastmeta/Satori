@@ -6,8 +6,8 @@
 // checked for a Base address as central's base-upgrade change does), and a
 // stream's history when `history` is set (else 404, as central2 today);
 // anything else is a 404, as prod's /base/config is. A token is good until the
-// stub ends, as central's last an hour. Satorian and the owner's dev relay (7778) are never
-// reached; /rpc is aborted unless a fake chain is given (e2e/base.spec.js).
+// stub ends, as central's last an hour. Satorian, its wss stand-in (wss://relay.satorinet.io) and the owner's dev
+// relay (7778) are never reached; /rpc is aborted unless a fake chain is given (e2e/base.spec.js).
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { getAddress, isAddress, verifyMessage, zeroAddress } from 'viem';
 import { evmAddress } from '../src/keys/keys.js';
@@ -64,7 +64,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
   const issued = new Set(); // every token a login gave: good until the stub ends (central's last an hour)
   const signedIn = (h) => issued.has(String(h.authorization ?? '').replace(/^Bearer /, ''));
-  await context.routeWebSocket((u) => u.hostname === 'satorian.satorinet.io' || u.port === '7778', (ws) => {
+  await context.routeWebSocket((u) => ['satorian.satorinet.io', 'relay.satorinet.io'].includes(u.hostname) || u.port === '7778', (ws) => {
     stub.blocked.push(ws.url());
     ws.close();
   });

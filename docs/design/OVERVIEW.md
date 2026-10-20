@@ -399,8 +399,10 @@ The deploy image added none to npm; it is
   discovered and subscribed in the UI, its stored and live observations
   forecast and published as `_pred` (read back from 7781 and checked, with
   the 34600 and the 34602), nothing on 7782 from the app, kept over a reload,
-  unsubscribed with the tombstone; Dockerized Neuron import with `nostr.yaml`. Satorian
-  and the dev relay are routed to nothing in every test. Base
+  unsubscribed with the tombstone; Dockerized Neuron import with `nostr.yaml`; an https
+  page, where a `ws://` relay is blocked and not counted and satorian is reached at
+  its wss stand-in (routed to 7782). Satorian, the real stand-in
+  (`wss://relay.satorinet.io`) and the dev relay are routed to nothing in every test. Base
   (`e2e/base.spec.js`) against a fake D6 behind `/rpc` and a stub central
   serving a merkle proof: Unlock → Stake, the identity's batch on its own,
   claims and the next batch a round later, Unstake, SATORI not sendable

@@ -180,21 +180,24 @@ test('Dockerized Neuron import with nostr.yaml keeps its Nostr key; refused subs
   await expect(page.evaluate(() => window.satori.setRelays({ relays: ['http://x.test'] }))).rejects.toThrow(/ws:\/\/ or wss:\/\//);
 });
 
-test('an https page: a ws:// relay is blocked, said once, and neither down nor counted; a relay that drops gets its grace', async ({ context, page }) => {
+test("an https page: a ws:// relay is blocked, said once, and neither down nor counted; satorian is reached at its wss stand-in; a relay that drops gets its grace", async ({ context, page }) => {
   test.setTimeout(240_000);
-  const BLOCKED = 'ws://relay.example:7777'; // what central lists today (satorian): an https page can never open it
+  const BLOCKED = 'ws://relay.example:7777'; // a ws:// relay with no wss stand-in: an https page can never open it
   const RELAY = 'wss://relay.test'; // a wss:// relay, this test's proxy to the test relay on 7782
-  const stub = await stubAt(context, { relays: [RELAY, BLOCKED] });
+  const SATORIAN = 'ws://satorian.satorinet.io:7777'; // what central lists today: an https page can't open it either
+  const STAND_IN = 'wss://relay.satorinet.io'; // its wss stand-in (src/config.js's default), here this test's proxy to 7782
+  const stub = await stubAt(context, { relays: [RELAY, BLOCKED, SATORIAN] });
   // the dev server's files under https://neuron.test (a secure page, as https://neuron.satorinet.io), through this test
   await context.route('https://neuron.test/**', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === '/rpc') return route.fallback();
     return route.fulfill({ response: await route.fetch({ url: `http://localhost:5180${url.pathname}${url.search}` }) });
   });
-  // the wss:// relay: proxied to the test relay on 7782 by this test, which can cut it: then every reconnect is refused
+  // the wss:// relays: proxied to the test relay on 7782 by this test, which can cut them: then every reconnect is refused
+  // (registered after the stub's, which routes the real stand-in to nothing: this route wins)
   let cut = false;
   const sockets = [];
-  await context.routeWebSocket((u) => u.hostname === 'relay.test', (ws) => {
+  await context.routeWebSocket((u) => ['relay.test', 'relay.satorinet.io'].includes(u.hostname), (ws) => {
     if (cut) return ws.close();
     const upstream = new WebSocket(CENTRAL_RELAY);
     const queue = [];
@@ -212,31 +215,39 @@ test('an https page: a ws:// relay is blocked, said once, and neither down nor c
 
   expect(await openApp(page, 'https://neuron.test/')).toBe('setup');
   await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
-  await page.evaluate(() => window.satori.setRelays({ relays: [] })); // central's two only
-  await expect.poll(async () => (await nostr(page)).relays.map((r) => [r.url, r.state, r.error]), { timeout: 20_000 })
-    .toEqual([[RELAY, 'open', ''], [BLOCKED, 'blocked', 'ws:// cannot be opened from an https page']]);
+  await page.evaluate(() => window.satori.setRelays({ relays: [] })); // central's three only
+  // satorian goes to its stand-in, as central's relay (read only on the dev server), saying which relay it stands in for
+  await expect.poll(async () => (await nostr(page)).relays.map((r) => [r.url, r.from, r.state, r.error, r.for]), { timeout: 20_000 })
+    .toEqual([[RELAY, ['central'], 'open', '', null], [BLOCKED, ['central'], 'blocked', 'ws:// cannot be opened from an https page', null],
+      [STAND_IN, ['central'], 'open', '', SATORIAN]]);
   await page.evaluate(([p, s]) => window.satori.subscribe(p, s), [provider.pubkey, stream]);
 
-  // the blocked relay is not down: the chip counts the one that can open, nothing amber, no card for it
+  // the blocked relay is not down: the chip counts the two that can open, nothing amber, no card for it
   let h = await page.evaluate(() => window.satori.health());
-  expect(h.channels.relays).toMatchObject({ state: 'ok', text: '1 relay' }); // it read "1 of 2 relays down"
+  expect(h.channels.relays).toMatchObject({ state: 'ok', text: '2 relays' }); // it read "1 of 3 relays down"
   expect(h.reasons.map((r) => r.id)).not.toContain('relay-down');
-  // said once, in the relays' detail (Settings)
+  // said once, in the relays' detail (Settings); the stand-in says what it stands in for, in small words
   await page.evaluate(() => window.satori.go('settings'));
   await expect(page.locator('[data-test=relay]').filter({ hasText: BLOCKED }).locator('[data-test=relay-state]')).toHaveText('Not reachable here');
   await expect(page.locator('[data-test=relays-blocked]')).toHaveText("A ws:// relay can't be reached from this page (only wss:// can), so it is left out: it doesn't count as down.");
+  const standIn = page.locator('[data-test=relay]').filter({ hasText: STAND_IN });
+  await expect(standIn.locator('[data-test=relay-for]')).toHaveText(`for ${SATORIAN}`);
+  await expect(standIn.locator('[data-test=relay-state]')).toHaveText('Connected · read only');
+  await expect(page.locator('[data-test=relay-for]')).toHaveCount(1);
+  await page.locator('#settings-relays').screenshot({ path: test.info().outputPath('relays.png') });
   await page.evaluate(() => window.satori.go('streams'));
-  await expect(page.locator('.card').filter({ hasText: 'Satori relays' }).first()).toContainText('1 of 1 relay connected');
+  await expect(page.locator('.card').filter({ hasText: 'Satori relays' }).first()).toContainText('2 of 2 relays connected');
 
-  // the one usable relay drops and refuses reconnects: within the grace it is not red ("Every relay is down" waits 10 min)
+  // the usable relays drop and refuse reconnects: within the grace it is not red ("Every relay is down" waits 10 min)
   cut = true;
   for (const ws of sockets) await ws.close();
-  await expect.poll(async () => (await nostr(page)).relays.find((r) => r.url === RELAY).state).not.toBe('open');
+  await expect.poll(async () => (await nostr(page)).relays.filter((r) => r.state === 'open').length).toBe(0);
   const r = (await nostr(page)).relays.find((x) => x.url === RELAY);
   expect(Date.now() - r.downSince).toBeLessThan(60_000); // since when it is down: the grace counts from there
   h = await page.evaluate(() => window.satori.health());
   expect(h.reasons.map((x) => x.id)).not.toContain('relays-down');
   expect(h.status).not.toBe('bad');
   expect(stub.prod).toEqual([]);
+  expect(stub.blocked.filter((u) => /satorian|relay\.satorinet/.test(u))).toEqual([]); // ws://satorian never tried, the real stand-in never reached
   provider.close?.();
 });
