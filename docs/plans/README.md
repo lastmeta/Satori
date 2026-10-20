@@ -5,7 +5,7 @@ and what is left. What is built is in [../design/](../design/OVERVIEW.md); this
 folder keeps what is left of each part, researched against Satori Lite
 (`../neuron`), satorilib, central and the contracts, with file:line evidence:
 [runtime](runtime.md), [Nostr transport](transport.md), [chain](chain.md),
-[engine](engine.md). Blockers outside this repo: [../issues/](../issues/README.md).
+[engine](engine.md), [market](market.md) (a proposal). Blockers outside this repo: [../issues/](../issues/README.md).
 Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 
 ## Steps
@@ -107,11 +107,16 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    the real-world score (central's scoring of what was sent) next to the
    backtest, once central serves a neuron's scores
    ([models.md](../design/models.md#quality-against-no-change)); bounties (the predictor's side first); the gasless relay (needs a
-   ruling, [issue](../issues/relayer-predict-fee.md)); paid streams (their
-   payment on Base, to design); own data sources. Also:
+   ruling, [issue](../issues/relayer-predict-fee.md)); own data sources. Also:
    importing a Docker neuron's keys is a move (both would predict for one
    identity; the chain refuses a second batch per round), so Import could say
    to stop the Docker neuron.
+16. **A market of data streams** (owner, 2026-10-20:
+   [../intent/network.md](../intent/network.md)): paid streams, paid per
+   observation in SATORI on Base with no gas per payment. A proposal, not
+   approved: [market.md](market.md) (Base payment channels compared with
+   Evrmore's Spilman channels, the contract, the flow over the relays, a
+   track record, the steps). The fixes to today's relay code wait on it.
 
 ## Noticed while building
 

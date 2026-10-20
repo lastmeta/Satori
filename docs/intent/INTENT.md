@@ -67,3 +67,6 @@ Set by the owner; quoted where these are the owner's own words.
 - **The engine:** every neuron builds models that are unique for a good
   reason, in their algorithm, priors and, above all, data. See
   [engine.md](engine.md).
+- **The network (owner, 2026-10-20):** the Satori Network is the relays,
+  where anyone publishes and anyone subscribes, predictions included; next,
+  a market of data streams. See [network.md](network.md).
