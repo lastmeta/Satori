@@ -1,0 +1,55 @@
+{
+  "made": "Once, 2026-10-20, from the deployed PaymentChannels (0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c) on an anvil fork of Base Sepolia (chain 84532, block 48364863; node scripts/fork.mjs start --port 8547), with foundry's cast: `cast call $C 'computeChannelId(address,address,address,address,bytes32)(bytes32)' payer payee token signer salt`, `cast call $C 'voucherDigest(bytes32,uint96)(bytes32)' channelId cumulative`, `cast call $C 'domainSeparator()(bytes32)'` and `cast call $C 'VOUCHER_TYPEHASH()(bytes32)'`. salt 0x808b… is `cast keccak satori`. The digests hold only for chain 84532 and this contract address.",
+  "chainId": 84532,
+  "contract": "0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c",
+  "domainSeparator": "0x8d68c7edd4e680a310b4f2124cbb3c30152eed4ddca53a2ce86d5eb609328988",
+  "voucherTypehash": "0x4730b4b2fe8de522475e80e010877c5b58ad10eb07fd0436615ee123f743bbe8",
+  "ids": [
+    {
+      "payer": "0x1111111111111111111111111111111111111111",
+      "payee": "0x2222222222222222222222222222222222222222",
+      "token": "0x4dee947383d5C9c8E421F55Fe3518a29324aE469",
+      "signer": "0x3333333333333333333333333333333333333333",
+      "salt": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "id": "0xc9e955c8ef07059281d4d02683cce1dffc9510cb9997e8d3820212ce28d288a9"
+    },
+    {
+      "payer": "0x9d3109b8A045D63056Aa5C1d2c883F3F9fA18817",
+      "payee": "0x2222222222222222222222222222222222222222",
+      "token": "0x4dee947383d5C9c8E421F55Fe3518a29324aE469",
+      "signer": "0x1111111111111111111111111111111111111111",
+      "salt": "0x808b71f079e4accb927c02eff4d1a0f07b2086a6b641c137a1d8a7bdf6759315",
+      "id": "0x8583220d4efcb3f12a6812a3e36dad41949de1843f37bfe07b3bacdcf4c658a8"
+    },
+    {
+      "payer": "0xffffffffffffffffffffffffffffffffffffffff",
+      "payee": "0x3333333333333333333333333333333333333333",
+      "token": "0x2222222222222222222222222222222222222222",
+      "signer": "0x1111111111111111111111111111111111111111",
+      "salt": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "id": "0xd7d0214baff63c23ee8e0c96bc53304624cb4992cedcfbaae529ce2c9e90297b"
+    }
+  ],
+  "digests": [
+    {
+      "channelId": "0xc9e955c8ef07059281d4d02683cce1dffc9510cb9997e8d3820212ce28d288a9",
+      "cumulative": "0",
+      "digest": "0x4ce1d6493d2483fad071c4ba81bd379909a5637a7506afb8a0e17cca213c805b"
+    },
+    {
+      "channelId": "0xc9e955c8ef07059281d4d02683cce1dffc9510cb9997e8d3820212ce28d288a9",
+      "cumulative": "1",
+      "digest": "0x320a17f988586b4b3dbd4e8f92d53698d4dbd8c9f3d7b0f6eb8c07a078bf4763"
+    },
+    {
+      "channelId": "0x8583220d4efcb3f12a6812a3e36dad41949de1843f37bfe07b3bacdcf4c658a8",
+      "cumulative": "24000000000000000",
+      "digest": "0x93e459765af2eb967b840df84035f947135b472af31632f1c45f80644719319e"
+    },
+    {
+      "channelId": "0xd7d0214baff63c23ee8e0c96bc53304624cb4992cedcfbaae529ce2c9e90297b",
+      "cumulative": "79228162514264337593543950335",
+      "digest": "0xdbdde4b5fb8e6aefb13b4dd14fc658b92bfda0cd7268ca4a81c0525b76687e02"
+    }
+  ]
+}

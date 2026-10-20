@@ -39,3 +39,12 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
 - `nostr-live.json`: two 34601 events as `ws://satorian.satorinet.io:7777`
   served them (a read-only REQ, 2026-10-15): a free price stream and a Base
   bridge stream whose value is a dict.
+- `abi-deployed.json`: the deployed D6 build's ABI for each function
+  `src/chain/abi.js` calls and each error it decodes (`ABI_SNAPSHOT=write`,
+  `src/chain/abi.test.js`).
+- `abi-channels.json`: PaymentChannels' whole ABI (functions, events with
+  their indexed inputs, errors), from the Hardhat artifact of the build
+  deployed at `0xeF3f…976c` (`ABI_SNAPSHOT=channels`, `src/chain/abi.test.js`).
+- `channels-vectors.json`: channel ids and voucher digests computed once by
+  the deployed PaymentChannels on a fork (`cast call`; the commands are in
+  the file), for `src/chain/channels.test.js`.

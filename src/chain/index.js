@@ -9,9 +9,10 @@
 //   await chain.delegate({ identity, vault }) / chain.undelegate({ vault })
 //   await chain.streams() / chain.history(id) / chain.simulateGame(identity, game) / chain.sendBatch(identity, games)
 //   await chain.claimRewards(vault) / claimMerkle(vault, proof) / claimAirdrop(vault) / sendEth / sendSatori
+//   createChannels({ chain, config })              // payment channels on this chain (channels.js)
 import {
-  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, encodePacked, formatGwei, hexToBytes,
-  keccak256, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
+  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, encodePacked, formatGwei, hashTypedData,
+  hexToBytes, keccak256, serializeSignature, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
@@ -73,8 +74,11 @@ export function lockText(lock) {
 /** The one-byte payload: solidityPacked(['uint8'], [direction]) (base_predict.py:237). */
 export const payload = (direction) => encodePacked(['uint8'], [direction]);
 
-/** Our signer, a viem account, or a 0x private key → a viem account. */
-function toAccount(key) {
+/**
+ * Our signer, a viem account, or a 0x private key → a viem account. Our signer signs transactions and EIP-712 typed
+ * data (a channel's vouchers, a token's permit: channels.js) by its digest, inside the signer.
+ */
+export function toAccount(key) {
   if (typeof key === 'string') return privateKeyToAccount(key);
   if (key?.signTransaction) return key;
   if (!key?.signDigest) throw new Error('No key to sign with');
@@ -85,7 +89,7 @@ function toAccount(key) {
       return serializer(tx, key.signDigest(hexToBytes(keccak256(serializer(signable)))));
     },
     async signMessage() { throw new Error('Not supported'); },
-    async signTypedData() { throw new Error('Not supported'); },
+    async signTypedData(typedData) { return serializeSignature(key.signDigest(hexToBytes(hashTypedData(typedData)))); },
   });
 }
 const addressOf = (key) => (typeof key === 'string' && key.length === 42 ? key : toAccount(key).address);
@@ -182,19 +186,19 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   /**
    * As satorilib's EvmClient.send (evm.py:60-93): simulate and estimate first
    * (a revert throws, naming the error, before any gas), the limit with
-   * HOOK_GAS over the estimate, the fees within the ceiling (maxFee), send at the
+   * HOOK_GAS over the estimate (or `pad`: more for a call that pays many), the fees within the ceiling (maxFee), send at the
    * account's next nonce (onSent(hash, { nonce, gas, maxFeePerGas,
    * maxPriorityFeePerGas }) at once: the batch keeps them to replace it if it
    * never mines), wait for the receipt (`timeout` ms, viem's 3 min by default),
    * throw unless it succeeded.
    */
-  const write = (key, call, { fees: given, onSent, timeout } = {}) => queued(async () => {
+  const write = (key, call, { fees: given, onSent, timeout, pad = HOOK_GAS } = {}) => queued(async () => {
     const account = toAccount(key);
     const { request } = await client.simulateContract({ ...call, account });
     const [estimate, fee, nonce] = await Promise.all([client.estimateContractGas({ ...call, account }), (given ? Promise.resolve(given) : fees()).then(capped),
       client.getTransactionCount({ address: account.address, blockTag: 'pending' })]);
     const wallet = createWalletClient({ account, chain, transport });
-    const gas = estimate + HOOK_GAS;
+    const gas = estimate + pad;
     const hash = await wallet.writeContract({ ...request, gas, nonce, ...fee });
     await onSent?.(hash, { nonce, gas, ...fee });
     return receiptOf(hash, call.functionName, timeout);
@@ -223,6 +227,10 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
   return {
     fees,
+    // For modules on this chain (channels.js): its public client, and the write every contract call here goes
+    // through (simulate, the pad, the max fee, one at a time with the rest, the receipt).
+    client,
+    write,
     /** What the RPC says it is (the app refuses a chain other than the config's). */
     chainId: () => client.getChainId(),
 
