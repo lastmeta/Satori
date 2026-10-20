@@ -2,6 +2,9 @@
 //   relays = central's /peer/relays + the user's; each relay: REQ follow, announce `<stream>_pred`
 //   34601 in ─▶ subscribed? ─▶ verify ─▶ store once ─▶ forecast (one cadence ahead) ─▶ publish `<stream>_pred`
 //   hourly: refetch the relay list, reconnect, re-announce; NIP-65 daily
+//   the track record (docs/design/track-record.md): once relays are open, then hourly at most every 6 h, the catalog is
+//   scanned for prediction streams; they and their sources are followed with the subscriptions, and a watched stream's
+//   34601 is kept (src/neuron/records.js): never forecast, never published
 // Relay streams are apart from central's: own tables, and nothing goes to central.
 // Intake runs one event at a time; sending (which waits for each relay's OK)
 // runs beside it, so a slow or mute relay holds nothing up.
@@ -13,6 +16,7 @@ import {
 } from '../nostr/satori.js';
 import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
+import { createWatch, followFilters, WATCH_SCAN_S } from './records.js';
 import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
 
@@ -51,11 +55,12 @@ const parseRaw = (raw) => {
  * changes them, and `wss`: a ws:// relay → the wss:// address of the same relay, its stand-in where ws:// can't open (src/config.js)
  * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): discover and subscribe say their steps
  * @param {boolean} [o.ws] whether the page's CSP allows ws:// (the dev server's does; a build's does not: csp.js)
+ * @param {() => void} [o.onRecords] a watched stream's observation kept: the track records changed (records())
  */
 export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay,
   forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:', ws = true,
-  onChange = () => {}, onPublished = () => {}, onError = () => {}, setInterval: si = setInterval, clearInterval: ci = clearInterval,
-  openWaitMs = 10_000, work: progress = createWork() }) {
+  onChange = () => {}, onPublished = () => {}, onError = () => {}, onRecords = () => {}, setInterval: si = setInterval,
+  clearInterval: ci = clearInterval, openWaitMs = 10_000, work: progress = createWork() }) {
   let maxStreams = MAX_STREAMS;
   let userRelays = defaults.relays;
   let centralWrite = defaults.centralWrite;
@@ -70,6 +75,11 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let prunedAt = -Infinity; // the last prune of the relay streams' observations (s)
   const sending = new Set();
   const log = (err) => console.error('[satori] nostr', err);
+  // the track record: the watched prediction streams and their sources (src/neuron/records.js)
+  const watch = createWatch({ db, me: key.pubkey, now, onChange: onRecords });
+  let watchedAt = -Infinity; // when the last scan for prediction streams worked (s)
+  let watchInfo = { found: 0, left: 0, error: null };
+  let watching = null; // the scan in flight
 
   /** Intake runs one event at a time, in order; one that fails (the database, the engine) is reported (onError). */
   const work = (fn) => intakeLine(fn).catch((err) => {
@@ -110,12 +120,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     await Promise.all(events.map((ev) => publish(ev, targets)));
   }
 
+  /** The follow REQ's filters: one per author over the subscriptions and the watched streams (followFilters). */
   async function filters() {
-    const by = new Map();
-    for (const s of await db.relayStreams({ active: true })) {
-      by.set(s.provider_pubkey, [...(by.get(s.provider_pubkey) ?? []), s.stream_name]);
-    }
-    return [...by.keys()].sort().map((p) => ({ kinds: [KIND.OBSERVATION], authors: [p], '#d': by.get(p).sort() }));
+    const subs = (await db.relayStreams({ active: true })).map((s) => [s.provider_pubkey, s.stream_name]);
+    return followFilters([...subs, ...watch.pairs()]);
   }
 
   /** The follow REQ: one #d filter per provider, ≤ 200 filters per REQ (client.py:944-983). */
@@ -169,13 +177,17 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     for (const e of targets) background(flushOutbox(e));
   }
 
-  /** A relay (re)connected: announce our `_pred` streams there (start.py:326-328), send what waits for it. */
+  /**
+   * A relay (re)connected: announce our `_pred` streams there (start.py:326-328), send what waits for it; the scan for
+   * prediction streams, when none has worked in 6 h (the first open after a load starts it).
+   */
   function opened(url, relay) {
     const e = relays.get(url);
     if (e?.relay !== relay) return;
     if (writes(e)) background(announce([e]));
     background(flushOutbox(e));
     background(relayList());
+    scanDue();
     onChange();
   }
 
@@ -254,28 +266,70 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     for (const e of relays.values()) if (e.relay?.state === 'closed' && !added.includes(e)) e.relay.connect();
     await connectNew(added);
     onChange();
+    scanDue(); // not awaited: it waits for relays still connecting, and the pass need not
     await Promise.all([background(announce()), background(relayList()), background(prune())]);
   }
 
-  /** At most daily, in the hourly pass: each stream's observations older than its window go (db.pruneRelay, batched). */
+  /**
+   * At most daily, in the hourly pass: each stream's observations older than its window go (db.pruneRelay, batched),
+   * the watched streams' too (db.pruneWatch).
+   */
   async function prune() {
     if (now() - prunedAt < RELAY_LIST_S) return;
     prunedAt = now();
     const n = await db.pruneRelay({ buckets: RELAY_WINDOW });
     if (n) console.info(`[satori] relay observations pruned to each stream's window: ${n}`);
+    const w = await watch.prune();
+    if (w) console.info(`[satori] watched streams' observations pruned to each stream's window: ${w}`);
+  }
+
+  // ── the track record (docs/design/track-record.md) ──
+  /** A scan's catalog: the watched set kept from it, the follow REQ sent again when that changed. */
+  async function applyWatch(entries) {
+    const r = await watch.apply(entries);
+    watchedAt = now();
+    watchInfo = { found: r.found, left: r.left, error: null };
+    if (r.changed) await refollow();
+    onChange();
+  }
+  /** The scan for prediction streams (the work list's `watch`), one at a time; a failure is kept for status() and tried again. */
+  function scanWatch() {
+    watching ??= progress.run('watch', async (step) => {
+      try {
+        await applyWatch((await scan(step)).list);
+      } catch (err) {
+        watchInfo = { ...watchInfo, error: err?.message ?? String(err) };
+        console.warn('[satori] scan for prediction streams (tried again at the next relay open or hourly pass)', watchInfo.error);
+      }
+    }).finally(() => { watching = null; });
+    return watching;
+  }
+  /** The scan, in the background, when none has worked in 6 h and none is running. */
+  function scanDue() {
+    if (!watching && now() - watchedAt >= WATCH_SCAN_S) background(scanWatch());
   }
 
   /**
-   * A 34601 from a relay (start.py:1112-1137, 621-667): subscribed by
-   * (stream_name, author), verified, stored once; a new one is forecast and
-   * published as `<stream>_pred` (start.py:1276-1327, 3549-3617).
+   * A 34601 from a relay, routed by (stream_name, author) and verified once: a subscription's goes the existing way
+   * (start.py:1112-1137, 621-667); a watched stream's (a prediction stream or its source) is kept for the track record,
+   * never forecast or published; one that is both, both (docs/design/track-record.md#following).
    */
   async function intake(e) {
     const o = parseObservation(e);
     if (!o) return;
     const uuid = relayUuid(o.provider, o.stream_name);
+    const watched = watch.has(uuid);
     const sub = await db.relayStream(uuid);
-    if (!sub?.active || !verifyEvent(e)) return;
+    if ((!sub?.active && !watched) || !verifyEvent(e)) return;
+    if (watched) await watch.intake(uuid, o, e);
+    if (sub?.active) await predict(e, o, uuid, sub);
+  }
+
+  /**
+   * A subscription's verified 34601: stored once; a new one is forecast and published as `<stream>_pred`
+   * (start.py:1276-1327, 3549-3617).
+   */
+  async function predict(e, o, uuid, sub) {
     const ts = safeEpoch(o.timestamp);
     const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
     const windowS = cadence * RELAY_WINDOW;
@@ -331,6 +385,36 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   }
 
   /**
+   * The relays' catalog, for discover() and the scan for prediction streams: one run at a time, shared by whoever asks
+   * while it runs (each one's step(step, done, total) told as it goes). → { list: catalog() entries with their events,
+   * from: event id → the relays that sent it }
+   */
+  let scanning = null;
+  const scanSteps = new Set();
+  function scan(step) {
+    scanSteps.add(step);
+    scanning ??= (async () => {
+      const tell = (...a) => { for (const f of scanSteps) f(...a); };
+      const from = new Map(); // event id → the relays that sent it
+      const asked = await readable();
+      let answered = 0;
+      tell('ask', 0, asked.length);
+      const events = (await Promise.all(asked.map(async (e) => {
+        const list = await pages(e.relay).catch(() => []);
+        for (const ev of list) from.set(ev.id, [...(from.get(ev.id) ?? []), e.url]);
+        tell('ask', ++answered, asked.length);
+        return list;
+      }))).flat();
+      const signed = await genuine(events, (done, total) => tell('verify', done, total));
+      return { list: catalog(signed), from };
+    })().finally(() => {
+      scanning = null;
+      scanSteps.clear();
+    });
+    return scanning;
+  }
+
+  /**
    * The events whose id and signature check (verifyEvent), each id once, in slices with a yield between them (a
    * catalog of ~1,000 is seconds of schnorr): a relay can forge any provider's announcement, and agents read what
    * discover() returns (the security review, 2026-10-19). step(done, total) as it goes.
@@ -381,6 +465,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   return {
     /** Central's max_streams once (start.py:236-246), the relay settings, then a reconcile and the hourly timer. */
     async start() {
+      await watch.load(); // the watched streams are followed from the first REQ
       const cfg = await Promise.resolve().then(() => central().relayConfig()).catch(() => null);
       maxStreams = Number(cfg?.max_streams) > 0 ? Number(cfg.max_streams) : MAX_STREAMS;
       centralUrls = (await db.get('nostr_central_relays')) ?? []; // used when central is down now
@@ -429,6 +514,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
           for: e.for, // the ws:// relay this wss stand-in is reached for, or null
         })),
         subscriptions: (await db.relayStreams({ active: true })).map(view),
+        // the track record: the watched prediction streams and sources, the last scan's finds (left: past the cap), when it worked
+        watching: { ...watch.count(), found: watchInfo.found, left: watchInfo.left, at: Number.isFinite(watchedAt) ? Math.floor(watchedAt) : null,
+          error: watchInfo.error },
       };
     },
 
@@ -437,21 +525,19 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
      * `pred` and `subscribed` marked, and `relays`: the ones that sent it.
      */
     discover: () => progress.run('discover', async (step) => {
-      const from = new Map(); // event id → the relays that sent it
-      const asked = await readable();
-      let answered = 0;
-      step('ask', 0, asked.length);
-      const events = (await Promise.all(asked.map(async (e) => {
-        const list = await pages(e.relay).catch(() => []);
-        for (const ev of list) from.set(ev.id, [...(from.get(ev.id) ?? []), e.url]);
-        step('ask', ++answered, asked.length);
-        return list;
-      }))).flat();
-      const signed = await genuine(events, (done, total) => step('verify', done, total));
+      const { list, from } = await scan(step);
+      background(applyWatch(list)); // the watched set, from the same catalog
       const active = new Set((await db.relayStreams({ active: true })).map((r) => r.uuid));
-      return catalog(signed).map(({ event, ...s }) => ({ ...s, relays: from.get(event.id),
+      return list.map(({ event, ...s }) => ({ ...s, relays: from.get(event.id),
         subscribed: active.has(relayUuid(s.pubkey, s.stream_name)) }));
     }),
+
+    /** The track record: every watched prediction stream's record, best first (docs/design/track-record.md#api-windowsatori-llmstxt). */
+    records: () => watch.list(),
+    /** One watched prediction stream's record with its last 28 scored pairs, or null. */
+    record: (pubkey, stream) => watch.one(pubkey, stream),
+    /** The scan for prediction streams, now (also at the first relay open and hourly at most every 6 h). */
+    scanWatch,
 
     /**
      * Subscribe and predict: the announcement is looked up and verified, the

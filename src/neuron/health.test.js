@@ -214,6 +214,11 @@ describe('bad: predictions are failing', () => {
     expect(health({ nostr: nostr({ subscriptions: [sub], relays: [] }) }).channels.relays.state).toBe('bad');
     expect(health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'ws://b', state: 'blocked' }] }) }).channels.relays.state).toBe('bad');
     expect(health({ nostr: nostr({ relays: [{ url: 'wss://a', state: 'closed' }] }) }).status).toBe('ok'); // nothing subscribed
+    // watching only: every relay down shows on the chip alone, amber; Home's answer (is it predicting?) stays ok
+    const watchDown = health({ nostr: nostr({ watching: { streams: 3, sources: 1 }, relays: [{ url: 'wss://a', state: 'closed' }] }) });
+    expect(watchDown).toMatchObject({ status: 'ok', reasons: [], channels: { relays: { state: 'warn', tone: 'warn', text: 'Relays down' } } });
+    const watchGrace = health({ nostr: nostr({ watching: { streams: 3, sources: 1 }, relays: [{ url: 'wss://a', state: 'connecting', downSince: (NOW - 60) * 1000 }] }) });
+    expect(watchGrace.channels.relays).toMatchObject({ state: 'ok', text: 'Watching 3' }); // reconnecting within 10 min counts as up
   });
 
   test(`a relay reconnecting has ${RELAY_GRACE_S / 60} min before it counts as down: then every relay down is red`, () => {
@@ -603,6 +608,12 @@ describe('the tone: green while all is well (sky at rest, regular while working,
     const oneDown = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] });
     expect(ch({ nostr: oneDown, work: { subscribe: e('subscribe', 'find') } }).relays).toEqual({ state: 'advice', tone: 'working', text: '1 of 2 relays down' });
     expect(ch({ work: { discover: e('discover', 'ask') } }).relays).toMatchObject({ tone: 'working', text: 'No streams' });
+    // watching prediction streams (the track record), nothing subscribed: use of the relays, sky at rest, green while the scan runs
+    const watching = (o) => nostr({ watching: { streams: 112, sources: 58 }, ...o });
+    expect(ch({ nostr: watching() }).relays).toEqual({ state: 'ok', tone: 'idle', text: 'Watching 112' });
+    expect(ch({ nostr: watching(), work: { watch: e('watch', 'verify') } }).relays).toMatchObject({ tone: 'working', text: 'Watching 112' });
+    expect(ch({ nostr: nostr({ watching: { streams: 0, sources: 0 } }) }).relays).toMatchObject({ tone: 'off', text: 'No streams' });
+    expect(ch({ nostr: watching({ subscriptions: [sub] }) }).relays).toMatchObject({ text: '2 relays' }); // subscriptions say what they said
     expect(ch({ rows: [...running(), failed(NOW - 20), failed(NOW - 10)], work: WORK.working }).network).toMatchObject({ tone: 'warn' });
     expect(ch({ rows: [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 10)], work: WORK.working }).network).toMatchObject({ tone: 'bad' });
   });

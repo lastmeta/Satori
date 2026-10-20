@@ -9,6 +9,7 @@ import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../n
 import { forecast, explainForecast } from '../engine/index.js';
 import { createWork } from './work.js';
 import { createNostr, FOLLOW_ID, MAX_STREAMS, RELAY_WINDOW } from './nostr.js';
+import { WATCH_SCAN_S, WATCH_DROP_S } from './records.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -281,6 +282,7 @@ describe('discover', () => {
   test('pages back with until over every open relay; newest per (author, d); tombstones dropped; _pred and subscribed marked', async () => {
     await boot();
     openAll();
+    await settle(); // the scan for prediction streams the first open started (docs/design/track-record.md): done
     const c = relays.get(CENTRAL_RELAY);
     const u = relays.get(USER_RELAY);
     // 501 announcements on central's relay: the first page holds 500.
@@ -329,6 +331,8 @@ describe('discover', () => {
       openWaitMs: 0, work });
     await nostr.start();
     openAll();
+    await nostr.idle(); // the scan for prediction streams the first open started
+    seen.length = 0;
     relays.get(CENTRAL_RELAY).stored.push(announce('btc'));
     await nostr.discover();
     expect(seen).toEqual(['discover ask 0 2', 'discover ask 1 2', 'discover ask 2 2', 'discover verify 0 1', 'discover verify 1 1']);
@@ -748,5 +752,195 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await again.idle();
     expect(kinds(relays.get(USER_RELAY)).filter(([k]) => k !== 10002)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
     expect(await db.get('nostr_outbox')).toEqual([]);
+  });
+});
+
+describe('the track record: watching prediction streams (docs/design/track-record.md)', () => {
+  const P = '6'.repeat(63) + '7'; // a predictor
+  const P_PUB = nostrPubkey(P);
+  /** A predictor's `<stream>_pred` announcement, naming PROV's stream as its source (as Lite's predMetadata). */
+  const predAnnounce = (stream, o = {}, at = clock - 50, secret = P) => signEvent(announceEvent({ stream_name: `${stream}_pred`,
+    nostr_pubkey: nostrPubkey(secret), name: `Predictions for ${stream.toUpperCase()}`, cadence_seconds: o.cadence ?? 900,
+    metadata: { source_stream_name: stream, source_provider_pubkey: PROV_PUB, wallet_pubkey: '02ab' } }, at), secret);
+  const predict = (stream, value, seq, timestamp = clock, secret = P) =>
+    signEvent(observationEvent({ stream: `${stream}_pred`, value, seq, timestamp, now: timestamp }), secret);
+  const byAuthor = (fs) => [...fs].sort((a, b) => (a.authors[0] < b.authors[0] ? -1 : 1));
+  /** How many scans of the catalog asked this relay: each one's first page (no `until`; it pages back from there). */
+  const catalogFetches = (spy) => spy.mock.calls.filter(([[f]]) => f.kinds?.includes(34600) && !f.authors && f.until === undefined).length;
+
+  /** Booted with each stream and a predictor's `_pred` of it announced on central's relay; the first open's scan done. */
+  async function watching(streams = ['btc'], o) {
+    await boot(o);
+    const c = relays.get(CENTRAL_RELAY);
+    c.stored.push(...streams.flatMap((x) => [announce(x), predAnnounce(x)]));
+    openAll();
+    await settle();
+    return c;
+  }
+
+  test("the scan at the first open: each `_pred` naming its source, and the source, followed with the subscriptions (one filter per author); nothing published", async () => {
+    const c = await watching(['btc']);
+    expect((await nostr.status()).watching).toEqual({ streams: 1, sources: 1, found: 1, left: 0, at: clock, error: null });
+    for (const r of relays.all.values()) {
+      expect(r.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc'] },
+        { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred'] }]));
+    }
+    for (const r of relays.all.values()) expect(r.published.filter((e) => e.kind !== 10002)).toEqual([]); // no 34602, nothing of its own
+    c.stored.push(announce('eth'));
+    await nostr.subscribe(PROV_PUB, 'eth');
+    expect(c.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] },
+      { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred'] }])); // merged per author
+  });
+
+  test('again in the hourly pass only 6 h after the last, not at a reconnect before; the same set sends no new REQ, a new one does', async () => {
+    const c = await watching(['btc']);
+    const fetch = vi.spyOn(c, 'fetch');
+    const sub = vi.spyOn(c, 'sub');
+    clock += 3600;
+    await nostr.reconcile();
+    c.drop();
+    c.open(); // a reconnect within 6 h
+    await settle();
+    expect(catalogFetches(fetch)).toBe(0);
+    clock += WATCH_SCAN_S - 3600;
+    await nostr.reconcile();
+    await settle();
+    expect(catalogFetches(fetch)).toBe(1);
+    expect(sub.mock.calls.filter(([id]) => id === FOLLOW_ID)).toHaveLength(0); // the same set: no new REQ
+    c.stored.push(announce('eth'), predAnnounce('eth'));
+    clock += WATCH_SCAN_S;
+    await nostr.reconcile();
+    await settle();
+    expect(c.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] },
+      { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred', 'eth_pred'] }]));
+    expect((await nostr.status()).watching).toMatchObject({ streams: 2, sources: 2, at: clock });
+  });
+
+  test('the cap (200, the newest announced) and the follow REQ chunked at 200 filters', async () => {
+    await boot();
+    const c = relays.get(CENTRAL_RELAY);
+    const keys = Array.from({ length: 205 }, (_, i) => (i + 1).toString(16).padStart(64, '0'));
+    c.stored.push(announce('btc'), ...keys.map((k, i) => predAnnounce('btc', {}, clock - 50 - i, k)));
+    openAll();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 200, sources: 1, found: 205, left: 5 });
+    expect(c.subs.get(FOLLOW_ID)).toHaveLength(200); // 201 authors: 200 filters and 1
+    expect(c.subs.get(`${FOLLOW_ID}-2`)).toHaveLength(1);
+    const followed = [...c.subs.get(FOLLOW_ID), ...c.subs.get(`${FOLLOW_ID}-2`)].map((f) => f.authors[0]);
+    expect(followed).not.toContain(nostrPubkey(keys[204])); // the oldest announced, left out
+    expect(followed).toContain(PROV_PUB);
+  }, 120_000);
+
+  test("intake: a watched stream's event is kept, never forecast or published; a subscription's goes the existing way; both: both; neither or forged: nothing", async () => {
+    const c = await watching(['btc', 'eth']);
+    await nostr.subscribe(PROV_PUB, 'eth'); // eth is also a watched source
+    for (const r of relays.all.values()) r.published = [];
+    const t = clock;
+    clock += 0.4;
+    await c.deliver(observe('btc', '100', 1, t - 10)); // a watched source only
+    await c.deliver(predict('btc', '101', 1, t - 9)); // a watched prediction stream
+    await c.deliver(observe('eth', '5', 1, t - 10)); // subscribed and watched
+    await c.deliver(observe('sol', '1', 1, t)); // neither
+    await c.deliver({ ...predict('btc', '999', 2, t), sig: observe('btc', '1', 9).sig }); // forged
+    await settle();
+    expect(kinds(relays.get(USER_RELAY))).toEqual([[34601, 'eth_pred']]); // only the subscription is forecast and published
+    expect(c.published).toEqual([]);
+    const uuids = { pred: relayUuid(P_PUB, 'btc_pred'), btc: relayUuid(PROV_PUB, 'btc'), eth: relayUuid(PROV_PUB, 'eth'), sol: relayUuid(PROV_PUB, 'sol') };
+    const w = await db.watchObservations(Object.values(uuids));
+    expect(w.get(uuids.pred)).toEqual([{ seq: 1, ts: t - 9, value: 101, received_at: t + 1 }]); // when it arrived, rounded up
+    expect(w.get(uuids.btc)).toHaveLength(1);
+    expect(w.get(uuids.eth)).toHaveLength(1);
+    expect(w.get(uuids.sol)).toEqual([]);
+    expect(await db.relayStream(uuids.btc)).toBeNull(); // watched, not subscribed: no relay row, no forecast
+    expect((await db.relayStream(uuids.eth)).observations).toBe(1);
+  });
+
+  test('records(): each prediction scored as its outcome arrives; ours marked mine (our own `_pred` comes back through the follow)', async () => {
+    const c = await watching(['btc'], { centralWrite: false });
+    const u = relays.get(USER_RELAY);
+    c.stored.push(announce('btc'));
+    await nostr.subscribe(PROV_PUB, 'btc'); // we predict btc too
+    u.stored.push(...u.published.filter((e) => e.kind === 34600)); // our `btc_pred` announcement, as a relay keeps it
+    await nostr.scanWatch();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 2, sources: 1 });
+    const t0 = clock;
+    for (let k = 0; k < 8; k++) {
+      clock = t0 + 900 * k;
+      u.published = [];
+      await c.deliver(observe('btc', String(100 + k), k + 1, clock));
+      await settle();
+      const ours = u.published.find((e) => e.kind === 34601);
+      await u.deliver(ours); // the relay sends our own `_pred` back to the follow REQ
+      clock += 1;
+      await c.deliver(predict('btc', String(100 + k + 0.5), k + 1, clock)); // half a step off, every time
+      await settle();
+    }
+    const list = await nostr.records();
+    expect(list.map((r) => [r.pubkey === ME_PUB ? 'me' : 'P', r.mine, r.scored, r.markText])).toEqual([
+      ['P', false, 7, '50% better'], ['me', true, 7, 'Same as no change']]); // ours: naive (no change) with this little history
+    expect(list[0]).toMatchObject({ stream: 'btc_pred', source: { pubkey: PROV_PUB, stream: 'btc', name: 'BTC' }, received: 8,
+      direction: { right: 7, total: 7 } });
+    const one = await nostr.record(P_PUB, 'btc_pred');
+    expect(one.pairs).toHaveLength(7);
+    expect(one.pairs[0]).toEqual({ ts: t0 + 900, predicted: 100.5, actual: 101, baseline: 100 });
+    expect(await nostr.record(PROV_PUB, 'btc')).toBeNull(); // a source has no record
+  });
+
+  test('a watched stream no scan selects for 7 days is dropped and unfollowed', async () => {
+    const c = await watching(['btc']);
+    c.stored = c.stored.filter((e) => e.pubkey !== P_PUB); // its announcement gone
+    clock += WATCH_SCAN_S;
+    await nostr.reconcile();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 1, sources: 1, found: 0 }); // still watched
+    expect(c.subs.get(FOLLOW_ID)).toHaveLength(2);
+    clock += WATCH_DROP_S;
+    await nostr.reconcile();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 0, sources: 0 });
+    expect(c.subs.has(FOLLOW_ID)).toBe(false);
+  });
+
+  test("the hourly pass prunes the watched streams to their window too, at most daily", async () => {
+    await watching(['btc']);
+    const uuid = relayUuid(PROV_PUB, 'btc'); // cadence 900
+    await conn.query(`INSERT INTO watch_observations SELECT '${uuid}', k + 1, ${clock} + k * 900, 1, ${clock}, 'x' || k FROM range(500) t(k)`);
+    await nostr.reconcile();
+    await settle();
+    expect((await db.watchObservations([uuid])).get(uuid)).toHaveLength(500); // within a day of the start's pass
+    clock += 86_400;
+    await nostr.reconcile();
+    await settle();
+    expect((await db.watchObservations([uuid])).get(uuid)).toHaveLength(RELAY_WINDOW + 1);
+  });
+
+  test('a scan with no relay open fails quietly, says so, and runs at the next open; discover() refreshes the watched set too', async () => {
+    await boot();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 0, at: null, error: expect.stringMatching(/No relay is connected/) });
+    openAll();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 0, at: clock, error: null });
+    relays.get(CENTRAL_RELAY).stored.push(announce('btc'), predAnnounce('btc'));
+    await nostr.discover();
+    await settle();
+    expect((await nostr.status()).watching).toMatchObject({ streams: 1, sources: 1, found: 1 });
+  });
+
+  test('the work list: the scan is `watch`, asking the relays then checking signatures (never a silent wait)', async () => {
+    db = await memoryDb();
+    relays = fakeRelays();
+    central = fakeCentral();
+    const seen = [];
+    const work = createWork({ onChange: () => { const e = work.of('watch'); if (e) seen.push(`${e.step} ${e.done} ${e.total}`); } });
+    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+      makeRelay: relays.make, now, defaults: { relays: [], centralWrite: false }, setInterval: () => 0, clearInterval: () => {},
+      openWaitMs: 0, work });
+    await nostr.start();
+    relays.get(CENTRAL_RELAY).stored.push(announce('btc'), predAnnounce('btc'));
+    openAll();
+    await nostr.idle();
+    expect(seen).toEqual(['ask 0 1', 'ask 1 1', 'verify 0 2', 'verify 2 2']);
+    expect(work.of('watch')).toBeNull();
   });
 });

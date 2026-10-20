@@ -103,6 +103,7 @@ describe('createWork', () => {
     const e = (task, step, critical = false) => ({ task, step, done: null, total: null, since: 0, critical });
     expect(leading({}, HERO)).toBeNull();
     expect(leading({ discover: e('discover', 'ask') }, HERO)).toBeNull();
+    expect(leading({ watch: e('watch', 'verify') }, HERO)).toBeNull(); // the scan for prediction streams: the Streams tab's
     expect(leading({ base: e('base', 'check'), central: e('central', 'history') }, HERO)).toMatchObject({ task: 'central' });
     expect(leading({ claim: e('claim', 'confirm', true), central: e('central', 'history') }, HERO)).toMatchObject({ task: 'claim' });
   });
@@ -167,6 +168,8 @@ describe('workText: plain words, from the person\'s side', () => {
     [e('claim', 'confirm'), 'Waiting for Base to confirm…'],
     [e('discover', 'ask', 1, 2), 'Asking the relays · 1 of 2'],
     [e('subscribe', 'find'), 'Finding the stream on the relays…'],
+    [e('watch', 'ask', 1, 2), 'Finding prediction streams · asking the relays 1 of 2'],
+    [e('watch', 'verify', 400, 1061), 'Finding prediction streams · checking signatures 400 of 1,061'],
     [e('keys', 'save'), 'Saving your keys…'],
     [e('reward', 'login'), 'Signing in to the Satori Network…'],
     [e('reward', 'save'), 'Saving the reward address…'],

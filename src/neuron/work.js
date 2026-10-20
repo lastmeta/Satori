@@ -11,9 +11,11 @@
  * The tasks, the neuron's own first; HERO: the ones Home's hero shows (the network's show on the Streams tab). `reward`:
  * the reward address saved or cleared (Settings, setRewardAddress()), never critical. `train`:
  * the training pass (src/neuron/train.js), after a poll and the Base batch, which it waits for; `retrain`: a model's
- * Retrain (src/neuron/retrain.js), which waits for a poll too.
+ * Retrain (src/neuron/retrain.js), which waits for a poll too. `watch`: the scan for prediction streams to watch (the track
+ * record, src/neuron/records.js), shown on the Streams tab's Prediction streams card.
  */
-export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'reward', 'discover', 'subscribe'];
+export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'reward', 'discover', 'subscribe',
+  'watch'];
 export const HERO = ORDER.slice(0, 10);
 const VAULT = new Set(['stake', 'unstake', 'claim', 'send', 'keys']);
 /**
@@ -29,6 +31,7 @@ export function leading(all, tasks = ORDER) {
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const count = (n) => Number(n ?? 0).toLocaleString('en-US');
 /** A vault action's transaction: "Step 2 of 3: …" when there are several. */
 const tx = (e, what) => (e.total > 1 ? `Step ${e.done} of ${e.total}: ${what[0].toLowerCase()}${what.slice(1)}` : what);
 
@@ -47,6 +50,8 @@ const TEXT = {
   'discover:ask': (e) => `Asking the relays · ${e.done} of ${e.total}`,
   'discover:verify': (e) => `Checking the announcements' signatures · ${e.done} of ${e.total}`,
   'subscribe:find': () => 'Finding the stream on the relays…',
+  'watch:ask': (e) => `Finding prediction streams · asking the relays ${e.done} of ${e.total}`,
+  'watch:verify': (e) => `Finding prediction streams · checking signatures ${count(e.done)} of ${count(e.total)}`,
   'keys:save': () => 'Saving your keys…',
   // the reward address saved or cleared (src/neuron/reward.js): signed in first; a read is quiet (Settings' row says it)
   'reward:login': () => 'Signing in to the Satori Network…',

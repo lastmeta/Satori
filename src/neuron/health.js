@@ -316,7 +316,7 @@ export const toneOf = (status, work) => (status === 'warn' || status === 'bad' ?
  * central's poll; the batch and the vault's actions; discover and subscribe. TRAFFIC: each one's traffic channel
  * (src/traffic.js keeps the code's names).
  */
-const CHANNEL_WORK = { network: ['central'], contract: ['base', 'stake', 'unstake', 'claim', 'send'], relays: ['discover', 'subscribe'] };
+const CHANNEL_WORK = { network: ['central'], contract: ['base', 'stake', 'unstake', 'claim', 'send'], relays: ['discover', 'subscribe', 'watch'] };
 export const TRAFFIC = { network: 'central', contract: 'base', relays: 'network' };
 /** A traffic channel's chip (src/traffic.js's name → the channel's). */
 export const CHIP_OF = Object.fromEntries(Object.entries(TRAFFIC).map(([chip, t]) => [t, chip]));
@@ -343,9 +343,14 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   else baseChip = { state: 'ok', text: base.checking ? 'Sending…' : `Round ${base.round} due` };
 
   const n = top('relays');
+  // watching prediction streams (the track record, docs/design/track-record.md#home) is use of the relays, but predicts
+  // nothing: "Watching 112", and with every relay down the chip alone says so (no reason: the hero is the predicting's)
+  const watched = nostr?.watching?.streams ?? 0;
+  const allDown = () => { const r = usableRelays(nostr); return !r.length || r.every((x) => relayDown(x, now)); };
   const relays = n ? { state: n.status, text: n.chip }
     : nostr?.subscriptions?.length ? { state: 'ok', text: `${usableRelays(nostr).length} relay${usableRelays(nostr).length === 1 ? '' : 's'}` }
-      : { state: 'idle', text: 'No streams', off: true };
+      : watched > 0 ? (allDown() ? { state: 'warn', text: 'Relays down' } : { state: 'ok', text: `Watching ${watched}` })
+        : { state: 'idle', text: 'No streams', off: true };
   // the tone: warn and bad as they are; working (its channel has work in progress, or is connecting); off (deliberately
   // not used: Base not staked here, no stream subscribed); else idle (sky: healthy, waiting). Advice is calm: its
   // words, a green tone.
