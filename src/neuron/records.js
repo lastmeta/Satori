@@ -11,7 +11,6 @@
 // Pure but createWatch. Scoring takes plain { value, ts, received_at } predictions, so a paid stream's revealed value,
 // with its commitment's arrival, fits later (step 3).
 import { PRED, relayUuid, numericValue } from '../nostr/satori.js';
-import { median } from '../engine/index.js';
 import { EPOCH } from '../central/index.js';
 import { qualityOf } from './quality.js';
 import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
@@ -47,8 +46,9 @@ export function sourceOf(entry) {
  * Which prediction streams to watch, from the relays' verified catalog (catalog() of the signed 34600s: newest per
  * author and `d`, no tombstones; each with its `event`): every `_pred` that names its source; ours (`me`) first, then
  * the most recently announced; at most `cap`. Cadence: the prediction stream's, else its source's, else a day; a source
- * not announced takes its prediction stream's. A source's name: its own announcement's, else what the prediction
- * stream calls it ("Predictions for X"), else its stream.
+ * not announced takes its prediction stream's. A source's name: its own announcement's, else its stream id as it is,
+ * never the prediction stream's words (a predictor could name a stream it controls under another key "BTC");
+ * `announced`: whether the source has an announcement of its own in the catalog.
  * @returns {{list: object[], found: number, left: number}} found: every prediction stream that names a source; left: past the cap
  */
 export function selectWatched(entries, { me = null, cap = WATCH_CAP } = {}) {
@@ -60,11 +60,10 @@ export function selectWatched(entries, { me = null, cap = WATCH_CAP } = {}) {
     if (!src) continue;
     const own = announced.get(`${src.pubkey}:${src.stream}`);
     const cadence = cadenceOf(s.cadence_seconds) ?? cadenceOf(own?.cadence_seconds) ?? DEFAULT_CADENCE_S;
-    const called = s.name?.startsWith(PREFIX) ? s.name.slice(PREFIX.length).trim() : '';
     found.push({
       pubkey: s.pubkey, stream: s.stream_name, name: s.name || `${PREFIX}${src.stream}`, cadence_seconds: cadence,
       announced_at: s.created_at, mine: s.pubkey === me,
-      source: { ...src, name: own?.name || called || src.stream, cadence_seconds: cadenceOf(own?.cadence_seconds) ?? cadence },
+      source: { ...src, name: own?.name || src.stream, announced: !!own, cadence_seconds: cadenceOf(own?.cadence_seconds) ?? cadence },
     });
   }
   found.sort((a, b) => (b.mine - a.mine) || (b.announced_at - a.announced_at)
@@ -72,7 +71,10 @@ export function selectWatched(entries, { me = null, cap = WATCH_CAP } = {}) {
   return { list: found.slice(0, cap), found: found.length, left: Math.max(0, found.length - cap) };
 }
 
-/** watch_streams rows for a selection, seen `now`: each prediction stream, then each source not already one (a pred wins). */
+/**
+ * watch_streams rows for a selection, seen `now`: each prediction stream, then each source not already one (a pred wins);
+ * a source's meta: { announced }.
+ */
 export function watchRows(list, now) {
   const rows = new Map();
   for (const p of list) {
@@ -84,7 +86,7 @@ export function watchRows(list, now) {
     const uuid = relayUuid(s.pubkey, s.stream);
     if (!rows.has(uuid)) {
       rows.set(uuid, { uuid, pubkey: s.pubkey, stream_name: s.stream, kind: 'source', source_uuid: null, name: s.name,
-        cadence_seconds: s.cadence_seconds, meta: null, seen_at: now });
+        cadence_seconds: s.cadence_seconds, meta: JSON.stringify({ announced: !!s.announced }), seen_at: now });
     }
   }
   return [...rows.values()];
@@ -99,34 +101,60 @@ export function followFilters(pairs) {
 
 const byTime = (a, b) => a.ts - b.ts || a.seq - b.seq;
 const sign = (x) => Math.sign(x);
+/** The median, its two middles halved before adding: two errors near the largest double never sum to Infinity. */
+function median(xs) {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : s[m - 1] / 2 + s[m] / 2;
+}
+
+/**
+ * Whether prediction p counts against baseline b and outcome o (the source's next observation after b), by when each
+ * arrived here (received_at, this clock): p before the outcome's time AND before the outcome arrived here (one clock:
+ * a source stamping ahead of ours credits no copy); and with a lead: within the first half of the interval after its
+ * baseline arrived here, r_p − r_b ≤ (o.ts − b.ts) / 2 (a nowcast made just before the outcome, from the source's own
+ * upstream, is not a forecast). Every time a number.
+ */
+function qualifies(p, b, o) {
+  const [rp, rb, ro] = [p.received_at, b.received_at, o.received_at];
+  return [rp, rb, ro].every(Number.isFinite) && rp < o.ts && rp < ro && rp - rb <= (o.ts - b.ts) / 2;
+}
 
 /**
  * A prediction stream's record, by the verified-order rule (docs/design/track-record.md#scoring-the-verified-order-rule).
  * A prediction p ({ value, ts, received_at }) is scored against the first source observation o with o.ts > p.ts, which
  * must be the source's next one after p's baseline b (the latest with ts ≤ p.ts: seq + 1, nothing missed between),
- * and only if p arrived before it (received_at < o.ts); v, b and o numbers. Over the last `n` scored: error = median
+ * and only if it qualifies by when each arrived here (qualifies(): before the outcome's time and its arrival, within
+ * the first half of the interval after the baseline arrived); v, b and o numbers, |v − o| and |b − o| finite. One
+ * prediction per outcome: the earliest received that qualifies. Over the last `n` outcomes scored: error = median
  * |v − o|, noChange = median |b − o|, the Models tab's mark (qualityOf); direction over the same; since: the first
  * scored outcome's time. Fewer than MIN_SCORED scored: no mark and no numbers.
- * @param {{predictions: {seq?: number, ts: number|null, value: number|null, received_at: number}[], observations: {seq: number, ts: number|null, value: number|null}[], n?: number}} o
+ * @param {{predictions: {seq?: number, ts: number|null, value: number|null, received_at: number}[], observations: {seq: number, ts: number|null, value: number|null, received_at: number}[], n?: number}} o
  */
 export function scoreRecord({ predictions, observations, n = RECORD_N }) {
   const obs = observations.filter((o) => Number.isFinite(o.ts)).sort(byTime);
   const preds = predictions.filter((p) => Number.isFinite(p.ts)).sort((a, b) => a.ts - b.ts || (a.seq ?? 0) - (b.seq ?? 0));
-  const all = [];
+  const first = new Map(); // the outcome's seq → { at, seq, pair }: the earliest received prediction that qualifies
   let j = 0; // obs[j]: the first observation after the prediction's time
   for (const p of preds) {
     while (j < obs.length && obs[j].ts <= p.ts) j++;
     const b = obs[j - 1];
     const o = obs[j];
-    if (!b || !o || o.seq !== b.seq + 1 || !(p.received_at < o.ts)) continue;
-    if (![p.value, b.value, o.value].every(Number.isFinite)) continue;
-    all.push({ ts: o.ts, predicted: p.value, actual: o.value, baseline: b.value });
+    if (!b || !o || o.seq !== b.seq + 1 || !qualifies(p, b, o)) continue;
+    if (![p.value, b.value, o.value, Math.abs(p.value - o.value), Math.abs(b.value - o.value)].every(Number.isFinite)) continue;
+    const was = first.get(o.seq);
+    const seq = p.seq ?? 0;
+    if (was && (was.at < p.received_at || (was.at === p.received_at && was.seq <= seq))) continue;
+    first.set(o.seq, { at: p.received_at, seq, pair: { ts: o.ts, predicted: p.value, actual: o.value, baseline: b.value } });
   }
+  const all = [...first.values()].map((x) => x.pair).sort((a, b) => a.ts - b.ts);
   const pairs = all.slice(-n);
   const scored = pairs.length;
   const enough = scored >= MIN_SCORED;
-  const q = qualityOf({ kind: 'record', score: enough ? median(pairs.map((x) => Math.abs(x.predicted - x.actual))) : null,
-    persist: enough ? median(pairs.map((x) => Math.abs(x.baseline - x.actual))) : null });
+  const error = enough ? median(pairs.map((x) => Math.abs(x.predicted - x.actual))) : null;
+  const noChange = enough ? median(pairs.map((x) => Math.abs(x.baseline - x.actual))) : null;
+  let q = qualityOf({ kind: 'record', score: error, persist: noChange });
+  if (q.ratio != null && !Number.isFinite(q.ratio)) q = { ...qualityOf({ kind: 'record', score: error, persist: 0 }), noChange }; // no change all but exact
   const direction = { right: 0, total: 0 };
   for (const x of pairs) {
     const want = sign(x.actual - x.baseline);
@@ -139,11 +167,19 @@ export function scoreRecord({ predictions, observations, n = RECORD_N }) {
     mark: q.mark, markText: q.text, direction, since: all[0]?.ts ?? null, pairs };
 }
 
+const metaOf = (r) => {
+  try { return JSON.parse(r?.meta ?? 'null') ?? {}; } catch { return {}; }
+};
+/** Whether a watched source (a watch_streams row) has its own announcement: a prediction stream does; a source says in its meta. */
+const announcedOf = (src) => !!src && (src.kind === 'pred' || metaOf(src).announced === true);
+
 const rankOf = (r) => (r.mark == null ? 1 : 0);
 const ratioOf = (r) => r.ratio ?? (r.mark === 'tie' ? 1 : Infinity); // no change perfect and some error: worst of the marked
 /** Best first: a record before "not scored yet", by ratio; then by how many are scored, how many received, the name. */
-export const sortRecords = (list) => [...list].sort((a, b) => rankOf(a) - rankOf(b) || ratioOf(a) - ratioOf(b)
-  || b.scored - a.scored || b.received - a.received || String(a.name).localeCompare(String(b.name)) || String(a.stream).localeCompare(String(b.stream)));
+export const compareRecords = (a, b) => rankOf(a) - rankOf(b) || ratioOf(a) - ratioOf(b)
+  || b.scored - a.scored || b.received - a.received || String(a.name).localeCompare(String(b.name)) || String(a.stream).localeCompare(String(b.stream))
+  || String(a.pubkey).localeCompare(String(b.pubkey));
+export const sortRecords = (list) => [...list].sort(compareRecords);
 
 /**
  * The watched set, kept in the db (watch_streams, watch_observations: migration 14) and in memory for the intake's
@@ -181,8 +217,9 @@ export function createWatch({ db, me, now = () => Date.now() / 1000, onChange = 
       const rec = scoreRecord({ predictions: mine, observations: observed.get(r.source_uuid) ?? [] });
       const latest = mine.reduce((a, x) => (!a || x.seq > a.seq ? x : a), null);
       cache.set(u, {
-        pubkey: r.pubkey, stream: r.stream_name, name: r.name, mine: r.pubkey === me,
-        source: { pubkey: src?.pubkey ?? null, stream: src?.stream_name ?? null, name: src?.name ?? src?.stream_name ?? null },
+        pubkey: r.pubkey, stream: r.stream_name, name: r.name, mine: r.pubkey === me, sameAuthor: !!src && src.pubkey === r.pubkey,
+        source: { pubkey: src?.pubkey ?? null, stream: src?.stream_name ?? null, name: src?.name || src?.stream_name || null,
+          announced: announcedOf(src) },
         cadence_seconds: r.cadence_seconds, received: mine.length, scored: rec.scored, error: rec.error, noChange: rec.noChange,
         ratio: rec.ratio, mark: rec.mark, markText: rec.markText, direction: rec.direction, since: rec.since,
         last: latest ? { value: latest.value, received_at: latest.received_at } : null, pairs: rec.pairs,

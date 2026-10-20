@@ -63,7 +63,7 @@ describe('which prediction streams are watched', () => {
     expect([found, left]).toEqual([1, 0]);
     expect(list).toEqual([{
       pubkey: A_PUB, stream: 'btc_pred', name: 'Predictions for btc', cadence_seconds: 900, announced_at: 1000, mine: false,
-      source: { pubkey: SRC_PUB, stream: 'btc', name: 'BTC', cadence_seconds: 900 },
+      source: { pubkey: SRC_PUB, stream: 'btc', name: 'BTC', announced: true, cadence_seconds: 900 },
     }]);
   });
 
@@ -91,12 +91,21 @@ describe('which prediction streams are watched', () => {
     expect(by['B:gold_pred']).toMatchObject({ cadence_seconds: 1800, source: { cadence_seconds: 1800, name: 'gold' } });
   });
 
-  test("a source's name: its own announcement's, else what its prediction stream calls it, else its stream", () => {
+  test("a source's name: its own announcement's, else its stream id as is; never the predictor's words; announced or not", () => {
     const events = [srcAnn('btc', { name: 'Bitcoin' }), predAnn(A, btc, { at: 1, name: 'Predictions for BTC/USD' }),
       predAnn(A, { pubkey: SRC_PUB, stream: 'eth' }, { at: 2, name: 'Predictions for Ether' }),
       predAnn(A, { pubkey: SRC_PUB, stream: 'gold' }, { at: 3, name: 'My gold guesses' })];
-    const names = Object.fromEntries(selectWatched(catalog(events)).list.map((x) => [x.source.stream, x.source.name]));
-    expect(names).toEqual({ btc: 'Bitcoin', eth: 'Ether', gold: 'gold' });
+    const by = Object.fromEntries(selectWatched(catalog(events)).list.map((x) => [x.source.stream, [x.source.name, x.source.announced]]));
+    expect(by).toEqual({ btc: ['Bitcoin', true], eth: ['eth', false], gold: ['gold', false] });
+  });
+
+  test('a fake source: a stream the predictor controls under another key, unannounced, is named by its id, not the predictor\'s "BTC"', () => {
+    const fake = { pubkey: B_PUB, stream: 'btc' }; // the predictor's second key, never announced
+    const events = [srcAnn('btc', { name: 'BTC' }), predAnn(A, btc, { at: 1, name: 'Predictions for BTC' }),
+      predAnn(ME, fake, { at: 2, name: 'Predictions for BTC' })];
+    const [mine, honest] = selectWatched(catalog(events), { me: ME_PUB }).list;
+    expect(mine.source).toEqual({ pubkey: B_PUB, stream: 'btc', name: 'btc', announced: false, cadence_seconds: 900 });
+    expect(honest.source).toMatchObject({ pubkey: SRC_PUB, name: 'BTC', announced: true });
   });
 
   test('watchRows: each prediction stream and each source once; a stream that is both is a pred', () => {
@@ -108,7 +117,7 @@ describe('which prediction streams are watched', () => {
     expect(by['A:btc_pred']).toEqual({ uuid: relayUuid(A_PUB, 'btc_pred'), pubkey: A_PUB, stream_name: 'btc_pred', kind: 'pred',
       source_uuid: relayUuid(SRC_PUB, 'btc'), name: 'Predictions for btc', cadence_seconds: 900, meta: JSON.stringify({ announced_at: 2 }), seen_at: 5000 });
     expect(by['S:btc']).toEqual({ uuid: relayUuid(SRC_PUB, 'btc'), pubkey: SRC_PUB, stream_name: 'btc', kind: 'source', source_uuid: null,
-      name: 'BTC', cadence_seconds: 900, meta: null, seen_at: 5000 });
+      name: 'BTC', cadence_seconds: 900, meta: JSON.stringify({ announced: true }), seen_at: 5000 });
     expect(by['B:btc_pred_pred']).toMatchObject({ kind: 'pred', source_uuid: relayUuid(A_PUB, 'btc_pred') });
   });
 
@@ -122,11 +131,11 @@ describe('which prediction streams are watched', () => {
 });
 
 describe('the verified-order rule', () => {
-  // the source every 900 s from t = 10,000 (seq k at 10,000 + 900k, value 100 + k); a prediction 1 s after each source
-  // observation, received 2 s after it
+  // the source every 900 s from t = 10,000 (seq k at 10,000 + 900k, value 100 + k, received 1 s after its time); a
+  // prediction 1 s after each source observation, received 2 s after it
   const T0 = 10_000;
   const C = 900;
-  const obs = (k, value = 100 + k) => ({ seq: k, ts: T0 + C * k, value });
+  const obs = (k, value = 100 + k, o = {}) => ({ seq: k, ts: T0 + C * k, value, received_at: T0 + C * k + 1, ...o });
   const series = (n, f = (k) => 100 + k) => Array.from({ length: n }, (_, k) => obs(k, f(k)));
   const pred = (k, value, o = {}) => ({ seq: k + 1, ts: T0 + C * k + 1, value, received_at: T0 + C * k + 2, ...o });
 
@@ -144,8 +153,52 @@ describe('the verified-order rule', () => {
   });
 
   test("a stored prediction the relay hands over late is scored against the outcome still to come", () => {
-    // made at t0 + 1, received only at t0 + 600 (a page opened then): the outcome at t0 + 900 was still to come
-    expect(scoreRecord({ predictions: [pred(0, 101, { received_at: T0 + 600 })], observations: series(2) }).pairs).toHaveLength(1);
+    // made at t0 + 1, received only at t0 + 600 (a page opened then, the baseline handed over with it): the outcome at
+    // t0 + 900 was still to come
+    const o = series(2);
+    o[0] = { ...o[0], received_at: T0 + 600 };
+    expect(scoreRecord({ predictions: [pred(0, 101, { received_at: T0 + 600 })], observations: o }).pairs).toHaveLength(1);
+  });
+
+  test('it must arrive here before the outcome arrived here, not only before the outcome\'s time (a source clock ahead of ours)', () => {
+    // the source stamps each outcome 2 s ahead of our clock (or ours runs 2 s behind): a copier publishes the outcome's
+    // value as soon as it sees it; the copy reaches us 1 s after the outcome did, still before the outcome's time on our clock
+    const o = [];
+    const p = [];
+    for (let k = 0; k < 6; k++) {
+      const base = 100_000 + k * 2 * C;
+      o.push({ seq: 2 * k + 1, ts: base, value: 100 + k, received_at: base - 2 + 1 },
+        { seq: 2 * k + 2, ts: base + C, value: 110 + k, received_at: base + C - 2 + 1 });
+      p.push({ seq: k + 1, ts: base + 5, value: 110 + k, received_at: base + C - 2 + 2 }); // after the outcome arrived
+    }
+    expect(scoreRecord({ predictions: p, observations: o })).toMatchObject({ scored: 0, mark: null });
+    // the same second as the outcome's arrival: not before it either
+    const same = p.map((x) => ({ ...x, received_at: x.received_at - 1 }));
+    expect(scoreRecord({ predictions: same, observations: o }).scored).toBe(0);
+    // a moment earlier: scored
+    const before = p.map((x) => ({ ...x, received_at: x.ts + 5 }));
+    expect(scoreRecord({ predictions: before, observations: o }).scored).toBe(6);
+  });
+
+  test('the lead: it must arrive within the first half of the interval after its baseline arrived here', () => {
+    // a nowcast: published 3 s before each outcome is stamped, from the source's own upstream (no forecast at all)
+    const o = series(12);
+    const nowcast = Array.from({ length: 11 }, (_, k) => pred(k, 100 + k + 1, { ts: T0 + C * (k + 1) - 3, received_at: T0 + C * (k + 1) - 2 }));
+    expect(scoreRecord({ predictions: nowcast, observations: o })).toMatchObject({ scored: 0, mark: null });
+    // r_p − r_b ≤ (o.ts − b.ts) / 2: at the half, scored; a second later, not
+    const half = (k, d) => pred(k, 100 + k + 1, { received_at: T0 + C * k + 1 + C / 2 + d });
+    expect(scoreRecord({ predictions: [half(0, 0), half(1, 1)], observations: o }).pairs.map((x) => x.ts)).toEqual([T0 + C]);
+    // the baseline handed over late (a page opened then) moves the lead with it
+    const late = series(3);
+    late[1] = { ...late[1], received_at: T0 + C + 800 };
+    expect(scoreRecord({ predictions: [pred(1, 102, { received_at: T0 + C + 805 })], observations: late }).scored).toBe(1);
+  });
+
+  test('a prediction without an arrival, or an outcome or baseline without one, is not scored', () => {
+    const o = series(3);
+    expect(scoreRecord({ predictions: [pred(0, 101, { received_at: null })], observations: o }).scored).toBe(0);
+    expect(scoreRecord({ predictions: [pred(0, 101)], observations: [o[0], { ...o[1], received_at: null }] }).scored).toBe(0);
+    expect(scoreRecord({ predictions: [pred(0, 101)], observations: [{ ...o[0], received_at: undefined }, o[1]] }).scored).toBe(0);
   });
 
   test('the baseline is the latest observation at or before the prediction\'s time (the same second counts)', () => {
@@ -211,10 +264,38 @@ describe('the verified-order rule', () => {
     expect(scoreRecord({ predictions: p, observations: o }).direction).toEqual({ right: 3, total: 4 });
   });
 
-  test('predictions in any order, two before the same outcome both count', () => {
-    const p = [pred(1, 102), pred(0, 101), { ...pred(0, 100.5), seq: 50, ts: T0 + 5, received_at: T0 + 6 }];
+  test('predictions in any order; one per outcome: the earliest received that qualifies', () => {
+    const p = [pred(1, 102), { ...pred(0, 100.5), seq: 50, ts: T0 + 5, received_at: T0 + 6 }, pred(0, 101),
+      { ...pred(0, 999), seq: 51, ts: T0 + 3, received_at: T0 + 1 }]; // received first: it is the one counted
     expect(scoreRecord({ predictions: p, observations: series(3).reverse() }).pairs.map((x) => [x.ts, x.predicted]))
-      .toEqual([[T0 + C, 101], [T0 + C, 100.5], [T0 + 2 * C, 102]]);
+      .toEqual([[T0 + C, 999], [T0 + 2 * C, 102]]);
+    // the earliest that qualifies: one without a number does not take the outcome from the next
+    const q = [{ ...pred(0, null), received_at: T0 + 1 }, pred(0, 101)];
+    expect(scoreRecord({ predictions: q, observations: series(2) }).pairs.map((x) => x.predicted)).toEqual([101]);
+  });
+
+  test('many predictions before one outcome make one scored, not "from 5"', () => {
+    const p = Array.from({ length: 5 }, (_, i) => ({ seq: i + 1, ts: T0 + 1 + i, value: 101, received_at: T0 + 2 + i }));
+    expect(scoreRecord({ predictions: p, observations: series(2) })).toMatchObject({ scored: 1, mark: null, markText: 'Not scored yet' });
+    // a predictor publishing three times a cadence: from N counts the outcomes
+    const o = series(9);
+    const many = Array.from({ length: 8 }, (_, k) => [0, 100, 200].map((d, i) => pred(k, 100 + k + 1, { seq: 3 * k + i + 1,
+      ts: T0 + C * k + 1 + d, received_at: T0 + C * k + 2 + d }))).flat();
+    const r = scoreRecord({ predictions: many, observations: o });
+    expect([r.scored, new Set(r.pairs.map((x) => x.ts)).size]).toEqual([8, 8]);
+  });
+
+  test('huge values never give Infinity or NaN: a pair whose error is not a finite number is not scored', () => {
+    const o = Array.from({ length: 7 }, (_, k) => obs(k, k % 2 ? 1e308 : 0));
+    const huge = Array.from({ length: 6 }, (_, k) => pred(k, -1e308));
+    const h = scoreRecord({ predictions: huge, observations: o }); // the three outcomes of 1e308: |−1e308 − 1e308| is Infinity
+    expect(h).toMatchObject({ scored: 3, error: null, noChange: null, ratio: null, mark: null });
+    expect(h.pairs.every((x) => x.actual === 0)).toBe(true);
+    // finite errors whose median of two would overflow: still a number
+    const big = Array.from({ length: 7 }, (_, k) => obs(k, k % 2 ? 1.7e308 : 0));
+    const r = scoreRecord({ predictions: Array.from({ length: 6 }, (_, k) => pred(k, 0)), observations: big });
+    expect([r.error, r.noChange].every(Number.isFinite)).toBe(true);
+    expect(r.markText).not.toMatch(/Infinity|NaN/);
   });
 });
 
@@ -271,8 +352,8 @@ describe('the watched set (createWatch) over the db', () => {
     }
     expect(changes).toBe(16);
     const [rec] = await watch.list();
-    expect(rec).toEqual({ pubkey: A_PUB, stream: 'btc_pred', name: 'Predictions for btc', mine: false,
-      source: { pubkey: SRC_PUB, stream: 'btc', name: 'BTC' }, cadence_seconds: 60, received: 8, scored: 7,
+    expect(rec).toEqual({ pubkey: A_PUB, stream: 'btc_pred', name: 'Predictions for btc', mine: false, sameAuthor: false,
+      source: { pubkey: SRC_PUB, stream: 'btc', name: 'BTC', announced: true }, cadence_seconds: 60, received: 8, scored: 7,
       error: 0, noChange: 1, ratio: 0, mark: 'better', markText: '100% better', direction: { right: 7, total: 7 },
       since: t0 + 60, last: { value: 108, received_at: Math.ceil(t0 + 60 * 7 + 0.75) } });
     const one = await watch.one(A_PUB, 'btc_pred');
@@ -282,6 +363,18 @@ describe('the watched set (createWatch) over the db', () => {
     // stored with when it arrived, rounded up (never earlier than it did)
     const rows = (await db.watchObservations([relayUuid(A_PUB, 'btc_pred')])).get(relayUuid(A_PUB, 'btc_pred'));
     expect(rows[0]).toEqual({ seq: 1, ts: t0 + 1, value: 101, received_at: Math.ceil(t0 + 0.75) });
+  });
+
+  test("records name each source by its own announcement, show its author and whether it is announced, and say when the predictor is the source's author", async () => {
+    const fake = { pubkey: B_PUB, stream: 'btc' }; // A's second key: never announced
+    await watch.apply(catalog([srcAnn('btc'), predAnn(A, btc, { at: 2, name: 'Predictions for BTC' }),
+      predAnn(A, fake, { at: 3, name: 'Predictions for BTC', stream: 'btc2_pred' }),
+      predAnn(SRC, btc, { at: 4, name: 'Predictions for BTC' })])); // the source's author predicts its own stream
+    const by = Object.fromEntries((await watch.list()).map((r) => [`${r.pubkey === A_PUB ? 'A' : 'S'}:${r.stream}`, r]));
+    expect(by['A:btc_pred']).toMatchObject({ sameAuthor: false, source: { pubkey: SRC_PUB, stream: 'btc', name: 'BTC', announced: true } });
+    expect(by['A:btc2_pred']).toMatchObject({ sameAuthor: false, source: { pubkey: B_PUB, stream: 'btc', name: 'btc', announced: false } });
+    expect(by['S:btc_pred']).toMatchObject({ sameAuthor: true, source: { pubkey: SRC_PUB, name: 'BTC', announced: true } });
+    expect((await watch.one(A_PUB, 'btc2_pred')).source).toEqual({ pubkey: B_PUB, stream: 'btc', name: 'btc', announced: false });
   });
 
   test('a record is computed again only when its stream or its source got something new', async () => {

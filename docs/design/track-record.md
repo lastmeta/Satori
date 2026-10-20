@@ -17,7 +17,8 @@ relays open ─▶ scan the catalog (as discover(): pages, signatures in slices)
 follow REQ = the subscriptions' #d filters ∪ the watched streams' (one filter per author)
 34601 in ─▶ verify ─▶ subscribed? the existing path (store, forecast, publish `_pred`)
                     └▶ watched?    watch_observations (value, its timestamp, when it arrived)      (both: both)
-records() ─▶ each prediction scored against its source's next observation, only if it arrived first
+records() ─▶ each outcome (the source's next observation) scored once: the earliest prediction that arrived here
+             before it did, within half an interval of its baseline's arrival
           ─▶ the last 28: median error vs no change's ─▶ "12% better" (the Models tab's words)
 ```
 
@@ -40,7 +41,21 @@ placed by `src/ui/streams.js`.
   must be 64 hex characters.
 - **Each one's source stream**, followed with it, announced or not (54 of
   satorian's 112 sources have no announcement there, but their 34601s are
-  on the relay).
+  on the relay). A source is **named by its own announcement**, else by its
+  stream id as it is, never by the prediction stream's words: a predictor
+  could call a stream it controls under another key "BTC". Each record says
+  the source's author (`source.pubkey`), whether the source is announced
+  (`source.announced`), and whether the predictor's key is the source's
+  author (`sameAuthor`: "predicts its own stream").
+
+**Inherent: a source the predictor controls.** A predictor can "predict" a
+second stream it publishes itself under another key, and score perfectly:
+it knows what it will publish next. Nothing in the data can tell that key
+apart from an honest provider's. So a record against a source the predictor
+controls means little, and the card shows each source's author and whether
+it is announced, grouped by source, so a buyer picks the source first (the
+real BTC, by its known provider) and judges a record against an unknown,
+unannounced one for what it is.
 - **Our own `_pred` streams** are among them, marked `mine`: our own events
   come back to us through the follow REQ like anyone's.
 - **The cap: 200 prediction streams.** Past it, ours first, then the most
@@ -99,10 +114,9 @@ writers do.
   stream_name)`, as relay streams), `pubkey`, `stream_name`, `kind`
   (`pred` or `source`; a stream that is both is a `pred`), `source_uuid`
   (a `pred`'s source), `name` (a `pred`'s announced name; a source's own
-  announced name, else what its prediction stream calls it, "Predictions for
-  X" → X, else its stream name), `cadence_seconds`, `meta` (JSON: a
-  `pred`'s `announced_at`), `seen_at` (the last scan that selected it, or
-  a prediction stream naming it), `added_at`.
+  announced name, else its stream name), `cadence_seconds`, `meta` (JSON: a
+  `pred`'s `announced_at`; a source's `announced`), `seen_at` (the last scan
+  that selected it, or a prediction stream naming it), `added_at`.
 - `watch_observations`: `stream_uuid`, `seq`, `ts` (the content's
   timestamp, null outside 2000–2100), `value` (`numericValue`, null when
   there is no number), `received_at` (this device's clock, whole seconds,
@@ -135,17 +149,34 @@ r_p), over the source's observations this neuron stored:
    seq + 1). Without the seq check, a pair with observations missed in
    between (the tab was closed overnight) would be judged hours ahead: one
    such pair per stream per visit, a third of an hourly stream's record.
-3. **It counts only if r_p < o.ts**: this neuron held p before the outcome
-   happened. A backdated prediction received after its outcome is not
-   scored, and a stored one the relay hands over late is scored against an
-   outcome still to come.
-4. v, b and o must be numbers; a prediction without a number (an echo) is
-   skipped.
+3. **It counts only if it arrived here first**, by when each arrived here
+   (`received_at`, this device's clock): r_p < o.ts (this neuron held p
+   before the outcome happened) **and** r_p < r_o (before the outcome
+   itself arrived here). The second compares two arrivals on one clock, so a
+   source that stamps its outcomes ahead of our clock (or our clock behind)
+   credits no copy of an outcome. A backdated prediction received after its
+   outcome is not scored.
+4. **It must lead**: it arrived within the first half of the interval after
+   its baseline arrived here, r_p − r_b ≤ (o.ts − b.ts) / 2. A "prediction"
+   made seconds before the outcome, from the source's own upstream (a
+   nowcast), is not a forecast and is not scored. A Lite neuron forecasts
+   seconds after the observation it follows, well inside the half (the
+   e2e's predictors publish 0.3 s after it at a 4 s cadence). A stored
+   prediction the relay hands over late (a page opened mid-interval) arrives
+   with its stored baseline, so it leads and is scored against the outcome
+   still to come.
+5. v, b and o must be numbers, and |v − o| and |b − o| finite numbers (a
+   value near the largest double would make Infinity or NaN): a prediction
+   without a number (an echo) is skipped.
+6. **One prediction per outcome**: the earliest received that qualifies. A
+   predictor that publishes five times before one outcome has one scored,
+   so "from N" counts outcomes.
 
-Then, over the **last 28** scored predictions (the Models tab's backtest
+Then, over the **last 28** scored outcomes (the Models tab's backtest
 uses 28 origins):
 
-- `error` = median |v − o|; `noChange` = median |b − o|; `ratio` = error /
+- `error` = median |v − o|; `noChange` = median |b − o| (the two middles
+  halved before adding, so they never overflow); `ratio` = error /
   noChange.
 - **The mark** by the Models tab's rule and words:
   `qualityOf({ kind: 'record', score: error, persist: noChange })`
@@ -172,22 +203,30 @@ publishes one cadence ahead ([nostr.md](nostr.md#the-engines-step)).
 - It counts only what this neuron saw while its tab was open. Two neurons
   can show different records for the same stream; each is honest about
   what it saw.
-- `received_at` is this device's clock against the source's timestamp. A
-  clock running behind could credit a prediction that arrived just after
-  the outcome; one running ahead credits fewer.
 - The source is the ground truth: if its author backdates, every prediction
   of it is judged on that.
+
+**No longer inherent: a clock behind the source's.** The first build
+compared only `received_at` (this clock) with the outcome's timestamp (the
+source's clock), so a source stamping ahead of us credited a copy of the
+outcome that arrived just after it. Now a prediction must also arrive before
+the outcome **arrived here**, two times on one clock, and lead by half an
+interval after its baseline arrived; a clock behind can only leave out a
+prediction that arrived just before an outcome, never credit one after it.
 
 ## API (window.satori, [/llms.txt](../../public/llms.txt))
 
 - `await satori.records()` → the watched prediction streams, best first (a
   record before "not scored yet", by ratio; then by how many are scored),
-  each `{ pubkey, stream, name, mine, source: { pubkey, stream, name },
-  cadence_seconds, received, scored, error, noChange, ratio, mark
-  ('better' | 'tie' | 'worse' | null), markText, direction: { right, total
-  }, since, last: { value, received_at } | null }`. `received`: the
-  predictions held (in the window); `scored`: how many the record is from
-  (at most 28).
+  each `{ pubkey, stream, name, mine, sameAuthor, source: { pubkey, stream,
+  name, announced }, cadence_seconds, received, scored, error, noChange,
+  ratio, mark ('better' | 'tie' | 'worse' | null), markText, direction: {
+  right, total }, since, last: { value, received_at } | null }`.
+  `source.pubkey`: the source's author; `source.name`: its own
+  announcement's name, else its stream id; `source.announced`: whether it
+  has an announcement of its own; `sameAuthor`: the predictor's key is the
+  source's author. `received`: the predictions held (in the window);
+  `scored`: how many outcomes the record is from (at most 28).
 - `await satori.record(pubkey, stream)` → the same, plus `pairs`: the last
   28 scored `{ ts, predicted, actual, baseline }` (ts: the outcome's), or
   null when that stream is not watched.
