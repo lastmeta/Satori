@@ -87,16 +87,16 @@ let changes;
 let published; // onPublished: each `_pred` a relay took (Home's activity log)
 let failures; // onError: an intake that failed (the database, the engine)
 let conn; // the database's own connection: a test's bulk rows in one statement
-async function boot({ https = false, ws = true, centralWrite = false, user = [USER_RELAY], dbOf = (d) => d } = {}) {
+async function boot({ https = false, ws = true, centralWrite = false, user = [USER_RELAY], wss = {}, centralList, dbOf = (d) => d } = {}) {
   conn = await memoryConn();
   db = await openDb(conn);
   relays = fakeRelays();
-  central = fakeCentral();
+  central = fakeCentral(centralList);
   changes = 0;
   published = [];
   failures = [];
   nostr = createNostr({ db: dbOf(db), key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
-    makeRelay: relays.make, now, https, ws, defaults: { relays: user, centralWrite }, onChange: () => changes++,
+    makeRelay: relays.make, now, https, ws, defaults: { relays: user, centralWrite, wss }, onChange: () => changes++,
     onPublished: (n) => published.push(n), onError: (err) => failures.push(err.message),
     setInterval: () => 0, clearInterval: () => {}, openWaitMs: 0 });
   await nostr.start();
@@ -113,8 +113,8 @@ describe('relays', () => {
     const s = await nostr.status();
     expect(s).toMatchObject({ pubkey: ME_PUB, maxStreams: 60, centralWrite: false, userRelays: [USER_RELAY] });
     expect(s.relays).toEqual([
-      { url: CENTRAL_RELAY, from: ['central'], write: false, state: 'connecting', error: '', downSince: null },
-      { url: USER_RELAY, from: ['user'], write: true, state: 'connecting', error: '', downSince: null },
+      { url: CENTRAL_RELAY, from: ['central'], write: false, state: 'connecting', error: '', downSince: null, for: null },
+      { url: USER_RELAY, from: ['user'], write: true, state: 'connecting', error: '', downSince: null, for: null },
     ]);
     expect(s.npub).toMatch(/^npub1/);
   });
@@ -154,6 +154,95 @@ describe('relays', () => {
     await nostr.start();
     expect((await nostr.status()).maxStreams).toBe(MAX_STREAMS);
     expect(MAX_STREAMS).toBe(100);
+  });
+});
+
+describe("a relay's wss stand-in (docs/design/nostr.md#relays-and-the-read-only-flag)", () => {
+  const STAND_IN = 'wss://relay.satorian.test'; // central's ws:// relay behind TLS: the same relay
+  const WSS = { [CENTRAL_RELAY]: STAND_IN };
+  const OTHER = 'ws://other.test:7777'; // a ws:// relay with no stand-in
+  const view = async () => (await nostr.status()).relays.map((r) => [r.url, r.from, r.state, r.for]);
+
+  test("in a build (no ws:) central's ws:// relay is reached at its stand-in, as central's relay, and says which it stands in for", async () => {
+    await boot({ ws: false, wss: WSS, user: [] });
+    const s = await nostr.status();
+    expect(s.relays).toEqual([{ url: STAND_IN, from: ['central'], write: false, state: 'connecting', error: '', downSince: null,
+      for: CENTRAL_RELAY }]);
+    expect([...relays.all.keys()]).toEqual([STAND_IN]); // the ws:// address is never tried
+    expect(relays.get(STAND_IN).connects).toBe(1);
+    expect(await db.get('nostr_central_relays')).toEqual([CENTRAL_RELAY]); // central's list as central sent it
+    // central drops it: its stand-in goes with it
+    central.relayList = [];
+    await nostr.reconcile();
+    expect(relays.get(STAND_IN).closed).toBe(true);
+    expect((await nostr.status()).relays).toEqual([]);
+  });
+
+  test('on an https page too (mixed content); a ws:// relay with no stand-in stays blocked, as before', async () => {
+    await boot({ https: true, wss: WSS, centralList: [CENTRAL_RELAY, OTHER] });
+    expect(await view()).toEqual([[STAND_IN, ['central'], 'connecting', CENTRAL_RELAY], [OTHER, ['central'], 'blocked', null],
+      [USER_RELAY, ['user'], 'connecting', null]]);
+    expect((await nostr.status()).relays[1].error).toBe('ws:// cannot be opened from an https page');
+    await boot({ ws: false, wss: WSS, centralList: [CENTRAL_RELAY, OTHER] });
+    expect(await view()).toEqual([[STAND_IN, ['central'], 'connecting', CENTRAL_RELAY], [OTHER, ['central'], 'blocked', null],
+      [USER_RELAY, ['user'], 'blocked', null]]);
+    expect(relays.get(OTHER)).toBeUndefined();
+  });
+
+  test('the plain-http dev server opens ws:// itself: the stand-in is never used', async () => {
+    await boot({ wss: WSS });
+    expect(await view()).toEqual([[CENTRAL_RELAY, ['central'], 'connecting', null], [USER_RELAY, ['user'], 'connecting', null]]);
+    expect(relays.get(STAND_IN)).toBeUndefined();
+  });
+
+  test("the stand-in also in the user's list: one entry and one connection, with both roles (so written to)", async () => {
+    await boot({ ws: false, wss: WSS, user: [STAND_IN] });
+    expect((await nostr.status()).relays.map((r) => [r.url, r.from, r.write, r.for])).toEqual([[STAND_IN, ['central', 'user'], true, CENTRAL_RELAY]]);
+    expect(relays.all.size).toBe(1);
+    // a user's own ws:// relay with a stand-in keeps the user's role
+    await boot({ ws: false, wss: WSS, user: [CENTRAL_RELAY], centralList: [] });
+    expect((await nostr.status()).relays.map((r) => [r.url, r.from, r.write, r.for])).toEqual([[STAND_IN, ['user'], true, CENTRAL_RELAY]]);
+  });
+
+  test('a later central that lists the wss:// address itself just works: one entry, with or without the ws:// one', async () => {
+    await boot({ ws: false, wss: WSS, user: [], centralList: [CENTRAL_RELAY, STAND_IN] });
+    expect(await view()).toEqual([[STAND_IN, ['central'], 'connecting', CENTRAL_RELAY]]);
+    central.relayList = [{ relay_url: STAND_IN }];
+    await nostr.reconcile();
+    expect(await view()).toEqual([[STAND_IN, ['central'], 'connecting', null]]);
+    expect(relays.get(STAND_IN).closed).toBe(false); // the same connection
+  });
+
+  test("a stood-in central relay follows the rule for central's relays: read only unless centralWrite; the outbox and NIP-65 key on the stand-in", async () => {
+    await boot({ ws: false, wss: WSS, user: [] });
+    openAll();
+    await settle();
+    const r = relays.get(STAND_IN);
+    expect(r.published).toEqual([]); // read only: no announcements, no NIP-65
+    r.stored.push(announce('btc'));
+    await nostr.subscribe(PROV_PUB, 'btc');
+    await r.deliver(observe('btc', '100', 1));
+    await settle();
+    expect(r.published).toEqual([]); // no 34602, no `_pred` 34600, no `_pred`
+    expect(r.subs.get(FOLLOW_ID)).toEqual([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc'] }]); // but followed
+    expect((await nostr.status()).subscriptions[0].observation).toMatchObject({ seq: 1, value: 100 }); // and read
+
+    await nostr.setRelays({ centralWrite: true });
+    await settle();
+    expect(kinds(r)).toEqual([[34600, 'btc_pred']]); // a relay we now write to gets our announcements
+    await nostr.reconcile();
+    await settle();
+    const list = r.published.find((e) => e.kind === 10002);
+    expect(list.tags).toEqual([['r', STAND_IN]]); // NIP-65 lists the address actually connected
+    await r.deliver(observe('btc', '101', 2));
+    await settle();
+    expect(r.published.filter((e) => e.kind === 34601).map((e) => e.tags.find((t) => t[0] === 'd')[1])).toEqual(['btc_pred']);
+    r.drop();
+    await nostr.unsubscribe(PROV_PUB, 'btc');
+    expect((await db.get('nostr_outbox')).map((x) => [x.url, x.event.kind])).toEqual([[STAND_IN, 34602], [STAND_IN, 34600]]);
+    r.open();
+    await settle();
+    expect(await db.get('nostr_outbox')).toEqual([]);
   });
 });
 

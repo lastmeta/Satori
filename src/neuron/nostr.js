@@ -47,7 +47,8 @@ const parseRaw = (raw) => {
  * (onPublished(relays): a `_pred` the relays took; onError(err): an intake that failed: both for Home's activity log)
  * @param {string} o.walletPubkey the identity's compressed pubkey (the announcement's wallet_pubkey)
  * @param {() => object} o.central the current central client (relays(), relayConfig())
- * @param {{relays: string[], centralWrite: boolean}} o.defaults Settings before the user changes them
+ * @param {{relays: string[], centralWrite: boolean, wss?: Record<string, string>}} o.defaults Settings before the user
+ * changes them, and `wss`: a ws:// relay → the wss:// address of the same relay, its stand-in where ws:// can't open (src/config.js)
  * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): discover and subscribe say their steps
  * @param {boolean} [o.ws] whether the page's CSP allows ws:// (the dev server's does; a build's does not: csp.js)
  */
@@ -59,7 +60,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   let userRelays = defaults.relays;
   let centralWrite = defaults.centralWrite;
   let centralUrls = [];
-  let relays = new Map(); // url → { url, from: Set, relay, blocked, chunks }
+  const standIns = defaults.wss ?? {};
+  let relays = new Map(); // url → { url, from: Set, for: the ws:// address it stands in for, or null, relay, blocked, chunks }
   let timer = null;
   let lastReconcile = -Infinity; // when the last hourly pass began (s)
   let reconciling = null;
@@ -177,19 +179,33 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     onChange();
   }
 
+  // ws:// can't open from an https page (mixed content; localhost aside), nor anywhere under a build's CSP (csp.js)
+  const blockedWhy = (url) => (!url.startsWith('ws://') ? null : !ws ? 'ws:// relays are not allowed in a build: use wss://'
+    : https && !isLocal(url) ? 'ws:// cannot be opened from an https page' : null);
+
+  /**
+   * Central's relays and the user's, each with its roles (`from`). A ws:// relay this page can't open is reached at its
+   * wss stand-in when it has one, as that same relay: its roles, and `for` the address it stands in for; the stand-in
+   * also listed is one entry with both roles. Without one it is blocked (docs/design/nostr.md#relays-and-the-read-only-flag).
+   */
   function applyRelays() {
-    const want = new Map();
+    const want = new Map(); // url → { from: Set, for }
     for (const [from, list] of [['central', centralUrls], ['user', userRelays]]) {
-      for (const url of list) want.set(url, new Set([...(want.get(url) ?? []), from]));
+      for (const listed of list) {
+        const standIn = blockedWhy(listed) ? standIns[listed] : undefined;
+        const url = standIn ?? listed;
+        const w = want.get(url) ?? { from: new Set(), for: null };
+        w.from.add(from);
+        if (standIn) w.for = listed;
+        want.set(url, w);
+      }
     }
     for (const [url, e] of relays) if (!want.has(url)) e.relay?.close();
     const next = new Map();
-    for (const [url, from] of want) {
+    for (const [url, w] of want) {
       let e = relays.get(url);
       if (!e) {
-        // ws:// can't open from an https page (mixed content; localhost aside), nor anywhere under a build's CSP (csp.js)
-        const why = !url.startsWith('ws://') ? null : !ws ? 'ws:// relays are not allowed in a build: use wss://'
-          : https && !isLocal(url) ? 'ws:// cannot be opened from an https page' : null;
+        const why = blockedWhy(url);
         e = { url, blocked: !!why, why, relay: null, chunks: 0 };
         if (!e.blocked) {
           e.relay = makeRelay(url, {
@@ -199,7 +215,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
           });
         }
       }
-      e.from = from;
+      e.from = w.from;
+      e.for = w.for;
       next.set(url, e);
     }
     const added = [...next.values()].filter((e) => e.relay && !relays.has(e.url));
@@ -409,6 +426,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
           url: e.url, from: [...e.from], write: writes(e), state: e.blocked ? 'blocked' : e.relay.state,
           error: e.blocked ? e.why : e.relay.error,
           downSince: e.blocked ? null : e.relay.downSince ?? null, // ms: Home's reconnect grace (docs/design/health.md)
+          for: e.for, // the ws:// relay this wss stand-in is reached for, or null
         })),
         subscriptions: (await db.relayStreams({ active: true })).map(view),
       };
