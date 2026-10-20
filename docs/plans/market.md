@@ -2,7 +2,9 @@
 
 [← Roadmap](README.md) · intent: [../intent/network.md](../intent/network.md)
 
-**Status:** proposal, 2026-10-20. Not approved; nothing here is built.
+**Status:** approved by the owner, 2026-10-20 ("Let's do it"). Step 0 (a
+relay everyone can reach) and step 2 (the channel contract, deployed on Base
+Sepolia) are done; steps 1 and 3 are next.
 
 ## The goal
 
@@ -43,8 +45,9 @@ signature against the channel's signer and pays the seller the difference
 between the voucher and what it has already paid.
 
 This is the design the field is converging on. Tempo's TIP-20 channel
-reserve has exactly this shape, with the voucher
-`Voucher(bytes32 channelId,uint96 cumulativeAmount)`. x402's
+reserve has the same shape and the same voucher type,
+`Voucher(bytes32 channelId,uint96 cumulativeAmount)` (not its domain, ids or
+API, so its helpers don't apply to ours; any EIP-712 signer does). x402's
 `batch-settlement` scheme uses cumulative vouchers against an escrow, and
 ERC-8184 (a draft, since renumbered 8190) proposes it as a standard for AI
 agents paying per call ([sources](#sources)).
@@ -81,10 +84,9 @@ forge or change one: the signature is checked against the chain.
   that holds everyone's rewards. A channel needs nothing from the hub.
 - **Recommended: a small contract of its own.** It would be immutable, with
   no admin and no fee, and work with any ERC-20 (SATORI is the app's
-  default). It follows Tempo's interface and uses the same voucher type, so
-  tooling for the emerging standard works with it. About 150 lines, the
-  textbook construction; it can be built, reviewed and deployed on its own
-  schedule.
+  default). It uses the same voucher type as Tempo's reserve. About 150
+  lines, the textbook construction; it can be built, reviewed and deployed
+  on its own schedule.
 
 ### SATORI on Base: what to know
 
@@ -106,23 +108,40 @@ forge or change one: the signature is checked against the chain.
   token-hook issue, fixed on `humble` (86e2bdb3), live with D7. The app
   already pads its gas.
 - **Gas.** Base mainnet was at 0.006 gwei on 2026-10-20 (`eth_gasPrice`).
-  At that price, opening (about 120k gas) or settling (about 60k, more with
-  the hook) costs well under a cent. These are estimates, to be measured on
-  the fork.
+  Measured with SATORI: opening 147k gas (197k with permit), a settle 70–87k,
+  more with the hook. At that price each costs well under a cent.
 
 ## The design
 
 ### The contract
 
+Built 2026-10-20: `PaymentChannels`, in the contract repo
+(`contract/satori/contracts/channels/PaymentChannels.sol`, branch
+`humble`; design and tests in `contract/docs/design/payment-channels.md`).
+It is deployed at **`0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c`** on Base
+Sepolia, by CREATE2, so the same address on every chain.
+
 ```
-open(payer, payee, token, deposit, signer, salt) → channelId   // funded by msg.sender; also with permit
-topUp(channelId, amount)                                       // anyone; cancels a pending close
+open(payer, payee, token, signer, deposit, salt) → channelId   // funded by msg.sender; also openWithPermit
+topUp(channelId, amount)                                       // anyone; adds funds, nothing else
 settle(channelId, cumulative, signature)                       // anyone; pays payee the new part
+settleMany(channelIds, cumulatives, signatures)                // the same in one tx; skips what can't pay
 close(channelId, cumulative, signature)                        // payee: settle and refund the rest now
 requestClose(channelId)                                        // payer or signer: starts the grace period
+cancelClose(channelId)                                         // payer only; moves no tokens
 withdraw(channelId)                                            // payer or signer, after the grace period: refund to payer
-events: Opened, ToppedUp, Settled, CloseRequested, Closed
+events: Opened, ToppedUp, Settled, CloseRequested, CloseCancelled, Closed
 ```
+
+- **Signatures: ECDSA first, then ERC-1271.** A voucher the signer's key
+  signed always counts. Asking contract code first would let a payer void
+  every voucher it gave by adding code to its signer's address (EIP-7702);
+  the adversarial review found this and it is fixed. A contract signer can
+  still change its answer, so **a seller accepts only key (EOA) signers**:
+  the neuron's identity is one.
+- **Only the payer cancels a close** (`cancelClose`, which moves no tokens,
+  so a staked vault can still use it). If the signer could, a leaked
+  identity could keep a refund from ever coming due.
 
 - `settle` is open to anyone, because the money can only go to the payee
   and only up to what the signer signed. So the seller's identity, or anyone
@@ -162,10 +181,13 @@ events: Opened, ToppedUp, Settled, CloseRequested, Closed
    voucher for the new total and sends it to the seller, encrypted (34603).
    The seller checks the signature, that the total rose by the price, and
    that it fits the deposit, then sends observation n + 1. The first
-   observation is free, as in Lite. Either side risks at most one
-   observation's price.
-5. **Collect.** The seller settles daily, when what's owed is worth it, and
-   at once on seeing a close request.
+   observation is free, as in Lite. The buyer risks at most one
+   observation's price. The seller risks what it hasn't settled, so it
+   settles often.
+5. **Collect.** The seller settles daily (`settleMany`, one transaction
+   for all its channels), when what's owed is worth it, and at once on
+   seeing a close request. It also stops serving that channel then: the
+   grace period doesn't restart while the buyer keeps paying.
 6. **Stop.** Unsubscribing sends `requestClose`. The seller settles within
    the grace period, then the buyer's refund is withdrawn.
 
@@ -209,11 +231,16 @@ can charge" doesn't work.
    ([issue](../issues/relays-not-wss.md)). Every design needs it, so it is
    not a fix that a redesign would undo. Done 2026-10-20 for the browser:
    `wss://relay.satorinet.io` fronts satorian, and the app maps central's
-   `ws://` entry to it, so Lite and browser neurons share one relay.
+   `ws://` entry to it, so Lite and browser neurons share one relay. Live
+   on neuron.satorinet.io: a fresh profile discovers 925 streams from 44
+   providers.
 1. **Track record for prediction streams**, free ones first, on the Streams
    tab. Useful on its own, and the base the market stands on.
 2. **The channel contract:** TDD, an adversarial review, then Base Sepolia
-   and the local fork. It is independent of D7.
+   and the local fork. It is independent of D7. Done 2026-10-20 (above):
+   30 Hardhat tests and six Foundry invariants. Two review passes found the
+   EIP-7702 issue and smaller ones, all fixed. A viem-signed voucher was
+   settled on the fork with D6 SATORI.
 3. **Paid streams in the neuron.**
    - **Sell:** a price on one of its prediction streams, encrypted
      delivery, vouchers checked, daily settle.
@@ -236,15 +263,14 @@ can charge" doesn't work.
 
 ## Open decisions (each with the recommendation)
 
-1. **A separate channel contract**: yes, as above.
-2. **Where it's built:** the contract repo (`humble`), with that
-   repo's session, so Satori's contracts keep one home, one deploy and one
-   review process.
+1. **A separate channel contract**: yes. Built.
+2. **Where it's built:** the contract repo (`humble`). The owner had it
+   built in this session, not by that repo's session.
 3. **The token:** SATORI, in a contract that takes any ERC-20.
 4. **The grace period:** 7 days.
 5. **Rewarded predictions:** sold or revealed after the outcome, not free
-   in the clear.
-6. **Step 0 now**, while the other relay fixes wait.
+   in the clear. Still open.
+6. **Step 0 now**, while the other relay fixes wait. Done.
 
 ## Direct links between neurons (later)
 

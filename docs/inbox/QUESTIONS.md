@@ -17,10 +17,7 @@ today, so nothing waits on an answer.
    both. A build defaults to prod, so its merkle claim says the route is
    missing and the Base addresses are the bundled ones. Deploy those routers
    to prod? ([../issues/central-prod-missing-base-routes.md](../issues/central-prod-missing-base-routes.md))
-3. **A wss relay.** Central lists only `ws://satorian.satorinet.io:7777`, which
-   an https page can't open, so a deployed app has no Nostr until a `wss://`
-   relay is listed (TLS in front of satorian, and central listing it). Who
-   sets it up, and where? ([../issues/relays-not-wss.md](../issues/relays-not-wss.md))
+3. *(Resolved 2026-10-20, below.)*
 4. **Key derivation for new neurons.** Today one 32-byte secret is at once
    the private key and the BIP39 entropy of the 24 words, with no HD path
    (satorilib's scheme). A neuron moving from Docker keeps the same keys and
@@ -72,3 +69,11 @@ today, so nothing waits on an answer.
   register with the vault's Base address (`vault_base_address`), the app
   has no Evrmore code at all
   ([../design/central.md](../design/central.md#the-vault-in-registers-answer)).
+
+- **A wss relay** (was item 3). Done 2026-10-20: `wss://relay.satorinet.io`
+  is a TLS front for satorian on central's nginx-proxy (certbot, the same
+  procedure as the neuron's name), and the app reaches central's
+  `ws://satorian.satorinet.io:7777` entry there as the same relay (a build's
+  `VITE_NOSTR_WSS`). Central listing a `wss://` URL itself waits on the
+  relay redesign ([../intent/network.md](../intent/network.md)). If satorian
+  gets TLS of its own, `relay.satorinet.io` can point there by DNS alone.

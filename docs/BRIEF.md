@@ -9,7 +9,7 @@ docs it links to.
 - It's a static site built with Vite, plain JavaScript, ArrowJS, and DuckDB-WASM on OPFS. It's an installable PWA, MIT licensed.
 - Repo: `git@github.com:lastmeta/Satori.git`, branch `main`.
 - It's live at **https://neuron.satorinet.io**. `satori.satorinet.io` redirects there with a 301.
-- The live build talks to the **dev** central (central2), Base Sepolia, and the relay `wss://app.satorinet.io/relay`.
+- The live build talks to the **dev** central (central2), Base Sepolia, and the relays `wss://relay.satorinet.io` (satorian, the network's relay, through a TLS front on central's nginx-proxy; the app's stand-in for central's `ws://` entry) and `wss://app.satorinet.io/relay`.
 - Agents drive it through `window.satori`. `/llms.txt` is the reference for that, and `/llms-changelog.txt` holds its history.
 
 Read next, in this order:
@@ -141,10 +141,19 @@ curl -sI https://neuron.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n"
 - Satori Lite still answers DOWN on a tie (a one-line change in its `base_predict.py` if the owner wants it to match; not answered yet).
 - Central's stake gate only counts peers with a `reward_address`. It's latent while the requirement is 0, but fix it in central before raising it.
 
-**3. Later, recorded and not scheduled:**
+**3. The market of data streams (owner, 2026-10-20; approved; `docs/intent/network.md`, `docs/plans/market.md`):**
+- Done 2026-10-20 (deployed `43a62b6`, the contract on humble `523af9a6`):
+  - step 0, a relay everyone can reach: `wss://relay.satorinet.io`;
+  - step 2, the channel contract: `PaymentChannels` at `0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c` (Base Sepolia, the same address everywhere), `contract/docs/design/payment-channels.md`.
+- Next: step 1 (a track record for prediction streams), then step 3 (paid streams: sell and buy in the neuron).
+- The owner holds the other relay fixes (central's uptime pay, discovery, Lite's paid-stream flaws) until the design settles.
+- Built by this session at the owner's request: the owner doesn't want PaymentChannels work handed to the contract session; coordinate only so neither sweeps the other's files.
+
+**4. Later, recorded and not scheduled:**
 - deeper engine work: deep Retrain search, direction modelling, more data and algorithms;
 - central's real-world score shown next to the backtest;
-- paid streams and bounties;
-- stream roles and pins.
+- bounties;
+- stream roles and pins;
+- direct links between neurons (WebRTC, with the relays as the rendezvous).
 
-**4. Open questions:** see `docs/inbox/QUESTIONS.md` (D6 interim rewards upgrade, prod routes, wss relay, key derivation for new neurons).
+**5. Open questions:** see `docs/inbox/QUESTIONS.md` (D6 interim rewards upgrade, prod routes, key derivation for new neurons).
