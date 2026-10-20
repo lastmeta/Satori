@@ -5,8 +5,9 @@
 // response; then the app in a Chrome profile of its own, as a person's
 // browser: under the CSP with no violation, DuckDB, the service worker, the
 // manifest, and this deployment's defaults (deploy/build.env). Every host but
-// the app's is unresolvable, central is the stub and the build's relays are
-// routed to nothing, so the neuron it creates talks to nothing real.
+// the app's is unresolvable, central is the stub (listing satorian, as central
+// does) and the build's relays and satorian's wss stand-in are routed to
+// nothing, so the neuron it creates talks to nothing real.
 import { expect, test, chromium } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { loaded, polled } from './load.js';
@@ -16,10 +17,14 @@ import { BUILD_DEFAULTS, defaultsFrom } from '../src/config.js';
 import { FALLBACK_RPC } from '../src/chain/config.js';
 
 const APP = `${(process.env.DEPLOY_URL ?? 'http://localhost:8090').replace(/\/+$/, '')}/`;
-// deploy/build.env, a variable set in the environment winning, as scripts/deploy-image.sh reads it
-const ENV = Object.fromEntries(readFileSync(new URL('../deploy/build.env', import.meta.url), 'utf8').split('\n')
-  .map((line) => /^(VITE_\w+)=(.*)$/.exec(line)).filter(Boolean).map(([, k, v]) => [k, process.env[k] ?? v]));
+// deploy/build.env, a variable set in the environment winning (one not in the file too), as scripts/deploy-image.sh reads it
+const ENV = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith('VITE_'))),
+  ...Object.fromEntries(readFileSync(new URL('../deploy/build.env', import.meta.url), 'utf8').split('\n')
+    .map((line) => /^(VITE_\w+)=(.*)$/.exec(line)).filter(Boolean).map(([, k, v]) => [k, process.env[k] ?? v])) };
 const WANT = defaultsFrom(ENV, BUILD_DEFAULTS);
+const SATORIAN = 'ws://satorian.satorinet.io:7777'; // what central lists; a build can't open ws://
+const STAND_IN = WANT.wss[SATORIAN]; // the build's wss stand-in for it (src/config.js), or none: then it is blocked
+const href = (u) => new URL(u).href;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const HSTS = 'max-age=63072000; includeSubDomains'; // two years, no preload (docs/design/deploy.md#what-it-sends)
 const T0 = Math.floor(Date.now() / 1000) - 3600;
@@ -95,10 +100,11 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
       '--bypass-app-banner-engagement-checks'],
   });
   try {
-    const stub = await stubCentral(context, { url: WANT.central });
+    const stub = await stubCentral(context, { url: WANT.central, relays: [SATORIAN] });
     const opened = [];
-    await context.routeWebSocket((u) => WANT.relays.includes(u.href), (ws) => {
-      opened.push(ws.url());
+    const reachable = [...WANT.relays, ...(STAND_IN ? [STAND_IN] : [])].map(href);
+    await context.routeWebSocket((u) => reachable.includes(u.href), (ws) => { // after the stub's: wins for the stand-in
+      opened.push(href(ws.url()));
       ws.close();
     });
     await context.addInitScript(() => {
@@ -130,7 +136,12 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     expect(s.base.rpc).toEqual(WANT.rpc ? [WANT.rpc, FALLBACK_RPC] : expect.any(Array));
     expect(s.version).toMatch(/^browser-\d+\.\d+\.\d+\+[0-9a-f]{7,}$/); // the build's version, stamped with its commit
     expect(stub.registered[0]['neuron-version']).toBe(s.version);
-    await expect.poll(() => [...new Set(opened)].sort()).toEqual([...WANT.relays].sort());
+    await expect.poll(() => [...new Set(opened)].sort()).toEqual([...reachable].sort());
+    // central's ws:// relay: reached at its wss stand-in, as central's relay (written to as the build says), never tried itself
+    const central = (await page.evaluate(() => window.satori.nostr())).relays.filter((r) => r.from.includes('central'));
+    expect(central).toEqual([expect.objectContaining(STAND_IN ? { url: STAND_IN, for: SATORIAN, write: WANT.centralWrite }
+      : { url: SATORIAN, state: 'blocked' })]);
+    expect(stub.blocked).toEqual([]);
 
     // DuckDB writes: the first poll, at once after register, stores central's stream and forecasts it
     expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 });

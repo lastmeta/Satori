@@ -184,19 +184,26 @@ curl -sI http://localhost:8090/sw.js       # CSP, nosniff, no-cache
    rule and the type), the SPA fallback, the 404 for a missing asset, and the
    compressed wasm.
 2. Chrome with a fresh profile, every host but the app's unresolvable. Central
-   is the stub, and the build's relays are routed to nothing. The page loads
-   under the CSP with no violation and DuckDB opens. The service worker takes
-   over, and the manifest is valid and installable. A new neuron gets this
-   deployment's central and relays: it registers with the stub and opens the
-   relay, and its Base RPC is the pinned one, then publicnode. A poll stores
-   and forecasts a stream, and a reload comes from the worker.
+   is the stub, listing `ws://satorian.satorinet.io:7777` as central does,
+   and the build's relays and satorian's wss stand-in are routed to nothing.
+   The page loads under the CSP with no violation and DuckDB opens. The
+   service worker takes over, and the manifest is valid and installable. A
+   new neuron gets this deployment's central and relays: it registers with
+   the stub and opens the relay, and central's satorian at its stand-in
+   (`wss://relay.satorinet.io`, `for` satorian, written to; `ws://` never
+   tried), and its Base RPC is the pinned one, then publicnode. A poll stores
+   and forecasts a stream, and a reload comes from the worker. A `VITE_*`
+   variable set in the environment counts as `deploy-image.sh` counts it.
 
 On this box (2026-10-19) docker is a separate daemon (`DOCKER_HOST=tcp://docker-daemon:2376`), so a
 container's ports publish on that host, and Chrome needs `localhost` for a secure context (OPFS, the
 service worker): run the image there and forward a local port to it, e.g. `docker run -d --rm -p 8091:80
 satori-neuron:latest`, a TCP forward from `127.0.0.1:8092` to `docker-daemon:8091`, then
 `DEPLOY_URL=http://localhost:8092 npm run e2e:deploy`. Passed so on 2026-10-19 (the CSP without `ws:`,
-HSTS, the pinned RPC, the version, `/llms-changelog.txt`).
+HSTS, the pinned RPC, the version, `/llms-changelog.txt`). The second check also passed on 2026-10-20
+against `vite preview` (`DEPLOY_URL=http://localhost:5181`, `-g "browser profile"`) of a `deploy-image.sh`
+build: the stand-in (preview sends the CSP but not the image's other headers, so the first check is the
+image's).
 
 After a deploy, run the same spec against the live site:
 `DEPLOY_URL=https://neuron.satorinet.io npm run e2e:deploy`. The neuron it
