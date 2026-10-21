@@ -11,8 +11,40 @@ its design note `contract/docs/design/payment-channels.md`), deployed by
 CREATE2 at **`0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c`**, the same
 address on every chain (Base Sepolia, the local fork, Base mainnet later).
 
-This doc grows with the step. Its first part is the chain client; the
-delivery over the relays, the UI and `window.satori` come next.
+It has two parts: selling and buying over the relays (`src/neuron/market.js`,
+below), and the chain client under it.
+
+## Selling and buying over the relays
+
+`src/neuron/market.js` runs satorilib's data-stream market
+(`satori_nostr/client.py`, `models.py`) with the same event kinds and
+fields. Only the Evrmore parts change: the P2SH commitments and the channel
+open and settlement events (34604–34606), and the amounts in sats, become
+the Satori contract's channel and its vouchers. Bounties (34607–34608) are
+not part of it.
+
+| Step | Satori Lite (satorilib) | Here |
+|---|---|---|
+| Sell | `announce_datastream` with `price_per_obs` (sats), `encrypted` | Our `<stream>_pred` 34600 with `encrypted: true` and `metadata.market = { chain, contract, token, payee, price }`: the Satori contract, SATORI, the vault, and the price in wei as a string. `price_per_obs` stays 0, so a Lite neuron never opens an Evrmore channel to it. Unpricing announces it free again |
+| Buy | an Evrmore channel (34605), then `subscribe_datastream` with `payment_channel` | The vault opens a channel (Unlock, gas) with a deposit (100 × the price by default), then the 34602 with `payment_channel = { chain, contract, id, binding }`. `binding` is the identity's EIP-191 signature of `satori-market:v1:<channel id>:<buyer's Nostr key>`, so only that Nostr key can use the channel |
+| Deliver | `publish_observation`: one 34601 per paying subscriber, `p` = them, the value encrypted, seq and timestamp in tags; the first observation free | The same, with `d = <stream>:<subscriber>`, because a relay keeps one event per `d` and would drop all but one subscriber's. The public `d = <stream>` gets Lite's heartbeat (tags, no value) on every observation |
+| Pay | `send_payment` (34603, `d = stream`, encrypted) for `seq + 1` on each observation received | The same event. In the content, `amount_sats` becomes `amount` (wei) and `tx_id` becomes `voucher: { channel, cumulative, signature }`: the identity's cumulative EIP-712 voucher. It never signs past the deposit |
+| Check | `record_payment` believes the content | The seller reads the channel on chain when it accepts it: its payee is our vault, its token SATORI, its signer the binding's, it is open, and the deposit covers a price. It then checks each voucher: the signer's, more than the last, at most the deposit. It delivers while the newest voucher covers every observation delivered before (the first is free) and the deposit covers one more |
+| Collect | the seller broadcasts the latest commitment | The hourly pass sends `settleMany` for every channel whose voucher is above what is settled. It settles one channel at once when its buyer unsubscribes or the pass reads a close request, and stops delivering to it |
+| Stop | `unsubscribe_datastream` | The identity sends `requestClose` (no Unlock), then Lite's unsubscribe 34602. After the 7-day grace period, the hourly or catch-up pass sends `withdraw`, and the rest goes back to the vault |
+
+- **Encryption is NIP-04**, as satorilib's `encryption.py` does it (Lite
+  has no NIP-44). It is built on WebCrypto's AES-CBC and noble's ECDH, with
+  no new dependency, and checked against nostr-sdk 0.45's own output
+  (`test/fixtures/nip04-vectors.json`).
+- **Bought observations land where received data already lands.** A bought
+  prediction stream is watched ahead of all others but ours, so what it
+  sends goes into the track record's tables, and its record comes from what
+  was bought.
+- **Kept** in the meta key `market`: `{ prices, sales, buys }`, amounts as
+  decimal strings ([storage.md](storage.md#meta-keys)).
+- **Words:** Sell, Make free, Buy, Stop; a vault staked with this neuron
+  can't fund a channel, and `channelErrorText` says why.
 
 ## The chain client
 
