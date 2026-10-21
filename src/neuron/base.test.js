@@ -486,6 +486,14 @@ describe('createBase', () => {
     expect((await base.delegate()).steps).toHaveLength(3);
   });
 
+  test("channels(): the market's channel client on the same chain (its queue, pads and max fee), the bundled config, the chain's clock", async () => {
+    const c = await base.channels();
+    expect(c.config.channels).toBe('0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c');
+    expect(typeof c.channels.settleMany).toBe('function');
+    expect((await base.channels()).channels).toBe(c.channels); // one per chain
+    expect(Number.isSafeInteger(await c.chainTime())).toBe(true); // the latest block's timestamp
+  });
+
   test('settings: the RPC and the max fee are both checked before either is saved; status shows what is stored', async () => {
     expect(await base.status()).toMatchObject({ rpcSetting: '', maxFeeSetting: null, maxFeeGwei: MAX_FEE_GWEI });
     await expect(base.setSettings({ rpc: 'https://rpc.example', maxFee: '-1' })).rejects.toThrow(/positive number of gwei/);

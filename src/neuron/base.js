@@ -9,6 +9,7 @@ import {
 } from 'viem';
 import { createChain, errorText, lockText, panicOf, same, DOWN, UP, ROUND_S } from '../chain/index.js';
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
+import { createChannels } from '../chain/channels.js';
 import { explainForecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
 import { createWork } from './work.js';
@@ -510,6 +511,15 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
 
   return {
     refresh,
+    /**
+     * The payment channels' client on the current chain (src/chain/channels.js: its writes share this chain's queue, pads
+     * and max fee), the bundled config and the chain's clock (s): the market's (src/neuron/market.js).
+     */
+    async channels() {
+      const m = await chainNow();
+      m.channels ??= createChannels({ chain: m.chain, config: m.config });
+      return { channels: m.channels, config: m.config, chainTime: async () => Number((await m.chain.client.getBlock()).timestamp) };
+    },
     /** A registry stream's history as the engine reads it (the Models tab's drill-in): [{ ts, value }], oldest first. */
     async history(streamId) {
       const { chain } = await chainNow();
