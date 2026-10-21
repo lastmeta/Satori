@@ -375,7 +375,7 @@ Each value is JSON text.
 | `nostr_central_relays` | central's last relay list, used while central is down | the hourly reconcile |
 | `nostr_relay_list_at` | when the NIP-65 relay list (10002) was last published (daily) | the relay-list publish |
 | `nostr_outbox` | unsubscribes and tombstones waiting for a relay that was not open: `[{ url, event }]`, at most 100 | unsubscribe; each flush |
-| `market` | paid streams ([market.md](market.md#selling-and-buying-over-the-relays)): `{ prices: { <our _pred>: wei }, sales: { '<stream>:<buyer>': { channel, signer, price, base, deposit, settled, cumulative, signature, delivered, closing } }, buys: { '<seller>:<stream>': { channel, price, deposit, cumulative, seq, status, closeAt, name, error } } }`, amounts as decimal strings | sell, unsell, buy, stop; each delivery, voucher and settle |
+| `market` | paid streams ([market.md](market.md#selling-and-buying-over-the-relays)): `{ prices: { <our _pred>: wei }, sales: { <channel id>: { stream, buyer, channel, signer, price, base, deposit, settled, cumulative, signature, delivered, closing } }, buys: { <channel id>: { pubkey, stream, name, channel, hash, price, deposit, cumulative, seq, status: 'open' \| 'closing', closeAt, at } } }` (a refunded buy goes), amounts as decimal strings | sell, unsell, buy, stop; each delivery, voucher and settle |
 | `base_rpc_url` | the Base RPC setting; `''` = the default ([base.md](base.md)) | Settings, `setBaseRpc` |
 | `base_max_fee_gwei` | the batch's max-fee ceiling; null = 2 gwei | Settings, `setBaseMaxFee` |
 | `base_pending_batch` | a batch sent and not yet mined: `{ round, hash, games, dropped }`, so a check never sends twice | the batch, at send; cleared after |
