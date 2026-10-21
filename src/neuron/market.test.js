@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test } from 'vitest';
 import { keccak256, toHex } from 'viem';
 import { DEFAULTS } from '../chain/config.js';
 import { CLOSE_GRACE_S, ChannelError, verifyVoucher } from '../chain/channels.js';
+import { fakeChannels } from '../../test/fake-channels.js';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { nostrPubkey, signEvent, verifyEvent } from '../nostr/event.js';
 import { nip04Decrypt } from '../nostr/nip04.js';
@@ -29,51 +30,6 @@ const B_VAULT = signer('55'.repeat(32));
 const STREAM = 'walk_pred';
 const PRICE = 1000n;
 let clock;
-
-/** The contract, held in memory: open (from an unlocked vault), read, settleMany (each voucher checked as the contract does), close, withdraw. */
-function fakeChannels() {
-  const map = new Map();
-  const calls = [];
-  let n = 0;
-  const api = {
-    map, calls, chainTime: () => clock, refuse: null,
-    async openChannel({ vault, identity, payee, deposit, token = DEFAULTS.token }) {
-      calls.push('open');
-      if (api.refuse) throw api.refuse;
-      const id = keccak256(toHex(`channel-${++n}`));
-      map.set(id, { id, payer: vault.evmAddress, payee, token, signer: identity.evmAddress, deposit, settled: 0n, closeRequestedAt: null, closed: false,
-        graceEndsAt: null });
-      return { id, hash: `0xopen${n}` };
-    },
-    async readChannel(id) { const c = map.get(id); return c ? { ...c } : null; },
-    async settleMany(identity, entries) {
-      calls.push(['settleMany', entries.length]);
-      const settled = [];
-      for (const e of entries) {
-        const c = map.get(e.id);
-        const ok = await verifyVoucher({ chainId: DEFAULTS.chainId, channelId: e.id, cumulative: e.cumulative, signature: e.signature, signer: c.signer });
-        const target = e.cumulative < c.deposit ? e.cumulative : c.deposit;
-        if (!ok || c.closed || target <= c.settled) continue;
-        c.settled = target;
-        settled.push({ id: e.id, cumulative: e.cumulative, paid: 0n, settled: target });
-      }
-      return { hash: '0xsettle', settled, skipped: [] };
-    },
-    async requestClose(identity, id) {
-      calls.push('requestClose');
-      const c = map.get(id);
-      c.closeRequestedAt ??= clock;
-      c.graceEndsAt = c.closeRequestedAt + CLOSE_GRACE_S;
-    },
-    async withdraw(identity, id) {
-      const c = map.get(id);
-      if (clock < c.graceEndsAt) throw new ChannelError("The 7-day grace period after the close request hasn't ended yet.", { reason: 'CloseNotReady' });
-      calls.push('withdraw');
-      c.closed = true;
-    },
-  };
-  return api;
-}
 
 function memoryKv() {
   const kv = new Map();
@@ -113,7 +69,7 @@ const sale = () => Object.values(sdb.kv.has('market') ? JSON.parse(sdb.kv.get('m
 
 beforeEach(async () => {
   clock = 1_792_100_000;
-  chainApi = fakeChannels();
+  chainApi = fakeChannels(() => clock);
   relay = [];
   sdb = memoryKv();
   bdb = memoryKv();

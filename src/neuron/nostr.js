@@ -5,6 +5,9 @@
 //   the track record (docs/design/track-record.md): once relays are open, then hourly at most every 6 h, the catalog is
 //   scanned for prediction streams; they and their sources are followed with the subscriptions, and a watched stream's
 //   34601 is kept (src/neuron/records.js): never forecast, never published
+//   paid streams (src/neuron/market.js, docs/design/market.md): a priced `_pred` is delivered encrypted to its buyers and
+//   its public 34601 is a heartbeat; 34602/34603 addressed to us go to the market; a bought stream's delivery is
+//   decrypted, paid and lands as a watched stream's; the hourly pass settles and withdraws
 // Relay streams are apart from central's: own tables, and nothing goes to central.
 // Intake runs one event at a time; sending (which waits for each relay's OK)
 // runs beside it, so a slow or mute relay holds nothing up.
@@ -12,8 +15,9 @@ import { signEvent, verifyEvent, npub, SeenSet } from '../nostr/event.js';
 import { createRelay } from '../nostr/relay.js';
 import {
   KIND, PRED, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
-  catalog, tombstoned, parseObservation, numericValue, predValue, relayUuid,
+  catalog, tombstoned, parseObservation, numericValue, predValue, relayUuid, heartbeatEvent,
 } from '../nostr/satori.js';
+import { createMarket, listingOf, amountOf } from './market.js';
 import { AHEAD_S } from '../db/index.js';
 import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
@@ -32,6 +36,7 @@ export const RELAY_WINDOW = 400;
 export const RECONCILE_S = 3600; // start.py:292
 export const RELAY_LIST_S = 86_400; // start.py:291
 export const FOLLOW_ID = 'satori-follow'; // client.py:76
+export const MARKET_ID = 'satori-market'; // 34602 and 34603 addressed to us (Lite's personal filter, client.py:1716-1733)
 const PAGE = 500; // strfry's maxFilterLimit (client.py:72-75)
 const MAX_FILTERS = 200; // strfry's maxReqFilterSize
 const MAX_PAGES = 100;
@@ -57,8 +62,11 @@ const parseRaw = (raw) => {
  * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): discover and subscribe say their steps
  * @param {boolean} [o.ws] whether the page's CSP allows ws:// (the dev server's does; a build's does not: csp.js)
  * @param {() => void} [o.onRecords] a watched stream's observation kept: the track records changed (records())
+ * @param {object} [o.identity] our signer (the market's vouchers, binding, settle, close, withdraw); o.vaultAddress the
+ * seller's payee; o.vault() the vault while unlocked (a Buy); o.chain() the channel client (src/neuron/base.js channels())
  */
-export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay,
+export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay, identity = null, vaultAddress = null,
+  vault = () => null, chain = async () => { throw new Error('No Base chain.'); },
   forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:', ws = true,
   onChange = () => {}, onPublished = () => {}, onError = () => {}, onRecords = () => {}, setInterval: si = setInterval,
   clearInterval: ci = clearInterval, openWaitMs = 10_000, work: progress = createWork() }) {
@@ -78,6 +86,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   const log = (err) => console.error('[satori] nostr', err);
   // the track record: the watched prediction streams and their sources (src/neuron/records.js)
   const watch = createWatch({ db, me: key.pubkey, now, onChange: onRecords });
+  // paid streams (src/neuron/market.js): what we sell and buy
+  const market = createMarket({ db, key, identity, vaultAddress, vault, chain, now, onChange: () => onChange(),
+    publish: (ev) => publish(ev), sendKept: (events) => sendKept(events) });
+  const marketLine = serial(); // the seller's 34602/34603, in order, beside the intake (each may read the chain)
   let watchedAt = -Infinity; // when the last scan for prediction streams worked (s)
   let watchInfo = { found: 0, left: 0, error: null };
   let watching = null; // the scan in flight
@@ -126,7 +138,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   /** The follow REQ's filters: one per author over the subscriptions and the watched streams (followFilters). */
   async function filters() {
     const subs = (await db.relayStreams({ active: true })).map((s) => [s.provider_pubkey, s.stream_name]);
-    return followFilters([...subs, ...watch.pairs()]);
+    return followFilters([...subs, ...watch.pairs(), ...market.pairs()]);
   }
 
   /** The follow REQ: one #d filter per provider, ≤ 200 filters per REQ (client.py:944-983). */
@@ -142,8 +154,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     for (const e of relays.values()) if (e.relay) follow(e, list);
   }
 
-  const announcements = async (at) => (await db.relayStreams({ active: true }))
-    .map((sub) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey }), at)));
+  /** A `_pred`'s announcement: priced, with its listing (market.listing). */
+  const announcementOf = (sub, at) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey,
+    market: market.listing(sub.stream_name + PRED) }), at));
+  const announcements = async (at) => (await db.relayStreams({ active: true })).map((sub) => announcementOf(sub, at));
 
   /** NIP-65 of the open relays, when the last one is a day old (start.py:370-389); one at a time. */
   let listing = null;
@@ -244,6 +258,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const list = await filters();
     for (const e of added) {
       follow(e, list);
+      e.relay.sub(MARKET_ID, [{ kinds: [KIND.SUBSCRIPTION, KIND.PAYMENT], '#p': [key.pubkey] }]);
       e.relay.connect();
     }
   }
@@ -271,7 +286,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     await connectNew(added);
     onChange();
     scanDue(); // not awaited: it waits for relays still connecting, and the pass need not
-    await Promise.all([background(announce()), background(relayList()), background(prune())]);
+    await Promise.all([background(announce()), background(relayList()), background(prune()), background(market.pass())]);
   }
 
   /**
@@ -298,7 +313,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const all = await db.relayStreams();
     const live = new Set(all.filter((r) => r.active).map((r) => r.stream_name)); // one `<name>_pred` per name: another provider's may be live
     const retired = all.filter((r) => !r.active && !live.has(r.stream_name)).map((r) => `${key.pubkey}:${r.stream_name}${PRED}`);
-    const r = await watch.apply(list, { gone: new Set([...gone, ...retired]) });
+    const r = await watch.apply(list, { gone: new Set([...gone, ...retired]), bought: market.bought() });
     watchedAt = now();
     reached = new Set(got);
     watchInfo = { found: r.found, left: r.left, error: null };
@@ -343,7 +358,11 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
    * never forecast or published; one that is both, both (docs/design/track-record.md#following).
    */
   async function intake(e, at = now()) {
-    const o = parseObservation(e);
+    if (e?.kind === KIND.SUBSCRIPTION || e?.kind === KIND.PAYMENT) { // to us, as a seller
+      if (verifyEvent(e)) background(marketLine(() => market.onEvent(e)));
+      return;
+    }
+    const o = parseObservation(e) ?? (await market.received(e)); // a bought stream's delivery: verified, decrypted and paid
     if (!o) return;
     const uuid = relayUuid(o.provider, o.stream_name);
     const watched = watch.has(uuid);
@@ -374,7 +393,10 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     const pub = predValue(f, o.value);
     const seq = await db.nextPredSeq(uuid);
     const made = t();
-    const ev = sign(observationEvent({ stream: sub.stream_name + PRED, value: pub, seq, timestamp: made }));
+    const stream = sub.stream_name + PRED;
+    const priced = market.priced(stream); // sold: a heartbeat in public, the value encrypted to each buyer in good standing
+    const ev = sign(priced ? heartbeatEvent({ stream, seq, timestamp: made, now: made })
+      : observationEvent({ stream, value: pub, seq, timestamp: made }));
     // with its backtest (the forecast's, kept for the Models tab: scoring is part of training)
     await db.addRelayPrediction({ stream_uuid: uuid, seq, value: pub, model: f?.model ?? 'echo', obs_seq: o.seq,
       made_at: made, event_id: ev.id, relays: 0, score: f?.score ?? null, persist: f?.persist ?? null, tests: f?.tests ?? null });
@@ -386,6 +408,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       await db.setPredictionRelays(uuid, seq, n);
       onChange();
     }));
+    if (priced) background(market.deliver(stream, { seq, timestamp: made, value: pub }));
   }
 
   /** Every open relay's 34600s, paged back with `until` as discover_datastreams (client.py:809-882). */
@@ -494,10 +517,18 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     return [p, s];
   }
 
+  /** One of our `_pred` streams (an active subscription's), by its name. */
+  async function ownPred(stream) {
+    const sub = (await db.relayStreams({ active: true })).find((r) => r.stream_name + PRED === String(stream ?? ''));
+    if (!sub) throw new Error(`${stream} is not a stream this neuron publishes (one of its <stream>${PRED}).`);
+    return sub;
+  }
+
   return {
     /** Central's max_streams once (start.py:236-246), the relay settings, then a reconcile and the hourly timer. */
     async start() {
       await watch.load(); // the watched streams are followed from the first REQ
+      await market.load(); // and the streams we buy
       const cfg = await Promise.resolve().then(() => central().relayConfig()).catch(() => null);
       maxStreams = Number(cfg?.max_streams) > 0 ? Number(cfg.max_streams) : MAX_STREAMS;
       centralUrls = (await db.get('nostr_central_relays')) ?? []; // used when central is down now
@@ -551,6 +582,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
         // the track record: the watched prediction streams and sources, the last scan's finds (left: past the cap), when it worked
         watching: { ...watch.count(), found: watchInfo.found, left: watchInfo.left, at: Number.isFinite(watchedAt) ? Math.floor(watchedAt) : null,
           error: watchInfo.error },
+        market: market.status(), // what we sell and buy (docs/design/market.md)
       };
     },
 
@@ -608,10 +640,53 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       await refollow();
       await db.checkpoint();
       background(publish(sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at }))));
-      background(publish(sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey }), at))));
+      background(publish(announcementOf(sub, at)));
       onChange();
       return viewOf(uuid);
     }),
+
+    /** Sell one of our `_pred` streams at `price` SATORI per observation (as typed), announced at once with its listing. → status() */
+    async sell(stream, price) {
+      const sub = await ownPred(stream);
+      await market.sell(sub.stream_name + PRED, amountOf(price));
+      background(publish(announcementOf(sub, t())));
+      return this.status();
+    },
+    /** Free again: announced without a price, published in the clear. → status() */
+    async unsell(stream) {
+      const sub = await ownPred(stream);
+      await market.unsell(sub.stream_name + PRED);
+      background(publish(announcementOf(sub, t())));
+      return this.status();
+    },
+    /**
+     * Buy a stream sold on the Satori contract: its announcement looked up and verified, the vault (unlocked) opens a
+     * channel with `deposit` SATORI (100 observations by default), the 34602 names it; followed, and watched. → its view
+     */
+    async buy(pubkey, stream, deposit) {
+      const [p, s] = checkStream(pubkey, stream);
+      if (p === key.pubkey) throw new Error('That is your own stream.');
+      const wei = deposit == null || deposit === '' ? undefined : amountOf(deposit, 'The deposit');
+      const filter = [{ kinds: [KIND.ANNOUNCE], authors: [p], '#d': [s] }];
+      const events = (await Promise.all((await readable()).map((e) => e.relay.fetch(filter).catch(() => [])))).flat();
+      const [found] = catalog(events.filter((e) => e?.kind === KIND.ANNOUNCE && e.pubkey === p && verifyEvent(e)
+        && e.tags.some((x) => Array.isArray(x) && x[0] === 'd' && x[1] === s)));
+      if (!found) throw new Error(`${s} is not announced by ${p.slice(0, 8)}… on the connected relays.`);
+      if (!listingOf(found)) throw new Error(`${s} is not for sale on the Satori contract.`);
+      const v = await market.buy(found, wei);
+      await refollow();
+      if (!watch.has(relayUuid(p, s))) background(scanWatch()); // watched as ours are, so what it delivers lands
+      onChange();
+      return v;
+    },
+    /** Stop buying: the identity asks to close the channel, the unsubscribe is sent; the refund after the 7-day grace period. → its view */
+    async stop(pubkey, stream) {
+      const [p, s] = checkStream(pubkey, stream);
+      const v = await market.stop(p, s);
+      await refollow();
+      onChange();
+      return v;
+    },
 
     /** Unsubscribe (routes.py:2673-2688): the 34602 unsubscribe, the `_pred` tombstone, unfollow. → status() */
     async unsubscribe(pubkey, stream) {

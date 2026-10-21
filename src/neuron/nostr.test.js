@@ -8,7 +8,13 @@ import { signEvent, verifyEvent, nostrPubkey } from '../nostr/event.js';
 import { announceEvent, observationEvent, tombstoneEvent, relayUuid } from '../nostr/satori.js';
 import { forecast, explainForecast } from '../engine/index.js';
 import { createWork } from './work.js';
-import { createNostr, FOLLOW_ID, MAX_STREAMS, RELAY_WINDOW } from './nostr.js';
+import { createNostr, FOLLOW_ID, MARKET_ID, MAX_STREAMS, RELAY_WINDOW } from './nostr.js';
+import { DEFAULTS } from '../chain/config.js';
+import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
+import { nip04Decrypt, nip04Encrypt } from '../nostr/nip04.js';
+import { deliveryEvent, subscriptionEvent, predMetadata } from '../nostr/satori.js';
+import { signBinding } from './market.js';
+import { fakeChannels } from '../../test/fake-channels.js';
 import { WATCH_SCAN_S, WATCH_DROP_S } from './records.js';
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -88,7 +94,7 @@ let changes;
 let published; // onPublished: each `_pred` a relay took (Home's activity log)
 let failures; // onError: an intake that failed (the database, the engine)
 let conn; // the database's own connection: a test's bulk rows in one statement
-async function boot({ https = false, ws = true, centralWrite = false, user = [USER_RELAY], wss = {}, centralList, dbOf = (d) => d } = {}) {
+async function boot({ https = false, ws = true, centralWrite = false, user = [USER_RELAY], wss = {}, centralList, dbOf = (d) => d, extra = {} } = {}) {
   conn = await memoryConn();
   db = await openDb(conn);
   relays = fakeRelays();
@@ -99,7 +105,7 @@ async function boot({ https = false, ws = true, centralWrite = false, user = [US
   nostr = createNostr({ db: dbOf(db), key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
     makeRelay: relays.make, now, https, ws, defaults: { relays: user, centralWrite, wss }, onChange: () => changes++,
     onPublished: (n) => published.push(n), onError: (err) => failures.push(err.message),
-    setInterval: () => 0, clearInterval: () => {}, openWaitMs: 0 });
+    setInterval: () => 0, clearInterval: () => {}, openWaitMs: 0, ...extra });
   await nostr.start();
 }
 const openAll = () => { for (const r of relays.all.values()) r.open(); };
@@ -1073,5 +1079,115 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     await nostr.idle();
     expect(seen).toEqual(['ask 0 1', 'ask 1 1', 'verify 0 2', 'verify 2 2']);
     expect(work.of('watch')).toBeNull();
+  });
+});
+
+describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays)', () => {
+  const signer = (hex) => {
+    const secret = Uint8Array.from(Buffer.from(hex, 'hex'));
+    return { evmAddress: evmAddress(publicKey(secret)), signDigest: (h) => signDigest(secret, h) };
+  };
+  const ID = signer('11'.repeat(32)); // ours
+  const VAULT = signer('44'.repeat(32));
+  const OTHER_ID = signer('22'.repeat(32)); // the other side's
+  const OTHER_VAULT = signer('55'.repeat(32));
+  const OTHER = '8'.repeat(64); // the other side's Nostr key
+  const OTHER_PUB = nostrPubkey(OTHER);
+  let chainApi;
+  const market = (o = {}) => ({ extra: { identity: ID, vaultAddress: VAULT.evmAddress, vault: () => VAULT,
+    chain: async () => ({ channels: chainApi, config: DEFAULTS, chainTime: async () => clock }) }, ...o });
+  const tagOf = (e, n) => e.tags.find((t) => t[0] === n)?.[1];
+  beforeEach(() => { chainApi = fakeChannels(() => clock); });
+
+  test('sell: our `_pred` announced with its listing; in public a heartbeat; each buyer whose channel checks gets the value, encrypted', async () => {
+    await boot(market());
+    openAll();
+    await settle();
+    const u = relays.get(USER_RELAY);
+    expect(u.subs.get(MARKET_ID)).toEqual([{ kinds: [34602, 34603], '#p': [ME_PUB] }]); // to us, on every relay
+    relays.get(CENTRAL_RELAY).stored.push(announce('btc'));
+    await nostr.subscribe(PROV_PUB, 'btc');
+    await expect(nostr.sell('eth_pred', '1')).rejects.toThrow('eth_pred is not a stream this neuron publishes');
+    await expect(nostr.sell('btc_pred', '0')).rejects.toThrow('positive amount of SATORI');
+    u.published = [];
+    expect((await nostr.sell('btc_pred', '0.001')).market.selling).toEqual([{ stream: 'btc_pred', price: '0.001', buyers: [] }]);
+    await settle();
+    const [ann] = u.published;
+    expect(JSON.parse(ann.content)).toMatchObject({ stream_name: 'btc_pred', encrypted: true, price_per_obs: 0, metadata: { market: {
+      chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: VAULT.evmAddress, price: '1000000000000000' } } });
+    await u.deliver(observe('btc', '100', 1));
+    await settle();
+    const hb = u.published.filter((e) => e.kind === 34601);
+    expect(hb.map((e) => [e.content, tagOf(e, 'd'), tagOf(e, 'satori')])).toEqual([['', 'btc_pred', 'heartbeat']]); // no value in public
+
+    // a buyer: its channel to our vault, signed for by its identity, bound to its Nostr key
+    const { id } = await chainApi.openChannel({ vault: OTHER_VAULT, identity: OTHER_ID, payee: VAULT.evmAddress, deposit: 5n * 10n ** 15n });
+    await u.deliver(signEvent(subscriptionEvent({ stream: 'btc_pred', provider: ME_PUB, subscriber: OTHER_PUB, now: clock,
+      paymentChannel: { chain: 84532, contract: DEFAULTS.channels, id, binding: signBinding(OTHER_ID, id, OTHER_PUB) } }), OTHER));
+    await settle();
+    expect((await nostr.status()).market.selling[0].buyers).toMatchObject([{ pubkey: OTHER_PUB, channel: id, delivered: 0 }]);
+    u.published = [];
+    clock += 900;
+    await u.deliver(observe('btc', '101', 2));
+    await settle();
+    const [pub, mine] = u.published.filter((e) => e.kind === 34601);
+    expect(pub.content).toBe('');
+    expect(mine.tags).toEqual([['d', `btc_pred:${OTHER_PUB}`], ['p', OTHER_PUB], ['stream', 'btc_pred'], ['seq', tagOf(pub, 'seq')],
+      ['timestamp', tagOf(pub, 'timestamp')], ['satori', 'observation']]);
+    const sent = (await nostr.status()).subscriptions[0].prediction.value;
+    expect(await nip04Decrypt(OTHER, ME_PUB, mine.content)).toBe(sent);
+    expect((await nostr.status()).market.selling[0].buyers[0].delivered).toBe(1);
+
+    // free again: announced without a price, the next one in the clear, no delivery
+    u.published = [];
+    await nostr.unsell('btc_pred');
+    clock += 900;
+    await u.deliver(observe('btc', '102', 3));
+    await settle();
+    expect(JSON.parse(u.published[0].content)).toMatchObject({ encrypted: false });
+    expect(JSON.parse(u.published[0].content).metadata).not.toHaveProperty('market');
+    expect(u.published.filter((e) => e.kind === 34601).map((e) => [JSON.parse(e.content).seq_num, tagOf(e, 'p') ?? null])).toEqual([[3, null]]);
+  });
+
+  test('buy: a listed stream, its channel opened from the vault, the 34602; each delivery decrypted, kept as a watched stream, paid', async () => {
+    await boot(market());
+    const c = relays.get(CENTRAL_RELAY);
+    const listing = { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: OTHER_VAULT.evmAddress, price: '1000000000000000' };
+    c.stored.push(announce('btc'), signEvent(announceEvent(predMetadata({ sub: { stream_name: 'btc', provider_pubkey: PROV_PUB, name: 'BTC',
+      cadence_seconds: 900, pred_created_at: 1 }, pubkey: OTHER_PUB, walletPubkey: '02ab', market: listing }), clock - 10), OTHER));
+    openAll();
+    await settle();
+    const u = relays.get(USER_RELAY);
+    await expect(nostr.buy(PROV_PUB, 'btc')).rejects.toThrow('btc is not for sale on the Satori contract');
+    await expect(nostr.buy(OTHER_PUB, 'btc_pred', '0')).rejects.toThrow('The deposit must be a positive amount');
+    u.published = [];
+    const v = await nostr.buy(OTHER_PUB, 'btc_pred', '0.005');
+    expect(v).toMatchObject({ pubkey: OTHER_PUB, stream: 'btc_pred', price: '0.001', deposit: '0.005', paid: '0', status: 'open' });
+    expect(chainApi.map.get(v.channel)).toMatchObject({ payer: VAULT.evmAddress, payee: OTHER_VAULT.evmAddress, signer: ID.evmAddress });
+    await settle();
+    const sub = u.published.find((e) => e.kind === 34602);
+    expect(JSON.parse(sub.content).payment_channel).toMatchObject({ id: v.channel });
+    expect(u.subs.get(FOLLOW_ID).find((f) => f.authors[0] === OTHER_PUB)['#d']).toEqual(['btc_pred', `btc_pred:${ME_PUB}`]);
+
+    // a delivery: lands as the watched stream's observation (the track record), and is paid
+    const deliver = async (secret, seq, value) => u.deliver(signEvent(deliveryEvent({ stream: 'btc_pred', subscriber: ME_PUB, seq, timestamp: clock,
+      content: await nip04Encrypt(secret, ME_PUB, value), now: clock }), secret));
+    u.published = [];
+    await deliver(OTHER, 1, '101.5');
+    await deliver('9'.repeat(64), 2, '1'); // not the seller's: nothing
+    await settle();
+    expect((await nostr.records()).find((r) => r.pubkey === OTHER_PUB)).toMatchObject({ stream: 'btc_pred', received: 1, last: { value: 101.5 } });
+    const [pay] = u.published.filter((e) => e.kind === 34603);
+    expect(pay.tags).toEqual([['d', 'btc_pred'], ['p', OTHER_PUB], ['stream', 'btc_pred'], ['seq', '2']]);
+    expect(JSON.parse(await nip04Decrypt(OTHER, ME_PUB, pay.content)).voucher).toMatchObject({ channel: v.channel, cumulative: '1000000000000000' });
+    expect((await nostr.status()).market.bought).toMatchObject([{ channel: v.channel, paid: '0.001', left: '0.004', received: 1 }]);
+
+    // stop: the close asked by the identity, Lite's unsubscribe; no longer followed
+    u.published = [];
+    expect(await nostr.stop(OTHER_PUB, 'btc_pred')).toMatchObject({ status: 'closing' });
+    await settle();
+    expect(chainApi.calls).toContain('requestClose');
+    expect(u.published.map((e) => [e.kind, tagOf(e, 'action')])).toEqual([[34602, 'unsubscribe']]);
+    expect(u.subs.get(FOLLOW_ID).find((f) => f.authors[0] === OTHER_PUB)['#d']).toEqual(['btc_pred']);
   });
 });
