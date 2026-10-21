@@ -60,16 +60,16 @@ describe("the events, as satorilib's client makes them", () => {
 describe("the paid stream's events (docs/design/market.md#selling-and-buying-over-the-relays), as satorilib's", () => {
   const SUB = 'ab'.repeat(32);
   const market = { chain: 84532, contract: '0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c', token: '0x4dee947383d5C9c8E421F55Fe3518a29324aE469',
-    payee: '0x' + '12'.repeat(20), price: '1000000000000000' };
-  test('a priced `_pred` announcement: encrypted, price_per_obs 0, the listing in metadata.market; free again without one', () => {
-    const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02ab', market });
-    expect(meta).toMatchObject({ encrypted: true, price_per_obs: 0,
+    payee: '0x' + '12'.repeat(20) };
+  test("a priced `_pred` announcement: encrypted, Lite's price_per_obs (satoshis) the one price, the channel in metadata.market; free again without one", () => {
+    const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02ab', listing: { price_per_obs: 100000, market } });
+    expect(meta).toMatchObject({ encrypted: true, price_per_obs: 100000,
       metadata: { source_stream_name: 'btc-usd-price', source_provider_pubkey: PROVIDER, wallet_pubkey: '02ab', market } });
     const e = sign(announceEvent(meta, now));
     expect(Object.keys(JSON.parse(e.content))).toEqual(Object.keys(JSON.parse(fx.events.announce.content))); // Lite's fields, no more
-    expect(catalog([e])[0]).toMatchObject({ encrypted: true, price_per_obs: 0, metadata: { market } });
-    const free = predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02ab', market: null });
-    expect(free.encrypted).toBe(false);
+    expect(catalog([e])[0]).toMatchObject({ encrypted: true, price_per_obs: 100000, metadata: { market } });
+    const free = predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02ab', listing: null });
+    expect(free).toMatchObject({ encrypted: false, price_per_obs: 0 });
     expect(free.metadata).not.toHaveProperty('market');
   });
   test("a delivery (34601) as publish_observation's per subscriber (client.py:621-660), its d the stream and the subscriber; read back", () => {
@@ -87,12 +87,12 @@ describe("the paid stream's events (docs/design/market.md#selling-and-buying-ove
       ['satori', 'heartbeat']] });
     expect(parseObservation(e)).toBeNull();
   });
-  test("a payment (34603) as send_payment's (client.py:1216-1283): the voucher in place of amount_sats and tx_id", () => {
+  test("a payment (34603) as send_payment's (client.py:1216-1283): Lite's amount_sats, the voucher in place of tx_id", () => {
     const e = sign(paymentEvent({ stream: 'x_pred', provider: SUB, seq: 8, content: 'c?iv=d', now }));
     expect(e).toMatchObject({ kind: 34603, content: 'c?iv=d', tags: [['d', 'x_pred'], ['p', SUB], ['stream', 'x_pred'], ['seq', '8']] });
     const voucher = { channel: '0x' + '9'.repeat(64), cumulative: '2000', signature: '0x' + '1'.repeat(130) };
-    expect(JSON.parse(paymentJson({ from: fx.pubkeyHex, to: SUB, stream: 'x_pred', seq: 8, amount: 1000n, timestamp: now, voucher })))
-      .toStrictEqual({ from_pubkey: fx.pubkeyHex, to_pubkey: SUB, stream_name: 'x_pred', seq_num: 8, amount: '1000', timestamp: now, voucher });
+    expect(JSON.parse(paymentJson({ from: fx.pubkeyHex, to: SUB, stream: 'x_pred', seq: 8, amountSats: 1000, timestamp: now, voucher })))
+      .toStrictEqual({ from_pubkey: fx.pubkeyHex, to_pubkey: SUB, stream_name: 'x_pred', seq_num: 8, amount_sats: 1000, timestamp: now, voucher });
   });
   test('a subscription with its payment channel (34602), and an unsubscribe, read back', () => {
     const channel = { chain: 84532, contract: market.contract, id: '0x' + '9'.repeat(64), binding: '0x' + '2'.repeat(130) };

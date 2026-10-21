@@ -4,6 +4,16 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-21 (paid streams: one price, a daily settle)
+
+- One price: a priced `_pred`'s 34600 carries it in Lite's `price_per_obs`
+  (satoshis, 10⁻⁸ SATORI); `metadata.market` is `{ chain, contract, token,
+  payee }`, without its own price. `sell()` refuses a price with more than 8
+  decimals. The payment (34603) says Lite's `amount_sats`.
+- The seller settles at most once a day (it was every hourly pass, and at
+  once when a buyer stopped); a buyer who stops gets no more deliveries, and
+  its last voucher is collected in the next daily settle.
+
 ## Changed 2026-10-21 (paid streams)
 
 - Sell and buy data streams over the relays, paid per observation in

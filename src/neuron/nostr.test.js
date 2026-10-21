@@ -1109,12 +1109,14 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     await nostr.subscribe(PROV_PUB, 'btc');
     await expect(nostr.sell('eth_pred', '1')).rejects.toThrow('eth_pred is not a stream this neuron publishes');
     await expect(nostr.sell('btc_pred', '0')).rejects.toThrow('positive amount of SATORI');
+    await expect(nostr.sell('btc_pred', '0.000000001')).rejects.toThrow('at most 8 decimal places'); // under a satoshi
     u.published = [];
     expect((await nostr.sell('btc_pred', '0.001')).market.selling).toEqual([{ stream: 'btc_pred', price: '0.001', buyers: [] }]);
     await settle();
     const [ann] = u.published;
-    expect(JSON.parse(ann.content)).toMatchObject({ stream_name: 'btc_pred', encrypted: true, price_per_obs: 0, metadata: { market: {
-      chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: VAULT.evmAddress, price: '1000000000000000' } } });
+    expect(JSON.parse(ann.content)).toMatchObject({ stream_name: 'btc_pred', encrypted: true, price_per_obs: 100000, metadata: { market: {
+      chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: VAULT.evmAddress } } }); // 0.001 SATORI: 100,000 satoshis
+    expect(JSON.parse(ann.content).metadata.market).not.toHaveProperty('price'); // one price
     await u.deliver(observe('btc', '100', 1));
     await settle();
     const hb = u.published.filter((e) => e.kind === 34601);
@@ -1144,7 +1146,7 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     clock += 900;
     await u.deliver(observe('btc', '102', 3));
     await settle();
-    expect(JSON.parse(u.published[0].content)).toMatchObject({ encrypted: false });
+    expect(JSON.parse(u.published[0].content)).toMatchObject({ encrypted: false, price_per_obs: 0 });
     expect(JSON.parse(u.published[0].content).metadata).not.toHaveProperty('market');
     expect(u.published.filter((e) => e.kind === 34601).map((e) => [JSON.parse(e.content).seq_num, tagOf(e, 'p') ?? null])).toEqual([[3, null]]);
   });
@@ -1152,9 +1154,9 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
   test('buy: a listed stream, its channel opened from the vault, the 34602; each delivery decrypted, kept as a watched stream, paid', async () => {
     await boot(market());
     const c = relays.get(CENTRAL_RELAY);
-    const listing = { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: OTHER_VAULT.evmAddress, price: '1000000000000000' };
+    const listing = { price_per_obs: 100000, market: { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: OTHER_VAULT.evmAddress } };
     c.stored.push(announce('btc'), signEvent(announceEvent(predMetadata({ sub: { stream_name: 'btc', provider_pubkey: PROV_PUB, name: 'BTC',
-      cadence_seconds: 900, pred_created_at: 1 }, pubkey: OTHER_PUB, walletPubkey: '02ab', market: listing }), clock - 10), OTHER));
+      cadence_seconds: 900, pred_created_at: 1 }, pubkey: OTHER_PUB, walletPubkey: '02ab', listing }), clock - 10), OTHER));
     openAll();
     await settle();
     const u = relays.get(USER_RELAY);

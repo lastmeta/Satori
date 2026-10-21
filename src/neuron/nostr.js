@@ -7,7 +7,7 @@
 //   34601 is kept (src/neuron/records.js): never forecast, never published
 //   paid streams (src/neuron/market.js, docs/design/market.md): a priced `_pred` is delivered encrypted to its buyers and
 //   its public 34601 is a heartbeat; 34602/34603 addressed to us go to the market; a bought stream's delivery is
-//   decrypted, paid and lands as a watched stream's; the hourly pass settles and withdraws
+//   decrypted, paid and lands as a watched stream's; the hourly pass settles (at most once a day) and withdraws
 // Relay streams are apart from central's: own tables, and nothing goes to central.
 // Intake runs one event at a time; sending (which waits for each relay's OK)
 // runs beside it, so a slow or mute relay holds nothing up.
@@ -17,7 +17,7 @@ import {
   KIND, PRED, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
   catalog, tombstoned, parseObservation, numericValue, predValue, relayUuid, heartbeatEvent,
 } from '../nostr/satori.js';
-import { createMarket, listingOf, amountOf } from './market.js';
+import { createMarket, listingOf, amountOf, priceOf } from './market.js';
 import { AHEAD_S } from '../db/index.js';
 import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
@@ -154,9 +154,9 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     for (const e of relays.values()) if (e.relay) follow(e, list);
   }
 
-  /** A `_pred`'s announcement: priced, with its listing (market.listing). */
+  /** A `_pred`'s announcement: priced, with its listing (market.listing: price_per_obs and the channel's market). */
   const announcementOf = (sub, at) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey,
-    market: market.listing(sub.stream_name + PRED) }), at));
+    listing: market.listing(sub.stream_name + PRED) }), at));
   const announcements = async (at) => (await db.relayStreams({ active: true })).map((sub) => announcementOf(sub, at));
 
   /** NIP-65 of the open relays, when the last one is a day old (start.py:370-389); one at a time. */
@@ -648,7 +648,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
     /** Sell one of our `_pred` streams at `price` SATORI per observation (as typed), announced at once with its listing. → status() */
     async sell(stream, price) {
       const sub = await ownPred(stream);
-      await market.sell(sub.stream_name + PRED, amountOf(price));
+      await market.sell(sub.stream_name + PRED, priceOf(price));
       background(publish(announcementOf(sub, t())));
       return this.status();
     },

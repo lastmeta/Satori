@@ -47,17 +47,17 @@ export const tombstoneEvent = (stream, pubkey, now) => ({
 
 /**
  * The metadata of `<stream>_pred` as _networkAnnouncePublications builds it
- * (start.py:3442-3482; the publication from routes.py:2700-2711). Priced (`market`: { chain, contract, token, payee,
- * price }, docs/design/market.md#selling-and-buying-over-the-relays): encrypted, and the listing in metadata.market;
- * price_per_obs stays 0 (Lite's sats: a Lite neuron must never open an Evrmore channel to a Base seller).
- * @param {{sub: object, pubkey: string, walletPubkey: string, market?: object|null}} p sub: a relay_streams row
+ * (start.py:3442-3482; the publication from routes.py:2700-2711). Priced (`listing`: { price_per_obs, market: { chain,
+ * contract, token, payee } }, docs/design/market.md#selling-and-buying-over-the-relays): encrypted, Lite's price_per_obs
+ * (satoshis) the one price, and the channel's details in metadata.market.
+ * @param {{sub: object, pubkey: string, walletPubkey: string, listing?: object|null}} p sub: a relay_streams row
  */
-export const predMetadata = ({ sub, pubkey, walletPubkey, market = null }) => ({
+export const predMetadata = ({ sub, pubkey, walletPubkey, listing = null }) => ({
   stream_name: sub.stream_name + PRED, nostr_pubkey: pubkey, name: `Predictions for ${sub.name || sub.stream_name}`,
-  description: '', encrypted: !!market, price_per_obs: 0, created_at: sub.pred_created_at,
+  description: '', encrypted: !!listing, price_per_obs: listing?.price_per_obs ?? 0, created_at: sub.pred_created_at,
   cadence_seconds: sub.cadence_seconds ?? null, tags: [],
   metadata: { source_stream_name: sub.stream_name, source_provider_pubkey: sub.provider_pubkey, wallet_pubkey: walletPubkey,
-    ...(market && { market }) },
+    ...(listing && { market: listing.market }) },
 });
 
 /**
@@ -120,11 +120,11 @@ export const paymentEvent = ({ stream, provider, seq, content, now }) => ({
 });
 
 /**
- * PaymentNotification's JSON (models.py:173-205) on Base: amount_sats → `amount` (wei, a string) and tx_id → `voucher`
- * ({ channel, cumulative, signature }: the identity's cumulative EIP-712 voucher, src/chain/channels.js).
+ * PaymentNotification's JSON (models.py:173-205) on Base: amount_sats as Lite's (the price, satoshis), and `voucher` in
+ * place of tx_id ({ channel, cumulative, signature }: the identity's cumulative EIP-712 voucher, src/chain/channels.js).
  */
-export const paymentJson = ({ from, to, stream, seq, amount, timestamp, voucher }) => JSON.stringify({
-  from_pubkey: from, to_pubkey: to, stream_name: stream, seq_num: seq, amount: String(amount), timestamp, voucher,
+export const paymentJson = ({ from, to, stream, seq, amountSats, timestamp, voucher }) => JSON.stringify({
+  from_pubkey: from, to_pubkey: to, stream_name: stream, seq_num: seq, amount_sats: amountSats, timestamp, voucher,
 });
 
 /** NIP-65 (client.py:405-428). */

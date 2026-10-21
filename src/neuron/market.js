@@ -1,9 +1,10 @@
 // Paid streams over the Satori relays (docs/design/market.md#selling-and-buying-over-the-relays): satorilib's data-stream
 // market (satori_nostr/client.py), its Evrmore parts replaced by the Satori contract's payment channels (src/chain/channels.js).
-//   sell: our `<stream>_pred` listed with a price; each observation encrypted (NIP-04) to each buyer in good standing
+//   sell: our `<stream>_pred` announced with Lite's price_per_obs (satoshis); each observation encrypted (NIP-04) to each
+//   buyer in good standing
 //   buy: the vault opens a channel (Unlock), the 34602 names it; each delivery received → the identity's next voucher (34603)
-//   the seller checks the channel on chain and each voucher; the hourly pass settles (settleMany) and withdraws refunds
-// Kept in meta `market`: { prices, sales, buys }, amounts as decimal strings.
+//   the seller checks the channel on chain and each voucher; it settles (settleMany) at most once a day; refunds withdrawn
+// Kept in meta `market`: { prices (wei), sales, buys, settledAt }, amounts as decimal strings.
 import { formatEther, hashMessage, hexToBytes, parseEther, recoverMessageAddress, serializeSignature, isAddress } from 'viem';
 import { DEFAULTS } from '../chain/config.js';
 import { MAX_AMOUNT, channelErrorText, signVoucher, verifyVoucher } from '../chain/channels.js';
@@ -13,6 +14,8 @@ import { nip04Decrypt, nip04Encrypt } from '../nostr/nip04.js';
 import { KIND, deliveryEvent, deliveryOf, parseSubscription, paymentEvent, paymentJson, subscriptionEvent } from '../nostr/satori.js';
 
 export const DEPOSIT_OBS = 100; // a Buy's deposit unless one is given: 100 observations
+export const SAT = 10n ** 10n; // wei per satoshi: price_per_obs is Lite's, in satoshis (10⁻⁸ SATORI)
+export const SETTLE_EVERY_S = 86_400; // the seller settles at most once a day: each settle costs gas
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 const B = (x) => BigInt(x ?? 0);
 const sat = (wei) => formatEther(B(wei));
@@ -39,17 +42,23 @@ export function amountOf(text, what = 'The price') {
   return wei;
 }
 
+/** A price as typed ('0.001') → wei: a positive amount of SATORI in whole satoshis (price_per_obs is Lite's, in satoshis). */
+export function priceOf(text) {
+  const wei = amountOf(text);
+  if (wei % SAT) throw new Error('The price can have at most 8 decimal places.');
+  return wei;
+}
+
 /**
- * A catalog entry's listing on this chain's Satori contract (metadata.market: chain, contract, token SATORI, a payee
- * address, a price in wei above 0) → { chain, contract, token, payee, price: bigint }, or null when it is none.
+ * A catalog entry for sale on this chain's Satori contract: its price_per_obs (satoshis, above 0) and metadata.market
+ * (chain, contract, token SATORI, a payee address) → { chain, contract, token, payee, price: bigint wei }, or null.
  */
 export function listingOf(entry, config = DEFAULTS) {
   const m = entry?.metadata?.market;
-  if (!m || typeof m !== 'object' || Number(m.chain) !== config.chainId || !same(m.contract, config.channels) || !same(m.token, config.token)
-    || typeof m.payee !== 'string' || !isAddress(m.payee)) return null;
-  let price;
-  try { price = BigInt(String(m.price)); } catch { return null; }
-  return price > 0n && price <= MAX_AMOUNT ? { chain: config.chainId, contract: config.channels, token: config.token, payee: m.payee, price } : null;
+  const sats = entry?.price_per_obs;
+  if (!Number.isSafeInteger(sats) || sats <= 0 || !m || typeof m !== 'object' || Number(m.chain) !== config.chainId
+    || !same(m.contract, config.channels) || !same(m.token, config.token) || typeof m.payee !== 'string' || !isAddress(m.payee)) return null;
+  return { chain: config.chainId, contract: config.channels, token: config.token, payee: m.payee, price: BigInt(sats) * SAT };
 }
 
 /** What a sale's buyer owes for what it was delivered: from the channel's settled amount when it was accepted. */
@@ -87,29 +96,37 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
     return identity;
   };
 
-  /** Settle these sales' newest vouchers in one transaction (the seller's identity, into the vault); a closing one goes once nothing is due. */
-  async function collect(list) {
+  /**
+   * Once a day at most: every sale's newest voucher above what is settled, in one transaction (the seller's identity,
+   * into the vault). A closing sale goes once nothing is due.
+   */
+  async function collect() {
+    const list = Object.values(m.sales);
     const due = list.filter((s) => s.signature && B(s.cumulative) > B(s.settled));
-    if (due.length) {
+    if (due.length && t() - (m.settledAt ?? 0) >= SETTLE_EVERY_S) {
       const { channels } = await chain();
       const r = await channels.settleMany(needIdentity(), due.map((s) => ({ id: s.channel, cumulative: B(s.cumulative), signature: s.signature })));
       for (const x of r.settled) for (const s of due) if (s.channel === x.id) s.settled = String(x.settled);
+      m.settledAt = t();
     }
-    for (const s of list) if (s.closing && B(s.cumulative) <= B(s.settled) && m.sales[s.channel] === s) delete m.sales[s.channel];
+    for (const s of list) if (s.closing && B(s.cumulative) <= B(s.settled)) delete m.sales[s.channel];
     await save();
   }
 
-  /** A buyer's 34602 to one of our priced streams: its channel read on chain and accepted, or its unsubscribe settled at once. */
+  /** A buyer's 34602 to one of our priced streams: its channel read on chain and accepted, or its unsubscribe (no more deliveries). */
   async function onSubscription(e) {
     const sub = parseSubscription(e);
     if (!sub || sub.provider !== key.pubkey || sub.subscriber !== e.pubkey) return;
-    // the buyer's channels on this stream still served: an unsubscribe, or a new channel, closes them (their last vouchers collected)
+    // the buyer's channels on this stream still served: an unsubscribe, or a new channel, closes them (their last vouchers
+    // collected in the daily settle, well inside the 7-day grace period)
     const was = Object.values(m.sales).filter((s) => s.stream === sub.stream_name && s.buyer === e.pubkey && !s.closing);
     const close = () => {
       for (const s of was) s.closing = true;
-      return was.length ? collect(was).catch(log) : null;
     };
-    if (sub.unsubscribe) return close();
+    if (sub.unsubscribe) {
+      close();
+      return was.length ? save() : undefined;
+    }
     const price = m.prices[sub.stream_name];
     const c = sub.channel;
     if (!price || !c || !HEX32.test(String(c.id)) || Number(c.chain) !== config.chainId || !same(c.contract, config.channels)) return;
@@ -143,21 +160,22 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
   }
 
   return {
-    async load() { m = { prices: {}, sales: {}, buys: {}, ...((await db.get('market')) ?? {}) }; },
+    async load() { m = { prices: {}, sales: {}, buys: {}, settledAt: 0, ...((await db.get('market')) ?? {}) }; },
 
     // ── selling ──
     /** Whether our stream has a price. */
     priced: (stream) => !!m.prices[stream],
-    /** Its listing for the announcement (predMetadata's market), or null when it is free. */
-    listing: (stream) => (m.prices[stream] ? { chain: config.chainId, contract: config.channels, token: config.token, payee: vaultAddress,
-      price: m.prices[stream] } : null),
-    /** A price in wei on our stream (the caller re-announces it). */
+    /** Its listing for the announcement (predMetadata's): price_per_obs in satoshis and the channel's market, or null when it is free. */
+    listing: (stream) => (m.prices[stream] ? { price_per_obs: Number(B(m.prices[stream]) / SAT),
+      market: { chain: config.chainId, contract: config.channels, token: config.token, payee: vaultAddress } } : null),
+    /** A price in wei, whole satoshis, on our stream (the caller re-announces it). */
     async sell(stream, wei) {
       if (!vaultAddress) throw new Error('No vault to be paid into.');
+      if (B(wei) <= 0n || B(wei) % SAT) throw new Error('The price can have at most 8 decimal places.');
       m.prices[stream] = String(wei);
       await save();
     },
-    /** Free again: no new deliveries; what buyers owe is still collected by the hourly pass. */
+    /** Free again: no new deliveries; what buyers owe is still collected by the daily settle. */
     async unsell(stream) {
       delete m.prices[stream];
       await save();
@@ -230,7 +248,7 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
         await save(); // kept before it is sent: a reload never signs it again
         const voucher = { channel: b.channel, cumulative: String(next), signature };
         const content = await nip04Encrypt(key.secret, d.provider, paymentJson({ from: key.pubkey, to: d.provider, stream: d.stream_name,
-          seq: d.seq + 1, amount: b.price, timestamp: t(), voucher }));
+          seq: d.seq + 1, amountSats: Number(B(b.price) / SAT), timestamp: t(), voucher }));
         sendKept([sign(paymentEvent({ stream: d.stream_name, provider: d.provider, seq: d.seq + 1, content, now: t() }))]).catch(log); // kept until a relay takes it
       } else {
         await save();
@@ -267,8 +285,8 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
 
     /**
      * The hourly pass (and the catch-up's): each sale's channel read again (its deposit, what is settled, a close asked:
-     * no more deliveries, closed: gone), then one settleMany for every voucher above what is settled; each bought
-     * channel whose grace period has ended is withdrawn (the refund to the vault).
+     * no more deliveries, closed: gone), then, once a day at most, one settleMany for every voucher above what is settled;
+     * each bought channel whose grace period has ended is withdrawn (the refund to the vault).
      */
     async pass() {
       try {
@@ -284,7 +302,7 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
           }
           Object.assign(s, { deposit: String(ch.deposit), settled: String(ch.settled), closing: s.closing || !!ch.closeRequestedAt || !m.prices[s.stream] });
         }
-        await collect(Object.values(m.sales));
+        await collect();
         const at = closing.length ? await chainTime() : 0;
         for (const b of closing) {
           const ch = await channels.readChannel(b.channel);

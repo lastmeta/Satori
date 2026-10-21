@@ -12,7 +12,7 @@ import { nostrPubkey, signEvent, verifyEvent } from '../nostr/event.js';
 import { nip04Decrypt } from '../nostr/nip04.js';
 import { KIND, announceEvent, catalog, predMetadata, paymentEvent, subscriptionEvent } from '../nostr/satori.js';
 import {
-  amountOf, bindingSigner, bindingText, createMarket, deliverable, listingOf, signBinding, DEPOSIT_OBS,
+  amountOf, bindingSigner, bindingText, createMarket, deliverable, listingOf, priceOf, signBinding, DEPOSIT_OBS, SAT, SETTLE_EVERY_S,
 } from './market.js';
 
 vi.setConfig({ testTimeout: 60_000 }); // schnorr, ECDSA and AES in JS: seconds on the busy shared box
@@ -30,7 +30,7 @@ const X_ID = signer('33'.repeat(32));
 const S_VAULT = signer('44'.repeat(32));
 const B_VAULT = signer('55'.repeat(32));
 const STREAM = 'walk_pred';
-const PRICE = 1000n;
+const PRICE = 1000n * SAT; // 1000 satoshis: 0.00001 SATORI
 let clock;
 
 function memoryKv() {
@@ -53,8 +53,8 @@ const SP = nostrPubkey(S_NOSTR);
 const BP = nostrPubkey(B_NOSTR);
 
 /** The seller's listing as the buyer finds it: its verified catalog entry. */
-const entryOf = (market = seller.listing(STREAM)) => catalog([signEvent(announceEvent(predMetadata({ sub: { stream_name: 'walk', provider_pubkey: 'ab'.repeat(32),
-  name: 'Walk', cadence_seconds: 60, pred_created_at: 1 }, pubkey: SP, walletPubkey: '02ab', market }), clock), S_NOSTR)])[0];
+const entryOf = (listing = seller.listing(STREAM)) => catalog([signEvent(announceEvent(predMetadata({ sub: { stream_name: 'walk', provider_pubkey: 'ab'.repeat(32),
+  name: 'Walk', cadence_seconds: 60, pred_created_at: 1 }, pubkey: SP, walletPubkey: '02ab', listing }), clock), S_NOSTR)])[0];
 const last = (kind) => relay.filter((e) => e.kind === kind).at(-1);
 /** One observation of the seller's stream, delivered and (when the buyer gets it) paid; the payment handed to the seller. → the deliveries */
 async function observe(seq, value = String(100 + seq), { pay = true } = {}) {
@@ -87,6 +87,8 @@ describe('pieces', () => {
     expect(amountOf('0.001')).toBe(10n ** 15n);
     expect(amountOf(' 2 ')).toBe(2n * 10n ** 18n);
     for (const bad of ['0', '-1', 'abc', '', '0.0000000000000000001', '1e3']) expect(() => amountOf(bad), bad).toThrow(/positive amount of SATORI/);
+    expect(priceOf('0.00000001')).toBe(SAT); // a price: whole satoshis (Lite's price_per_obs)
+    expect(() => priceOf('0.000000001')).toThrow('at most 8 decimal places');
   });
   test("the binding: the identity's EIP-191 signature of the channel and the Nostr key; another key, channel or Nostr key recovers no match", async () => {
     const id = keccak256(toHex('c'));
@@ -97,14 +99,16 @@ describe('pieces', () => {
     expect(await bindingSigner(keccak256(toHex('d')), BP, sig)).not.toBe(B_ID.evmAddress);
     expect(await bindingSigner(id, BP, '0x1234')).toBeNull();
   });
-  test('a listing: this chain, the Satori contract, SATORI, a payee and a price above 0; anything else is none', () => {
-    const m = { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: S_VAULT.evmAddress, price: '1000' };
-    expect(listingOf({ metadata: { market: m } })).toEqual({ ...m, price: 1000n });
-    for (const bad of [{ chain: 8453 }, { contract: '0x' + '1'.repeat(40) }, { token: '0x' + '2'.repeat(40) }, { payee: 'nope' }, { price: '0' },
-      { price: '-5' }, { price: 'x' }, { price: (2n ** 96n).toString() }]) {
-      expect(listingOf({ metadata: { market: { ...m, ...bad } } }), JSON.stringify(bad)).toBeNull();
+  test("a listing: Lite's price_per_obs (satoshis, above 0) the one price; this chain, the Satori contract, SATORI and a payee; anything else is none", () => {
+    const m = { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: S_VAULT.evmAddress };
+    expect(listingOf({ price_per_obs: 1000, metadata: { market: m } })).toEqual({ ...m, price: 1000n * SAT });
+    for (const bad of [{ chain: 8453 }, { contract: '0x' + '1'.repeat(40) }, { token: '0x' + '2'.repeat(40) }, { payee: 'nope' }]) {
+      expect(listingOf({ price_per_obs: 1000, metadata: { market: { ...m, ...bad } } }), JSON.stringify(bad)).toBeNull();
     }
-    expect(listingOf({ metadata: null })).toBeNull();
+    for (const sats of [0, -5, 1.5, '1000', Number.MAX_SAFE_INTEGER + 1, null]) {
+      expect(listingOf({ price_per_obs: sats, metadata: { market: m } }), String(sats)).toBeNull();
+    }
+    expect(listingOf({ price_per_obs: 1000, metadata: null })).toBeNull();
   });
   test('deliverable: the first free, then only while the newest voucher covers every one delivered and the deposit one more', () => {
     const s = { base: '0', delivered: 0, price: '10', cumulative: '0', deposit: '30', closing: false };
@@ -128,8 +132,10 @@ describe('selling and buying', () => {
   test('sell: the listing (the vault paid, SATORI, the Satori contract); unsell: free again', async () => {
     await seller.sell(STREAM, PRICE);
     expect(seller.priced(STREAM)).toBe(true);
-    expect(seller.listing(STREAM)).toEqual({ chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: S_VAULT.evmAddress, price: '1000' });
-    expect(seller.status().selling).toEqual([{ stream: STREAM, price: '0.000000000000001', buyers: [] }]);
+    expect(seller.listing(STREAM)).toEqual({ price_per_obs: 1000, market: { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token,
+      payee: S_VAULT.evmAddress } });
+    expect(seller.status().selling).toEqual([{ stream: STREAM, price: '0.00001', buyers: [] }]);
+    await expect(seller.sell(STREAM, SAT + 1n)).rejects.toThrow('at most 8 decimal places');
     await seller.unsell(STREAM);
     expect(seller.listing(STREAM)).toBeNull();
     expect(await seller.deliver(STREAM, { seq: 1, timestamp: clock, value: '1' })).toEqual([]);
@@ -137,16 +143,16 @@ describe('selling and buying', () => {
 
   test('buy: the vault opens a channel to the payee, the 34602 names it with the binding; the seller accepts it from the chain', async () => {
     const v = await bought();
-    expect(v).toMatchObject({ pubkey: SP, stream: STREAM, price: '0.000000000000001', deposit: '0.000000000000005', paid: '0', status: 'open' });
+    expect(v).toMatchObject({ pubkey: SP, stream: STREAM, price: '0.00001', deposit: '0.00005', paid: '0', status: 'open' });
     const ch = chainApi.map.get(v.channel);
-    expect(ch).toMatchObject({ payer: B_VAULT.evmAddress, payee: S_VAULT.evmAddress, signer: B_ID.evmAddress, deposit: 5000n });
+    expect(ch).toMatchObject({ payer: B_VAULT.evmAddress, payee: S_VAULT.evmAddress, signer: B_ID.evmAddress, deposit: 5n * PRICE });
     const sub = last(KIND.SUBSCRIPTION);
     expect(verifyEvent(sub)).toBe(true);
     expect(sub.tags).toEqual([['d', STREAM], ['p', SP], ['stream', STREAM], ['satori', 'subscription']]);
     const pc = JSON.parse(sub.content).payment_channel;
     expect(pc).toMatchObject({ chain: 84532, contract: DEFAULTS.channels, id: v.channel });
     expect(await bindingSigner(v.channel, BP, pc.binding)).toBe(B_ID.evmAddress);
-    expect(seller.status().selling[0].buyers).toEqual([{ pubkey: BP, channel: v.channel, delivered: 0, paid: '0', settled: '0', deposit: '0.000000000000005',
+    expect(seller.status().selling[0].buyers).toEqual([{ pubkey: BP, channel: v.channel, delivered: 0, paid: '0', settled: '0', deposit: '0.00005',
       closing: false }]);
     expect(buyer.pairs()).toEqual([[SP, `${STREAM}:${BP}`]]); // its own d is followed
     expect(buyer.bought()).toEqual(new Set([`${SP}:${STREAM}`]));
@@ -168,15 +174,15 @@ describe('selling and buying', () => {
     const [p] = a.payments;
     expect(p.tags).toEqual([['d', STREAM], ['p', SP], ['stream', STREAM], ['seq', '2']]);
     const body = JSON.parse(await nip04Decrypt(S_NOSTR, BP, p.content));
-    expect(body).toMatchObject({ from_pubkey: BP, to_pubkey: SP, stream_name: STREAM, seq_num: 2, amount: '1000',
-      voucher: { channel: v.channel, cumulative: '1000' } });
-    expect(await verifyVoucher({ chainId: 84532, channelId: v.channel, cumulative: 1000n, signature: body.voucher.signature, signer: B_ID.evmAddress })).toBe(true);
+    expect(body).toMatchObject({ from_pubkey: BP, to_pubkey: SP, stream_name: STREAM, seq_num: 2, amount_sats: 1000,
+      voucher: { channel: v.channel, cumulative: String(PRICE) } });
+    expect(await verifyVoucher({ chainId: 84532, channelId: v.channel, cumulative: PRICE, signature: body.voucher.signature, signer: B_ID.evmAddress })).toBe(true);
     for (let k = 2; k <= 4; k++) expect((await observe(k)).out).toHaveLength(1);
-    expect(seller.status().selling[0].buyers[0]).toMatchObject({ delivered: 4, paid: '0.000000000000004' });
-    expect(buyer.status().bought[0]).toMatchObject({ paid: '0.000000000000004', left: '0.000000000000001', received: 4 });
+    expect(seller.status().selling[0].buyers[0]).toMatchObject({ delivered: 4, paid: '0.00004' });
+    expect(buyer.status().bought[0]).toMatchObject({ paid: '0.00004', left: '0.00001', received: 4 });
     // a delivery seen again (a relay replays it) is not paid twice
     expect(await buyer.received(a.out[0])).toBeNull();
-    expect(buyer.status().bought[0].paid).toBe('0.000000000000004');
+    expect(buyer.status().bought[0].paid).toBe('0.00004');
   });
 
   test("a buyer that doesn't pay gets nothing more; the deposit's end stops the seller and the buyer alike", async () => {
@@ -209,7 +215,7 @@ describe('selling and buying', () => {
     await seller.onEvent(claim(X_NOSTR, { ...pc, binding: signBinding(X_ID, v.channel, nostrPubkey(X_NOSTR)) })); // bound by another identity
     expect(seller.status().selling[0].buyers).toEqual([]);
     // a channel paying someone else
-    const other = await chainApi.openChannel({ vault: B_VAULT, identity: B_ID, payee: X_ID.evmAddress, deposit: 5000n });
+    const other = await chainApi.openChannel({ vault: B_VAULT, identity: B_ID, payee: X_ID.evmAddress, deposit: 5n * PRICE });
     await seller.onEvent(claim(B_NOSTR, { ...pc, id: other.id, binding: signBinding(B_ID, other.id, BP) }));
     expect(seller.status().selling[0].buyers).toEqual([]);
     // the real one
@@ -224,46 +230,56 @@ describe('selling and buying', () => {
     const { signVoucher } = await import('../chain/channels.js');
     const voucher = async (who, cumulative) => ({ channel: v.channel, cumulative: String(cumulative),
       signature: await signVoucher(who, { chainId: 84532, channelId: v.channel, cumulative }) });
-    await pay({ stream_name: STREAM, voucher: await voucher(X_ID, 1000n) }); // not the channel's signer
-    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, 9000n) }); // past the deposit
-    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, 1000n) }, X_NOSTR); // from another Nostr key
+    await pay({ stream_name: STREAM, voucher: await voucher(X_ID, PRICE) }); // not the channel's signer
+    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, 9n * PRICE) }); // past the deposit
+    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, PRICE) }, X_NOSTR); // from another Nostr key
     expect(sale().cumulative).toBe('0');
-    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, 1000n) });
-    expect(sale().cumulative).toBe('1000');
-    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, 1000n) }); // no rise
-    await pay({ stream_name: STREAM, voucher: { ...(await voucher(B_ID, 2000n)), signature: '0x' + '1'.repeat(130) } });
-    expect(sale().cumulative).toBe('1000');
+    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, PRICE) });
+    expect(sale().cumulative).toBe(String(PRICE));
+    await pay({ stream_name: STREAM, voucher: await voucher(B_ID, PRICE) }); // no rise
+    await pay({ stream_name: STREAM, voucher: { ...(await voucher(B_ID, 2n * PRICE)), signature: '0x' + '1'.repeat(130) } });
+    expect(sale().cumulative).toBe(String(PRICE));
   });
 
-  test('the hourly pass settles every voucher above what is settled, once; a close request stops deliveries and is settled', async () => {
+  test('the pass settles every voucher above what is settled at most once a day; a close request stops deliveries, settled in the next daily settle', async () => {
+    const settles = () => chainApi.calls.filter((c) => c[0] === 'settleMany').length;
     const v = await bought();
     await observe(1);
     await observe(2);
     await seller.pass();
-    expect(chainApi.map.get(v.channel).settled).toBe(2000n);
-    expect(seller.status().selling[0].buyers[0].settled).toBe('0.000000000000002');
-    await seller.pass();
-    expect(chainApi.calls.filter((c) => c[0] === 'settleMany')).toEqual([['settleMany', 1]]); // nothing new: no transaction
+    expect(chainApi.map.get(v.channel).settled).toBe(2n * PRICE);
+    expect(seller.status().selling[0].buyers[0].settled).toBe('0.00002');
     await observe(3);
-    chainApi.map.get(v.channel).closeRequestedAt = clock; // asked on chain (by its vault, say)
+    clock += 3600; // an hour later: something due, but no transaction until a day has passed
     await seller.pass();
-    expect(chainApi.map.get(v.channel).settled).toBe(3000n);
-    expect(seller.status().selling[0].buyers).toEqual([]); // nothing more due: it goes
+    expect([settles(), chainApi.map.get(v.channel).settled]).toEqual([1, 2n * PRICE]);
+    chainApi.map.get(v.channel).closeRequestedAt = clock; // asked on chain (by its vault, say): no more deliveries, still owed
+    await seller.pass();
     expect((await observe(4)).out).toEqual([]);
+    expect(seller.status().selling[0].buyers).toHaveLength(1);
+    clock += SETTLE_EVERY_S;
+    await seller.pass();
+    expect([settles(), chainApi.map.get(v.channel).settled]).toEqual([2, 3n * PRICE]);
+    expect(seller.status().selling[0].buyers).toEqual([]); // nothing more due: it goes
+    clock += SETTLE_EVERY_S;
+    await seller.pass();
+    expect(settles()).toBe(2); // nothing due: no transaction
   });
 
-  test("stop: the identity asks to close, Lite's unsubscribe; the seller settles at once; the refund after the grace period, in the pass", async () => {
+  test("stop: the identity asks to close, Lite's unsubscribe; the seller stops and settles in its daily settle; the refund after the grace period, in the pass", async () => {
     const v = await bought();
     await observe(1);
     await observe(2);
     const s = await buyer.stop(SP, STREAM);
-    expect(s).toMatchObject({ status: 'closing', closeAt: clock + CLOSE_GRACE_S, paid: '0.000000000000002' });
+    expect(s).toMatchObject({ status: 'closing', closeAt: clock + CLOSE_GRACE_S, paid: '0.00002' });
     const u = last(KIND.SUBSCRIPTION);
     expect(u.tags).toEqual([['d', STREAM], ['p', SP], ['stream', STREAM], ['action', 'unsubscribe'], ['satori', 'unsubscription']]);
     expect(buyer.pairs()).toEqual([]);
     await seller.onEvent(u);
-    await new Promise((r) => setTimeout(r, 50)); // its settle runs beside the intake
-    expect(chainApi.map.get(v.channel).settled).toBe(2000n);
+    expect(seller.status().selling[0].buyers[0].closing).toBe(true);
+    expect((await observe(3)).out).toEqual([]);
+    await seller.pass(); // the first settle: due at once
+    expect(chainApi.map.get(v.channel).settled).toBe(2n * PRICE);
     expect(seller.status().selling[0].buyers).toEqual([]);
     await expect(buyer.stop(SP, STREAM)).rejects.toThrow(/Not buying/);
     await buyer.pass(); // the grace period runs: nothing
@@ -283,28 +299,29 @@ describe('selling and buying', () => {
     const v2 = await buyer.buy(entryOf(), 5n * PRICE);
     expect(v2.channel).not.toBe(v1.channel);
     await seller.onEvent(last(KIND.SUBSCRIPTION));
-    await new Promise((r) => setTimeout(r, 50));
+    expect(seller.status().selling[0].buyers.map((b) => [b.channel, b.closing])).toEqual([[v1.channel, true], [v2.channel, false]]);
+    await seller.pass();
     expect(seller.status().selling[0].buyers.map((b) => b.channel)).toEqual([v2.channel]);
-    expect(chainApi.map.get(v1.channel).settled).toBe(1000n);
+    expect(chainApi.map.get(v1.channel).settled).toBe(PRICE);
     expect(buyer.status().bought.map((b) => b.status)).toEqual(['closing', 'open']);
   });
 
   test("what can't buy: locked vault, a stream not listed, a deposit under one price, a staked vault (in plain words, nothing kept)", async () => {
     await seller.sell(STREAM, PRICE);
     vaultOpen = false;
-    await expect(buyer.buy(entryOf(), 5000n)).rejects.toThrow('Unlock the vault first');
+    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow('Unlock the vault first');
     vaultOpen = true;
-    await expect(buyer.buy(entryOf(null), 5000n)).rejects.toThrow('not for sale on the Satori contract');
-    await expect(buyer.buy(entryOf(), 999n)).rejects.toThrow('at least one observation');
+    await expect(buyer.buy(entryOf(null), 5n * PRICE)).rejects.toThrow('not for sale on the Satori contract');
+    await expect(buyer.buy(entryOf(), PRICE - 1n)).rejects.toThrow('at least one observation');
     chainApi.refuse = new ChannelError("Your vault is staked with this neuron, so it can't send SATORI: a channel needs SATORI the vault can send.",
       { reason: 'Locked' });
-    await expect(buyer.buy(entryOf(), 5000n)).rejects.toThrow("Your vault is staked with this neuron, so it can't send SATORI");
+    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow("Your vault is staked with this neuron, so it can't send SATORI");
     expect(buyer.status().bought).toEqual([]);
     expect(relay.filter((e) => e.kind === KIND.SUBSCRIPTION)).toEqual([]);
     // the default deposit: 100 observations
     chainApi.refuse = null;
     expect(DEPOSIT_OBS).toBe(100);
-    expect((await buyer.buy(entryOf())).deposit).toBe('0.0000000000001'); // 100 × 1000 wei
+    expect((await buyer.buy(entryOf())).deposit).toBe('0.001'); // 100 × 1000 satoshis
   });
 
   test('kept: a reload has the price, the buyers and what each paid, and what we buy', async () => {
@@ -315,7 +332,7 @@ describe('selling and buying', () => {
     await s2.load();
     await b2.load();
     expect(s2.priced(STREAM)).toBe(true);
-    expect(s2.status().selling[0].buyers[0]).toMatchObject({ channel: v.channel, delivered: 1, paid: '0.000000000000001' });
-    expect(b2.status().bought[0]).toMatchObject({ channel: v.channel, paid: '0.000000000000001', received: 1 });
+    expect(s2.status().selling[0].buyers[0]).toMatchObject({ channel: v.channel, delivered: 1, paid: '0.00001' });
+    expect(b2.status().bought[0]).toMatchObject({ channel: v.channel, paid: '0.00001', received: 1 });
   });
 });

@@ -3,8 +3,8 @@
 // :8545 (node scripts/fork.mjs start) with the real PaymentChannels and SATORI, fresh throwaway keys funded there. A
 // provider publishes a stream every 6 s; the seller predicts it and sells its `_pred` (Streams › Sell); the buyer finds it
 // in Streams on the relays and Buys (Unlock in place): the vault opens a channel, each observation comes encrypted to it
-// alone (in public a heartbeat), lands in its track record, and is paid with a voucher; Stop asks the contract to close and
-// the seller settles at once, into its vault. SHOTS=1 writes docs/screenshots/streams-sell-* and streams-buy-*.
+// alone (in public a heartbeat), lands in its track record, and is paid with a voucher; Stop asks the contract to close, the
+// seller stops delivering and settles in its next pass (at most once a day; here a reload runs it), into its vault. SHOTS=1 writes docs/screenshots/streams-sell-* and streams-buy-*.
 import { expect, test } from '@playwright/test';
 import WebSocket from 'ws';
 import { createPublicClient, http, parseEther } from 'viem';
@@ -45,7 +45,7 @@ const tagOf = (e, n) => e.tags.find((t) => t[0] === n)?.[1];
 const shot = async (locator, name) => locator.screenshot({ path: process.env.SHOTS ? `docs/screenshots/${name}.png` : test.info().outputPath(`${name}.png`) });
 
 test('sell and buy a prediction stream: a channel on the Satori contract, encrypted deliveries, vouchers, Stop and the settle', async ({ browser }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(600_000); // two neurons, a fork and a relay: minutes on the busy shared box
   const provider = await connectProvider({ url: RELAY });
   const stream = `walk-${Date.now().toString(36)}`;
   const pred = `${stream}_pred`;
@@ -96,7 +96,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     // the seller accepts it from the chain; each observation then goes to the buyer alone, and is paid
     await expect.poll(async () => (await market(s)).selling[0]?.buyers[0]?.channel, { timeout: 30_000 }).toBe(bought.channel);
     await expect.poll(async () => (await market(b)).bought[0].received != null ? Number((await market(b)).bought[0].paid) : 0,
-      { timeout: 60_000 }).toBeGreaterThanOrEqual(0.003);
+      { timeout: 180_000 }).toBeGreaterThanOrEqual(0.003);
     await expect.poll(async () => Number((await market(s)).selling[0].buyers[0].paid), { timeout: 30_000 }).toBeGreaterThanOrEqual(0.003);
     // on the relay: the value encrypted to the buyer (its own d); in public a heartbeat, no value
     const r = await reader(RELAY);
@@ -106,8 +106,8 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     const [pub] = await r.fetch([{ kinds: [34601], authors: [seller.nostr], '#d': [pred] }]);
     expect([pub.content, tagOf(pub, 'satori')]).toEqual(['', 'heartbeat']);
     const [ann] = await r.fetch([{ kinds: [34600], authors: [seller.nostr], '#d': [pred] }]);
-    expect(JSON.parse(ann.content)).toMatchObject({ encrypted: true, price_per_obs: 0, metadata: { market: { chain: 84532, contract: DEFAULTS.channels,
-      token: DEFAULTS.token, payee: seller.vault, price: '1000000000000000' } } });
+    expect(JSON.parse(ann.content)).toMatchObject({ encrypted: true, price_per_obs: 100000, metadata: { market: { chain: 84532, contract: DEFAULTS.channels,
+      token: DEFAULTS.token, payee: seller.vault } } }); // one price: Lite's price_per_obs, 0.001 SATORI in satoshis
     r.close();
     // what was bought lands in the buyer's track record (the watched stream's table)
     await expect.poll(async () => (await b.evaluate(([p, st]) => window.satori.record(p, st), [seller.nostr, pred]))?.received ?? 0)
@@ -122,12 +122,16 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     await b.setViewportSize({ width: 390, height: 2400 });
     await shot(b.locator('section.card.nostr'), 'streams-buy-phone-light');
 
-    // Stop: the identity asks to close (no Unlock); the seller settles at once into its vault
+    // Stop: the identity asks to close (no Unlock); the seller stops delivering, and settles into its vault in its next pass
     await b.locator(`[data-test=bought-row][data-key="${seller.nostr}:${pred}"] [data-test=stop]`).click();
     await expect(left).toHaveText(/^Stopped: 0\.00\d+ SATORI back to the vault after .+$/, { timeout: 60_000 });
     const paid = parseEther((await market(b)).bought[0].paid);
     const read = () => chain.readContract({ address: DEFAULTS.channels, abi: channelsAbi, functionName: 'getChannel', args: [bought.channel] });
     expect((await read()).closeRequestedAt).toBeGreaterThan(0n);
+    await expect.poll(async () => (await market(s)).selling[0].buyers[0]?.closing, { timeout: 30_000 }).toBe(true);
+    expect((await read()).settled).toBe(0n); // no settle of its own: the pass collects, at most once a day
+    await s.reload(); // a start runs the pass; the seller has never settled, so it is due
+    await expect(s.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
     await expect.poll(async () => (await read()).settled, { timeout: 60_000 }).toBe(paid);
     expect(await chain.readContract({ address: DEFAULTS.token, abi: tokenAbi, functionName: 'balanceOf', args: [seller.vault] })).toBe(paid);
     await expect.poll(async () => (await market(s)).selling[0].buyers, { timeout: 30_000 }).toEqual([]);

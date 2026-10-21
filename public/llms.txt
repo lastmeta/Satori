@@ -320,14 +320,16 @@ Every method is below; `await satori.status()` shows everything at once.
   same kinds and fields), paid in SATORI through the Satori contract's
   payment channels (PaymentChannels, `0xeF3f…976c`) instead of Evrmore.
   **Sell**: a price per observation on one of this neuron's `<stream>_pred`;
-  its 34600 says `encrypted: true` and `metadata.market = { chain, contract,
-  token, payee (the vault), price (wei) }` (`price_per_obs` stays 0). Each
+  its 34600 says `encrypted: true`, `price_per_obs` (the one price, in
+  satoshis: 10⁻⁸ SATORI) and `metadata.market = { chain, contract, token,
+  payee (the vault) }`. Each
   observation then goes, encrypted (NIP-04, as Lite), to each buyer whose
   channel checks on chain and whose vouchers cover what it was sent (the
   first free), one 34601 each (`d` = `<stream>:<buyer>`); in public only a
-  heartbeat (no value). The hourly pass settles every voucher (one
-  `settleMany` from the identity, into the vault), and a channel at once
-  when its buyer stops. **Buy**: the vault (Unlock, gas) opens a channel
+  heartbeat (no value). At most once a day the hourly pass settles every
+  voucher (one `settleMany` from the identity, into the vault); a buyer who
+  stops gets no more, and its last voucher waits for that daily settle.
+  **Buy**: the vault (Unlock, gas) opens a channel
   with a deposit (100 observations by default), then the 34602 names it;
   each observation received is kept as a watched stream's (its track record
   is what was bought) and paid with the identity's next voucher (34603),
@@ -789,12 +791,12 @@ the page's JS context:
 - `await satori.unsubscribe(pubkey, stream_name)` → `nostr()` (as `setRelays`).
 - `await satori.sell(stream, price)` (only on the person's request): one of
   this neuron's `<stream>_pred` at `price` SATORI per observation (a decimal
-  string, `'0.001'`), announced at once → `nostr()`.
+  string, `'0.001'`, at most 8 decimals), announced at once → `nostr()`.
   `await satori.unsell(stream)` → `nostr()`: free again (what buyers owe is
   still settled).
 - `await satori.buy(pubkey, stream, deposit?)` (only on the person's
   request; needs Unlock; gas): a stream sold on the Satori contract
-  (`discover()`'s `metadata.market`); the vault opens a channel with
+  (`discover()`'s `price_per_obs` and `metadata.market`); the vault opens a channel with
   `deposit` SATORI (100 observations by default) → `nostr().market.bought`'s
   entry. Throws in plain words: not for sale, locked, a staked vault, not
   enough SATORI. `await satori.stop(pubkey, stream)` (only on the person's
