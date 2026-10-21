@@ -4,7 +4,7 @@
 import { sha1 } from '@noble/hashes/legacy';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils';
 
-export const KIND = { ANNOUNCE: 34600, OBSERVATION: 34601, SUBSCRIPTION: 34602, RELAY_LIST: 10002 }; // models.py:512-514
+export const KIND = { ANNOUNCE: 34600, OBSERVATION: 34601, SUBSCRIPTION: 34602, PAYMENT: 34603, RELAY_LIST: 10002 }; // models.py:512-515
 export const PRED = '_pred';
 
 const tag = (e, name) => e.tags.find((t) => t[0] === name)?.[1];
@@ -47,26 +47,85 @@ export const tombstoneEvent = (stream, pubkey, now) => ({
 
 /**
  * The metadata of `<stream>_pred` as _networkAnnouncePublications builds it
- * (start.py:3442-3482; the publication from routes.py:2700-2711).
- * @param {{sub: object, pubkey: string, walletPubkey: string}} p sub: a relay_streams row
+ * (start.py:3442-3482; the publication from routes.py:2700-2711). Priced (`market`: { chain, contract, token, payee,
+ * price }, docs/design/market.md#selling-and-buying-over-the-relays): encrypted, and the listing in metadata.market;
+ * price_per_obs stays 0 (Lite's sats: a Lite neuron must never open an Evrmore channel to a Base seller).
+ * @param {{sub: object, pubkey: string, walletPubkey: string, market?: object|null}} p sub: a relay_streams row
  */
-export const predMetadata = ({ sub, pubkey, walletPubkey }) => ({
+export const predMetadata = ({ sub, pubkey, walletPubkey, market = null }) => ({
   stream_name: sub.stream_name + PRED, nostr_pubkey: pubkey, name: `Predictions for ${sub.name || sub.stream_name}`,
-  description: '', encrypted: false, price_per_obs: 0, created_at: sub.pred_created_at,
+  description: '', encrypted: !!market, price_per_obs: 0, created_at: sub.pred_created_at,
   cadence_seconds: sub.cadence_seconds ?? null, tags: [],
-  metadata: { source_stream_name: sub.stream_name, source_provider_pubkey: sub.provider_pubkey, wallet_pubkey: walletPubkey },
+  metadata: { source_stream_name: sub.stream_name, source_provider_pubkey: sub.provider_pubkey, wallet_pubkey: walletPubkey,
+    ...(market && { market }) },
 });
 
-/** subscribe_datastream / unsubscribe_datastream (client.py:1102-1154, 1600-1644). */
-export function subscriptionEvent({ stream, provider, subscriber, now, unsubscribe = false }) {
+/**
+ * subscribe_datastream / unsubscribe_datastream (client.py:1102-1154, 1600-1644); a paid stream's subscription names
+ * its channel in payment_channel ({ chain, contract, id, binding }).
+ */
+export function subscriptionEvent({ stream, provider, subscriber, now, unsubscribe = false, paymentChannel = null }) {
   const tags = [['d', stream], ['p', provider], ['stream', stream]];
   tags.push(...(unsubscribe ? [['action', 'unsubscribe'], ['satori', 'unsubscription']] : [['satori', 'subscription']]));
   return {
     created_at: now, kind: KIND.SUBSCRIPTION, tags,
     content: JSON.stringify({ subscriber_pubkey: subscriber, stream_name: stream, nostr_pubkey: provider, timestamp: now,
-      payment_channel: null }),
+      payment_channel: unsubscribe ? null : paymentChannel }),
   };
 }
+
+/** A 34602 → { subscriber, stream_name, provider, channel (payment_channel, an object, or null), unsubscribe }, or null. */
+export function parseSubscription(e) {
+  if (e?.kind !== KIND.SUBSCRIPTION || !wellTagged(e)) return null;
+  let c;
+  try { c = JSON.parse(e.content); } catch { return null; }
+  if (!c || typeof c !== 'object' || typeof c.subscriber_pubkey !== 'string' || typeof c.stream_name !== 'string' || !c.stream_name
+    || typeof c.nostr_pubkey !== 'string') return null;
+  const channel = c.payment_channel && typeof c.payment_channel === 'object' ? c.payment_channel : null;
+  return { subscriber: c.subscriber_pubkey, stream_name: c.stream_name, provider: c.nostr_pubkey, channel,
+    unsubscribe: e.tags.some((t) => t[0] === 'action' && t[1] === 'unsubscribe') };
+}
+
+/**
+ * A paid observation for one subscriber (34601), as publish_observation sends it (client.py:621-660): `content` the
+ * value encrypted to them (NIP-04), seq and timestamp in tags; d = `<stream>:<subscriber>`, one per subscriber (a relay
+ * keeps one event per d: Lite's shared d would leave one subscriber's).
+ */
+export const deliveryEvent = ({ stream, subscriber, seq, timestamp, content, now }) => ({
+  created_at: now, kind: KIND.OBSERVATION, content,
+  tags: [['d', `${stream}:${subscriber}`], ['p', subscriber], ['stream', stream], ['seq', String(seq)], ['timestamp', String(timestamp)],
+    ['satori', 'observation']],
+});
+
+/** A delivery's plain parts → { stream_name, provider, subscriber, seq, timestamp, id }, or null (Lite reads the stream tag, then d). */
+export function deliveryOf(e) {
+  if (e?.kind !== KIND.OBSERVATION || !wellTagged(e) || !e.content) return null;
+  const subscriber = tag(e, 'p');
+  const stream = tag(e, 'stream') ?? tag(e, 'd');
+  const seq = Number(tag(e, 'seq'));
+  const ts = Number(tag(e, 'timestamp'));
+  if (!subscriber || !stream || !Number.isSafeInteger(seq)) return null;
+  return { stream_name: stream, provider: e.pubkey, subscriber, seq, timestamp: Number.isFinite(ts) ? ts : null, id: e.id };
+}
+
+/** A paid stream's public heartbeat (34601, no value: client.py:665-680), on its own d at each observation. */
+export const heartbeatEvent = ({ stream, seq, timestamp, now }) => ({
+  created_at: now, kind: KIND.OBSERVATION, content: '',
+  tags: [['d', stream], ['stream', stream], ['seq', String(seq)], ['timestamp', String(timestamp)], ['satori', 'heartbeat']],
+});
+
+/** A payment (34603) as send_payment sends it (client.py:1216-1283): `content` its JSON encrypted to the seller (NIP-04). */
+export const paymentEvent = ({ stream, provider, seq, content, now }) => ({
+  created_at: now, kind: KIND.PAYMENT, content, tags: [['d', stream], ['p', provider], ['stream', stream], ['seq', String(seq)]],
+});
+
+/**
+ * PaymentNotification's JSON (models.py:173-205) on Base: amount_sats → `amount` (wei, a string) and tx_id → `voucher`
+ * ({ channel, cumulative, signature }: the identity's cumulative EIP-712 voucher, src/chain/channels.js).
+ */
+export const paymentJson = ({ from, to, stream, seq, amount, timestamp, voucher }) => JSON.stringify({
+  from_pubkey: from, to_pubkey: to, stream_name: stream, seq_num: seq, amount: String(amount), timestamp, voucher,
+});
 
 /** NIP-65 (client.py:405-428). */
 export const relayListEvent = (urls, now) => ({ created_at: now, kind: KIND.RELAY_LIST, tags: urls.map((u) => ['r', u]), content: '' });
