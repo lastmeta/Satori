@@ -1,4 +1,4 @@
-# Brief for Claude (handoff, 2026-10-19)
+# Brief for Claude (handoff, 2026-10-21)
 
 Read this first after a context reset. It says where everything is, how the
 owner wants work done, what's live, and what's next. The detail lives in the
@@ -20,6 +20,7 @@ Read next, in this order:
 
 ## How the owner wants work done
 The full set is in Claude memory; this is the short version.
+- **Do only what was asked.** No extra steps, features or hardening passes. Before designing anything, look at how Satori Lite / satorilib already does it and port that (2026-10-21: an unasked-for "track record" step cost a day).
 - **Essentialism.** Keep it small and correct. Follow Satori Lite's *network behaviour* (central, the contracts, the relays), but not its local formats.
 - **Migrate in, never back.** Import and translate what users bring. Don't keep old formats or limits for compatibility's sake.
 - **Two keys.** The identity is plaintext and signs on its own. The vault is encrypted with PBKDF2-SHA256 at 600k rounds plus AES-GCM, and holds the funds. The Nostr key is random and plaintext.
@@ -141,13 +142,20 @@ curl -sI https://neuron.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n"
 - Satori Lite still answers DOWN on a tie (a one-line change in its `base_predict.py` if the owner wants it to match; not answered yet).
 - Central's stake gate only counts peers with a `reward_address`. It's latent while the requirement is 0, but fix it in central before raising it.
 
-**3. The market of data streams (owner, 2026-10-20; approved; `docs/intent/network.md`, `docs/plans/market.md`):**
-- Done 2026-10-20 (deployed `43a62b6`, the contract on humble `523af9a6`):
-  - step 0, a relay everyone can reach: `wss://relay.satorinet.io`;
-  - step 2, the channel contract: `PaymentChannels` at `0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c` (Base Sepolia, the same address everywhere), `contract/docs/design/payment-channels.md`.
-- Next: step 1 (a track record for prediction streams), then step 3 (paid streams: sell and buy in the neuron).
-- The owner holds the other relay fixes (central's uptime pay, discovery, Lite's paid-stream flaws) until the design settles.
-- Built by this session at the owner's request: the owner doesn't want PaymentChannels work handed to the contract session; coordinate only so neither sweeps the other's files.
+**3. The market of data streams (owner, 2026-10-20; `docs/intent/network.md`, `docs/plans/market.md`, `docs/design/market.md`):**
+What the owner asked for: a data-stream marketplace on the Satori relays and the Base contract. A seller sets a price per observation; a buyer pays tiny SATORI amounts per observation through a payment channel, with no gas per payment. Lite's Evrmore flow, ported, nothing more.
+- Done and live:
+  - a relay everyone can reach: `wss://relay.satorinet.io`;
+  - the channel contract: `PaymentChannels` at `0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c` (Base Sepolia, the same address everywhere; contract repo `humble` `523af9a6`), `contract/docs/design/payment-channels.md`;
+  - sell and buy in the browser neuron (`src/neuron/market.js`): satorilib's events and fields; the Evrmore channel swapped for the Base contract.
+- The owner's rulings (2026-10-21):
+  - **One price:** Lite's `price_per_obs`, in satoshis (10⁻⁸ SATORI). `metadata.market` only says where to pay (chain, contract, token, payee). There are no Evrmore buyers.
+  - **The seller settles at most once a day.** Hourly wastes gas.
+  - **Not now:** the prediction marketplace (bounties: a buyer pays the top N predictors). It is mixed in with the same Lite code; don't port it.
+- The track record of prediction streams (`records.js`, Streams › Prediction streams) was never asked for. Leave it as it is; don't extend it.
+- Next: Satori Lite (`neuron` + `satorilib`, `base-upgrade`) adopts the same events, buying and selling on Base.
+- The owner holds the other relay fixes (central's uptime pay, discovery) until the design settles.
+- Market contracts are built in this session's line of work, not handed to the contract session; coordinate only so neither sweeps the other's files.
 
 **4. Later, recorded and not scheduled:**
 - deeper engine work: deep Retrain search, direction modelling, more data and algorithms;
