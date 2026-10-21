@@ -1,0 +1,21 @@
+{
+ "nostr_sdk": "0.45.0",
+ "sender": "3333333333333333333333333333333333333333333333333333333333333331",
+ "recipient": "dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4",
+ "sender_pubkey": "9b9386ad0b909054f77de5b44d55409f70c938f98ded9700c21b279c0b934acb",
+ "recipient_pubkey": "62756113cd917a659263ead50da0f538d97a5d4cbf0c573464140364f9a98cc8",
+ "vectors": [
+  {
+   "text": "101.25",
+   "ciphertext": "ujHgZEycPJ7hIHF2JzS7sg==?iv=rhKi20JEjDWGtAk/mrxFmg=="
+  },
+  {
+   "text": "{\"from_pubkey\": \"ab\", \"seq_num\": 3}",
+   "ciphertext": "rFiVYI9PbLO2fMHeDgaddTjFy+ChULPPC2wNBYwOyb+Xq+nMGdGwRys5OenGv0B8?iv=LnXZYatx+0ANumYqaowcTA=="
+  },
+  {
+   "text": "Ünïcode ✓ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "ciphertext": "rofRyyNFd21Y+l+/SDggmvIIRPXE2cJOV1+yTcQrUe03kP/bDlyUsybSd9TYshpYyepQHJFhWxD5u5zJHSthFQ==?iv=5uOdtJZqq1E1kQqVMs5UAg=="
+  }
+ ]
+}
