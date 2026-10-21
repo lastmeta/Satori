@@ -78,6 +78,9 @@ describe('which prediction streams are watched', () => {
     expect(list[1].stream).toBe(`s${WATCH_CAP + 2}_pred`); // the newest
     expect(list.at(-1).stream).toBe('s4_pred'); // s0…s3 left out
     expect(selectWatched(catalog(events), { me: ME_PUB, cap: 2 }).list.map((x) => x.stream)).toEqual(['btc_pred', `s${WATCH_CAP + 2}_pred`]);
+    // a stream we buy (docs/design/market.md) is kept ahead of the newcomers, as ours
+    expect(selectWatched(catalog(events), { me: ME_PUB, cap: 2, keep: new Set([`${A_PUB}:s0_pred`]) }).list.map((x) => x.stream).sort())
+      .toEqual(['btc_pred', 's0_pred']);
   });
 
   test("cadence: the prediction stream's, else its source's, else a day; a source unannounced takes its prediction stream's", () => {

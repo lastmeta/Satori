@@ -50,17 +50,18 @@ export function sourceOf(entry) {
  * `pubkey:stream`: tombstoned on a relay, or our own we unsubscribed from). The cap holds for the whole watched set:
  * ours (`me`) first, then those already `watched` that are still announced, then the watched ones missing from this
  * catalog but seen since `since` (they keep their place: a relay down or an announcement lost for a while), then the
- * newcomers, most recently announced first; at most `cap` in all. Cadence: the prediction stream's, else its source's,
+ * newcomers, most recently announced first; at most `cap` in all. Those in `keep` (`pubkey:stream`: the streams we buy,
+ * docs/design/market.md) rank with ours. Cadence: the prediction stream's, else its source's,
  * else a day; a source not announced takes its prediction stream's. A source's name: its own announcement's, else its
  * stream id as it is, never the prediction stream's words (a predictor could name a stream it controls under another
  * key "BTC"); `announced`: whether the source has an announcement of its own in the catalog.
  * @param {object[]} entries catalog()
- * @param {{me?: string|null, cap?: number, watched?: {pubkey: string, stream: string, seen_at: number}[], gone?: Set<string>, since?: number}} [o]
+ * @param {{me?: string|null, cap?: number, watched?: {pubkey: string, stream: string, seen_at: number}[], gone?: Set<string>, since?: number, keep?: Set<string>}} [o]
  * @returns {{list: object[], lingering: {pubkey: string, stream: string}[], found: number, left: number}} list: from
  *   this catalog; lingering: watched ones kept though missing from it; found: every prediction stream that names a source
  *   (not gone); left: found and not watched (past the cap)
  */
-export function selectWatched(entries, { me = null, cap = WATCH_CAP, watched = [], gone = new Set(), since = -Infinity } = {}) {
+export function selectWatched(entries, { me = null, cap = WATCH_CAP, watched = [], gone = new Set(), since = -Infinity, keep = new Set() } = {}) {
   const key = (pubkey, stream) => `${pubkey}:${stream}`;
   const announced = new Map(entries.map((s) => [key(s.pubkey, s.stream_name), s]));
   const was = new Set(watched.map((w) => key(w.pubkey, w.stream)));
@@ -77,7 +78,7 @@ export function selectWatched(entries, { me = null, cap = WATCH_CAP, watched = [
       source: { ...src, name: own?.name || src.stream, announced: !!own, cadence_seconds: cadenceOf(own?.cadence_seconds) ?? cadence },
     });
   }
-  const tier = (x) => (x.mine ? 0 : was.has(key(x.pubkey, x.stream)) ? 1 : 2);
+  const tier = (x) => (x.mine || keep.has(key(x.pubkey, x.stream)) ? 0 : was.has(key(x.pubkey, x.stream)) ? 1 : 2);
   const byKey = (a, b) => (a.pubkey < b.pubkey ? -1 : a.pubkey > b.pubkey ? 1 : a.stream < b.stream ? -1 : a.stream > b.stream ? 1 : 0);
   found.sort((a, b) => tier(a) - tier(b) || (b.announced_at - a.announced_at) || byKey(a, b));
   const here = new Set(found.map((x) => key(x.pubkey, x.stream)));
@@ -267,16 +268,16 @@ export function createWatch({ db, me, now = () => Date.now() / 1000, onChange = 
     /** How many prediction streams and sources are watched. */
     count: () => ({ streams: preds().length, sources: rows.size - preds().length }),
     /**
-     * A scan's catalog (catalog() entries, with their events) and what it saw `gone` (keys `pubkey:stream`: tombstoned,
-     * or our own we unsubscribed from): the selection (selectWatched: at most WATCH_CAP in all, the watched ones first)
+     * A scan's catalog (catalog() entries, with their events), what it saw `gone` (keys `pubkey:stream`: tombstoned,
+     * or our own we unsubscribed from) and what we buy (`bought`, the same keys: ranked with ours): the selection (selectWatched: at most WATCH_CAP in all, the watched ones first)
      * kept, seen now; a watched one missing from the catalog kept until no scan has seen it for 7 days; everything else
      * (gone, past the cap, a source nothing names) dropped now with its observations.
      * → { found, left, changed: whether the followed set changed }
      */
-    async apply(entries, { gone = new Set() } = {}) {
+    async apply(entries, { gone = new Set(), bought = new Set() } = {}) {
       const at = Math.floor(now());
       const was = pairsKey();
-      const { list, lingering, found, left } = selectWatched(entries, { me, gone, since: at - WATCH_DROP_S,
+      const { list, lingering, found, left } = selectWatched(entries, { me, gone, keep: bought, since: at - WATCH_DROP_S,
         watched: preds().map((r) => ({ pubkey: r.pubkey, stream: r.stream_name, seen_at: r.seen_at })) });
       const stay = new Set(lingering.map((x) => relayUuid(x.pubkey, x.stream)));
       const saved = watchRows(list, at).filter((r) => !(r.kind === 'source' && stay.has(r.uuid))); // a lingering pred stays a pred
