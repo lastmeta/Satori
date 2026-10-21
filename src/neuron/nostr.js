@@ -88,7 +88,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   const watch = createWatch({ db, me: key.pubkey, now, onChange: onRecords });
   // paid streams (src/neuron/market.js): what we sell and buy
   const market = createMarket({ db, key, identity, vaultAddress, vault, chain, now, onChange: () => onChange(),
-    publish: (ev) => publish(ev), sendKept: (events) => sendKept(events) });
+    publish: (ev) => background(publish(ev)), sendKept: (events) => background(sendKept(events)) }); // idle() waits for them
   const marketLine = serial(); // the seller's 34602/34603, in order, beside the intake (each may read the chain)
   let watchedAt = -Infinity; // when the last scan for prediction streams worked (s)
   let watchInfo = { found: 0, left: 0, error: null };
@@ -679,8 +679,8 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       onChange();
       return v;
     },
-    /** Stop buying: the identity asks to close the channel, the unsubscribe is sent; the refund after the 7-day grace period. → its view */
-    async stop(pubkey, stream) {
+    /** Stop buying (window.satori.stop): the identity asks to close the channel, the unsubscribe is sent; the refund after the 7-day grace period. → its view */
+    async stopBuying(pubkey, stream) {
       const [p, s] = checkStream(pubkey, stream);
       const v = await market.stop(p, s);
       await refollow();

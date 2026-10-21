@@ -66,7 +66,7 @@ export const deliverable = (s) => !s.closing && B(s.cumulative) >= owed(s) && B(
  * @param {() => object|null} o.vault the vault while unlocked (a Buy opens the channel from it)
  * @param {() => Promise<{channels: object, config: object, chainTime: () => Promise<number>}>} o.chain the channel client on the current chain
  * @param {(event: object) => Promise<number>} o.publish to the relays we write to → how many took it
- * @param {(events: object[]) => Promise<void>} o.sendKept the same, kept until each relay took it (an unsubscribe)
+ * @param {(events: object[]) => Promise<void>} o.sendKept the same, kept until each relay took it (a subscription, a payment, an unsubscribe)
  */
 export function createMarket({ db, key, identity = null, vaultAddress = null, vault = () => null, chain, publish, sendKept = async () => {},
   now = () => Date.now() / 1000, onChange = () => {}, config = DEFAULTS }) {
@@ -208,8 +208,8 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
         deposit: String(amount), cumulative: '0', seq: null, status: 'open', closeAt: null, at: t() };
       await save();
       const binding = signBinding(identity, r.id, key.pubkey);
-      await publish(sign(subscriptionEvent({ stream: entry.stream_name, provider: entry.pubkey, subscriber: key.pubkey, now: t(),
-        paymentChannel: { chain: config.chainId, contract: config.channels, id: r.id, binding } })));
+      await sendKept([sign(subscriptionEvent({ stream: entry.stream_name, provider: entry.pubkey, subscriber: key.pubkey, now: t(),
+        paymentChannel: { chain: config.chainId, contract: config.channels, id: r.id, binding } }))]); // kept until a relay takes it
       return this.view(r.id);
     },
     /**
@@ -231,7 +231,7 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
         const voucher = { channel: b.channel, cumulative: String(next), signature };
         const content = await nip04Encrypt(key.secret, d.provider, paymentJson({ from: key.pubkey, to: d.provider, stream: d.stream_name,
           seq: d.seq + 1, amount: b.price, timestamp: t(), voucher }));
-        publish(sign(paymentEvent({ stream: d.stream_name, provider: d.provider, seq: d.seq + 1, content, now: t() }))).catch(log);
+        sendKept([sign(paymentEvent({ stream: d.stream_name, provider: d.provider, seq: d.seq + 1, content, now: t() }))]).catch(log); // kept until a relay takes it
       } else {
         await save();
       }

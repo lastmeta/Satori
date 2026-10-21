@@ -6,7 +6,8 @@
 relay everyone can reach) and step 2 (the channel contract, deployed on Base
 Sepolia) are done; step 1 (the track record) is built, 2026-10-20, not yet
 deployed ([../design/track-record.md](../design/track-record.md)); step 3
-is next.
+(sell and buy in the neuron) is built, 2026-10-21, not yet deployed
+([../design/market.md](../design/market.md#selling-and-buying-over-the-relays)).
 
 ## The goal
 

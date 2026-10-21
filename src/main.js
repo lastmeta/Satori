@@ -882,7 +882,7 @@ const actions = {
     return withVault('buy', () => actions.buyNow(pubkey, stream, f.deposit));
   },
   buyNow: shownAt('networkError', (pubkey, stream, deposit) => marketAction(`buy:${pubkey}:${stream}`, () => nostr.buy(pubkey, stream, deposit))),
-  stop: shownAt('marketError', (pubkey, stream) => marketAction(`stop:${pubkey}:${stream}`, () => nostr.stop(pubkey, stream))),
+  stop: shownAt('marketError', (pubkey, stream) => marketAction(`stop:${pubkey}:${stream}`, () => nostr.stopBuying(pubkey, stream))),
   fillRelays(el) {
     el.elements.relays.value = state.nostr.userRelays.join('\n');
     el.elements.centralWrite.checked = state.nostr.centralWrite;
@@ -1151,7 +1151,7 @@ window.satori = {
    */
   async buy(pubkey, stream, deposit) { ready(); return marketAction('buy', () => nostr.buy(String(pubkey ?? '').trim().toLowerCase(), stream, deposit)); },
   /** Stop buying: the identity asks to close the channel (gas, no Unlock); the rest comes back to the vault after 7 days. → the same */
-  async stop(pubkey, stream) { ready(); return marketAction('stop', () => nostr.stop(String(pubkey ?? '').trim().toLowerCase(), stream)); },
+  async stop(pubkey, stream) { ready(); return marketAction('stop', () => nostr.stopBuying(String(pubkey ?? '').trim().toLowerCase(), stream)); },
   /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
   /** Base: a fresh read of the chain (one multicall) and the last batch. */

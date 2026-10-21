@@ -1184,7 +1184,7 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
 
     // stop: the close asked by the identity, Lite's unsubscribe; no longer followed
     u.published = [];
-    expect(await nostr.stop(OTHER_PUB, 'btc_pred')).toMatchObject({ status: 'closing' });
+    expect(await nostr.stopBuying(OTHER_PUB, 'btc_pred')).toMatchObject({ status: 'closing' });
     await settle();
     expect(chainApi.calls).toContain('requestClose');
     expect(u.published.map((e) => [e.kind, tagOf(e, 'action')])).toEqual([[34602, 'unsubscribe']]);

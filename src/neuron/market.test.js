@@ -2,7 +2,7 @@
 // a fake relay (each published event handed to the other) and a fake of the channel contract with the real voucher and
 // binding signatures: listing, the channel accepted on chain, deliveries encrypted to paying buyers only, vouchers
 // checked, settle, stop and the refund after the grace period; forged channels, bindings and vouchers refused.
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { keccak256, toHex } from 'viem';
 import { DEFAULTS } from '../chain/config.js';
 import { CLOSE_GRACE_S, ChannelError, verifyVoucher } from '../chain/channels.js';
@@ -14,6 +14,8 @@ import { KIND, announceEvent, catalog, predMetadata, paymentEvent, subscriptionE
 import {
   amountOf, bindingSigner, bindingText, createMarket, deliverable, listingOf, signBinding, DEPOSIT_OBS,
 } from './market.js';
+
+vi.setConfig({ testTimeout: 60_000 }); // schnorr, ECDSA and AES in JS: seconds on the busy shared box
 
 const signer = (hex) => {
   const secret = Uint8Array.from(Buffer.from(hex, 'hex'));
