@@ -27,7 +27,7 @@ export const state = reactive({
   lockAt: null, // when the vault locks on its own (ms), or null (src/keys/autolock.js)
   lockNow: 0, // the clock "Locks in 4 min" is counted from (ms; moves every 15 s while unlocked)
   vaultError: '',
-  unlockFor: '', // the inline Unlock prompt that is open: '' | 'card' | 'claim' | 'wallet'
+  unlockFor: '', // the inline Unlock prompt that is open: '' | 'card' | 'claim' | 'wallet' | 'buy'
   unlockError: '',
   backupAsk: '', // the key whose backup asks for the passphrase (each time): '' | 'identity' | 'vault' | 'nostr'
   backupError: '',
@@ -78,7 +78,9 @@ export const state = reactive({
   rewardError: '',
   // Nostr (docs/design/nostr.md): the flow's status, the last catalog
   nostr: { pubkey: '', npub: '', maxStreams: 0, centralWrite: false, userRelays: [], relays: [], subscriptions: [],
-    watching: { streams: 0, sources: 0, found: 0, left: 0, at: null, error: null } },
+    watching: { streams: 0, sources: 0, found: 0, left: 0, at: null, error: null }, market: { selling: [], bought: [], error: null } },
+  marketBusy: '', // a paid-stream action in flight: 'sell:<stream>' | 'buy:<pubkey>:<stream>' | 'stop:<pubkey>:<stream>' (docs/design/market.md)
+  marketError: '',
   catalog: [],
   // the track record (docs/design/track-record.md): records() as last read (while Streams shows), the scan's step at a
   // readable pace, the open stream's key and its record() (with its pairs), the whole list asked for

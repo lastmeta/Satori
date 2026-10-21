@@ -1,14 +1,17 @@
 // Streams: the Satori Network's (central: the data flow's facts and Poll now; each stream with its forecast, model and
 // companions, and its history on a tap), the subscriptions on the Satori relays (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams), and the relays' streams to discover.
+// Paid streams (docs/design/market.md): a price on our own `_pred`s, the streams we buy (the deposit left, Stop), Buy in the catalog.
 // The words people see (docs/intent/ui.md); the addresses are Settings'.
 import { html } from '@arrow-js/core';
+import { formatEther } from 'viem';
 import { state } from './state.js';
-import { fact, sparkPath } from './parts.js';
+import { fact, form, sparkPath, unlockPrompt } from './parts.js';
 import {
   fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
-  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText,
+  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText, saleText, boughtText,
 } from './format.js';
+import { listingOf, DEPOSIT_OBS } from '../neuron/market.js';
 import { watchText, recordGroups, firstRows, recordDetail, SHOWN } from './record.js';
 
 export const CATALOG_SHOWN = 50;
@@ -78,6 +81,40 @@ function subRow(s, a) {
   return html`<div class="row nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs" title="${s.observation ? `sent as ${rawText(s.observation)}` : ''}">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><button class="link" data-test="unsubscribe" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></div>`;
 }
 
+// ── paid streams (docs/design/market.md) ──
+
+/** One of our `_pred` streams: Free with a price to set (Sell), or its price and buyers with Make free. */
+function sellRow(sub, a) {
+  // One root node, no whitespace around it (see streamRow).
+  const stream = `${sub.stream}_pred`;
+  const sale = () => state.nostr.market?.selling.find((x) => x.stream === stream);
+  const busy = () => state.marketBusy === `sell:${stream}`;
+  return html`<div class="crow" data-test="sell-row" data-stream="${stream}"><div class="cmain"><span class="sname">${stream}</span> <span class="muted small" data-test="sell-state">${() => saleText(sale())}</span></div>${() => (sale()
+    ? html`<button class="small-btn" data-test="unsell" disabled="${() => !!state.marketBusy}" @click="${() => a.unsell(stream)}">${() => (busy() ? '…' : 'Make free')}</button>`
+    : html`<form class="sell" @submit="${(e) => a.sell(stream, form(e))}"><input name="price" inputmode="decimal" autocomplete="off" required aria-label="${`Price per observation of ${stream}, in SATORI`}" placeholder="SATORI each" data-test="sell-price"><button class="small-btn primary" type="submit" data-test="sell" disabled="${() => !!state.marketBusy}">${() => (busy() ? '…' : 'Sell')}</button></form>`)}</div>`;
+}
+
+/** A stream we buy: the deposit left and Stop; stopped, when the rest comes back to the vault. */
+function boughtRow(b, a) {
+  // One root node, no whitespace around it (see streamRow).
+  const key = `${b.pubkey}:${b.stream}`;
+  return html`<div class="crow" data-test="bought-row" data-key="${key}"><div class="cmain"><span class="sname">${b.name || b.stream}</span> <span class="muted small"><span class="nowrap" title="${b.pubkey}">${shortKey(b.pubkey)}</span> · ${b.price} SATORI each</span><div class="small" data-test="bought-left">${boughtText(b)}</div></div>${b.status === 'open' ? html`<button class="small-btn" data-test="stop" disabled="${() => !!state.marketBusy}" @click="${() => a.stop(b.pubkey, b.stream)}">${() => (state.marketBusy === `stop:${key}` ? '…' : 'Stop')}</button>` : ''}</div>`;
+}
+
+function marketPart(a) {
+  const m = () => state.nostr.market ?? { selling: [], bought: [], error: null };
+  return html`
+    <div class="market" data-test="market" hidden="${() => !state.nostr.subscriptions.length && !m().bought.length}">
+      <h3>Sell <small class="muted">per observation, in SATORI, through the Satori contract</small></h3>
+      <div class="crows">${() => state.nostr.subscriptions.map((sub) => sellRow(sub, a).key(sub.uuid))}</div>
+      <div hidden="${() => !m().bought.length}">
+        <h3>Bought</h3>
+        <div class="crows">${() => m().bought.map((b) => boughtRow(b, a).key(`${b.channel}:${b.status}:${b.left}:${b.closeAt}`))}</div>
+      </div>
+      <p class="error small" role="alert" data-test="market-error" hidden="${() => !(state.marketError || m().error)}">${() => state.marketError || m().error}</p>
+    </div>`;
+}
+
 function nostrCard(a) {
   const n = () => state.nostr;
   return html`
@@ -91,6 +128,7 @@ function nostrCard(a) {
       <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
       <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq}`))}</div>
     </div>
+    ${marketPart(a)}
   </section>`;
 }
 
@@ -130,16 +168,28 @@ function recordsCard(a) {
   </section>`;
 }
 
-function catRow(s, a) {
+/** A stream sold on the Satori contract: its price, a deposit (100 observations) and Buy; bought, the deposit left. */
+function buyPart(s, l, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
-  const paid = s.price_per_obs > 0 || s.encrypted || s.approval_required;
-  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}</span><div class="muted small desc">${s.description}</div></div><button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button></div>`;
+  const mine = () => state.nostr.market?.bought.find((b) => b.pubkey === s.pubkey && b.stream === s.stream_name && b.status === 'open');
+  return html`${() => (mine()
+    ? html`<span class="muted small" data-test="catalog-bought">${`Bought · ${mine().left} SATORI left`}</span>`
+    : html`<form class="buy" @submit="${(e) => a.buy(s.pubkey, s.stream_name, form(e))}"><input name="deposit" inputmode="decimal" autocomplete="off" required value="${formatEther(l.price * BigInt(DEPOSIT_OBS))}" aria-label="${`Deposit for ${s.stream_name}, in SATORI`}" data-test="buy-deposit"><button class="small-btn primary" type="submit" data-test="buy" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `buy:${key}` ? '…' : 'Buy')}</button></form>`)}`;
 }
 
-const shownCatalog = () => state.catalog.filter((s) => !s.pred && catalogMatch(s, state.catalogQuery));
+function catRow(s, a) {
+  const key = `${s.pubkey}:${s.stream_name}`;
+  const l = listingOf(s);
+  const paid = !l && (s.price_per_obs > 0 || s.encrypted || s.approval_required);
+  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}${l ? html` · <b data-test="catalog-price">${`${formatEther(l.price)} SATORI each`}</b>` : ''}</span><div class="muted small desc">${s.description}</div></div>${l ? buyPart(s, l, a) : html`<button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button>`}</div>`;
+}
+
+/** Shown: the streams to subscribe to, and the ones sold on the Satori contract (prediction streams too); the rest of the prediction streams hidden. */
+const listed = (s) => !s.pred || !!listingOf(s);
+const shownCatalog = () => state.catalog.filter((s) => listed(s) && catalogMatch(s, state.catalogQuery));
 
 function network(a) {
-  const total = () => state.catalog.filter((s) => !s.pred).length;
+  const total = () => state.catalog.filter(listed).length;
   const summary = () => {
     if (!state.catalog.length) return state.discovering ? 'Asking the relays…' : 'Discover the streams the relays announce.';
     const hits = shownCatalog().length;
@@ -155,7 +205,8 @@ function network(a) {
       <button type="submit" disabled="${() => state.discovering}">${() => (state.discovering ? 'Discovering…' : state.catalog.length ? 'Refresh' : 'Discover')}</button>
     </form>
     <p class="muted small" data-test="catalog-summary">${() => state.networkLine || summary()}</p>
-    <p class="error small" role="alert" hidden="${() => !state.networkError}">${() => state.networkError}</p>
+    <p class="error small" role="alert" data-test="network-error" hidden="${() => !state.networkError}">${() => state.networkError}</p>
+    ${unlockPrompt(a, 'buy', 'buy')}
     <div class="crows">${() => shownCatalog().slice(0, CATALOG_SHOWN).map((s) => catRow(s, a).key(`${s.pubkey}:${s.stream_name}:${s.subscribed}`))}</div>
   </details>`;
 }

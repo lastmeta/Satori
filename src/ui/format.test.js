@@ -4,6 +4,7 @@ import {
   fmtCadence, shortKey, relayText, relaysText, BLOCKED_NOTE, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
   storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText, openingText,
+  saleText, boughtText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -280,4 +281,14 @@ test('openingText: a revisit\'s wait, step by step', () => {
   expect(openingText({ step: 'download', loaded: 1_200_000, total: 5_065_391 })).toBe('Opening… downloading the engine, 1.2 of 5.1 MB');
   expect(openingText({ step: 'open' })).toBe('Opening… opening the database…');
   expect(openingText({ step: 'ready' })).toBe('Opening… starting the neuron…'); // the database is open; the neuron starts
+});
+
+test('paid streams (docs/design/market.md): a sale and a buy in words', () => {
+  expect(saleText(undefined)).toBe('Free');
+  expect(saleText({ price: '0.001', buyers: [] })).toBe('0.001 SATORI each');
+  expect(saleText({ price: '0.001', buyers: [{ closing: false }, { closing: true }, { closing: false }] })).toBe('0.001 SATORI each · 2 buying');
+  expect(boughtText({ status: 'open', left: '0.004', deposit: '0.005' })).toBe('0.004 of 0.005 SATORI left');
+  const at = Date.UTC(2026, 9, 28, 12, 0) / 1000;
+  expect(boughtText({ status: 'closing', left: '0.004', closeAt: at })).toBe(`Stopped: 0.004 SATORI back to the vault after ${fmtWhen(at)}`);
+  expect(boughtText({ status: 'closing', left: '0.004', closeAt: null })).toBe('Stopped: 0.004 SATORI back to the vault after 7 days');
 });

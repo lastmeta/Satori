@@ -4,6 +4,19 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-21 (paid streams)
+
+- Sell and buy data streams over the relays, paid per observation in
+  SATORI through the Satori contract's payment channels (satorilib's
+  data-stream market, its Evrmore parts replaced): `sell(stream, price)`,
+  `unsell(stream)`, `buy(pubkey, stream, deposit?)`, `stop(pubkey,
+  stream)`, all only on the person's request (Safety); `nostr().market`.
+- A priced `_pred` is announced `encrypted: true` with `metadata.market`;
+  its public 34601 is a heartbeat, and each buyer gets the value encrypted
+  (NIP-04). `discover()` entries carry `metadata.market`.
+- Streams: Sell and Bought under Satori relays; streams sold on the Satori
+  contract show in "Streams on the relays" with a price, a deposit and Buy.
+
 ## Changed 2026-10-20 (the track record's review: fixes)
 
 - A prediction counts only if it arrived here before its outcome arrived

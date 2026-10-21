@@ -360,6 +360,10 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; color:
 .crow .sname { font-weight: 550; }
 .crow .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crow button { flex: none; }
+/* paid streams (docs/design/market.md): a price or a deposit typed in the row, its button beside it */
+.crow form { display: flex; gap: 8px; align-items: center; flex: none; }
+.crow form input { margin: 0; width: 7.5em; }
+.market h3 { margin: 14px 0 2px; font-size: 0.95rem; }
 /* the track record (docs/design/track-record.md#ui-streams): a row per prediction stream, its pill the Models tab's (.q);
    a tap opens its detail in place: the record in words, the outcomes as a line and the predictions dashed */
 .rstatus { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; }

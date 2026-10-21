@@ -127,6 +127,17 @@ export function fmtCadence(s) {
   return `${s} s`;
 }
 
+/** One of our streams for sale (nostr().market.selling's entry), or Free (docs/design/market.md). */
+export function saleText(sale) {
+  if (!sale) return 'Free';
+  const n = sale.buyers.filter((b) => !b.closing).length;
+  return `${sale.price} SATORI each${n ? ` · ${n} buying` : ''}`;
+}
+
+/** A stream we buy (nostr().market.bought's entry): the deposit left, or, stopped, when the rest comes back to the vault. */
+export const boughtText = (b) => (b.status === 'open' ? `${b.left} of ${b.deposit} SATORI left`
+  : `Stopped: ${b.left} SATORI back to the vault after ${b.closeAt ? fmtWhen(b.closeAt) : '7 days'}`);
+
 /** A Nostr pubkey, shortened: the first 8 and last 4 hex. */
 export const shortKey = (k) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : '');
 

@@ -259,7 +259,9 @@ async function startNeuron() {
   nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, ws: import.meta.env.DEV, // csp.js: only the dev page allows ws:
     defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite, wss: DEFAULTS.wss }, // wss: relays' stand-ins (config.js)
     onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err),
-    onRecords: refreshRecords, work });
+    onRecords: refreshRecords, work,
+    // paid streams (docs/design/market.md): the identity signs and settles, the vault is paid and funds a Buy, on Base's chain
+    identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, chain: () => base.channels() });
   await refreshNostr();
   base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase, onCheck: (r) => activity.base(r), onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
@@ -492,6 +494,12 @@ async function exclusive(what, fn, slot = 'busy') {
     state[slot] = '';
   }
 }
+
+/** A paid-stream action (docs/design/market.md), one at a time; then the relays card is read again. An interaction, as Base's. */
+const marketAction = (what, fn) => exclusive(what, fn, 'marketBusy').finally(() => {
+  autoLock.touch();
+  void refreshNostr();
+});
 
 /** A Base action, one at a time; then the card is read again. It counts as an interaction (the vault's 5 minutes). */
 const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => {
@@ -866,6 +874,15 @@ const actions = {
       state.subscribing = '';
     }
   }),
+  /** Paid streams (docs/design/market.md): a price on one of our `_pred`s, free again, Buy (the vault: Unlock in place), Stop. */
+  sell: shownAt('marketError', (stream, f) => marketAction(`sell:${stream}`, () => nostr.sell(stream, f.price))),
+  unsell: shownAt('marketError', (stream) => marketAction(`sell:${stream}`, () => nostr.unsell(stream))),
+  buy(pubkey, stream, f) {
+    state.networkError = '';
+    return withVault('buy', () => actions.buyNow(pubkey, stream, f.deposit));
+  },
+  buyNow: shownAt('networkError', (pubkey, stream, deposit) => marketAction(`buy:${pubkey}:${stream}`, () => nostr.buy(pubkey, stream, deposit))),
+  stop: shownAt('marketError', (pubkey, stream) => marketAction(`stop:${pubkey}:${stream}`, () => nostr.stop(pubkey, stream))),
   fillRelays(el) {
     el.elements.relays.value = state.nostr.userRelays.join('\n');
     el.elements.centralWrite.checked = state.nostr.centralWrite;
@@ -1124,6 +1141,17 @@ window.satori = {
   async records() { ready(); return nostr.records(); },
   /** One watched prediction stream's record, with `pairs`: the last 28 scored { ts, predicted, actual, baseline }; null when not watched. */
   async record(pubkey, stream) { ready(); return nostr.record(pubkey, stream); },
+  /** Sell one of this neuron's `<stream>_pred` streams at `price` SATORI per observation (only on the person's request). → nostr() */
+  async sell(stream, price) { ready(); return marketAction('sell', () => nostr.sell(stream, price)); },
+  /** That stream free again. → nostr() */
+  async unsell(stream) { ready(); return marketAction('unsell', () => nostr.unsell(stream)); },
+  /**
+   * Buy a stream sold on the Satori contract (only on the person's request; needs Unlock; gas): the vault opens a channel
+   * with `deposit` SATORI (100 observations by default). → nostr().market.bought's entry
+   */
+  async buy(pubkey, stream, deposit) { ready(); return marketAction('buy', () => nostr.buy(String(pubkey ?? '').trim().toLowerCase(), stream, deposit)); },
+  /** Stop buying: the identity asks to close the channel (gas, no Unlock); the rest comes back to the vault after 7 days. → the same */
+  async stop(pubkey, stream) { ready(); return marketAction('stop', () => nostr.stop(String(pubkey ?? '').trim().toLowerCase(), stream)); },
   /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
   /** Base: a fresh read of the chain (one multicall) and the last batch. */
