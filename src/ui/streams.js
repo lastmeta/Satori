@@ -105,8 +105,10 @@ function marketPart(a) {
   const m = () => state.nostr.market ?? { selling: [], bought: [], error: null };
   return html`
     <div class="market" data-test="market" hidden="${() => !state.nostr.subscriptions.length && !m().bought.length}">
-      <h3>Sell <small class="muted">per observation, in SATORI, through the Satori contract</small></h3>
-      <div class="crows">${() => state.nostr.subscriptions.map((sub) => sellRow(sub, a).key(sub.uuid))}</div>
+      <div hidden="${() => !state.nostr.subscriptions.length}">
+        <h3>Sell <small class="muted">per observation, in SATORI, through the Satori contract</small></h3>
+        <div class="crows">${() => state.nostr.subscriptions.map((sub) => sellRow(sub, a).key(sub.uuid))}</div>
+      </div>
       <div hidden="${() => !m().bought.length}">
         <h3>Bought</h3>
         <div class="crows">${() => m().bought.map((b) => boughtRow(b, a).key(`${b.channel}:${b.status}:${b.left}:${b.closeAt}`))}</div>
