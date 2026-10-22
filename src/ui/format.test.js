@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import {
   fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, relaysText, BLOCKED_NOTE, obsText, catalogMatch, predText,
-  shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText,
+  shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText, referralText, referralNote,
   storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText, openingText,
   saleText, boughtText,
 } from './format.js';
@@ -291,4 +291,14 @@ test('paid streams (docs/design/market.md): a sale and a buy in words', () => {
   const at = Date.UTC(2026, 9, 28, 12, 0) / 1000;
   expect(boughtText({ status: 'closing', left: '0.004', closeAt: at })).toBe(`Stopped: 0.004 SATORI back to the vault after ${fmtWhen(at)}`);
   expect(boughtText({ status: 'closing', left: '0.004', closeAt: null })).toBe('Stopped: 0.004 SATORI back to the vault after 7 days');
+});
+
+test('Referral: registered, held until Stake, or none; the note says what Stake does with it', () => {
+  const R = '0x' + 'ab'.repeat(20);
+  expect(referralText({ vault: { referral: R }, pendingReferrer: null })).toBe(shortHash(R));
+  expect(referralText({ vault: { referral: R }, pendingReferrer: '0x' + 'cd'.repeat(20) })).toBe(shortHash(R)); // set once: the held one is moot
+  expect(referralText({ vault: { referral: null }, pendingReferrer: R })).toBe(`Invited by ${shortHash(R)}, registered when you stake`);
+  expect(referralText({ vault: { referral: null }, pendingReferrer: null })).toBe('None');
+  expect(referralNote('0xabab…abab')).toBe('Invited by 0xabab…abab. Staking registers them as your referral, once and for good: 5% of the rewards your vault earns goes to them instead of to the project, and you earn the same either way.');
+  expect(stepText('setReferral(referrer)')).toBe('Vault: registers who invited you');
 });

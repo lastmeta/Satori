@@ -616,6 +616,50 @@ describe('createBase', () => {
     base.stop();
   });
 
+  describe('referral (docs/design/base.md#referral-invite-links)', () => {
+    const R = '0x' + 'ab'.repeat(20);
+    test('a held referrer is the vault\'s referral once it stakes; then nothing is held, and the status says who', async () => {
+      vault = vaultKey;
+      expect(await base.holdReferrer(R)).toBe(true);
+      let v = await base.status();
+      expect(v).toMatchObject({ pendingReferrer: R, vault: { referral: null } });
+      const r = await base.delegate();
+      expect(r.steps.map((x) => x.step)).toEqual(['setReferral(referrer)', 'setPredictorFee(0)', 'setAllowedDelegator(vault)',
+        'delegatePredictionPower(identity)']);
+      expect(s.referral[V]).toBe(R);
+      v = await base.refresh();
+      expect(v.vault.referral.toLowerCase()).toBe(R);
+      expect((await base.status()).pendingReferrer).toBeNull();
+      expect(await db.get('referrer')).toBeNull();
+    });
+    test('the newest link wins; none (not an address, the vault\'s own, nothing) holds nothing and keeps what was held', async () => {
+      expect(await base.holdReferrer(R)).toBe(true);
+      const other = '0x' + 'cd'.repeat(20);
+      expect(await base.holdReferrer(other)).toBe(true);
+      expect((await base.status()).pendingReferrer).toBe(other);
+      for (const bad of [null, '', 'nope', vaultKey.evmAddress, vaultKey.evmAddress.toLowerCase(), '0x' + '0'.repeat(40)]) {
+        expect(await base.holdReferrer(bad), String(bad)).toBe(false);
+      }
+      expect((await base.status()).pendingReferrer).toBe(other);
+    });
+    test('a vault that already has a referral keeps it: no transaction, and the held one is dropped at the next read', async () => {
+      vault = vaultKey;
+      s.referral[V] = '0x' + 'cd'.repeat(20);
+      await base.holdReferrer(R);
+      const r = await base.delegate();
+      expect(r.steps.map((x) => x.step)).not.toContain('setReferral(referrer)');
+      await base.refresh();
+      expect(s.referral[V]).toBe('0x' + 'cd'.repeat(20));
+      expect((await base.status()).pendingReferrer).toBeNull();
+    });
+    test('held and not staked: it stays held (nothing is sent on the visit)', async () => {
+      await base.holdReferrer(R);
+      await base.refresh();
+      expect(rpc.sent).toHaveLength(0);
+      expect((await base.status()).pendingReferrer).toBe(R);
+    });
+  });
+
   test("out of sync: 1 wei sent to the staked vault with its hook skipped; status says so, and Unstake explains, not 'reverted: Panic'", async () => {
     vault = vaultKey;
     await base.delegate();

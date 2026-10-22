@@ -114,6 +114,7 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 | `token.getCurrentRound()`, `getCurrentBlockTimestamp()` | the round (`block.timestamp / 86400`, `C/next/SatoriToken.sol:329-331`) and chain time |
 | `lens.getTotalClaimableRewards(vault)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
 | `airdrop.claimableAirdrop(vault)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
+| `rewards.referral(vault)` | who the vault's referral is, if set ([Referral](#referral-invite-links)) |
 | `merkle.alreadyMintedTo(vault)` | the Satori Network's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims-unlock)) |
 
 Each read may fail on its own (`allowFailure`), so one reverting view does
@@ -144,8 +145,49 @@ plus the dapp's instant-signing setup (`UI/components/GameWalletPanel.tsx:536-59
 3. If `predictionDelegateInfo(vault).delegate != identity`, the vault sends
    `hub.delegatePredictionPower(identity)` (BP:286-287).
 
+A referrer the app is holding ([Referral](#referral-invite-links)) is
+registered first: if `rewards.referral(vault)` is zero, the vault sends
+`rewards.setReferral(referrer)`, before the stake, so a failure leaves nothing
+half done and Stake can be tried again.
+
 **Unstake**: the vault sends `delegatePredictionPower(0x0)`
 (BP:292-301). Its SATORI can't be sent through the next round (above).
+
+## Referral (invite links)
+
+The dapp's referral (`UI/components/ReferralTab.tsx`, `InviteLinkCard.tsx`,
+`hooks/useReferralAutoSet.ts`), for the neuron. Lite has none
+(`start.py:4914`, "central-lite doesn't use referrer system").
+
+On the contract the cut is the earner's: `_creditReward` takes
+`REFERRAL_BPS` (5 %) of every reward credited to `who` and pays it to
+`referral[who]`, or to the marketing wallet when `who` has none
+(`C/SatoriRewards.sol:826-837`). `referral` is set once, by the address itself
+(`setReferral`, `:847-852`) or, in the dapp, for the predictor by
+`predictMultipleWithReferral`. Here the earner is the **vault**: the identity's
+fee is 0 and the vault is its delegator, so the rewards are the vault's
+delegator accrual (`:380-383`). The dapp's way, setting it on the first
+prediction, would register the identity, which earns nothing; so the vault
+registers it, as part of Stake.
+
+- **Capture.** `?ref=<0x address>` on any URL of the app is kept in `meta`
+  (`referrer`), checked as an address; the newest link wins. Nothing happens on
+  the visit: no transaction, no banner (the dapp's rule).
+- **Register.** [Stake](#stake-with-this-neuron-unlock) sends
+  `setReferral(referrer)` from the vault when `referral(vault)` is zero, then
+  forgets the held referrer; when the vault already has a referral (set once,
+  never changed), or the held one is the vault itself (the contract refuses a
+  self-referral), it is dropped with no transaction. A neuron that is
+  already staked has no Stake to press, so a link opened later does nothing
+  (the dapp's referral is likewise for a new user's first prediction).
+- **Invite.** `<this origin>/?ref=<the vault's Base address>`: the referrer is
+  paid into `unclaimedRewards[vault]`, which Claim already collects. The
+  Wallet tab shows the link with a Copy button.
+- **Said before it happens.** The Wallet tab's Referral fact reads "Invited by
+  0x… (set when you stake)" while one is held, the address once set, else "None".
+- **Not built:** the dapp's earnings and "You've referred" lists, which read an
+  indexer (`/referrals`, `/referred-by`) the neuron does not use; what a
+  referrer earns is already in Claimable.
 
 ### Staking out of sync (the token-hook bug)
 
@@ -489,6 +531,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | viem's CCIP-read is off. | A contract's revert must not make the page fetch a URL it names. |
 | An RPC on another chain is refused. | A wrong RPC must not take writes. |
 | `setAllowedDelegator(vault)` is sent by the identity (the dapp); Lite does not. | Only our vault can stake with the identity. |
+| Referral: the vault's `setReferral` at Stake, and an invite link with the vault's address; the dapp sets the predictor's through `predictMultipleWithReferral`, and Lite has none. | The vault is the earner here ([Referral](#referral-invite-links)); the identity's referral would never be paid. |
 | `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's staking earnings. |
 | The transfer lock is shown with `>=` (the token's rule); Lite's display uses `>`. | Lite shows the tokens free one round early. |
 | Words: Lite's "Stake" / "Unstake" (the owner's choice, 2026-10-18), not the dapp's; the token's transfer lock is "can't be sent". | The app's Lock/Unlock is the passphrase. |
@@ -518,7 +561,8 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
   SATORI is staked with this neuron, so it can't also play Satori Daily by
   hand. Unstake to play manually.", while not "Stake with this neuron to let
   it predict every round, or play Satori Daily by hand.", with Satori Daily
-  linked. Stake with this neuron or Unstake and Claim, each asking
+  linked; the Referral fact, and under the card's actions Your invite link
+  (`<origin>/?ref=<the vault>`) with Copy ([Referral](#referral-invite-links)). Stake with this neuron or Unstake and Claim, each asking
   for the passphrase in place while the vault is locked (and locking it again
   after, [keys.md](keys.md#the-vault-locks-on-its-own)), and Send from the
   vault (SATORI or ETH: [the review and the passphrase each time](#send-the-passphrase-each-time)); each action lists its

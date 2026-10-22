@@ -271,7 +271,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
         ['identityEth', mc3('getEthBalance', [identity])], ['identityInfo', rewards('predictionDelegateInfo', [identity])],
         ['fee', rewards('effectivePredictorFee', [identity])], ['allowed', hub('allowedDelegator', [identity])],
         ['vaultEth', mc3('getEthBalance', [vault])], ['satori', token('balanceOf', [vault])],
-        ['vaultInfo', rewards('predictionDelegateInfo', [vault])], ['lockedUntil', token('transferLockedUntil', [vault])],
+        ['vaultInfo', rewards('predictionDelegateInfo', [vault])], ['referral', rewards('referral', [vault])], ['lockedUntil', token('transferLockedUntil', [vault])],
         ['rewards', lens('getTotalClaimableRewards', [vault])], ['airdrop', airdrop('claimableAirdrop', [vault])],
         ['minted', merkle('alreadyMintedTo', [vault])], // the reward drop paid so far: central's proof says the entitlement
       ];
@@ -296,7 +296,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
         },
         vault: {
           address: vault, eth: r.vaultEth ?? null, satori: r.satori ?? null, delegate: r.vaultInfo?.[0] ?? null,
-          lockedUntil: r.lockedUntil ?? null,
+          lockedUntil: r.lockedUntil ?? null, referral: r.referral ?? null,
           lock: r.lockedUntil == null || round == null ? null : transferLock(r.lockedUntil, round),
         },
         claimable: { rewards: r.rewards?.[0] ?? null, rewardsComplete: r.rewards?.[1] ?? null, airdrop: r.airdrop ?? null,
@@ -310,15 +310,18 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * (GameWalletPanel.tsx:536-595): the identity's fee to 0, the identity
      * accepts only this vault, the vault's delegatePredictionPower(identity). Each step
      * only when needed. onStep('send' | 'confirm', k, n) for each, then onStep('settle').
+     * A `referrer` (the invite link's) is registered first, by the vault, when it has none (set once, never the vault
+     * itself: the contract refuses both), so a failure leaves nothing staked.
      * → { steps: [{ step, by, hash }], settled }
      */
-    async delegate({ identity, vault, onStep = () => {} }) {
+    async delegate({ identity, vault, referrer = null, onStep = () => {} }) {
       const I = toAccount(identity);
       const V = toAccount(vault);
       const look = () => many([rewards('effectivePredictorFee', [I.address]), hub('allowedDelegator', [I.address]),
-        rewards('predictionDelegateInfo', [V.address])]);
-      const [fee, allowed, [delegate]] = await look();
+        rewards('predictionDelegateInfo', [V.address]), rewards('referral', [V.address])]);
+      const [fee, allowed, [delegate], referral] = await look();
       const todo = [
+        referrer && !same(referrer, V.address) && same(referral, zeroAddress) && ['setReferral(referrer)', 'vault', V, rewards('setReferral', [referrer])],
         fee !== 0 && ['setPredictorFee(0)', 'identity', I, rewards('setPredictorFee', [0])],
         !same(allowed, V.address) && ['setAllowedDelegator(vault)', 'identity', I, hub('setAllowedDelegator', [V.address])],
         !same(delegate, I.address) && ['delegatePredictionPower(identity)', 'vault', V, hub('delegatePredictionPower', [I.address])],

@@ -197,6 +197,7 @@ export const rpcTitle = (b) => `${b.rpc.join(', ')}${b.localFork ? ' → 127.0.0
 const STEPS = {
   'setPredictorFee(0)': 'Identity: fee to 0',
   'setAllowedDelegator(vault)': 'Identity: accepts this vault',
+  'setReferral(referrer)': 'Vault: registers who invited you',
   'delegatePredictionPower(identity)': 'Vault: stakes with this neuron',
   'delegatePredictionPower(0x0)': 'Vault: unstakes',
 };
@@ -229,6 +230,19 @@ export function delegationText(v) {
   if (d === 'other') return `Staked with ${v.vault.stakedWith}, not this neuron`;
   return '–';
 }
+
+/** The referral cut: `REFERRAL_BPS = 500` in SatoriRewards.sol (internal, so it cannot be read). */
+export const REFERRAL_PCT = 5;
+
+/** Who invited this vault: registered on the contract, held until Stake, or no one. */
+export function referralText(b) {
+  if (b?.vault?.referral) return shortHash(b.vault.referral);
+  if (b?.pendingReferrer) return `Invited by ${shortHash(b.pendingReferrer)}, registered when you stake`;
+  return 'None';
+}
+
+/** What Stake also does when an invite is held, said before it does it. */
+export const referralNote = (ref) => `Invited by ${ref}. Staking registers them as your referral, once and for good: ${REFERRAL_PCT}% of the rewards your vault earns goes to them instead of to the project, and you earn the same either way.`;
 
 /** The identity's gas: its ETH and about how many daily batches it pays for. */
 export function gasText(id) {

@@ -24,7 +24,9 @@
     "SatoriRewards": [
       "function effectivePredictorFee(address) -> (uint16) view",
       "function predictionDelegateInfo(address) -> (address,uint96) view",
-      "function setPredictorFee(uint16) -> () nonpayable"
+      "function referral(address) -> (address) view",
+      "function setPredictorFee(uint16) -> () nonpayable",
+      "function setReferral(address) -> () nonpayable"
     ],
     "SatoriRewardsLens": [
       "function getTotalClaimableRewards(address) -> (uint256,bool) view"
@@ -65,6 +67,7 @@
     "error EmptyStream() -> ()",
     "error InvalidPredictorFee() -> ()",
     "error InvalidProof() -> ()",
+    "error InvalidReferral() -> ()",
     "error Locked() -> ()",
     "error NothingToClaim() -> ()",
     "error Reentrancy() -> ()",

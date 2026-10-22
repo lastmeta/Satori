@@ -48,7 +48,7 @@ describe('status: one multicall', () => {
     expect(st).toMatchObject({
       round: ROUND, chainTime: ROUND * 86400 + 9 * 3600, gasPrice: 1_000_000n,
       identity: { eth: 10n ** 16n, delegate: zeroAddress, power: 0n, fee: 1000, allowedDelegator: zeroAddress },
-      vault: { eth: 10n ** 16n, satori: 100n * E18, delegate: zeroAddress, lockedUntil: 0, lock: { locked: false } },
+      vault: { eth: 10n ** 16n, satori: 100n * E18, delegate: zeroAddress, lockedUntil: 0, lock: { locked: false }, referral: zeroAddress },
       claimable: { rewards: 3n * E18, rewardsComplete: true, airdrop: 7n * E18 },
       errors: [],
     });
@@ -74,6 +74,28 @@ describe('stake: delegatePredictionPower(identity) (Lite\'s Enable staking + the
     expect(sentBy().map((x) => x[1])).toEqual(['setAllowedDelegator', 'delegatePredictionPower']);
     expect(await chain.delegate({ identity, vault })).toEqual({ steps: [], settled: true });
     expect(rpc.sent).toHaveLength(2);
+  });
+  describe('a referrer (docs/design/base.md#referral-invite-links)', () => {
+    const R = '0x' + 'ab'.repeat(20);
+    test('the vault registers it first, once; the status reads it', async () => {
+      const r = await chain.delegate({ identity, vault, referrer: R });
+      expect(sentBy().map((x) => x.slice(0, 2).join(':'))).toEqual(['vault:setReferral', 'identity:setPredictorFee', 'identity:setAllowedDelegator',
+        'vault:delegatePredictionPower']);
+      expect(sentBy()[0][2].map((a) => a.toLowerCase())).toEqual([R]);
+      expect(r.steps[0]).toMatchObject({ step: 'setReferral(referrer)', by: 'vault' });
+      expect((await chain.status({ identity: identity.evmAddress, vault: vault.evmAddress })).vault.referral.toLowerCase()).toBe(R);
+    });
+    test('none when the vault has a referral already (set once)', async () => {
+      s.referral[V] = '0x' + 'cd'.repeat(20);
+      await chain.delegate({ identity, vault, referrer: R });
+      expect(sentBy().map((x) => x[1])).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower']);
+      expect(s.referral[V]).toBe('0x' + 'cd'.repeat(20));
+    });
+    test('none when it is the vault itself (the contract refuses it), or when none is held', async () => {
+      await chain.delegate({ identity, vault, referrer: vault.evmAddress });
+      expect(sentBy().map((x) => x[1])).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower']);
+      expect(s.referral[V]).toBeUndefined();
+    });
   });
   test('a fee set once to something else: the simulate says AlreadySet, nothing is sent', async () => {
     s.feeStored[I] = 500;

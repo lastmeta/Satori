@@ -840,8 +840,9 @@ the page's JS context:
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
   identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
-  vault: { address, eth, satori, stakedWith, staked: 'identity' | 'none' | 'other', inSync, shortfall,
+  vault: { address, eth, satori, stakedWith, referral, staked: 'identity' | 'none' | 'other', inSync, shortfall,
   lock: { locked, indefinite, untilRound, freeAt }, lowEth }, claimable: { rewards, drop, airdrop, total },
+  pendingReferrer, inviteLink,
   lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, rule, model, latest, forecast, horizon, step, score?, persist? }],
   dropped: [{ …, error }] } | null, pendingBatch, lastCheck, nextCheck, checking }`
   (`pendingBatch`: a batch sent and not mined, `{ round, hash, hashes?,
@@ -860,6 +861,13 @@ the page's JS context:
   claimed yet (`drop`: null when this central does not serve it), the
   airdrop, and `total` (the parts known); `vault.lowEth`: under one
   transaction's gas (Claim says so before trying).
+  Referral (docs/design/base.md#referral-invite-links): `inviteLink` is
+  `<this origin>/?ref=<the vault's address>`, to give to someone who will run their
+  own neuron: they become the vault's referral, and `claim` collects the cut (5 % of
+  what they earn). `pendingReferrer` is the `?ref=` address this page was opened with
+  and is holding (null: none); `stake` registers it first, from the vault
+  (`setReferral(referrer)` in its steps), once, and `vault.referral` is then the
+  address (null: none). The visit itself sends nothing.
   `inSync`: the stake booked right (the identity's power equals the vault's
   SATORI, checked once the identity accepts only this vault): `true`,
   `false` (out of sync: unstaking fails until the contract fix;

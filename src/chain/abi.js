@@ -11,7 +11,7 @@ const ERRORS = [
   'error BadDirection()', 'error DuplicatePrediction()', 'error EmptyStream()', 'error StaleValue()',
   'error DelegateActive()', 'error DelegatorNotAllowed()', 'error CapabilityDisabled()', 'error AlreadySet()',
   'error NothingToClaim()', 'error InvalidProof()', 'error BudgetExceeded()', 'error Unauthorized()',
-  'error InvalidPredictorFee()', 'error ClaimDelegatedAway()', 'error BadInput()', 'error Reentrancy()',
+  'error InvalidPredictorFee()', 'error InvalidReferral()', 'error ClaimDelegatedAway()', 'error BadInput()', 'error Reentrancy()',
   'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
   'error ERC20InvalidReceiver(address receiver)',
 ];
@@ -49,6 +49,8 @@ export const rewardsAbi = abi(
   'function setPredictorFee(uint16 bps)',
   'function effectivePredictorFee(address predictor) view returns (uint16)',
   'function predictionDelegateInfo(address) view returns (address delegate, uint96 power)',
+  'function referral(address) view returns (address)',
+  'function setReferral(address ref)',
 );
 
 export const lensAbi = abi('function getTotalClaimableRewards(address user) view returns (uint256 total, bool complete)');

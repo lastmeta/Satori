@@ -33,6 +33,7 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     delegateOf: {}, // addr → delegate
     feeStored: {}, // addr → bps (0 = never set: the 10 % default)
     allowed: {}, // addr → the one vault it accepts (allowedDelegator)
+    referral: {}, // addr → its referrer (set once)
     lock: {}, // addr → round (transferLockedUntil)
     balance: {}, // SATORI
     rewards: {}, // what the lens says the address can claim with hub.claim()
@@ -151,6 +152,12 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       },
       effectivePredictorFee: ([a]) => fee(lc(a)),
       predictionDelegateInfo: ([a]) => [s.delegateOf[lc(a)] ?? zeroAddress, powerOf(lc(a))],
+      referral: ([a]) => s.referral[lc(a)] ?? zeroAddress,
+      setReferral: ([ref], ctx) => {
+        if (lc(ref) === zeroAddress || lc(ref) === ctx.from) revert('InvalidReferral');
+        if (s.referral[ctx.from]) revert('AlreadySet');
+        if (ctx.write) s.referral[ctx.from] = lc(ref);
+      },
     }),
     [DEFAULTS.lens]: fns(abi.lensAbi, { getTotalClaimableRewards: ([a]) => [s.rewards[lc(a)] ?? 0n, true] }),
     [DEFAULTS.token]: fns(abi.tokenAbi, {

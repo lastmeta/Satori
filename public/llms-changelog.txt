@@ -4,6 +4,14 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-22 (referral)
+
+- Invite links, as the dapp has them: `base().inviteLink` is `<origin>/?ref=<the
+  vault>`; a page opened with `?ref=<0x address>` holds it (`base().pendingReferrer`,
+  nothing sent), and `stake()` registers it first from the vault
+  (`setReferral(referrer)`, once; a step in its `steps`), then
+  `base().vault.referral` is the address. A vault that has a referral keeps it.
+
 ## Changed 2026-10-21 (paid streams: one price, a daily settle)
 
 - One price: a priced `_pred`'s 34600 carries it in Lite's `price_per_obs`

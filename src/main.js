@@ -30,6 +30,7 @@ import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase, checkSend, NEED_GAS } from './neuron/base.js';
+import { referrerOf } from './neuron/referral.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -67,6 +68,7 @@ let central = null;
 let registration = null; // this page load's register result
 let poller = null;
 let base = null; // the Base flow
+const invitedBy = referrerOf(location.search); // an invite link's ?ref= (docs/design/base.md#referral-invite-links), read once at load
 let reward = null; // the reward address, as the Satori Network keeps it (src/neuron/reward.js): read when Settings opens
 let activity = null; // the activity log Home's health reads (docs/design/health.md)
 let trainer = null; // the training pass (src/neuron/train.js): every model's current fit, from stored history
@@ -265,6 +267,7 @@ async function startNeuron() {
   await refreshNostr();
   base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase, onCheck: (r) => activity.base(r), onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
+  if (invitedBy) await base.holdReferrer(invitedBy); // the invite link's ?ref=, kept until Stake registers it
   await refreshBase();
   // when a poll is due (a new neuron, or one reopened late) it runs at once, after register: signing in is its first
   // step on Home, set before Home shows

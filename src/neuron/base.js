@@ -13,6 +13,7 @@ import { createChannels } from '../chain/channels.js';
 import { explainForecast as engineForecast, STEP_S } from '../engine/index.js';
 import { createSchedule } from './schedule.js';
 import { createWork } from './work.js';
+import { inviteLink, referrerOf } from './referral.js';
 import { emit, traced } from '../traffic.js';
 
 export const FIRST_CHECK_S = 10;
@@ -336,6 +337,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
   let proof = null; // the vault's merkle proof from central: proofState, with { at, url } (asked at most hourly)
   let lastCheck = null;
   const changed = () => onChange();
+  const hasReferral = (a) => !!a && !same(a, zeroAddress);
 
   const resolve = (u) => (u.startsWith('/') && origin ? new URL(u, origin).href : u);
 
@@ -397,6 +399,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       const { chain } = await chainNow();
       [status] = await Promise.all([chain.status({ identity: identity.evmAddress, vault: vaultAddress }), proofNow()]);
       statusError = status.round == null ? (status.errors[0] ?? 'no answer') : '';
+      if (hasReferral(status.vault.referral)) await db.set('referrer', null); // set once: nothing left to register
     } catch (err) {
       statusError = errorText(err);
     }
@@ -430,6 +433,7 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
       vault: {
         address: vaultAddress, eth: plainAmount(s?.vault.eth), satori: plainAmount(s?.vault.satori),
         stakedWith: vd ?? null,
+        referral: hasReferral(s?.vault.referral) ? s.vault.referral : null, // who the vault is referred by (rewards.referral)
         staked,
         ...sync, // inSync, shortfall: the stake booked right (stakeSync)
         lock: s?.vault.lock ?? null,
@@ -528,7 +532,8 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     /** The status, with the settings as stored ('' and null: the defaults) and the max fee in force. */
     async status() {
       const maxFeeSetting = (await db.get('base_max_fee_gwei')) ?? null;
-      return { ...(await withLast(view())), rpcSetting: (await db.get('base_rpc_url')) || '', maxFeeSetting,
+      return { ...(await withLast(view())), pendingReferrer: (await db.get('referrer')) ?? null,
+        inviteLink: inviteLink(origin ? new URL(origin).origin : '', vaultAddress), rpcSetting: (await db.get('base_rpc_url')) || '', maxFeeSetting,
         maxFeeGwei: maxFeeSetting ?? MAX_FEE_GWEI };
     },
 
@@ -568,10 +573,23 @@ export function createBase({ db, identity, vaultAddress, vault, central, default
     /** The check now when its time has passed and none runs (the device slept); else null. */
     catchUp: schedule.catchUp,
 
+    /**
+     * An invite link's referrer, held until Stake registers it (docs/design/base.md#referral-invite-links): the newest
+     * wins; not an address, the zero address and the vault's own are refused. → whether it is held now
+     */
+    async holdReferrer(address) {
+      const ref = referrerOf(`?ref=${address ?? ''}`);
+      if (!ref || same(ref, vaultAddress)) return false;
+      await db.set('referrer', ref);
+      changed();
+      return true;
+    },
+
     /** Stake with this neuron (docs/design/base.md): needs Unlock. Then a batch check soon. */
     async delegate() {
       const v = needVault();
-      const r = await act('stake', (chain, step) => chain.delegate({ identity, vault: v, onStep: step }));
+      const referrer = (await db.get('referrer')) ?? null;
+      const r = await act('stake', (chain, step) => chain.delegate({ identity, vault: v, referrer, onStep: step }));
       schedule.arm(now() + FIRST_CHECK_S);
       return r;
     },

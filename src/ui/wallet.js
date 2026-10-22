@@ -3,9 +3,10 @@
 // actions ask for the passphrase in place (the inline Unlock) when it is locked.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
-import { fact, form, unlockPrompt } from './parts.js';
+import { fact, form, idRow, unlockPrompt } from './parts.js';
 import {
   amountText, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
+  referralText, referralNote, REFERRAL_PCT,
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
 import { workText } from '../neuron/work.js';
@@ -48,6 +49,7 @@ export function walletTab(a) {
       ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
       ${fact('Claimable', 'base-claimable', () => claimableText(b().claimable))}
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this neuron, below' : delegationText(b())))}
+      ${fact('Referral', 'base-referral', () => referralText(b()))}
       ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
       ${fact('Identity', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
       ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
@@ -61,7 +63,12 @@ export function walletTab(a) {
       <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
       <button data-test="base-claim" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
     </div>
+    <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().vault.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
     <p class="muted small" data-test="base-stake-note">Staking lets this neuron predict with your vault's SATORI every round. The SATORI stays in the vault and earns; it can't be sent while staked, or through the round after you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.</p>
+    <div hidden="${() => !b().inviteLink}">
+      ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
+      <p class="muted small">Whoever opens it and stakes with their own neuron becomes your referral: you get ${REFERRAL_PCT}% of the rewards they earn, forever, in Claimable.</p>
+    </div>
     <form class="send" hidden="${() => !!state.sendReview}" @submit="${(e) => a.reviewSend(form(e), e.target)}">
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
