@@ -144,6 +144,7 @@ export function render(root, a) {
       <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
       <span class="muted small lock-in" data-test="lock-in" hidden="${() => state.screen !== 'home' || !state.unlocked}">${() => lockInText(state.lockAt, state.lockNow)}</span>
       <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
+      <button class="small-btn" data-test="share" hidden="${() => state.screen !== 'home' || !state.base.inviteLink}" @click="${a.share}">${() => (state.copied === 'share' ? 'Link copied' : 'Share')}</button>
     </div>
   </header>
   <main>

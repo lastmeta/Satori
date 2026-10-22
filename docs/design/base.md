@@ -182,7 +182,9 @@ registers it, as part of Stake.
   (the dapp's referral is likewise for a new user's first prediction).
 - **Invite.** `<this origin>/?ref=<the vault's Base address>`: the referrer is
   paid into `unclaimedRewards[vault]`, which Claim already collects. The
-  Wallet tab shows the link with a Copy button.
+  Wallet tab shows the link with a Copy button, and the header's **Share**
+  (top right, on every tab once the neuron runs) sends it to the device's share
+  sheet, or copies it where there is none (a computer without one).
 - **Said before it happens.** The Wallet tab's Referral fact reads "Invited by
   0x… (set when you stake)" while one is held, the address once set, else "None".
 - **Not built:** the dapp's earnings and "You've referred" lists, which read an

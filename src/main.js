@@ -30,7 +30,7 @@ import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { createBase, checkSend, NEED_GAS } from './neuron/base.js';
-import { referrerOf } from './neuron/referral.js';
+import { referrerOf, shareLink } from './neuron/referral.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -849,6 +849,12 @@ const actions = {
       state.copied = key;
       setTimeout(() => (state.copied = ''), 1500);
     } catch { /* clipboard not allowed */ }
+  },
+  /** Share: the invite link (docs/design/base.md#referral-invite-links) to the device's share sheet, else copied. */
+  async share() {
+    if (await shareLink(state.base.inviteLink) !== 'copied') return;
+    state.copied = 'share';
+    setTimeout(() => (state.copied = ''), 1500);
   },
   pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
   install: () => install().catch((err) => console.warn('[satori] install', err)),

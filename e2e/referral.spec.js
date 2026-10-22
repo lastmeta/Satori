@@ -33,6 +33,16 @@ test('an invite link: held on the visit, registered by the vault at Stake; the n
   await expect(fact(page, 'referral-note')).toContainText('Staking registers them as your referral');
   await expect(fact(page, 'invite')).toHaveText(base.inviteLink);
 
+  // Share, top right: the invite link to the device's share sheet (a stub here), else copied
+  await page.evaluate(() => { window.__shared = []; navigator.share = async (d) => void window.__shared.push(d); });
+  await page.locator('[data-test=share]').click();
+  expect(await page.evaluate(() => window.__shared)).toEqual([{ title: 'Satori neuron', url: base.inviteLink }]);
+  await page.evaluate(() => { navigator.share = undefined; });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.locator('[data-test=share]').click();
+  await expect(page.locator('[data-test=share]')).toHaveText('Link copied');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(base.inviteLink);
+
   rpc.eth[I] = 10n ** 17n;
   rpc.eth[V] = 10n ** 17n;
   s.balance[V] = 100n * E18;

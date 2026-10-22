@@ -9,3 +9,25 @@ export function referrerOf(search) {
 
 /** The link that makes whoever opens it this vault's referral. */
 export const inviteLink = (origin, vault) => (origin && vault ? `${origin}/?ref=${vault}` : '');
+
+/**
+ * Share a link: the device's share sheet when it has one, else copied. → 'shared' | 'cancelled' (the sheet closed with
+ * no choice) | 'copied' | null (nothing to share, or no way to copy)
+ */
+export async function shareLink(link, nav = globalThis.navigator) {
+  if (!link) return null;
+  if (nav?.share) {
+    try {
+      await nav.share({ title: 'Satori neuron', url: link });
+      return 'shared';
+    } catch (err) {
+      if (err?.name === 'AbortError') return 'cancelled';
+    }
+  }
+  try {
+    await nav.clipboard.writeText(link);
+    return 'copied';
+  } catch {
+    return null;
+  }
+}
