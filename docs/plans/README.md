@@ -118,7 +118,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    Evrmore's Spilman channels, the contract, the flow over the relays, a
    track record, the steps). The fixes to today's relay code wait on it.
 17. **Vault, alias, accounts** (owner, 2026-10-23,
-   [../design/accounts.md](../design/accounts.md)): the identity key is the
+   [../design/wallets.md](../design/wallets.md)): the identity key is the
    vault's **alias**; one app holds several accounts (a vault, its alias, its
    own database), one active at a time; a vault can be connected from an
    outside wallet. A. ✅ the words (alias; "Create a wallet"). B. several

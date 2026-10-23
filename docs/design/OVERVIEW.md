@@ -10,7 +10,7 @@ reference for `window.satori`: [/llms.txt](../../public/llms.txt).
 Component docs: [health.md](health.md) (Home: is the neuron predicting, is
 anything broken), [models.md](models.md) (the Models tab: the engine's
 status, every model, a model's In, Model and Out), [keys.md](keys.md),
-[accounts.md](accounts.md) (a vault, its alias, and several accounts), [central.md](central.md),
+[wallets.md](wallets.md) (a vault, its alias, and several accounts), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
 [market.md](market.md) (paid streams, step 3 of the market: selling and
 buying streams over the relays, `src/neuron/market.js`, on the

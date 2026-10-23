@@ -12,7 +12,7 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   so no agent breaks: the field `identity` in `status()` and `base()`, the
   `'identity'` names `backup()`, `reward().whose` and `staked` take, the
   `identityWords` of `setup()`, and every `data-test` name. Read `identity`
-  as the alias. The design is docs/design/accounts.md (several accounts and a
+  as the alias. The design is docs/design/wallets.md (several accounts and a
   connected vault come next; nothing of that is built yet).
 
 ## Changed 2026-10-23 (the word "neuron")

@@ -67,15 +67,14 @@ Set by the owner; quoted where these are the owner's own words.
 - **The engine:** every neuron builds models that are unique for a good
   reason, in their algorithm, priors and, above all, data. See
   [engine.md](engine.md).
-- **Vault, alias, accounts (owner, 2026-10-23).** The word "neuron" is being
-  phased out for "the Satori app". The **vault** is the person's true
-  identity: the key only they have, in the app (encrypted) or outside it, in a
-  wallet they connect (MetaMask or another). What was called the identity key
-  is the vault's **alias**: an automated signing key the app makes and holds
-  with full access, unencrypted and replaceable. Every vault has one alias.
-  One app holds several vaults (people merge their neurons into it), one
-  active at a time. The models and the engine do not change. See
-  [../design/accounts.md](../design/accounts.md).
+- **Wallet and alias (owner, 2026-10-23).** "The Satori app", not "neuron".
+  The **wallet** is the person's identity: the key only they hold, in the app
+  (encrypted) or in an outside wallet they connect (MetaMask or another). Its
+  **alias** is the app's own signing key, made by the app, unencrypted,
+  replaceable, and not something people need to think about. The wallet
+  signs a link to its alias for the Satori Network. One app holds several
+  wallets, one active at a time; the models and the engine do not change. See
+  [../design/wallets.md](../design/wallets.md).
 - **The network (owner, 2026-10-20):** the Satori Network is the relays,
   where anyone publishes and anyone subscribes, predictions included; next,
   a market of data streams. See [network.md](network.md).
