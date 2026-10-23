@@ -9,13 +9,13 @@
 // Usage: node scripts/provider.mjs [relay] [stream] [seconds] [--pred]
 //        (defaults: ws://localhost:7778 demo-walk 60). The e2e uses connectProvider.
 // It refuses the production relays (any satorinet.io host: satorian, its wss front
-// wss://relay.satorinet.io, wss://app.satorinet.io/relay): test streams belong on a test relay.
+// wss://relay.satorinet.io, wss://nostr.satorinet.io): test streams belong on a test relay.
 import WebSocket from 'ws';
 import { createRelay } from '../src/nostr/relay.js';
 import { signEvent, generateNostrSecret, nostrPubkey } from '../src/nostr/event.js';
 import { announceEvent, observationEvent } from '../src/nostr/satori.js';
 
-/** Satori's own relays (satorian at ws://satorian.satorinet.io:7777 and its wss front wss://relay.satorinet.io, wss://app.satorinet.io/relay): production. */
+/** Satori's own relays (satorian at ws://satorian.satorinet.io:7777 and its wss front wss://relay.satorinet.io, wss://nostr.satorinet.io): production. */
 export const PRODUCTION = /(^|[./])satorinet\.io(?=$|[:/])/i;
 
 /** Connect a provider with a key (random by default). → { pubkey, announce, observe, close } */

@@ -36,7 +36,7 @@ export const DEFAULTS = Object.freeze({
 
 export const FALLBACK_RPC = 'https://base-sepolia-rpc.publicnode.com';
 // Satori Daily, the dapp (contract/satori-ui), where a vault plays by hand; the neuron plays only automatically.
-export const SATORI_DAILY_URL = 'https://app.satorinet.io';
+export const SATORI_DAILY_URL = 'https://games.satorinet.io';
 const CONFIG_TTL_S = 3600;
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;

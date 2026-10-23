@@ -146,7 +146,7 @@ variables, when set and not empty, replaces one; a bad value stops the build
 The app is served at https://neuron.satorinet.io (https://satori.satorinet.io
 redirects there): one static image, `satori-neuron` (nginx), behind
 the nginx-proxy on Satori's central server, which terminates TLS. Its build
-uses `deploy/build.env` (the dev central, `wss://app.satorinet.io/relay` and
+uses `deploy/build.env` (the dev central, `wss://nostr.satorinet.io` and
 `https://sepolia.base.org` for now). The image sends the CSP, nosniff and
 HSTS on every response:
 

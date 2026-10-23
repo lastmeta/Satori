@@ -99,7 +99,7 @@ On the dev server central's relays (satorian, production) are **read only**
 (REQ, never EVENT) and the user's relays default to the test relay
 `ws://localhost:7778` (`scripts/test-relay.mjs`); a build writes to central's
 relays, and its own relays are `VITE_NOSTR_RELAYS` (none unless set; the
-deployment's: `wss://app.satorinet.io/relay`).
+deployment's: `wss://nostr.satorinet.io`).
 
 On Base the neuron predicts as Lite does ([base.md](base.md)): the vault
 stakes with this neuron once (Unlock; on-chain its

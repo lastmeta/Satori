@@ -19,7 +19,7 @@ and the code keep their names, and Lock and Unlock stay the passphrase's.
 
 **Automatic only (the owner's split, 2026-10-15).** On-chain the neuron plays
 only automatically, through the identity's daily batch; manual play is
-**Satori Daily**, the dapp at https://app.satorinet.io (`SATORI_DAILY_URL`,
+**Satori Daily**, the dapp at https://games.satorinet.io (`SATORI_DAILY_URL`,
 `src/chain/config.js`). The two are mutually exclusive per vault per round:
 the engine refuses a staked vault's own predictions
 (`if (delegate != address(0)) revert Delegated();`,

@@ -84,9 +84,9 @@ test('a malformed REQ or EVENT is refused, and the relay lives on', async () => 
   raw.close();
 });
 
-test("scripts/provider.mjs refuses the production relays: satorian, its wss front, and the app's relay", async () => {
+test("scripts/provider.mjs refuses the production relays: satorian, its wss front, and Central's relay", async () => {
   for (const url of ['ws://satorian.satorinet.io:7777', 'wss://relay.satorinet.io', 'wss://relay.satorinet.io/',
-    'wss://app.satorinet.io/relay', 'WSS://Relay.Satorinet.io']) {
+    'wss://nostr.satorinet.io', 'WSS://Relay.Satorinet.io']) {
     expect(PRODUCTION.test(url)).toBe(true);
     await expect(connectProvider({ url })).rejects.toThrow(/Not on the production relay/);
   }

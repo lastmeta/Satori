@@ -9,7 +9,7 @@ docs it links to.
 - It's a static site built with Vite, plain JavaScript, ArrowJS, and DuckDB-WASM on OPFS. It's an installable PWA, MIT licensed.
 - Repo: `git@github.com:lastmeta/Satori.git`, branch `main`.
 - It's live at **https://neuron.satorinet.io**. `satori.satorinet.io` redirects there with a 301.
-- The live build talks to the **dev** central (central2), Base Sepolia, and the relays `wss://relay.satorinet.io` (satorian, the network's relay, through a TLS front on central's nginx-proxy; the app's stand-in for central's `ws://` entry) and `wss://app.satorinet.io/relay`.
+- The live build talks to the **dev** central (central2), Base Sepolia, and the relays `wss://relay.satorinet.io` (satorian, the network's relay, through a TLS front on central's nginx-proxy; the app's stand-in for central's `ws://` entry) and `wss://nostr.satorinet.io`.
 - Agents drive it through `window.satori`. `/llms.txt` is the reference for that, and `/llms-changelog.txt` holds its history.
 
 Read next, in this order:

@@ -229,7 +229,7 @@ can charge" doesn't work.
 ## Steps (proposed, smallest first)
 
 0. **One relay everyone can reach.** TLS in front of satorian, or Lite
-   neurons on `wss://app.satorinet.io/relay` with central's watcher able to
+   neurons on `wss://nostr.satorinet.io` with central's watcher able to
    reach it. Without it, browser and Lite neurons can't trade at all
    ([issue](../issues/relays-not-wss.md)). Every design needs it, so it is
    not a fix that a redesign would undo. Done 2026-10-20 for the browser:

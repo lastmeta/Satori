@@ -104,7 +104,7 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
    neuron.satorinet.io, an https page that can't open `ws://`, it is reached
    at its wss stand-in, `wss://relay.satorinet.io` (the same relay behind
    TLS; `for` says so), and written to, beside the user's relay
-   `wss://app.satorinet.io/relay`. On the dev server it is read over
+   `wss://nostr.satorinet.io`. On the dev server it is read over
    `ws://`, read only, beside the test relay `ws://localhost:7778`.
    With the person's go-ahead, `await satori.subscribe(pubkey, stream_name)`
    for a free stream: each observation is forecast and published as
@@ -263,7 +263,7 @@ Every method is below; `await satori.status()` shows everything at once.
   never events) and the user's relays default to the test relay
   `ws://localhost:7778`; a build writes to central's relays too, and its
   user relays default to the build's `VITE_NOSTR_RELAYS` (neuron.satorinet.io:
-  `wss://app.satorinet.io/relay`). A build opens only `wss://` relays (its
+  `wss://nostr.satorinet.io`). A build opens only `wss://` relays (its
   CSP has no `ws:`; an https page can't open `ws://` anyway). There a `ws://`
   relay with a **wss stand-in** (the `wss://` address of the same relay, from
   the build's map: satorian → `wss://relay.satorinet.io` by default) is
@@ -361,7 +361,7 @@ Every method is below; `await satori.status()` shows everything at once.
   `transferLockedUntil + 1` at 00:00 UTC. ("Staking" in the Docker neuron
   too.)
 - Automatic only: on-chain the neuron plays only through the identity's
-  daily batch; manual play is Satori Daily (https://app.satorinet.io, the
+  daily batch; manual play is Satori Daily (https://games.satorinet.io, the
   dapp). Per vault per round it is one or the other: the engine refuses a
   staked vault's own predictions (the revert `Delegated`).
 - Prediction power: the vault's SATORI, staked with this neuron. A vault

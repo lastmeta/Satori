@@ -54,7 +54,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'staking')).toHaveText('Not staked: Stake with this neuron, below');
   const CHOICE = 'Stake with this neuron to let it predict every round, or play Satori Daily by hand.';
   await expect(fact(page, 'play')).toHaveText(CHOICE);
-  await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://app.satorinet.io');
+  await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://games.satorinet.io');
   await expect(fact(page, 'check')).toContainText('Waits until you stake');
   await expect(page.getByText(ASKS)).toBeVisible();
 

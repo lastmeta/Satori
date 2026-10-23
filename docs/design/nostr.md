@@ -135,7 +135,7 @@ readers depend on, not Lite's bytes. Checked against satorilib
   Without a stand-in a blocked relay is blocked as before. The proper fix is
   central listing a `wss://` address itself, which waits on the relay
   redesign ([issue](../issues/relays-not-wss.md)). The deployment's build
-  also sets `VITE_NOSTR_RELAYS=wss://app.satorinet.io/relay`, Satori's public
+  also sets `VITE_NOSTR_RELAYS=wss://nostr.satorinet.io`, Satori's public
   relay over TLS, as the user's relay by default
   ([deploy.md](deploy.md#build-variables)).
 
@@ -288,7 +288,7 @@ the browser follows the rule, not Lite's t2 (a deviation, below).
   shape is answered with CLOSED; no message takes it down.
 - `node scripts/provider.mjs [relay] [stream] [seconds] [--pred]`: a throwaway provider
   (it refuses any `satorinet.io` relay: satorian, `wss://relay.satorinet.io`,
-  `wss://app.satorinet.io/relay`) that announces a stream (34600) and publishes a random walk (34601) on it;
+  `wss://nostr.satorinet.io`) that announces a stream (34600) and publishes a random walk (34601) on it;
   with `--pred`, a second throwaway key also announces `<stream>_pred` (as
   Lite names it, the source in its tags and metadata) and publishes a
   forecast a moment after each value, most of the way to the next one: a

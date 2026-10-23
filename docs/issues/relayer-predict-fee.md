@@ -7,7 +7,7 @@
 - `SatoriHub.relay` executes Predict, Claim, DelegatePrediction,
   SetPredictorFee and others for an EIP-712-signed request; the relayer pays gas
   and takes a SATORI fee (`contract/satori/contracts/next/SatoriHub.sol:899-990`).
-- Live at `https://app.satorinet.io/relayer`, CORS open (probed 2026-10-14).
+- Live at `https://games.satorinet.io/relayer`, CORS open (probed 2026-10-14).
 - Fee policy: default 0.25 SATORI, Claim 0 (`contract/relayer/fees.json`).
 - The README says staked wallets (their SATORI can't be sent) cannot pay
   a SATORI fee (`contract/relayer/README.md:37-39`).

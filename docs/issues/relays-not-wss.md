@@ -55,7 +55,7 @@ traffic, and neurons won't connect to it until it is listed.
   stays central's relay (written to as a build writes to central's relays),
   and Settings shows it as `wss://relay.satorinet.io` "for
   ws://satorian.satorinet.io:7777". Central's list is kept as central sent it.
-- The deployment's user relay, `wss://app.satorinet.io/relay` (Satori's
+- The deployment's user relay, `wss://nostr.satorinet.io` (Satori's
   public relay over TLS), stays.
 
 ## The proper fix (waits on the relay redesign)

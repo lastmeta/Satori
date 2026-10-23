@@ -124,7 +124,7 @@ build.
 | Variable | Sets | A build's default | The dev server's default | This deployment (`deploy/build.env`) |
 |---|---|---|---|---|
 | `VITE_CENTRAL_URL` | central, https only (Settings › Central URL) | `https://network.satorinet.io` | `https://central2.satorinet.io` | `https://central2.satorinet.io` |
-| `VITE_NOSTR_RELAYS` | the user's relays, a comma list of `ws://` or `wss://` URLs (Settings › Nostr relays) | none | `ws://localhost:7778` | `wss://app.satorinet.io/relay` |
+| `VITE_NOSTR_RELAYS` | the user's relays, a comma list of `ws://` or `wss://` URLs (Settings › Nostr relays) | none | `ws://localhost:7778` | `wss://nostr.satorinet.io` |
 | `VITE_NOSTR_WSS` | relays' wss stand-ins, a comma list of `ws://…=wss://…` pairs: a `ws://` relay the page can't open (a build, an https page) is reached at its `wss://` address, as that same relay ([nostr.md](nostr.md#relays-and-the-read-only-flag)); set, it replaces the default map; not in Settings | `ws://satorian.satorinet.io:7777=wss://relay.satorinet.io` | the same (unused on its plain-http page, which opens `ws://`) | unset (the default) |
 | `VITE_NOSTR_CENTRAL_WRITE` | `true` or `false`: whether central's relays are written to (Settings › Publish to central's relays) | `true` | `false` | unset (`true`) |
 | `VITE_BASE_RPC` | the Base RPC used when none is saved: `https://…` (then publicnode as the fallback), or a same-origin path (alone); central's `rpcUrl` and `explorerUrl` never override it (Settings › Base RPC) | none: central's `rpcUrl`, then publicnode | `/rpc` (the local fork) | `https://sepolia.base.org` (then publicnode) |
@@ -154,7 +154,7 @@ stand-in, `wss://relay.satorinet.io` (a TLS front on central's nginx-proxy,
 2026-10-20; the default map, so `deploy/build.env` doesn't set
 `VITE_NOSTR_WSS`), as central's relay, written to as a build writes to
 central's relays. Its user relay is Satori's public relay over TLS,
-`wss://app.satorinet.io/relay`.
+`wss://nostr.satorinet.io`.
 
 ## Two names, two origins
 
@@ -220,7 +220,7 @@ http://localhost:8090.
 Screenshot below: the deploy build on that nginx, in a fresh profile, with
 its defaults in place. Central2 and the relay are answered inside the test.
 
-![The deploy build on the image's nginx: central2 and the app.satorinet.io relay by default](../screenshots/deploy.png)
+![The deploy build on the image's nginx: central2 and Satori's relay by default](../screenshots/deploy.png)
 
 ## Redeploy
 

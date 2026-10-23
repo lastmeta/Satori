@@ -24,7 +24,7 @@ named games refuse bounties: none placed).
 
 `SatoriHub.relay` takes an EIP-712 `RelayRequest` and a relayer pays gas for a
 SATORI fee (`contract/satori/contracts/next/SatoriHub.sol:899-990`); the relayer is live at
-`https://app.satorinet.io/relayer` with open CORS (probed). Fees: 0.25 SATORI
+`https://games.satorinet.io/relayer` with open CORS (probed). Fees: 0.25 SATORI
 default, Claim 0 (`contract/relayer/fees.json`). Predict is paid by the
 identity, which holds no SATORI, and staked wallets cannot pay a SATORI fee
 (`contract/relayer/README.md:37-39`). Needs a ruling
