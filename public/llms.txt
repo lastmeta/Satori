@@ -602,7 +602,20 @@ the page's JS context:
   Nostr key's nsec or hex, are given). Passphrase: any Unicode, at least 8
   characters (code points after NFC). The wallet starts locked. One setup runs at
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
-  and a call once set up throws `Already set up`.
+  and a call once set up throws `Already set up`. A wallet already in this
+  app (another of its wallets has its address) throws `This wallet is already
+  in this app…`.
+- Several wallets (docs/design/wallets.md#several-wallets): each has its own
+  database (its keys, alias, Nostr key, streams, models, predictions,
+  activity, settings); one runs at a time.
+  `await satori.wallets()` → `{ active, wallets: [{ id, address, active }] }`
+  (`address` null: not set up yet). `await satori.addWallet()` and
+  `await satori.switchWallet(id)` → `{ reloading: true }`: the wallet is
+  locked and the page reloads, on Setup for the new one (then `setup()`), or
+  with the other wallet. `await satori.removeWallet(id)` → `wallets()`:
+  deletes a wallet that is not in use from this browser, keys and all (its
+  words are the only way back; only on the person's request, after its
+  backup); the one in use throws.
 - `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
   each stream in the batch whose latest observation has no prediction yet
   (a new row, or one an interrupted poll stored), and send everything pending. `submit` is null
@@ -1021,6 +1034,10 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (asset, Amount, "To (0x address)", "Send from the wallet"), which opens a
   review ("Check before sending": the amount and asset, the recipient in
   full, the fee), then "Wallet passphrase to send" (each time), Send or Back.
+  Then the **Wallets** card: each wallet's address (or "Not set up yet"), the
+  one running marked "In use", Switch and Remove on the others (Remove asks:
+  "Remove 0x…? Its keys and data are deleted from this browser, and its 24
+  words are the only way back…", Remove it or Cancel), and Add a wallet.
 - **Settings**: **Keys** (each key with Copy: the wallet's Base address with
   its Locked/Unlocked badge, "Wallet passphrase" and Unlock, or "Lock the
   wallet"; the Nostr pubkey), **Backup** (Wallet words, with its private key
@@ -1102,7 +1119,11 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `send-review` (with `review-amount`, `review-to`, `review-fee`), `alias`
   (the alias's Base address), `alias-key` (its private key: "Wallet
   passphrase to show the alias's private key", then `alias-backup-prompt`,
-  `alias-backup-key`, `alias-backup-hex`).
+  `alias-backup-key`, `alias-backup-hex`), `wallets` (the Wallets card:
+  `wallet-row` with `data-id`, its `.badge` "In use", `wallet-switch`,
+  `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
+  `add-wallet`; `wallets-error`). Setup: `other-wallets` with `wallet-back`
+  (one per other wallet that was set up).
   Settings: `wallet` (the Base address), `wallet-state`,
   `nostr-pubkey`, `unlock`, `lock-wallet`, `backup-prompt`, `backup-key` (a
   private key, or the nsec), `backup-hex`, `reward-address` (the address

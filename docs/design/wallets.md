@@ -108,28 +108,42 @@ else tells the forms apart.
   wallet is linked to one alias at a time: an accepted link moves it from any
   other alias. The network keeps the message and the signature, so the link
   can be checked again later. A register without a link registers the alias
-  alone (not paid until a wallet links).
+  alone; its answer names the wallet an older neuron registered for that
+  alias, if any, so peers moving over keep being paid until they link (owner,
+  2026-10-23), else null.
 - The app makes the link when the wallet is in hand (Create, Restore, Import,
   Connect; for a stored wallet without one, its next Unlock), keeps it with
   its keys, and sends it with every register.
 
 ## Several wallets
 
-- **A database each.** The first wallet keeps today's file
+- **A database each.** The first wallet keeps the first file
   (`opfs://satori-mvp.duckdb`); each later one gets `opfs://satori-<n>.duckdb`.
   Everything a wallet has learned and done is in its own file, so no query
   can mix two, and removing one is deleting its file.
-- **The list**: `satori-wallets.json` beside them in the same OPFS (the same
-  lifetime as the databases): `{ v, active, wallets: [{ id, file, address,
-  label }] }`. No file means one wallet in `satori-mvp.duckdb`. Written by
-  the one tab that runs the app ([pwa.md](pwa.md#one-neuron)).
+- **The list** is in IndexedDB (database `satori`, store `app`, key
+  `wallets`), the same site storage as the databases (it goes when they go,
+  and storage kept keeps it): `{ v: 1, active, wallets: [{ id, file, address
+  }] }`. IndexedDB because a page can write it in every browser (an OPFS
+  file needs `createWritable`, which Safari lacks). No list means one wallet
+  in the first file. Written only by the one tab that runs the app
+  ([pwa.md](pwa.md#one-neuron)). `src/wallets.js`.
 - **Switching = lock, set the active wallet, reload.** The page's end takes
-  the old wallet's keys, workers, sockets and timers with it. The list is on
-  the Wallet tab (label, address, the active one marked); "Add a wallet" opens
-  Setup's four ways; "Remove" asks first, says to back up, deletes the file
-  and the entry. A wallet already in the list is not added twice.
+  the old wallet's keys, workers, sockets and timers with it, and the last
+  visit's Home (a snapshot on this device) is dropped so the next one is not
+  shown under another wallet.
+- **On the Wallet tab**, a **Wallets** card: each wallet's address, the
+  active one marked; Switch on the others; Remove on the others (it asks
+  first, says its words are its only backup, then deletes its database file
+  and its entry); **Add a wallet**: a new entry, active, so the reload opens
+  Setup's four ways on an empty database. Setup then names the other wallets
+  to switch back to. A wallet whose address is already in the list is
+  refused at setup ("This wallet is already in this app").
+- **For agents**: `wallets()` → `{ active, wallets: [{ id, address, active }] }`,
+  `addWallet()`, `switchWallet(id)` (both reload the page), `removeWallet(id)`.
 - **Preferences stay per wallet** (the Satori Network's URL, the Base RPC,
-  the max fee, the relays), in each database, as now.
+  the max fee, the relays), in each database, as now; the theme and the
+  other device choices are the device's.
 
 ## Steps
 
@@ -138,7 +152,7 @@ else tells the forms apart.
 - **A2. The link and the current form**: the Satori Network accepts both
   forms and the link (central `base-upgrade`); the app, satorilib and Satori
   Lite send the current form.
-- **B. Several wallets**: the list, a file each, the switch, Add and Remove.
+- **B. Several wallets**: the list, a file each, the switch, Add and Remove (2026-10-23).
 - **C. A connected wallet**: an injected EIP-1193 provider (EIP-6963 when
   several), the link at connect, the outside wallet asked for each action.
 - **Later**: replacing the alias on purpose (a new alias, a new link, Unstake

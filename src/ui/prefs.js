@@ -65,6 +65,11 @@ export function readSnapshot(storage = local()) {
 /** → whether it was kept */
 export const writeSnapshot = (snap, storage = local()) => writePref(SNAPSHOT_KEY, JSON.stringify(snap), storage);
 
+/** The last visit's Home dropped: another wallet opens next (docs/design/wallets.md#several-wallets). */
+export function dropSnapshot(storage = local()) {
+  try { storage?.removeItem(SNAPSHOT_KEY); } catch { /* storage blocked */ }
+}
+
 /**
  * A menu button's keys (WAI-ARIA's menu pattern), on item `i` of `n`: → { focus } (the arrows, wrapping; Home, End),
  * { close, restore } (Escape: closed, focus back on the button; Tab: closed, focus moves on), or null (the key's own).

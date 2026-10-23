@@ -98,5 +98,28 @@ export function walletTab(a) {
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>
   </section>
+  ${walletsCard(a)}
+  </section>`;
+}
+
+/**
+ * The Wallets card (docs/design/wallets.md#several-wallets): this app's wallets, the one in use marked; Switch and
+ * Remove on the others (Remove asks first); Add a wallet. One row template, its parts shown or hidden by its values:
+ * ArrowJS 1.0.6 reuses a rendered chunk for any template of the same text (see txLink).
+ */
+function walletsCard(a) {
+  const removing = () => state.wallets.wallets.find((w) => w.id === state.walletRemove);
+  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><code title="${w.address ?? ''}">${w.address ? shortHash(w.address) : 'Not set up yet'}</code><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
+    .key(`${w.id}:${w.address}:${w.active}`);
+  return html`<section class="card" data-test="wallets">
+    <h2>Wallets</h2>
+    <p class="muted small">Each wallet keeps its own data in this app. One runs at a time.</p>
+    <ul class="wallet-list">${() => state.wallets.wallets.map(row)}</ul>
+    <div class="confirm" data-test="wallet-remove-confirm" hidden="${() => !removing()}">
+      <p class="small">${() => (removing() ? `Remove ${removing().address ? shortHash(removing().address) : 'this wallet'}? Its keys and data are deleted from this browser, and its 24 words are the only way back. Back them up first: switch to it, then Settings › Backup.` : '')}</p>
+      <div class="actions"><button class="primary" data-test="wallet-remove-yes" @click="${() => a.removeWallet(state.walletRemove)}">Remove it</button><button @click="${a.cancelRemoveWallet}">Cancel</button></div>
+    </div>
+    <div class="actions"><button data-test="add-wallet" @click="${a.addWallet}">Add a wallet</button></div>
+    <p class="error small" role="alert" data-test="wallets-error" hidden="${() => !state.walletsError}">${() => state.walletsError}</p>
   </section>`;
 }

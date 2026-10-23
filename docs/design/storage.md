@@ -2,13 +2,16 @@
 
 [← OVERVIEW](OVERVIEW.md)
 
-One database per browser profile and origin: `opfs://satori-mvp.duckdb`
-(`src/db/opfs.js`), DuckDB-WASM 1.32.0, which is DuckDB 1.4.3. Newer builds
+One database per wallet ([wallets.md](wallets.md#several-wallets)): the first
+wallet's is `opfs://satori-mvp.duckdb`, a later one's `opfs://satori-<n>.duckdb`;
+the list of wallets (which file is active) is in IndexedDB. Below, "the
+database" is the active wallet's (`src/db/opfs.js`), DuckDB-WASM 1.32.0, which is DuckDB 1.4.3. Newer builds
 are dev builds only (`1.33.1-devNN`; npm's `latest` is dev57, `next` dev65,
 which is DuckDB 1.5.6). They create OPFS files but never write them, and the
 WAL bug below is still in DuckDB 1.5.6. The name stays: renaming it would orphan stored keys and
 data, and `satori.duckdb` on this origin holds an earlier draft's other schema.
-Only the tab that holds the `satori-neuron` Web Lock opens it. The API is
+Only the tab that holds the `satori-neuron` Web Lock opens it, and only the
+active wallet's. The API is
 `src/db/index.js`: every call runs one at a time, in call order (`serial()`,
 `src/util.js`). No DuckDB extension is loaded (`autoload_known_extensions =
 false`): JSON is kept as text and parsed in JS. Times are unix seconds.

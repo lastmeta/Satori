@@ -633,3 +633,11 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 }
 a.chan { color: var(--text); text-decoration: none; }
 a.chan:hover { border-color: var(--muted); }
+
+/* the Wallets card (docs/design/wallets.md#several-wallets) */
+.wallet-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.wallet-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.wallet-row:first-child { border-top: 0; }
+.wallet-row code { flex: 1 1 auto; min-width: 0; }
+.confirm { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--warn-soft); }
+.confirm .actions { margin-top: 10px; }

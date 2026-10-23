@@ -15,7 +15,7 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, IMPORT_MAX,
+  withPassphrase, backupKeys, IMPORT_MAX, evmAddress,
 } from './keys/index.js';
 import { createAutoLock } from './keys/autolock.js';
 import { nostrSecretOf } from './nostr/event.js';
@@ -39,7 +39,8 @@ import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
-import { writePref, SORT_KEY, INSTALL_KEY, snapshotOf, readSnapshot, writeSnapshot } from './ui/prefs.js';
+import { writePref, SORT_KEY, INSTALL_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
+import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView } from './wallets.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
@@ -55,6 +56,8 @@ state.version = VERSION;
 const DEFAULT_CENTRAL = DEFAULTS.central;
 
 let db;
+let wallets = null; // this app's wallets as stored (src/wallets.js; null: one, in the first file)
+let dbPath = pathOf(activeOf(null)); // the active wallet's database
 let dbOpening = null; // the database's open, begun at boot: a first visit's Setup runs meanwhile, and its keys wait for it
 let record = null; // the keys as stored (meta `keys`)
 let alias = null;
@@ -225,6 +228,8 @@ async function startNeuron() {
   ({ alias, nostr: nostrKey, wallet: walletPublic } = loadKeys(record));
   state.alias = alias.evmAddress;
   state.wallet = walletPublic.evmAddress;
+  if (wallets && activeOf(wallets).address !== state.wallet) await keepWallets(withAddress(wallets, state.wallet)).catch(() => {});
+  state.wallets = walletsView(wallets, state.wallet);
   state.centralDefault = DEFAULT_CENTRAL;
   state.backupAt = (await db.get('backup_at')) ?? null;
   activity = createActivity({ db, onChange: () => { state.activityRev++; } });
@@ -388,16 +393,43 @@ const storeKeys = (r) => work.run('keys', async (step) => {
  * first visit the database may still be loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
  */
 async function saveKeys(r, { backedUp = false } = {}) {
+  const listed = wallets && withAddress(wallets, evmAddress(r.wallet.pubkey)); // throws: already in this app
   state.setupWaiting = true; // until Home: the engine's step, then "saving your keys…"
   try {
     db ??= await dbOpening;
     await storeKeys(r);
+    if (listed) await keepWallets(listed);
     if (backedUp) await markBackup();
     await startNeuron();
   } finally {
     state.setupWaiting = false;
   }
 }
+
+/** The list stored and shown. */
+async function keepWallets(list) {
+  await writeWallets(list);
+  wallets = list;
+  state.wallets = walletsView(wallets, state.wallet);
+}
+
+/** Another wallet opens: the keys wiped (Lock), the list's active one set, the last visit's Home dropped, the page reloaded. */
+async function reopenWith(list) {
+  lock();
+  await writeWallets(list);
+  dropSnapshot();
+  setTimeout(() => location.reload(), 50); // after an agent's call has its answer
+}
+
+const addWallet = () => exclusive('wallets', () => reopenWith(withAdded(wallets, state.wallet || null)));
+const switchWallet = (id) => exclusive('wallets', () => reopenWith(withActive(wallets, Number(id))));
+/** Remove a wallet that is not in use: its database file (its keys among it) deleted, its entry gone. */
+const removeWallet = (id) => exclusive('wallets', async () => {
+  const { list, file } = withoutWallet(wallets, Number(id));
+  await deleteWalletFile(file);
+  await keepWallets(list);
+  state.walletRemove = 0;
+});
 
 /** The wallet's backup is confirmed (meta.backup_at): Home stops asking for it while storage is not kept. */
 async function markBackup() {
@@ -465,9 +497,9 @@ const setAsideDb = () => exclusive('setAside', async () => {
   if (state.screen !== 'damaged') throw new Error(`Nothing to set aside (screen: ${state.screen}).`);
   state.setAsideError = '';
   try {
-    state.setAside = await setAsideOpfsDb();
+    state.setAside = await setAsideOpfsDb(dbPath);
     console.warn('[satori] the database file that would not open was set aside as', state.setAside);
-    dbOpening = openOpfsDb(undefined, { onStep: (e) => { state.engine = e; } });
+    dbOpening = openOpfsDb(dbPath, { onStep: (e) => { state.engine = e; } });
     db = await dbOpening;
   } catch (err) {
     state.setAsideError = `It could not be set aside: ${err?.message ?? err}`;
@@ -970,6 +1002,12 @@ const actions = {
   }),
   clearReward: shownAt('rewardError', () => setReward(null)),
   readReward: () => void (reward && readRewardNow()),
+  /** The Wallets card (docs/design/wallets.md#several-wallets): Add, Switch, and Remove after it asks. */
+  addWallet: shownAt('walletsError', () => addWallet()),
+  switchWallet: shownAt('walletsError', (id) => switchWallet(id)),
+  askRemoveWallet(id) { Object.assign(state, { walletRemove: id, walletsError: '' }); },
+  cancelRemoveWallet() { state.walletRemove = 0; },
+  removeWallet: shownAt('walletsError', (id) => removeWallet(id)),
 };
 
 // ── window.satori: the same app for agents (see /llms.txt) ──────────────────
@@ -1009,6 +1047,15 @@ window.satori = {
       train: trainer?.last ?? null,
     };
   },
+  /** This app's wallets (docs/design/wallets.md#several-wallets) → { active, wallets: [{ id, address, active }] }. */
+  wallets: async () => walletsView(wallets, state.wallet || null),
+  /** A new wallet, active: the page reloads on Setup (setup() then makes it). Only on the person's request. → { reloading: true } */
+  async addWallet() { await addWallet(); return { reloading: true }; },
+  /** Another wallet of this app's, by id: the keys locked, the page reloaded with it. → { reloading: true } */
+  async switchWallet(id) { await switchWallet(id); return { reloading: true }; },
+  /** Remove a wallet that is not in use: its database (its keys among it) deleted from this browser. Only on the person's
+   * request, after its words are backed up. → wallets() */
+  async removeWallet(id) { await removeWallet(id); return walletsView(wallets, state.wallet || null); },
   /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
   install() { return install(); },
   /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */
@@ -1302,8 +1349,11 @@ async function boot() {
   // one tab runs the neuron; another waits, says so, and takes over when that one closes (no reload)
   await claimTab(undefined, undefined, { onWait: () => { state.screen = 'elsewhere'; } });
   if (state.screen === 'elsewhere') state.screen = 'loading';
-  const fresh = await hasDatabase().then((has) => !has, () => false); // OPFS can't say: the usual way
-  dbOpening = openOpfsDb(undefined, { onStep: (e) => { state.engine = e; } });
+  wallets = await readWallets().catch(() => null); // IndexedDB can't say: the first wallet, as before any list
+  dbPath = pathOf(activeOf(wallets));
+  state.wallets = walletsView(wallets);
+  const fresh = await hasDatabase(dbPath).then((has) => !has, () => false); // OPFS can't say: the usual way
+  dbOpening = openOpfsDb(dbPath, { onStep: (e) => { state.engine = e; } });
   dbOpening.catch(() => {}); // boot's own await reports it
   if (fresh) state.screen = 'setup';
   else if (state.tab === 'home') state.cached = readSnapshot();

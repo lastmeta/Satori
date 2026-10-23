@@ -6,7 +6,7 @@ import { html, watch } from '@arrow-js/core';
 import { MIN_PASSPHRASE } from '../keys/index.js';
 import { state } from './state.js';
 import { form, wordList } from './parts.js';
-import { lockInText, engineText, openingText } from './format.js';
+import { lockInText, engineText, openingText, shortHash } from './format.js';
 import { home } from './home.js';
 import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
@@ -39,6 +39,9 @@ const goTo = (a, t) => (e) => {
 const navLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`nav-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${LABEL[t]}</a>`;
 const barLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
 
+/** Setup's way back (docs/design/wallets.md#several-wallets): the app's other wallets that were set up. */
+const otherWallets = () => state.wallets.wallets.filter((w) => !w.active && w.address);
+
 function setup(a) {
   return html`
   <section class="card narrow setup" hidden="${show('setup')}">
@@ -51,6 +54,10 @@ function setup(a) {
         <button class="primary" @click="${a.newWords}">Create a wallet</button>
         <button @click="${() => a.goStep('restore')}">Restore from words</button>
         <button @click="${() => a.goStep('docker')}">Import Docker files</button>
+      </div>
+      <div class="other-wallets" data-test="other-wallets" hidden="${() => !otherWallets().length}">
+        <p class="muted small">Or go back to a wallet already in this app:</p>
+        <div class="actions">${() => otherWallets().map((w) => html`<button class="small-btn" data-test="wallet-back" @click="${() => a.switchWallet(w.id)}">${shortHash(w.address)}</button>`.key(`${w.id}:${w.address}`))}</div>
       </div>
       ${install(a)}
     </div>

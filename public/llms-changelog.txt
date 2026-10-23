@@ -4,6 +4,14 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-23 (several wallets)
+
+- One app holds several wallets, one active at a time, each with its own
+  database: `wallets()`, `addWallet()`, `switchWallet(id)` (both reload the
+  page), `removeWallet(id)`; the Wallets card on the Wallet tab (Add a wallet,
+  Switch, Remove after it asks); Setup offers the way back to the others. A
+  wallet already in the app is refused at setup.
+
 ## Changed 2026-10-23 (wallet and alias)
 
 - The two keys are the **wallet** (the person's, holding the funds) and its

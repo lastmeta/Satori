@@ -23,6 +23,8 @@ export const state = reactive({
   // the keys
   alias: '', // the alias's Base address
   wallet: '', // the wallet's Base address (shown while locked)
+  wallets: { active: 1, wallets: [] }, // this app's wallets (src/wallets.js walletsView): the Wallets card, Setup's switch back
+  walletRemove: 0, // the wallet whose Remove asks to confirm (its id), or 0
   unlocked: false,
   lockAt: null, // when the wallet locks on its own (ms), or null (src/keys/autolock.js)
   lockNow: 0, // the clock "Locks in 4 min" is counted from (ms; moves every 15 s while unlocked)
@@ -76,6 +78,7 @@ export const state = reactive({
   rewardLine: '',
   rewardDone: '',
   rewardError: '',
+  walletsError: '', // the Wallets card's Add, Switch or Remove failed
   // Nostr (docs/design/nostr.md): the flow's status, the last catalog
   nostr: { pubkey: '', npub: '', maxStreams: 0, centralWrite: false, userRelays: [], relays: [], subscriptions: [],
     watching: { streams: 0, sources: 0, found: 0, left: 0, at: null, error: null }, market: { selling: [], bought: [], error: null } },
