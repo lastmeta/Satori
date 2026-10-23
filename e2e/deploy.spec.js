@@ -1,7 +1,7 @@
 // The deploy image (deploy/; docs/design/deploy.md) at DEPLOY_URL, default
 // http://localhost:8090 (`docker run --rm -p 8090:80 satori-neuron`): start it,
 // then `npm run e2e:deploy` (playwright.deploy.config.js); after a deploy,
-// DEPLOY_URL=https://neuron.satorinet.io. Its headers on every kind of
+// DEPLOY_URL=https://app.satorinet.io. Its headers on every kind of
 // response; then the app in a Chrome profile of its own, as a person's
 // browser: under the CSP with no violation, DuckDB, the service worker, the
 // manifest, and this deployment's defaults (deploy/build.env). Every host but

@@ -8,7 +8,7 @@ docs it links to.
 `/code/Satori/satori` is the Satori neuron as a client-side browser app.
 - It's a static site built with Vite, plain JavaScript, ArrowJS, and DuckDB-WASM on OPFS. It's an installable PWA, MIT licensed.
 - Repo: `git@github.com:lastmeta/Satori.git`, branch `main`.
-- It's live at **https://neuron.satorinet.io**. `satori.satorinet.io` redirects there with a 301.
+- It's live at **https://app.satorinet.io** (moved from `neuron.satorinet.io` on 2026-10-23; `neuron.` and `satori.satorinet.io` redirect there with a 301, path and query kept). The dapp is at `games.satorinet.io`, the indexer at `index.`, central's Nostr relay at `nostr.satorinet.io`.
 - The live build talks to the **dev** central (central2), Base Sepolia, and the relays `wss://relay.satorinet.io` (satorian, the network's relay, through a TLS front on central's nginx-proxy; the app's stand-in for central's `ws://` entry) and `wss://nostr.satorinet.io`.
 - Agents drive it through `window.satori`. `/llms.txt` is the reference for that, and `/llms-changelog.txt` holds its history.
 
@@ -75,7 +75,7 @@ The full set is in Claude memory; this is the short version.
 - Test relay: `node scripts/test-relay.mjs 7778`. Demo provider: `scripts/provider.mjs`.
 - Note: the docker daemon is remote (`tcp://docker-daemon:2376`), and `ss`/`dig` aren't installed.
 
-## Deploying neuron.satorinet.io
+## Deploying app.satorinet.io (the container is still `satori-neuron`)
 Full detail is in `docs/design/deploy.md`. The image is built **on central's box**. That build only copies files: no npm runs there.
 ```sh
 cd /code/Satori/satori && ./scripts/deploy-image.sh   # builds dist/ with deploy/build.env (exit 2 without local docker is fine)
@@ -86,7 +86,7 @@ CSP=$(node --input-type=module -e "import { CSP } from './csp.js'; process.stdou
 $S 'mkdir -p /root/satori-neuron/ctx && rm -rf /root/satori-neuron/ctx/*'
 scp $K -P 2222 /tmp/ctx.tgz root@157.180.104.175:/root/satori-neuron/
 $S "cd /root/satori-neuron/ctx && tar -xzf ../ctx.tgz && docker build -q -f deploy/Dockerfile --build-arg CSP=\"$CSP\" -t satori-neuron:$SHA -t satori-neuron:latest . && docker rm -f satori-neuron && docker run -d --name satori-neuron --network central-lite_default --restart unless-stopped satori-neuron:$SHA"
-curl -sI https://neuron.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" https://network.satorinet.io/   # app up, prod untouched
+curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" https://network.satorinet.io/   # app up, prod untouched
 ```
 - Then run a smoke test with a fresh Playwright profile: setup → Predicting, and central2 accepts N of N.
 - nginx: `/root/nginx/nginx.conf` on central. It's a single-file bind mount, so back it up first and run `docker exec nginx-proxy nginx -t` before any reload.

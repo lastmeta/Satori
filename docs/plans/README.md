@@ -28,7 +28,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    ([../design/pwa.md](../design/pwa.md)). It does not run the neuron while
    closed.
 9. ✅ **Deploy**: one static image (nginx serving the build) behind central's
-   nginx-proxy at https://neuron.satorinet.io (satori.satorinet.io redirects there);
+   nginx-proxy at https://app.satorinet.io (neuron. and satori.satorinet.io redirect there);
    Settings' defaults set at build time (`VITE_*`), the CSP from `csp.js` on
    every response ([../design/deploy.md](../design/deploy.md)).
 10. ✅ **Migrate in, never back** (owner, 2026-10-16): the keys in one record

@@ -17,7 +17,7 @@ payment-channel client, `src/chain/channels.js`),
 [storage.md](storage.md), [track-record.md](track-record.md) (every
 prediction stream on the relays scored against no change from what this
 neuron saw arrive), [pwa.md](pwa.md) (the installed app),
-[deploy.md](deploy.md) (the image at neuron.satorinet.io, and the build
+[deploy.md](deploy.md) (the image at app.satorinet.io, and the build
 variables).
 
 ## The flow

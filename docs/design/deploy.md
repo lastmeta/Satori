@@ -1,17 +1,21 @@
-# Deploy: neuron.satorinet.io
+# Deploy: app.satorinet.io (the Satori app)
 
 The app is a static site, so a deployment is one container of files. The
 image `satori-neuron` is nginx serving `dist/`. It runs on Satori Central
 (the host of `network.satorinet.io`), behind the nginx-proxy that is already
 there. The proxy owns ports 80 and 443 and terminates TLS. The container
 serves plain http on port 80, to the proxy only. The app lives at
-`neuron.satorinet.io`. `satori.satorinet.io` only redirects there (301, path
-kept), because each origin is a separate browser storage: one name means one
-neuron per browser (owner, 2026-10-16).
+`app.satorinet.io` (moved from `neuron.satorinet.io` on 2026-10-23, when the
+term "neuron" began to be phased out for the Satori app). `neuron.satorinet.io`
+and `satori.satorinet.io` only redirect there (301, path and query kept),
+because each origin is a separate browser storage: one name means one neuron
+per browser (owner, 2026-10-16). A neuron made at `neuron.satorinet.io` is not
+seen at `app.satorinet.io`; it is restored from its words. The container is
+still `satori-neuron`.
 
 ```
-browser ─ https://satori.satorinet.io ─ 301 ─▶ https://neuron.satorinet.io
-browser ─ https://neuron.satorinet.io ─▶ nginx-proxy on central (:443, TLS) ─ http :80 ─▶ satori-neuron (nginx, dist/)
+browser ─ https://neuron.satorinet.io (or satori.) ─ 301 ─▶ https://app.satorinet.io
+browser ─ https://app.satorinet.io ─▶ nginx-proxy on central (:443, TLS) ─ http :80 ─▶ satori-neuron (nginx, dist/)
 
 then, from the page in the browser:  central (VITE_CENTRAL_URL) · wss:// relays · the Base RPC
 ```
@@ -50,14 +54,15 @@ Every response, 404s included, carries:
 - `X-Content-Type-Options: nosniff`;
 - `Strict-Transport-Security: max-age=63072000; includeSubDomains` (two
   years, 2026-10-19, the security review): once a browser has seen it over
-  https it never asks for `http://neuron.satorinet.io` again, so a hostile
+  https it never asks for `http://app.satorinet.io` again, so a hostile
   network can't answer a typed http address with a look-alike page asking for
   the words. No `preload` (that waits until every satorinet.io name is
   https-only). Browsers ignore it over plain http, which the container
   speaks: the front proxy on central terminates TLS and passes it through,
   as it passes the CSP (nginx's `proxy_pass` keeps upstream headers). The
-  `satori.satorinet.io` 301 is the proxy's own answer and carries none, and
-  `includeSubDomains` here covers only names under `neuron.satorinet.io`.
+  `neuron.` and `satori.satorinet.io` 301s are the proxy's own answer and
+  carry none, and `includeSubDomains` here covers only names under
+  `app.satorinet.io`.
 
 | Path | Cache-Control | Content-Type |
 |---|---|---|
@@ -206,7 +211,7 @@ build: the stand-in (preview sends the CSP but not the image's other headers, so
 image's).
 
 After a deploy, run the same spec against the live site:
-`DEPLOY_URL=https://neuron.satorinet.io npm run e2e:deploy`. The neuron it
+`DEPLOY_URL=https://app.satorinet.io npm run e2e:deploy`. The neuron it
 creates still talks only to the stub.
 
 Verified 2026-10-16, without docker (this box has no daemon). The image's
@@ -255,24 +260,31 @@ database. `S` means `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175`
 4. nginx-proxy (one-time, done 2026-10-16). Its one `nginx.conf`
    (`/root/nginx/nginx.conf`, a single-file bind mount) has three server
    blocks:
-   - port 80 for both names: the ACME webroot, everything else to https;
-   - 443 `neuron.satorinet.io`: `proxy_pass http://$satori_neuron:80`;
-   - 443 `satori.satorinet.io`: `return 301 https://neuron.satorinet.io$request_uri`.
+   - port 80 for `neuron.` and `satori.`: the ACME webroot, everything else to https;
+   - 443 `app.satorinet.io`: `/api/` redirects to `index.satorinet.io` (old
+     links of the dapp, which used to be here), everything else
+     `proxy_pass http://$satori_neuron:80`;
+   - 443 `neuron.satorinet.io` and `satori.satorinet.io`:
+     `return 301 https://app.satorinet.io$request_uri`.
 
    The copies on central are `/root/nginx/satori-neuron.80.conf` and
    `satori-neuron.443.conf`. They were inserted before the `http` block's
    closing brace, after a backup (`nginx.conf.bak-satori-neuron*`), and loaded
    only after `nginx -t` passed. Don't add a CSP or nosniff there; the
-   container sends both. One certificate covers both names:
+   container sends both. The first setup (2026-10-16) had `neuron.` proxy and
+   one certificate for both names:
    `certbot certonly --webroot -w /var/www/certbot -d neuron.satorinet.io -d satori.satorinet.io --cert-name neuron.satorinet.io --key-type ecdsa`.
+   `app.` has its own certificate (`/etc/letsencrypt/live/app.satorinet.io`);
+   the two redirecting names still use the `neuron.` one.
    It renews with certbot's timer, and the deploy hook reloads nginx-proxy.
-   DNS: two A records to `157.180.104.175` in Cloudflare, proxy off, as for
-   `app` and `coined`.
+   DNS: A records to `157.180.104.175` in Cloudflare, proxy off, for `app`,
+   `neuron`, `satori` and `coined`. The 2026-10-23 move changed nginx only
+   (backups: `nginx.conf.bak-20261023-app`, `-neuron-redirect`).
 
-5. Check: `curl -sI https://neuron.satorinet.io/sw.js` (expect the CSP,
+5. Check: `curl -sI https://app.satorinet.io/sw.js` (expect the CSP,
    nosniff, `strict-transport-security: max-age=63072000; includeSubDomains`
    and `no-cache`), then
-   `DEPLOY_URL=https://neuron.satorinet.io npm run e2e:deploy`.
+   `DEPLOY_URL=https://app.satorinet.io npm run e2e:deploy`.
 
 Live since 2026-10-16. The check passed then, and a real smoke test also
 passed: a fresh profile registered with central2, which accepted 83 of 83

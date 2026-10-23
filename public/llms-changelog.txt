@@ -4,6 +4,15 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-23 (the app's address)
+
+- The app is served at https://app.satorinet.io. neuron.satorinet.io and
+  satori.satorinet.io answer 301 to it, path and query kept (a `?ref=` invite
+  link still works). Browser storage is per origin: a neuron made at
+  neuron.satorinet.io is not visible at app.satorinet.io, and is restored there
+  from its 24 words (or its files). The header reads "Satori app"; `base().inviteLink`
+  is built from the origin it runs at, so new links are app.satorinet.io's.
+
 ## Changed 2026-10-23 (D7)
 
 - The app is on the D7 contracts (Base Sepolia, chain 84532, redeployed

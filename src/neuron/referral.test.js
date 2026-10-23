@@ -22,7 +22,7 @@ describe('referrerOf: the ?ref= of a URL', () => {
 
 describe('inviteLink', () => {
   test('the origin and the vault, as the dapp writes it', () => {
-    expect(inviteLink('https://neuron.satorinet.io', A)).toBe(`https://neuron.satorinet.io/?ref=${A}`);
+    expect(inviteLink('https://app.satorinet.io', A)).toBe(`https://app.satorinet.io/?ref=${A}`);
     expect(inviteLink('http://localhost:5173', A)).toBe(`http://localhost:5173/?ref=${A}`);
   });
   test('none without an origin or a vault', () => {

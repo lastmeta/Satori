@@ -12,8 +12,9 @@
 > the keys, the database (DuckDB-WASM on OPFS) and the engine. There is no
 > server of our own. It is built to be driven by people and by AI agents.
 
-Served at https://neuron.satorinet.io (https://satori.satorinet.io redirects
-there). This file is the current reference; what changed, and when:
+Served at https://app.satorinet.io (https://neuron.satorinet.io and
+https://satori.satorinet.io redirect there; storage is per origin, so a
+neuron made at neuron.satorinet.io is restored from its words on app.). This file is the current reference; what changed, and when:
 /llms-changelog.txt. Code: https://github.com/lastmeta/Satori (pull requests
 welcome).
 
@@ -101,7 +102,7 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
    (signature-checked). The Satori Network lists one relay,
    `ws://satorian.satorinet.io:7777` (about 930 announcements, 119 of them
    `_pred`; about 9 s the first time, checking their signatures). On
-   neuron.satorinet.io, an https page that can't open `ws://`, it is reached
+   app.satorinet.io, an https page that can't open `ws://`, it is reached
    at its wss stand-in, `wss://relay.satorinet.io` (the same relay behind
    TLS; `for` says so), and written to, beside the user's relay
    `wss://nostr.satorinet.io`. On the dev server it is read over
@@ -142,7 +143,7 @@ Every method is below; `await satori.status()` shows everything at once.
   version's stored keys are carried forward: the identity and the Nostr key
   at load, the vault at its next Unlock.
 - Central (the Satori Network): `https://network.satorinet.io` in a build
-  unless the build sets another (`VITE_CENTRAL_URL`; neuron.satorinet.io
+  unless the build sets another (`VITE_CENTRAL_URL`; app.satorinet.io
   uses `https://central2.satorinet.io` for now); central2 (the dev central)
   on the dev server. Changeable (https only); a change is noted on Home for
   24 h (`health().notices`).
@@ -262,7 +263,7 @@ Every method is below; `await satori.status()` shows everything at once.
   `setRelays`). On the dev server central's relays are read only (requests,
   never events) and the user's relays default to the test relay
   `ws://localhost:7778`; a build writes to central's relays too, and its
-  user relays default to the build's `VITE_NOSTR_RELAYS` (neuron.satorinet.io:
+  user relays default to the build's `VITE_NOSTR_RELAYS` (app.satorinet.io:
   `wss://nostr.satorinet.io`). A build opens only `wss://` relays (its
   CSP has no `ws:`; an https page can't open `ws://` anyway). There a `ws://`
   relay with a **wss stand-in** (the `wss://` address of the same relay, from
@@ -345,7 +346,7 @@ Every method is below; `await satori.status()` shows everything at once.
   central's `/api/v1/base/config` is read (cached 1 h; prod answers 404,
   central2 serves it) but its addresses are never used: one that differs is
   a quiet warning in the feed. RPC: Settings or `setBaseRpc`; empty = the
-  default: in a build the one it pins (`VITE_BASE_RPC`; neuron.satorinet.io
+  default: in a build the one it pins (`VITE_BASE_RPC`; app.satorinet.io
   `https://sepolia.base.org`), then publicnode (a build that pins none takes
   central's `rpcUrl`); on the dev server `/rpc`, a local anvil fork (`node
   scripts/fork.mjs start`). A change is noted on Home for 24 h. An RPC on
@@ -872,7 +873,7 @@ the page's JS context:
   SATORI, checked once the identity accepts only this vault): `true`,
   `false` (out of sync: unstaking fails until the contract fix;
   `shortfall` is the SATORI not booked) or `null` (not checked).
-  `rpc`: the RPCs in use, in failover order (neuron.satorinet.io:
+  `rpc`: the RPCs in use, in failover order (app.satorinet.io:
   `['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com']`).
   `config`: `'central'` when the Satori Network answered `base/config` (its
   addresses checked against the app's, never used), `'bundled'` when it did
