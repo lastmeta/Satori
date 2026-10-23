@@ -145,6 +145,48 @@ else tells the forms apart.
   the max fee, the relays), in each database, as now; the theme and the
   other device choices are the device's.
 
+## A connected wallet
+
+As the dapp connects one (`contract/satori-ui/src/hooks/useWallet.ts`): the
+wallets installed in this browser announce themselves (EIP-6963; else the
+injected `window.ethereum`), the person picks one, `eth_requestAccounts`
+gives its address, and before a transaction the wallet is switched to Base
+Sepolia (added with the chain's EIP-3085 fields when it answers 4902). The
+app uses viem over the wallet's EIP-1193 provider (the dapp uses ethers).
+WalletConnect, for a phone's wallet app, comes later.
+
+- **Connect** (Setup's fourth way, `src/keys/connect.js`): one button per
+  wallet found ("Connect MetaMask"); none found says so ("No wallet in this
+  browser: install one, such as MetaMask, or open this page in your wallet
+  app's browser"). Connecting makes the alias and the Nostr key, and the
+  wallet signs the link to the alias once (`personal_sign`, checked: it must
+  recover to the wallet's address). Nothing is encrypted and there is no
+  passphrase.
+- **The record**: `wallet: { kind: 'connected', address, rdns, name }` (the
+  wallet's EIP-6963 id and name, to find it again; `injected` for a plain
+  `window.ethereum`), and the link. No secret of the wallet's is ever in the
+  app.
+- **Each start** finds the same wallet again by its id. Not found (another
+  browser, the extension removed): the app still predicts, and an action
+  that needs the wallet says "<name> isn't in this browser".
+- **Each action that needs the wallet** goes to the wallet app, which asks
+  the person: Stake and Unstake (the wallet's transactions), Claim, Send
+  (after the review; no passphrase), the referral, a channel's open (its
+  permit is EIP-712, `eth_signTypedData_v4`). Before each signature the app
+  asks the wallet for its accounts; on another account it says "<name> is on
+  another account: choose 0x… in it". Transactions are sent by the wallet
+  (`eth_sendTransaction`) with the app's gas limit and fee fields; the app
+  then waits for the receipt as for its own.
+- **No Unlock, no Lock** for it: Settings › Keys shows "Connected: <name>";
+  the inline Unlock prompts never open. Backup offers the alias's and the
+  Nostr key's (the wallet's own words stay in the wallet app), each shown
+  after the wallet signs a fixed text ("Satori: show this app's keys",
+  the wallet's address, the time), checked like the link.
+- **For agents**: `connectWallets()` → the wallets found (`[{ rdns, name }]`),
+  `connect(rdns)` on Setup; `status().walletKind` is `'sealed'` or
+  `'connected'`. An agent drives a connected wallet only where the wallet
+  app approves.
+
 ## Steps
 
 - **A. The words**: alias and wallet everywhere; "neuron" leaves the UI; the
@@ -154,7 +196,8 @@ else tells the forms apart.
   Lite send the current form.
 - **B. Several wallets**: the list, a file each, the switch, Add and Remove (2026-10-23).
 - **C. A connected wallet**: an injected EIP-1193 provider (EIP-6963 when
-  several), the link at connect, the outside wallet asked for each action.
+  several), the link at connect, the outside wallet asked for each action
+  (2026-10-23).
 - **Later**: replacing the alias on purpose (a new alias, a new link, Unstake
   and Stake again; the network then sees a new peer with new streams);
   WalletConnect for a phone's outside wallet; shared preferences.

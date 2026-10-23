@@ -25,10 +25,13 @@ function keys(a) {
   <section class="card settings-section" id="settings-keys">
     <h2>Keys</h2>
     <div class="key">
-      <h3>Wallet <span class="${() => (state.unlocked ? 'badge on' : 'badge')}" data-test="wallet-state">${() => (state.unlocked ? 'Unlocked' : 'Locked')}</span></h3>
+      <h3>Wallet <span class="${() => (state.unlocked || state.connected ? 'badge on' : 'badge')}" data-test="wallet-state">${() => (state.connected ? 'Connected' : state.unlocked ? 'Unlocked' : 'Locked')}</span></h3>
       ${idRow('Address', 'wallet', () => state.wallet, a)}
-      <p class="muted small">Holds your funds. Encrypted with your passphrase.</p>
-      <form class="unlock" hidden="${() => state.unlocked}" @submit="${(e) => a.unlock(form(e), e.target)}">
+      <p class="muted small" hidden="${() => !!state.connected}">Holds your funds. Encrypted with your passphrase.</p>
+      <p class="muted small" data-test="wallet-connected" hidden="${() => !state.connected}">${() => (!state.connected ? ''
+        : state.connected.found ? `Holds your funds, in ${state.connected.name}: it asks you each time the wallet is needed.`
+          : `Holds your funds, in ${state.connected.name}, which isn't in this browser: open the app where it is installed to stake, claim or send.`)}</p>
+      <form class="unlock" hidden="${() => state.unlocked || !!state.connected}" @submit="${(e) => a.unlock(form(e), e.target)}">
         <input name="pass" type="password" aria-label="Wallet passphrase" placeholder="Wallet passphrase" autocomplete="current-password" required>
         <button class="primary" type="submit" data-test="unlock" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>
       </form>
@@ -47,10 +50,11 @@ function backup(a) {
   return html`
   <section class="card settings-section" id="settings-backup">
     <h2>Backup</h2>
-    <p class="muted small">The wallet is 24 words; Restore from words brings it back. The Nostr key is random, not from
-      the words, so it is backed up on its own. Showing them asks for the wallet's passphrase each time.</p>
+    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Restore from words brings it back. The
+      Nostr key is random, not from the words, so it is backed up on its own. Showing them asks for the wallet's passphrase each time.</p>
+    <p class="muted small" hidden="${() => !state.connected}">${() => (state.connected ? `Your wallet is backed up in ${state.connected.name}. The Nostr key is the app's own: showing it asks ${state.connected.name} to confirm.` : '')}</p>
     <div class="backup-row">
-      <button class="small-btn" @click="${() => a.askBackup('wallet')}">Wallet words</button>
+      <button class="small-btn" hidden="${() => !!state.connected}" @click="${() => a.askBackup('wallet')}">Wallet words</button>
       <button class="small-btn" @click="${() => a.askBackup('nostr')}">Nostr key</button>
     </div>
     ${backupPanel(a, ['wallet', 'nostr'])}

@@ -437,7 +437,7 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 (synchronous, kept current; `await satori.status()` says the same). Then, in
 the page's JS context:
 
-- `await satori.status()` → `{ screen, version, alias, wallet, unlocked, lockAt, central, nostr, base, storage, app,
+- `await satori.status()` → `{ screen, version, alias, wallet, walletKind, connected, unlocked, lockAt, central, nostr, base, storage, app,
   recovered, setAside, train }` (`version`: `browser-<package version>+<git short sha>`, the build's, as register
   sends it; `train`: the last training pass, `{ central, nostr, base, stopped, ms }`, or null; `lockAt`: when the
   unlocked wallet locks on its own, ms, or null; `setAside`: the name a damaged database file was set aside under at
@@ -605,6 +605,18 @@ the page's JS context:
   and a call once set up throws `Already set up`. A wallet already in this
   app (another of its wallets has its address) throws `This wallet is already
   in this app…`.
+- A connected wallet (docs/design/wallets.md#a-connected-wallet): the
+  person's own wallet app (MetaMask or another, found by EIP-6963, else
+  `window.ethereum`) instead of a wallet sealed here. On Setup:
+  `await satori.connectWallets()` → `[{ rdns, name }]`, then
+  `await satori.connect(rdns)` → status (the wallet app asks the person for
+  the account, then to sign the link). Then `status().walletKind` is
+  `'connected'` and `status().connected` `{ name, found }` (found: its wallet
+  app is in this browser); there is no passphrase: `unlock()` throws, and
+  `stake()`, `unstake()`, `claim()`, `send()` (no passphrase) and a buy's
+  channel are each approved in the wallet app; its "no" is `Declined in the
+  wallet app.` `backup('alias' | 'nostr')` asks the wallet app to sign a
+  fixed text first; the wallet's own words are in its wallet app.
 - Several wallets (docs/design/wallets.md#several-wallets): each has its own
   database (its keys, alias, Nostr key, streams, models, predictions,
   activity, settings); one runs at a time.
@@ -1122,8 +1134,11 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `alias-backup-key`, `alias-backup-hex`), `wallets` (the Wallets card:
   `wallet-row` with `data-id`, its `.badge` "In use", `wallet-switch`,
   `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
-  `add-wallet`; `wallets-error`). Setup: `other-wallets` with `wallet-back`
-  (one per other wallet that was set up).
+  `add-wallet`; `wallets-error`), `base-connected` (a connected wallet's note).
+  Setup: `other-wallets` with `wallet-back` (one per other wallet that was
+  set up); `connect-wallet` (Connect a wallet), then `connect-step` with
+  `connect-to` (one per wallet found, `data-rdns`) or `no-wallet`. Settings:
+  `wallet-connected` (a connected wallet's note).
   Settings: `wallet` (the Base address), `wallet-state`,
   `nostr-pubkey`, `unlock`, `lock-wallet`, `backup-prompt`, `backup-key` (a
   private key, or the nsec), `backup-hex`, `reward-address` (the address

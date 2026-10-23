@@ -90,6 +90,10 @@ nothing):
   else about them (public keys, addresses) is derived at load.
 - The wallet's public key is in clear: its Base address shows while locked.
   At Unlock the decrypted secret must give the same public key.
+- A **connected** wallet (its wallet app holds it,
+  [wallets.md](wallets.md#a-connected-wallet)) is stored as `"wallet": {
+  "kind": "connected", "address": "0x…", "rdns": "io.metamask", "name":
+  "MetaMask" }`: nothing secret, no passphrase.
 - `link` is the wallet's EIP-191 signature of its link to the alias
   ([wallets.md](wallets.md#the-satori-network-register-login-and-the-link)):
   `{ message, signature }`, made at Create, Restore and Import, and at the

@@ -23,6 +23,9 @@ export const state = reactive({
   // the keys
   alias: '', // the alias's Base address
   wallet: '', // the wallet's Base address (shown while locked)
+  connected: null, // a connected wallet (docs/design/wallets.md#a-connected-wallet): { name, found }, else null
+  connectFound: null, // Setup's Connect: [{ rdns, name }] found in this browser; null while looking
+  connecting: '', // the wallet whose app is being asked to connect
   wallets: { active: 1, wallets: [] }, // this app's wallets (src/wallets.js walletsView): the Wallets card, Setup's switch back
   walletRemove: 0, // the wallet whose Remove asks to confirm (its id), or 0
   unlocked: false,

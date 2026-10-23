@@ -69,7 +69,7 @@ describe('loadKeys and Unlock', () => {
     expect(await verifyMessage({ address: a.ethAddress, message: 'c-0', signature: k.alias.signCentralLogin('c-0') })).toBe(true); // EIP-191
     expect(k.alias.backup()).toEqual({ words: a.words, privateKey: `0x${a.entropyHex}` });
     expect(k.nostr).toEqual({ secret: fx.nostr.secretHex, pubkey: fx.nostr.pubkeyHex });
-    expect(k.wallet).toEqual({ pubkey: b.pubkey, evmAddress: b.ethAddress });
+    expect(k.wallet).toEqual({ pubkey: b.pubkey, evmAddress: b.ethAddress, connected: null });
 
     await expect(unlockWallet(r, 'not it at all')).rejects.toThrow(/^Wrong passphrase$/);
     const { wallet, record } = await unlockWallet(r, PASS);
@@ -213,7 +213,7 @@ describe('every earlier version\'s keys (test/fixtures/profiles.json) carried fo
       else expect(nostrPubkey(record.nostr)).toMatch(/^[0-9a-f]{64}$/); // made now, as the load before step 5 did
       const walletPub = publicKey(hex(p.expect.wallet));
       const noPlainKey = p.commit === '8996f24';
-      expect(loadKeys(record).wallet).toEqual(noPlainKey ? { pubkey: null, evmAddress: null } : { pubkey: walletPub, evmAddress: evmAddress(walletPub) });
+      expect(loadKeys(record).wallet).toEqual(noPlainKey ? { pubkey: null, evmAddress: null, connected: null } : { pubkey: walletPub, evmAddress: evmAddress(walletPub), connected: null });
       expect(loadKeys(record).alias.pubkey).toBe(publicKey(hex(p.expect.alias)));
 
       // The next Unlock: the wallet re-encrypted in this app's format, with the same passphrase.

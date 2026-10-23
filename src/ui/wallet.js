@@ -89,11 +89,12 @@ export function walletTab(a) {
         ${fact('To', 'review-to', html`<code class="block">${() => q()?.to ?? ''}</code>`)}
         ${fact('Fee', 'review-fee', () => (q() ? `about ${ethFeeText(q().fee.about)}, at most ${ethFeeText(q().fee.max)} (Base ETH, from the wallet)` : ''))}
       </dl>
-      <form class="unlock" @submit="${(e) => a.confirmSend(form(e), e.target)}"><input name="pass" type="password" aria-label="Wallet passphrase to send" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send')}</button><button type="button" disabled="${busy}" @click="${a.backSend}">Back</button></form>
+      <form class="unlock" @submit="${(e) => a.confirmSend(form(e), e.target)}"><input name="pass" type="password" aria-label="Wallet passphrase to send" placeholder="Wallet passphrase" autocomplete="current-password" required hidden="${() => !!state.connected}" disabled="${() => !!state.connected}"><button class="primary" type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : state.connected ? `Send in ${state.connected.name}` : 'Send')}</button><button type="button" disabled="${busy}" @click="${a.backSend}">Back</button></form>
     </div>
     ${unlockPrompt(a, 'wallet', 'use the wallet')}
-    <p class="muted small" hidden="${() => state.unlocked}">Stake, Claim and Send ask for the wallet's passphrase. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).</p>
+    <p class="muted small" hidden="${() => state.unlocked || !!state.connected}">Stake, Claim and Send ask for the wallet's passphrase. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).</p>
     <p class="muted small" hidden="${() => !state.unlocked}">Send asks for the wallet's passphrase each time.</p>
+    <p class="muted small" data-test="base-connected" hidden="${() => !state.connected}">${() => (state.connected ? `Stake, Claim and Send ask ${state.connected.name} to approve. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).` : '')}</p>
     <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>

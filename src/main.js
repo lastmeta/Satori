@@ -15,8 +15,9 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, IMPORT_MAX, evmAddress,
+  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup,
 } from './keys/index.js';
+import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { createAutoLock } from './keys/autolock.js';
 import { nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
@@ -64,7 +65,8 @@ let alias = null;
 let nostrKey = null; // { secret, pubkey }: plaintext, as the alias
 let nostr = null; // the Nostr flow
 let walletPublic = { pubkey: null, evmAddress: null }; // from the record, while locked
-let wallet = null; // only while unlocked
+let wallet = null; // only while unlocked; a connected wallet's (src/keys/connect.js) while its wallet app is in this browser
+let foundWallets = []; // Setup's Connect: the wallets in this browser, with their providers
 let lockCount = 0; // a Lock during an Unlock in flight wins
 let pending = null; // setup only: { wallet, alias?, nostr? } secrets
 let central = null;
@@ -228,6 +230,7 @@ async function startNeuron() {
   ({ alias, nostr: nostrKey, wallet: walletPublic } = loadKeys(record));
   state.alias = alias.evmAddress;
   state.wallet = walletPublic.evmAddress;
+  if (walletPublic.connected) await findConnected();
   if (wallets && activeOf(wallets).address !== state.wallet) await keepWallets(withAddress(wallets, state.wallet)).catch(() => {});
   state.wallets = walletsView(wallets, state.wallet);
   state.centralDefault = DEFAULT_CENTRAL;
@@ -393,7 +396,7 @@ const storeKeys = (r) => work.run('keys', async (step) => {
  * first visit the database may still be loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
  */
 async function saveKeys(r, { backedUp = false } = {}) {
-  const listed = wallets && withAddress(wallets, evmAddress(r.wallet.pubkey)); // throws: already in this app
+  const listed = wallets && withAddress(wallets, r.wallet.address ?? evmAddress(r.wallet.pubkey)); // throws: already in this app
   state.setupWaiting = true; // until Home: the engine's step, then "saving your keys…"
   try {
     db ??= await dbOpening;
@@ -405,6 +408,18 @@ async function saveKeys(r, { backedUp = false } = {}) {
     state.setupWaiting = false;
   }
 }
+
+/**
+ * A connected wallet, found again in this browser by its EIP-6963 id (docs/design/wallets.md#a-connected-wallet): its
+ * signer, or none (another browser, the extension removed): the app still predicts, and wallet actions say so.
+ */
+async function findConnected() {
+  const { rdns, name } = walletPublic.connected;
+  const w = (await findWallets()).find((x) => x.rdns === rdns);
+  wallet = w ? connectedWallet({ address: walletPublic.evmAddress, name, provider: w.provider }) : null;
+  state.connected = { name, found: !!w };
+}
+const notHere = () => new Error(`${state.connected.name} isn't in this browser: open the app where it is installed.`);
 
 /** The list stored and shown. */
 async function keepWallets(list) {
@@ -456,8 +471,10 @@ async function unlock(passphrase) {
 /** Lock: the wallet wiped from memory, and any backup on screen hidden. */
 function lock() {
   lockCount++;
-  wallet?.lock();
-  wallet = null;
+  if (!wallet?.connected) { // a connected wallet holds no secret here: nothing to wipe
+    wallet?.lock();
+    wallet = null;
+  }
   afterUnlock = null;
   autoLock.stop();
   Object.assign(state, { unlocked: false, unlockFor: '', backup: '', backupWords: '', backupKey: '', backupHex: '', backupAsk: '', backupError: '' });
@@ -484,9 +501,17 @@ async function finishUpdate(passphrase) {
  * from the passphrase each time, unlocked or not (keys' backupKeys: ~0.3 s; docs/design/keys.md#backup).
  */
 async function backupOf(which, passphrase) {
-  const b = await backupKeys(record, which, passphrase);
+  const b = walletPublic.connected ? await connectedBackupOf(which) : await backupKeys(record, which, passphrase);
   markBackup().catch((err) => console.warn('[satori] backup_at', err)); // shown: the backup is confirmed
   return b;
+}
+
+/** A connected wallet's Backup: the alias's or the Nostr key's, once its wallet app has signed showKeysText (checked). */
+async function connectedBackupOf(which) {
+  if (which === 'wallet') return connectedBackup(record, which); // its words are in its wallet app: said so
+  if (!wallet) throw notHere();
+  await signText(wallet.provider, walletPublic.evmAddress, showKeysText(walletPublic.evmAddress));
+  return connectedBackup(record, which);
 }
 
 /**
@@ -565,11 +590,28 @@ const walletOps = {
   /** { asset, to, amount, passphrase }: the inputs checked first, then the wallet opened from the passphrase for this send alone. */
   async send(o = {}) {
     const { asset, amount } = checkSend(o);
-    const r = await withPassphrase(record, o.passphrase, (v) => base.send(o, v));
+    const r = walletPublic.connected ? await base.send(o, wallet ?? (() => { throw notHere(); })())
+      : await withPassphrase(record, o.passphrase, (v) => base.send(o, v));
     activity.wallet('send', `Sent ${amount} ${asset} from the wallet`);
     return r;
   },
 };
+
+/**
+ * Connect a wallet found in this browser: its chosen account, then the link it signs (the wallet app asks the person);
+ * no passphrase. Its words are in its wallet app, so there is no backup to ask for.
+ */
+const connectTo = (rdns) => setup(async () => {
+  const w = foundWallets.find((x) => x.rdns === rdns);
+  if (!w) throw new Error('That wallet is not in this browser.');
+  state.connecting = w.name;
+  try {
+    const address = await requestAddress(w.provider);
+    return await connectedRecord({ address, rdns: w.rdns, name: w.name, signLink: (m) => signText(w.provider, address, m) });
+  } finally {
+    state.connecting = '';
+  }
+}, { backedUp: true });
 
 /**
  * Setup, from the UI or an agent: one at a time, and only on the Setup screen. `makeRecord` → the keys, or null (not
@@ -644,6 +686,7 @@ function fillSettings() {
 /** Run `fn` now if the wallet is open; else open the inline Unlock prompt at `slot`, and run it after Unlock. */
 function withWallet(slot, fn) {
   if (wallet) return fn();
+  if (state.connected) return void (state.baseError = notHere().message); // nothing to unlock: its wallet app is elsewhere
   afterUnlock = fn;
   Object.assign(state, { unlockFor: slot, unlockError: '' });
   requestAnimationFrame(() => document.querySelector(`[data-unlock-for="${slot}"] input`)?.focus());
@@ -735,6 +778,14 @@ const actions = {
    * record. The same password becomes this app's passphrase when it meets the rule and `reuse` is ticked;
    * otherwise the passphrase step asks for one.
    */
+  /** Setup's Connect: the wallets in this browser (docs/design/wallets.md#a-connected-wallet). */
+  async lookForWallets() {
+    goStep('connect');
+    Object.assign(state, { connectFound: null, error: '' });
+    foundWallets = await findWallets();
+    state.connectFound = foundWallets.map(({ rdns, name }) => ({ rdns, name }));
+  },
+  connect: shownAt('error', (rdns) => connectTo(rdns)),
   importDocker: shownAt('error', async (el) => {
     const f = new FormData(el);
     await setup(async () => {
@@ -1033,6 +1084,8 @@ window.satori = {
       version: VERSION, // browser-<package version>+<git short sha>
       alias: state.alias || null,
       wallet: state.wallet || null,
+      walletKind: !state.wallet ? null : state.connected ? 'connected' : 'sealed',
+      connected: state.connected, // a connected wallet: { name, found } (found: its wallet app is in this browser), else null
       unlocked: state.unlocked,
       lockAt: state.lockAt, // when the wallet locks on its own (ms), or null
 
@@ -1046,6 +1099,16 @@ window.satori = {
       // the last training pass (docs/design/models.md#the-training-pass): { central, nostr, base, stopped, ms }, or null
       train: trainer?.last ?? null,
     };
+  },
+  /** On Setup: the wallets in this browser that can be connected (EIP-6963, else window.ethereum) → [{ rdns, name }]. */
+  async connectWallets() {
+    foundWallets = await findWallets();
+    return foundWallets.map(({ rdns, name }) => ({ rdns, name }));
+  },
+  /** On Setup: connect one of them (connectWallets() first); its wallet app asks the person for the account and the link. → status */
+  async connect(rdns) {
+    await connectTo(rdns);
+    return window.satori.status();
   },
   /** This app's wallets (docs/design/wallets.md#several-wallets) → { active, wallets: [{ id, address, active }] }. */
   wallets: async () => walletsView(wallets, state.wallet || null),
@@ -1366,7 +1429,8 @@ async function boot() {
     record = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
     if (!record) return void Object.assign(state, { screen: 'setup', cached: null });
     // an earlier version's wallet whose public key was not in clear: the neuron needs it (register, the Base address)
-    if (!loadKeys(record).wallet.pubkey) return void Object.assign(state, { screen: 'finish', cached: null });
+    const w = loadKeys(record).wallet;
+    if (!w.pubkey && !w.connected) return void Object.assign(state, { screen: 'finish', cached: null });
     await startNeuron();
   } catch (err) {
     // the database file itself won't open (damaged): offer to set it aside; anything else, "could not start"

@@ -4,6 +4,18 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-23 (a connected wallet)
+
+- Setup's fourth way, "Connect a wallet": the person's own wallet app
+  (EIP-6963, else window.ethereum) holds the wallet; `connectWallets()`,
+  `connect(rdns)`; `status().walletKind` (`'sealed' | 'connected'`) and
+  `status().connected` (`{ name, found }`). No passphrase for it: Stake,
+  Unstake, Claim, Send and a buy's channel are approved in the wallet app (a
+  "no" is "Declined in the wallet app."), `unlock()` throws, and Backup shows
+  the alias's and the Nostr key's after the wallet app signs a fixed text.
+  `data-test`: `connect-wallet`, `connect-step`, `connect-to` (`data-rdns`),
+  `no-wallet`, `wallet-connected`, `base-connected`.
+
 ## Added 2026-10-23 (several wallets)
 
 - One app holds several wallets, one active at a time, each with its own

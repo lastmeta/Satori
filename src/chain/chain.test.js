@@ -7,6 +7,8 @@ import { tokenAbi } from './abi.js';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
 import { fakeSatori, E18 } from '../../test/fake-satori.js';
+import { fakeWallet } from '../../test/fake-wallet.js';
+import { connectedWallet } from '../keys/connect.js';
 
 import { createChain, transferLock, payload, revertName, errorText, panicOf, UP, DOWN, HOOK_GAS, INDEFINITE } from './index.js';
 
@@ -338,5 +340,42 @@ describe("viem's CCIP-read is off (the security review, 2026-10-19)", () => {
     } finally {
       fetch.mockRestore();
     }
+  });
+});
+
+describe('a connected wallet (docs/design/wallets.md#a-connected-wallet): its wallet app signs and sends', () => {
+  const connected = (app) => connectedWallet({ address: app.address, name: 'TestWallet', provider: app.provider });
+  test('Stake: the alias\'s steps signed here, the wallet\'s sent by its wallet app; the reads show it', async () => {
+    const app = fakeWallet({ key: `0x${'33'.repeat(32)}`, transport: rpc.transport });
+    const W = app.address.toLowerCase();
+    rpc.eth[W] = 10n ** 16n;
+    s.balance[W] = 100n * E18;
+    const r = await chain.delegate({ alias, wallet: connected(app) });
+    expect(r.steps.map((x) => [x.step, x.by])).toEqual([['setPredictorFee(0)', 'alias'], ['setAllowedDelegator(wallet)', 'alias'],
+      ['delegatePredictionPower(alias)', 'wallet']]);
+    expect(rpc.sent.at(-1)).toMatchObject({ from: W, functionName: 'delegatePredictionPower' });
+    expect(app.calls.filter((m) => m === 'eth_sendTransaction')).toHaveLength(1);
+    expect(app.calls.indexOf('eth_requestAccounts')).toBeLessThan(app.calls.indexOf('eth_sendTransaction')); // its account checked first
+    expect(r.settled).toBe(true);
+  });
+  test('a wallet on another chain is switched first; one that does not know Base Sepolia is offered it (EIP-3085)', async () => {
+    const app = fakeWallet({ key: `0x${'44'.repeat(32)}`, transport: rpc.transport, chainId: 1, knowsChain: false });
+    rpc.eth[app.address.toLowerCase()] = 10n ** 16n;
+    await chain.sendEth(connected(app), '0x' + '55'.repeat(20), 1000n);
+    expect(app.state.added).toEqual([expect.objectContaining({ chainId: '0x14a34', rpcUrls: [DEFAULTS.rpcUrl], blockExplorerUrls: [DEFAULTS.explorerUrl] })]);
+    expect(app.state.chainId).toBe(84532);
+    expect(rpc.sent.at(-1)).toMatchObject({ from: app.address.toLowerCase(), value: 1000n });
+  });
+  test('on another account, or declined: said plainly, nothing sent', async () => {
+    const app = fakeWallet({ key: `0x${'66'.repeat(32)}`, transport: rpc.transport });
+    rpc.eth[app.address.toLowerCase()] = 10n ** 16n;
+    const before = rpc.sent.length;
+    app.state.accounts = ['0x' + '77'.repeat(20)];
+    await expect(chain.sendEth(connected(app), '0x' + '55'.repeat(20), 1n)).rejects.toThrow(`TestWallet is on another account: choose ${app.address} in it`);
+    app.state.accounts = [app.address];
+    app.state.reject = true;
+    const err = await chain.sendEth(connected(app), '0x' + '55'.repeat(20), 1n).catch((e) => e);
+    expect(errorText(err)).toBe('Declined in the wallet app.');
+    expect(rpc.sent.length).toBe(before);
   });
 });

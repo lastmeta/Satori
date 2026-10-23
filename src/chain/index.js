@@ -11,7 +11,7 @@
 //   await chain.claimRewards(wallet) / claimMerkle(wallet, proof) / claimAirdrop(wallet) / sendEth / sendSatori
 //   createChannels({ chain, config })              // payment channels on this chain (channels.js)
 import {
-  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, encodePacked, formatGwei, hashTypedData,
+  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, encodePacked, formatGwei, hashTypedData,
   hexToBytes, keccak256, serializeSignature, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
@@ -75,12 +75,19 @@ export function lockText(lock) {
 export const payload = (direction) => encodePacked(['uint8'], [direction]);
 
 /**
- * Our signer, a viem account, or a 0x private key → a viem account. Our signer signs transactions and EIP-712 typed
- * data (a channel's vouchers, a token's permit: channels.js) by its digest, inside the signer.
+ * Our signer, a connected wallet (src/keys/connect.js), a viem account, or a 0x private key → a viem account. Our
+ * signer signs transactions and EIP-712 typed data (a channel's vouchers, a token's permit: channels.js) by its digest,
+ * inside the signer. A connected wallet is a JSON-RPC account: its wallet app signs, and sends its transactions (write).
  */
 export function toAccount(key) {
   if (typeof key === 'string') return privateKeyToAccount(key);
-  if (key?.signTransaction) return key;
+  if (key?.signTransaction || key?.type === 'json-rpc') return key;
+  if (key?.provider) {
+    const app = createWalletClient({ account: key.evmAddress, transport: custom(key.provider) });
+    return { address: key.evmAddress, type: 'json-rpc', provider: key.provider,
+      signTypedData: (typedData) => app.signTypedData({ account: key.evmAddress, ...typedData }).catch(plainNo),
+      signMessage: ({ message }) => app.signMessage({ account: key.evmAddress, message }).catch(plainNo) };
+  }
   if (!key?.signDigest) throw new Error('No key to sign with');
   return customAccount({
     address: key.evmAddress,
@@ -131,12 +138,22 @@ const PLAIN = {
   HookFailedWithoutReason: 'The transaction ran out of gas; try again', // a starved transfer (D7)
 };
 
-/** An error in a line: the contract's error name (or its plain words), else viem's short message. */
+/** An error in a line: the contract's error name (or its plain words), a wallet app's no, else viem's short message. */
 export function errorText(err) {
+  if (declined(err)) return DECLINED;
   const name = revertName(err);
   if (name) return PLAIN[name] ?? `reverted: ${name}`;
   return String(err?.shortMessage ?? err?.message ?? err).split('\n')[0];
 }
+
+/** The person said no in their wallet app (EIP-1193 4001), however viem wrapped it. */
+function declined(err) {
+  for (let e = err; e; e = e.cause) if (e.code === 4001 || e.name === 'UserRejectedRequestError') return true;
+  return false;
+}
+export const DECLINED = 'Declined in the wallet app.';
+/** A wallet app's no, in one line (else the error as it was). */
+const plainNo = (err) => { throw declined(err) ? Object.assign(new Error(DECLINED), { code: 4001 }) : err; };
 
 /**
  * @param {{config: object, transport: any, pollingInterval?: number, settle?: {tries: number, ms: number},
@@ -197,12 +214,35 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     const { request } = await client.simulateContract({ ...call, account });
     const [estimate, fee, nonce] = await Promise.all([client.estimateContractGas({ ...call, account }), (given ? Promise.resolve(given) : fees()).then(capped),
       client.getTransactionCount({ address: account.address, blockTag: 'pending' })]);
-    const writer = createWalletClient({ account, chain, transport });
+    const writer = await writerFor(account);
     const gas = estimate + pad;
-    const hash = await writer.writeContract({ ...request, gas, nonce, ...fee });
+    // a connected wallet keeps its own nonce (the wallet app may have sent from this account itself)
+    const hash = await writer.writeContract({ ...request, gas, ...(account.type === 'json-rpc' ? {} : { nonce }), ...fee }).catch(plainNo);
     await onSent?.(hash, { nonce, gas, ...fee });
     return receiptOf(hash, call.functionName, timeout);
   });
+
+  /**
+   * Who sends a transaction: our signer's (signed here, sent to the RPC), or a connected wallet's app (it signs and
+   * sends), once it is on this chain: switched, or added with the chain's EIP-3085 fields when it answers 4902 (as the
+   * dapp: useWallet.ts).
+   */
+  async function writerFor(account) {
+    if (account.type !== 'json-rpc') return createWalletClient({ account, chain, transport });
+    const app = createWalletClient({ account: account.address, chain, transport: custom(account.provider) });
+    if (await app.getChainId() !== chain.id) {
+      try {
+        await app.switchChain({ id: chain.id });
+      } catch (err) {
+        let e = err;
+        while (e && e.code !== 4902) e = e.cause;
+        if (!e) plainNo(err);
+        await app.addChain({ chain: { ...chain, rpcUrls: { default: { http: [config.rpcUrl] } },
+          blockExplorers: { default: { name: 'Basescan', url: config.explorerUrl } } } }).catch(plainNo);
+      }
+    }
+    return app;
+  }
 
   async function receiptOf(hash, what, timeout) {
     const receipt = await client.waitForTransactionReceipt({ hash, pollingInterval, ...(timeout ? { timeout } : {}) });
@@ -458,8 +498,8 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     sendEth: (wallet, to, value, { onSent } = {}) => queued(async () => {
       const account = toAccount(wallet);
       const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }), fees().then(capped)]);
-      const writer = createWalletClient({ account, chain, transport });
-      const hash = await writer.sendTransaction({ to, value, gas, ...fee });
+      const writer = await writerFor(account);
+      const hash = await writer.sendTransaction({ to, value, gas, ...fee }).catch(plainNo);
       await onSent?.(hash);
       return receiptOf(hash, 'transfer');
     }),

@@ -11,7 +11,8 @@
 //   const record = await newKeys({ alias?, wallet, nostr? }, passphrase)   // create, restore, import
 //   const secrets = await readDockerFiles({ aliasText, walletText, password, nostrText? })  // import: translate
 //   const record = await recordFromRows({ aliasYaml, walletYaml, nostrYaml? })  // migration 7: earlier rows
-//   const { alias, nostr, wallet } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress }
+//   const record = connectedRecord({ address, rdns, name, signLink })   // Connect: the wallet stays in the wallet app
+//   const { alias, nostr, wallet } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress, connected }
 //   const { wallet, record } = await unlockWallet(record, passphrase)   // record: store it (an upgrade), or null
 //   await withPassphrase(record, passphrase, (wallet) => …)   // the wallet for one use (Send), wiped after it
 //   await backupKeys(record, which, passphrase)   // Backup: the passphrase each time, unlocked or not
@@ -32,6 +33,7 @@ export const RECORD_VERSION = 1;
 export const IMPORT_MAX = 65_536;
 const HEX64 = /^[0-9a-f]{64}$/;
 const PUBKEY = /^0[23][0-9a-f]{64}$/;
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
 const sameKey = (x, y) => x.length === y.length && x.every((v, i) => v === y[i]);
 const notSame = (x, y) => {
@@ -93,6 +95,24 @@ export async function newKeys({ alias = generateSecret(), wallet, nostr = genera
   return { v: RECORD_VERSION, created, alias: bytesToHex(alias), nostr,
     wallet: { pubkey: publicKey(wallet), ...await sealSecret(wallet, passphrase) },
     link: linkOf(wallet, evmAddress(publicKey(alias)), created) };
+}
+
+/**
+ * A connected wallet's record (docs/design/wallets.md#a-connected-wallet): a new alias and Nostr key, the wallet's
+ * address and how to find it again (its EIP-6963 rdns and name), and the link the wallet signs now:
+ * `signLink(message)` → the signature (the wallet app asks the person; src/keys/connect.js signText checks it).
+ */
+export async function connectedRecord({ address, rdns, name, signLink }) {
+  const alias = generateSecret();
+  try {
+    const created = Math.floor(Date.now() / 1000);
+    const message = linkMessage({ alias: evmAddress(publicKey(alias)), wallet: address, issued: created });
+    const signature = await signLink(message);
+    return { v: RECORD_VERSION, created, alias: bytesToHex(alias), nostr: generateNostrSecret(),
+      wallet: { kind: 'connected', address, rdns, name }, link: { message, signature } };
+  } finally {
+    alias.fill(0);
+  }
 }
 
 /**
@@ -160,7 +180,8 @@ function checkRecord(r) {
   const v = r.wallet ?? {};
   const sealed = typeof v.data === 'string' && PUBKEY.test(v.pubkey);
   const legacy = typeof v.yaml === 'string' && (v.pubkey === null || PUBKEY.test(v.pubkey));
-  if (!sealed && !legacy) throw new Error('The stored wallet is not readable.');
+  const connected = v.kind === 'connected' && ADDRESS.test(v.address ?? '') && typeof v.rdns === 'string';
+  if (!sealed && !legacy && !connected) throw new Error('The stored wallet is not readable.');
   if (r.link != null && !(typeof r.link.message === 'string' && typeof r.link.signature === 'string')) throw new Error('The stored link is not readable.');
   return r;
 }
@@ -169,10 +190,11 @@ function checkRecord(r) {
 export function loadKeys(record) {
   const r = checkRecord(record);
   const pubkey = r.wallet.pubkey ?? null;
+  const connected = r.wallet.kind === 'connected' ? { rdns: r.wallet.rdns, name: r.wallet.name } : null;
   return {
     alias: signer(checkKey(hexToBytes(r.alias)), { login: true }),
     nostr: nostrOf(r.nostr),
-    wallet: { pubkey, evmAddress: pubkey && evmAddress(pubkey) },
+    wallet: { pubkey, evmAddress: connected ? r.wallet.address : pubkey && evmAddress(pubkey), connected },
     link: r.link ?? null,
   };
 }
@@ -188,6 +210,7 @@ export function loadKeys(record) {
  */
 export async function unlockWallet(record, passphrase) {
   const r = checkRecord(record);
+  if (r.wallet.kind === 'connected') throw new Error(CONNECTED);
   const pass = String(passphrase ?? '');
   if (typeof r.wallet.data === 'string') {
     const secret = await openSecret(r.wallet, pass);
@@ -217,6 +240,8 @@ export async function unlockWallet(record, passphrase) {
 const withLink = (r, secret) => (r.link ? r : { ...r, link: linkOf(secret, evmAddress(publicKey(hexToBytes(r.alias)))) });
 
 export const PASSPHRASE_NEEDED = "The wallet's passphrase is needed: it is asked each time.";
+/** Unlock, a passphrase and the wallet's words are a sealed wallet's: a connected one's are in its wallet app. */
+export const CONNECTED = 'This wallet is connected: its wallet app asks you for each action, so there is nothing to unlock.';
 
 /**
  * The wallet opened from the passphrase for one use: fn(wallet), then it is wiped, whether fn succeeds or throws. Each
@@ -254,4 +279,22 @@ export async function backupKeys(record, which, passphrase) {
       alias.lock();
     }
   });
+}
+
+/**
+ * A connected wallet's Backup: the alias's and the Nostr key's ('alias' | 'nostr', or both for null or undefined), shown
+ * once the caller has checked the wallet's signature of connect.js showKeysText. Its own words are in its wallet app.
+ */
+export function connectedBackup(record, which) {
+  const r = checkRecord(record);
+  if (r.wallet.kind !== 'connected') throw new Error('Not a connected wallet.');
+  if (which === 'wallet') throw new Error(`This wallet's words are in ${r.wallet.name}: back it up there.`);
+  if (which != null && !BACKUP_KEYS.includes(which)) throw new Error("Name the key: 'alias' or 'nostr' (or nothing, for both).");
+  const { alias, nostr } = loadKeys(r);
+  try {
+    const all = { alias: alias.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };
+    return which == null ? all : all[which];
+  } finally {
+    alias.lock();
+  }
 }

@@ -4,6 +4,7 @@
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, watch } from '@arrow-js/core';
 import { MIN_PASSPHRASE } from '../keys/index.js';
+import { NO_WALLET } from '../keys/connect.js';
 import { state } from './state.js';
 import { form, wordList } from './parts.js';
 import { lockInText, engineText, openingText, shortHash } from './format.js';
@@ -47,13 +48,15 @@ function setup(a) {
   <section class="card narrow setup" hidden="${show('setup')}">
     <div hidden="${showStep('choose')}">
       <h2>Set up Satori</h2>
-      <p class="muted">Your <strong>wallet</strong> holds your funds and is encrypted with your passphrase in this
-        browser. The app signs its own work with a key it keeps for itself, so it runs on its own.</p>
+      <p class="muted">Your <strong>wallet</strong> holds your funds: here, encrypted with your passphrase, or in your
+        own wallet app (MetaMask or another), connected. The app signs its own work with a key it keeps for itself, so it
+        runs on its own.</p>
       <p class="muted" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
       <div class="actions">
         <button class="primary" @click="${a.newWords}">Create a wallet</button>
         <button @click="${() => a.goStep('restore')}">Restore from words</button>
         <button @click="${() => a.goStep('docker')}">Import Docker files</button>
+        <button data-test="connect-wallet" @click="${a.lookForWallets}">Connect a wallet</button>
       </div>
       <div class="other-wallets" data-test="other-wallets" hidden="${() => !otherWallets().length}">
         <p class="muted small">Or go back to a wallet already in this app:</p>
@@ -105,6 +108,18 @@ function setup(a) {
         <button type="button" @click="${() => a.goStep('choose')}">Back</button>
       </div>
     </form>
+
+    <div hidden="${showStep('connect')}" data-test="connect-step">
+      <h2>Connect a wallet</h2>
+      <p class="muted">Your wallet stays in your wallet app. It asks you each time the wallet is needed: to stake, claim
+        or send. The app predicts on its own meanwhile.</p>
+      <p class="muted" hidden="${() => state.connectFound !== null}">Looking for wallets in this browser…</p>
+      <p class="muted" data-test="no-wallet" hidden="${() => state.connectFound?.length !== 0}">${NO_WALLET}</p>
+      <div class="actions">${() => (state.connectFound ?? []).map((w) => html`<button class="primary" data-test="connect-to" data-rdns="${w.rdns}" disabled="${() => !!state.connecting}" @click="${() => a.connect(w.rdns)}">${`Connect ${w.name}`}</button>`.key(w.rdns))}</div>
+      <p class="muted small" hidden="${() => !state.connecting}">${() => `Waiting for ${state.connecting}: approve the account, then the link to this app.`}</p>
+      ${errorLine()}
+      <div class="actions"><button type="button" @click="${() => a.goStep('choose')}">Back</button></div>
+    </div>
 
     <form hidden="${showStep('docker')}" @submit="${(e) => { e.preventDefault(); a.importDocker(e.target); }}">
       <h2>Import Docker files</h2>

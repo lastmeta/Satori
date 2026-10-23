@@ -41,7 +41,7 @@ export { sparkPath } from './format.js'; // a trend line (pure, so the views tha
  */
 export function backupPanel(a, keys, test = 'backup', label = 'Wallet passphrase to show the backup') {
   const mine = (k) => keys.includes(k);
-  return html`<form class="inline-unlock" data-test="${`${test}-prompt`}" hidden="${() => !mine(state.backupAsk)}" @submit="${(e) => a.showBackup(form(e), e.target)}"><input name="pass" type="password" aria-label="${label}" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => state.revealing}">${() => (state.revealing ? 'Checking…' : 'Show')}</button><button type="button" @click="${a.cancelBackup}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.backupError}">${() => state.backupError}</p></form>
+  return html`<form class="inline-unlock" data-test="${`${test}-prompt`}" hidden="${() => !mine(state.backupAsk)}" @submit="${(e) => a.showBackup(form(e), e.target)}"><input name="pass" type="password" aria-label="${label}" placeholder="Wallet passphrase" autocomplete="current-password" required hidden="${() => !!state.connected}" disabled="${() => !!state.connected}"><button class="primary" type="submit" disabled="${() => state.revealing}">${() => (state.revealing ? 'Checking…' : state.connected ? `Confirm in ${state.connected.name}` : 'Show')}</button><button type="button" @click="${a.cancelBackup}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.backupError}">${() => state.backupError}</p></form>
     <div class="backup" hidden="${() => !mine(state.backup)}">
       <div hidden="${() => state.backup === 'nostr'}">
         <h3>${() => (state.backup === 'alias' ? 'Alias' : 'Wallet')} words</h3>
