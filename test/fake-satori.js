@@ -1,4 +1,4 @@
-// Test double (never imported by the app): a small, stateful Satori D6 on
+// Test double (never imported by the app): a small, stateful Satori D7 on
 // fake-rpc.js, with the rules the app depends on (docs/design/base.md):
 // the engine's batch checks (C/next/SatoriEngine.sol:698-810), staking (delegatePredictionPower) and
 // its locks (C/next/SatoriHub.sol:426-434,813-877), the set-once predictor fee
@@ -120,7 +120,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       getAllDataStreams: () => Object.keys(s.streams).map(Number),
       getLatestUpdateInfo: ([id]) => {
         const st = s.streams[id];
-        return [st?.history.length ?? 0, BigInt(st ? latestHour(st) : 0), BigInt(st ? latestHour(st) * 3600 : 0), st?.cadence ?? 0];
+        return [st?.history.length ?? 0, BigInt(st ? latestHour(st) : 0), BigInt(st ? latestHour(st) * 3600 : 0), st?.cadence ?? 0,
+          st?.named ?? false, BigInt(st?.history.at(-1)?.value ?? 0)];
       },
       getHistoryPage: ([id, offset, limit]) => {
         const h = (s.streams[id]?.history ?? []).slice(-HISTORY);
@@ -130,7 +131,7 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         const page = h.slice(total - Number(offset) - take, total - Number(offset));
         return [page.map((e) => e.value), page.map((e) => e.hour), total];
       },
-      isNamedStream: ([id]) => (s.streams[id] && !s.streams[id].namedReverts ? s.streams[id].named : revert()), // D6 reverts for an unknown id
+      isNamedStream: ([id]) => (s.streams[id] && !s.streams[id].namedReverts ? s.streams[id].named : revert()), // reverts for an unknown id (D6 and D7)
     }),
     [DEFAULTS.hub]: fns(abi.hubAbi, {
       delegatePredictionPower: delegate,

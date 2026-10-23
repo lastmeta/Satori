@@ -1,5 +1,5 @@
 // The chain module (docs/design/base.md) against test/fake-satori.js: viem over a
-// custom transport to a small stateful D6. Keys are our signers (src/keys),
+// custom transport to a small stateful D7. Keys are our signers (src/keys),
 // so every transaction here is signed the way the app signs it.
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ContractFunctionExecutionError, ContractFunctionRevertedError, custom, encodeErrorResult, zeroAddress } from 'viem';
@@ -113,7 +113,7 @@ describe('stake: delegatePredictionPower(identity) (Lite\'s Enable staking + the
     expect(rpc.sent).toHaveLength(0);
     expect(panicOf(new Error('x'))).toBeNull();
   });
-  test("the next contracts' starved transfer (HookFailedWithoutReason, humble 86e2bdb3): a plain line", () => {
+  test("a starved transfer (HookFailedWithoutReason, D7): a plain line", () => {
     const data = encodeErrorResult({ abi: tokenAbi, errorName: 'HookFailedWithoutReason' });
     const err = new ContractFunctionExecutionError(new ContractFunctionRevertedError({ abi: tokenAbi, data, functionName: 'transfer' }),
       { abi: tokenAbi, functionName: 'transfer', args: [] });
@@ -158,7 +158,7 @@ describe('the batch\'s pieces', () => {
       { streamId: 3, gameId: 9, named: true, cadenceMinutes: 60, latestHour: ROUND * 24 + 8, count: 1, weight: 5n * E18 },
     ]);
   });
-  test('a revert of isNamedStream (D6: unknown ids) reads as not named', async () => {
+  test('a revert of isNamedStream (unknown ids) reads as not named', async () => {
     s.streams[3] = { game: 9, named: true, cadence: 60, history: [{ hour: 1, value: 5n }], namedReverts: true };
     s.weights[9] = 1n;
     expect((await chain.streams()).find((g) => g.streamId === 3).named).toBe(false);

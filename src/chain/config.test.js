@@ -2,8 +2,8 @@ import { describe, expect, test, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { DEFAULTS, FALLBACK_RPC, PAYMENT_CHANNELS, loadConfig, checkRpcSetting, rpcUrls } from './config.js';
 
-// central2's answer on 2026-10-15
-const CENTRAL2 = {
+// central2's answer on 2026-10-23: still D6's addresses (it has not moved to D7)
+const CENTRAL2_D6 = {
   chainId: 84532, chainName: 'Base Sepolia', rpcUrl: 'https://sepolia.base.org', explorerUrl: 'https://sepolia.basescan.org',
   symbol: 'SATORI', decimals: 18, token: '0x4dee947383d5C9c8E421F55Fe3518a29324aE469',
   merkle: '0x78C83AE275e9659Bc8490fa33943e22ec7c5A7e7', rewards: '0xde5d2B4b92c1231EC19cd3877D7C3eb6b44982Ac',
@@ -12,6 +12,8 @@ const CENTRAL2 = {
   hub: '0x1eec7E1443C1065ab78180A14326e5Ac8284f143',
   streamProvider: 'cb45de2a76a5df79ea8aff0c867e96e527f803eb389420419e441a4946129838',
 };
+// what central answers once it serves the bundle's contracts
+const CENTRAL2 = { ...CENTRAL2_D6, ...Object.fromEntries(Object.keys(CENTRAL2_D6).filter((k) => DEFAULTS[k] && k !== 'rpcUrl').map((k) => [k, DEFAULTS[k]])) };
 
 describe('loadConfig', () => {
   test('the bundle mirrors contract/satori/deployments/baseSepolia.json and Lite\'s DEFAULTS', () => {
@@ -23,9 +25,13 @@ describe('loadConfig', () => {
         expect(DEFAULTS[k], k).toBe(addresses[k]);
       }
     }
-    for (const k of ['token', 'merkle', 'airdrop', 'rewards', 'engine', 'games', 'registry', 'hub', 'rpcUrl']) {
-      expect(DEFAULTS[k], k).toBe(CENTRAL2[k]); // = base_config.py DEFAULTS = central2
-    }
+    expect(DEFAULTS.rpcUrl).toBe(CENTRAL2_D6.rpcUrl); // = base_config.py DEFAULTS = central2
+  });
+
+  test("central still on D6: every contract it names differs from the bundle's D7 and is listed, none used", async () => {
+    const { config, differs } = await loadConfig({ fetchCentral: async () => CENTRAL2_D6, now: 1 });
+    expect(config).toEqual(DEFAULTS);
+    expect(differs).toEqual(['token', 'merkle', 'airdrop', 'rewards', 'engine', 'games', 'registry', 'hub']);
   });
 
   test('PaymentChannels: the address its CREATE2 deploy recorded (the same on every chain)', () => {

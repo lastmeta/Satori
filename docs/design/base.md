@@ -26,7 +26,7 @@ the engine refuses a staked vault's own predictions
 `C/next/SatoriEngine.sol:711`). The Base card says which one is in force.
 
 ```
-page load ─▶ config (bundled D6 addresses, central's /api/v1/base/config over them, 1 h)
+page load ─▶ config (bundled D7 addresses, central's /api/v1/base/config over them, 1 h)
           └─▶ status: one multicall (ETH ×2, SATORI, stake ×2, fee, allowedDelegator, lock, round, claimable ×2, alreadyMintedTo)
                       + central's merkle proof for the vault (at most hourly)
 Unlock ─▶ Stake with this neuron: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
@@ -64,7 +64,11 @@ account).
 - **Addresses** (`src/chain/config.js`): BCFG's DEFAULTS (`:20-36`), plus
   `lens`, `voting` and Multicall3 from the dapp (`UI/contracts/addresses.ts:199-221`);
   they mirror `contract/satori/deployments/baseSepolia.json` (`voting` =
-  `SatoriEngine.satoriVoting()` on D6). `explorerUrl` links tx hashes on the
+  `SatoriEngine.satoriVoting()`; `config.test.js` checks it when that file is
+  there). **Now D7** (the redeploy of 2026-10-23, Base Sepolia, from `humble`
+  `59151a65`; deployment block 49048034, round 20749; the record:
+  `contract/HANDOFF-sepolia-redeploy.md`). D6 (2026-10-14, `d9d22632`) is
+  retired: a vault staked there is not seen from here. `explorerUrl` links tx hashes on the
   card (not on a local fork). Central's `GET /api/v1/base/config` is read
   (only for chain 84532), cached 1 h in memory as BCFG does (`:16,66-88`), but
   **its contract addresses are never used**: the app keeps its own, and an
@@ -75,8 +79,9 @@ account).
   overlay, but a central that could point the vault at other contracts would
   move its funds; a new deployment is a new build). central2 answers with the
   bundle's own values (`base().config` `'central'`: it answered; the
-  Wallet card's tooltip says its addresses are checked, never used); prod
-  returns 404 (`'bundled'`). Central's payload has no `lens` or `voting`.
+  Wallet card's tooltip says its addresses are checked, never used) once it
+  serves D7, and until then (central2 still answered with D6's on 2026-10-23)
+  says they differ, as above; prod returns 404 (`'bundled'`). Central's payload has no `lens` or `voting`.
 - **RPC** (Settings, `meta.base_rpc_url`): empty means the default. **A build
   pins its RPC** (`VITE_BASE_RPC`; this deployment `https://sepolia.base.org`),
   then `https://base-sepolia-rpc.publicnode.com` as a fallback (viem's
@@ -193,11 +198,12 @@ registers it, as part of Stake.
 
 ### Staking out of sync (the token-hook bug)
 
-On D6 (until D7 deploys the fix from `humble` 86e2bdb3), SATORI that reaches
+On D6 (D7, 2026-10-23, carries the fix from `humble` 86e2bdb3: see the last
+bullet), SATORI that reaches
 a staked vault in a transaction sent with the node's gas estimate (anyone's
 1 wei, `claimAirdropFor(vault)`) skips the hook that books it into the
 identity's power, and unstaking then underflows (Panic 0x11) for good
-([issue](../issues/token-hook-gas-estimate.md)). So, while it is live:
+([issue](../issues/token-hook-gas-estimate.md)). The checks below stay as a guard. While it was live:
 
 - Home offers Stake as advice (not warn), and its card, like the Wallet
   card's staking note, says the risk before staking: "While staked, your
@@ -217,8 +223,8 @@ identity's power, and unstaking then underflows (Panic 0x11) for good
   sync. Unstaking will fail until the contract fix. Don't add SATORI to the
   vault.") and nothing is sent.
 - On D7 a starved transfer reverts with `HookFailedWithoutReason()` instead
-  (in `NEXT_ERRORS`, `src/chain/abi.js`, apart from the D6 ABI check), said
-  as "The transaction ran out of gas; try again".
+  (`src/chain/abi.js`), said as "The transaction ran out of gas; try again".
+  The Stake and Unstake words above are still those of D6 and not yet changed.
 
 Reproduced on the fork (the real D6 contracts, 2026-10-19): Stake, then
 `node scripts/fork.mjs grief <vault>` (1 wei at the bare estimate, 110,514
@@ -541,7 +547,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | The vault's Base address is computed from its public key, in clear in the keys record. | Status without Unlock; Lite needs the decrypted vault. |
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
-| Stake is offered as advice with the risk said, and a stake out of sync is detected and shown (Lite and the dapp do neither). | The token-hook bug is live on D6: staking can freeze the vault, through anyone else's transaction. |
+| Stake is offered as advice with the risk said, and a stake out of sync is detected and shown (Lite and the dapp do neither). | The token-hook bug was live on D6 (fixed in D7): staking could freeze the vault, through anyone else's transaction. |
 | A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
 | A tie (the forecast equals the latest value) follows the stream's last move; only a flat history is DOWN. Lite answers DOWN on every tie (`direction_from`, BP:141-143). | The owner's choice (2026-10-19): a no-opinion model should not cast the same DOWN on every stream and every neuron. |
 
@@ -601,11 +607,12 @@ asked at once.
   unweighted games left out, the hash kept at send and waited for, the round
   from the block, the fee ceiling, persist only after success, the schedule;
   the merkle claim's 404s and a partial payment; an RPC on another chain),
-  `abi.test.js` (every ABI entry against the deployed D6 build,
+  `abi.test.js` (every ABI entry against the deployed D7 build,
   `test/fixtures/abi-deployed.json`, and, when the public RPC answers, against
   the deployed code: every selector, and each view's answer in the shape
-  `abi.js` decodes; a local build of the contracts runs ahead of the chain,
-  so it is not the reference),
+  `abi.js` decodes; a local build of the contracts can run ahead of the chain,
+  so it is not the reference; D7's snapshot came from the dapp's ABI files,
+  `contract/satori-ui/src/contracts`, regenerated in its commit),
   `config.test.js` (central's addresses only when they are the bundle's, the
   ones that differ listed; its rpcUrl and explorer only without a pinned RPC;
   a build's pinned RPC then publicnode), and the keys' Base addresses against
@@ -619,8 +626,9 @@ asked at once.
   inline Unlock locking again after, and `stake()` / `unstake()` from the
   agent API.
 - Against a fork: `BASE_FORK=http://127.0.0.1:8546 npx vitest run
-  src/chain/fork.test.js` runs the chain module against the real D6
-  contracts on an anvil fork (`node scripts/fork.mjs start --port 8546`):
+  src/chain/fork.test.js` runs the chain module against the real contracts
+  on an anvil fork (written on D6; not run on D7, whose airdrop table is
+  closed, which `scripts/fork.mjs` `airdrop` needs) (`node scripts/fork.mjs start --port 8546`):
   stake (three steps), the registry's streams (a new junk stream left
   out: no voting weight) and history, a batch and
   `AlreadyPredicted` after it, the airdrop and merkle claims a round later

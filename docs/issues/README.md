@@ -15,7 +15,7 @@ Design: [../design/OVERVIEW.md](../design/OVERVIEW.md).
 | Issue | Where | Precondition |
 |---|---|---|
 | [relays-not-wss.md](relays-not-wss.md) | central (lists a `wss://` address itself; waits on the relay redesign) | a page served over https (any deployment) can't open central's `ws://satorian.satorinet.io:7777`. Worked around 2026-10-20: the app reaches it through its wss stand-in, `wss://relay.satorinet.io` (a TLS front on central's nginx-proxy); any other `ws://` relay central lists stays blocked there |
-| [token-hook-gas-estimate.md](token-hook-gas-estimate.md) | contracts: fixed on `humble` (86e2bdb3), live once D7 deploys | on D6, a staked vault receives SATORI (a claim, a transfer, from anyone: 1 wei is enough) with an estimated gas limit: it can't unstake, and its SATORI can't be sent. The app pads its own writes, offers staking as advice with the risk said, and detects the frozen state exactly |
+| [token-hook-gas-estimate.md](token-hook-gas-estimate.md) | contracts: fixed on `humble` (86e2bdb3), live on D7 (2026-10-23) | on D6, a staked vault receives SATORI (a claim, a transfer, from anyone: 1 wei is enough) with an estimated gas limit: it can't unstake, and its SATORI can't be sent. The app pads its own writes, offers staking as advice with the risk said, and detects the frozen state exactly |
 | [central-login-replayable.md](central-login-replayable.md) | central | someone sees one login header set |
 | [central-register-unauthenticated.md](central-register-unauthenticated.md) | central | someone knows a wallet pubkey (public) |
 | [base-batch-one-bad-game-reverts-all.md](base-batch-one-bad-game-reverts-all.md) | Docker neuron (the browser simulates each game) | a game with no new value since our last prediction on it |

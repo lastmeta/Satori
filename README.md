@@ -90,7 +90,7 @@ An https page can't open `ws://`: there the app reaches satorian through its wss
 `wss://relay.satorinet.io`, as central's relay ([docs/design/nostr.md](docs/design/nostr.md#relays-and-the-read-only-flag)).
 
 **Base.** The dev server's RPC is `/rpc`, proxied to the anvil fork on
-127.0.0.1:8545 (the real D6 addresses; by default a dev checkout sends
+127.0.0.1:8545 (the real D7 addresses; by default a dev checkout sends
 nothing to a public chain). Fund the neuron's Base addresses (in the Keys
 card), then Unlock and **Stake with this neuron**:
 

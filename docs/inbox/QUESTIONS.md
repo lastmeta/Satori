@@ -3,14 +3,13 @@
 Open questions the code can't settle on its own. Each says what the app does
 today, so nothing waits on an answer.
 
-1. **The token hook on D6, until D7.** A staked vault that receives SATORI
+1. **The token hook (fixed in D7, 2026-10-23).** A staked vault that receives SATORI
    in a transaction sent with a bare gas estimate can't unstake (Panic
    0x11), and anyone can cause it with 1 wei. The root fix is on the
-   contracts' `humble` branch (86e2bdb3) and ships with D7, which goes before
-   the central flip (decided 2026-10-19, below). Still open: is the interim
-   rewards UUPS upgrade on D6 (tested on the fork) wanted before D7? Until
-   then the app offers staking as advice with the risk said, and shows a
-   stake out of sync
+   contracts' `humble` branch (86e2bdb3) and shipped with D7, which is deployed and bundled
+   in the app (D6 is retired, so the interim rewards upgrade is moot). The
+   app still offers staking as advice with the risk said, and shows a
+   stake out of sync; whether to drop those words now is open
    ([../issues/token-hook-gas-estimate.md](../issues/token-hook-gas-estimate.md)).
 2. **Prod central's Base and merkle routes.** `network.satorinet.io` answers
    404 for `/api/v1/base/config` and `/api/v1/merkle/proof/…`; central2 serves

@@ -1,5 +1,5 @@
 {
-  "deploy": "D6, Base Sepolia, 2026-10-14, contract commit d9d22632",
+  "deploy": "D7, Base Sepolia, 2026-10-23, contract commit 59151a65 (ABIs: satori-ui/src/contracts)",
   "functions": {
     "SatoriEngine": [
       "function predictMultipleWithPayloads((uint32,bytes)[]) -> () nonpayable",
@@ -11,7 +11,7 @@
     "SatoriRegistry": [
       "function getAllDataStreams() -> (uint32[]) view",
       "function getHistoryPage(uint32,uint256,uint256) -> (int232[],uint24[],uint16) view",
-      "function getLatestUpdateInfo(uint32) -> (uint16,uint64,uint64,uint24) view",
+      "function getLatestUpdateInfo(uint32) -> (uint16,uint64,uint64,uint24,bool,int232) view",
       "function isNamedStream(uint32) -> (bool) view"
     ],
     "SatoriHub": [
@@ -65,6 +65,7 @@
     "error ERC20InvalidReceiver(address) -> ()",
     "error EmptyBatch() -> ()",
     "error EmptyStream() -> ()",
+    "error HookFailedWithoutReason() -> ()",
     "error InvalidPredictorFee() -> ()",
     "error InvalidProof() -> ()",
     "error InvalidReferral() -> ()",

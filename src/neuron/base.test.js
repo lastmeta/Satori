@@ -459,7 +459,7 @@ describe('createBase', () => {
     const said = [];
     const other = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
       transport: rpc.transport, now: () => at.t, setTimeout: () => 0, clearTimeout: () => {}, onConfigDiffers: (keys, url) => said.push([keys, url]) });
-    central.baseConfig = async () => ({ chainId: 84532, token: '0x' + 'ee'.repeat(20), hub: '0x1EEC7E1443C1065AB78180A14326E5AC8284F143' });
+    central.baseConfig = async () => ({ chainId: 84532, token: '0x' + 'ee'.repeat(20), hub: '0x17719B7B1A630DECBC5B7FFDDED14FFB24120183' });
     const v = await other.refresh();
     expect([v.error, v.vault.satori, v.config]).toEqual(['', '100', 'central']); // read from the bundle's token: the fake chain knows only it
     await other.refresh(); // the cached config: not said again

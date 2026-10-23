@@ -4,6 +4,18 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-23 (D7)
+
+- The app is on the D7 contracts (Base Sepolia, chain 84532, redeployed
+  2026-10-23): new addresses for the token, hub, engine, rewards, registry,
+  games, airdrop, merkle, lens and voting. D6's contracts are retired: a vault staked, or holding
+  SATORI, on D6 shows nothing here. The keys and the Base addresses are
+  unchanged; only what sits at them on chain is new.
+- The Satori Network may still name D6's addresses in its config: the app
+  ignores them and says so in the Activity feed ("contract addresses differ").
+- D7's default stream is a named stream with an hourly cadence; the daily
+  batch reads it as it read D6's.
+
 ## Changed 2026-10-22 (referral)
 
 - Invite links, as the dapp has them: `base().inviteLink` is `<origin>/?ref=<the

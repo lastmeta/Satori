@@ -338,7 +338,7 @@ Every method is below; `await satori.status()` shows everything at once.
   the hourly pass. A vault staked with this neuron can't fund a channel
   (the token's transfer lock): said in plain words.
 
-- Base (Base Sepolia, chain 84532, the D6 contracts; docs/design/base.md):
+- Base (Base Sepolia, chain 84532, the D7 contracts; docs/design/base.md):
   each key's 32-byte secret is also its EVM key, so the identity and the
   vault each have a Base (0x) address (the vault's from its public key,
   stored in clear, while locked). Addresses: the app's own, bundled;
@@ -1115,7 +1115,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
 ## Base on the dev server: the local fork
 
 The dev server's default Base RPC is `/rpc`, which it proxies to an anvil
-fork of Base Sepolia on 127.0.0.1:8545 (the real D6 contracts; nothing goes
+fork of Base Sepolia on 127.0.0.1:8545 (the real D7 contracts; nothing goes
 to a public chain). `node scripts/fork.mjs --help` lists:
 
 - `start` / `stop` (anvil in the background, 2 s blocks; needs Foundry's
@@ -1250,7 +1250,7 @@ build step beyond Vite, MIT licensed.
   7778`) and `provider.mjs` (a throwaway stream provider for a test relay);
   `fork.mjs` (the local fork of Base Sepolia, above); `deploy-image.sh` (the
   deploy image).
-- `test/`: fixtures (parity vectors) and test doubles (a fake D6 behind
+- `test/`: fixtures (parity vectors) and test doubles (a fake D7 behind
   JSON-RPC, an in-memory DuckDB); `e2e/`: Playwright specs and their stub
   central (`stub.js`).
 - Tests: `npm test` (vitest), `npm run e2e` (Playwright, Chrome, a stub

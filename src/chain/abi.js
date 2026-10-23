@@ -1,7 +1,7 @@
 // Minimal ABIs: only what the app calls (docs/design/base.md). Signatures as
-// deployed (D6; abi.test.js checks each against a snapshot of that build,
+// deployed (D7; abi.test.js checks each against a snapshot of that build,
 // test/fixtures/abi-deployed.json, and online against the deployed code; the
-// contracts' newer builds run ahead of the chain) and as Satori Lite declares them
+// contracts' newer builds may run ahead of the chain) and as Satori Lite declares them
 // (base_predict.py:29-125, base_claim.py:19-76). Every ABI carries the
 // errors a call can bubble up, so a simulate names the reason.
 import { parseAbi } from 'viem';
@@ -14,14 +14,11 @@ const ERRORS = [
   'error InvalidPredictorFee()', 'error InvalidReferral()', 'error ClaimDelegatedAway()', 'error BadInput()', 'error Reentrancy()',
   'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
   'error ERC20InvalidReceiver(address receiver)',
+  // a transfer whose hook ran out of gas reverts instead of skipping a staker's sync (contract humble 86e2bdb3, live
+  // since D7; docs/issues/token-hook-gas-estimate.md)
+  'error HookFailedWithoutReason()',
 ];
-/**
- * Errors the next contracts raise and D6 does not (abi.test.js leaves them out of the D6 check): a transfer whose hook
- * ran out of gas reverts instead of skipping a staker's sync (contract humble 86e2bdb3, live once D7 deploys;
- * docs/issues/token-hook-gas-estimate.md).
- */
-export const NEXT_ERRORS = ['error HookFailedWithoutReason()'];
-const abi = (...items) => parseAbi([...items, ...ERRORS, ...NEXT_ERRORS]);
+const abi = (...items) => parseAbi([...items, ...ERRORS]);
 
 export const engineAbi = abi(
   'struct Request { uint32 gameId; bytes payload; }',
@@ -33,7 +30,7 @@ export const gamesAbi = abi('function binaryGameByStream(uint32) view returns (u
 
 export const registryAbi = abi(
   'function getAllDataStreams() view returns (uint32[])',
-  'function getLatestUpdateInfo(uint32 streamId) view returns (uint16 count, uint64 latestHour, uint64 lastUpdateTimestamp, uint24 minCadenceMinutes)',
+  'function getLatestUpdateInfo(uint32 streamId) view returns (uint16 count, uint64 latestHour, uint64 lastUpdateTimestamp, uint24 minCadenceMinutes, bool named, int232 latestValue)',
   'function getHistoryPage(uint32 streamId, uint256 offset, uint256 limit) view returns (int232[] values, uint24[] entryHours, uint16 total)',
   'function isNamedStream(uint32) view returns (bool)',
 );
@@ -114,7 +111,7 @@ export const channelsAbi = parseAbi([
   'event Closed(bytes32 indexed channelId, address indexed payer, address indexed payee, address by, uint96 settled, uint96 refunded)',
   ...CHANNEL_ERRORS,
   'error Locked()', 'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
-  'error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)', ...NEXT_ERRORS,
+  'error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)', 'error HookFailedWithoutReason()',
 ]);
 
 /**
@@ -128,5 +125,5 @@ export const erc20PermitAbi = parseAbi([
   'function name() view returns (string)',
   'function DOMAIN_SEPARATOR() view returns (bytes32)',
   'function eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)',
-  'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)', 'error Locked()', ...NEXT_ERRORS,
+  'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)', 'error Locked()', 'error HookFailedWithoutReason()',
 ]);

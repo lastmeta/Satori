@@ -1,4 +1,4 @@
-// Base (docs/design/base.md): the D6 contracts over viem, as Satori Lite calls
+// Base (docs/design/base.md): the D7 contracts over viem, as Satori Lite calls
 // them (base_predict.py, base_claim.py) and as the dapp goes further
 // (hub.claim, setAllowedDelegator). Keys are injected per call: our signers
 // ({ evmAddress, signDigest }, src/keys), viem accounts, or 0x private keys
@@ -128,7 +128,7 @@ export class FeeCeilingError extends Error {
 
 /** Contract errors said in plain words. */
 const PLAIN = {
-  HookFailedWithoutReason: 'The transaction ran out of gas; try again', // the next contracts' starved transfer (abi.js NEXT_ERRORS)
+  HookFailedWithoutReason: 'The transaction ran out of gas; try again', // a starved transfer (D7)
 };
 
 /** An error in a line: the contract's error name (or its plain words), else viem's short message. */
@@ -364,7 +364,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * add a stream (and its game) for a small burn, so only games with voting
      * weight > 0 are kept, the engine's own eligibility test
      * (SatoriEngine.sol:828: an unweighted game earns no SATORI). isNamedStream
-     * reverts for an unknown id on D6: a failure reads as not named
+     * reverts for an unknown id: a failure reads as not named
      * (base_predict.py:223-230). Two multicalls: the games, then their weights.
      */
     async streams() {

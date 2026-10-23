@@ -1,4 +1,4 @@
-// abi.js against the contracts as deployed (D6 on Base Sepolia, 2026-10-14, from contract commit d9d22632; its
+// abi.js against the contracts as deployed (D7 on Base Sepolia, 2026-10-23, from contract commit 59151a65; its
 // addresses: contract/satori/deployments/baseSepolia.json and config.js DEFAULTS), not against a local build, which
 // runs ahead of the chain.
 // - Offline: test/fixtures/abi-deployed.json, the deployed build's ABI for each function abi.js calls and each error
@@ -6,7 +6,8 @@
 // - Online: the deployed code has every selector abi.js calls, and each view answers in the shape abi.js decodes
 //   (read-only calls to the public RPC; skipped when it does not answer).
 // At the next redeploy, build the deployed commit (`forge build` in contract/satori; or ABIs only, a second with
-// solc's standard JSON, outputSelection abi: how D6's was made), then
+// solc's standard JSON, outputSelection abi; D7's came from the dapp's ABI files, contract/satori-ui/src/contracts,
+// regenerated in the deploy's commit), then
 //   ABI_SNAPSHOT=write npx vitest run src/chain/abi.test.js
 // rewrites the snapshot from its out/ (ABI_OUT=<dir> for another build). Set `deploy` in it, review the diff, and
 // fix abi.js where a test then fails; config.js DEFAULTS take the new addresses.
@@ -70,12 +71,8 @@ describe(`abi.js matches the deployed contracts (${snapshot.deploy})`, () => {
       for (const item of of(abi[name], 'function')) expect(snapshot.functions[c]).toContain(sig(item));
     });
   }
-  test('every error the ABIs decode is one the contracts raise (the next release\'s, NEXT_ERRORS, apart)', () => {
-    const next = abi.NEXT_ERRORS.map((e) => e.replace(/^error (\w+)\(\)$/, 'error $1() -> ()'));
-    for (const item of of(abi.engineAbi, 'error')) {
-      if (next.includes(sig(item))) expect(snapshot.errors).not.toContain(sig(item)); // not on D6
-      else expect(snapshot.errors).toContain(sig(item));
-    }
+  test('every error the ABIs decode is one the contracts raise', () => {
+    for (const item of of(abi.engineAbi, 'error')) expect(snapshot.errors).toContain(sig(item));
   });
 });
 
