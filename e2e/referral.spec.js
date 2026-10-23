@@ -71,6 +71,10 @@ test('an invite link: held on the visit, registered by the vault at Stake; the n
 
   const size = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 844 });
+  const box = (sel) => page.locator(sel).first().boundingBox();
+  const [h1, top, share] = [await box('header.top h1'), await box('header.top'), await box('[data-test=share]')];
+  expect(h1.height).toBeLessThan(40); // "Satori app" on one line, with Lock and Share beside it
+  expect(share.x + share.width).toBeLessThanOrEqual(top.x + top.width + 0.5);
   await page.waitForTimeout(400);
   await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/referral.png' : test.info().outputPath('referral.png'), fullPage: true });
   await page.setViewportSize(size);

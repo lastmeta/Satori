@@ -138,7 +138,7 @@ export function render(root, a) {
   const running = () => state.screen !== 'home';
   html`
   <header class="top">
-    <h1>Satori <span class="muted">neuron</span></h1>
+    <h1>Satori <span class="muted">app</span></h1>
     <nav class="topnav" aria-label="Sections" hidden="${running}">${TABS.map((t) => navLink(a, t))}</nav>
     <div class="top-actions">
       <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
