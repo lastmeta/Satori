@@ -19,7 +19,7 @@ Read next, in this order:
 4. `docs/plans/README.md`: the roadmap.
 
 ## How the owner wants work done
-The full set is in Claude memory; this is the short version.
+The short version; owner rulings are in `CLAUDE.md` and `/code/Satori/CLAUDE.md`.
 - **Do only what was asked.** No extra steps, features or hardening passes. Before designing anything, look at how Satori Lite / satorilib already does it and port that (2026-10-21: an unasked-for "track record" step cost a day).
 - **Essentialism.** Keep it small and correct. Follow Satori Lite's *network behaviour* (central, the contracts, the relays), but not its local formats.
 - **Migrate in, never back.** Import and translate what users bring. Don't keep old formats or limits for compatibility's sake.
