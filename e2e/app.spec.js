@@ -176,7 +176,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   const key = page.locator('[data-test=backup-key]');
   await expect(key).toHaveText(/^0x[0-9a-f]{64}$/);
   expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(vaultAddress);
-  await showBackup('Identity words');
+  await showBackup('Alias words');
   await expect(page.locator('[data-test=backup-prompt]')).toBeHidden();
   await expect(visible(page.locator('ol.words li'))).not.toHaveText(words);
   const idWords = await visible(page.locator('ol.words li')).allTextContents();
@@ -387,7 +387,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(nostrPubkey(all.nostr.secret)).toBe((await status(page)).nostr.pubkey);
   expect(await page.evaluate(() => typeof window.satori.file)).toBe('undefined');
   for (const which of ['Vault', 'vaults', '', 'wallet.yaml']) {
-    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'identity', 'vault' or 'nostr'/);
+    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'identity' \(the alias\), 'vault' or 'nostr'/);
   }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
@@ -449,12 +449,12 @@ test("import Docker files; central pays this vault's rewards to another Base add
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
   // In the wrong slots: refused, and the message says so.
-  await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
+  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('wallet.yaml', wallet.walletYaml));
   await page.getByLabel('Vault password').fill(fx.vaults.password);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'The files are swapped' })).toBeVisible();
-  await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
+  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel('Vault password').fill(fx.vaults.wrongPassword);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
@@ -509,7 +509,7 @@ test('import: a Docker vault password under 8 characters asks for a new passphra
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
-  await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', p.meta.wallet_yaml));
+  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('wallet.yaml', p.meta.wallet_yaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', p.meta.vault_yaml));
   await page.getByLabel('Vault password').fill(p.passphrase);
   await expect(page.getByLabel(/Use it as this app’s passphrase too/)).toBeChecked();
@@ -537,12 +537,12 @@ test('restore from words', async ({ context, page }) => {
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'vault words are not 24 valid' })).toBeVisible();
   await page.getByLabel('Vault words (24)').fill(v.words);
-  await page.getByLabel(/Identity words/).fill(id.words);
+  await page.getByLabel(/Alias words/).fill(id.words);
   await page.getByLabel(/^Nostr key \(nsec or hex/).fill('nsec1nope');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Not a Nostr key' })).toBeVisible();
   await page.getByLabel('Vault words (24)').fill(v.words);
-  await page.getByLabel(/Identity words/).fill(id.words);
+  await page.getByLabel(/Alias words/).fill(id.words);
   await page.getByLabel(/^Nostr key \(nsec or hex/).fill(nsec(fx.nostr.secretHex)); // as Backup shows it
   await page.getByRole('button', { name: 'Continue' }).click();
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);

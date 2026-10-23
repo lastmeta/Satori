@@ -648,7 +648,7 @@ const baseUi = (what, fn) => shownAt('baseError', async () => {
   Object.assign(state, { baseResult: text, baseTxs: txs });
 })();
 
-const stepTxs = (steps) => steps.map((x) => ({ label: stepText(x.step), title: `${x.step} by the ${x.by}`, hash: x.hash }));
+const stepTxs = (steps) => steps.map((x) => ({ label: stepText(x.step), title: `${x.step} by the ${x.by === 'identity' ? 'alias' : x.by}`, hash: x.hash }));
 const claimTxs = (r) => [['Rewards', r.rewards], ['Merkle', r.merkle], ['Airdrop', r.airdrop]]
   .filter(([, x]) => x?.hash).map(([label, x]) => ({ label, hash: x.hash }));
 
@@ -678,7 +678,7 @@ const actions = {
     };
     try {
       pending = { vault: words(f.vault, 'vault') };
-      if (f.identity.trim()) pending.identity = words(f.identity, 'identity');
+      if (f.identity.trim()) pending.identity = words(f.identity, 'alias');
       if (f.nostr.trim()) pending.nostr = nostrSecretOf(f.nostr);
     } catch (err) {
       wipePending();

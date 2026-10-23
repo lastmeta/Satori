@@ -50,7 +50,7 @@ const PLAIN = {
   ChannelClosed: 'The channel is closed.',
   NotPayee: "Only the seller (the channel's payee) can do that.",
   NotPayer: 'Only the vault that funded the channel can do that.',
-  NotPayerOrSigner: "Only the channel's vault or identity can do that.",
+  NotPayerOrSigner: "Only the channel's vault or alias can do that.",
   BadSignature: "The voucher's signature isn't the channel's signer's.",
   NothingToSettle: 'Nothing new to settle: the voucher pays no more than is already paid.',
   CloseNotRequested: 'No close was asked for this channel.',

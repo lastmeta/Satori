@@ -164,7 +164,7 @@ test('Dockerized Neuron import with nostr.yaml keeps its Nostr key; refused subs
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
-  await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
+  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel(/nostr.yaml/).setInputFiles(file('nostr.yaml', fx.nostr.yaml));
   await page.getByLabel('Vault password').fill(fx.vaults.password);

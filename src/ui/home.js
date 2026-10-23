@@ -66,7 +66,7 @@ function vaultLine() {
 const gasLine = () => {
   const n = B().identity.batchesLeft;
   if (n == null) return '–';
-  if (n === 0) return 'No ETH on the identity';
+  if (n === 0) return 'No ETH on the alias';
   return `${n >= 1000 ? '1,000+' : n} day${n === 1 ? '' : 's'} left`;
 };
 

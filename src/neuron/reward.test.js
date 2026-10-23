@@ -33,8 +33,8 @@ describe('checkRewardAddress: a Base address, checked before any call', () => {
   });
   test("this app's own identity: refused, in any case (the app claims only from the vault: they would sit unclaimed)", () => {
     expect(() => checkRewardAddress(ME.toLowerCase(), { identity: ME })).toThrow(IDENTITY);
-    expect(IDENTITY).toBe("That is this app's identity. This app claims rewards only from the vault, so rewards sent to "
-      + 'the identity would sit unclaimed. Use another address, or Clear to send them to your vault.');
+    expect(IDENTITY).toBe("That is this app's alias. This app claims rewards only from the vault, so rewards sent to "
+      + 'the alias would sit unclaimed. Use another address, or Clear to send them to your vault.');
     expect(checkRewardAddress(VAULT, { identity: ME })).toBe(VAULT); // the vault itself is fine: where they go anyway
     expect(checkRewardAddress(ME)).toBe(ME); // no identity given: nothing to compare
   });

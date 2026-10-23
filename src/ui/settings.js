@@ -25,7 +25,7 @@ function keys(a) {
   <section class="card settings-section" id="settings-keys">
     <h2>Keys</h2>
     <div class="key">
-      <h3>Identity</h3>
+      <h3>Alias</h3>
       ${idRow('Address', 'identity', () => state.identity, a)}
       <p class="muted small">Runs the app on its own: signs in to the Satori Network and sends the daily batch to the Satori contract. Unencrypted.</p>
     </div>
@@ -43,7 +43,7 @@ function keys(a) {
     <div class="key">
       <h3>Nostr</h3>
       ${idRow('Pubkey', 'nostr-pubkey', () => state.nostr.pubkey, a, () => state.nostr.npub)}
-      <p class="muted small">Signs the app's Nostr events on its own. Unencrypted, as the identity.</p>
+      <p class="muted small">Signs the app's Nostr events on its own. Unencrypted, as the alias.</p>
     </div>
   </section>`;
 }
@@ -52,17 +52,17 @@ function backup(a) {
   return html`
   <section class="card settings-section" id="settings-backup">
     <h2>Backup</h2>
-    <p class="muted small">The identity and the vault are 24 words each; Restore from words brings them back. The Nostr
+    <p class="muted small">The alias and the vault are 24 words each; Restore from words brings them back. The Nostr
       key is random, not from the words, so it is backed up on its own. Showing them asks for the vault's passphrase each time.</p>
     <div class="backup-row">
-      <button class="small-btn" @click="${() => a.askBackup('identity')}">Identity words</button>
+      <button class="small-btn" @click="${() => a.askBackup('identity')}">Alias words</button>
       <button class="small-btn" @click="${() => a.askBackup('vault')}">Vault words</button>
       <button class="small-btn" @click="${() => a.askBackup('nostr')}">Nostr key</button>
     </div>
     <form class="inline-unlock" data-test="backup-prompt" hidden="${() => !state.backupAsk}" @submit="${(e) => a.showBackup(form(e), e.target)}"><input name="pass" type="password" aria-label="Vault passphrase to show the backup" placeholder="Vault passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => state.revealing}">${() => (state.revealing ? 'Checking…' : 'Show')}</button><button type="button" @click="${a.cancelBackup}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.backupError}">${() => state.backupError}</p></form>
     <div class="backup" hidden="${() => !state.backup}">
       <div hidden="${() => state.backup === 'nostr'}">
-        <h3>${() => (state.backup === 'vault' ? 'Vault' : 'Identity')} words</h3>
+        <h3>${() => (state.backup === 'vault' ? 'Vault' : 'Alias')} words</h3>
         ${wordList(() => state.backupWords.split(' ').filter(Boolean))}
         <div class="label">Private key (imports into a Base wallet)</div>
       </div>
@@ -90,7 +90,7 @@ function rewardWhen(r) {
   if (r.at != null) return 'Not set · rewards go to your vault';
   return r.reading || !r.error ? 'Reading it from the Satori Network…' : "Couldn't read it from the Satori Network.";
 }
-const WHOSE = { vault: 'your vault', identity: 'your identity' };
+const WHOSE = { vault: 'your vault', identity: 'your alias' };
 const spin = (test, hide) => html`<i class="spin" data-test="${test}" aria-hidden="true" hidden="${hide}"></i>`;
 
 function rewardCard(a) {
@@ -102,7 +102,7 @@ function rewardCard(a) {
       <h2>Reward address</h2>
       <p class="muted small">Where the Satori Network sends this app's rewards. Not set, they go to your vault. A Base address (0x…) sends them there instead, such as a pool's.</p>
       <div class="id reward-now"><span class="label">Now</span><span class="reward-val"><code data-test="reward-address" title="${() => r().address ?? ''}" hidden="${() => !r().address}">${() => shortHash(r().address)}</code><span class="badge" data-test="reward-whose" hidden="${() => !r().whose}">${() => WHOSE[r().whose] ?? ''}</span><span data-test="reward-none" hidden="${() => !!r().address}">${() => rewardWhen(r())}</span>${spin('reward-reading', () => !r().reading || busy())}</span><button class="small-btn" type="button" hidden="${() => !r().address}" @click="${() => a.copy('reward-address', r().address)}">${() => (state.copied === 'reward-address' ? 'Copied' : 'Copy')}</button></div>
-      <p class="error small" data-test="reward-identity" hidden="${() => r().whose !== 'identity'}">That is this app's identity: this app claims rewards only from the vault, so rewards sent there aren't claimed here. Save another address, or Clear to send them to your vault.</p>
+      <p class="error small" data-test="reward-identity" hidden="${() => r().whose !== 'identity'}">That is this app's alias: this app claims rewards only from the vault, so rewards sent there aren't claimed here. Save another address, or Clear to send them to your vault.</p>
       <p class="error small" role="alert" data-test="reward-read-error" hidden="${() => !r().error}">${() => r().error ?? ''} <button class="small-btn" type="button" data-test="reward-retry" disabled="${() => r().reading}" @click="${a.readReward}">Try again</button></p>
       <label>New reward address
         <input name="address" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="0x…" required>
@@ -113,7 +113,7 @@ function rewardCard(a) {
         <button class="primary" type="submit" data-test="reward-save" disabled="${busy}">${() => (state.rewardBusy === 'save' ? 'Saving…' : 'Save')}</button>
         <button type="button" data-test="reward-clear" hidden="${() => !r().address}" disabled="${busy}" @click="${a.clearReward}">${() => (state.rewardBusy === 'clear' ? 'Clearing…' : 'Clear')}</button>
       </div>
-      <p class="muted small">Free: the identity signs it, so it needs no passphrase and no gas. It doesn't change staking. Home notes a change for a day.</p>
+      <p class="muted small">Free: the alias signs it, so it needs no passphrase and no gas. It doesn't change staking. Home notes a change for a day.</p>
     </form>
   </section>`;
 }
@@ -159,7 +159,7 @@ function baseForm(a) {
   <section class="card settings-section" id="settings-base">
     <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
       <h2>Satori contract</h2>
-      <p class="muted small">The daily batch of predictions on Base. It uses gas: the identity pays each batch in Base ETH.</p>
+      <p class="muted small">The daily batch of predictions on Base. It uses gas: the alias pays each batch in Base ETH.</p>
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>

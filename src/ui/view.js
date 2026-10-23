@@ -44,7 +44,7 @@ function setup(a) {
   <section class="card narrow setup" hidden="${show('setup')}">
     <div hidden="${showStep('choose')}">
       <h2>Set up Satori</h2>
-      <p class="muted">Satori has two keys. The <strong>identity</strong> runs the app on its own,
+      <p class="muted">Satori has two keys. The <strong>alias</strong> acts for your vault on its own,
         so it stays unencrypted in this browser. The <strong>vault</strong> holds your funds and is
         encrypted with your passphrase.</p>
       <p class="muted" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
@@ -87,7 +87,7 @@ function setup(a) {
       <label>Vault words (24)
         <textarea name="vault" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
       </label>
-      <label>Identity words (24, optional: a new identity is made if empty)
+      <label>Alias words (24, optional: a new alias is made if empty)
         <textarea name="identity" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
       <label>Nostr key (nsec or hex, optional: a new one is made if empty)
@@ -104,7 +104,7 @@ function setup(a) {
       <h2>Import Docker files</h2>
       <p class="muted">The files from a Docker install’s wallet folder (unzip “Download Wallet” first). Their keys
         are read here and stored in this app’s own way; the files themselves are not kept.</p>
-      <label>wallet.yaml (identity) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
+      <label>wallet.yaml (alias) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
       <label>vault.yaml <input name="vault" type="file" accept=".yaml,.yml" required></label>
       <label>nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
       <label>Vault password (the Docker install’s) <input name="pass" type="password" autocomplete="current-password" required></label>
@@ -175,7 +175,7 @@ export function render(root, a) {
       <p class="error" data-test="damaged-error">${() => state.fatal}</p>
       <p class="muted small">It may be damaged. You can set it aside and start again: the file is kept in this browser's
         storage for this site under another name, never deleted. Your keys are in it too, so you then restore
-        from your vault's 24 words (and the identity's, and the Nostr key from Backup), or import the Docker files.
+        from your vault's 24 words (and the alias's, and the Nostr key from Backup), or import the Docker files.
         Reload first if you want to try again.</p>
       <div class="actions">
         <button class="primary" data-test="set-aside" disabled="${() => state.busy === 'setAside'}" @click="${a.setAside}">${() => (state.busy === 'setAside' ? 'Setting aside…' : 'Set aside and start again')}</button>

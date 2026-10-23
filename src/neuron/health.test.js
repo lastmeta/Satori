@@ -268,7 +268,7 @@ describe('staking while the contract bug is live (docs/issues/token-hook-gas-est
 describe('warn: predicting, but something needs you', () => {
   test("the identity's gas runs low", () => {
     const h = health({ base: staked({ identity: { power: '100', lowEth: true, batchesLeft: 3, eth: '0.00001' } }) });
-    expect(h.action).toMatchObject({ id: 'gas-low', text: 'The identity has gas for about 3 daily batches. Send it a little Base ETH.',
+    expect(h.action).toMatchObject({ id: 'gas-low', text: 'The alias has gas for about 3 daily batches. Send it a little Base ETH.',
       button: 'Add gas', do: 'go', tab: 'wallet' });
     expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Gas: 3 batches' });
   });
@@ -322,8 +322,8 @@ describe('warn: predicting, but something needs you', () => {
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Vault mismatch' });
     h = health({ central: reg(null, 'none') });
     expect(h).toMatchObject({ status: 'warn', line: 'The Satori Network has no vault for this app.' });
-    expect(h.action).toMatchObject({ id: 'vault-mismatch', text: "The Satori Network kept no vault for this identity, so it has no Base address to pay this "
-      + "app's rewards to (the vault may be registered to another identity). Check the keys in Settings." });
+    expect(h.action).toMatchObject({ id: 'vault-mismatch', text: "The Satori Network kept no vault for this alias, so it has no Base address to pay this "
+      + "app's rewards to (the vault may be registered to another alias). Check the keys in Settings." });
     // a match, or a central that does not say (no vault_base_address: prod on main): no reason
     for (const r of [reg(ours, false), reg(null, null)]) {
       h = health({ central: r });
@@ -368,7 +368,7 @@ describe('advice: the card, nothing wrong (never the status, the tone or the lin
   });
   test('a warn or bad reason with a button keeps the card; the advice waits', () => {
     const h = health({ storage: { persisted: false }, backedUp: false, base: staked({ identity: { power: '100', lowEth: true, batchesLeft: 3, eth: '0' } }) });
-    expect([h.status, h.tone, h.action.id, h.line]).toEqual(['warn', 'warn', 'gas-low', "The Satori Network is fine. The identity's gas is running low."]);
+    expect([h.status, h.tone, h.action.id, h.line]).toEqual(['warn', 'warn', 'gas-low', "The Satori Network is fine. The alias's gas is running low."]);
     // two advice reasons: the first in order, the backup before the stake
     const two = health({ storage: { persisted: false }, backedUp: false, base: base({ vault: { satori: '5', staked: 'none' } }) });
     expect([two.status, two.action.id]).toEqual(['ok', 'backup']);
@@ -404,7 +404,7 @@ test('the action priority: the worst status; one card, the highest reason that h
   const rows = [open(NOW - 3 * D, NOW - 3 * D + 2 * H), good(NOW - 3 * D + H), open(NOW - 10 * M, NOW, { gap: 3 * D, missed: true })];
   h = health({ rows, base: staked({ identity: { power: '5', lowEth: true, batchesLeft: 2, eth: '0' } }), app: { installed: false, canInstall: true } });
   expect([h.status, h.title, h.action.id]).toEqual(['warn', 'Was asleep', 'gas-low']);
-  expect(h.line).toBe("The identity's gas is running low."); // central is not "fine" while it catches up
+  expect(h.line).toBe("The alias's gas is running low."); // central is not "fine" while it catches up
 });
 
 describe('Install, as advice on Home, once (docs/design/pwa.md#install): wherever the browser can add Satori, not only after it was asleep', () => {

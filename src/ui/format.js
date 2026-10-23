@@ -48,8 +48,8 @@ export function mismatchText(r) {
   if (r.vaultMismatch === 'other') {
     return `Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${r.vault_base_address}, not this vault's ${r.vault}.`;
   }
-  return "Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this app's rewards to"
-    + ' (this vault may be registered to another identity).';
+  return "Vault mismatch: the Satori Network kept no vault for this alias, so it has no Base address to pay this app's rewards to"
+    + ' (this vault may be registered to another alias).';
 }
 
 export function pollText(p) {
@@ -195,8 +195,8 @@ export function rpcText(b) {
 export const rpcTitle = (b) => `${b.rpc.join(', ')}${b.localFork ? ' → 127.0.0.1:8545 (node scripts/fork.mjs start)' : ''}`;
 
 const STEPS = {
-  'setPredictorFee(0)': 'Identity: fee to 0',
-  'setAllowedDelegator(vault)': 'Identity: accepts this vault',
+  'setPredictorFee(0)': 'Alias: fee to 0',
+  'setAllowedDelegator(vault)': 'Alias: accepts this vault',
   'setReferral(referrer)': 'Vault: registers who invited you',
   'delegatePredictionPower(identity)': 'Vault: stakes with this app',
   'delegatePredictionPower(0x0)': 'Vault: unstakes',

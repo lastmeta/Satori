@@ -4,8 +4,8 @@
 
 The domain of who the person is and what the app signs with. Set by the owner
 on 2026-10-23 ([intent](../intent/INTENT.md)); [keys.md](keys.md) is how the
-keys are made and sealed today, which this builds on. Nothing here is built
-yet except the words (step A below).
+keys are made and sealed today, which this builds on. Only the words are built so
+far (step A below).
 
 ## The words
 
@@ -129,7 +129,7 @@ asked only for what moves value or proves ownership.
 Stair-steps, the smallest working slice each ([plans](../plans/README.md)):
 
 - **A. The words.** Identity becomes alias in what people read; "Create a
-  wallet" (done 2026-10-23). Nothing stored changes.
+  wallet"; "neuron" leaves the UI (done 2026-10-23). Nothing stored changes.
 - **B. Several accounts.** The list, a file each, the switch, Add and Remove,
   on the sealed vault only. The first account is untouched.
 - **C. A connected vault.** The injected provider (EIP-1193, found through

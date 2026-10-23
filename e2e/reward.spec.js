@@ -10,8 +10,8 @@ import { openApp, polled } from './load.js';
 import { stubCentral } from './stub.js';
 
 const POOL = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7'; // EIP-55
-const IDENTITY = "That is this app's identity. This app claims rewards only from the vault, so rewards sent to the "
-  + 'identity would sit unclaimed. Use another address, or Clear to send them to your vault.';
+const IDENTITY = "That is this app's alias. This app claims rewards only from the vault, so rewards sent to the "
+  + 'alias would sit unclaimed. Use another address, or Clear to send them to your vault.';
 
 const status = (page) => page.evaluate(() => window.satori.status());
 const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
@@ -163,7 +163,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await expect(card.locator('[data-test=reward-line]')).toBeHidden(); // the last save's words ("Cleared: …") went with the read
   stub.reward = identity;
   expect(await page.evaluate(() => window.satori.rewardAddress())).toMatchObject({ address: identity, whose: 'identity' });
-  await expect(card.locator('[data-test=reward-whose]')).toHaveText('your identity');
+  await expect(card.locator('[data-test=reward-whose]')).toHaveText('your alias');
   await expect(card.locator('[data-test=reward-identity]')).toContainText("rewards sent there aren't claimed here");
   await expect(card.locator('[data-test=reward-clear]')).toBeVisible();
   await page.setViewportSize({ width: 360, height: 740 });
@@ -176,7 +176,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await input.fill(POOL);
   await save.click();
   await expect(card.locator('[data-test=reward-error]')).toHaveText('Satori Network 400: Invalid Base address');
-  await expect(card.locator('[data-test=reward-whose]')).toHaveText('your identity');
+  await expect(card.locator('[data-test=reward-whose]')).toHaveText('your alias');
   await expect(page.evaluate((a) => window.satori.setRewardAddress(a), POOL)).rejects.toThrow('Satori Network 400: Invalid Base address');
   stub.rewardRefuse = null;
 

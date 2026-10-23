@@ -32,7 +32,7 @@ const PUBKEY = /^0[23][0-9a-f]{64}$/;
 
 const sameKey = (x, y) => x.length === y.length && x.every((v, i) => v === y[i]);
 const notSame = (x, y) => {
-  if (sameKey(x, y)) throw new Error('The identity and the vault must not be the same key.');
+  if (sameKey(x, y)) throw new Error('The alias and the vault must not be the same key.');
 };
 
 /** A signer over a 32-byte secret; lock() wipes it. `login`: central's login signature, EIP-191 (the identity's). */
@@ -131,7 +131,7 @@ export async function readDockerFiles({ walletText, vaultText, password, nostrTe
  */
 export async function recordFromRows({ walletYaml, vaultYaml, nostrYaml }) {
   const id = await readWallet(walletYaml);
-  if (id.mismatches.length) throw new Error(`The stored identity's ${id.mismatches.join(', ')} do not match its key.`);
+  if (id.mismatches.length) throw new Error(`The stored alias's ${id.mismatches.join(', ')} do not match its key.`);
   return { v: RECORD_VERSION, identity: bytesToHex(id.secret),
     nostr: nostrYaml ? readNostrYaml(nostrYaml).secret : generateNostrSecret(),
     vault: { pubkey: vaultPubkey(vaultYaml), yaml: vaultYaml } };
@@ -221,7 +221,7 @@ const BACKUP_KEYS = ['identity', 'vault', 'nostr'];
  */
 export async function backupKeys(record, which, passphrase) {
   if (which != null && !BACKUP_KEYS.includes(which)) {
-    throw new Error("Name the key: 'identity', 'vault' or 'nostr' (or nothing, for all three).");
+    throw new Error("Name the key: 'identity' (the alias), 'vault' or 'nostr' (or nothing, for all three).");
   }
   return withPassphrase(record, passphrase, (vault) => {
     const { identity, nostr } = loadKeys(record);

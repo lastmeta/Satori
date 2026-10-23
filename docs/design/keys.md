@@ -2,6 +2,11 @@
 
 [← OVERVIEW](OVERVIEW.md)
 
+> **Words (2026-10-23).** What this doc and the code call the *identity* is
+> the vault's **alias** in everything people read; the vault is the person's
+> true identity ([accounts.md](accounts.md)). The stored record, the code and
+> `window.satori` keep `identity`.
+
 The browser neuron holds Satori's two keys, made and used as the Docker
 neuron (Satori Lite, `../neuron`) and satorilib (`../satorilib`) make and use
 them, and a random Nostr key. It stores them in a record of its own. The

@@ -35,8 +35,8 @@ test('registrationText and mismatchText', () => {
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' }))
     .toBe(`Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}.`);
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: 'none' }))
-    .toBe("Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this app's rewards to"
-      + ' (this vault may be registered to another identity).');
+    .toBe("Vault mismatch: the Satori Network kept no vault for this alias, so it has no Base address to pay this app's rewards to"
+      + ' (this vault may be registered to another alias).');
 });
 
 test('pollText and submitText', () => {
@@ -177,7 +177,7 @@ test('rpcText, rpcTitle, stepText: plain words on the card, the detail in the ho
   expect(rpcText(build)).toBe('sepolia.base.org, then base-sepolia-rpc.publicnode.com (the default)');
   expect(rpcText({ rpc: ['https://mine.example/rpc'], rpcSetting: 'https://mine.example/rpc', localFork: false })).toBe('mine.example');
   expect(rpcText({ rpc: [], rpcSetting: '', localFork: false })).toBe('–');
-  expect(stepText('setPredictorFee(0)')).toBe('Identity: fee to 0');
+  expect(stepText('setPredictorFee(0)')).toBe('Alias: fee to 0');
   expect(stepText('delegatePredictionPower(identity)')).toBe('Vault: stakes with this app');
   expect(stepText('delegatePredictionPower(0x0)')).toBe('Vault: unstakes');
   expect(stepText('somethingNew()')).toBe('somethingNew()');

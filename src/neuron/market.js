@@ -92,7 +92,7 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
   const salesOf = (stream) => Object.values(m.sales).filter((s) => s.stream === stream);
   const openBuy = (pubkey, stream) => Object.values(m.buys).find((b) => b.pubkey === pubkey && b.stream === stream && b.status === 'open');
   const needIdentity = () => {
-    if (!identity) throw new Error('No identity to sign with.');
+    if (!identity) throw new Error('No alias to sign with.');
     return identity;
   };
 

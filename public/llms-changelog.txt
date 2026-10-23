@@ -4,6 +4,17 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-23 (the alias)
+
+- What the app called the identity is now the vault's **alias**: the app's
+  words say "Alias" (Settings' Keys and Backup, Wallet, Home's gas line,
+  `health()` reasons, errors, the Restore form's "Alias words"). Unchanged,
+  so no agent breaks: the field `identity` in `status()` and `base()`, the
+  `'identity'` names `backup()`, `reward().whose` and `staked` take, the
+  `identityWords` of `setup()`, and every `data-test` name. Read `identity`
+  as the alias. The design is docs/design/accounts.md (several accounts and a
+  connected vault come next; nothing of that is built yet).
+
 ## Changed 2026-10-23 (the word "neuron")
 
 - The app no longer calls itself a neuron in what it shows or returns: "this

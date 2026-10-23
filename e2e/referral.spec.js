@@ -52,7 +52,7 @@ test('an invite link: held on the visit, registered by the vault at Stake; the n
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
-  await page.getByRole('button', { name: 'Identity words' }).click(); // a word list first: ArrowJS 1.0.6 reuses its <li> for other lists
+  await page.getByRole('button', { name: 'Alias words' }).click(); // a word list first: ArrowJS 1.0.6 reuses its <li> for other lists
   await page.getByLabel('Vault passphrase to show the backup').fill(PASS);
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();

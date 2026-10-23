@@ -414,7 +414,7 @@ describe('topUp and cancelClose (the vault), requestClose and withdraw (the iden
     expect(await channels.readChannel(id)).toMatchObject({ closeRequestedAt: null, graceEndsAt: null });
   });
   test('someone else\'s identity can\'t close it', async () => {
-    await expect(channels.requestClose(sellerI, id)).rejects.toThrow("Only the channel's vault or identity can do that.");
+    await expect(channels.requestClose(sellerI, id)).rejects.toThrow("Only the channel's vault or alias can do that.");
   });
 });
 
@@ -495,7 +495,7 @@ describe('errors in plain words (channelErrorText)', () => {
     ['ChannelClosed', 'The channel is closed.'],
     ['NotPayee', "Only the seller (the channel's payee) can do that."],
     ['NotPayer', 'Only the vault that funded the channel can do that.'],
-    ['NotPayerOrSigner', "Only the channel's vault or identity can do that."],
+    ['NotPayerOrSigner', "Only the channel's vault or alias can do that."],
     ['BadSignature', "The voucher's signature isn't the channel's signer's."],
     ['NothingToSettle', 'Nothing new to settle: the voucher pays no more than is already paid.'],
     ['CloseNotRequested', 'No close was asked for this channel.'],

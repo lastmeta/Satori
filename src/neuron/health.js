@@ -156,7 +156,7 @@ function centralReasons({ now, rows, sessions, central, work }) {
     out.push(reason('vault-mismatch', 'network', { chip: 'Vault mismatch',
       line: other ? "The Satori Network pays this vault's rewards to another address." : 'The Satori Network has no vault for this app.',
       text: `${other ? `The Satori Network pays this vault's rewards to a different Base address, ${reg.vault_base_address}, not this vault's ${reg.vault}.`
-        : "The Satori Network kept no vault for this identity, so it has no Base address to pay this app's rewards to (the vault may be registered to another identity)."
+        : "The Satori Network kept no vault for this alias, so it has no Base address to pay this app's rewards to (the vault may be registered to another alias)."
       } Check the keys in Settings.`,
       button: 'Open Settings', act: go('settings', 'keys') }));
   }
@@ -237,8 +237,8 @@ function baseReasons({ rows, base }) {
   }
   if (d === 'identity' && base.identity?.lowEth) {
     const n = base.identity.batchesLeft;
-    out.push(reason('gas-low', 'contract', { line: "The identity's gas is running low.", chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
-      text: `The identity has gas for about ${n} daily batch${n === 1 ? '' : 'es'}. Send it a little Base ETH.`,
+    out.push(reason('gas-low', 'contract', { line: "The alias's gas is running low.", chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
+      text: `The alias has gas for about ${n} daily batch${n === 1 ? '' : 'es'}. Send it a little Base ETH.`,
       button: 'Add gas', act: go('wallet') }));
   }
   if (d === 'identity' && check?.skipped && FIXABLE_SKIPS.test(check.skipped) && (check.round == null || check.round === base.round)) {

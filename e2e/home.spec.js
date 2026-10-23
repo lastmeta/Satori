@@ -204,7 +204,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   rpc.eth[st.identity.address.toLowerCase()] = 10n ** 12n;
   await page.evaluate(() => window.satori.base());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "The Satori Network is fine. The identity's gas is running low.",
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "The Satori Network is fine. The alias's gas is running low.",
     action: { id: 'gas-low', button: 'Add gas', do: 'go', tab: 'wallet' } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
   await shots(page, 'warn');

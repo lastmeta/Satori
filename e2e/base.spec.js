@@ -24,7 +24,7 @@ async function setup(context) {
 
 const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
 const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
-const ASKS = "Stake, Claim and Send ask for the vault's passphrase. The identity sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).";
+const ASKS = "Stake, Claim and Send ask for the vault's passphrase. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).";
 const sent = (rpc) => rpc.sent.map((t) => t.functionName);
 /** SHOTS=1: a phone's Home into docs/screenshots (else the test's output). */
 async function phoneShot(page, name) {
@@ -72,7 +72,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
   // A word list on the page first (as after a setup in the UI): ArrowJS 1.0.6 reuses its <li> for other lists.
-  await page.getByRole('button', { name: 'Identity words' }).click();
+  await page.getByRole('button', { name: 'Alias words' }).click();
   await page.getByLabel('Vault passphrase to show the backup').fill(PASS);
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();
@@ -90,9 +90,9 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
 
   await expect(page.locator('[data-test=base-txs] > *')).toHaveCount(3);
   await expect(page.locator('[data-test=base-txs]')).not.toContainText('renderTemplate');
-  await expect(page.locator('[data-test=base-txs] code')).toHaveText([/^Identity: fee to 0 0x/, /^Identity: accepts this vault 0x/,
+  await expect(page.locator('[data-test=base-txs] code')).toHaveText([/^Alias: fee to 0 0x/, /^Alias: accepts this vault 0x/,
     /^Vault: stakes with this app 0x/]); // plain words; a local fork: no explorer link
-  await expect(page.locator('[data-test=base-txs] code').first()).toHaveAttribute('title', /^setPredictorFee\(0\) by the identity · 0x/);
+  await expect(page.locator('[data-test=base-txs] code').first()).toHaveAttribute('title', /^setPredictorFee\(0\) by the alias · 0x/);
 
   // The identity's batch, on its own, 10 s after staking: the default game, UP (naive on two values: a tie, which
   // follows the stream's last move, up; Lite's rule said DOWN).
