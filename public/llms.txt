@@ -1012,8 +1012,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   wallet's SATORI and ETH, Claimable (rewards, from the Satori Network,
   airdrop), Staking ("Staked: 100 SATORI with this app"), Transfers
   ("Staked SATORI can't be sent until you unstake", "SATORI can be sent
-  from <date> (round N)", "Free to send"), the alias's ETH as daily
-  batches of gas, Last contract batch, Contract batch check, the alias
+  from <date> (round N)", "Free to send"), "Daily batch gas" (the alias's ETH as daily
+  batches of gas), Last contract batch, Contract batch check, the alias
   (its address with Copy, "The app's own signing address; the daily
   batch's gas is paid from it.", and "Private key"), who plays (this app,
   or Satori Daily by hand, linked); then "Stake with this app" or "Unstake", "Claim" (while locked each asks for the passphrase

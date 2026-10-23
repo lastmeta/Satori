@@ -136,7 +136,7 @@ function baseForm(a) {
   <section class="card settings-section" id="settings-base">
     <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
       <h2>Satori contract</h2>
-      <p class="muted small">The daily batch of predictions on Base. It uses gas, paid in Base ETH from the app's alias (on the Wallet tab).</p>
+      <p class="muted small">The daily batch of predictions on Base. It uses gas, paid in Base ETH (the Wallet tab shows how much is left).</p>
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>

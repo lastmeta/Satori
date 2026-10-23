@@ -52,7 +52,7 @@ export function walletTab(a) {
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this app, below' : delegationText(b())))}
       ${fact('Referral', 'base-referral', () => referralText(b()))}
       ${fact('Transfers', 'base-lock', () => lockText(b().wallet.lock))}
-      ${fact('Alias', 'base-alias', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().alias) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
+      ${fact('Daily batch gas', 'base-alias', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().alias) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
       ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
       ${fact('Contract batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
     : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
