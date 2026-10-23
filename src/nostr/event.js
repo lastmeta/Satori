@@ -17,7 +17,7 @@ export function nostrPubkey(secretHex) {
   return bytesToHex(schnorr.getPublicKey(hexToBytes(secretHex))); // throws outside 1..n-1
 }
 
-/** A random secret (64 hex), independent of the identity and the vault (start.py:136-138). */
+/** A random secret (64 hex), independent of the alias and the wallet (start.py:136-138). */
 export const generateNostrSecret = () => bytesToHex(generateSecret());
 
 /** NIP-19 npub of a pubkey. */

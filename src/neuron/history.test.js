@@ -11,7 +11,7 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm sta
 const BASE = 'https://central.test';
 const T = 1_792_000_000;
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-const identity = { pubkey: '02ab', signCentralLogin: () => 'sig' };
+const alias = { pubkey: '02ab', signCentralLogin: () => 'sig' };
 const row = (uuid, at, value, o = {}) => ({ id: 1, stream_uuid: uuid, observed_at: String(at), value: String(value), ts: '2026-10-14T23:00:12', ...o });
 const entry = (uuid, name, at, value) => ({ ...row(uuid, at, value), stream: { uuid, name, meta: null } });
 
@@ -39,7 +39,7 @@ function fakeCentral({ history = () => json(404, { detail: 'Not Found' }), delay
     }
     return json(404, { detail: 'Not Found' });
   });
-  f.central = createCentral({ url: BASE, identity, version: '0', fetch: f.fetch });
+  f.central = createCentral({ url: BASE, alias, version: '0', fetch: f.fetch });
   return f;
 }
 

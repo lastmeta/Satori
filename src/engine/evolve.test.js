@@ -47,7 +47,7 @@ const validSpec = (s, pool, target) => {
   expect(LAMBDA2_GRID).toContain(s.lambda2);
 };
 
-describe('the identity-seeded RNG', () => {
+describe('the alias-seeded RNG', () => {
   test('the same parts give the same stream; other parts another', () => {
     const a = seeded(ID, 'u-1', 'draw');
     const b = seeded(ID, 'u-1', 'draw');
@@ -61,14 +61,14 @@ describe('the identity-seeded RNG', () => {
 });
 
 describe('the first spec', () => {
-  test('is reproducible per identity and target, and valid', () => {
+  test('is reproducible per alias and target, and valid', () => {
     const s = drawSpec(seeded(ID, 'gold', 'draw'), POOL);
     expect(drawSpec(seeded(ID, 'gold', 'draw'), [...POOL].reverse())).toEqual(s); // the pool's order doesn't matter
     validSpec(s, POOL, 'gold');
   });
 
-  test('neurons start differently: 40 identities, many specs, every count of companions', () => {
-    const specs = Array.from({ length: 40 }, (_, i) => drawSpec(seeded(`identity-${i}`, 'gold', 'draw'), POOL));
+  test('neurons start differently: 40 aliases, many specs, every count of companions', () => {
+    const specs = Array.from({ length: 40 }, (_, i) => drawSpec(seeded(`alias-${i}`, 'gold', 'draw'), POOL));
     specs.forEach((s) => validSpec(s, POOL, 'gold'));
     expect(new Set(specs.map((s) => JSON.stringify(s))).size).toBeGreaterThan(35);
     expect(new Set(specs.map((s) => s.companions.length))).toEqual(new Set([1, 2, 3]));
@@ -114,7 +114,7 @@ describe('mutations', () => {
     }
   });
 
-  test('reproducible from identity + target + generation', () => {
+  test('reproducible from alias + target + generation', () => {
     expect(mutate(base, seeded(ID, 'gold', 3), POOL)).toEqual(mutate(base, seeded(ID, 'gold', 3), POOL));
   });
 });
@@ -243,7 +243,7 @@ describe('runModels: one poll', () => {
     expect(row.accepted).toBeLessThan(row.generation);
   });
 
-  test('neurons diverge: other identities, other champions', () => {
+  test('neurons diverge: other aliases, other champions', () => {
     const histories = historiesOf(prices, 200);
     const champions = Array.from({ length: 6 }, (_, i) => {
       let specs = new Map();

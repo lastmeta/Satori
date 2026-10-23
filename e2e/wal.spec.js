@@ -67,19 +67,19 @@ test("setup's keys are in the database file itself when setup returns; a reload 
   const stub = await stubCentral(context);
   const release = stub.hold('register'); // after it the poll schedule is saved and the first poll runs: later writes
   expect(await openApp(page)).toBe('setup');
-  const { identity, vault } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+  const { alias, wallet } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   const files = await opfsFiles(page);
   await opfsCopy(page, DB, 'e2e-keys-copy.duckdb'); // the file alone, without any WAL
   release();
   await page.reload();
   expect(walBytes(files)).toBe(0);
   expect(await loaded(page)).toBe('home');
-  expect((await page.evaluate(() => window.satori.status())).identity).toBe(identity);
+  expect((await page.evaluate(() => window.satori.status())).alias).toBe(alias);
 
   await page.goto('/e2e/store/');
   const r = await probe(page, { cmd: 'raw', path: 'opfs://e2e-keys-copy.duckdb', sql: ["SELECT key, value FROM meta WHERE key = 'keys'"] });
   expect(r.rows?.[0]?.map((x) => x.key), JSON.stringify(r)).toEqual(['keys']);
-  expect(evmAddress(JSON.parse(r.rows[0][0].value).vault.pubkey)).toBe(vault);
+  expect(evmAddress(JSON.parse(r.rows[0][0].value).wallet.pubkey)).toBe(wallet);
 });
 
 test('Chrome killed right after setup: the keys are there at the next start', async () => {
@@ -92,7 +92,7 @@ test('Chrome killed right after setup: the keys are there at the next start', as
   let { context, page } = await launch();
   await page.goto('http://localhost:5180/');
   expect(await loaded(page)).toBe('setup');
-  const { identity } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+  const { alias } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   // no shutdown of any kind: every process of this profile, at once
   const pids = execFileSync('pgrep', ['-f', dir]).toString().trim().split('\n').map(Number);
   for (const pid of pids) try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
@@ -102,18 +102,18 @@ test('Chrome killed right after setup: the keys are there at the next start', as
   try {
     await page.goto('http://localhost:5180/');
     expect(await loaded(page)).toBe('home');
-    expect((await page.evaluate(() => window.satori.status())).identity).toBe(identity);
+    expect((await page.evaluate(() => window.satori.status())).alias).toBe(alias);
   } finally {
     await context.close();
   }
 });
 
-/** A set-up neuron's key rows as the version before this fix stored them (test/fixtures/profiles.json), and its identity. */
+/** A set-up neuron's key rows as the version before this fix stored them (test/fixtures/profiles.json), and its alias. */
 function neuronFiles() {
   const { profiles } = JSON.parse(readFileSync(new URL('../test/fixtures/profiles.json', import.meta.url)));
   const p = profiles.find((x) => x.label.startsWith('step 5 on'));
-  const identity = evmAddress(publicKey(Uint8Array.from(p.expect.identity.match(/../g), (b) => parseInt(b, 16))));
-  return { identity, rows: Object.entries(p.meta) };
+  const alias = evmAddress(publicKey(Uint8Array.from(p.expect.alias.match(/../g), (b) => parseInt(b, 16))));
+  return { alias, rows: Object.entries(p.meta) };
 }
 const keyRows = (rows) => `INSERT OR REPLACE INTO meta VALUES ${rows.map(([k, v]) => `('${k}', ${sqlText(v)})`).join(', ')}`;
 
@@ -133,13 +133,13 @@ test("the owner's profile: a WAL DuckDB cannot replay is set aside, never delete
   expect(walBytes(files)).toBe(0);
 
   // It goes on as usual: setup; the notice can be dismissed, and a reload has none.
-  const { identity } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+  const { alias } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
   await notice.getByRole('button', { name: 'Dismiss' }).click();
   await expect(notice).toBeHidden();
   expect(await reloadApp(page)).toBe('home');
   await expect(notice).toBeHidden();
   expect(await recovered(page)).toBeNull();
-  expect((await page.evaluate(() => window.satori.status())).identity).toBe(identity);
+  expect((await page.evaluate(() => window.satori.status())).alias).toBe(alias);
   expect(setAside(await opfsFiles(page))).toHaveLength(1);
 });
 
@@ -151,7 +151,7 @@ const OLD_PROFILES = {
 };
 for (const [shape, laterSessions] of Object.entries(OLD_PROFILES)) {
   test(`an older version's set-up neuron (${shape}): its WAL is set aside once, silently; the keys and later writes stay`, async ({ context, page }) => {
-    const { identity, rows } = neuronFiles();
+    const { alias, rows } = neuronFiles();
     await stubCentral(context);
     await page.goto('/e2e/store/');
     expect(await probe(page, { cmd: 'raw', path: `opfs://${DB}`, sql: [...OLD_FIRST_LOAD, keyRows(rows), 'CHECKPOINT'] })).toHaveProperty('rows');
@@ -169,7 +169,7 @@ for (const [shape, laterSessions] of Object.entries(OLD_PROFILES)) {
     for (let i = 0; i < 6; i++) { // each load checkpoints a few times (the schedule, Nostr, Base): any count is fine
       expect(await reloadApp(page), `load ${i}`).toBe('home');
       const st = await page.evaluate(() => window.satori.status());
-      expect([st.identity, st.base.maxFeeSetting, st.recovered], `load ${i}`).toEqual([identity, 5, null]);
+      expect([st.alias, st.base.maxFeeSetting, st.recovered], `load ${i}`).toEqual([alias, 5, null]);
       await expect(notice).toBeHidden();
       await page.evaluate(() => window.satori.setBaseMaxFee(5)); // one more checkpoint: odd and even counts
     }
@@ -181,7 +181,7 @@ for (const [shape, laterSessions] of Object.entries(OLD_PROFILES)) {
 }
 
 test('keys checkpointed and an unreplayable WAL on top: only the WAL\'s changes are set aside, the keys stay', async ({ context, page }) => {
-  const { identity, rows } = neuronFiles();
+  const { alias, rows } = neuronFiles();
   await stubCentral(context);
   await page.goto('/e2e/store/');
   expect(await probe(page, { cmd: 'raw', path: `opfs://${DB}`, sql: [
@@ -193,7 +193,7 @@ test('keys checkpointed and an unreplayable WAL on top: only the WAL\'s changes 
   expect(await openApp(page)).toBe('home');
   await expect(page.locator('[data-test=notice]')).toContainText(NOTICE);
   expect(await recovered(page)).toMatch(/unreplayed/);
-  expect((await page.evaluate(() => window.satori.status())).identity).toBe(identity);
+  expect((await page.evaluate(() => window.satori.status())).alias).toBe(alias);
   await page.goto('/e2e/store/'); // the app's tab is gone: its database can be read
   const meta = await probe(page, { cmd: 'app-meta', key: 'e2e_unsaved' });
   expect(meta).not.toHaveProperty('error');
@@ -203,8 +203,8 @@ test('keys checkpointed and an unreplayable WAL on top: only the WAL\'s changes 
 test('a database file that will not open (damaged): "Set aside and start again" renames it, never deletes it; a fresh one; Setup; restore from words', async ({ context, page }) => {
   await stubCentral(context);
   expect(await openApp(page)).toBe('setup');
-  const { vault } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
-  const { words } = await page.evaluate(() => window.satori.backup('vault', 'pass phrase'));
+  const { wallet } = await page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }));
+  const { words } = await page.evaluate(() => window.satori.backup('wallet', 'pass phrase'));
   await expect(page.evaluate(() => window.satori.setAside())).rejects.toThrow('Nothing to set aside (screen: home).');
   await page.goto('/e2e/store/'); // the app gone: DuckDB's worker lets go of the file
   const size = await page.evaluate(async (name) => { // 64 bytes over the file's header, as the reliability review did
@@ -229,9 +229,9 @@ test('a database file that will not open (damaged): "Set aside and start again" 
   await expect(page.locator('[data-test=set-aside-notice]')).toContainText(aside[0]);
   await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/database-set-aside.png' : test.info().outputPath('set-aside.png') });
   expect((await page.evaluate(() => window.satori.status())).setAside).toBe(aside[0]);
-  // Setup offers Restore from words (and the Nostr key) and Import; the same vault comes back
+  // Setup offers Restore from words (and the Nostr key) and Import; the same wallet comes back
   await expect(page.getByRole('button', { name: 'Restore from words' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import Docker files' })).toBeVisible();
-  const s = await page.evaluate((w) => window.satori.setup({ passphrase: 'pass phrase', vaultWords: w }), words);
-  expect([s.screen, s.vault]).toEqual(['home', vault]);
+  const s = await page.evaluate((w) => window.satori.setup({ passphrase: 'pass phrase', walletWords: w }), words);
+  expect([s.screen, s.wallet]).toEqual(['home', wallet]);
 });

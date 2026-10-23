@@ -1,13 +1,13 @@
 import { describe, test, expect } from 'vitest';
-import { checkRewardAddress, rewardFrom, createReward, NOT_BASE, BAD_CHECKSUM, IDENTITY, UNREADABLE } from './reward.js';
+import { checkRewardAddress, rewardFrom, createReward, NOT_BASE, BAD_CHECKSUM, ALIAS, UNREADABLE } from './reward.js';
 import { ZERO_ADDRESS } from './base.js';
 import { createWork } from './work.js';
 import { CentralError } from '../central/index.js';
 
 const ADDR = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7'; // EIP-55
 const LOWER = ADDR.toLowerCase();
-const ME = '0xCf07Dd9F7Dfc0031300b271aFe93a8308df14237'; // this app's identity
-const VAULT = '0x10319eaa0A323a3Cf225B9D8f9C490CD53fD7bE5'; // its vault
+const ME = '0xCf07Dd9F7Dfc0031300b271aFe93a8308df14237'; // this app's alias
+const WALLET = '0x10319eaa0A323a3Cf225B9D8f9C490CD53fD7bE5'; // its wallet
 
 describe('checkRewardAddress: a Base address, checked before any call', () => {
   test('a checksummed, all-lowercase or all-uppercase address → checksummed; spaces trimmed', () => {
@@ -31,16 +31,16 @@ describe('checkRewardAddress: a Base address, checked before any call', () => {
   test('the zero address burns: refused, as Send refuses it', () => {
     expect(() => checkRewardAddress(`0x${'0'.repeat(40)}`)).toThrow(ZERO_ADDRESS);
   });
-  test("this app's own identity: refused, in any case (the app claims only from the vault: they would sit unclaimed)", () => {
-    expect(() => checkRewardAddress(ME.toLowerCase(), { identity: ME })).toThrow(IDENTITY);
-    expect(IDENTITY).toBe("That is this app's alias. This app claims rewards only from the vault, so rewards sent to "
-      + 'the alias would sit unclaimed. Use another address, or Clear to send them to your vault.');
-    expect(checkRewardAddress(VAULT, { identity: ME })).toBe(VAULT); // the vault itself is fine: where they go anyway
-    expect(checkRewardAddress(ME)).toBe(ME); // no identity given: nothing to compare
+  test("this app's own alias: refused, in any case (the app claims only from the wallet: they would sit unclaimed)", () => {
+    expect(() => checkRewardAddress(ME.toLowerCase(), { alias: ME })).toThrow(ALIAS);
+    expect(ALIAS).toBe("That is this app's alias. This app claims rewards only from the wallet, so rewards sent to "
+      + 'the alias would sit unclaimed. Use another address, or Clear to send them to your wallet.');
+    expect(checkRewardAddress(WALLET, { alias: ME })).toBe(WALLET); // the wallet itself is fine: where they go anyway
+    expect(checkRewardAddress(ME)).toBe(ME); // no alias given: nothing to compare
   });
 });
 
-describe("rewardFrom: central's answer → the address, or null (not set: the vault)", () => {
+describe("rewardFrom: central's answer → the address, or null (not set: the wallet)", () => {
   test('a 0x address, checksummed whatever its case', () => {
     expect(rewardFrom({ reward_address: ADDR })).toBe(ADDR);
     expect(rewardFrom({ reward_address: LOWER })).toBe(ADDR);
@@ -102,22 +102,22 @@ describe('createReward: read and set, with the status', () => {
     expect(await fresh.read()).toMatchObject({ address: null, at: null, error: UNREADABLE }); // unknown: never "not set"
     expect(fresh.known).toBe(false);
   });
-  test("whose: the vault's or this app's identity's address is named, in any case", async () => {
-    const central = fakeCentral(VAULT.toLowerCase());
-    const r = createReward({ central: () => central, now: at, identity: ME, vault: VAULT });
-    expect(await r.read()).toMatchObject({ address: VAULT, whose: 'vault' });
+  test("whose: the wallet's or this app's alias's address is named, in any case", async () => {
+    const central = fakeCentral(WALLET.toLowerCase());
+    const r = createReward({ central: () => central, now: at, alias: ME, wallet: WALLET });
+    expect(await r.read()).toMatchObject({ address: WALLET, whose: 'wallet' });
     central.stored = ME;
-    expect(await r.read()).toMatchObject({ address: ME, whose: 'identity' });
+    expect(await r.read()).toMatchObject({ address: ME, whose: 'alias' });
     central.stored = ADDR;
     expect(await r.read()).toMatchObject({ address: ADDR, whose: null });
     expect(await r.set(null)).toEqual({ address: null, whose: null, changed: true });
   });
-  test("set: this app's identity is refused before any call", async () => {
+  test("set: this app's alias is refused before any call", async () => {
     const central = fakeCentral(null);
-    const r = createReward({ central: () => central, now: at, identity: ME, vault: VAULT });
-    await expect(r.set(ME.toLowerCase())).rejects.toThrow(IDENTITY);
+    const r = createReward({ central: () => central, now: at, alias: ME, wallet: WALLET });
+    await expect(r.set(ME.toLowerCase())).rejects.toThrow(ALIAS);
     expect(central.calls).toEqual([]);
-    expect(await r.set(VAULT)).toEqual({ address: VAULT, whose: 'vault', changed: true });
+    expect(await r.set(WALLET)).toEqual({ address: WALLET, whose: 'wallet', changed: true });
   });
   test("a read that fails keeps what was known and says why; it never throws", async () => {
     const central = fakeCentral(ADDR);

@@ -1,7 +1,7 @@
-// The vault's encryption: PBKDF2-HMAC-SHA256 → AES-256-GCM over the 32-byte
+// The wallet's encryption: PBKDF2-HMAC-SHA256 → AES-256-GCM over the 32-byte
 // secret, all WebCrypto. The passphrase is any Unicode, taken as the UTF-8
 // bytes of its NFC form. Each record holds its own parameters, so a later
-// iteration count still opens it. Why these: docs/design/keys.md#the-vault-encryption
+// iteration count still opens it. Why these: docs/design/keys.md#the-wallet-encryption
 //
 //   const sealed = await sealSecret(secret, passphrase)   // { kdf, cipher, data }
 //   const secret = await openSecret(sealed, passphrase)   // throws 'Wrong passphrase' (GCM's tag)
@@ -52,7 +52,7 @@ export async function openSecret(sealed, passphrase) {
   const { kdf, cipher, data } = sealed ?? {};
   if (kdf?.name !== 'PBKDF2' || kdf.hash !== 'SHA-256' || !(Number.isSafeInteger(kdf.iterations) && kdf.iterations > 0)
     || cipher?.name !== 'AES-GCM' || typeof data !== 'string') {
-    throw new Error('Unknown vault format: this vault was stored by another version of the app.');
+    throw new Error('Unknown wallet format: this wallet was stored by another version of the app.');
   }
   const key = await aesKey(passphrase, base64.decode(kdf.salt), kdf.iterations);
   try {

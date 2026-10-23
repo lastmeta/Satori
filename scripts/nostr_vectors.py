@@ -32,11 +32,11 @@ SATORILIB = os.environ.get('SATORILIB', os.path.join(SATORI, 'satorilib'))
 REF = os.environ.get('SATORILIB_REF', 'origin/base-upgrade')
 START = os.environ.get('START_PY', os.path.join(SATORI, 'neuron', 'neuron-lite', 'start.py'))
 
-# The fixture key (test/fixtures/identity-parity.json `nostr`) and a pinned clock.
+# The fixture key (test/fixtures/alias-parity.json `nostr`) and a pinned clock.
 SECRET = 'dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4'
 NOW = 1792073160
 PROVIDER = 'e5e6ce948344b1e0178f9ccf49fcb499b4b4f00fc09c7637535ee82fc7bf503d'
-WALLET_PUBKEY = '02' + '11' * 32  # an identity's compressed pubkey (shape only)
+ALIAS_PUBKEY = '02' + '11' * 32  # an alias's compressed pubkey (shape only)
 SOURCE = 'btc-usd-price'
 PRED = SOURCE + '_pred'
 PRED_CREATED_AT = 1792000000
@@ -85,7 +85,7 @@ class Capture(SatoriNostr):
 
 def pred_metadata(pubkey):
     """start.py:3454-3477 (_networkAnnouncePublications) for a `_pred` publication."""
-    meta = {'source_stream_name': SOURCE, 'source_provider_pubkey': PROVIDER, 'wallet_pubkey': WALLET_PUBKEY}
+    meta = {'source_stream_name': SOURCE, 'source_provider_pubkey': PROVIDER, 'alias_pubkey': ALIAS_PUBKEY}
     return DatastreamMetadata(
         stream_name=PRED, nostr_pubkey=pubkey, name='Predictions for Bitcoin USD Price', description='',
         encrypted=False, price_per_obs=0, created_at=PRED_CREATED_AT, cadence_seconds=900, tags=[],

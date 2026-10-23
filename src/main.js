@@ -1,9 +1,9 @@
 // App wiring: one tab → open the database → Setup, or Home with the neuron
-// running on the identity key from page load: register with central, then
+// running on the alias key from page load: register with central, then
 // poll on Satori Lite's schedule (docs/design/central.md), and follow the
 // subscribed Nostr streams, publishing `<stream>_pred` (docs/design/nostr.md),
-// and the identity's daily batch on Base (docs/design/base.md).
-// Unlock/Lock open and wipe the vault; the neuron never needs it (Base's
+// and the alias's daily batch on Base (docs/design/base.md).
+// Unlock/Lock open and wipe the wallet; the neuron never needs it (Base's
 // Stake, claims and sends do). The keys are one record of this app's own
 // (meta `keys`, docs/design/keys.md); Base is the only chain shown.
 // window.satori is the same surface for agents (public/llms.txt). The
@@ -14,7 +14,7 @@ import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
-  generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockVault, passphraseOk, MIN_PASSPHRASE,
+  generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
   withPassphrase, backupKeys, IMPORT_MAX,
 } from './keys/index.js';
 import { createAutoLock } from './keys/autolock.js';
@@ -57,13 +57,13 @@ const DEFAULT_CENTRAL = DEFAULTS.central;
 let db;
 let dbOpening = null; // the database's open, begun at boot: a first visit's Setup runs meanwhile, and its keys wait for it
 let record = null; // the keys as stored (meta `keys`)
-let identity = null;
-let nostrKey = null; // { secret, pubkey }: plaintext, as the identity
+let alias = null;
+let nostrKey = null; // { secret, pubkey }: plaintext, as the alias
 let nostr = null; // the Nostr flow
-let vaultPublic = { pubkey: null, evmAddress: null }; // from the record, while locked
-let vault = null; // only while unlocked
+let walletPublic = { pubkey: null, evmAddress: null }; // from the record, while locked
+let wallet = null; // only while unlocked
 let lockCount = 0; // a Lock during an Unlock in flight wins
-let pending = null; // setup only: { vault, identity?, nostr? } secrets
+let pending = null; // setup only: { wallet, alias?, nostr? } secrets
 let central = null;
 let registration = null; // this page load's register result
 let poller = null;
@@ -179,17 +179,17 @@ let fromList = false; // the open model was opened from the list: its back link 
 /** The stored (or default) central; a new client means a new register result. */
 async function connect() {
   const url = (await db.get('central_url')) || DEFAULT_CENTRAL;
-  central = createCentral({ url, identity, version: VERSION });
+  central = createCentral({ url, alias, version: VERSION });
   registration = null;
   return central;
 }
 
 /** Register, as Lite does on every start; the result is shown, never thrown. */
 async function registerWith(c) {
-  const r = await register({ central: c, vaultPubkey: vaultPublic.pubkey, nostrPubkey: nostrKey.pubkey });
+  const r = await register({ central: c, wallet: walletPublic.evmAddress, link: record.link, nostrPubkey: nostrKey.pubkey });
   if (c !== central) return; // the URL changed meanwhile
   registration = r;
-  console[r.ok && !r.vaultMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
+  console[r.ok && !r.walletMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
   await refresh();
 }
 
@@ -213,8 +213,8 @@ async function runCycle(report) {
     report('register');
     await registerWith(central);
   }
-  // never throws: errors are in r and in the status; seed: the identity draws each target's spec
-  const r = await cycle({ db, central, seed: identity.pubkey, backfill, report });
+  // never throws: errors are in r and in the status; seed: the alias draws each target's spec
+  const r = await cycle({ db, central, seed: alias.pubkey, backfill, report });
   console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
   await refresh();
   await activity.central(r, state.central.pending); // Home still shows the last step, then the answer (src/ui/hold.js)
@@ -222,9 +222,9 @@ async function runCycle(report) {
 }
 
 async function startNeuron() {
-  ({ identity, nostr: nostrKey, vault: vaultPublic } = loadKeys(record));
-  state.identity = identity.evmAddress;
-  state.vault = vaultPublic.evmAddress;
+  ({ alias, nostr: nostrKey, wallet: walletPublic } = loadKeys(record));
+  state.alias = alias.evmAddress;
+  state.wallet = walletPublic.evmAddress;
   state.centralDefault = DEFAULT_CENTRAL;
   state.backupAt = (await db.get('backup_at')) ?? null;
   activity = createActivity({ db, onChange: () => { state.activityRev++; } });
@@ -239,7 +239,7 @@ async function startNeuron() {
       await refreshModels();
     } });
   // Retrain (docs/design/models.md#retrain): one at a time, waiting for central's work; the list read again after each
-  retrain = createRetrain({ db, work, seed: () => identity.pubkey, nameOf: (u) => state.streams.find((r) => r.uuid === u)?.name ?? u,
+  retrain = createRetrain({ db, work, seed: () => alias.pubkey, nameOf: (u) => state.streams.find((r) => r.uuid === u)?.name ?? u,
     onChange: () => {
       modelBox.retrains = retrain.all();
       state.retrainRev++;
@@ -251,21 +251,21 @@ async function startNeuron() {
     } });
   state.now = nowS();
   const c = await connect();
-  reward = createReward({ central: () => central, work, identity: identity.evmAddress, vault: vaultPublic.evmAddress,
+  reward = createReward({ central: () => central, work, alias: alias.evmAddress, wallet: walletPublic.evmAddress,
     onChange: (st) => { state.reward = st; } });
   poller = createPoller(runCycle, { db, work, onChange: ({ next, running }) => {
     state.now = nowS(); // Home's "next try in 2 min" from now, not from the last 30 s tick (it read 3 min)
     state.central = { ...state.central, nextPoll: next, polling: running };
   } });
   await refresh();
-  nostr = createNostr({ db, key: nostrKey, walletPubkey: identity.pubkey, central: () => central, ws: import.meta.env.DEV, // csp.js: only the dev page allows ws:
+  nostr = createNostr({ db, key: nostrKey, aliasPubkey: alias.pubkey, central: () => central, ws: import.meta.env.DEV, // csp.js: only the dev page allows ws:
     defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite, wss: DEFAULTS.wss }, // wss: relays' stand-ins (config.js)
     onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err),
     onRecords: refreshRecords, work,
-    // paid streams (docs/design/market.md): the identity signs and settles, the vault is paid and funds a Buy, on Base's chain
-    identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, chain: () => base.channels() });
+    // paid streams (docs/design/market.md): the alias signs and settles, the wallet is paid and funds a Buy, on Base's chain
+    alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, chain: () => base.channels() });
   await refreshNostr();
-  base = createBase({ db, identity, vaultAddress: vaultPublic.evmAddress, vault: () => vault, central: () => central, defaultRpc: DEFAULTS.rpc,
+  base = createBase({ db, alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase, onCheck: (r) => activity.base(r), onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
   if (invitedBy) await base.holdReferrer(invitedBy); // the invite link's ?ref=, kept until Stake registers it
   await refreshBase();
@@ -295,7 +295,7 @@ async function startNeuron() {
  */
 async function tick(why) {
   state.now = nowS();
-  autoLock.check(); // a device that slept past the vault's deadline locks it now
+  autoLock.check(); // a device that slept past the wallet's deadline locks it now
   await activity.beat();
   catchUpAll({ poll: poller.catchUp, base: base.catchUp, relays: nostr.catchUp, train: () => void trainer.run() }, why);
 }
@@ -353,14 +353,14 @@ function readReward() {
 
 /**
  * Set the reward address (a 0x address) or clear it (null or ''), from Settings or an agent (docs/design/central.md#the-reward-address):
- * signed in by the identity, no vault; one at a time. A change is logged, so Home notes it for 24 h. → its status
+ * signed in by the alias, no wallet; one at a time. A change is logged, so Home notes it for 24 h. → its status
  */
 const setReward = (address) => exclusive(address == null || !String(address).trim() ? 'clear' : 'save', async () => {
   state.rewardDone = '';
   const r = await reward.set(address);
   if (r.changed) await activity.setting('reward', r.address ?? '');
-  state.rewardDone = !r.address ? 'Cleared: rewards go to your vault.'
-    : `Saved: the Satori Network sends this app's rewards to ${r.address}${r.whose === 'vault' ? ', your vault' : ''}.`;
+  state.rewardDone = !r.address ? 'Cleared: rewards go to your wallet.'
+    : `Saved: the Satori Network sends this app's rewards to ${r.address}${r.whose === 'wallet' ? ', your wallet' : ''}.`;
   return reward.status;
 }, 'rewardBusy');
 
@@ -384,7 +384,7 @@ const storeKeys = (r) => work.run('keys', async (step) => {
 });
 
 /**
- * The keys, then the neuron; backedUp: the vault's words were confirmed, given or brought (docs/design/health.md). On a
+ * The keys, then the neuron; backedUp: the wallet's words were confirmed, given or brought (docs/design/health.md). On a
  * first visit the database may still be loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
  */
 async function saveKeys(r, { backedUp = false } = {}) {
@@ -399,7 +399,7 @@ async function saveKeys(r, { backedUp = false } = {}) {
   }
 }
 
-/** The vault's backup is confirmed (meta.backup_at): Home stops asking for it while storage is not kept. */
+/** The wallet's backup is confirmed (meta.backup_at): Home stops asking for it while storage is not kept. */
 async function markBackup() {
   if (state.backupAt) return;
   state.backupAt = nowS();
@@ -409,29 +409,31 @@ async function markBackup() {
 
 async function unlock(passphrase) {
   const count = lockCount;
-  const { vault: v, record: upgraded } = await unlockVault(record, passphrase);
-  if (upgraded) await storeKeys(upgraded); // an earlier version's vault, now in this app's format (keys.md#migration)
+  const { wallet: v, record: upgraded } = await unlockWallet(record, passphrase);
+  const linked = !record.link && upgraded?.link;
+  if (upgraded) await storeKeys(upgraded); // its link made now, or an earlier version's wallet in this app's format
+  if (linked && central) registerWith(central).catch(() => {}); // the Satori Network learns the link at once
   if (count !== lockCount) return void v.lock();
-  vault?.lock();
-  vault = v;
+  wallet?.lock();
+  wallet = v;
   state.unlocked = true;
   state.unlockFor = '';
   autoLock.start();
 }
 
-/** Lock: the vault wiped from memory, and any backup on screen hidden. */
+/** Lock: the wallet wiped from memory, and any backup on screen hidden. */
 function lock() {
   lockCount++;
-  vault?.lock();
-  vault = null;
+  wallet?.lock();
+  wallet = null;
   afterUnlock = null;
   autoLock.stop();
   Object.assign(state, { unlocked: false, unlockFor: '', backup: '', backupWords: '', backupKey: '', backupHex: '', backupAsk: '', backupError: '' });
 }
 
 /**
- * The vault locks on its own (docs/design/keys.md#the-vault-locks-on-its-own): 5 minutes after the last interaction (a
- * key, a tap, the wheel, a vault action) while it is unlocked or a backup is on screen, never in the middle of a vault
+ * The wallet locks on its own (docs/design/keys.md#the-wallet-locks-on-its-own): 5 minutes after the last interaction (a
+ * key, a tap, the wheel, a wallet action) while it is unlocked or a backup is on screen, never in the middle of a wallet
  * action, and at once on a wake past the deadline. An action an inline Unlock was opened for locks it when it ends.
  */
 const autoLock = createAutoLock({ onLock: () => lock(), busy: () => !!state.baseBusy || !!state.busy || state.revealing,
@@ -439,7 +441,7 @@ const autoLock = createAutoLock({ onLock: () => lock(), busy: () => !!state.base
 for (const type of ['pointerdown', 'keydown', 'wheel']) addEventListener(type, () => autoLock.touch(), { capture: true, passive: true });
 setInterval(() => { if (state.lockAt) state.lockNow = Date.now(); }, 15_000); // "Locks in 4 min" by Lock
 
-/** An earlier version's vault with no public key in clear: its first Unlock stores it in this app's format, then the neuron starts. */
+/** An earlier version's wallet with no public key in clear: its first Unlock stores it in this app's format, then the neuron starts. */
 async function finishUpdate(passphrase) {
   await exclusive('unlock', () => unlock(passphrase));
   await startNeuron();
@@ -504,14 +506,14 @@ const marketAction = (what, fn) => exclusive(what, fn, 'marketBusy').finally(() 
   void refreshNostr();
 });
 
-/** A Base action, one at a time; then the card is read again. It counts as an interaction (the vault's 5 minutes). */
+/** A Base action, one at a time; then the card is read again. It counts as an interaction (the wallet's 5 minutes). */
 const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => {
   autoLock.touch();
   void refreshBase();
 });
 
-/** The vault's Base actions (Unlock), for the UI and agents alike; the activity log says what each did. */
-const vaultOps = {
+/** The wallet's Base actions (Unlock), for the UI and agents alike; the activity log says what each did. */
+const walletOps = {
   async delegate() {
     const r = await base.delegate();
     if (r.steps.length) activity.wallet('stake', 'Staked with this app');
@@ -528,18 +530,18 @@ const vaultOps = {
     if (sum > 0) activity.wallet('claim', `Claimed ${fmtNum(sum)} SATORI`);
     return r;
   },
-  /** { asset, to, amount, passphrase }: the inputs checked first, then the vault opened from the passphrase for this send alone. */
+  /** { asset, to, amount, passphrase }: the inputs checked first, then the wallet opened from the passphrase for this send alone. */
   async send(o = {}) {
     const { asset, amount } = checkSend(o);
     const r = await withPassphrase(record, o.passphrase, (v) => base.send(o, v));
-    activity.wallet('send', `Sent ${amount} ${asset} from the vault`);
+    activity.wallet('send', `Sent ${amount} ${asset} from the wallet`);
     return r;
   },
 };
 
 /**
  * Setup, from the UI or an agent: one at a time, and only on the Setup screen. `makeRecord` → the keys, or null (not
- * yet). backedUp: the vault's words were confirmed (Create), given (Restore) or brought (a Dockerized Neuron's files).
+ * yet). backedUp: the wallet's words were confirmed (Create), given (Restore) or brought (a Dockerized Neuron's files).
  */
 const setup = (makeRecord, { backedUp = false } = {}) => exclusive('setup', async () => {
   if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
@@ -607,9 +609,9 @@ function fillSettings() {
   readReward();
 }
 
-/** Run `fn` now if the vault is open; else open the inline Unlock prompt at `slot`, and run it after Unlock. */
-function withVault(slot, fn) {
-  if (vault) return fn();
+/** Run `fn` now if the wallet is open; else open the inline Unlock prompt at `slot`, and run it after Unlock. */
+function withWallet(slot, fn) {
+  if (wallet) return fn();
   afterUnlock = fn;
   Object.assign(state, { unlockFor: slot, unlockError: '' });
   requestAnimationFrame(() => document.querySelector(`[data-unlock-for="${slot}"] input`)?.focus());
@@ -619,8 +621,8 @@ function withVault(slot, fn) {
 // ── UI actions ──────────────────────────────────────────────────────────────
 
 function wipePending() {
-  pending?.vault?.fill(0);
-  pending?.identity?.fill(0);
+  pending?.wallet?.fill(0);
+  pending?.alias?.fill(0);
   pending = null;
   state.words = [];
   state.passNote = '';
@@ -648,7 +650,7 @@ const baseUi = (what, fn) => shownAt('baseError', async () => {
   Object.assign(state, { baseResult: text, baseTxs: txs });
 })();
 
-const stepTxs = (steps) => steps.map((x) => ({ label: stepText(x.step), title: `${x.step} by the ${x.by === 'identity' ? 'alias' : x.by}`, hash: x.hash }));
+const stepTxs = (steps) => steps.map((x) => ({ label: stepText(x.step), title: `${x.step} by the ${x.by}`, hash: x.hash }));
 const claimTxs = (r) => [['Rewards', r.rewards], ['Merkle', r.merkle], ['Airdrop', r.airdrop]]
   .filter(([, x]) => x?.hash).map(([label, x]) => ({ label, hash: x.hash }));
 
@@ -657,8 +659,8 @@ const actions = {
   setTheme(t) { state.theme = setTheme(t); },
   newWords() {
     wipePending();
-    pending = { vault: generateSecret() };
-    state.words = wordsOf(pending.vault).split(' ');
+    pending = { wallet: generateSecret() };
+    state.words = wordsOf(pending.wallet).split(' ');
     goStep('words');
   },
   toConfirm() {
@@ -677,8 +679,8 @@ const actions = {
       try { return secretFromWords(text); } catch { throw new Error(`The ${which} words are not 24 valid backup words.`); }
     };
     try {
-      pending = { vault: words(f.vault, 'vault') };
-      if (f.identity.trim()) pending.identity = words(f.identity, 'alias');
+      pending = { wallet: words(f.wallet, 'wallet') };
+      if (f.alias.trim()) pending.alias = words(f.alias, 'alias');
       if (f.nostr.trim()) pending.nostr = nostrSecretOf(f.nostr);
     } catch (err) {
       wipePending();
@@ -697,21 +699,21 @@ const actions = {
     }, { backedUp: true }); // reached only after the words were confirmed, typed in, or brought as files
   }),
   /**
-   * Dockerized Neuron files: decrypted with the Docker vault password and translated into this app's
+   * Dockerized Neuron files: decrypted with the Docker wallet password and translated into this app's
    * record. The same password becomes this app's passphrase when it meets the rule and `reuse` is ticked;
    * otherwise the passphrase step asks for one.
    */
   importDocker: shownAt('error', async (el) => {
     const f = new FormData(el);
     await setup(async () => {
-      for (const [field, name] of [['wallet', 'wallet.yaml'], ['vault', 'vault.yaml'], ['nostr', 'nostr.yaml']]) {
+      for (const [field, name] of [['alias', 'The alias file'], ['wallet', 'The wallet file'], ['nostr', 'The Nostr file']]) {
         if (f.get(field)?.size > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Docker file.`); // not read at all
       }
       const n = f.get('nostr');
       const password = String(f.get('pass') ?? '');
       const reuse = f.get('reuse') === 'on';
       const secrets = await readDockerFiles({
-        walletText: await f.get('wallet').text(), vaultText: await f.get('vault').text(), password,
+        aliasText: await f.get('alias').text(), walletText: await f.get('wallet').text(), password,
         nostrText: n?.size ? await n.text() : undefined,
       });
       el.reset();
@@ -719,21 +721,21 @@ const actions = {
         try {
           return await newKeys(secrets, password);
         } finally {
-          secrets.identity.fill(0);
-          secrets.vault.fill(0);
+          secrets.alias.fill(0);
+          secrets.wallet.fill(0);
         }
       }
       wipePending();
       pending = secrets;
       state.passNote = reuse
-        ? `The Docker install's vault password is shorter than ${MIN_PASSPHRASE} characters. Choose a new passphrase for this app.`
+        ? `The Docker install's wallet password is shorter than ${MIN_PASSPHRASE} characters. Choose a new passphrase for this app.`
         : 'Choose a passphrase for this app.';
       goStep('passphrase');
       return null;
     }, { backedUp: true });
   }),
-  /** Settings' Unlock; an action asked for meanwhile (its inline prompt open) runs after it, and the vault stays unlocked. */
-  unlock: shownAt('vaultError', async (f, el) => actions.unlockAndRun(f, el)),
+  /** Settings' Unlock; an action asked for meanwhile (its inline prompt open) runs after it, and the wallet stays unlocked. */
+  unlock: shownAt('walletError', async (f, el) => actions.unlockAndRun(f, el)),
   /** The inline prompt: Unlock, then the action it was opened for, then Lock again (it was unlocked for that alone). */
   unlockThen: shownAt('unlockError', async (f, el) => actions.unlockAndRun(f, el, { inline: true })),
   async unlockAndRun(f, el, { inline = false } = {}) {
@@ -808,21 +810,22 @@ const actions = {
     else if (a.do === 'poll') actions.pollNow();
     else if (a.do === 'install') actions.install();
     else if (a.do === 'dismiss') actions.dismissAdvice(a.id);
-    else if (a.do === 'stake') withVault('card', actions.baseDelegate);
+    else if (a.do === 'stake') withWallet('card', actions.baseDelegate);
     else if (a.do === 'backup') {
       go('settings', 'backup');
-      actions.askBackup('vault');
+      actions.askBackup('wallet');
     } else if (a.do === 'go') go(a.tab, a.section);
   },
-  finishUpdate: shownAt('vaultError', async (f, el) => {
+  finishUpdate: shownAt('walletError', async (f, el) => {
     await finishUpdate(f.pass);
     el.reset();
   }),
   lock,
   /** Backup's buttons: the passphrase is asked each time, in place (docs/design/keys.md#backup). */
   askBackup(which) {
-    Object.assign(state, { backupAsk: which, backupError: '' });
-    requestAnimationFrame(() => document.querySelector('[data-test=backup-prompt] input')?.focus());
+    Object.assign(state, { backupAsk: which, backupError: '', backup: '', backupWords: '', backupKey: '', backupHex: '' }); // what another showed goes
+    requestAnimationFrame(() => [...document.querySelectorAll('form.inline-unlock')].find((f) => !f.hidden && f.dataset.test?.endsWith('backup-prompt'))
+      ?.querySelector('input')?.focus());
   },
   cancelBackup() { Object.assign(state, { backupAsk: '', backupError: '' }); },
   /** The passphrase typed: the key's backup shown, for 5 minutes without interaction at most. */
@@ -841,7 +844,7 @@ const actions = {
   }),
   hideBackup() {
     Object.assign(state, { backup: '', backupWords: '', backupKey: '', backupHex: '' });
-    if (!vault) autoLock.stop();
+    if (!wallet) autoLock.stop();
   },
   async copy(key, text) {
     try {
@@ -883,12 +886,12 @@ const actions = {
       state.subscribing = '';
     }
   }),
-  /** Paid streams (docs/design/market.md): a price on one of our `_pred`s, free again, Buy (the vault: Unlock in place), Stop. */
+  /** Paid streams (docs/design/market.md): a price on one of our `_pred`s, free again, Buy (the wallet: Unlock in place), Stop. */
   sell: shownAt('marketError', (stream, f) => marketAction(`sell:${stream}`, () => nostr.sell(stream, f.price))),
   unsell: shownAt('marketError', (stream) => marketAction(`sell:${stream}`, () => nostr.unsell(stream))),
   buy(pubkey, stream, f) {
     state.networkError = '';
-    return withVault('buy', () => actions.buyNow(pubkey, stream, f.deposit));
+    return withWallet('buy', () => actions.buyNow(pubkey, stream, f.deposit));
   },
   buyNow: shownAt('networkError', (pubkey, stream, deposit) => marketAction(`buy:${pubkey}:${stream}`, () => nostr.buy(pubkey, stream, deposit))),
   stop: shownAt('marketError', (pubkey, stream) => marketAction(`stop:${pubkey}:${stream}`, () => nostr.stopBuying(pubkey, stream))),
@@ -902,24 +905,24 @@ const actions = {
     actions.fillRelays(el);
   }),
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
-  /** A vault action from the UI: Unlock first (inline, at `slot`) when the vault is locked. */
-  vaultAction(slot, name) {
-    if (name === 'baseClaim' && state.base.vault.lowEth) { // a claim is a vault transaction: said before trying (and before Unlock)
+  /** A wallet action from the UI: Unlock first (inline, at `slot`) when the wallet is locked. */
+  walletAction(slot, name) {
+    if (name === 'baseClaim' && state.base.wallet.lowEth) { // a claim is a wallet transaction: said before trying (and before Unlock)
       return void Object.assign(state, { baseDid: 'claim', baseResult: '', baseTxs: [], baseError: NEED_GAS });
     }
-    return withVault(slot, () => actions[name]());
+    return withWallet(slot, () => actions[name]());
   },
   baseDelegate: () => baseUi('stake', async () => {
-    const r = await vaultOps.delegate();
+    const r = await walletOps.delegate();
     return { text: r.steps.length ? 'Staked with this app.' : 'Already staked with this app.',
       txs: stepTxs(r.steps) };
   }),
   baseUndelegate: () => baseUi('unstake', async () => {
-    const r = await vaultOps.undelegate();
+    const r = await walletOps.undelegate();
     return { text: r.steps.length ? 'Unstaked.' : 'Not staked.', txs: stepTxs(r.steps) };
   }),
   baseClaim: () => baseUi('claim', async () => {
-    const r = await vaultOps.claim();
+    const r = await walletOps.claim();
     return { text: [claimLine('Rewards', r.rewards), claimLine('Merkle', r.merkle), claimLine('Airdrop', r.airdrop)].join(' · '),
       txs: claimTxs(r) };
   }),
@@ -938,10 +941,10 @@ const actions = {
   }),
   /** Back to the form, as it was typed. */
   backSend() { Object.assign(state, { sendReview: null, baseError: '' }); },
-  /** Step two: Send, with the vault's passphrase (asked each time, unlocked or not). */
+  /** Step two: Send, with the wallet's passphrase (asked each time, unlocked or not). */
   confirmSend: (f, el) => baseUi('send', async () => {
     const q = state.sendReview;
-    const r = await vaultOps.send({ asset: q.asset, to: q.to, amount: q.amount, passphrase: f.pass });
+    const r = await walletOps.send({ asset: q.asset, to: q.to, amount: q.amount, passphrase: f.pass });
     el.reset();
     document.querySelector('form.send')?.reset();
     state.sendReview = null;
@@ -990,10 +993,10 @@ window.satori = {
     return {
       screen: state.screen,
       version: VERSION, // browser-<package version>+<git short sha>
-      identity: state.identity || null,
-      vault: state.vault || null,
+      alias: state.alias || null,
+      wallet: state.wallet || null,
       unlocked: state.unlocked,
-      lockAt: state.lockAt, // when the vault locks on its own (ms), or null
+      lockAt: state.lockAt, // when the wallet locks on its own (ms), or null
 
       central: home ? await centralStatus() : null,
       nostr: home ? await nostrStatus() : null,
@@ -1015,20 +1018,20 @@ window.satori = {
    * Setup, to restore from words or import. Only on the person's request: their keys are in that file. → status()
    */
   async setAside() { await setAsideDb(); return window.satori.status(); },
-  /** Create a neuron (random keys unless words, or the Nostr key's nsec or hex, are given). The vault stays locked. */
-  async setup({ passphrase, vaultWords, identityWords, nostrKey } = {}) {
+  /** Create a neuron (random keys unless words, or the Nostr key's nsec or hex, are given). The wallet stays locked. */
+  async setup({ passphrase, walletWords, aliasWords, nostrKey } = {}) {
     await setup(async () => {
       const keys = {};
       try {
-        keys.vault = vaultWords ? secretFromWords(vaultWords) : generateSecret();
-        if (identityWords) keys.identity = secretFromWords(identityWords);
+        keys.wallet = walletWords ? secretFromWords(walletWords) : generateSecret();
+        if (aliasWords) keys.alias = secretFromWords(aliasWords);
         if (nostrKey) keys.nostr = nostrSecretOf(nostrKey);
         return await newKeys(keys, passphrase);
       } finally {
-        keys.vault?.fill(0);
-        keys.identity?.fill(0);
+        keys.wallet?.fill(0);
+        keys.alias?.fill(0);
       }
-    }, { backedUp: !!vaultWords }); // given words are a backup; random ones are not until backup() shows them
+    }, { backedUp: !!walletWords }); // given words are a backup; random ones are not until backup() shows them
     return window.satori.status();
   },
   /**
@@ -1098,8 +1101,8 @@ window.satori = {
   /** Set the central URL ('' = the default) and register there. → status().central */
   async setCentral(url) { ready(); await setCentral(url); return centralStatus(); },
   /**
-   * Where the Satori Network sends this neuron's rewards, read from it now (signed in by the identity). → { address: '0x…'
-   * (checksummed) | null (not set: the vault), whose: 'vault' | 'identity' | null, at }; throws when it could not be read.
+   * Where the Satori Network sends this neuron's rewards, read from it now (signed in by the alias). → { address: '0x…'
+   * (checksummed) | null (not set: the wallet), whose: 'wallet' | 'alias' | null, at }; throws when it could not be read.
    */
   async rewardAddress() {
     ready();
@@ -1108,8 +1111,8 @@ window.satori = {
     return { address: st.address, whose: st.whose, at: st.at };
   },
   /**
-   * Set the reward address (a Base 0x address, not this neuron's identity) or clear it (null or ''), signed in by the
-   * identity; free. → { address, whose, at }
+   * Set the reward address (a Base 0x address, not this neuron's alias) or clear it (null or ''), signed in by the
+   * alias; free. → { address, whose, at }
    */
   async setRewardAddress(address) { ready(); const st = await setReward(address); return { address: st.address, whose: st.whose, at: st.at }; },
   /** Unlock (on the 'finish' screen it also finishes an earlier version's update, then the neuron starts). */
@@ -1124,8 +1127,8 @@ window.satori = {
   },
   lock() { lock(); return true; },
   /**
-   * The passphrase each time, unlocked or not (~0.3 s). 'identity' | 'vault' → { words, privateKey }; 'nostr' → { nsec,
-   * secret }; null or undefined → { identity, vault, nostr }.
+   * The passphrase each time, unlocked or not (~0.3 s). 'alias' | 'wallet' → { words, privateKey }; 'nostr' → { nsec,
+   * secret }; null or undefined → { alias, wallet, nostr }.
    */
   async backup(which, passphrase) { ready(); return backupOf(which, passphrase); },
   /** Nostr: the key, the relays and their state, the subscribed streams with the latest observation and our `_pred`. */
@@ -1155,28 +1158,28 @@ window.satori = {
   /** That stream free again. → nostr() */
   async unsell(stream) { ready(); return marketAction('unsell', () => nostr.unsell(stream)); },
   /**
-   * Buy a stream sold on the Satori contract (only on the person's request; needs Unlock; gas): the vault opens a channel
+   * Buy a stream sold on the Satori contract (only on the person's request; needs Unlock; gas): the wallet opens a channel
    * with `deposit` SATORI (100 observations by default). → nostr().market.bought's entry
    */
   async buy(pubkey, stream, deposit) { ready(); return marketAction('buy', () => nostr.buy(String(pubkey ?? '').trim().toLowerCase(), stream, deposit)); },
-  /** Stop buying: the identity asks to close the channel (gas, no Unlock); the rest comes back to the vault after 7 days. → the same */
+  /** Stop buying: the alias asks to close the channel (gas, no Unlock); the rest comes back to the wallet after 7 days. → the same */
   async stop(pubkey, stream) { ready(); return marketAction('stop', () => nostr.stopBuying(String(pubkey ?? '').trim().toLowerCase(), stream)); },
   /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
   /** Base: a fresh read of the chain (one multicall) and the last batch. */
   async base() { ready(); await base.refresh(); return base.status(); },
-  /** Stake with this neuron (needs Unlock): the vault's prediction power to the identity. → { steps: [{ step, by, hash }], settled } */
-  async stake() { ready(); return baseAction('stake', vaultOps.delegate); },
+  /** Stake with this neuron (needs Unlock): the wallet's prediction power to the alias. → { steps: [{ step, by, hash }], settled } */
+  async stake() { ready(); return baseAction('stake', walletOps.delegate); },
   /** Unstake (needs Unlock): the SATORI can be sent once the next round ends. → the same shape */
-  async unstake() { ready(); return baseAction('unstake', vaultOps.undelegate); },
-  /** hub.claim(), the merkle drop, the airdrop, from the vault (needs Unlock). → { rewards, merkle, airdrop } */
-  async claim() { ready(); return baseAction('claim', vaultOps.claim); },
-  /** The identity's daily batch now, if this round has none yet. → the check's result */
+  async unstake() { ready(); return baseAction('unstake', walletOps.undelegate); },
+  /** hub.claim(), the merkle drop, the airdrop, from the wallet (needs Unlock). → { rewards, merkle, airdrop } */
+  async claim() { ready(); return baseAction('claim', walletOps.claim); },
+  /** The alias's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
   /** The review before a send, no key needed: { asset, to, amount } → { asset, to, amount, fee: { gas, about, max } } */
   async quoteSend(o) { ready(); return base.quoteSend(o); },
-  /** From the vault, with its passphrase each time: { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5', passphrase } → { hash } */
-  async send(o) { ready(); return baseAction('send', () => vaultOps.send(o)); },
+  /** From the wallet, with its passphrase each time: { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5', passphrase } → { hash } */
+  async send(o) { ready(); return baseAction('send', () => walletOps.send(o)); },
   /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
   async setBaseRpc(url) { ready(); return setBaseSettings({ rpc: url }); },
   /** The unattended batch's ceiling on the max fee per gas, in gwei (null or '' = the default, 2). → base() */
@@ -1197,12 +1200,12 @@ watch(() => {
 
 /**
  * What the neuron is doing, at a pace a person can read (src/ui/hold.js; docs/design/health.md#work): the hero (central's
- * poll, the Base batch, the vault's actions, a critical one first: its ring turns, its line says the step, its tone is
- * green, vivid while closing would lose work), the Wallet card's line (the vault's actions, there) and the network's
+ * poll, the Base batch, the wallet's actions, a critical one first: its ring turns, its line says the step, its tone is
+ * green, vivid while closing would lose work), the Wallet card's line (the wallet's actions, there) and the network's
  * (the Network streams line, only once one lasts a second). At rest the hero turns sky green from the tone before it
  * (data-from: over 2.5 min after work, style.css); back to work, at once.
  */
-const VAULT_TASKS = ['stake', 'unstake', 'claim', 'send'];
+const WALLET_TASKS = ['stake', 'unstake', 'claim', 'send'];
 let heroWas = null; // the hero's view shown last (not read from state: the watch below would depend on what it writes)
 const heroHold = createHold({ show: (v) => {
   const from = v.tone !== 'idle' ? null : heroWas?.tone === 'idle' ? heroWas.from : heroWas?.tone ?? null;
@@ -1224,7 +1227,7 @@ const lineOf = (tasks, hold) => () => {
   const w = tasks.map((t) => state.work[t]).find(Boolean);
   hold(w ? { key: `${w.task}:${w.step}:${w.done}`, working: true, line: workText(w) } : { key: 'idle', working: false, line: '' });
 };
-watch(lineOf(VAULT_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
+watch(lineOf(WALLET_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
 watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
 watch(lineOf(['watch'], createHold({ show: (v) => { state.watchLine = v.line; } }))); // Streams › Prediction streams: the scan's step
 /** Streams › Prediction streams: read when the tab shows, and when the watched set changes (nostr's status). */
@@ -1312,8 +1315,8 @@ async function boot() {
     if (fresh) return; // Setup is on screen: it writes the keys (saveKeys)
     record = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
     if (!record) return void Object.assign(state, { screen: 'setup', cached: null });
-    // an earlier version's vault whose public key was not in clear: the neuron needs it (register, the Base address)
-    if (!loadKeys(record).vault.pubkey) return void Object.assign(state, { screen: 'finish', cached: null });
+    // an earlier version's wallet whose public key was not in clear: the neuron needs it (register, the Base address)
+    if (!loadKeys(record).wallet.pubkey) return void Object.assign(state, { screen: 'finish', cached: null });
     await startNeuron();
   } catch (err) {
     // the database file itself won't open (damaged): offer to set it aside; anything else, "could not start"

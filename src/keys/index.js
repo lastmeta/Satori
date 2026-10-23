@@ -1,26 +1,29 @@
-// The neuron's keys, in this app's own record, meta `keys` (docs/design/keys.md):
-//   { v: 1, identity: hex, nostr: hex, vault: { pubkey, kdf, cipher, data } }
-// identity — plain text on purpose: the neuron signs on its own (central's login, the Base batch);
-// nostr    — plain text on purpose: it signs the Nostr events on its own; random, not derived;
-// vault    — sealed with the passphrase (vault.js), holds the funds; its public key in clear,
-//            so its Base address shows and central's register has it while locked.
-// An earlier version's vault, until its next Unlock: vault: { pubkey | null, yaml } (Docker's text).
+// The app's keys, in its own record, meta `keys` (docs/design/keys.md, docs/design/wallets.md):
+//   { v: 1, alias: hex, nostr: hex, wallet: { pubkey, kdf, cipher, data }, link: { message, signature } }
+// alias  — plain text on purpose: the app signs on its own (central's login, the Base batch);
+// nostr  — plain text on purpose: it signs the Nostr events on its own; random, not derived;
+// wallet — sealed with the passphrase (wallet.js), holds the funds; its public key in clear,
+//          so its Base address shows while locked;
+// link   — the wallet's EIP-191 signature of its link to the alias (linkMessage), sent with every register;
+//          made whenever the wallet is in hand (newKeys, an Unlock without one).
+// An earlier version's wallet, until its next Unlock: wallet: { pubkey | null, yaml } (Docker's text).
 //
-//   const record = await newKeys({ identity?, vault, nostr? }, passphrase)   // create, restore, import
-//   const secrets = await readDockerFiles({ walletText, vaultText, password, nostrText? })  // import: translate
-//   const record = await recordFromRows({ walletYaml, vaultYaml, nostrYaml? })  // migration 7: earlier rows
-//   const { identity, nostr, vault } = loadKeys(record)   // identity: a signer; vault: { pubkey, evmAddress }
-//   const { vault, record } = await unlockVault(record, passphrase)   // record: store it (an upgrade), or null
-//   await withPassphrase(record, passphrase, (vault) => …)   // the vault for one use (Send), wiped after it
+//   const record = await newKeys({ alias?, wallet, nostr? }, passphrase)   // create, restore, import
+//   const secrets = await readDockerFiles({ aliasText, walletText, password, nostrText? })  // import: translate
+//   const record = await recordFromRows({ aliasYaml, walletYaml, nostrYaml? })  // migration 7: earlier rows
+//   const { alias, nostr, wallet } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress }
+//   const { wallet, record } = await unlockWallet(record, passphrase)   // record: store it (an upgrade), or null
+//   await withPassphrase(record, passphrase, (wallet) => …)   // the wallet for one use (Send), wiped after it
 //   await backupKeys(record, which, passphrase)   // Backup: the passphrase each time, unlocked or not
 //   signer: pubkey, evmAddress, signDigest(hash), backup() → { words, privateKey }, lock();
-//           the identity's also signCentralLogin(challenge) (EIP-191, central's login: src/central/login.js)
+//           the alias's also signCentralLogin(challenge) (EIP-191, central's login: src/central/login.js);
+//           the wallet's also signLink(aliasAddress) → the record's link
 export { generateSecret, secretFromWords, wordsOf, publicKey, evmAddress } from './keys.js';
-export { MIN_PASSPHRASE, passphraseOk } from './vault.js';
+export { MIN_PASSPHRASE, passphraseOk } from './wallet.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { checkKey, generateSecret, publicKey, wordsOf, evmAddress, signDigest, privateKeyHex } from './keys.js';
-import { sealSecret, openSecret, checkNewPassphrase } from './vault.js';
-import { readWallet, readNostrYaml, secrecy, vaultPubkey } from './docker.js';
+import { sealSecret, openSecret, checkNewPassphrase } from './wallet.js';
+import { readKeyFile, readNostrYaml, secrecy, walletPubkey } from './docker.js';
 import { loginSignature } from '../central/login.js';
 import { generateNostrSecret, nostrPubkey, nsec } from '../nostr/event.js';
 
@@ -32,10 +35,10 @@ const PUBKEY = /^0[23][0-9a-f]{64}$/;
 
 const sameKey = (x, y) => x.length === y.length && x.every((v, i) => v === y[i]);
 const notSame = (x, y) => {
-  if (sameKey(x, y)) throw new Error('The alias and the vault must not be the same key.');
+  if (sameKey(x, y)) throw new Error('The alias and the wallet must not be the same key.');
 };
 
-/** A signer over a 32-byte secret; lock() wipes it. `login`: central's login signature, EIP-191 (the identity's). */
+/** A signer over a 32-byte secret; lock() wipes it. `login`: central's login signature, EIP-191 (the alias's). */
 function signer(secret, { login = false } = {}) {
   const pubkey = publicKey(secret);
   const live = () => {
@@ -56,7 +59,18 @@ function signer(secret, { login = false } = {}) {
     },
   };
   if (login) s.signCentralLogin = (challenge) => loginSignature(live(), challenge); // src/central/login.js
+  else s.signLink = (aliasAddress, issued) => linkOf(live(), aliasAddress, issued);
   return s;
+}
+
+/** The text a wallet signs to link its alias for the Satori Network (docs/design/wallets.md#the-satori-network-register-login-and-the-link). */
+export const linkMessage = ({ alias, wallet, issued }) =>
+  `Satori: link this alias to my wallet\nalias: ${alias}\nwallet: ${wallet}\nissued: ${issued}`;
+
+/** The link, signed by the wallet's secret: { message, signature } (EIP-191, as central's login). */
+function linkOf(walletSecret, aliasAddress, issued = Math.floor(Date.now() / 1000)) {
+  const message = linkMessage({ alias: aliasAddress, wallet: evmAddress(publicKey(walletSecret)), issued });
+  return { message, signature: loginSignature(walletSecret, message) };
 }
 
 const nostrOf = (secret) => {
@@ -68,168 +82,176 @@ const nostrOf = (secret) => {
 };
 
 /**
- * A new record: the vault (and an identity and a Nostr key, random when not given), sealed with a new passphrase;
+ * A new record: the wallet (and an alias and a Nostr key, random when not given), sealed with a new passphrase;
  * `created`: when (unix seconds), Home's first day (docs/design/health.md#the-day-strip).
  */
-export async function newKeys({ identity = generateSecret(), vault, nostr = generateNostrSecret() }, passphrase) {
+export async function newKeys({ alias = generateSecret(), wallet, nostr = generateNostrSecret() }, passphrase) {
   checkNewPassphrase(passphrase);
-  notSame(checkKey(identity), checkKey(vault));
+  notSame(checkKey(alias), checkKey(wallet));
   nostrOf(nostr);
-  return { v: RECORD_VERSION, created: Math.floor(Date.now() / 1000), identity: bytesToHex(identity), nostr,
-    vault: { pubkey: publicKey(vault), ...await sealSecret(vault, passphrase) } };
+  const created = Math.floor(Date.now() / 1000);
+  return { v: RECORD_VERSION, created, alias: bytesToHex(alias), nostr,
+    wallet: { pubkey: publicKey(wallet), ...await sealSecret(wallet, passphrase) },
+    link: linkOf(wallet, evmAddress(publicKey(alias)), created) };
 }
 
 /**
- * A Dockerized Neuron's files and its vault password → the secrets, to seal
+ * A Dockerized Neuron's files and its wallet password → the secrets, to seal
  * with this app's passphrase (newKeys). wallet.yaml must be plain text and
  * vault.yaml encrypted (files in the wrong slots are named as such); refuses a
  * wrong password, a watch-only file and a file whose stored public key, words
  * or private key are not its key's. nostr.yaml is optional (undefined: none).
- * @returns {Promise<{identity: Uint8Array, vault: Uint8Array, nostr?: string}>}
+ * @returns {Promise<{alias: Uint8Array, wallet: Uint8Array, nostr?: string}>}
  */
-export async function readDockerFiles({ walletText, vaultText, password, nostrText }) {
+export async function readDockerFiles({ aliasText, walletText, password, nostrText }) {
   const named = (name, fn) => {
     try { return fn(); } catch (err) { throw new Error(err.message.startsWith(name) ? err.message : `${name}: ${err.message}`); }
   };
-  for (const [name, text] of [['wallet.yaml', walletText], ['vault.yaml', vaultText], ['nostr.yaml', nostrText]]) {
+  for (const [name, text] of [['The alias file', aliasText], ['The wallet file', walletText], ['The Nostr file', nostrText]]) {
     // UTF-8 never has fewer bytes than UTF-16 units: a long text is refused before it is encoded
     const t = String(text ?? '');
     if (t.length > IMPORT_MAX || new TextEncoder().encode(t).length > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Docker file.`);
   }
-  const [w, v] = [named('wallet.yaml', () => secrecy(walletText)), named('vault.yaml', () => secrecy(vaultText))];
-  if (w === 'encrypted' && v === 'plain') {
-    throw new Error('The files are swapped: wallet.yaml is the unencrypted one, vault.yaml the encrypted one.');
+  const [a, w] = [named('The alias file', () => secrecy(aliasText)), named('The wallet file', () => secrecy(walletText))];
+  if (a === 'encrypted' && w === 'plain') {
+    throw new Error('The files are swapped: the alias file is the unencrypted one, the wallet file the encrypted one.');
   }
-  if (w === 'encrypted' || w === 'mixed') {
-    throw new Error('wallet.yaml: this file is encrypted, so it is a vault.yaml. Choose the unencrypted wallet.yaml.');
+  if (a === 'encrypted' || a === 'mixed') {
+    throw new Error('The alias file: this file is encrypted, so it is a wallet file. Choose the unencrypted alias file.');
   }
-  if (v === 'plain' || v === 'mixed') {
-    throw new Error('vault.yaml: this file is not encrypted, so it is not a vault. Choose the encrypted vault.yaml.');
+  if (w === 'plain' || w === 'mixed') {
+    throw new Error('The wallet file: this file is not encrypted, so it is not a wallet. Choose the encrypted wallet file.');
   }
-  const nostr = nostrText ? named('nostr.yaml', () => readNostrYaml(nostrText)).secret : undefined;
+  const nostr = nostrText ? named('The Nostr file', () => readNostrYaml(nostrText)).secret : undefined;
   const read = async (name, text, opts) => {
     try {
-      const r = await readWallet(text, opts);
+      const r = await readKeyFile(text, opts);
       if (r.mismatches.length) throw new Error(`stored ${r.mismatches.join(', ')} do not match its key`);
       return r.secret;
     } catch (err) {
       throw new Error(`${name}: ${err.message}`);
     }
   };
-  const identity = await read('wallet.yaml', walletText);
-  const vault = await read('vault.yaml', vaultText, { password: String(password ?? '') });
-  notSame(identity, vault);
-  return { identity, vault, nostr };
+  const alias = await read('The alias file', aliasText);
+  const wallet = await read('The wallet file', walletText, { password: String(password ?? '') });
+  notSame(alias, wallet);
+  return { alias, wallet, nostr };
 }
 
 /**
  * This app's earlier rows (wallet.yaml, vault.yaml and nostr.yaml texts) → the
- * record, at load (migration 7). The identity and the Nostr key are plain text,
+ * record, at load (migration 7). The alias and the Nostr key are plain text,
  * so they are translated now (a new Nostr key when there was none, as the load
- * before step 5 made one); the vault needs the passphrase, so its text is kept
- * until its next Unlock (unlockVault), its public key in clear when it had one.
+ * before step 5 made one); the wallet needs the passphrase, so its text is kept
+ * until its next Unlock (unlockWallet), its public key in clear when it had one.
  */
-export async function recordFromRows({ walletYaml, vaultYaml, nostrYaml }) {
-  const id = await readWallet(walletYaml);
+export async function recordFromRows({ aliasYaml, walletYaml, nostrYaml }) {
+  const id = await readKeyFile(aliasYaml);
   if (id.mismatches.length) throw new Error(`The stored alias's ${id.mismatches.join(', ')} do not match its key.`);
-  return { v: RECORD_VERSION, identity: bytesToHex(id.secret),
+  return { v: RECORD_VERSION, alias: bytesToHex(id.secret),
     nostr: nostrYaml ? readNostrYaml(nostrYaml).secret : generateNostrSecret(),
-    vault: { pubkey: vaultPubkey(vaultYaml), yaml: vaultYaml } };
+    wallet: { pubkey: walletPubkey(walletYaml), yaml: walletYaml } };
 }
 
 function checkRecord(r) {
   if (!r || typeof r !== 'object') throw new Error('No keys stored.');
   if (r.v > RECORD_VERSION) throw new Error(`These keys were stored by a newer version of the app (record ${r.v}).`);
-  if (r.v !== RECORD_VERSION || !HEX64.test(r.identity) || !HEX64.test(r.nostr)) throw new Error('The stored keys are not readable.');
-  const v = r.vault ?? {};
+  if (r.v !== RECORD_VERSION || !HEX64.test(r.alias) || !HEX64.test(r.nostr)) throw new Error('The stored keys are not readable.');
+  const v = r.wallet ?? {};
   const sealed = typeof v.data === 'string' && PUBKEY.test(v.pubkey);
   const legacy = typeof v.yaml === 'string' && (v.pubkey === null || PUBKEY.test(v.pubkey));
-  if (!sealed && !legacy) throw new Error('The stored vault is not readable.');
+  if (!sealed && !legacy) throw new Error('The stored wallet is not readable.');
+  if (r.link != null && !(typeof r.link.message === 'string' && typeof r.link.signature === 'string')) throw new Error('The stored link is not readable.');
   return r;
 }
 
-/** The record's keys: the identity's signer, the Nostr key, the vault's public key and Base address (null until an old vault's Unlock). */
+/** The record's keys: the alias's signer, the Nostr key, the wallet's public key and Base address (null until an old wallet's Unlock). */
 export function loadKeys(record) {
   const r = checkRecord(record);
-  const pubkey = r.vault.pubkey ?? null;
+  const pubkey = r.wallet.pubkey ?? null;
   return {
-    identity: signer(checkKey(hexToBytes(r.identity)), { login: true }),
+    alias: signer(checkKey(hexToBytes(r.alias)), { login: true }),
     nostr: nostrOf(r.nostr),
-    vault: { pubkey, evmAddress: pubkey && evmAddress(pubkey) },
+    wallet: { pubkey, evmAddress: pubkey && evmAddress(pubkey) },
+    link: r.link ?? null,
   };
 }
 
 /**
- * Unlock: the vault's secret into memory. A wrong passphrase → 'Wrong
- * passphrase'. A vault in an earlier version's form (Docker's vault.yaml text)
+ * Unlock: the wallet's secret into memory. A wrong passphrase → 'Wrong
+ * passphrase'. A wallet in an earlier version's form (Docker's vault.yaml text)
  * is opened as that version did (the passphrase's Latin-1, else UTF-8 bytes;
  * a plain-text one needs a new passphrase that meets the rule), sealed in this
  * app's format with the same passphrase, and that is checked by opening it
- * again: `record` is then the record to store, else null.
- * @returns {Promise<{vault: ReturnType<typeof signer>, record: object | null}>}
+ * again. A record without a link gets one (linkOf). `record` is then the record to store, else null.
+ * @returns {Promise<{wallet: ReturnType<typeof signer>, record: object | null}>}
  */
-export async function unlockVault(record, passphrase) {
+export async function unlockWallet(record, passphrase) {
   const r = checkRecord(record);
   const pass = String(passphrase ?? '');
-  if (typeof r.vault.data === 'string') {
-    const secret = await openSecret(r.vault, pass);
-    if (publicKey(secret) !== r.vault.pubkey) throw new Error('The stored vault does not match its public key.');
-    return { vault: signer(secret), record: null };
+  if (typeof r.wallet.data === 'string') {
+    const secret = await openSecret(r.wallet, pass);
+    if (publicKey(secret) !== r.wallet.pubkey) throw new Error('The stored wallet does not match its public key.');
+    const linked = withLink(r, secret);
+    return { wallet: signer(secret), record: linked === r ? null : linked };
   }
-  const plain = secrecy(r.vault.yaml) === 'plain';
+  const plain = secrecy(r.wallet.yaml) === 'plain';
   if (plain) checkNewPassphrase(pass);
-  const { secret, pubkey, mismatches } = await readWallet(r.vault.yaml, plain ? {} : { password: pass, encodings: ['latin1', 'utf8'] });
-  if (mismatches.length || (r.vault.pubkey && pubkey !== r.vault.pubkey)) {
+  const { secret, pubkey, mismatches } = await readKeyFile(r.wallet.yaml, plain ? {} : { password: pass, encodings: ['latin1', 'utf8'] });
+  if (mismatches.length || (r.wallet.pubkey && pubkey !== r.wallet.pubkey)) {
     secret.fill(0);
     throw new Error('Wrong passphrase');
   }
   const sealed = await sealSecret(secret, pass);
   const again = await openSecret(sealed, pass);
   const same = sameKey(again, secret);
-  again.fill(0); // the check's copy of the vault's secret
+  again.fill(0); // the check's copy of the wallet's secret
   if (!same) {
     secret.fill(0);
-    throw new Error('Re-encrypting the vault failed; it was kept as it was.');
+    throw new Error('Re-encrypting the wallet failed; it was kept as it was.');
   }
-  return { vault: signer(secret), record: { ...r, vault: { pubkey, ...sealed } } };
+  return { wallet: signer(secret), record: withLink({ ...r, wallet: { pubkey, ...sealed } }, secret) };
 }
 
-export const PASSPHRASE_NEEDED = "The vault's passphrase is needed: it is asked each time.";
+/** The record with its link, made now from the wallet's secret when it has none. */
+const withLink = (r, secret) => (r.link ? r : { ...r, link: linkOf(secret, evmAddress(publicKey(hexToBytes(r.alias)))) });
+
+export const PASSPHRASE_NEEDED = "The wallet's passphrase is needed: it is asked each time.";
 
 /**
- * The vault opened from the passphrase for one use: fn(vault), then it is wiped, whether fn succeeds or throws. Each
- * call pays the passphrase's derivation (~0.3 s), unlocked or not, so a vault left unlocked can't show its words or
- * send funds without the passphrase (docs/design/keys.md#backup). An earlier version's vault is opened as at Unlock and
+ * The wallet opened from the passphrase for one use: fn(wallet), then it is wiped, whether fn succeeds or throws. Each
+ * call pays the passphrase's derivation (~0.3 s), unlocked or not, so a wallet left unlocked can't show its words or
+ * send funds without the passphrase (docs/design/keys.md#backup). An earlier version's wallet is opened as at Unlock and
  * not stored again here (its next Unlock does).
  */
 export async function withPassphrase(record, passphrase, fn) {
   if (typeof passphrase !== 'string' || !passphrase) throw new Error(PASSPHRASE_NEEDED);
-  const { vault } = await unlockVault(record, passphrase);
+  const { wallet } = await unlockWallet(record, passphrase);
   try {
-    return await fn(vault);
+    return await fn(wallet);
   } finally {
-    vault.lock();
+    wallet.lock();
   }
 }
 
-const BACKUP_KEYS = ['identity', 'vault', 'nostr'];
+const BACKUP_KEYS = ['alias', 'wallet', 'nostr'];
 
 /**
- * Backup, from the passphrase each time: 'identity' | 'vault' → { words, privateKey }; 'nostr' → { nsec, secret };
- * null or undefined → { identity, vault, nostr }. The identity and the Nostr key are stored unencrypted, but they are
+ * Backup, from the passphrase each time: 'alias' | 'wallet' → { words, privateKey }; 'nostr' → { nsec, secret };
+ * null or undefined → { alias, wallet, nostr }. The alias and the Nostr key are stored unencrypted, but they are
  * private keys: they are shown only to someone who knows the passphrase too.
  */
 export async function backupKeys(record, which, passphrase) {
   if (which != null && !BACKUP_KEYS.includes(which)) {
-    throw new Error("Name the key: 'identity' (the alias), 'vault' or 'nostr' (or nothing, for all three).");
+    throw new Error("Name the key: 'alias', 'wallet' or 'nostr' (or nothing, for all three).");
   }
-  return withPassphrase(record, passphrase, (vault) => {
-    const { identity, nostr } = loadKeys(record);
+  return withPassphrase(record, passphrase, (wallet) => {
+    const { alias, nostr } = loadKeys(record);
     try {
-      const all = { identity: identity.backup(), vault: vault.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };
+      const all = { alias: alias.backup(), wallet: wallet.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };
       return which == null ? all : all[which];
     } finally {
-      identity.lock();
+      alias.lock();
     }
   });
 }

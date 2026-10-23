@@ -11,13 +11,13 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 ## Steps
 
 1. ✅ **MVP**: keys, db, linear engine, local publish, basic UI.
-2. ✅ **Two keys**: identity (unencrypted) and vault (passphrase); a
+2. ✅ **Two keys**: alias (unencrypted) and wallet (passphrase); a
    Dockerized Neuron's files imported ([../design/keys.md](../design/keys.md)).
    Since step 10 in this app's own format, with no export back.
 3. ✅ **Central data flow**: register, poll, store, forecast, predictions batch, as Lite does it ([../design/central.md](../design/central.md)).
-4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence; then `bvar`, each central stream's own Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved after each poll, with history from central ([../design/engine.md](../design/engine.md)); left for later: [engine.md](engine.md).
+4. ✅ **Engine**, inspired by `../namaste_club`: `bar1`, a Bayesian AR(1) on 12 h returns faded toward persistence; then `bvar`, each central stream's own Bayesian VAR(1) with 1–3 companion streams, drawn from the alias and evolved after each poll, with history from central ([../design/engine.md](../design/engine.md)); left for later: [engine.md](engine.md).
 5. ✅ **Nostr**: the Nostr key, discover, subscribe, intake, publish `_pred`, as Lite does it ([../design/nostr.md](../design/nostr.md)); left for later: [transport.md](transport.md). A deployed app reaches central's satorian through its wss stand-in, `wss://relay.satorinet.io` ([issue](../issues/relays-not-wss.md)).
-6. ✅ **Base**: stake with this neuron, the identity's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [chain.md](chain.md). A local fork for the dev server: `scripts/fork.mjs`.
+6. ✅ **Base**: stake with this neuron, the alias's daily batch, claims (`hub.claim`, merkle, airdrop), sends, as Lite does it and the dapp in `../contract/satori-ui` goes further ([../design/base.md](../design/base.md)); left for later: [chain.md](chain.md). A local fork for the dev server: `scripts/fork.mjs`.
 7. ✅ **Finishing pass**: simpler code that follows what Lite and satorilib
    already do (one schedule, one serial line, one stub central, shared
    constants, no dead code), a Home grouped by key, and agents first
@@ -32,9 +32,9 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    Settings' defaults set at build time (`VITE_*`), the CSP from `csp.js` on
    every response ([../design/deploy.md](../design/deploy.md)).
 10. ✅ **Migrate in, never back** (owner, 2026-10-16): the keys in one record
-   of this app's own (the vault sealed with PBKDF2-SHA256 and AES-256-GCM,
+   of this app's own (the wallet sealed with PBKDF2-SHA256 and AES-256-GCM,
    any Unicode passphrase of 8 or more), a Dockerized Neuron's files
-   translated on import, every earlier profile carried forward (the vault at
+   translated on import, every earlier profile carried forward (the wallet at
    its next Unlock), Backup as words, private keys and the Nostr key, no
    Docker export; Base addresses only; central's payload and Nostr content as
    plain JS text, after an audit of what central, satorilib and Lite parse
@@ -42,9 +42,9 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    [../design/central.md](../design/central.md#the-protocol-audit),
    [../design/nostr.md](../design/nostr.md#the-protocol-audit)). Then
    central's login as EIP-191, as central and Lite now sign it; register's
-   vault check on the Base address central pays (`vault_base_address`,
+   wallet check on the Base address central pays (`wallet_address`,
    central d8a2085), so no Evrmore code is left
-   ([../design/central.md](../design/central.md#the-vault-in-registers-answer)).
+   ([../design/central.md](../design/central.md#the-wallets-link)).
 11. ✅ **Home: is it predicting, is anything broken?** (owner, 2026-10-16:
    [../intent/ui.md](../intent/ui.md), the approved
    [mockup](../design/home-mockup.html)): an activity log, one health status
@@ -69,9 +69,9 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 13. **Runtime hardening**: ✅ the catch-up pass after the device sleeps,
    and ✅ failures retried in minutes (2026-10-19,
    [runtime.md](runtime.md#catch-up-pass), [../design/central.md](../design/central.md#errors));
-   from the review of 2026-10-19 (the owner approved four more): ✅ the vault
+   from the review of 2026-10-19 (the owner approved four more): ✅ the wallet
    locks on its own, Backup and Send ask the passphrase each time, Send's
-   review ([../design/keys.md](../design/keys.md#the-vault-locks-on-its-own));
+   review ([../design/keys.md](../design/keys.md#the-wallet-locks-on-its-own));
    ✅ a first visit you can watch: Setup at once, the engine's progress, the
    last visit's Home, brotli ([../design/storage.md](../design/storage.md#the-first-visit));
    ✅ saying how it runs, Install offered on every platform
@@ -99,8 +99,8 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    Left: the keys in a worker ([runtime.md](runtime.md)).
 14. ✅ **A reward address** (owner, 2026-10-19: "in the settings or in the
    wallet"): Settings › Reward address, where the Satori Network sends the
-   rewards instead of the vault (a Base address; checked, signed in by the
-   identity, free), `rewardAddress()` and `setRewardAddress()`, noted on Home
+   rewards instead of the wallet (a Base address; checked, signed in by the
+   alias, free), `rewardAddress()` and `setRewardAddress()`, noted on Home
    ([../design/central.md](../design/central.md#the-reward-address));
    central2 runs the route's Base check (`base-upgrade` 8dcc016).
 15. **Later**, in rough order of value per effort: the Models tab showing
@@ -109,7 +109,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    ([models.md](../design/models.md#quality-against-no-change)); bounties (the predictor's side first); the gasless relay (needs a
    ruling, [issue](../issues/relayer-predict-fee.md)); own data sources. Also:
    importing a Docker neuron's keys is a move (both would predict for one
-   identity; the chain refuses a second batch per round), so Import could say
+   alias; the chain refuses a second batch per round), so Import could say
    to stop the Docker neuron.
 16. **A market of data streams** (owner, 2026-10-20:
    [../intent/network.md](../intent/network.md)): paid streams, paid per
@@ -117,24 +117,24 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    approved: [market.md](market.md) (Base payment channels compared with
    Evrmore's Spilman channels, the contract, the flow over the relays, a
    track record, the steps). The fixes to today's relay code wait on it.
-17. **Vault, alias, accounts** (owner, 2026-10-23,
-   [../design/wallets.md](../design/wallets.md)): the identity key is the
-   vault's **alias**; one app holds several accounts (a vault, its alias, its
-   own database), one active at a time; a vault can be connected from an
+17. **Wallet, alias, accounts** (owner, 2026-10-23,
+   [../design/wallets.md](../design/wallets.md)): the alias key is the
+   wallet's **alias**; one app holds several accounts (a wallet, its alias, its
+   own database), one active at a time; a wallet can be connected from an
    outside wallet. A. ✅ the words (alias; "Create a wallet"). B. several
-   accounts. C. a connected vault. Open questions at the end of the design.
+   accounts. C. a connected wallet. Open questions at the end of the design.
 
 ## Noticed while building
 
 ### Fixable (each with when it bites)
 
-- **A forgotten vault passphrase.** When the user forgets it, the neuron keeps
-  running on the identity, but the vault comes back only by restoring its 24
-  words, and Setup is the only path: Home has no "replace the vault". Fix: a
-  restore-the-vault flow on Home.
+- **A forgotten wallet passphrase.** When the user forgets it, the neuron keeps
+  running on the alias, but the wallet comes back only by restoring its 24
+  words, and Setup is the only path: Home has no "replace the wallet". Fix: a
+  restore-the-wallet flow on Home.
 - **Keys on the main thread.** When a script runs in the page (an XSS, a
-  malicious extension), it can read the identity, the Nostr key and an
-  unlocked vault. Fix: the keys and signing in a worker (step 13).
+  malicious extension), it can read the alias, the Nostr key and an
+  unlocked wallet. Fix: the keys and signing in a worker (step 13).
 - **Words that open in a standard wallet.** The 24 words are satorilib's
   scheme (the secret as BIP39 entropy), so MetaMask derives another account
   from them; Backup shows the private key for that. Whether new neurons use
@@ -147,10 +147,10 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   central the data is from and reset at start when it differs
   ([../design/deploy.md](../design/deploy.md#moving-to-the-production-central)).
 - **The token's hook starves on an estimated gas limit.** When a staked
-  vault receives SATORI (any claim, any transfer to it) in a transaction sent
+  wallet receives SATORI (any claim, any transfer to it) in a transaction sent
   with `eth_estimateGas`'s limit, the token's try/catch hook fails silently
-  and the vault can never unstake (Panic 0x11); anyone can do it to any
-  staked vault with 1 wei. The app pads its own writes by 500,000 gas,
+  and the wallet can never unstake (Panic 0x11); anyone can do it to any
+  staked wallet with 1 wei. The app pads its own writes by 500,000 gas,
   which protects only those. Fixed in the contracts (`humble` 86e2bdb3),
   live once D7 deploys; until then the app offers staking as advice with the
   risk said and detects a stake out of sync
@@ -158,7 +158,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 - ~~Every browser neuron votes DOWN on Base for now.~~ Resolved 2026-10-19:
   a tie (a forecast equal to the latest value) follows the stream's last
   move, and only a flat history is DOWN
-  ([../design/base.md](../design/base.md#the-daily-batch-the-identity-on-its-own)).
+  ([../design/base.md](../design/base.md#the-daily-batch-the-alias-on-its-own)).
   The seeded slope rule stays parked ([engine.md](engine.md)).
 - **`StaleValue` every other round.** When a daily stream is written later in
   hour 0 than the 00:01 batch, the contract (which compares clock hours)
@@ -180,7 +180,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 - A relay keeps one of two replaceable events with the same `created_at`
   (NIP-01): two `_pred` of one stream in one second lose one, as in Lite
   ([../design/nostr.md](../design/nostr.md#inherent-as-in-lite)).
-- A vault's staking share of the identity's wins shows on the lens only
+- A wallet's staking share of the alias's wins shows on the lens only
   after its loyalty builds (on the fork: 9 rounds after staking, with the
   default stream moving), so the first rounds' Claim finds 0 on-chain rewards.
 - On a fork moved ahead in time the Base card's times are the chain's (days

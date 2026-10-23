@@ -23,7 +23,7 @@ const ME = 'dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4';
 const ME_PUB = nostrPubkey(ME);
 const PROV = '3'.repeat(63) + '1';
 const PROV_PUB = nostrPubkey(PROV);
-const WALLET = '02' + 'ab'.repeat(32);
+const ALIAS = '02' + 'ab'.repeat(32);
 const CENTRAL_RELAY = 'ws://satorian.test:7777';
 const USER_RELAY = 'ws://localhost:7778';
 let clock;
@@ -102,7 +102,7 @@ async function boot({ https = false, ws = true, centralWrite = false, user = [US
   changes = 0;
   published = [];
   failures = [];
-  nostr = createNostr({ db: dbOf(db), key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+  nostr = createNostr({ db: dbOf(db), key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => central,
     makeRelay: relays.make, now, https, ws, defaults: { relays: user, centralWrite, wss }, onChange: () => changes++,
     onPublished: (n) => published.push(n), onError: (err) => failures.push(err.message),
     setInterval: () => 0, clearInterval: () => {}, openWaitMs: 0, ...extra });
@@ -156,7 +156,7 @@ describe('relays', () => {
     db = await memoryDb();
     central = fakeCentral();
     central.relayConfig = vi.fn(async () => { throw new Error('down'); });
-    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => central,
       makeRelay: fakeRelays().make, now, defaults: { relays: [], centralWrite: false }, setInterval: () => 0 });
     await nostr.start();
     expect((await nostr.status()).maxStreams).toBe(MAX_STREAMS);
@@ -256,7 +256,7 @@ describe("a relay's wss stand-in (docs/design/nostr.md#relays-and-the-read-only-
 describe('catch-up after the device sleeps (docs/plans/runtime.md#catch-up-pass)', () => {
   test('a relay whose reconnect is due connects now; the hourly pass runs once an hour has gone by; nothing before start', async () => {
     db = await memoryDb();
-    const idle = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => fakeCentral(), makeRelay: fakeRelays().make,
+    const idle = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => fakeCentral(), makeRelay: fakeRelays().make,
       now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0 });
     expect(idle.catchUp()).toBeNull(); // not started
     await boot();
@@ -332,7 +332,7 @@ describe('discover', () => {
     central = fakeCentral();
     const seen = [];
     const work = createWork({ onChange: () => { const e = work.current(); if (e) seen.push([e.task, e.step, e.done, e.total].filter((x) => x != null).join(' ')); } });
-    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => central,
       makeRelay: relays.make, now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0, clearInterval: () => {},
       openWaitMs: 0, work });
     await nostr.start();
@@ -351,7 +351,7 @@ describe('discover', () => {
   test('no relay open: an error (right after a load it waits for the first one)', async () => {
     await boot();
     await expect(nostr.discover()).rejects.toThrow(/No relay is connected/);
-    const later = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+    const later = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => central,
       makeRelay: relays.make, now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0, openWaitMs: 5000 });
     await later.start();
     relays.get(CENTRAL_RELAY).stored.push(announce('late'));
@@ -383,7 +383,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(u.published[0].tags).toEqual([['d', 'btc'], ['p', PROV_PUB], ['stream', 'btc'], ['satori', 'subscription']]);
     const meta = JSON.parse(u.published[1].content);
     expect(meta).toMatchObject({ stream_name: 'btc_pred', nostr_pubkey: ME_PUB, name: 'Predictions for BTC', cadence_seconds: 900,
-      created_at: clock, metadata: { source_stream_name: 'btc', source_provider_pubkey: PROV_PUB, wallet_pubkey: WALLET } });
+      created_at: clock, metadata: { source_stream_name: 'btc', source_provider_pubkey: PROV_PUB, alias_pubkey: ALIAS } });
     for (const r of relays.all.values()) {
       expect(r.subs.get(FOLLOW_ID)).toEqual([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc'] }]);
     }
@@ -736,7 +736,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(await db.get('nostr_central_relays')).toEqual([CENTRAL_RELAY]);
     nostr.stop();
     central.fail = true;
-    const again = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+    const again = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => central,
       makeRelay: relays.make, now, defaults: { relays: [], centralWrite: false }, setInterval: () => 0, openWaitMs: 0 });
     await again.start();
     expect((await again.status()).relays.map((r) => [r.url, r.from])).toEqual([[CENTRAL_RELAY, ['central']]]);
@@ -751,7 +751,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(u.published).toEqual([]);
     expect((await db.get('nostr_outbox')).map((x) => [x.url, x.event.kind])).toEqual([[USER_RELAY, 34602], [USER_RELAY, 34600]]);
     nostr.stop(); // a reload
-    const again = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+    const again = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => central,
       makeRelay: relays.make, now, defaults: { relays: [USER_RELAY], centralWrite: false }, setInterval: () => 0, openWaitMs: 0 });
     await again.start();
     relays.get(USER_RELAY).open();
@@ -767,7 +767,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
   /** A predictor's `<stream>_pred` announcement, naming PROV's stream as its source (as Lite's predMetadata). */
   const predAnnounce = (stream, o = {}, at = clock - 50, secret = P) => signEvent(announceEvent({ stream_name: `${stream}_pred`,
     nostr_pubkey: nostrPubkey(secret), name: `Predictions for ${stream.toUpperCase()}`, cadence_seconds: o.cadence ?? 900,
-    metadata: { source_stream_name: stream, source_provider_pubkey: PROV_PUB, wallet_pubkey: '02ab' } }, at), secret);
+    metadata: { source_stream_name: stream, source_provider_pubkey: PROV_PUB, alias_pubkey: '02ab' } }, at), secret);
   const predict = (stream, value, seq, timestamp = clock, secret = P) =>
     signEvent(observationEvent({ stream: `${stream}_pred`, value, seq, timestamp, now: timestamp }), secret);
   const byAuthor = (fs) => [...fs].sort((a, b) => (a.authors[0] < b.authors[0] ? -1 : 1));
@@ -1070,7 +1070,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     central = fakeCentral();
     const seen = [];
     const work = createWork({ onChange: () => { const e = work.of('watch'); if (e) seen.push(`${e.step} ${e.done} ${e.total}`); } });
-    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, walletPubkey: WALLET, central: () => central,
+    nostr = createNostr({ db, key: { secret: ME, pubkey: ME_PUB }, aliasPubkey: ALIAS, central: () => central,
       makeRelay: relays.make, now, defaults: { relays: [], centralWrite: false }, setInterval: () => 0, clearInterval: () => {},
       openWaitMs: 0, work });
     await nostr.start();
@@ -1088,13 +1088,13 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     return { evmAddress: evmAddress(publicKey(secret)), signDigest: (h) => signDigest(secret, h) };
   };
   const ID = signer('11'.repeat(32)); // ours
-  const VAULT = signer('44'.repeat(32));
+  const WALLET = signer('44'.repeat(32));
   const OTHER_ID = signer('22'.repeat(32)); // the other side's
-  const OTHER_VAULT = signer('55'.repeat(32));
+  const OTHER_WALLET = signer('55'.repeat(32));
   const OTHER = '8'.repeat(64); // the other side's Nostr key
   const OTHER_PUB = nostrPubkey(OTHER);
   let chainApi;
-  const market = (o = {}) => ({ extra: { identity: ID, vaultAddress: VAULT.evmAddress, vault: () => VAULT,
+  const market = (o = {}) => ({ extra: { alias: ID, walletAddress: WALLET.evmAddress, wallet: () => WALLET,
     chain: async () => ({ channels: chainApi, config: DEFAULTS, chainTime: async () => clock }) }, ...o });
   const tagOf = (e, n) => e.tags.find((t) => t[0] === n)?.[1];
   beforeEach(() => { chainApi = fakeChannels(() => clock); });
@@ -1115,15 +1115,15 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     await settle();
     const [ann] = u.published;
     expect(JSON.parse(ann.content)).toMatchObject({ stream_name: 'btc_pred', encrypted: true, price_per_obs: 100000, metadata: { market: {
-      chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: VAULT.evmAddress } } }); // 0.001 SATORI: 100,000 satoshis
+      chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: WALLET.evmAddress } } }); // 0.001 SATORI: 100,000 satoshis
     expect(JSON.parse(ann.content).metadata.market).not.toHaveProperty('price'); // one price
     await u.deliver(observe('btc', '100', 1));
     await settle();
     const hb = u.published.filter((e) => e.kind === 34601);
     expect(hb.map((e) => [e.content, tagOf(e, 'd'), tagOf(e, 'satori')])).toEqual([['', 'btc_pred', 'heartbeat']]); // no value in public
 
-    // a buyer: its channel to our vault, signed for by its identity, bound to its Nostr key
-    const { id } = await chainApi.openChannel({ vault: OTHER_VAULT, identity: OTHER_ID, payee: VAULT.evmAddress, deposit: 5n * 10n ** 15n });
+    // a buyer: its channel to our wallet, signed for by its alias, bound to its Nostr key
+    const { id } = await chainApi.openChannel({ wallet: OTHER_WALLET, alias: OTHER_ID, payee: WALLET.evmAddress, deposit: 5n * 10n ** 15n });
     await u.deliver(signEvent(subscriptionEvent({ stream: 'btc_pred', provider: ME_PUB, subscriber: OTHER_PUB, now: clock,
       paymentChannel: { chain: 84532, contract: DEFAULTS.channels, id, binding: signBinding(OTHER_ID, id, OTHER_PUB) } }), OTHER));
     await settle();
@@ -1151,12 +1151,12 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     expect(u.published.filter((e) => e.kind === 34601).map((e) => [JSON.parse(e.content).seq_num, tagOf(e, 'p') ?? null])).toEqual([[3, null]]);
   });
 
-  test('buy: a listed stream, its channel opened from the vault, the 34602; each delivery decrypted, kept as a watched stream, paid', async () => {
+  test('buy: a listed stream, its channel opened from the wallet, the 34602; each delivery decrypted, kept as a watched stream, paid', async () => {
     await boot(market());
     const c = relays.get(CENTRAL_RELAY);
-    const listing = { price_per_obs: 100000, market: { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: OTHER_VAULT.evmAddress } };
+    const listing = { price_per_obs: 100000, market: { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: OTHER_WALLET.evmAddress } };
     c.stored.push(announce('btc'), signEvent(announceEvent(predMetadata({ sub: { stream_name: 'btc', provider_pubkey: PROV_PUB, name: 'BTC',
-      cadence_seconds: 900, pred_created_at: 1 }, pubkey: OTHER_PUB, walletPubkey: '02ab', listing }), clock - 10), OTHER));
+      cadence_seconds: 900, pred_created_at: 1 }, pubkey: OTHER_PUB, aliasPubkey: '02ab', listing }), clock - 10), OTHER));
     openAll();
     await settle();
     const u = relays.get(USER_RELAY);
@@ -1165,7 +1165,7 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     u.published = [];
     const v = await nostr.buy(OTHER_PUB, 'btc_pred', '0.005');
     expect(v).toMatchObject({ pubkey: OTHER_PUB, stream: 'btc_pred', price: '0.001', deposit: '0.005', paid: '0', status: 'open' });
-    expect(chainApi.map.get(v.channel)).toMatchObject({ payer: VAULT.evmAddress, payee: OTHER_VAULT.evmAddress, signer: ID.evmAddress });
+    expect(chainApi.map.get(v.channel)).toMatchObject({ payer: WALLET.evmAddress, payee: OTHER_WALLET.evmAddress, signer: ID.evmAddress });
     await settle();
     const sub = u.published.find((e) => e.kind === 34602);
     expect(JSON.parse(sub.content).payment_channel).toMatchObject({ id: v.channel });
@@ -1184,7 +1184,7 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     expect(JSON.parse(await nip04Decrypt(OTHER, ME_PUB, pay.content)).voucher).toMatchObject({ channel: v.channel, cumulative: '1000000000000000' });
     expect((await nostr.status()).market.bought).toMatchObject([{ channel: v.channel, paid: '0.001', left: '0.004', received: 1 }]);
 
-    // stop: the close asked by the identity, Lite's unsubscribe; no longer followed
+    // stop: the close asked by the alias, Lite's unsubscribe; no longer followed
     u.published = [];
     expect(await nostr.stopBuying(OTHER_PUB, 'btc_pred')).toMatchObject({ status: 'closing' });
     await settle();

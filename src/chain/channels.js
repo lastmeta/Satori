@@ -1,15 +1,15 @@
 // Payment channels on Base (docs/design/market.md#the-chain-client): PaymentChannels
 // (contract/satori/contracts/channels/PaymentChannels.sol), the same address on every chain (config.js
-// PAYMENT_CHANNELS). The vault funds a channel and tops it up (Unlock); the identity signs its vouchers, asks to close
-// and withdraws (the refund goes to the vault, the payer); a seller's identity settles into the seller's vault. The
+// PAYMENT_CHANNELS). The wallet funds a channel and tops it up (Unlock); the alias signs its vouchers, asks to close
+// and withdraws (the refund goes to the wallet, the payer); a seller's alias settles into the seller's wallet. The
 // writes go through the chain's own write (index.js): simulated first, one at a time with the batch, padded, under
 // the max fee. No UI, no database, no Nostr.
 //
 //   const channels = createChannels({ chain, config })
-//   await channels.openChannel({ vault, identity, payee, deposit }) → { id, hash, receipt, permit }
-//   await signVoucher(identity, { chainId, channelId, cumulative }) / verifyVoucher({ …, signature, signer })
-//   await channels.settleMany(identity, [{ id, cumulative, signature }]) → { hash, receipt, settled, skipped }
-//   await channels.requestClose(identity, id) … CLOSE_GRACE_S … channels.withdraw(identity, id)
+//   await channels.openChannel({ wallet, alias, payee, deposit }) → { id, hash, receipt, permit }
+//   await signVoucher(alias, { chainId, channelId, cumulative }) / verifyVoucher({ …, signature, signer })
+//   await channels.settleMany(alias, [{ id, cumulative, signature }]) → { hash, receipt, settled, skipped }
+//   await channels.requestClose(alias, id) … CLOSE_GRACE_S … channels.withdraw(alias, id)
 import {
   domainSeparator, encodeAbiParameters, hashTypedData, keccak256, parseEventLogs, parseSignature, recoverTypedDataAddress,
   toHex, zeroAddress,
@@ -21,7 +21,7 @@ import { FeeCeilingError, HOOK_GAS, errorText, fmtUtc, revertName, same, toAccou
 export const CLOSE_GRACE_S = 7 * 86400; // CLOSE_GRACE_PERIOD: requestClose → withdraw
 export const MAX_AMOUNT = 2n ** 96n - 1n; // amounts are uint96 wei
 /**
- * Gas per payment in a settleMany, over HOOK_GAS: each payment into a staked vault runs the token's delegation hook
+ * Gas per payment in a settleMany, over HOOK_GAS: each payment into a staked wallet runs the token's delegation hook
  * (measured on the fork: about 100,000 the first time, 70,000 after; docs/design/market.md), and a starved hook is skipped silently on
  * D6 (docs/issues/token-hook-gas-estimate.md). Unused gas is not charged.
  */
@@ -49,16 +49,16 @@ const PLAIN = {
   UnknownChannel: 'There is no such channel.',
   ChannelClosed: 'The channel is closed.',
   NotPayee: "Only the seller (the channel's payee) can do that.",
-  NotPayer: 'Only the vault that funded the channel can do that.',
-  NotPayerOrSigner: "Only the channel's vault or alias can do that.",
+  NotPayer: 'Only the wallet that funded the channel can do that.',
+  NotPayerOrSigner: "Only the channel's wallet or alias can do that.",
   BadSignature: "The voucher's signature isn't the channel's signer's.",
   NothingToSettle: 'Nothing new to settle: the voucher pays no more than is already paid.',
   CloseNotRequested: 'No close was asked for this channel.',
   CloseNotReady: "The 7-day grace period after the close request hasn't ended yet.",
   UnsupportedToken: "The token takes a fee on transfer, which channels can't hold.",
   SafeERC20FailedOperation: 'The token refused the transfer.',
-  Locked: "The vault's SATORI can't be sent now: it is staked, or it predicted by hand this round or the last.",
-  ERC20InsufficientBalance: 'Not enough SATORI in the vault.',
+  Locked: "The wallet's SATORI can't be sent now: it is staked, or it predicted by hand this round or the last.",
+  ERC20InsufficientBalance: 'Not enough SATORI in the wallet.',
   ERC20InsufficientAllowance: "The channel contract wasn't allowed to take the deposit.",
   HookFailedWithoutReason: 'The transaction ran out of gas; try again.',
 };
@@ -96,7 +96,7 @@ export function voucherTypedData({ chainId, channelId, cumulative, contract = DE
 /** Its digest: the contract's voucherDigest(channelId, cumulative). */
 export const voucherDigest = (v) => hashTypedData(voucherTypedData(v));
 
-/** A voucher signed by `key` (the identity's signer, inside it; a viem account; a 0x key): 65 bytes, hex. No Unlock. */
+/** A voucher signed by `key` (the alias's signer, inside it; a viem account; a 0x key): 65 bytes, hex. No Unlock. */
 export const signVoucher = (key, v) => toAccount(key).signTypedData(voucherTypedData(v));
 
 /** What OpenZeppelin 5's ECDSA.tryRecover(hash, bytes) accepts: 65 bytes, v 27 or 28, 0 < r < n, 0 < s ≤ n/2. */
@@ -135,19 +135,19 @@ export function settledOf(receipt, contract = DEFAULTS.channels) {
     .map(({ args: a }) => ({ id: a.channelId, cumulative: a.cumulativeAmount, paid: a.paid, settled: a.settled }));
 }
 
-/** SATORI's transfer lock, said before anything is signed or sent (a funded channel needs SATORI the vault can send). */
+/** SATORI's transfer lock, said before anything is signed or sent (a funded channel needs SATORI the wallet can send). */
 function lockError(lock) {
   if (!lock.locked) return null;
-  const why = lock.indefinite ? "Your vault is staked with this app, so it can't send SATORI"
-    : `Your vault's SATORI can't be sent until ${fmtUtc(lock.freeAt)} (round ${lock.untilRound + 1})`;
-  return new ChannelError(`${why}: a channel needs SATORI the vault can send.`, { reason: 'Locked' });
+  const why = lock.indefinite ? "Your wallet is staked with this app, so it can't send SATORI"
+    : `Your wallet's SATORI can't be sent until ${fmtUtc(lock.freeAt)} (round ${lock.untilRound + 1})`;
+  return new ChannelError(`${why}: a channel needs SATORI the wallet can send.`, { reason: 'Locked' });
 }
 
 const addressOf = (key) => (typeof key === 'string' && key.length === 42 ? key : key?.evmAddress ?? toAccount(key).address);
-/** The vault's writes need it unlocked (its signer wipes the key at Lock). */
-function unlocked(vault) {
-  if (vault?.locked) throw new ChannelError('The vault is locked: Unlock it first.', { reason: 'VaultLocked' });
-  return toAccount(vault);
+/** The wallet's writes need it unlocked (its signer wipes the key at Lock). */
+function unlocked(wallet) {
+  if (wallet?.locked) throw new ChannelError('The wallet is locked: Unlock it first.', { reason: 'WalletLocked' });
+  return toAccount(wallet);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -164,11 +164,11 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
   const satori = (functionName, args = []) => ({ address: config.token, abi: tokenAbi, functionName, args });
   const run = (fn) => async (...args) => { try { return await fn(...args); } catch (err) { throw plain(err); } };
 
-  /** SATORI only: transferLockedUntil(vault) vs the round (the token's rule, index.js transferLock). */
-  async function checkLock(vault, token) {
+  /** SATORI only: transferLockedUntil(wallet) vs the round (the token's rule, index.js transferLock). */
+  async function checkLock(wallet, token) {
     if (!same(token, config.token)) return;
     const [lockedUntil, round] = await client.multicall({ allowFailure: false,
-      contracts: [satori('transferLockedUntil', [vault]), satori('getCurrentRound')] });
+      contracts: [satori('transferLockedUntil', [wallet]), satori('getCurrentRound')] });
     const err = lockError(transferLock(Number(lockedUntil), Number(round)));
     if (err) throw err;
   }
@@ -222,14 +222,14 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
     readChannel: run(readChannel),
 
     /**
-     * The vault opens a channel to `payee` (the seller's vault) with `deposit` of `token` (SATORI by default): payer = the
-     * vault, signer = the identity. One openWithPermit; a token without a permit: approve, then open. SATORI's transfer
+     * The wallet opens a channel to `payee` (the seller's wallet) with `deposit` of `token` (SATORI by default): payer = the
+     * wallet, signer = the alias. One openWithPermit; a token without a permit: approve, then open. SATORI's transfer
      * lock is checked first. opts: as index.js's writes (onSent). → { id, hash, receipt, permit, approve? }
      */
-    openChannel: run(async ({ vault, identity, payee, deposit, token = config.token, salt = newSalt() }, opts = {}) => {
+    openChannel: run(async ({ wallet, alias, payee, deposit, token = config.token, salt = newSalt() }, opts = {}) => {
       amountOf(deposit, 'The deposit', { positive: true });
-      const account = unlocked(vault);
-      const [payer, signer] = [account.address, addressOf(identity)];
+      const account = unlocked(wallet);
+      const [payer, signer] = [account.address, addressOf(alias)];
       const id = channelIdOf({ payer, payee, token, signer, salt });
       await checkLock(payer, token);
       const permit = await permitFor(account, token, deposit);
@@ -243,10 +243,10 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
       return { id, hash, receipt, permit: false, ...(approve && { approve }) };
     }),
 
-    /** The vault adds `amount` (the contract has no permit form: approve first when short). → { hash, receipt, approve? } */
-    topUp: run(async (vault, id, amount, opts = {}) => {
+    /** The wallet adds `amount` (the contract has no permit form: approve first when short). → { hash, receipt, approve? } */
+    topUp: run(async (wallet, id, amount, opts = {}) => {
       amountOf(amount, 'The amount', { positive: true });
-      const account = unlocked(vault);
+      const account = unlocked(wallet);
       const c = await readChannel(id);
       if (!c) throw new ChannelError(PLAIN.UnknownChannel, { reason: 'UnknownChannel' });
       if (c.closed) throw new ChannelError(PLAIN.ChannelClosed, { reason: 'ChannelClosed' });
@@ -255,25 +255,25 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
       return { ...await write(account, ch('topUp', [id, amount]), opts), ...(approve && { approve }) };
     }),
 
-    /** The identity (or the vault) starts the 7-day grace period; asking again doesn't restart it. */
-    requestClose: run((identity, id, opts) => write(identity, ch('requestClose', [id]), opts)),
-    /** The vault takes its close request back (only the payer may; it moves no tokens, so a staked vault can). */
-    cancelClose: run((vault, id, opts) => write(unlocked(vault), ch('cancelClose', [id]), opts)),
-    /** After the grace period, the identity (or the vault) sends what was not settled back to the vault. */
-    withdraw: run((identity, id, opts) => write(identity, ch('withdraw', [id]), opts)),
+    /** The alias (or the wallet) starts the 7-day grace period; asking again doesn't restart it. */
+    requestClose: run((alias, id, opts) => write(alias, ch('requestClose', [id]), opts)),
+    /** The wallet takes its close request back (only the payer may; it moves no tokens, so a staked wallet can). */
+    cancelClose: run((wallet, id, opts) => write(unlocked(wallet), ch('cancelClose', [id]), opts)),
+    /** After the grace period, the alias (or the wallet) sends what was not settled back to the wallet. */
+    withdraw: run((alias, id, opts) => write(alias, ch('withdraw', [id]), opts)),
 
-    /** The seller's identity settles one voucher into the payee. → { hash, receipt, settled } */
-    settle: run(async (identity, id, cumulative, signature, opts) => {
-      const r = await write(identity, ch('settle', [id, amountOf(cumulative), signature]), opts);
+    /** The seller's alias settles one voucher into the payee. → { hash, receipt, settled } */
+    settle: run(async (alias, id, cumulative, signature, opts) => {
+      const r = await write(alias, ch('settle', [id, amountOf(cumulative), signature]), opts);
       return { ...r, settled: settledOf(r.receipt, at) };
     }),
 
     /**
-     * The seller's identity settles many vouchers in one transaction ([{ id, cumulative, signature }]), only those that
+     * The seller's alias settles many vouchers in one transaction ([{ id, cumulative, signature }]), only those that
      * would pay: the rest come back in `skipped` ({ id, reason: 'unknown' | 'closed' | 'nothing-due' | 'bad-signature' }),
      * and with none left nothing is sent. Padded per payment (PAYMENT_GAS). → { hash, receipt, settled, skipped }
      */
-    settleMany: run(async (identity, entries, opts = {}) => {
+    settleMany: run(async (alias, entries, opts = {}) => {
       entries.forEach((e) => amountOf(e.cumulative));
       const held = entries.length
         ? await client.multicall({ allowFailure: false, contracts: entries.map((e) => ch('getChannel', [e.id])) }) : [];
@@ -288,7 +288,7 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
         else keep.push(e);
       }
       if (!keep.length) return { hash: null, receipt: null, settled: [], skipped };
-      const r = await write(identity, ch('settleMany', [keep.map((e) => e.id), keep.map((e) => e.cumulative), keep.map((e) => e.signature)]),
+      const r = await write(alias, ch('settleMany', [keep.map((e) => e.id), keep.map((e) => e.cumulative), keep.map((e) => e.signature)]),
         { ...opts, pad: HOOK_GAS + BigInt(keep.length) * PAYMENT_GAS });
       return { ...r, settled: settledOf(r.receipt, at), skipped };
     }),

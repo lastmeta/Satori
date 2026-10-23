@@ -4,21 +4,21 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   `meta` rows), made by that version's own code: the step-1 sealed key,
   `wallet.yaml`/`vault.yaml` with the passphrase as UTF-8 and as Latin-1
   bytes, with and without `nostr.yaml`, Docker imports (kept as given, an old
-  vault re-written, a plain-text vault, one with no plain `publicKey`), and a
+  wallet re-written, a plain-text wallet, one with no plain `publicKey`), and a
   setup cut off. `scripts/profile_fixtures.mjs` (run on each commit's `src`;
   the commands are in the script). For the forward migration.
-- `identity-parity.json`: made from satorilib (the Docker neuron's code) by
-  `scripts/identity_fixtures.py` on branch `draft/v1-full`: words, pubkey,
-  Base address, `wallet.yaml`; current and old vaults with their password
+- `alias-parity.json`: made from satorilib (the Docker neuron's code) by
+  `scripts/alias_fixtures.py` on branch `draft/v1-full`: words, pubkey,
+  Base address, `wallet.yaml`; current and old wallets with their password
   and a wrong one; a mismatched file; a Nostr key (for step 5). Fields only
   the app's former Evrmore code used were dropped with it (2026-10-16/17).
-- `identity-js.json`: a `wallet.yaml` and a `vault.yaml` made by this JS
+- `alias-js.json`: a `wallet.yaml` and a `vault.yaml` made by this JS
   code (earlier versions wrote Docker's format), which satorilib accepted
-  (`scripts/identity_crossverify.py` on `draft/v1-full`).
+  (`scripts/alias_crossverify.py` on `draft/v1-full`).
 - `satorilib-edges.json`: edge cases from satorilib's own code
   (`scripts/satorilib_edges.py`, run against the satorilib source with
-  Docker's package versions): a vault whose password is Latin-1 (pycryptodome
-  turns a str password into Latin-1 bytes), the plain-text vault satorilib
+  Docker's package versions): a wallet whose password is Latin-1 (pycryptodome
+  turns a str password into Latin-1 bytes), the plain-text wallet satorilib
   saves when the password is outside Latin-1.
 - `engine-parity.json`: 10 series and what namaste_club's own code makes of
   them (lag 1, one stream, no time features): φ, the first lag, g1/g2, the

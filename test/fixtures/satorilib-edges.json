@@ -9,7 +9,7 @@
    "PyYAML": "6.0.3"
   }
  },
- "latin1Vault": {
+ "latin1Wallet": {
   "password": "pässwörd",
   "entropy": "gNEzTQ2R3RB/zVOjibXhK7UHUg+xZquD79/dGq2UXeQ=",
   "yaml": "entropy: OCNpJh0GDcqSNBtObIHxoWvVB3D0ikxGbSYCeE+CThciGqdbkrmSQets5fE9VmR57BsnUJ5VazAl12GezQOGyT1vcKRwnhlnqhIQByhaPy8=\nevr:\n  address: Eg8Js3e4KECxjXBBPjMdDoJ7fuqgoWciEP\nprivateKey: zrQW/dFrNyOhiom+bCaJNlCIfkMiX7EtOWPTCmfOt4/UNsAP2+S9jQieVeLMbGMzcrGQK12BEpbBKrVjwEu1zaReD/bYyZNtWapDP4cp6xlN2PLaWrsQC8LL9jQBvfLs\npublicKey: 034680d65a7c963f0f9da856f94e1a30e45a8039d5a98051631b278b127589f302\nscripthash: a9be9ad11764c843a3acf684aa3f132d7fe251195be72940d2a9fde267a16977\nwords: DTbz8v4uWpfxaQJ+GOBTUaG8SchBhIzyGO0NG3iLSP9v9Aoe/aAbU5IRErX6gHYbUVRYoc8uVVC9cBkjwarpR4FGqPEqFNCptnBhqZY4IEQf9Ni85+lyHfUClykMi2VCCDGMa/5qbqSDaASSl/rJrdh8/fa81VBpnMKra2L+Kr0MwVJ31qR6i4kFc7P5yXPJdpxn0E1oDzZXUWnm8wDkzW0A7XiTApABlZFEYP9GcketigVf+Ud4EI52D5e7AzFe\n"

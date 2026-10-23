@@ -9,7 +9,7 @@ import { fakeSatori } from '../test/fake-satori.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
-const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
 const v = fx.vectors[2];
 const PASS = 'correct horse battery';
 const H = 3600;
@@ -29,7 +29,6 @@ function streams(stub, t = nowS() - 60) {
 async function setup(context) {
   const chain = fakeSatori({ round: Math.floor(nowS() / 86400), hour: 9 });
   const central = await stubCentral(context, { rpc: chain.rpc });
-  central.vaults[v.pubkey] = v.ethAddress; // central pays this vault: no mismatch
   return central;
 }
 
@@ -100,7 +99,7 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(RECORD);
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
 
   // working: regular green; the one animation on the screen is the hero's ring
   // a phone: every step begins "Keep Satori open · " (a phone stops a tab as soon as it leaves the screen)
@@ -173,7 +172,7 @@ test('a theme change during the fade to sky shows at once: the hero stays readab
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: 'light' });
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
 
@@ -209,7 +208,7 @@ test('reduced motion: nothing turns; a still working mark, and the words change'
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const release = central.hold(); // the poll's observations batch, held
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   await expect(line(page)).toHaveText("Fetching today's observations…", { timeout: LOAD_TIMEOUT }); // a computer: the words alone
   await expect(hero(page)).toHaveAttribute('data-work', 'central:observations');
   expect(await animations(page)).toEqual([]);
@@ -224,7 +223,7 @@ test('reduced motion: nothing turns; a still working mark, and the words change'
 test('the backup reminder is advice: a new neuron with random keys and storage not kept stays green, the Back up card under it', async ({ context, page }) => {
   test.setTimeout(240_000);
   const central = await setup(context);
-  central.noVaultBase = true; // random keys: central says nothing of the vault (as prod on main), so no mismatch
+  central.noWalletAddress = true; // random keys: central says nothing of the wallet (as prod on main), so no mismatch
   streams(central);
   const send = central.hold('submit');
   await page.addInitScript(() => { StorageManager.prototype.persisted = async () => false; StorageManager.prototype.persist = async () => false; });

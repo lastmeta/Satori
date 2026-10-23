@@ -1,4 +1,4 @@
-// Central's login signature: EIP-191 personal_sign by the identity, as central
+// Central's login signature: EIP-191 personal_sign by the alias, as central
 // verifies it (central base-upgrade f4d72f5, src/utils/auth.py
 // verify_wallet_signature) and Satori Lite signs it (satorilib 5028913).
 // Checked against central's own vector and, independently, with viem.
@@ -50,7 +50,7 @@ describe('login against a central that checks EIP-191 itself (viem verifyMessage
   const BASE = 'https://central.test';
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-  /** challenge → login (EIP-191 by the wallet-pubkey's address, else 401) → the batch, with the token. */
+  /** challenge → login (EIP-191 by the alias-pubkey's address, else 401) → the batch, with the token. */
   function centralChecking() {
     const logins = [];
     const fetch = vi.fn(async (url, { method = 'GET', headers = {} } = {}) => {
@@ -58,7 +58,7 @@ describe('login against a central that checks EIP-191 itself (viem verifyMessage
       if (path === 'GET /api/v1/auth/challenge') return json(200, { challenge: 'b1e5c0de-challenge' });
       if (path === 'POST /api/v1/auth/login') {
         const ok = /^0x[0-9a-fA-F]{130}$/.test(headers.signature) && await verifyMessage({
-          address: addressOf(headers['wallet-pubkey']), message: headers.message, signature: headers.signature,
+          address: addressOf(headers['alias-pubkey']), message: headers.message, signature: headers.signature,
         }).catch(() => false); // recovers no key: central answers 401 too
         logins.push({ ...headers, ok });
         return ok ? json(200, { access_token: 'jwt', expires_in: 3600 }) : json(401, { detail: 'Invalid signature' });
@@ -68,26 +68,26 @@ describe('login against a central that checks EIP-191 itself (viem verifyMessage
     });
     return { fetch, logins };
   }
-  // The identity as the app holds it: the record's plain-text key, through loadKeys (the vault is not opened).
-  const identity = loadKeys({ v: 1, identity: V.key.slice(2), nostr: '11'.repeat(32),
-    vault: { pubkey: publicKey(new Uint8Array(32).fill(2)), data: '' } }).identity;
+  // The alias as the app holds it: the record's plain-text key, through loadKeys (the wallet is not opened).
+  const alias = loadKeys({ v: 1, alias: V.key.slice(2), nostr: '11'.repeat(32),
+    wallet: { pubkey: publicKey(new Uint8Array(32).fill(2)), data: '' } }).alias;
 
-  test("the app's identity logs in and its batch is taken", async () => {
+  test("the app's alias logs in and its batch is taken", async () => {
     const { fetch, logins } = centralChecking();
-    const central = createCentral({ url: BASE, fetch, identity, version: '0.1.0' });
+    const central = createCentral({ url: BASE, fetch, alias, version: '0.1.0' });
     expect(await central.submitPredictions([{ stream_uuid: 'u' }])).toEqual({ successful: 1 });
-    expect(logins).toEqual([{ 'wallet-pubkey': V.pubkey, message: 'b1e5c0de-challenge',
+    expect(logins).toEqual([{ 'alias-pubkey': V.pubkey, message: 'b1e5c0de-challenge',
       signature: loginSignature(hexToBytes(V.key), 'b1e5c0de-challenge'), ok: true }]);
   });
 
   test('a tampered signature, or another key\'s, is refused (401)', async () => {
-    const sig = identity.signCentralLogin('b1e5c0de-challenge');
+    const sig = alias.signCentralLogin('b1e5c0de-challenge');
     for (const signCentralLogin of [
       () => `${sig.slice(0, 10)}${sig[10] === '0' ? '1' : '0'}${sig.slice(11)}`,
       () => loginSignature(new Uint8Array(32).fill(3), 'b1e5c0de-challenge'),
     ]) {
       const { fetch, logins } = centralChecking();
-      const central = createCentral({ url: BASE, fetch, identity: { pubkey: V.pubkey, signCentralLogin }, version: '0.1.0' });
+      const central = createCentral({ url: BASE, fetch, alias: { pubkey: V.pubkey, signCentralLogin }, version: '0.1.0' });
       await expect(central.submitPredictions([])).rejects.toMatchObject({ status: 401, detail: 'Invalid signature' });
       expect(logins.map((l) => l.ok)).toEqual([false]);
     }

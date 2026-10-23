@@ -95,9 +95,9 @@ test.describe.serial('a build, in a browser profile', () => {
     await expect(page.locator('#settings-device [data-test=install-hint]')).toHaveText('Keeps your keys, and runs in its own window.');
 
     // Home offers Install as advice, once (not only after "Was asleep"): Install, or Not now, kept on this device
-    stub.noVaultBase = true; // a central that does not say whom it pays: no mismatch's card before it
+    stub.noWalletAddress = true; // a central that does not say whom it pays: no mismatch's card before it
     await page.evaluate(() => window.satori.setCentral('')); // registers again
-    await page.evaluate(() => window.satori.backup('vault', 'pass phrase')); // the backup's advice first, then Install's
+    await page.evaluate(() => window.satori.backup('wallet', 'pass phrase')); // the backup's advice first, then Install's
     await page.evaluate(() => window.satori.go('home'));
     await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'install');
     await expect(page.locator('[data-test=action-text]')).toHaveText("Satori works while it's open. Install it: it stays open in its own window, and keeps your keys.");
@@ -122,7 +122,7 @@ test.describe.serial('a build, in a browser profile', () => {
 
   test('offline: the page, DuckDB and the stored neuron load from the cache; central, Base and /llms.txt fail and say so', async () => {
     expect((await polled(page)).lastPoll).toMatchObject({ streams: 1, new: 1, predicted: 1 }); // the reload kept the schedule
-    const { identity, vault } = await status(page);
+    const { alias, wallet } = await status(page);
 
     await context.unroute(`${PROD}/**`); // central is now only the network, which is gone
     await context.setOffline(true);
@@ -131,8 +131,8 @@ test.describe.serial('a build, in a browser profile', () => {
       const res = await page.reload();
       expect(res.fromServiceWorker()).toBe(true); // network first failed: the cached page
       expect(await loaded(page)).toBe('home'); // DuckDB's worker and wasm from the cache, the keys from OPFS
-      await expect(page.locator('[data-test=identity]')).toHaveText(identity);
-      await expect(page.locator('[data-test=vault]')).toHaveText(vault);
+      await expect(page.locator('[data-test=alias]')).toHaveText(alias);
+      await expect(page.locator('[data-test=wallet]')).toHaveText(wallet);
       await expect(page.locator('[data-test=streams-count]')).toHaveText('1 from the Satori Network, with our forecasts');
       await expect(page.locator('[data-test=last-poll]')).toContainText('1 streams, 1 new, 1 predicted');
       await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable/);

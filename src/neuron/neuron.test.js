@@ -12,7 +12,7 @@ import { healthOf } from './health.js';
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
 
 const T = 1_792_000_000; // seconds
-const ID = '02a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9a'; // the identity's pubkey: the specs' seed
+const ID = '02a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9a'; // the alias's pubkey: the specs' seed
 const entry = (uuid, name, observedAt, value) => ({
   id: 1, observed_at: String(observedAt), value: String(value), hash: '', stream_id: 1,
   stream: { id: 1, uuid, name, meta: null }, ts: '2026-10-14T23:00:12.756973', stream_uuid: uuid,
@@ -229,7 +229,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect((await db.predictions('b'))).toEqual([]);
   });
 
-  test('the engine: each target\'s spec drawn from the identity, stored, evolved; the prediction says which model made it', async () => {
+  test('the engine: each target\'s spec drawn from the alias, stored, evolved; the prediction says which model made it', async () => {
     const names = ['gold', 'btc', 'eth', 'oil'];
     const price = (n, k) => 100 * (1 + 0.01 * Math.sin(k * (names.indexOf(n) + 1)) + 0.002 * k);
     let r;
@@ -252,7 +252,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect([...specs.values()].every((row) => row.fit_key)).toBe(true);
     expect(lacking({ streams: await db.streams() }).total).toBe(0);
     expect((await db.predictions('gold', 40)).at(-1).model).toBe('naive'); // the first poll: one observation
-    // the first draw: the same identity draws the same specs, another identity others
+    // the first draw: the same alias draws the same specs, another alias others
     const first = async (seed) => {
       const fresh = await memoryDb();
       central.batch = names.map((n) => entry(`u-${n}`, n, T, price(n, 0)));
@@ -260,7 +260,7 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
       return JSON.stringify([...(await fresh.specs())].map(([u, x]) => [u, x.spec]).sort());
     };
     expect(await first(ID)).toBe(await first(ID));
-    expect(await first('another identity')).not.toBe(await first(ID));
+    expect(await first('another alias')).not.toBe(await first(ID));
   });
 
   test('report(step, done, total): observations, history (the backfill\'s), models (0 to n), send (what is pending), in order', async () => {
@@ -286,38 +286,41 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
 });
 
 describe('register', () => {
-  // central's vault_base_address (base-upgrade d8a2085): the Base address it pays this vault's rewards to
-  const [v, other] = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url))).vectors;
-  const res = { success: true, peer_id: 7, wallet_address: 'w', vault_address: 'v', vault_base_address: v.ethAddress,
-    message: 'Peer already registered' };
+  // central's wallet_address: the linked wallet it pays (docs/design/wallets.md)
+  const [v, other] = JSON.parse(readFileSync(new URL('../../test/fixtures/alias-parity.json', import.meta.url))).vectors;
+  const res = { success: true, peer_id: 7, wallet_address: v.ethAddress, message: 'Peer already registered' };
+  const link = { message: 'Satori: link this alias to my wallet', signature: '0xsig' };
   const fake = (r) => ({ register: vi.fn(async () => { if (r instanceof Error) throw r; return r; }) });
-  const mismatch = async (r) => (await register({ central: fake(r), vaultPubkey: v.pubkey, now })).vaultMismatch;
-  test("sends the vault pubkey; central pays this vault: no mismatch; both Base addresses, none of central's other forms", async () => {
+  const mismatch = async (r) => (await register({ central: fake(r), wallet: v.ethAddress, link, now })).walletMismatch;
+  test('sends the link; central pays this wallet: no mismatch; both Base addresses', async () => {
     const c = fake(res);
-    expect(await register({ central: c, vaultPubkey: v.pubkey, nostrPubkey: 'ee', now })).toEqual({
+    expect(await register({ central: c, wallet: v.ethAddress, link, nostrPubkey: 'ee', now })).toEqual({
       at: clock, ok: true, peer_id: 7, message: 'Peer already registered',
-      vault: v.ethAddress, vault_base_address: v.ethAddress, vaultMismatch: false,
+      wallet: v.ethAddress, wallet_address: v.ethAddress, walletLinkError: null, walletMismatch: false,
     });
-    expect(c.register).toHaveBeenCalledWith({ vaultPubkey: v.pubkey, nostrPubkey: 'ee' });
+    expect(c.register).toHaveBeenCalledWith({ link, nostrPubkey: 'ee' });
   });
   test('the addresses are compared case-insensitively', async () => {
-    expect(await mismatch({ ...res, vault_base_address: v.ethAddress.toLowerCase() })).toBe(false);
-    expect(await mismatch({ ...res, vault_base_address: `0x${v.ethAddress.slice(2).toUpperCase()}` })).toBe(false);
+    expect(await mismatch({ ...res, wallet_address: v.ethAddress.toLowerCase() })).toBe(false);
+    expect(await mismatch({ ...res, wallet_address: `0x${v.ethAddress.slice(2).toUpperCase()}` })).toBe(false);
   });
-  test("another Base address ('other'), or none (null: 'none'): a mismatch", async () => {
-    const r = await register({ central: fake({ ...res, vault_base_address: other.ethAddress }), vaultPubkey: v.pubkey, now });
-    expect(r).toMatchObject({ vault: v.ethAddress, vault_base_address: other.ethAddress, vaultMismatch: 'other' });
-    expect(await mismatch({ ...res, vault_base_address: null })).toBe('none');
+  test("another Base address ('other'), or none (null: 'none', with why the link was refused): a mismatch", async () => {
+    const r = await register({ central: fake({ ...res, wallet_address: other.ethAddress }), wallet: v.ethAddress, link, now });
+    expect(r).toMatchObject({ wallet: v.ethAddress, wallet_address: other.ethAddress, walletMismatch: 'other' });
+    expect(await mismatch({ ...res, wallet_address: null })).toBe('none');
+    const refused = await register({ central: fake({ ...res, wallet_address: null, wallet_link_error: 'stale link' }), wallet: v.ethAddress, link, now });
+    expect(refused).toMatchObject({ walletMismatch: 'none', walletLinkError: 'stale link' });
   });
-  test('a central without the field (prod, on main): unknown (null), not a mismatch', async () => {
-    const { vault_base_address: _, ...old } = res;
-    expect(await register({ central: fake(old), vaultPubkey: v.pubkey, now })).toEqual({
-      at: clock, ok: true, peer_id: 7, message: 'Peer already registered', vault: v.ethAddress, vault_base_address: null, vaultMismatch: null,
+  test('a central without the field: unknown (null), not a mismatch', async () => {
+    const { wallet_address: _, ...old } = res;
+    expect(await register({ central: fake(old), wallet: v.ethAddress, link, now })).toEqual({
+      at: clock, ok: true, peer_id: 7, message: 'Peer already registered', wallet: v.ethAddress, wallet_address: null,
+      walletLinkError: null, walletMismatch: null,
     });
     expect(await mismatch('not json')).toBeNull();
   });
   test('a failure is returned, never thrown', async () => {
-    expect(await register({ central: fake(new CentralError(409, 'taken')), vaultPubkey: v.pubkey, now }))
+    expect(await register({ central: fake(new CentralError(409, 'taken')), wallet: v.ethAddress, link, now }))
       .toEqual({ at: clock, ok: false, error: 'Satori Network 409: taken' });
   });
 });

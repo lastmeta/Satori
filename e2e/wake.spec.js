@@ -34,7 +34,7 @@ function skewableDate() {
 test('asleep 12 h with the page open: the poll runs within one heartbeat; "Catching up now…" only while it runs', async ({ context, page }) => {
   test.setTimeout(240_000);
   const stub = await stubCentral(context, { rpc: fakeSatori({ round: Math.floor(nowS() / 86400), hour: 9 }).rpc });
-  stub.noVaultBase = true;
+  stub.noWalletAddress = true;
   centralAt(stub, nowS() - 60);
   await context.addInitScript(skewableDate);
   await openApp(page);

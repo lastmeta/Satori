@@ -32,8 +32,8 @@
         "vault_yaml": "entropy: BcG2O+u+PLknjDqAm+pNSg2ROQbLTsfBh/KUjAnSSwxUZ6p6oU090OuOkdXXtc0CzGcW03Ymu0Pcox0F6tp85zaBE9/uE3KaQS5LoplTOVs=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: 0hlytWB4GAHwVOjex7dQnpjQ5DWh7nTeefJQZudta14MCRcZl1y3xr8FURY3rdlsZqnHuf4W0cd+jWZusRxr8m6ABfuOONekc1ldQYYjMm6dxA6ATc0xxCHIlkdR3b9Q\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: uiWw7RTlUlSS/VVadZMdD2jwIQRM1N+6NXkMv9PgsHgI00/d37o3LGk22FgJiMMKQVSLI5YOWpPSWGy/ls6XOiDrzgSbGFhQP+ozxjqmR1No6+44XbeXpGm/TmW3RwMPL+EIMraT46f8VGJSEvxuiS6P3/j9zJEAS7vYZaLekkgOJ+DPTTIrGpZLY4d0lFzOqijGMShA9ZTRl0DSi/hI+IZnkay3e+2F54zOFDohh5s=\n"
       },
       "expect": {
-        "identity": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
-        "vault": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
+        "alias": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
+        "wallet": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
         "nostr": null
       }
     },
@@ -47,8 +47,8 @@
         "vault_yaml": "entropy: WphLkSjJX0E+n4uuD+J7XQ6UeWNVhjlfRon6c//qfHbwxwMM1vcgA7ZvFmWbQCpLI17aH5wMux6poIb4G8tOl6KRT4Drw1w5q8GtBNL++JE=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: 5a9iHQiFK4aPo1BMqiYfjXZ0mRuDMLj5Y5vpuo2sT6koOx/+C+N8XbloRGHaDPnlwD0vLHItUWpF7wnBqKATxI58yjLYe8+EJX18T4CPqlPzFWEdERrB8o6FfjLHPbsi\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: J/Q1ykcecYjPbuDmorFZrhnc4gM5WLJr+k5/UCbkrM8GMlatF/yFATv8EohakSW5heHkzbdx4AyAtkkGnm7s2FN5spzAtM6sVqvy6luM+9Ja9T0+AxktCzKIvoR2CVbaWKjvyxRiN8qCy6bYf5UdL4n4i4TOrKF40dTvxUjPB5YcIw96wunybz2+DK/Yu5B30gPxh8sJtcYXN+3v7RDTFiSfE5waP4PY5/GMfQSu0lE=\n"
       },
       "expect": {
-        "identity": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
-        "vault": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
+        "alias": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
+        "wallet": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
         "nostr": null
       }
     },
@@ -62,8 +62,8 @@
         "vault_yaml": "entropy: 7+EkKs4RRSlfWL/NhThICTN/ZEtIeiJSy/vpv6gTvFg=\nevr:\n  address: EUWKMzXvwZH2q6tdGPzGTZqFS5PmWASSjU\nprivateKey: L5G1FkavGmFEft8wjqu56w7qrohrZSS8uwUm6UcSVUU5xV9Yhk3N\npublicKey: 02a29d7aa1bf703435c7b2cb64ca9c0c14bf30c6b0a3e60fead4aa5bea5e87be0b\nscripthash: 888e0ea9c99dacf2f1879b530baba10eb599837cff577c032b8cb47f0713f3a7\nwords: useful ankle apple order begin net latin blood snow clap bamboo bar dawn rate\n  coffee aunt car north year square whisper antenna vapor anchor\n"
       },
       "expect": {
-        "identity": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
-        "vault": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
+        "alias": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
+        "wallet": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
         "nostr": null
       }
     },
@@ -77,8 +77,8 @@
         "vault_yaml": "entropy: 2Rk1uC94YgJLQbgqVjTGwkSSK6dDPgXUNnGDrtueokNnN4l3tlBel0zCeap5/IbsVIMatrTvPPYpAv2UlEYyh2uT1h/x1W9+m39qkzhvKTk=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: LqXLoJML6SmE8qAZgOccIwiJiTBb0qc9UV+ZINY4CI66U2WM3KxQM7Cg3GBMXpdLr+4K1ggmcB4Qqx5RVlLadrMgTRtKYlxZCWmLSIxz1j6568XK7gpE46KTf05wSXjR\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: FZM2auCkwXHnUydypS3hgac6U/WbzzbMdlu3NQICITXBLFWQWXJNc1VjeGPtfYgqmlSHb8poZZqz5anBIxhL4qGFJx5xobQB5UqStcLfHL/BXUlzgAK87qeot+Sx5UKOENVYJKQ2Owns0U7ZnsOrVsc1TS7fK6ytCh5/dPqudXxUg0WBpH1A6r8DA+35MkBe49emynuF4I/5twqdzH+snzbNOCfEYEH0BeUpQbwkNNy9A7vShE73G0cUNlzgf618a8z1pGBHekKhxaozsP4M+A==\n"
       },
       "expect": {
-        "identity": "ea16cbf67fd735b40a0309aa6794b04dc3d0751174ddfa8d68a601971a40ab91",
-        "vault": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
+        "alias": "ea16cbf67fd735b40a0309aa6794b04dc3d0751174ddfa8d68a601971a40ab91",
+        "wallet": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
         "nostr": null
       }
     },
@@ -93,8 +93,8 @@
         "nostr_yaml": "pubkey_hex: 62756113cd917a659263ead50da0f538d97a5d4cbf0c573464140364f9a98cc8\nsecret_hex: dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4\n"
       },
       "expect": {
-        "identity": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
-        "vault": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
+        "alias": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
+        "wallet": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
         "nostr": "dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4"
       }
     },
@@ -109,8 +109,8 @@
         "nostr_yaml": "pubkey_hex: 62756113cd917a659263ead50da0f538d97a5d4cbf0c573464140364f9a98cc8\nsecret_hex: dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4\n"
       },
       "expect": {
-        "identity": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
-        "vault": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
+        "alias": "93173a8c1485c17add114d53ef1949a08aafc5fc2d2c0338adfa19a7f4a3292c",
+        "wallet": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
         "nostr": "dd278564ca11c31ffb929b807c65d07a7cb0fddfd26b2d97a91f84ed0b3086e4"
       }
     },
@@ -125,8 +125,8 @@
         "nostr_yaml": "pubkey_hex: a6ca44dcc5a8c6bcefcc8a3989e2a5ea59b1ee988bcb427ccc83e71fcd283c39\nsecret_hex: efe5c74046133fa5076be9cd21e221ef0661132fedd9122fe610de42708279a9\n"
       },
       "expect": {
-        "identity": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
-        "vault": "ea16cbf67fd735b40a0309aa6794b04dc3d0751174ddfa8d68a601971a40ab91",
+        "alias": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
+        "wallet": "ea16cbf67fd735b40a0309aa6794b04dc3d0751174ddfa8d68a601971a40ab91",
         "nostr": "efe5c74046133fa5076be9cd21e221ef0661132fedd9122fe610de42708279a9"
       }
     },
@@ -141,8 +141,8 @@
         "nostr_yaml": "pubkey_hex: c4b7477bab2212865394d2de7bc6e2ac196ba263294117f607ed491623e1c97b\nsecret_hex: d274bbe9d9d51913121661b490743321c3872c0a5f75852fd82824c8b76ddcdc\n"
       },
       "expect": {
-        "identity": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
-        "vault": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
+        "alias": "00d234bc65d8d093ccfceb0b525cc1c9f05e9d93189f268a0a26aa1152ddebea",
+        "wallet": "efe1242ace1145295f58bfcd85384809337f644b487a2252cbfbe9bfa813bc58",
         "nostr": "d274bbe9d9d51913121661b490743321c3872c0a5f75852fd82824c8b76ddcdc"
       }
     },

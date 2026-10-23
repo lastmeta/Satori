@@ -20,7 +20,7 @@
 // Errors are |forecast − actual| / actual; medians are pooled over forecasts,
 // as namaste_club reports them (NC/calibration.py:4-10).
 //
-// Then the neurons: each (an identity seed) runs bvar with evolution on all the
+// Then the neurons: each (an alias seed) runs bvar with evolution on all the
 // symbols at once, as the app runs central's streams (src/engine/evolve.js:
 // each symbol a target, the others its pool), on the same polls; they are
 // scored like bar1 and persistence. --backfill starts each neuron with 1,000

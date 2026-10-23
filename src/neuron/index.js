@@ -4,7 +4,6 @@
 //   prediction yet (a new row, or one an interrupted cycle stored) ─▶ send everything pending
 // The forecasts: each target's own bvar spec, evolved after each poll (docs/design/engine.md).
 import { normalizeObservation, predictionItem } from '../central/index.js';
-import { evmAddress } from '../keys/keys.js';
 import { runModelsAsync } from '../engine/evolve.js';
 import { createSchedule } from './schedule.js';
 import { backfillHistory } from './history.js';
@@ -34,22 +33,21 @@ const errorText = (err) => String(err?.message ?? err);
 const reach = (err) => (err?.status === 0 ? { unreachable: true } : {});
 
 /**
- * Register with central (on every start). Never throws: the result says what
- * happened and whether central pays this vault: `vault` (this vault's Base
- * address), `vault_base_address` (central's answer: the Base address it pays
- * this vault's rewards to) and vaultMismatch: false (the same address, in any
- * letter case), 'other' (a different one), 'none' (null: central kept no
- * vault) or null (unknown: a central without the field, as prod on main).
+ * Register with central (on every start), with the wallet's link to the alias. Never throws: the result says what
+ * happened and whether central pays this wallet: `wallet` (this wallet's Base address), `wallet_address` (central's
+ * answer: the linked wallet it pays), `walletLinkError` (why it refused the link, or null) and walletMismatch: false
+ * (the same address, in any letter case), 'other' (a different one), 'none' (null: no wallet linked) or null (unknown:
+ * a central without the field).
  */
-export async function register({ central, vaultPubkey, nostrPubkey, now = nowS }) {
+export async function register({ central, wallet, link = null, nostrPubkey, now = nowS }) {
   const at = now();
   try {
-    const r = await central.register({ vaultPubkey, nostrPubkey });
-    const vault = evmAddress(vaultPubkey);
-    const known = r != null && Object.hasOwn(r, 'vault_base_address');
-    const theirs = known ? r.vault_base_address ?? null : null;
-    const vaultMismatch = !known ? null : theirs == null ? 'none' : String(theirs).toLowerCase() === vault.toLowerCase() ? false : 'other';
-    return { at, ok: true, peer_id: r?.peer_id ?? null, message: r?.message ?? '', vault, vault_base_address: theirs, vaultMismatch };
+    const r = await central.register({ link, nostrPubkey });
+    const known = r != null && Object.hasOwn(r, 'wallet_address');
+    const theirs = known ? r.wallet_address ?? null : null;
+    const walletMismatch = !known ? null : theirs == null ? 'none' : String(theirs).toLowerCase() === wallet.toLowerCase() ? false : 'other';
+    return { at, ok: true, peer_id: r?.peer_id ?? null, message: r?.message ?? '', wallet, wallet_address: theirs,
+      walletLinkError: r?.wallet_link_error ?? null, walletMismatch };
   } catch (err) {
     return { at, ok: false, error: errorText(err) };
   }
@@ -137,7 +135,7 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill, rep
  * a failed submission keeps the queue.
  * @param {{db, central, now?: () => number, seed?: string, engine?: typeof runModelsAsync, backfill?: Function,
  *   report?: (step: string, done?: number|null, total?: number|null) => void}} o
- *   seed: the identity's public key (the specs' RNG); engine: one poll's models (src/engine/evolve.js);
+ *   seed: the alias's public key (the specs' RNG); engine: one poll's models (src/engine/evolve.js);
  *   backfill({ onProgress }): central's history; report: each step as it begins, and its count (src/neuron/work.js):
  *   'observations', 'history' (streams in hand of those needing it), 'models' (targets done), 'send' (what is pending)
  * @returns {Promise<{poll: object, submit: object | null}>}

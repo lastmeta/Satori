@@ -9,7 +9,7 @@ export const form = (e) => {
 };
 
 /**
- * The 24 numbered words (a key's backup, Setup's new vault). Fixed slots, each a reactive text, never list items made
+ * The 24 numbered words (a key's backup, Setup's new wallet). Fixed slots, each a reactive text, never list items made
  * per word: ArrowJS keeps a list's unmounted <li>s, their text in them, to reuse (the security review, 2026-10-19), so
  * clearing the words here blanks every slot in place.
  */
@@ -23,14 +23,40 @@ export function idRow(kind, test, value, a, title = () => '') {
 }
 
 /**
- * The inline Unlock prompt (docs/design/health.md): shown at `slot` when an action that needs the vault was asked
+ * The inline Unlock prompt (docs/design/health.md): shown at `slot` when an action that needs the wallet was asked
  * for while it is locked; Unlock, then the action.
  */
 export function unlockPrompt(a, slot, verb) {
-  return html`<form class="inline-unlock" data-test="unlock-prompt" data-unlock-for="${slot}" hidden="${() => state.unlockFor !== slot}" @submit="${(e) => a.unlockThen(form(e), e.target)}"><input name="pass" type="password" aria-label="${`Vault passphrase to ${verb}`}" placeholder="Vault passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button><button type="button" @click="${a.cancelUnlock}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.unlockError}">${() => state.unlockError}</p></form>`;
+  return html`<form class="inline-unlock" data-test="unlock-prompt" data-unlock-for="${slot}" hidden="${() => state.unlockFor !== slot}" @submit="${(e) => a.unlockThen(form(e), e.target)}"><input name="pass" type="password" aria-label="${`Wallet passphrase to ${verb}`}" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button><button type="button" @click="${a.cancelUnlock}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.unlockError}">${() => state.unlockError}</p></form>`;
 }
 
 /** A health state's mark: a colored disc with its icon (the shape from the state, in CSS). */
 export const mark = (s) => html`<span class="state" data-s="${s}"><i class="ico"></i></span>`;
 
 export { sparkPath } from './format.js'; // a trend line (pure, so the views that draw one are tested without a page)
+
+/**
+ * A backup's passphrase prompt and what it shows, for the keys this place offers (`keys`: Settings 'wallet' and
+ * 'nostr'; the Wallet tab 'alias'): each place shows only its own. `test` prefixes its data-test names.
+ */
+export function backupPanel(a, keys, test = 'backup', label = 'Wallet passphrase to show the backup') {
+  const mine = (k) => keys.includes(k);
+  return html`<form class="inline-unlock" data-test="${`${test}-prompt`}" hidden="${() => !mine(state.backupAsk)}" @submit="${(e) => a.showBackup(form(e), e.target)}"><input name="pass" type="password" aria-label="${label}" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => state.revealing}">${() => (state.revealing ? 'Checking…' : 'Show')}</button><button type="button" @click="${a.cancelBackup}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.backupError}">${() => state.backupError}</p></form>
+    <div class="backup" hidden="${() => !mine(state.backup)}">
+      <div hidden="${() => state.backup === 'nostr'}">
+        <h3>${() => (state.backup === 'alias' ? 'Alias' : 'Wallet')} words</h3>
+        ${wordList(() => state.backupWords.split(' ').filter(Boolean))}
+        <div class="label">Private key (imports into a Base wallet)</div>
+      </div>
+      <div hidden="${() => state.backup !== 'nostr'}">
+        <h3>Nostr key</h3>
+        <div class="label">nsec</div>
+      </div>
+      <code class="block" data-test="${`${test}-key`}">${() => state.backupKey}</code>
+      <div hidden="${() => !state.backupHex}">
+        <div class="label">Secret (hex)</div>
+        <code class="block" data-test="${`${test}-hex`}">${() => state.backupHex}</code>
+      </div>
+      <div class="actions"><button @click="${a.hideBackup}">Hide</button></div>
+    </div>`;
+}

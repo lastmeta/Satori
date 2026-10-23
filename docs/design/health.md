@@ -89,7 +89,7 @@ of four levels, and the status is the worst `bad`, `warn` or `idle` one:
 `bad` > `warn` > `idle` > `ok`. An `advice` reason never moves it.
 
 - **ok** (predicting): central took predictions within `WINDOW_S` of open
-  time. If the vault is staked, Base has this round's batch or its
+  time. If the wallet is staked, Base has this round's batch or its
   check has not run yet. No channel is in error.
 - **idle**: not predicting right now, for a calm reason. It is never red,
   and on Home never grey either: it is green, by [the tone](#the-tone-three-greens)
@@ -144,19 +144,19 @@ no warn or bad reason is present.
 | 3 | `central-failing` | bad | the failures span a real cycle: nothing went out for 12 h of open time | network | the last cycle failed, and no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Try again (a poll) |
 | 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | network | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
 | 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | contract | the batch check failed twice in a row while Base is in use (staked, or a batch sent before) | Open Settings (Base) |
-| 5b | `stake-out-of-sync` | bad | the vault's SATORI can't be unstaked until the contract fix (the token-hook bug), and more SATORI in the vault only adds to it | contract | staked with this app, the identity accepts only this vault, and its power is under the vault's SATORI (`base.vault.inSync === false`, [below](#staking-out-of-sync)) | none: the card says "Unstaking will fail until the contract fix. Don't add SATORI to the vault." |
+| 5b | `stake-out-of-sync` | bad | the wallet's SATORI can't be unstaked until the contract fix (the token-hook bug), and more SATORI in the wallet only adds to it | contract | staked with this app, the alias accepts only this wallet, and its power is under the wallet's SATORI (`base.wallet.inSync === false`, [below](#staking-out-of-sync)) | none: the card says "Unstaking will fail until the contract fix. Don't add SATORI to the wallet." |
 | 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | relays | streams are subscribed and every relay is down: not open for 10 min (`RELAY_GRACE_S`, [below](#relays-blocked-and-reconnecting)); a blocked one is not counted | Open Settings (relays) |
 | 7 | `central-failed` | warn | it retries in minutes on its own (2, 10, 30 min), but something may need fixing | network | the last cycle failed (once or more), within `WINDOW_S` of open time of the last good one | Try again |
-| 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | network | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
+| 8 | `wallet-mismatch` | warn | central pays this wallet's rewards to another address, or to none: earning lost | network | register's `wallet_address` is another Base address than this wallet's (the card shows both), or null (central has no wallet for this alias); not when a central does not send it | Open Settings (keys) |
 | 9 | `not-registered` | warn | central may not count or pay this neuron until it registers | network | registering failed (each poll registers again first, until it succeeds) | Try again (a poll) |
-| 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | contract | staked, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
+| 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | contract | staked, and the alias's ETH pays for under 7 batches | Add gas (Wallet) |
 | 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | contract | staked, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
-| 12b | `base-stuck` | warn | the round's batch is not on the chain, and the identity's later transactions wait behind it | contract | a batch sent and not mined for 10 min ([base.md](base.md#a-batch-that-never-mines)): sent again with a higher fee ("The Satori contract batch is stuck; retrying with a higher fee."), or a higher fee would pass the max fee ("The Satori contract batch is stuck.") | none (it retries) / Open Settings (Base) |
+| 12b | `base-stuck` | warn | the round's batch is not on the chain, and the alias's later transactions wait behind it | contract | a batch sent and not mined for 10 min ([base.md](base.md#a-batch-that-never-mines)): sent again with a higher fee ("The Satori contract batch is stuck; retrying with a higher fee."), or a higher fee would pass the max fee ("The Satori contract batch is stuck.") | none (it retries) / Open Settings (Base) |
 | 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | contract | the chain did not answer, while the contract is in use (staked with this app, or a batch sent before) | Open Settings (Base) |
 | 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | network | *Was asleep* (above) | none |
 | 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | network | *Starting* (above) | none |
-| 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the vault | – | storage is not persistent and no backup is confirmed | Back up |
-| 16b | `stake` | advice (warn until 2026-10-19) | nothing is wrong: the vault's SATORI could earn on the Satori contract, and staking carries a known risk until the contract fix, which the card says before staking; the chip stays "Not staked" (off, grey) | contract | not staked, and the vault holds SATORI: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." | Stake |
+| 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the wallet | – | storage is not persistent and no backup is confirmed | Back up |
+| 16b | `stake` | advice (warn until 2026-10-19) | nothing is wrong: the wallet's SATORI could earn on the Satori contract, and staking carries a known risk until the contract fix, which the card says before staking; the chip stays "Not staked" (off, grey) | contract | not staked, and the wallet holds SATORI: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." | Stake |
 | 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | not installed, the browser can add Satori (its prompt, or the steps on iOS, Safari on a Mac, Firefox on Android: `app.addTo`), and the card was not put away on this device; any state, not only *Was asleep* ([pwa.md](pwa.md#install)) | Install and Not now (the prompt); Got it (the steps) |
 | 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | relays | streams are subscribed and some relay, not all, is down (10 min, not blocked) | Open Settings (relays) |
 | 19 | `base-unused-unreachable` | note | nothing is predicted or earned there: not staked, no batch ever sent | contract | the chain did not answer while the contract is unused: the Contract chip says "Unreachable", grey; no card, never the status, the tone, the title, the line or the day strip ([below](#the-contract-unused)) | none |
@@ -187,39 +187,39 @@ advice reason now, `install`, so each reason has one level; since
 ### Staking out of sync
 
 The token-hook bug ([../issues/token-hook-gas-estimate.md](../issues/token-hook-gas-estimate.md),
-live on D6 until D7 deploys): SATORI that reaches a staked vault in a
+live on D6 until D7 deploys): SATORI that reaches a staked wallet in a
 transaction sent with a normal gas estimate (anyone can send 1 wei, or call
-`claimAirdropFor(vault)`) lands in its balance but not in the identity's
+`claimAirdropFor(wallet)`) lands in its balance but not in the alias's
 booked power, and unstaking then underflows (Panic 0x11), for good, until the
 contract fix. So while it is live:
 
 - **Stake is advice, not warn** (2026-10-19): Home is no longer amber for an
-  unstaked vault, and the card says the risk, short and calm, before
+  unstaked wallet, and the card says the risk, short and calm, before
   anyone stakes. The Wallet card's staking note says it too.
-- **The frozen state is detected exactly.** Once the identity accepts only
-  this vault (`allowedDelegator == vault`, set by Stake) and the vault
-  stakes with it, the vault is the identity's only staker, so
-  `predictionDelegateInfo(identity).power` must equal the vault's SATORI
+- **The frozen state is detected exactly.** Once the alias accepts only
+  this wallet (`allowedDelegator == wallet`, set by Stake) and the wallet
+  stakes with it, the wallet is the alias's only staker, so
+  `predictionDelegateInfo(alias).power` must equal the wallet's SATORI
   (both in the status multicall, one block). Under it is `stake-out-of-sync`
   (bad): the hero "Staking is out of sync.", the Contract chip "Out of
   sync", a card with no button ("Unstaking will fail until the contract fix.
-  Don't add SATORI to the vault."), the Wallet card's line and its Staking
-  fact ("· out of sync"). The batch still goes out (the identity keeps its
+  Don't add SATORI to the wallet."), the Wallet card's line and its Staking
+  fact ("· out of sync"). The batch still goes out (the alias keeps its
   power), so the title stays *Predicting*: only `base-failing` makes it
   *Partly predicting*.
-- **Not checked** when `allowedDelegator` is not the vault (another
+- **Not checked** when `allowedDelegator` is not the wallet (another
   address, or open to anyone): other stakers are possible, and their SATORI
   in the power would hide or fake a shortfall, so nothing is said
   (`inSync: null`). Also not when not staked here, or not read.
 - **Unstake** simulates first; the underflow (Panic 0x11) is said in the same
   plain words ("Staking is out of sync. Unstaking will fail until the
-  contract fix. Don't add SATORI to the vault."), not "reverted: Panic", and
+  contract fix. Don't add SATORI to the wallet."), not "reverted: Panic", and
   nothing is sent.
 
 Checked live on the fork of Base Sepolia (the real D6 contracts; 2026-10-19,
 the dev app, a fresh profile): Stake (three transactions), then `node
-scripts/fork.mjs grief <vault>`: 1 wei at the bare estimate (110,514 gas),
-`TransferHookFailed`; the identity's power 100, the vault's SATORI
+scripts/fork.mjs grief <wallet>`: 1 wei at the bare estimate (110,514 gas),
+`TransferHookFailed`; the alias's power 100, the wallet's SATORI
 100.000000000000000001: Home red with the reason, the Wallet card and
 Unstake said it, and `satori.unstake()` rejects with it.
 
@@ -228,14 +228,14 @@ Unstake said it, and `satori.unstake()` rejects with it.
 The card has no button here: the card is the highest reason with words for
 it (a reason with an action has a button; this one has only what to know).
 
-**Backup confirmed** (`meta.backup_at`) is set when the vault's words are
-confirmed in Create, given at Restore (also `setup({ vaultWords })`), brought
-by a Dockerized Neuron import, or shown under Backup. The vault holds the
-funds. A lost identity is replaced by a new one, and the vault stakes with it.
+**Backup confirmed** (`meta.backup_at`) is set when the wallet's words are
+confirmed in Create, given at Restore (also `setup({ walletWords })`), brought
+by a Dockerized Neuron import, or shown under Backup. The wallet holds the
+funds. A lost alias is replaced by a new one, and the wallet stakes with it.
 
-An action needing the vault (Stake and Home's Claim) opens one inline
-passphrase prompt in place when the vault is locked, does the action, then
-locks the vault again ([keys.md](keys.md#the-vault-locks-on-its-own)). Back
+An action needing the wallet (Stake and Home's Claim) opens one inline
+passphrase prompt in place when the wallet is locked, does the action, then
+locks the wallet again ([keys.md](keys.md#the-wallet-locks-on-its-own)). Back
 up opens Settings › Backup with the passphrase asked there, as it is each
 time ([keys.md](keys.md#backup)).
 
@@ -249,13 +249,13 @@ holds:
 | Title | When |
 |---|---|
 | *Not predicting* | central's predictions are failing: a bad central reason (`db-error`, `login-refused`, `central-failing`, `central-overdue`) |
-| *Partly predicting* | central predicts (a good cycle in the log, no bad central reason; one failed poll still counts, as for *Predicting*), but Base, which should be predicting, has a red reason (`base-failing`). Base should be predicting when the vault is staked with this app, or when the stake is not read (its RPC down since the page loaded) and a batch went out before |
+| *Partly predicting* | central predicts (a good cycle in the log, no bad central reason; one failed poll still counts, as for *Predicting*), but Base, which should be predicting, has a red reason (`base-failing`). Base should be predicting when the wallet is staked with this app, or when the stake is not read (its RPC down since the page loaded) and a batch went out before |
 | *Starting* | no good cycle in the log yet (the rows this session read) |
 | *Was asleep* | a session missed work and has not caught up: no good cycle since it began |
 | *Predicting* | otherwise |
 
 Nostr never changes the title: every relay down is red, one down is
-advice, and the title stays central's and Base's. So a new neuron with a vault mismatch
+advice, and the title stays central's and Base's. So a new neuron with a wallet mismatch
 is *Starting*: amber, with the mismatch's line and card (it was
 *Predicting*, from the mismatch, a central reason above `starting`). A first
 poll that failed once is still *Starting*; a later one that failed once is
@@ -319,7 +319,7 @@ began during a poll never writes it back as still running.
 transitions.
 
 **Home's hero** shows the hero's task: the first critical one among
-`central`, `base`, `train`, the vault's actions, `keys` and `reward`, else the first of them.
+`central`, `base`, `train`, the wallet's actions, `keys` and `reward`, else the first of them.
 While it runs, a short arc of light turns around the ring (1.8 s a turn,
 only its transform changes), the ring's icon is three dots, and the line
 says the step. It is the only animation on the screen (the chips' glow is a
@@ -337,7 +337,7 @@ Elsewhere: the Models tab's status says the poll's or the Base batch's step,
 the same words through its own pacer, with the still "working" mark and no
 ring, so the hero's ring stays the one moving indicator
 ([models.md](models.md#the-engines-status-top-of-the-tab)); it uses the same
-tones, amber only when the engine itself failed. The Wallet card's line says the vault's action step (the hero is
+tones, amber only when the engine itself failed. The Wallet card's line says the wallet's action step (the hero is
 on Home only); Home's Stake and Claim buttons say "Staking…",
 "Claiming…"; the Wallet's Unstake says "Unstaking…". The Network streams line says discover's or subscribe's step,
 only once it has lasted 1 s; the Prediction streams card's line says the
@@ -347,7 +347,7 @@ watch scan's. Settings › Reward address's line says its step, and its buttons 
 words change.
 
 **Agents**: `health().work` is the entry that leads (a critical one, else
-the first of central, base, the vault's actions, keys, reward, discover, subscribe, watch)
+the first of central, base, the wallet's actions, keys, reward, discover, subscribe, watch)
 with its `text`, or null; the hero has `data-work` (`central:history`) and
 `aria-busy` while it shows a step.
 
@@ -367,7 +367,7 @@ what is deliberately off. `health().tone` and each `channels[x].tone`:
 `toneOf(status, work)`: `warn` and `bad` from the status; else `critical`
 or `working` while the hero's task runs; else `idle`. A chip: its state's
 `warn` or `bad` (an `advice` state is green); `working` while its channel has work in progress (central's
-poll; Base's batch and the vault's actions; the network's discover,
+poll; Base's batch and the wallet's actions; the network's discover,
 subscribe and watch scan) or is connecting; `off` as above; else `idle`.
 
 **The greens**, worked out in OKLCH from `--ok` (the comment in
@@ -419,7 +419,7 @@ health.js map them).
   the last poll had nothing to send (never "0 sent"); idle "First poll now…",
   "Catching up now…" (while the poll runs; "Catching up soon" when due and
   not yet running, "… in 2 h" when a poll is still ahead); warn "Sending failed",
-  "Unreachable", "Poll failed", "Vault mismatch", "Not registered"; bad
+  "Unreachable", "Poll failed", "Wallet mismatch", "Not registered"; bad
   "Database error", "Login refused", the same failure words once they span
   12 h of open time, "Nothing sent for 14 h".
 - **Contract** (the Satori contract): ok "Round 20742 sent", "Round 20742 due"; idle "Not staked"
@@ -525,7 +525,7 @@ phone's CPU, [storage.md](storage.md#the-first-visit)). Meanwhile Home
 shows the **last visit's** at once: a small snapshot of the last health
 (`snapshotOf`, `src/ui/prefs.js`: the title, the status and tone, the line,
 the day strip, the chips' words, the feed, and the claimable rewards, the
-vault and the gas; never the card, whose buttons need the neuron, the work,
+wallet and the gas; never the card, whose buttons need the neuron, the work,
 or keys), kept in `localStorage` (`satori-home`, read and written in
 try/catch; storage blocked: no snapshot) at most every 10 s while Home's
 health changes, and when the page is hidden or left.
@@ -587,7 +587,7 @@ first, with how long ago:
   https://sepolia.base.org");
 - "Reward address set to 0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7" (the
   whole address, so a swap is seen), "Reward address cleared: rewards go to
-  your vault" ([central.md](central.md#the-reward-address)).
+  your wallet" ([central.md](central.md#the-reward-address)).
 
 It never changes the status, the tone, the card or the day strip.
 `health().notices` is the same, `[{ at, what, text }]`; the feed keeps the
@@ -646,7 +646,7 @@ used". A session that missed nothing is not shown.
   Try again minutes later) and then taken: amber, amber, green, never red
   (a MutationObserver on the hero), then a refused login red; a register
   that fails twice, then succeeds before a later poll; a new neuron (29 days before it,
-  "0 full days", then "1 full day"); a new neuron with a vault mismatch
+  "0 full days", then "1 full day"); a new neuron with a wallet mismatch
   (*Starting* in `health()` and on Home, the mismatch's card; *Predicting*
   after the first poll); a chip glowing while central's stub serves a poll
   and fading after, `lastTraffic`, reduced motion still; and the screenshots below.
@@ -660,14 +660,14 @@ used". A session that missed nothing is not shown.
 ([phone](../screenshots/live-final-phone.png)); on another, Base RPC set to
 `/rpc` and back: two quiet notes under the hero, newest first, the status
 untouched; Stake on the fork refused above a 0.0001 gwei max fee, then sent;
-the identity's batch for round 20745
+the alias's batch for round 20745
 ([computer](../screenshots/live-home-hardening.png)).
 
 2026-10-17, the dev server on :5180 against central2, a fresh browser
 profile, no stubs: Create (the words confirmed) → Home *Starting* ("First
 predictions in 18 min", every chip idle) → Poll now: 82 streams, central's
 history for all 82 (81 on bvar), 82 of 82 accepted → *Predicting*, "Sent 82
-predictions just now · next in 11 h"; Base idle (a new vault, no SATORI),
+predictions just now · next in 11 h"; Base idle (a new wallet, no SATORI),
 Network idle (nothing subscribed); nothing sent to prod.
 
 Again after the day strip's `before` (2026-10-17 01:55, a fresh profile, set
@@ -678,12 +678,12 @@ today full, "1 full day" on the phone and the computer; nothing sent to prod.
 ![Home live on central2 after the first poll](../screenshots/home-live-central2.png)
 
 The title with a reason above `starting` (2026-10-17 14:40, two fresh
-profiles on central2 sharing one new vault): the second registers with
-`vault_base_address` null, so before its first poll Home is amber with the
-mismatch's card and reads *Starting*, "Central has no vault for this
+profiles on central2 sharing one new wallet): the second registers with
+`wallet_address` null, so before its first poll Home is amber with the
+mismatch's card and reads *Starting*, "Central has no wallet for this
 neuron." (it read *Predicting*); `health()` says the same.
 
-<img src="../screenshots/home-starting-mismatch-phone-light.png" alt="Starting with a vault mismatch" width="240"> <img src="../screenshots/home-starting-mismatch-phone-dark.png" alt="Starting with a vault mismatch, dark" width="240">
+<img src="../screenshots/home-starting-mismatch-phone-light.png" alt="Starting with a wallet mismatch" width="240"> <img src="../screenshots/home-starting-mismatch-phone-dark.png" alt="Starting with a wallet mismatch, dark" width="240">
 
 Nothing to send (2026-10-17 16:59, a fresh profile on central2): after the
 first poll (82 of 82 accepted), Poll now with nothing new: the line and the
@@ -741,7 +741,7 @@ install it, and it predicts on its own."; the first poll 84 of 84
 accepted in 15.9 s, every hero step on the phone beginning "Keep Satori
 open · " (Signing in, Fetching today's observations, Loading history · 2 of
 84 … 84 of 84, Building models, Sending 84 predictions); Unlock: "Locks in
-5 min"; `backup('vault')` and `send()` without the passphrase refused, with
+5 min"; `backup('wallet')` and `send()` without the passphrase refused, with
 it 24 words and a send; the Wallet's review ("0.001 ETH", the recipient in
 full, "about 0.000021 ETH"), then Sent; the zero address refused; the RPC
 broken while unstaked: Home green, the Contract chip "Unreachable" in grey
@@ -766,7 +766,7 @@ each state on a phone (390 × 844, the first screen) and a computer (1280
 wide), light and dark, `docs/screenshots/home-<state>-<phone|desktop>-<light|dark>.png`
 for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 
-<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: the identity's gas is low" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: the Satori Network refused the login" width="240">
+<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: the alias's gas is low" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: the Satori Network refused the login" width="240">
 
 The Stake card, advice (the hero stays green; the risk said before staking):
 

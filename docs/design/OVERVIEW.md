@@ -10,7 +10,7 @@ reference for `window.satori`: [/llms.txt](../../public/llms.txt).
 Component docs: [health.md](health.md) (Home: is the neuron predicting, is
 anything broken), [models.md](models.md) (the Models tab: the engine's
 status, every model, a model's In, Model and Out), [keys.md](keys.md),
-[wallets.md](wallets.md) (a vault, its alias, and several accounts), [central.md](central.md),
+[wallets.md](wallets.md) (a wallet, its alias, and several accounts), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
 [market.md](market.md) (paid streams, step 3 of the market: selling and
 buying streams over the relays, `src/neuron/market.js`, on the
@@ -27,19 +27,19 @@ The neuron runs central's data flow the way Satori Lite (the Docker neuron)
 does ([central.md](central.md)):
 
 ```
-page load ──▶ register with central (identity + vault public keys)
+page load ──▶ register with central (alias + wallet public keys)
 first poll at once (unless one is still ahead), then every 11 h (or Poll now):
-  GET observations ──▶ store (DuckDB) ──▶ history for new streams ──▶ forecast streams not predicted yet ──▶ queue ──▶ login (identity) ──▶ POST predictions
+  GET observations ──▶ store (DuckDB) ──▶ history for new streams ──▶ forecast streams not predicted yet ──▶ queue ──▶ login (alias) ──▶ POST predictions
                        insert or ignore    once per stream (central)    each one's bvar spec, evolved         pending      signs the challenge    batch; kept on failure
 ```
 
-1. **Register** on every page load: `wallet-pubkey` (identity), `vault-pubkey`
-   (in clear in the keys record, so it is read while locked), `nostr-pubkey` and `neuron-version`
+1. **Register** on every page load: `alias-pubkey`, the wallet's link to the alias
+   (`wallet-link`, `wallet-signature`: [wallets.md](wallets.md)), `nostr-pubkey` and `neuron-version`
    (`browser-<package version>+<git short sha>`, stamped by `vite.config.js`; also in Settings › This
    device and `status().version`). The result is
-   shown on Streams, and on Home as a **vault mismatch** (with both
-   addresses) if central pays this vault's rewards to another Base address,
-   or has no vault for this identity (register's `vault_base_address`).
+   shown on Streams, and on Home as a **wallet mismatch** (with both
+   addresses) if central pays this wallet's rewards to another Base address,
+   or as **wallet not linked** if it has none (register's `wallet_address`).
    A central that does not send that field leaves it unknown: no mismatch.
 2. **Poll** central's observations batch (the latest observation of each
    stream, under 48 h old), right after register: a new neuron, or one
@@ -55,7 +55,7 @@ first poll at once (unless one is still ahead), then every 11 h (or Poll now):
 5. **Forecast** each stream whose latest observation has no prediction
    made from it (a new row, or one a reload mid-poll stored and never
    forecast; each observation once), from all their stored history ([engine.md](engine.md)): `t1` 12 h ahead and `t2` 24 h ahead.
-   Each target has its **own spec**, drawn from the identity: `bvar`, a
+   Each target has its **own spec**, drawn from the alias: `bvar`, a
    Bayesian VAR(1) of the target and 1–3 companion streams (namaste_club's
    Minnesota prior with the spec's λ1 and λ2), faded toward persistence by its
    own backtest. After each poll one mutation of each spec (swap, add or drop
@@ -73,7 +73,7 @@ first poll at once (unless one is still ahead), then every 11 h (or Poll now):
    predictions for the next poll; ones older than 2 × 11 h are dropped.
    A network error, a timeout or a 5xx is resent once.
 
-No passphrase is needed: the identity key is unencrypted, as in Docker.
+No passphrase is needed: the alias key is unencrypted, as in Docker.
 
 Next to it, the neuron follows Satori streams on Nostr relays and publishes a
 prediction stream for each, as Lite does ([nostr.md](nostr.md)). Relay
@@ -102,14 +102,14 @@ On the dev server central's relays (satorian, production) are **read only**
 relays, and its own relays are `VITE_NOSTR_RELAYS` (none unless set; the
 deployment's: `wss://nostr.satorinet.io`).
 
-On Base the neuron predicts as Lite does ([base.md](base.md)): the vault
+On Base the neuron predicts as Lite does ([base.md](base.md)): the wallet
 stakes with this app once (Unlock; on-chain its
-`delegatePredictionPower(identity)`), and the identity sends one batch of
+`delegatePredictionPower(alias)`), and the alias sends one batch of
 up/down predictions each UTC round on its own.
 
 ```
-status (no key): one multicall ── ETH ×2, the vault's SATORI, the stake, fee, lock, round, claimables
-Unlock ─▶ Stake: identity setPredictorFee(0), setAllowedDelegator(vault) ─▶ vault delegatePredictionPower(identity)
+status (no key): one multicall ── ETH ×2, the wallet's SATORI, the stake, fee, lock, round, claimables
+Unlock ─▶ Stake: alias setPredictorFee(0), setAllowedDelegator(wallet) ─▶ wallet delegatePredictionPower(alias)
 each round, first check: power > 0, no batch yet ─▶ registry streams with a game ─▶ engine (≥ 24 h ahead) vs latest: UP/DOWN
      ─▶ simulate each game alone ─▶ predictMultipleWithPayloads(the ones that pass) ─▶ receipt ─▶ persist
 Unlock ─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH; SATORI when it can be sent
@@ -125,18 +125,18 @@ uses central's `rpcUrl`, then publicnode.
 
 | Part | Folder | Does |
 |---|---|---|
-| keys | `src/keys/` | Satori's two keys and the Nostr key in one record of this app's own, `meta.keys` ([keys.md](keys.md)): the **identity** (plain text, signs on its own), the **vault** (sealed with the passphrase: PBKDF2-SHA256 600,000 and AES-256-GCM, any Unicode passphrase of 8 or more; holds funds; its public key in clear) and the **Nostr key** (random, plain text). Create, restore from words, import a Dockerized Neuron's files (read only, translated: `docker.js`), Unlock/Lock (an earlier version's vault is re-encrypted at its next Unlock; it locks on its own after 5 min without interaction, `autolock.js`), backup and send with the passphrase each time. Each key's Base address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)); the identity's central login signature (EIP-191). |
-| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `rewardAddress`, `setRewardAddress` (signed in the same way); `predictionItem` (the payload and its hash); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. `login.js`: central's login signature, EIP-191 by the identity ([central.md](central.md#login-signature)). |
+| keys | `src/keys/` | Satori's two keys and the Nostr key in one record of this app's own, `meta.keys` ([keys.md](keys.md)): the **alias** (plain text, signs on its own), the **wallet** (sealed with the passphrase: PBKDF2-SHA256 600,000 and AES-256-GCM, any Unicode passphrase of 8 or more; holds funds; its public key in clear) and the **Nostr key** (random, plain text). Create, restore from words, import a Dockerized Neuron's files (read only, translated: `docker.js`), Unlock/Lock (an earlier version's wallet is re-encrypted at its next Unlock; it locks on its own after 5 min without interaction, `autolock.js`), backup and send with the passphrase each time. Each key's Base address and transaction signatures (`signDigest`), inside the signer so Lock still wipes it ([base.md](base.md#keys-on-base)); the alias's central login signature (EIP-191). |
+| central | `src/central/` | Central's API as Lite calls it ([central.md](central.md)): `register`, `observations`, `submitPredictions` (login, one retry on 401); `rewardAddress`, `setRewardAddress` (signed in the same way); `predictionItem` (the payload and its hash); `normalizeObservation` (Lite's `EPOCH` bounds); for Base `baseConfig`, `merkleProof`. 15 s timeouts; network errors wrapped. `login.js`: central's login signature, EIP-191 by the alias ([central.md](central.md#login-signature)). |
 | chain | `src/chain/` | The D7 contracts on Base Sepolia over viem ([base.md](base.md)): the bundled addresses, which central's config is checked against and never overrides (`config.js`), minimal ABIs (`abi.js`), and `createChain`: the status multicall, stake/unstake, the batch's pieces, streams kept by voting weight, claims, sends; every write simulated first, one at a time, with gas over the estimate for contract calls, under the max fee; CCIP-read off. Its test doubles (a fake D6 behind JSON-RPC) are in `test/`. |
 | db | `src/db/` | DuckDB-WASM 1.32.0 on OPFS (`opfs://satori-mvp.duckdb`), tables `meta`, `streams`, `observations`, `predictions`, `model_specs`, and for Nostr `relay_streams`, `relay_observations`, `relay_predictions`, `watch_streams`, `watch_observations` (the track record, migration 14), and `activity` (Home's log, [health.md](health.md)); ordered migrations (each marked additive or not, so an older build can open a newer database that only added); every call one at a time; every commit checkpointed; a WAL an older version left set aside before the open, and a database file that won't open set aside on the person's word (`recover.js`) ([storage.md](storage.md): tables, migrations, every meta key, the checkpoint rule, recovery). Times are unix seconds. |
-| engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (identity-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
+| engine | `src/engine/` | `forecast(points, { step, horizon }) → {model, t1, t2, value, horizon, phi?, weight?} \| null` ([engine.md](engine.md)): `bar1`, `bar1d` (the same on changes, for a series with a value ≤ 0) or `naive`; step 12 h for central, a relay stream's cadence; `value` one cadence ahead (24 h for central: t2). For central's streams `runModels` (`evolve.js`): each target's spec (alias-seeded), one mutation per poll kept by the margin, and its `bvar` forecast (`bvar.js`, a Bayesian VAR(1) with 1–3 companions) or the fallback. Pure (sha256 from `@noble/hashes` for the seeded draws). |
 | nostr | `src/nostr/` | NIP-01 events over `@noble/curves` schnorr (`event.js`), Satori's events and parsing byte for byte as satorilib (`satori.js`), one relay over a WebSocket with reconnect (`relay.js`) ([nostr.md](nostr.md)). The engine reads a relay stream's last 400 cadences, and older observations are pruned daily ([nostr.md](nostr.md#data-growth)). |
-| neuron | `src/neuron/` | `register` (and its vault check: register's `vault_base_address` against the vault's Base address, [central.md](central.md#the-vault-in-registers-answer)), `cycle` (poll → store → history → forecast → submit), `history.js` (central's history for new streams), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a queued Web Lock: the next tab takes over when it closes); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile, the scan for prediction streams and the intake's routing (watched, subscribed, both); `records.js`: the track record ([track-record.md](track-record.md)): which prediction streams are watched, the follow filters, the verified-order scoring, `records()` and `record()`; `market.js`: paid streams ([market.md](market.md#selling-and-buying-over-the-relays)): sell, deliver, buy, vouchers, settle, stop; `base.js`: the daily batch and its schedule, stake, claims, sends, the Base settings; `reward.js`: the reward address, checked (0x, its checksum, not zero), read and set ([central.md](central.md#the-reward-address)). |
+| neuron | `src/neuron/` | `register` (and its wallet check: register's `wallet_address` against the wallet's Base address, [central.md](central.md#the-wallets-link)), `cycle` (poll → store → history → forecast → submit), `history.js` (central's history for new streams), central's status, the poll schedule (`createPoller` over `schedule.js`, which the Base check shares), one tab only (a queued Web Lock: the next tab takes over when it closes); `nostr.js`: relays, discover, subscribe, intake → `_pred`, reconcile, the scan for prediction streams and the intake's routing (watched, subscribed, both); `records.js`: the track record ([track-record.md](track-record.md)): which prediction streams are watched, the follow filters, the verified-order scoring, `records()` and `record()`; `market.js`: paid streams ([market.md](market.md#selling-and-buying-over-the-relays)): sell, deliver, buy, vouchers, settle, stop; `base.js`: the daily batch and its schedule, stake, claims, sends, the Base settings; `reward.js`: the reward address, checked (0x, its checksum, not zero), read and set ([central.md](central.md#the-reward-address)). |
 | train | `src/neuron/train.js` | The training pass ([models.md](models.md#the-training-pass)): every model without a current fit (a spec's stored fit key not its data's, a `_pred` or Base game with no backtest kept) is fit from stored history on load, after a poll and whenever the list changes; never a prediction or a submission; Home's "Scoring models · k of n". |
 | retrain | `src/neuron/retrain.js`, `src/engine/retrain.js` | Retrain ([models.md](models.md#retrain)): a user's request to keep training one Satori Network model until it beats no change. The search (pure): a seeded hill-climb over its companions, λ's and the single-stream AR, scored on the older backtest origins, its best looked at once on the last two weeks (20 % less error than no change). The runner: one at a time, kept with the spec (migration 13), paced in slices, waiting while a poll runs, resumed on open; never a prediction; Home's "Retraining eth · tried 40". |
 | models | `src/neuron/models.js` | The Models tab's data ([models.md](models.md)): every model (central's, the Base batch's, the Nostr `_pred`s) with its quality against no change (the engine's backtest medians: better, tie or worse by evolution's 5 % margin), its inputs by influence (the fitted bvar's standardized coefficients) and its outputs, a list, each with where it went; the engine's status; one model's drill-in recomputed from its stored spec and history. |
 | health | `src/neuron/health.js`, `src/neuron/activity.js`, `src/neuron/work.js`, `src/ui/hold.js` | Home's answer ([health.md](health.md)): `activity.js` writes the activity log (migration 8: sessions with a heartbeat, central cycles, Base checks, Nostr publishes, history runs, wallet actions, errors; 90 days); `health.js` turns it and the current statuses into one status (`ok`, `idle`, `warn`, `bad`), its tone (the three greens, amber, red, grey for off), title and line, at most one action (the reasons in priority order, each bad, warn, idle or advice: a suggestion for the card that never colours the hero), the day strip, the three chips and the feed. Pure. `work.js`: what the neuron is doing now, one entry per task `{ task, step, done, total, since, critical }`, set by the cycle, the history, the engine, the Base batch and the actions; `hold.js` paces Home's hero (its turning ring and its step) so each step can be read ([health.md](health.md#work-what-it-is-doing-now)). |
-| ui | `src/ui/` | ArrowJS, phone first: five tabs, a tab bar on a phone and a top nav on a computer (≥ 1024 px), hash routes `#home` `#models` (and `#models/<id>`) `#streams` `#wallet` `#settings` (`view.js`, the shell, with Setup and the screens before Home). **Models** (`models.js`, its words and chart in `drill.js`; [models.md](models.md)): the engine's status (working, in Home's hero's words without a second ring; resting; amber only when the engine failed), the models by kind and against no change, every model named for the stream it predicts (its mark against no change, kind, inputs by influence, latest → forecast, where it goes; filter by destination, sort by quality or name) and a model's drill-in: In (each input's share), the Model, Out (a list of outputs, each with its chart and destinations). **Home** (`home.js`): the health, the one action card, the day strip (14 days; 30 on a computer), the Central/Base/Network chips, claimable rewards with Claim; on a computer also a streams table with trend lines, the wallet and the activity feed, as the approved mockup ([home-mockup.html](home-mockup.html)). **Streams** (`streams.js`): central's facts and Poll now, each stream (forecast, model, companions; its history on a tap), the Nostr subscriptions, the prediction streams' track records ([track-record.md](track-record.md#ui-streams)), Network streams. **Wallet** (`wallet.js`): Base. **Settings** (`settings.js`): the keys with Unlock/Lock, Backup, the reward address (read when Settings opens; Save, Clear: [central.md](central.md#the-reward-address)), central URL, relays, Base RPC and max fee, Appearance (System, Light, Dark: `theme.js`, kept on this device and read before the first paint by `public/theme.js`), this device (storage, Install, Update). The inline Unlock (`parts.js`) wherever an action needs the vault. `state.js`: the one reactive state; `format.js`: display text. The tokens, light and dark, with the semantic ok/warn/idle/bad colors, the three greens (sky, regular, vivid: [health.md](health.md#the-tone-three-greens)) and the traffic glow's: `src/style.css`, light on `:root`, dark under the system's `prefers-color-scheme` (unless `data-theme="light"`) and the same under `data-theme="dark"`; `src/style.test.js` holds every theme to WCAG contrast (4.5:1 text, 3:1 the status colours and the greens) and the greens to their OKLCH derivation. |
+| ui | `src/ui/` | ArrowJS, phone first: five tabs, a tab bar on a phone and a top nav on a computer (≥ 1024 px), hash routes `#home` `#models` (and `#models/<id>`) `#streams` `#wallet` `#settings` (`view.js`, the shell, with Setup and the screens before Home). **Models** (`models.js`, its words and chart in `drill.js`; [models.md](models.md)): the engine's status (working, in Home's hero's words without a second ring; resting; amber only when the engine failed), the models by kind and against no change, every model named for the stream it predicts (its mark against no change, kind, inputs by influence, latest → forecast, where it goes; filter by destination, sort by quality or name) and a model's drill-in: In (each input's share), the Model, Out (a list of outputs, each with its chart and destinations). **Home** (`home.js`): the health, the one action card, the day strip (14 days; 30 on a computer), the Central/Base/Network chips, claimable rewards with Claim; on a computer also a streams table with trend lines, the wallet and the activity feed, as the approved mockup ([home-mockup.html](home-mockup.html)). **Streams** (`streams.js`): central's facts and Poll now, each stream (forecast, model, companions; its history on a tap), the Nostr subscriptions, the prediction streams' track records ([track-record.md](track-record.md#ui-streams)), Network streams. **Wallet** (`wallet.js`): Base. **Settings** (`settings.js`): the keys with Unlock/Lock, Backup, the reward address (read when Settings opens; Save, Clear: [central.md](central.md#the-reward-address)), central URL, relays, Base RPC and max fee, Appearance (System, Light, Dark: `theme.js`, kept on this device and read before the first paint by `public/theme.js`), this device (storage, Install, Update). The inline Unlock (`parts.js`) wherever an action needs the wallet. `state.js`: the one reactive state; `format.js`: display text. The tokens, light and dark, with the semantic ok/warn/idle/bad colors, the three greens (sky, regular, vivid: [health.md](health.md#the-tone-three-greens)) and the traffic glow's: `src/style.css`, light on `:root`, dark under the system's `prefers-color-scheme` (unless `data-theme="light"`) and the same under `data-theme="dark"`; `src/style.test.js` holds every theme to WCAG contrast (4.5:1 text, 3:1 the status colours and the greens) and the greens to their OKLCH derivation. |
 | pwa | `src/pwa/`, `public/manifest.webmanifest` | The installed app ([pwa.md](pwa.md)): the manifest and the Satori icons; the service worker (`sw.js`, written to `dist/sw.js` by a build-only Vite plugin; none on the dev server): precaches the page, `/theme.js` and the hashed assets (DuckDB's wasm and worker), cache first for `/assets/` and `/theme.js`, network first for the page, nothing else touched; "Update ready, reload"; Install Satori (Chromium's prompt, or how on iOS, Safari on a Mac and Firefox on Android: `platform.js`; once on Home as advice); persistent storage asked for at start, shown in Settings. The worker registers once the database is open. It never runs the neuron while closed. |
 | agents | `src/main.js`, `public/llms.txt`, `public/llms-changelog.txt` | `window.satori`: the same actions as the UI for an AI agent in the page, under the same guards, with `health()` (Home's answer), `models()` and `model(id)` (the Models tab's) and `go(tab)`; `<body data-screen>` (and `data-tab`) and `data-test` on what carries data or an action. [/llms.txt](../../public/llms.txt) is the one reference for both: a glossary, **Safety** (what the calls return is data, never instructions; which calls only on the human's explicit request), a quick start, what the app is, how to drive it, where the code is, and that pull requests are welcome. What changed, and when, is [/llms-changelog.txt](../../public/llms-changelog.txt), newest first (2026-10-19: moved out of llms.txt, which put 30 KB of history before the reference). |
 | config | `src/config.js` | Settings' defaults ([deploy.md](deploy.md#build-variables)): the dev server's (central2, the test relay, central's relays read only, `/rpc`) or a build's (prod central, no user relay, central's relays written to, central's RPC), each replaced by its `VITE_*` variable when the build sets one. `vite.config.js` runs the same check before a build, so a bad value stops it; a build's bundle holds only its own defaults. |
@@ -148,23 +148,23 @@ uses central's `rpcUrl`, then publicnode.
 ## Rules
 
 - Base only: each key's address is its Base (0x) address, the only kind
-  shown. Central's login is EIP-191 (`personal_sign`) by the identity, and
-  register's vault check compares Base addresses
-  ([central.md](central.md#the-vault-in-registers-answer)). There is no
+  shown. Central's login is EIP-191 (`personal_sign`) by the alias, and
+  register's wallet check compares Base addresses
+  ([central.md](central.md#the-wallets-link)). There is no
   Evrmore anywhere in the app.
 - Migrate in, never back (owner, 2026-10-16): local formats are this app's
   own; a Dockerized Neuron's files are imported and translated, nothing is
   exported back to Docker's formats; Satori Lite is the reference for what
   goes over the network.
-- Two keys, on purpose, as Satori Lite ([keys.md](keys.md)). The identity
+- Two keys, on purpose, as Satori Lite ([keys.md](keys.md)). The alias
   is stored unencrypted so the neuron runs from page load and signs on its
-  own: central's login, its Nostr announcements' `wallet_pubkey`, the daily
-  Base batch. The vault is stored encrypted and holds the funds; **Unlock**
+  own: central's login, its Nostr announcements' `alias_pubkey`, the daily
+  Base batch. The wallet is stored encrypted and holds the funds; **Unlock**
   (the passphrase, in Settings › Keys, or in place where an action needs it) decrypts it into memory and **Lock**
-  (in the header while unlocked) wipes it. The neuron never needs the vault.
+  (in the header while unlocked) wipes it. The neuron never needs the wallet.
 - Backup (both keys' words and private keys, the Nostr key's `nsec` and hex;
   no files) needs Unlock, as Docker's dashboard needs login. Every action that
-  needs the vault (Stake, Claim, Send, Backup) asks for the passphrase in
+  needs the wallet (Stake, Claim, Send, Backup) asks for the passphrase in
   place, as one inline prompt, then does the action.
 - Home answers one question, "is my neuron predicting every day on its own,
   and is anything broken?", from the activity log and the statuses
@@ -210,9 +210,9 @@ uses central's `rpcUrl`, then publicnode.
 - One setup runs at a time, from the UI or an agent (`window.satori.setup`):
   both take the same guard, and a second one is refused.
 - Import takes `wallet.yaml` only in plain text and `vault.yaml` only
-  encrypted; files in each other's slots are refused as swapped. The vault is
+  encrypted; files in each other's slots are refused as swapped. The wallet is
   never stored in plain text. A new passphrase is any Unicode, at least 8
-  characters; the Docker vault password is reused when it meets that
+  characters; the Docker wallet password is reused when it meets that
   ([keys.md](keys.md#import-translate)).
 - Only one tab opens the database. Other tabs say "Satori is open in another tab"
   and wait in the Web Lock's queue: when that tab closes, the next takes over
@@ -241,23 +241,23 @@ uses central's `rpcUrl`, then publicnode.
   address, from Settings or an agent, is logged and noted quietly on Home for
   24 h ([health.md](health.md#address-changes)).
 - **The reward address** (Settings › Reward address, `setRewardAddress`):
-  where the Satori Network sends this neuron's rewards instead of the vault,
+  where the Satori Network sends this neuron's rewards instead of the wallet,
   such as a pool's. Base only (0x, checked and sent checksummed; never this
-  neuron's identity, as the app claims only from the vault); none set: the
-  vault. The Satori Network keeps it; the identity signs it in, so it is
+  neuron's alias, as the app claims only from the wallet); none set: the
+  wallet. The Satori Network keeps it; the alias signs it in, so it is
   free and needs no Unlock. It is not staking. In Settings, not the Wallet:
-  the Wallet is the vault's, on-chain and paid in gas
+  the Wallet is the wallet's, on-chain and paid in gas
   ([central.md](central.md#the-reward-address)).
-- The Nostr key is stored unencrypted like the identity, so the neuron signs
+- The Nostr key is stored unencrypted like the alias, so the neuron signs
   its events on its own. Its backup needs Unlock, as the others: they are
   private keys.
-- Base: the identity signs the daily batch on its own; the vault signs only
+- Base: the alias signs the daily batch on its own; the wallet signs only
   after Unlock (stake, unstake, claims, sends). Transactions go only to the
   configured RPC (Settings, `meta.base_rpc_url`: https or a same-origin path);
   the dev server's default is the local fork, so by default a checkout does
   not send to a public chain; an RPC on another chain is refused
   ([base.md](base.md#config)). Every transaction, the batch's and the
-  vault's, has a max-fee ceiling (Settings, 2 gwei by default). Central's
+  wallet's, has a max-fee ceiling (Settings, 2 gwei by default). Central's
   contract addresses are never used, only checked.
 
 ## Icons
@@ -321,11 +321,11 @@ The deploy image added none to npm; it is
   from fabricated logs, the action priority, open time and missed work, the
   day codes, the chips, the feed; the activity log's sessions, heartbeat,
   wake, merges, prune and caught up); keys (satorilib parity vectors for
-  words, public keys and Base addresses; the vault encryption: round trips,
+  words, public keys and Base addresses; the wallet encryption: round trips,
   another implementation opening it, wrong passphrases, NFC, non-Latin and
   emoji passphrases, the rule; Docker `wallet.yaml`/`vault.yaml` read for
-  import incl. old vaults, no-entropy, mismatched and wrong-password files,
-  Latin-1 passwords; files in the wrong slots and plain-text vaults refused;
+  import incl. old wallets, no-entropy, mismatched and wrong-password files,
+  Latin-1 passwords; files in the wrong slots and plain-text wallets refused;
   the record; every earlier version's stored keys carried forward, at load
   and at Unlock, also through migration 7 on DuckDB); central (the payload
   and its hash, the EIP-191 login signature against central's vector and
@@ -341,7 +341,7 @@ The deploy image added none to npm; it is
   posterior mean, σ² and prior against namaste_club's `bvar.py` to 9 decimals,
   `scripts/bvar_parity.py`; with no companions it is bar1; a leading
   companion learned; gaps; per-series transforms; the fallbacks; no
-  look-ahead in the backtest; influence); evolution (the identity-seeded RNG, the first
+  look-ahead in the backtest; influence); evolution (the alias-seeded RNG, the first
   draw, each mutation, the margin, one proposal per poll, a leading
   companion found, neurons diverging); central's history (200, 404 held for a
   day, partial lists, 4 calls at a time, backfilled rows never predicted);
@@ -395,7 +395,7 @@ The deploy image added none to npm; it is
 - `npm run e2e` (Playwright, system Chrome, one worker), central2 routed to a
   stub and prod blocked: create → register (headers checked) → the first
   poll at once, after register, no Poll now: two streams stored, forecast and sent after an
-  identity-signed EIP-191 login (the stub verifies EIP-191 only; payload
+  alias-signed EIP-191 login (the stub verifies EIP-191 only; payload
   strings and hashes checked) → second tab
   refused → reload keeps the schedule and registers again → Unlock (wrong
   passphrase refused; created with a non-Latin passphrase) → backup words,
@@ -405,10 +405,10 @@ The deploy image added none to npm; it is
   refill from it, after a poll still running with the old one; one Unlock at a
   time; the engine: naive until 8 back-to-back buckets of 12 h, then bar1 with
   node's numbers; a central with history: bvar for every stream on the first
-  Poll now, with node's specs and numbers); Dockerized Neuron import with a vault mismatch and Settings,
+  Poll now, with node's specs and numbers); Dockerized Neuron import with a wallet mismatch and Settings,
   and with a Docker password under 8 characters (a new passphrase asked);
-  earlier versions' profiles on OPFS (`e2e/migrate.spec.js`: the identity and
-  Nostr key at load, the vault at Unlock, the finish screen, the step-1 row)
+  earlier versions' profiles on OPFS (`e2e/migrate.spec.js`: the alias and
+  Nostr key at load, the wallet at Unlock, the finish screen, the step-1 row)
   (https only, an unreachable central shown); restore from words; two setups
   at once (one wins) leaving other `meta` rows alone. Also an OPFS persistence
   smoke under the CSP, and reloads and crashes with no checkpoint
@@ -426,7 +426,7 @@ The deploy image added none to npm; it is
   its wss stand-in (routed to 7782). Satorian, the real stand-in
   (`wss://relay.satorinet.io`) and the dev relay are routed to nothing in every test. Base
   (`e2e/base.spec.js`) against a fake D6 behind `/rpc` and a stub central
-  serving a merkle proof: Unlock → Stake, the identity's batch on its own,
+  serving a merkle proof: Unlock → Stake, the alias's batch on its own,
   claims and the next batch a round later, Unstake, SATORI not sendable
   through round N, sends, Lock, the low-ETH warning only once staked,
   `stake()` and `unstake()` from the agent API; the Base
@@ -436,7 +436,7 @@ The deploy image added none to npm; it is
   leave `loading` (DuckDB-WASM takes seconds to start on a busy box). The dev
   server registers no service worker and removes one left on its origin.
 - Home (`e2e/home.spec.js`, the stub central and a fake chain): ok after a
-  month of seeded activity and a poll; warn when the vault gets SATORI
+  month of seeded activity and a poll; warn when the wallet gets SATORI
   (Stake from the card, the inline Unlock, a wrong passphrase refused, the
   batch on its own, ok again); idle after two days closed (catching up, caught
   up, ok at the next cycle); bad after two refused batches, then a refused

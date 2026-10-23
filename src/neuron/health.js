@@ -26,7 +26,7 @@ export const NOTICE_S = 86400; // an address change is noted on Home this long
 export const LEVEL = {
   'db-error': 'bad', 'login-refused': 'bad', 'central-failing': 'bad', 'central-overdue': 'bad', 'base-failing': 'bad',
   'stake-out-of-sync': 'bad', 'relays-down': 'bad',
-  'central-failed': 'warn', 'vault-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
+  'central-failed': 'warn', 'wallet-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
   'base-stuck': 'warn', 'base-unreachable': 'warn',
   asleep: 'idle', starting: 'idle',
   backup: 'advice', stake: 'advice', install: 'advice', 'relay-down': 'advice',
@@ -149,15 +149,15 @@ function centralReasons({ now, rows, sessions, central, work }) {
       text: `No predictions went out for ${fmtDur(ran)} while Satori was open. Try a poll now.`, button: 'Poll now', act: { do: 'poll' } }));
   }
 
-  // register's vault_base_address: 'other' or 'none'; false (it pays this vault) and null (this central does not say) are fine
+  // register's wallet_address: 'other' or 'none'; false (it pays this wallet) and null (this central does not say) are fine
   const reg = central?.registration;
-  if (reg?.ok && reg.vaultMismatch) {
-    const other = reg.vaultMismatch === 'other';
-    out.push(reason('vault-mismatch', 'network', { chip: 'Vault mismatch',
-      line: other ? "The Satori Network pays this vault's rewards to another address." : 'The Satori Network has no vault for this app.',
-      text: `${other ? `The Satori Network pays this vault's rewards to a different Base address, ${reg.vault_base_address}, not this vault's ${reg.vault}.`
-        : "The Satori Network kept no vault for this alias, so it has no Base address to pay this app's rewards to (the vault may be registered to another alias)."
-      } Check the keys in Settings.`,
+  if (reg?.ok && reg.walletMismatch) {
+    const other = reg.walletMismatch === 'other';
+    const refused = reg.walletLinkError ? ` It refused the wallet's link: ${reg.walletLinkError}.` : '';
+    out.push(reason('wallet-mismatch', 'network', { chip: other ? 'Wallet mismatch' : 'Wallet not linked',
+      line: other ? "The Satori Network pays this wallet's rewards to another address." : 'The Satori Network has no wallet linked to this app.',
+      text: other ? `The Satori Network pays this wallet's rewards to a different Base address, ${reg.wallet_address}, not this wallet's ${reg.wallet}.${refused}`
+        : `The Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.${refused} Unlock the wallet: the app links it.`,
       button: 'Open Settings', act: go('settings', 'keys') }));
   }
   if (reg && !reg.ok) {
@@ -190,9 +190,9 @@ function centralReasons({ now, rows, sessions, central, work }) {
 function baseReasons({ rows, base }) {
   const out = [];
   if (!base) return out;
-  const d = base.vault?.staked;
+  const d = base.wallet?.staked;
   // in use: staked with this neuron, or a batch went out before (the stake may not be read: the RPC down since load)
-  const inUse = d === 'identity' || !!base.lastBatch;
+  const inUse = d === 'alias' || !!base.lastBatch;
   const lastRow = rows.filter((r) => r.kind === 'base').at(-1);
   const repeated = lastRow?.level === 'bad' && lastRow.count >= 2;
   const check = base.lastCheck;
@@ -225,23 +225,23 @@ function baseReasons({ rows, base }) {
   if (base.error || !base.config) return out;
   // advice while the contract bug is live (docs/issues/token-hook-gas-estimate.md): the card offers it and says the risk;
   // the chip keeps the plain "Not staked" (off)
-  if (d === 'none' && Number(base.vault.satori) > 0) {
+  if (d === 'none' && Number(base.wallet.satori) > 0) {
     out.push(reason('stake', 'contract', { text: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be "
       + 'sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.',
     button: 'Stake', act: { do: 'stake' } }));
   }
-  // the vault is the identity's only staker, and its SATORI is more than the power booked: unstaking underflows until the fix
-  if (d === 'identity' && base.vault?.inSync === false) {
+  // the wallet is the alias's only staker, and its SATORI is more than the power booked: unstaking underflows until the fix
+  if (d === 'alias' && base.wallet?.inSync === false) {
     out.push(reason('stake-out-of-sync', 'contract', { line: 'Staking is out of sync.', chip: 'Out of sync',
-      text: "Unstaking will fail until the contract fix. Don't add SATORI to the vault." }));
+      text: "Unstaking will fail until the contract fix. Don't add SATORI to the wallet." }));
   }
-  if (d === 'identity' && base.identity?.lowEth) {
-    const n = base.identity.batchesLeft;
-    out.push(reason('gas-low', 'contract', { line: "The alias's gas is running low.", chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
-      text: `The alias has gas for about ${n} daily batch${n === 1 ? '' : 'es'}. Send it a little Base ETH.`,
+  if (d === 'alias' && base.alias?.lowEth) {
+    const n = base.alias.batchesLeft;
+    out.push(reason('gas-low', 'contract', { line: 'Gas for the daily batch is running low.', chip: `Gas: ${n} batch${n === 1 ? '' : 'es'}`,
+      text: `The app has gas for about ${n} daily batch${n === 1 ? '' : 'es'}. Send a little Base ETH to its alias, on the Wallet tab.`,
       button: 'Add gas', act: go('wallet') }));
   }
-  if (d === 'identity' && check?.skipped && FIXABLE_SKIPS.test(check.skipped) && (check.round == null || check.round === base.round)) {
+  if (d === 'alias' && check?.skipped && FIXABLE_SKIPS.test(check.skipped) && (check.round == null || check.round === base.round)) {
     const why = check.skipped.split(':')[0];
     const gas = why.startsWith('gas');
     out.push(reason('base-skipped', 'contract', { line: 'The Satori contract batch was skipped.', chip: `Skipped: ${why}`,
@@ -313,7 +313,7 @@ export const toneOf = (status, work) => (status === 'warn' || status === 'bad' ?
 /**
  * The channels, by the words people see (docs/intent/ui.md, 2026-10-18): `network` the Satori Network (central, free to
  * submit to), `contract` the Satori contract (Base, uses gas), `relays` the Satori relays (Nostr). Each one's work:
- * central's poll; the batch and the vault's actions; discover and subscribe. TRAFFIC: each one's traffic channel
+ * central's poll; the batch and the wallet's actions; discover and subscribe. TRAFFIC: each one's traffic channel
  * (src/traffic.js keeps the code's names).
  */
 const CHANNEL_WORK = { network: ['central'], contract: ['base', 'stake', 'unstake', 'claim', 'send'], relays: ['discover', 'subscribe', 'watch'] };
@@ -336,9 +336,9 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   let baseChip;
   if (b) baseChip = { state: b.status, text: b.chip, off: b.status === 'note' }; // a note: a channel not used, grey
   else if (!base?.config) baseChip = { state: 'idle', text: 'Connecting…', busy: true };
-  else if (base.vault?.staked === 'other') baseChip = { state: 'idle', text: 'Staked elsewhere', off: true };
-  else if (base.vault?.staked !== 'identity') baseChip = { state: 'idle', text: 'Not staked', off: true };
-  else if (!(Number(base.identity?.power) > 0)) baseChip = { state: 'idle', text: 'No SATORI staked', off: true };
+  else if (base.wallet?.staked === 'other') baseChip = { state: 'idle', text: 'Staked elsewhere', off: true };
+  else if (base.wallet?.staked !== 'alias') baseChip = { state: 'idle', text: 'Not staked', off: true };
+  else if (!(Number(base.alias?.power) > 0)) baseChip = { state: 'idle', text: 'No SATORI staked', off: true };
   else if (base.lastBatch?.round === base.round) baseChip = { state: 'ok', text: `Round ${base.round} sent` };
   else baseChip = { state: 'ok', text: base.checking ? 'Sending…' : `Round ${base.round} due` };
 
@@ -416,7 +416,7 @@ const times = (r) => (r.count > 1 ? ` (×${r.count})` : '');
  * https://…', 'Reward address set to 0x…' (the whole address: a swap is seen), 'Reward address cleared: …'.
  */
 const settingText = (d) => {
-  if (d.what === 'reward') return d.to ? `Reward address set to ${d.to}` : 'Reward address cleared: rewards go to your vault';
+  if (d.what === 'reward') return d.to ? `Reward address set to ${d.to}` : 'Reward address cleared: rewards go to your wallet';
   const to = d.to || (d.default ? `the default, ${d.default}` : 'the default');
   return d.what === 'rpc' ? `Base RPC changed to ${to}` : `Satori Network address changed to ${to}`;
 };
@@ -481,7 +481,7 @@ export const noticesOf = (rows, now) => rows.filter((r) => r.kind === 'setting' 
  * @param {{persisted: boolean}|null} o.storage
  * @param {{installed: boolean, canInstall: boolean, addTo?: string|null}} o.app
  * @param {boolean} [o.installDismissed] the Install card was put away on this device (Not now, Got it)
- * @param {boolean} o.backedUp the vault's words confirmed (meta.backup_at)
+ * @param {boolean} o.backedUp the wallet's words confirmed (meta.backup_at)
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
  * @param {{central, base, network}} [o.traffic] each traffic channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
  * @param {Object<string, object>} [o.work] the work in progress, { [task]: entry } (src/neuron/work.js): the tones, `work`
@@ -493,15 +493,15 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr, now }), ...installReason({ app, installDismissed })];
   if (storage && storage.persisted === false && !backedUp) {
     reasons.push(reason('backup', null, {
-      text: 'This browser may clear Satori’s storage, your keys with it. Back up your vault’s 24 words.', button: 'Back up', act: { do: 'backup' } }));
+      text: 'This browser may clear Satori’s storage, your keys with it. Back up your wallet’s 24 words.', button: 'Back up', act: { do: 'backup' } }));
   }
   reasons.sort((a, b) => PRIORITY.indexOf(a.id) - PRIORITY.indexOf(b.id));
   const told = reasons.filter((r) => r.status !== 'advice' && r.status !== 'note'); // what the hero says: advice is the card's, a note the chip's
   const status = told[0]?.status ?? 'ok'; // the worst: PRIORITY is by level
   // The title: is the neuron predicting on the channels that pay? Central (Not predicting wins), and Base when it should
   // be predicting: staked with this neuron, or not read (its RPC down) after a batch went out. Nostr never moves it.
-  const d = base?.vault?.staked;
-  const baseRed = (d === 'identity' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.id === 'base-failing'); // the batch fails
+  const d = base?.wallet?.staked;
+  const baseRed = (d === 'alias' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.id === 'base-failing'); // the batch fails
   const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting' : c.title;
   const top = told[0];
   const centralTop = told.find((r) => r.channel === 'network');

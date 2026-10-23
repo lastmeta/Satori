@@ -1,6 +1,7 @@
 // The e2e's central: the dev server's default, central2, routed to a stub
-// (prod is aborted and recorded). It answers register, the observations batch,
-// the login and the predictions batch (checking the identity's signature as
+// (prod is aborted and recorded). It answers register (checking the wallet's link to the alias as central does,
+// docs/design/wallets.md), the observations batch,
+// the login and the predictions batch (checking the alias's signature as
 // central does: EIP-191 only, anything else is a 401), the
 // relay list and config, the merkle proof, the reward address (signed in,
 // checked for a Base address as central's base-upgrade change does), and a
@@ -9,7 +10,7 @@
 // stub ends, as central's last an hour. Satorian, its wss stand-in (wss://relay.satorinet.io) and the owner's dev
 // relay (7778) are never reached; /rpc is aborted unless a fake chain is given (e2e/base.spec.js).
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { getAddress, isAddress, verifyMessage, zeroAddress } from 'viem';
+import { getAddress, isAddress, recoverMessageAddress, verifyMessage, zeroAddress } from 'viem';
 import { evmAddress } from '../src/keys/keys.js';
 
 export const CENTRAL = 'https://central2.satorinet.io';
@@ -17,12 +18,12 @@ export const CENTRAL = 'https://central2.satorinet.io';
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
-  'access-control-allow-headers': 'authorization, content-type, wallet-pubkey, vault-pubkey, nostr-pubkey, neuron-version, message, signature',
+  'access-control-allow-headers': 'authorization, content-type, alias-pubkey, wallet-link, wallet-signature, nostr-pubkey, neuron-version, message, signature',
 };
 
 /**
  * Central's login check (base-upgrade f4d72f5, src/utils/auth.py verify_wallet_signature), EIP-191 only:
- * 0x + r ‖ s ‖ v in 130 hex, v 27/28 or 0/1, low s, recovering the Ethereum address of `wallet-pubkey`.
+ * 0x + r ‖ s ‖ v in 130 hex, v 27/28 or 0/1, low s, recovering the Ethereum address of `alias-pubkey`.
  * Anything else (another scheme's signature, a high s, garbage) is refused.
  */
 async function eip191(h) {
@@ -30,17 +31,32 @@ async function eip191(h) {
   if (!/^0x[0-9a-fA-F]{130}$/.test(sig) || !['1b', '1c', '00', '01'].includes(sig.slice(-2).toLowerCase())) return false;
   if (BigInt(`0x${sig.slice(66, 130)}`) > secp256k1.CURVE.n / 2n) return false;
   try {
-    return await verifyMessage({ address: evmAddress(h['wallet-pubkey']), message: h.message, signature: sig });
+    return await verifyMessage({ address: evmAddress(h['alias-pubkey']), message: h.message, signature: sig });
   } catch {
     return false;
+  }
+}
+
+/** Register's link check, as central: → { wallet } (the linked wallet's address) or { error }; {} with no link. */
+async function linkOf(h) {
+  if (!h['wallet-link']) return {};
+  try {
+    const message = Buffer.from(h['wallet-link'], 'base64').toString('utf8');
+    const [title, alias, wallet] = message.split('\n');
+    if (title !== 'Satori: link this alias to my wallet') return { error: 'not a link' };
+    if (alias !== `alias: ${evmAddress(h['alias-pubkey'])}`) return { error: 'the link names another alias' };
+    const signer = await recoverMessageAddress({ message, signature: h['wallet-signature'] });
+    return wallet === `wallet: ${signer}` ? { wallet: signer } : { error: 'the signature is not the wallet\'s' };
+  } catch {
+    return { error: 'not a link' };
   }
 }
 
 /**
  * @param {import('@playwright/test').BrowserContext} context
  * @param {{url?: string, relays?: string[], rpc?: {http: Function}}} [o] relays: central's relay list
- * @returns the stub: set `batch`, `vaults` (vault pubkey → register's `vault_base_address` for it, else null), `otherVault` (the
- *   `vault_base_address` for any vault), `noVaultBase` (no such field: a central on main, as prod), `fail` (statuses for the next
+ * @returns the stub: set `batch`, `otherWallet` (register's `wallet_address` whatever the link: central pays another
+ *   address), `noWalletAddress` (no such field: a central that does not say), `fail` (statuses for the next
  *   predictions batches), `failRegister` (how many registers answer 503: each register() is resent once on a 5xx), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
  *   `history` (stream uuid → its rows, oldest first; null: the route 404s), `reward` (the reward address central keeps:
  *   null or a 0x address, as central answers it since 8dcc016), `rewardHold` (a promise the reward-address calls wait
@@ -53,7 +69,7 @@ async function eip191(h) {
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
   const held = { batch: null, register: null, submit: null };
-  const stub = { batch: [], vaults: {}, otherVault: null, noVaultBase: false, fail: [], failRegister: 0, refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
+  const stub = { batch: [], otherWallet: null, noWalletAddress: false, fail: [], failRegister: 0, refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
     historyDelayMs: 0, reward: null, rewardHold: null, rewardRefuse: null,
     registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], rewardCalls: [], prod: [], blocked: [],
     hold(what = 'batch') {
@@ -116,9 +132,12 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
           stub.failRegister--;
           return reply(route, 503, { detail: 'unavailable' });
         }
-        // central base-upgrade d8a2085's answer; wallet_address and vault_address are its other forms, never read
-        const answer = { success: true, peer_id: 7, wallet_address: 'Eid', vault_address: 'Evault', message: 'Peer registered successfully' };
-        if (!stub.noVaultBase) answer.vault_base_address = stub.otherVault ?? stub.vaults[h['vault-pubkey']] ?? null;
+        const answer = { success: true, peer_id: 7, message: 'Peer registered successfully' };
+        if (!stub.noWalletAddress) {
+          const link = await linkOf(h);
+          answer.wallet_address = stub.otherWallet ?? link.wallet ?? null;
+          if (link.error) answer.wallet_link_error = link.error;
+        }
         return reply(route, 200, answer);
       }
       case 'GET /api/v1/peer/relays':

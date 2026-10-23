@@ -49,15 +49,15 @@ describe('the last visit\'s Home (docs/design/health.md#the-last-visit): painted
       relays: { state: 'idle', tone: 'off', text: 'No streams' } },
     feed: [{ at: 1, level: 'ok', text: 'Sent 82 predictions to the Satori Network' }],
   };
-  const base = { claimable: { rewards: '0', drop: '3.6', airdrop: '0', total: '3.6' }, vault: { satori: '100', staked: 'none', eth: '0.1' },
-    identity: { batchesLeft: 40, eth: '0.1' }, lastBatch: { round: 1 } };
+  const base = { claimable: { rewards: '0', drop: '3.6', airdrop: '0', total: '3.6' }, wallet: { satori: '100', staked: 'none', eth: '0.1' },
+    alias: { batchesLeft: 40, eth: '0.1' }, lastBatch: { round: 1 } };
   test('small: what Home draws, without the card (its buttons need the neuron), the work or the traffic', () => {
     const snap = snapshotOf({ health, base, at: 1_800_000_000_000 });
     expect(snap).toEqual({ v: 1, at: 1_800_000_000_000,
       health: { status: 'ok', tone: 'idle', title: 'Predicting', line: health.line, days: health.days, feed: health.feed,
         channels: { network: { state: 'ok', tone: 'idle', text: '82 sent 2 h ago' }, contract: { state: 'idle', tone: 'off', text: 'Not staked' },
           relays: { state: 'idle', tone: 'off', text: 'No streams' } } },
-      base: { claimable: base.claimable, vault: { satori: '100', staked: 'none' }, identity: { batchesLeft: 40 } } });
+      base: { claimable: base.claimable, wallet: { satori: '100', staked: 'none' }, alias: { batchesLeft: 40 } } });
     expect(JSON.stringify(snap).length).toBeLessThan(2000);
   });
   test('kept and read back; storage blocked, absent, or holding something else: none, nothing thrown', () => {

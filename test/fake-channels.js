@@ -4,23 +4,23 @@ import { keccak256, toHex } from 'viem';
 import { DEFAULTS } from '../src/chain/config.js';
 import { CLOSE_GRACE_S, ChannelError, verifyVoucher } from '../src/chain/channels.js';
 
-/** The contract, held in memory: open (from an unlocked vault), read, settleMany (each voucher checked as the contract does), close, withdraw. */
+/** The contract, held in memory: open (from an unlocked wallet), read, settleMany (each voucher checked as the contract does), close, withdraw. */
 export function fakeChannels(now) {
   const map = new Map();
   const calls = [];
   let n = 0;
   const api = {
     map, calls, refuse: null,
-    async openChannel({ vault, identity, payee, deposit, token = DEFAULTS.token }) {
+    async openChannel({ wallet, alias, payee, deposit, token = DEFAULTS.token }) {
       calls.push('open');
       if (api.refuse) throw api.refuse;
       const id = keccak256(toHex(`channel-${++n}`));
-      map.set(id, { id, payer: vault.evmAddress, payee, token, signer: identity.evmAddress, deposit, settled: 0n, closeRequestedAt: null, closed: false,
+      map.set(id, { id, payer: wallet.evmAddress, payee, token, signer: alias.evmAddress, deposit, settled: 0n, closeRequestedAt: null, closed: false,
         graceEndsAt: null });
       return { id, hash: `0xopen${n}` };
     },
     async readChannel(id) { const c = map.get(id); return c ? { ...c } : null; },
-    async settleMany(identity, entries) {
+    async settleMany(alias, entries) {
       calls.push(['settleMany', entries.length]);
       const settled = [];
       for (const e of entries) {
@@ -33,13 +33,13 @@ export function fakeChannels(now) {
       }
       return { hash: '0xsettle', settled, skipped: [] };
     },
-    async requestClose(identity, id) {
+    async requestClose(alias, id) {
       calls.push('requestClose');
       const c = map.get(id);
       c.closeRequestedAt ??= now();
       c.graceEndsAt = c.closeRequestedAt + CLOSE_GRACE_S;
     },
-    async withdraw(identity, id) {
+    async withdraw(alias, id) {
       const c = map.get(id);
       if (now() < c.graceEndsAt) throw new ChannelError("The 7-day grace period after the close request hasn't ended yet.", { reason: 'CloseNotReady' });
       calls.push('withdraw');

@@ -40,7 +40,7 @@ Deadlines are stored (`meta.next_poll_at`; the Base check's follows the
 chain's round). Each job has one timer (`createSchedule`,
 `src/neuron/schedule.js`), and the catch-up pass below runs what a timer
 missed. The batch rule is in
-[base.md](../design/base.md#the-daily-batch-the-identity-on-its-own): checking
+[base.md](../design/base.md#the-daily-batch-the-alias-on-its-own): checking
 `predictedStreamsCount` each tick means a tab open at any time during a round
 can earn that round, and catching up can never submit twice in one round.
 
@@ -124,16 +124,16 @@ batch, the Base round's state. Setup text:
 keep a pinned desktop tab; on iPhone the neuron works only while on screen.
 (Install Satori is on Setup and Home already.)
 
-## Also left (from the parked identity, storage and UI notes)
+## Also left (from the parked alias, storage and UI notes)
 
-- **Keys in a worker.** The identity, the unlocked vault and the Nostr key
+- **Keys in a worker.** The alias, the unlocked wallet and the Nostr key
   live on the main thread today; move them (and signing) into the neuron
   worker, so no key reaches the page's context.
 - **Hosting.** A static https host that can set response headers: the CSP
   (`csp.js`) must arrive as a header, on the page and on every worker script
   (`/sw.js` too), `.wasm` as `application/wasm`, and `/sw.js` and `/` not
   cached for long ([../design/pwa.md](../design/pwa.md#csp-and-hosting)).
-  Persistent storage is asked for, but a browser may refuse it: the vault's
+  Persistent storage is asked for, but a browser may refuse it: the wallet's
   24 words, checked at setup, stay the way back.
 - Not planned: ECDH peer encryption (only for Docker's engine IPC), anything
   on Evrmore (Base only). Central's login is EIP-191 since 2026-10-16

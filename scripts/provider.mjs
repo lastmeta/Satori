@@ -45,7 +45,7 @@ export async function connectProvider({ url, secret = generateNostrSecret() }) {
     announcePred: ({ source, name = `Predictions for ${source.stream}`, cadence = 60 }) => send(announceEvent({
       stream_name: `${source.stream}_pred`, nostr_pubkey: pubkey, name, description: '', encrypted: false, price_per_obs: 0,
       created_at: now(), cadence_seconds: cadence, tags: [],
-      metadata: { source_stream_name: source.stream, source_provider_pubkey: source.pubkey, wallet_pubkey: null } }, now())),
+      metadata: { source_stream_name: source.stream, source_provider_pubkey: source.pubkey, alias_pubkey: null } }, now())),
     /** 34601 with `value` (a string, as Lite providers send numbers). */
     observe: ({ stream, value, seq, timestamp = now() }) =>
       send(observationEvent({ stream, value, seq, timestamp, now: now() })),

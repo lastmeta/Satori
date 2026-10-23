@@ -12,7 +12,7 @@ import { recordFromRows } from '../keys/index.js';
  * in step at every write (5's obs_*, 9's predicted_ts), the keys' move (7), rows rewritten (10). 15 rewrites words an older
  * build only displays, and writes again in its own: it lives with either.
  */
-export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13, 14, 15]);
+export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13, 14, 15, 17]);
 
 export const MIGRATIONS = [
   // 1 (step 1): streams fetched from a URL; times in ms.
@@ -91,10 +91,10 @@ export const MIGRATIONS = [
   // translated now; the vault keeps its yaml in the record until its next Unlock re-encrypts it. Rows of
   // a setup cut off before wallet_yaml, and the step-1 prototype's meta.vault, are left as they are.
   async ({ get, set, remove }) => {
-    const walletYaml = await get('wallet_yaml');
-    const vaultYaml = await get('vault_yaml');
-    if (!walletYaml || !vaultYaml) return;
-    await set('keys', await recordFromRows({ walletYaml, vaultYaml, nostrYaml: await get('nostr_yaml') }));
+    const aliasYaml = await get('wallet_yaml');
+    const walletYaml = await get('vault_yaml');
+    if (!aliasYaml || !walletYaml) return;
+    await set('keys', await recordFromRows({ aliasYaml, walletYaml, nostrYaml: await get('nostr_yaml') }));
     await remove('wallet_yaml', 'vault_yaml', 'nostr_yaml');
   },
   // 8 (2026-10-16): the activity log Home's health is read from (docs/design/health.md#the-activity-log).
@@ -150,4 +150,15 @@ export const MIGRATIONS = [
   // app" too ("Staked with this app", "nothing staked with this app"), so the feed never shows the old words.
   `UPDATE activity SET data = replace(data, 'this neuron', 'this app'), mkey = replace(mkey, 'this neuron', 'this app')
    WHERE data LIKE '%this neuron%' OR mkey LIKE '%this neuron%';`,
+  // 16 (2026-10-23): the keys record names its keys alias and wallet (docs/design/wallets.md). An older build can't
+  // read the record, so not additive.
+  async ({ get, set }) => {
+    const r = await get('keys');
+    if (!r || !('identity' in r || 'vault' in r)) return;
+    const { identity, vault, ...rest } = r;
+    await set('keys', { ...rest, alias: identity, wallet: vault });
+  },
+  // 17 (2026-10-23): the activity log's rows in the same words.
+  `UPDATE activity SET data = replace(replace(data, 'vault', 'wallet'), 'identity', 'alias')
+   WHERE data LIKE '%vault%' OR data LIKE '%identity%';`,
 ];

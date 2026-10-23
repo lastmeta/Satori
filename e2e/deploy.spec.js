@@ -78,7 +78,7 @@ test('every response has the CSP from csp.js, nosniff and HSTS; hashed assets ar
   const gz = await encoded('gzip, deflate');
   expect(gz.h).toMatchObject({ 'content-encoding': 'gzip', vary: 'Accept-Encoding', 'content-type': 'application/wasm',
     'content-security-policy': CSP, 'strict-transport-security': HSTS, 'cache-control': IMMUTABLE });
-  const plain = await encoded('identity');
+  const plain = await encoded('alias');
   expect(plain.h['content-encoding']).toBeUndefined();
   expect(plain.h['content-type']).toBe('application/wasm');
   // Playwright decodes bodies: each is the same wasm; the wire sizes are the content-length

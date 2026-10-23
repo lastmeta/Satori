@@ -62,8 +62,8 @@ describe('the channel id and the voucher, as the deployed contract computes them
   });
 });
 
-describe('vouchers: signed by the identity, checked by ECDSA as the contract checks them', () => {
-  const identity = keyOf('11'.repeat(32));
+describe('vouchers: signed by the alias, checked by ECDSA as the contract checks them', () => {
+  const alias = keyOf('11'.repeat(32));
   const v = { chainId: CHAIN, channelId: V.ids[0].id, cumulative: 24n * 10n ** 15n };
   const flipS = (sig) => { // the malleable twin: (r, n − s) with the other v; ecrecover takes it, OpenZeppelin refuses it
     const { r, s, yParity } = parseSignature(sig);
@@ -71,18 +71,18 @@ describe('vouchers: signed by the identity, checked by ECDSA as the contract che
   };
 
   test('sign → recover: our signer (inside it, no key handed out) and a viem account sign the same 65 bytes', async () => {
-    const sig = await signVoucher(identity, v);
+    const sig = await signVoucher(alias, v);
     expect(sig).toMatch(/^0x[0-9a-f]{130}$/);
-    expect(identity.signDigest).toHaveBeenCalledWith(hexToBytes(voucherDigest(v)));
+    expect(alias.signDigest).toHaveBeenCalledWith(hexToBytes(voucherDigest(v)));
     expect(await signVoucher(privateKeyToAccount(`0x${'11'.repeat(32)}`), v)).toBe(sig); // RFC 6979: deterministic
     expect(await signVoucher(`0x${'11'.repeat(32)}`, v)).toBe(sig);
-    expect(await recoverVoucherSigner({ ...v, signature: sig })).toBe(identity.evmAddress);
-    expect(await verifyVoucher({ ...v, signature: sig, signer: identity.evmAddress })).toBe(true);
-    expect(await verifyVoucher({ ...v, signature: sig, signer: lc(identity.evmAddress) })).toBe(true);
+    expect(await recoverVoucherSigner({ ...v, signature: sig })).toBe(alias.evmAddress);
+    expect(await verifyVoucher({ ...v, signature: sig, signer: alias.evmAddress })).toBe(true);
+    expect(await verifyVoucher({ ...v, signature: sig, signer: lc(alias.evmAddress) })).toBe(true);
   });
   test('verify refuses a wrong signer, channel, amount, chain or contract', async () => {
-    const signature = await signVoucher(identity, v);
-    const signer = identity.evmAddress;
+    const signature = await signVoucher(alias, v);
+    const signer = alias.evmAddress;
     expect(await verifyVoucher({ ...v, signature, signer: keyOf('22'.repeat(32)).evmAddress })).toBe(false);
     expect(await verifyVoucher({ ...v, channelId: V.ids[1].id, signature, signer })).toBe(false);
     expect(await verifyVoucher({ ...v, cumulative: v.cumulative + 1n, signature, signer })).toBe(false);
@@ -90,8 +90,8 @@ describe('vouchers: signed by the identity, checked by ECDSA as the contract che
     expect(await verifyVoucher({ ...v, contract: `0x${'ab'.repeat(20)}`, signature, signer })).toBe(false);
   });
   test('what the contract\'s ECDSA refuses, refused here too: high s, v 0/1, 64 bytes, junk', async () => {
-    const signature = await signVoucher(identity, v);
-    const signer = identity.evmAddress;
+    const signature = await signVoucher(alias, v);
+    const signer = alias.evmAddress;
     const twin = flipS(signature);
     expect(await verifyVoucher({ ...v, signature: twin, signer })).toBe(false);
     expect(await recoverVoucherSigner({ ...v, signature: twin })).toBe(null);
@@ -276,7 +276,7 @@ const BI = lc(buyerI.evmAddress);
 const BV = lc(buyerV.evmAddress);
 const SI = lc(sellerI.evmAddress);
 const SV = lc(sellerV.evmAddress);
-const who = { [BI]: 'buyer identity', [BV]: 'buyer vault', [SI]: 'seller identity', [SV]: 'seller vault' };
+const who = { [BI]: 'buyer alias', [BV]: 'buyer wallet', [SI]: 'seller alias', [SV]: 'seller wallet' };
 const SALT = `0x${'5a'.repeat(32)}`;
 
 let s, rpc, chain, channels;
@@ -291,16 +291,16 @@ beforeEach(() => {
   channels = make();
 });
 const sentBy = () => rpc.sent.map((t) => [who[t.from] ?? t.from, t.functionName]);
-const opened = (o = {}) => channels.openChannel({ vault: buyerV, identity: buyerI, payee: sellerV.evmAddress, deposit: 2n * E18, salt: SALT, ...o });
+const opened = (o = {}) => channels.openChannel({ wallet: buyerV, alias: buyerI, payee: sellerV.evmAddress, deposit: 2n * E18, salt: SALT, ...o });
 const voucher = (id, cumulative, key = buyerI) => signVoucher(key, { chainId: CHAIN, channelId: id, cumulative });
 
-describe('openChannel: the vault funds it (Unlock), the identity signs for it', () => {
-  test('one openWithPermit from the vault: payer = the vault, signer = the identity; the id is channelIdOf', async () => {
+describe('openChannel: the wallet funds it (Unlock), the alias signs for it', () => {
+  test('one openWithPermit from the wallet: payer = the wallet, signer = the alias; the id is channelIdOf', async () => {
     const r = await opened();
     const id = channelIdOf({ payer: buyerV.evmAddress, payee: sellerV.evmAddress, token: TOKEN, signer: buyerI.evmAddress, salt: SALT });
     expect(r).toMatchObject({ id, permit: true, hash: rpc.sent[0].hash });
     expect(r.receipt.status).toBe('success');
-    expect(sentBy()).toEqual([['buyer vault', 'openWithPermit']]);
+    expect(sentBy()).toEqual([['buyer wallet', 'openWithPermit']]);
     expect(rpc.sent[0].args.slice(0, 6)).toEqual([buyerV.evmAddress, sellerV.evmAddress, TOKEN, buyerI.evmAddress, 2n * E18, SALT]);
     expect(rpc.sent[0].gas).toBe(0x30000n + HOOK_GAS);
     expect(s.nonces[BV]).toBe(1n); // the permit was used
@@ -312,53 +312,53 @@ describe('openChannel: the vault funds it (Unlock), the identity signs for it', 
     s.domainVersion = '2'; // a token that says one domain and signs under another
     const r = await opened();
     expect(r).toMatchObject({ permit: false, approve: rpc.sent[0].hash, hash: rpc.sent[1].hash });
-    expect(sentBy()).toEqual([['buyer vault', 'approve'], ['buyer vault', 'open']]);
+    expect(sentBy()).toEqual([['buyer wallet', 'approve'], ['buyer wallet', 'open']]);
     expect(rpc.sent[0].args).toEqual([CH, 2n * E18]);
   });
   test('without eip712Domain: name() and version "1", when that is the token\'s DOMAIN_SEPARATOR', async () => {
     s.erc5267 = false;
     expect(await opened()).toMatchObject({ permit: true });
-    expect(sentBy()).toEqual([['buyer vault', 'openWithPermit']]);
+    expect(sentBy()).toEqual([['buyer wallet', 'openWithPermit']]);
   });
   test('a token with no permit: approve, then open; an allowance already there: open alone', async () => {
     s.permit = false;
     expect(await opened()).toMatchObject({ permit: false });
-    expect(sentBy()).toEqual([['buyer vault', 'approve'], ['buyer vault', 'open']]);
+    expect(sentBy()).toEqual([['buyer wallet', 'approve'], ['buyer wallet', 'open']]);
     rpc.sent.length = 0;
     s.allowance[`${BV}:${lc(CH)}`] = 2n * E18;
     const r = await opened({ salt: newSalt() });
     expect(r.approve).toBeUndefined();
-    expect(sentBy()).toEqual([['buyer vault', 'open']]);
+    expect(sentBy()).toEqual([['buyer wallet', 'open']]);
   });
-  test('the lock: a vault staked with this app can\'t fund a channel; said plainly, before any signature or gas', async () => {
+  test('the lock: a wallet staked with this app can\'t fund a channel; said plainly, before any signature or gas', async () => {
     s.lock[BV] = INDEFINITE;
     const err = await opened().catch((e) => e);
     expect(err).toBeInstanceOf(ChannelError);
-    expect(err.message).toBe("Your vault is staked with this app, so it can't send SATORI: a channel needs SATORI the vault can send.");
+    expect(err.message).toBe("Your wallet is staked with this app, so it can't send SATORI: a channel needs SATORI the wallet can send.");
     expect(err.reason).toBe('Locked');
     expect(rpc.sent).toHaveLength(0);
     expect(buyerV.signDigest).not.toHaveBeenCalled();
   });
   test('the lock after unstaking (or a hand prediction): until the round after it, with its date', async () => {
     s.lock[BV] = ROUND + 1;
-    await expect(opened()).rejects.toThrow("Your vault's SATORI can't be sent until Oct 17, 00:00 UTC (round 20743): a channel needs SATORI the vault can send.");
+    await expect(opened()).rejects.toThrow("Your wallet's SATORI can't be sent until Oct 17, 00:00 UTC (round 20743): a channel needs SATORI the wallet can send.");
     s.lock[BV] = ROUND - 1; // ended
     await opened();
-    expect(sentBy()).toEqual([['buyer vault', 'openWithPermit']]);
+    expect(sentBy()).toEqual([['buyer wallet', 'openWithPermit']]);
   });
   test('another token: no lock to read, no permit (approve + open)', async () => {
     s.lock[BV] = INDEFINITE; // SATORI's lock says nothing about another token
     expect(await opened({ token: OTHER_TOKEN })).toMatchObject({ permit: false });
-    expect(rpc.sent.map((t) => [who[t.from], t.to, t.functionName])).toEqual([['buyer vault', lc(OTHER_TOKEN), 'approve'], ['buyer vault', lc(CH), 'open']]);
+    expect(rpc.sent.map((t) => [who[t.from], t.to, t.functionName])).toEqual([['buyer wallet', lc(OTHER_TOKEN), 'approve'], ['buyer wallet', lc(CH), 'open']]);
   });
-  test('a locked vault (the passphrase): Unlock first, nothing sent', async () => {
+  test('a locked wallet (the passphrase): Unlock first, nothing sent', async () => {
     const locked = { evmAddress: buyerV.evmAddress, locked: true, signDigest: () => { throw new Error('Locked'); } };
-    await expect(opened({ vault: locked })).rejects.toThrow('The vault is locked: Unlock it first.');
+    await expect(opened({ wallet: locked })).rejects.toThrow('The wallet is locked: Unlock it first.');
     expect(rpc.sent).toHaveLength(0);
   });
   test('errors in plain words: too little SATORI; the same id twice; a deposit of 0', async () => {
     s.balance[BV] = E18;
-    await expect(opened()).rejects.toThrow('Not enough SATORI in the vault.');
+    await expect(opened()).rejects.toThrow('Not enough SATORI in the wallet.');
     s.balance[BV] = 5n * E18;
     await opened();
     const again = await opened().catch((e) => e);
@@ -369,19 +369,19 @@ describe('openChannel: the vault funds it (Unlock), the identity signs for it', 
   test('the max fee: over the ceiling, refused as every write is (FeeCeilingError as it is), nothing sent', async () => {
     const capped = make({ maxFee: async () => 10n ** 9n });
     rpc.state.tip = 3n * 10n ** 9n;
-    const err = await capped.openChannel({ vault: buyerV, identity: buyerI, payee: sellerV.evmAddress, deposit: E18 }).catch((e) => e);
+    const err = await capped.openChannel({ wallet: buyerV, alias: buyerI, payee: sellerV.evmAddress, deposit: E18 }).catch((e) => e);
     expect(err).toBeInstanceOf(FeeCeilingError);
     expect(rpc.sent).toHaveLength(0);
   });
 });
 
-describe('topUp and cancelClose (the vault), requestClose and withdraw (the identity; the refund to the vault)', () => {
+describe('topUp and cancelClose (the wallet), requestClose and withdraw (the alias; the refund to the wallet)', () => {
   let id;
   beforeEach(async () => { ({ id } = await opened()); rpc.sent.length = 0; });
 
-  test('topUp: approve the amount when the allowance is short, then topUp, both from the vault', async () => {
+  test('topUp: approve the amount when the allowance is short, then topUp, both from the wallet', async () => {
     const r = await channels.topUp(buyerV, id, E18);
-    expect(sentBy()).toEqual([['buyer vault', 'approve'], ['buyer vault', 'topUp']]);
+    expect(sentBy()).toEqual([['buyer wallet', 'approve'], ['buyer wallet', 'topUp']]);
     expect(r).toMatchObject({ hash: rpc.sent[1].hash, approve: rpc.sent[0].hash });
     expect((await channels.readChannel(id)).deposit).toBe(3n * E18);
   });
@@ -391,7 +391,7 @@ describe('topUp and cancelClose (the vault), requestClose and withdraw (the iden
     await expect(channels.topUp(buyerV, `0x${'99'.repeat(32)}`, E18)).rejects.toThrow('There is no such channel.');
     expect(rpc.sent).toHaveLength(0);
   });
-  test('requestClose by the identity; withdraw refused until 7 days later, then the rest goes back to the vault', async () => {
+  test('requestClose by the alias; withdraw refused until 7 days later, then the rest goes back to the wallet', async () => {
     const t0 = rpc.now;
     await channels.requestClose(buyerI, id);
     expect(await channels.readChannel(id)).toMatchObject({ closeRequestedAt: t0, graceEndsAt: t0 + 7 * 86400 });
@@ -399,26 +399,26 @@ describe('topUp and cancelClose (the vault), requestClose and withdraw (the iden
     expect([early.message, early.reason]).toEqual(["The 7-day grace period after the close request hasn't ended yet.", 'CloseNotReady']);
     rpc.advance(7 * 86400);
     await channels.withdraw(buyerI, id);
-    expect(sentBy()).toEqual([['buyer identity', 'requestClose'], ['buyer identity', 'withdraw']]);
+    expect(sentBy()).toEqual([['buyer alias', 'requestClose'], ['buyer alias', 'withdraw']]);
     expect(s.balance[BV]).toBe(5n * E18);
     expect(s.balance[BI]).toBeUndefined();
     expect(await channels.readChannel(id)).toMatchObject({ closed: true });
     await expect(channels.requestClose(buyerI, id)).rejects.toThrow('The channel is closed.');
   });
-  test('cancelClose: the vault only (a leaked identity must not hold a refund back)', async () => {
+  test('cancelClose: the wallet only (a leaked alias must not hold a refund back)', async () => {
     await expect(channels.cancelClose(buyerV, id)).rejects.toThrow('No close was asked for this channel.');
     await channels.requestClose(buyerI, id);
-    await expect(channels.cancelClose(buyerI, id)).rejects.toThrow('Only the vault that funded the channel can do that.');
+    await expect(channels.cancelClose(buyerI, id)).rejects.toThrow('Only the wallet that funded the channel can do that.');
     await channels.cancelClose(buyerV, id);
-    expect(sentBy()).toEqual([['buyer identity', 'requestClose'], ['buyer vault', 'cancelClose']]);
+    expect(sentBy()).toEqual([['buyer alias', 'requestClose'], ['buyer wallet', 'cancelClose']]);
     expect(await channels.readChannel(id)).toMatchObject({ closeRequestedAt: null, graceEndsAt: null });
   });
-  test('someone else\'s identity can\'t close it', async () => {
-    await expect(channels.requestClose(sellerI, id)).rejects.toThrow("Only the channel's vault or alias can do that.");
+  test('someone else\'s alias can\'t close it', async () => {
+    await expect(channels.requestClose(sellerI, id)).rejects.toThrow("Only the channel's wallet or alias can do that.");
   });
 });
 
-describe('settle and settleMany: the seller\'s identity sends, the seller\'s vault is paid; padded for the hook', () => {
+describe('settle and settleMany: the seller\'s alias sends, the seller\'s wallet is paid; padded for the hook', () => {
   let id;
   beforeEach(async () => { ({ id } = await opened()); rpc.sent.length = 0; });
 
@@ -426,7 +426,7 @@ describe('settle and settleMany: the seller\'s identity sends, the seller\'s vau
     const sig = await voucher(id, 24n * 10n ** 15n);
     const r = await channels.settle(sellerI, id, 24n * 10n ** 15n, sig);
     expect(r).toMatchObject({ hash: rpc.sent[0].hash, settled: [] }); // fake receipts carry no logs: settledOf below
-    expect(sentBy()).toEqual([['seller identity', 'settle']]);
+    expect(sentBy()).toEqual([['seller alias', 'settle']]);
     expect(rpc.sent[0].gas).toBe(0x30000n + HOOK_GAS);
     expect(s.balance[SV]).toBe(24n * 10n ** 15n);
     await expect(channels.settle(sellerI, id, 24n * 10n ** 15n, sig)).rejects.toThrow('Nothing new to settle: the voucher pays no more than is already paid.');
@@ -454,7 +454,7 @@ describe('settle and settleMany: the seller\'s identity sends, the seller\'s vau
       { id: id2, cumulative: 3n * E18, signature: await voucher(id2, 3n * E18) }, // past its 2 SATORI: pays the 2
     ];
     const r = await channels.settleMany(sellerI, entries);
-    expect(sentBy()).toEqual([['seller identity', 'settleMany']]);
+    expect(sentBy()).toEqual([['seller alias', 'settleMany']]);
     expect(rpc.sent[0].args).toEqual([[id, id2], [10n, 3n * E18], [entries[0].signature, entries[5].signature]]);
     expect(rpc.sent[0].gas).toBe(0x30000n + HOOK_GAS + 2n * PAYMENT_GAS);
     expect(r.skipped).toEqual([{ id: unknown, reason: 'unknown' }, { id: closed, reason: 'closed' }, { id: paid, reason: 'nothing-due' },
@@ -494,16 +494,16 @@ describe('errors in plain words (channelErrorText)', () => {
     ['UnknownChannel', 'There is no such channel.'],
     ['ChannelClosed', 'The channel is closed.'],
     ['NotPayee', "Only the seller (the channel's payee) can do that."],
-    ['NotPayer', 'Only the vault that funded the channel can do that.'],
-    ['NotPayerOrSigner', "Only the channel's vault or alias can do that."],
+    ['NotPayer', 'Only the wallet that funded the channel can do that.'],
+    ['NotPayerOrSigner', "Only the channel's wallet or alias can do that."],
     ['BadSignature', "The voucher's signature isn't the channel's signer's."],
     ['NothingToSettle', 'Nothing new to settle: the voucher pays no more than is already paid.'],
     ['CloseNotRequested', 'No close was asked for this channel.'],
     ['CloseNotReady', "The 7-day grace period after the close request hasn't ended yet."],
     ['UnsupportedToken', "The token takes a fee on transfer, which channels can't hold."],
     ['SafeERC20FailedOperation', 'The token refused the transfer.', [TOKEN]],
-    ['Locked', "The vault's SATORI can't be sent now: it is staked, or it predicted by hand this round or the last."],
-    ['ERC20InsufficientBalance', 'Not enough SATORI in the vault.', [BV, 1n, 2n]],
+    ['Locked', "The wallet's SATORI can't be sent now: it is staked, or it predicted by hand this round or the last."],
+    ['ERC20InsufficientBalance', 'Not enough SATORI in the wallet.', [BV, 1n, 2n]],
     ['ERC20InsufficientAllowance', "The channel contract wasn't allowed to take the deposit.", [CH, 1n, 2n]],
     ['HookFailedWithoutReason', 'The transaction ran out of gas; try again.'],
   ])('%s', (name, words, args) => {

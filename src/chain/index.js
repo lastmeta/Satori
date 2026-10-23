@@ -5,10 +5,10 @@
 // (tests and scripts). Nothing here stores a key.
 //
 //   const chain = createChain({ config, transport })
-//   await chain.status({ identity, vault })        // one multicall, no key needed
-//   await chain.delegate({ identity, vault }) / chain.undelegate({ vault })
-//   await chain.streams() / chain.history(id) / chain.simulateGame(identity, game) / chain.sendBatch(identity, games)
-//   await chain.claimRewards(vault) / claimMerkle(vault, proof) / claimAirdrop(vault) / sendEth / sendSatori
+//   await chain.status({ alias, wallet })        // one multicall, no key needed
+//   await chain.delegate({ alias, wallet }) / chain.undelegate({ wallet })
+//   await chain.streams() / chain.history(id) / chain.simulateGame(alias, game) / chain.sendBatch(alias, games)
+//   await chain.claimRewards(wallet) / claimMerkle(wallet, proof) / claimAirdrop(wallet) / sendEth / sendSatori
 //   createChannels({ chain, config })              // payment channels on this chain (channels.js)
 import {
   BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, encodePacked, formatGwei, hashTypedData,
@@ -29,8 +29,8 @@ export const HISTORY = 768; // the registry's ring (SatoriRegistry.sol HISTORY_S
 /**
  * Gas over eth_estimateGas on every write. The token runs its transfer hook in
  * a try/catch (SatoriToken.sol:831-842), so the estimate is the least gas at
- * which the hook may fail silently: SATORI minted or sent to a staked vault
- * then leaves the identity's power short, and the vault can never unstake
+ * which the hook may fail silently: SATORI minted or sent to a staked wallet
+ * then leaves the alias's power short, and the wallet can never unstake
  * (Panic 0x11, docs/issues/token-hook-gas-estimate.md). Unused gas is
  * not charged.
  */
@@ -61,7 +61,7 @@ export function fmtUtc(s) {
 }
 
 /**
- * Whether the vault's SATORI can be sent (the token's rule: not while lockedUntil >= round): never while staked; after
+ * Whether the wallet's SATORI can be sent (the token's rule: not while lockedUntil >= round): never while staked; after
  * Unstake, from the round after lockedUntil, at its 00:00 UTC.
  */
 export function lockText(lock) {
@@ -116,7 +116,7 @@ export function panicOf(err) {
 
 /**
  * The max fee per gas over the ceiling (Settings' max fee): refused before anything is sent, for every transaction,
- * the vault's and the identity's (the security review, 2026-10-19: an RPC quoting a huge tip must not be paid).
+ * the wallet's and the alias's (the security review, 2026-10-19: an RPC quoting a huge tip must not be paid).
  */
 export class FeeCeilingError extends Error {
   constructor(maxFeePerGas, ceiling) {
@@ -163,7 +163,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const read = (call) => client.readContract(call);
   const many = (contracts) => client.multicall({ contracts, allowFailure: false });
 
-  // One write at a time, for both keys: the batch and a setup step never race for the identity's nonce.
+  // One write at a time, for both keys: the batch and a setup step never race for the alias's nonce.
   const queued = serial();
   const batchCall = (list) => engine('predictMultipleWithPayloads', [list.map((g) => ({ gameId: g.gameId, payload: payload(g.direction) }))]);
 
@@ -197,9 +197,9 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     const { request } = await client.simulateContract({ ...call, account });
     const [estimate, fee, nonce] = await Promise.all([client.estimateContractGas({ ...call, account }), (given ? Promise.resolve(given) : fees()).then(capped),
       client.getTransactionCount({ address: account.address, blockTag: 'pending' })]);
-    const wallet = createWalletClient({ account, chain, transport });
+    const writer = createWalletClient({ account, chain, transport });
     const gas = estimate + pad;
-    const hash = await wallet.writeContract({ ...request, gas, nonce, ...fee });
+    const hash = await writer.writeContract({ ...request, gas, nonce, ...fee });
     await onSent?.(hash, { nonce, gas, ...fee });
     return receiptOf(hash, call.functionName, timeout);
   });
@@ -265,15 +265,15 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * Everything the Base card shows, in one multicall (each read may fail on
      * its own) plus the gas price.
      */
-    async status({ identity, vault }) {
+    async status({ alias, wallet }) {
       const calls = [
         ['round', token('getCurrentRound')], ['chainTime', mc3('getCurrentBlockTimestamp')],
-        ['identityEth', mc3('getEthBalance', [identity])], ['identityInfo', rewards('predictionDelegateInfo', [identity])],
-        ['fee', rewards('effectivePredictorFee', [identity])], ['allowed', hub('allowedDelegator', [identity])],
-        ['vaultEth', mc3('getEthBalance', [vault])], ['satori', token('balanceOf', [vault])],
-        ['vaultInfo', rewards('predictionDelegateInfo', [vault])], ['referral', rewards('referral', [vault])], ['lockedUntil', token('transferLockedUntil', [vault])],
-        ['rewards', lens('getTotalClaimableRewards', [vault])], ['airdrop', airdrop('claimableAirdrop', [vault])],
-        ['minted', merkle('alreadyMintedTo', [vault])], // the reward drop paid so far: central's proof says the entitlement
+        ['aliasEth', mc3('getEthBalance', [alias])], ['aliasInfo', rewards('predictionDelegateInfo', [alias])],
+        ['fee', rewards('effectivePredictorFee', [alias])], ['allowed', hub('allowedDelegator', [alias])],
+        ['walletEth', mc3('getEthBalance', [wallet])], ['satori', token('balanceOf', [wallet])],
+        ['walletInfo', rewards('predictionDelegateInfo', [wallet])], ['referral', rewards('referral', [wallet])], ['lockedUntil', token('transferLockedUntil', [wallet])],
+        ['rewards', lens('getTotalClaimableRewards', [wallet])], ['airdrop', airdrop('claimableAirdrop', [wallet])],
+        ['minted', merkle('alreadyMintedTo', [wallet])], // the reward drop paid so far: central's proof says the entitlement
       ];
       const [results, gasPrice] = await Promise.all([
         client.multicall({ contracts: calls.map(([, call]) => call), allowFailure: true }),
@@ -290,12 +290,12 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
         round,
         chainTime: r.chainTime == null ? null : Number(r.chainTime),
         gasPrice,
-        identity: {
-          address: identity, eth: r.identityEth ?? null, delegate: r.identityInfo?.[0] ?? null,
-          power: r.identityInfo?.[1] ?? null, fee: r.fee ?? null, allowedDelegator: r.allowed ?? null,
+        alias: {
+          address: alias, eth: r.aliasEth ?? null, delegate: r.aliasInfo?.[0] ?? null,
+          power: r.aliasInfo?.[1] ?? null, fee: r.fee ?? null, allowedDelegator: r.allowed ?? null,
         },
-        vault: {
-          address: vault, eth: r.vaultEth ?? null, satori: r.satori ?? null, delegate: r.vaultInfo?.[0] ?? null,
+        wallet: {
+          address: wallet, eth: r.walletEth ?? null, satori: r.satori ?? null, delegate: r.walletInfo?.[0] ?? null,
           lockedUntil: r.lockedUntil ?? null, referral: r.referral ?? null,
           lock: r.lockedUntil == null || round == null ? null : transferLock(r.lockedUntil, round),
         },
@@ -307,24 +307,24 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
     /**
      * Stake: Lite's ensure_delegation (base_predict.py:273-290) and the dapp's setup
-     * (GameWalletPanel.tsx:536-595): the identity's fee to 0, the identity
-     * accepts only this vault, the vault's delegatePredictionPower(identity). Each step
+     * (GameWalletPanel.tsx:536-595): the alias's fee to 0, the alias
+     * accepts only this wallet, the wallet's delegatePredictionPower(alias). Each step
      * only when needed. onStep('send' | 'confirm', k, n) for each, then onStep('settle').
-     * A `referrer` (the invite link's) is registered first, by the vault, when it has none (set once, never the vault
+     * A `referrer` (the invite link's) is registered first, by the wallet, when it has none (set once, never the wallet
      * itself: the contract refuses both), so a failure leaves nothing staked.
      * → { steps: [{ step, by, hash }], settled }
      */
-    async delegate({ identity, vault, referrer = null, onStep = () => {} }) {
-      const I = toAccount(identity);
-      const V = toAccount(vault);
+    async delegate({ alias, wallet, referrer = null, onStep = () => {} }) {
+      const I = toAccount(alias);
+      const V = toAccount(wallet);
       const look = () => many([rewards('effectivePredictorFee', [I.address]), hub('allowedDelegator', [I.address]),
         rewards('predictionDelegateInfo', [V.address]), rewards('referral', [V.address])]);
       const [fee, allowed, [delegate], referral] = await look();
       const todo = [
-        referrer && !same(referrer, V.address) && same(referral, zeroAddress) && ['setReferral(referrer)', 'vault', V, rewards('setReferral', [referrer])],
-        fee !== 0 && ['setPredictorFee(0)', 'identity', I, rewards('setPredictorFee', [0])],
-        !same(allowed, V.address) && ['setAllowedDelegator(vault)', 'identity', I, hub('setAllowedDelegator', [V.address])],
-        !same(delegate, I.address) && ['delegatePredictionPower(identity)', 'vault', V, hub('delegatePredictionPower', [I.address])],
+        referrer && !same(referrer, V.address) && same(referral, zeroAddress) && ['setReferral(referrer)', 'wallet', V, rewards('setReferral', [referrer])],
+        fee !== 0 && ['setPredictorFee(0)', 'alias', I, rewards('setPredictorFee', [0])],
+        !same(allowed, V.address) && ['setAllowedDelegator(wallet)', 'alias', I, hub('setAllowedDelegator', [V.address])],
+        !same(delegate, I.address) && ['delegatePredictionPower(alias)', 'wallet', V, hub('delegatePredictionPower', [I.address])],
       ].filter(Boolean);
       const steps = [];
       for (const [i, [name, by, key, call]] of todo.entries()) {
@@ -339,22 +339,22 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return { steps, settled: ok };
     },
 
-    /** Unstake: the vault's delegatePredictionPower(0x0) (base_predict.py:292-301); onStep as above. → { steps, settled } */
-    async undelegate({ vault, onStep = () => {} }) {
-      const V = toAccount(vault);
+    /** Unstake: the wallet's delegatePredictionPower(0x0) (base_predict.py:292-301); onStep as above. → { steps, settled } */
+    async undelegate({ wallet, onStep = () => {} }) {
+      const V = toAccount(wallet);
       if (same(await delegateOf(V.address), zeroAddress)) return { steps: [], settled: true };
       onStep('send', 1, 1);
       const { hash } = await write(V, hub('delegatePredictionPower', [zeroAddress]), { onSent: () => onStep('confirm', 1, 1) });
       onStep('settle');
       const ok = await settled(async () => same(await delegateOf(V.address), zeroAddress));
-      return { steps: [{ step: 'delegatePredictionPower(0x0)', by: 'vault', hash }], settled: ok };
+      return { steps: [{ step: 'delegatePredictionPower(0x0)', by: 'wallet', hash }], settled: ok };
     },
 
     /** What the batch's due rule reads (start.py:1171-1176): the round, chain time, incoming power, this round's count. */
-    async batchState(identity) {
+    async batchState(alias) {
       const [round, chainTime, [, power]] = await many([token('getCurrentRound'), mc3('getCurrentBlockTimestamp'),
-        rewards('predictionDelegateInfo', [identity])]);
-      const predicted = await read(engine('predictedStreamsCount', [identity, round]));
+        rewards('predictionDelegateInfo', [alias])]);
+      const predicted = await read(engine('predictedStreamsCount', [alias, round]));
       return { round: Number(round), chainTime: Number(chainTime), power, predicted: Number(predicted) };
     },
 
@@ -392,11 +392,11 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return hours.map((hour, i) => ({ hour, value: values[i] }));
     },
 
-    /** One game alone, from the identity, without sending: null when it would pass, else the revert's name. RPC errors throw. */
-    async simulateGame(identity, { gameId, direction }) {
+    /** One game alone, from the alias, without sending: null when it would pass, else the revert's name. RPC errors throw. */
+    async simulateGame(alias, { gameId, direction }) {
       try {
         await client.simulateContract({ ...engine('predictMultipleWithPayloads', [[{ gameId, payload: payload(direction) }]]),
-          account: addressOf(identity) });
+          account: addressOf(alias) });
         return null;
       } catch (err) {
         const name = revertName(err);
@@ -406,12 +406,12 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     },
 
     /**
-     * The day's batch from the identity; onSent(hash, { nonce, gas, fees }) as soon as it is sent, `fees` as given
+     * The day's batch from the alias; onSent(hash, { nonce, gas, fees }) as soon as it is sent, `fees` as given
      * (the batch checks them against its ceiling), `timeout` for its receipt.
      * → { hash, at (the block's time), blockNumber }
      */
-    async sendBatch(identity, list, opts = {}) {
-      const { hash, receipt } = await write(identity, batchCall(list), opts);
+    async sendBatch(alias, list, opts = {}) {
+      const { hash, receipt } = await write(alias, batchCall(list), opts);
       const block = await client.getBlock({ blockNumber: receipt.blockNumber });
       return { hash, at: Number(block.timestamp), blockNumber: Number(receipt.blockNumber) };
     },
@@ -420,20 +420,20 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * A batch sent again in place of one that does not mine: the same games at the same nonce, gas limit and the
      * given (higher) fees; no simulate (the first is still pending) and no wait (the next check looks). → its hash
      */
-    replaceBatch: (identity, list, { nonce, gas, fees: fee }) => queued(async () => {
-      const account = toAccount(identity);
-      const wallet = createWalletClient({ account, chain, transport });
-      return wallet.writeContract({ ...batchCall(list), account, chain, nonce, gas, ...await capped(fee) });
+    replaceBatch: (alias, list, { nonce, gas, fees: fee }) => queued(async () => {
+      const account = toAccount(alias);
+      const writer = createWalletClient({ account, chain, transport });
+      return writer.writeContract({ ...batchCall(list), account, chain, nonce, gas, ...await capped(fee) });
     }),
 
-    // the vault's writes below: opts.onSent(hash) once sent, before the receipt (Home's "Waiting for Base to confirm…")
-    /** On-chain rewards: hub.claim() from the vault (the dapp, useDashboard.ts:288-311). */
-    claimRewards: (vault, opts) => write(vault, hub('claim'), opts),
+    // the wallet's writes below: opts.onSent(hash) once sent, before the receipt (Home's "Waiting for Base to confirm…")
+    /** On-chain rewards: hub.claim() from the wallet (the dapp, useDashboard.ts:288-311). */
+    claimRewards: (wallet, opts) => write(wallet, hub('claim'), opts),
     /** What the merkle lane has paid `addr` (at `blockNumber`, else now). */
     alreadyMinted: (addr, blockNumber) => client.readContract({ ...merkle('alreadyMintedTo', [addr]), ...(blockNumber ? { blockNumber } : {}) }),
-    /** claimMerkle(lifetimeEntitlement, proof) from the vault (base_claim.py:99-104). */
-    claimMerkle: (vault, { amountWei, proof }, opts) => write(vault, merkle('claimMerkle', [BigInt(amountWei), proof]), opts),
-    claimAirdrop: (vault, opts) => write(vault, airdrop('claimAirdrop'), opts),
+    /** claimMerkle(lifetimeEntitlement, proof) from the wallet (base_claim.py:99-104). */
+    claimMerkle: (wallet, { amountWei, proof }, opts) => write(wallet, merkle('claimMerkle', [BigInt(amountWei), proof]), opts),
+    claimAirdrop: (wallet, opts) => write(wallet, airdrop('claimAirdrop'), opts),
 
     /**
      * A send's fee before it is sent, from the sender's address (no key): the gas limit it would be sent with (ETH:
@@ -452,14 +452,14 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return { gas, about: estimate * (base + tip), max: gas * (2n * base + tip) };
     },
 
-    /** SATORI from the vault (the token refuses while transfer-locked: the simulate says Locked). */
-    sendSatori: (vault, to, amount, opts) => write(vault, token('transfer', [to, amount]), opts),
-    /** ETH from the vault: estimated first (a failure throws before sending); a plain transfer runs no hook, so no pad. */
-    sendEth: (vault, to, value, { onSent } = {}) => queued(async () => {
-      const account = toAccount(vault);
+    /** SATORI from the wallet (the token refuses while transfer-locked: the simulate says Locked). */
+    sendSatori: (wallet, to, amount, opts) => write(wallet, token('transfer', [to, amount]), opts),
+    /** ETH from the wallet: estimated first (a failure throws before sending); a plain transfer runs no hook, so no pad. */
+    sendEth: (wallet, to, value, { onSent } = {}) => queued(async () => {
+      const account = toAccount(wallet);
       const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }), fees().then(capped)]);
-      const wallet = createWalletClient({ account, chain, transport });
-      const hash = await wallet.sendTransaction({ to, value, gas, ...fee });
+      const writer = createWalletClient({ account, chain, transport });
+      const hash = await writer.sendTransaction({ to, value, gas, ...fee });
       await onSent?.(hash);
       return receiptOf(hash, 'transfer');
     }),

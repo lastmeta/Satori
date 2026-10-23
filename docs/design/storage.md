@@ -209,7 +209,7 @@ never replay another's WAL), never deleting either (`setAsideDatabase`,
 fresh database, and shows Setup with a notice ("The old database was set
 aside as satori-mvp.duckdb.corrupt-…, in this site's storage. Restore this
 neuron from your words, or import its files."): Restore from words (the
-vault's, the identity's and the Nostr key) or Import. `status().setAside` is
+wallet's, the alias's and the Nostr key) or Import. `status().setAside` is
 the new name for that page load. Any other failure (the engine's download,
 OPFS itself) still shows "Satori could not start", which says nothing was
 deleted, offers Reload, links to the issue tracker, and points to the backup.
@@ -271,12 +271,12 @@ additive; a later build keeps `schema_min` current.
    [central.md](central.md#history-an-addition-beyond-lite)).
 7. **Own key format** (2026-10-16, a function): `meta.wallet_yaml`,
    `vault_yaml` and `nostr_yaml` (Docker's texts) become one record,
-   `meta.keys`. The identity and the Nostr key are translated at once (a new
-   Nostr key if there was none); the vault keeps its yaml in the record until
+   `meta.keys`. The alias and the Nostr key are translated at once (a new
+   Nostr key if there was none); the wallet keeps its yaml in the record until
    its next Unlock re-encrypts it; the three rows go in the same commit.
    Without both `wallet_yaml` and `vault_yaml` (never set up, or a setup cut
    off) nothing is written, and the rows are left; the step-1 prototype's
-   `meta.vault` is never touched. Rows it cannot read stop the open, with
+   `meta.wallet` is never touched. Rows it cannot read stop the open, with
    nothing changed. Every earlier profile shape is tested
    ([keys.md](keys.md#migration)).
 8. **The activity log** (2026-10-16, [health.md](health.md#the-activity-log)):
@@ -366,15 +366,15 @@ Each value is JSON text.
 |---|---|---|
 | `schema_version` | how many migrations have run | the migrations |
 | `schema_min` | how many migrations a build must know to open this database: up to the last one that is not additive (`ADDITIVE`, [migrations](#migrations)) | each open that migrated it, or found it missing |
-| `keys` | the keys record, local format our own ([keys.md](keys.md#the-record)): `{ v: 1, identity, nostr, vault: { pubkey, kdf, cipher, data } }`; an earlier version's vault keeps `{ pubkey, yaml }` until its next Unlock | setup; migration 7; an Unlock that re-encrypts an earlier version's vault |
+| `keys` | the keys record, local format our own ([keys.md](keys.md#the-record)): `{ v: 1, alias, nostr, wallet: { pubkey, kdf, cipher, data } }`; an earlier version's wallet keeps `{ pubkey, yaml }` until its next Unlock | setup; migration 7; an Unlock that re-encrypts an earlier version's wallet |
 | `wallet_yaml`, `vault_yaml`, `nostr_yaml` | gone: earlier versions' Docker texts, moved into `keys` by migration 7 (left only where a setup was cut off) | earlier versions |
-| `vault` | the step-1 prototype's sealed key; never read, never deleted | the step-1 prototype |
+| `wallet` | the step-1 prototype's sealed key; never read, never deleted | the step-1 prototype |
 | `central_url` | the Settings URL; `''` = the default | Settings, `setCentral` |
 | `next_poll_at` | when the next poll is due, so a reload keeps the 11 h cadence and a failed cycle's retry ([central.md](central.md#errors)) | each poll's schedule |
 | `poll_failures` | failed cycles in a row (0 after a good one), so a reload keeps the retries' place (2, 10, 30 min, then 11 h) | each poll's schedule |
 | `central_last_poll` | the last poll: `{ at, streams, new, predicted }` or `{ at, error }` (`local: true`: the database or the engine failed, not central) | each cycle; dropped with another central |
 | `central_last_submit` | the last predictions batch: `{ at, total_submitted, successful, failed, errors }` or `{ at, error, total_submitted }` (`login: true`: central refused the login) | each cycle with something pending; dropped with another central |
-| `backup_at` | when the vault's backup was confirmed (its words confirmed at Create, given at Restore, or shown under Backup; a Dockerized Neuron's files): Home stops asking for a backup while storage is not kept ([health.md](health.md)) | setup; Backup |
+| `backup_at` | when the wallet's backup was confirmed (its words confirmed at Create, given at Restore, or shown under Backup; a Dockerized Neuron's files): Home stops asking for a backup while storage is not kept ([health.md](health.md)) | setup; Backup |
 | `central_history` | the last history run: `{ at, url, streams, rows, left, error, retryAt }`; `retryAt` (a 404: no history route) holds off this central for a day | each history run; dropped with another central |
 | `nostr_relays` | the user's relays (Settings) | `setRelays` |
 | `nostr_central_write` | whether central's relays are written to | `setRelays` |

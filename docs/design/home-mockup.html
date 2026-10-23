@@ -173,7 +173,7 @@ td.r, th.r { text-align: right; }
           </section>
           <section class="chans" data-chans></section>
           <section class="tile earn">
-            <div><div class="sub">Claimable rewards</div><div class="big" data-claim></div><div class="sub" data-vault></div></div>
+            <div><div class="sub">Claimable rewards</div><div class="big" data-claim></div><div class="sub" data-wallet></div></div>
             <button class="btn ghost" type="button">Claim</button>
           </section>
         </div>
@@ -217,7 +217,7 @@ td.r, th.r { text-align: right; }
           <section class="tile span-4 wallet">
             <div class="tile-h" style="margin:0"><b>Wallet</b><span>Base</span></div>
             <div class="earn"><div><div class="sub">Claimable</div><div class="big" data-claim></div></div><button class="btn ghost" type="button">Claim</button></div>
-            <div class="line"><span>Vault</span><span data-vault-d>100 SATORI · staked</span></div>
+            <div class="line"><span>Wallet</span><span data-wallet-d>100 SATORI · staked</span></div>
             <div class="line"><span>Gas for daily batch</span><span data-gas>33 days left</span></div>
           </section>
           <section class="tile span-12">
@@ -232,7 +232,7 @@ td.r, th.r { text-align: right; }
   <div class="notes">
     <div><b>Home answers one question</b>Is my neuron predicting every day, and is anything broken? Words appear only when something is wrong.</div>
     <div><b>Streams</b>Each stream, its forecast, its model and companions, its history.</div>
-    <div><b>Wallet</b>Vault, staking, claims, sending, gas.</div>
+    <div><b>Wallet</b>Wallet, staking, claims, sending, gas.</div>
     <div><b>Settings</b>Keys and backup, central, relays, Base RPC, storage, install.</div>
   </div>
 </div>
@@ -250,21 +250,21 @@ const tone = { ok: ['--ok','--ok-soft'], idle: ['--idle','--idle-soft'], warn: [
 // Example data per state. Day codes: f = predicted all day's channels, p = part, o = app closed, e = error.
 const S = {
   ok:   { title: 'Predicting', line: 'Sent 83 predictions <span class="when">2 h ago</span> · next <span class="when">in 9 h</span>',
-          days: 'ffffffffofffff', days30: 'fffffffffoffffffffffffffofffff', claim: '12.4', vault: '100 SATORI staked', gas: '33 days left',
+          days: 'ffffffffofffff', days30: 'fffffffffoffffffffffffffofffff', claim: '12.4', wallet: '100 SATORI staked', gas: '33 days left',
           chans: [['ok','Central','83 sent today'],['ok','Base','Round 20742 sent'],['ok','Network','2 relays']],
           feed: [['ok','Sent 83 predictions to central','2 h ago'],['ok','Base batch for round 20742: 1 game','5 h ago'],['ok','Published 3 forecasts to the network','6 h ago'],['ok','History loaded for 83 streams','1 d ago']] },
   idle: { title: 'Was asleep', line: 'Closed for <span class="when">2 days</span>. Caught up just now.',
-          days: 'fffffffffffoop', days30: 'fffffffffffffffffffffffffffoop', claim: '12.4', vault: '100 SATORI staked', gas: '33 days left',
+          days: 'fffffffffffoop', days30: 'fffffffffffffffffffffffffffoop', claim: '12.4', wallet: '100 SATORI staked', gas: '33 days left',
           action: ['The neuron only runs while Satori is open. Install it so it stays open in its own window.', 'Install'],
           chans: [['ok','Central','83 sent just now'],['ok','Base','Round 20744 sent'],['ok','Network','2 relays']],
           feed: [['ok','Caught up: sent 83 predictions','just now'],['idle','Satori was closed','2 d'],['ok','Base batch for round 20742','2 d ago']] },
   warn: { title: 'Predicting', line: 'Central is fine. Base needs one step from you.',
-          days: 'ffffffffpppppp', days30: 'ffffffffffffffffffffffffpppppp', claim: '0', vault: '100 SATORI · not staked', gas: '0 ETH',
-          action: ["Your vault's SATORI isn't earning on Base. Stake with this neuron.", 'Stake'],
+          days: 'ffffffffpppppp', days30: 'ffffffffffffffffffffffffpppppp', claim: '0', wallet: '100 SATORI · not staked', gas: '0 ETH',
+          action: ["Your wallet's SATORI isn't earning on Base. Stake with this neuron.", 'Stake'],
           chans: [['ok','Central','83 sent today'],['warn','Base','Not staked'],['ok','Network','2 relays']],
           feed: [['ok','Sent 83 predictions to central','2 h ago'],['warn','Base batch skipped: no prediction power','5 h ago'],['ok','Published 3 forecasts to the network','6 h ago']] },
   bad:  { title: 'Not predicting', line: 'Central refused the last <span class="when">2</span> batches.',
-          days: 'ffffffffffffee', days30: 'ffffffffffffffffffffffffffffee', claim: '12.4', vault: '100 SATORI staked', gas: '33 days left',
+          days: 'ffffffffffffee', days30: 'ffffffffffffffffffffffffffffee', claim: '12.4', wallet: '100 SATORI staked', gas: '33 days left',
           action: ['Central rejects this neuron’s login. Check the central address in Settings.', 'Open details'],
           chans: [['bad','Central','Login refused'],['ok','Base','Round 20742 sent'],['ok','Network','2 relays']],
           feed: [['bad','Central refused the batch: login 401','2 h ago'],['bad','Central refused the batch: login 401','13 h ago'],['ok','Base batch for round 20742','1 d ago']] },
@@ -284,8 +284,8 @@ function render(k) {
   document.querySelectorAll('[data-chans]').forEach(el => el.innerHTML = s.chans.map(([t, name, sub]) =>
     `<div class="chan"><div class="row"><span class="state" style="background:var(${tone[t][0]})">${small[t]}</span>${name}</div><div class="sub">${sub}</div></div>`).join(''));
   document.querySelectorAll('[data-claim]').forEach(el => el.innerHTML = `${s.claim}<small>SATORI</small>`);
-  document.querySelector('[data-vault]').textContent = s.vault;
-  document.querySelector('[data-vault-d]').textContent = s.vault;
+  document.querySelector('[data-wallet]').textContent = s.wallet;
+  document.querySelector('[data-wallet-d]').textContent = s.wallet;
   document.querySelector('[data-gas]').textContent = s.gas;
   document.querySelectorAll('[data-action]').forEach(el => { el.hidden = !s.action; if (s.action) { el.querySelector('[data-action-text]').textContent = s.action[0]; el.querySelector('[data-action-btn]').textContent = s.action[1]; } });
   document.querySelector('[data-feed]').innerHTML = s.feed.map(([t, text, when]) =>

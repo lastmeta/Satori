@@ -27,8 +27,8 @@ const X_NOSTR = '7'.repeat(64); // someone else
 const S_ID = signer('11'.repeat(32));
 const B_ID = signer('22'.repeat(32));
 const X_ID = signer('33'.repeat(32));
-const S_VAULT = signer('44'.repeat(32));
-const B_VAULT = signer('55'.repeat(32));
+const S_WALLET = signer('44'.repeat(32));
+const B_WALLET = signer('55'.repeat(32));
 const STREAM = 'walk_pred';
 const PRICE = 1000n * SAT; // 1000 satoshis: 0.00001 SATORI
 let clock;
@@ -44,9 +44,9 @@ let seller;
 let buyer;
 let sdb;
 let bdb;
-let vaultOpen;
+let walletOpen;
 const make = (who, db, extra = {}) => createMarket({ db, key: who === 's' ? { secret: S_NOSTR, pubkey: nostrPubkey(S_NOSTR) } : { secret: B_NOSTR, pubkey: nostrPubkey(B_NOSTR) },
-  identity: who === 's' ? S_ID : B_ID, vaultAddress: who === 's' ? S_VAULT.evmAddress : B_VAULT.evmAddress, vault: () => (who === 'b' && vaultOpen ? B_VAULT : null),
+  alias: who === 's' ? S_ID : B_ID, walletAddress: who === 's' ? S_WALLET.evmAddress : B_WALLET.evmAddress, wallet: () => (who === 'b' && walletOpen ? B_WALLET : null),
   chain: async () => ({ channels: chainApi, config: DEFAULTS, chainTime: async () => clock }), now: () => clock,
   publish: async (e) => { relay.push(e); return 1; }, sendKept: async (list) => { relay.push(...list); }, ...extra });
 const SP = nostrPubkey(S_NOSTR);
@@ -54,7 +54,7 @@ const BP = nostrPubkey(B_NOSTR);
 
 /** The seller's listing as the buyer finds it: its verified catalog entry. */
 const entryOf = (listing = seller.listing(STREAM)) => catalog([signEvent(announceEvent(predMetadata({ sub: { stream_name: 'walk', provider_pubkey: 'ab'.repeat(32),
-  name: 'Walk', cadence_seconds: 60, pred_created_at: 1 }, pubkey: SP, walletPubkey: '02ab', listing }), clock), S_NOSTR)])[0];
+  name: 'Walk', cadence_seconds: 60, pred_created_at: 1 }, pubkey: SP, aliasPubkey: '02ab', listing }), clock), S_NOSTR)])[0];
 const last = (kind) => relay.filter((e) => e.kind === kind).at(-1);
 /** One observation of the seller's stream, delivered and (when the buyer gets it) paid; the payment handed to the seller. → the deliveries */
 async function observe(seq, value = String(100 + seq), { pay = true } = {}) {
@@ -75,7 +75,7 @@ beforeEach(async () => {
   relay = [];
   sdb = memoryKv();
   bdb = memoryKv();
-  vaultOpen = true;
+  walletOpen = true;
   seller = make('s', sdb);
   buyer = make('b', bdb);
   await seller.load();
@@ -90,7 +90,7 @@ describe('pieces', () => {
     expect(priceOf('0.00000001')).toBe(SAT); // a price: whole satoshis (Lite's price_per_obs)
     expect(() => priceOf('0.000000001')).toThrow('at most 8 decimal places');
   });
-  test("the binding: the identity's EIP-191 signature of the channel and the Nostr key; another key, channel or Nostr key recovers no match", async () => {
+  test("the binding: the alias's EIP-191 signature of the channel and the Nostr key; another key, channel or Nostr key recovers no match", async () => {
     const id = keccak256(toHex('c'));
     expect(bindingText(id, BP)).toBe(`satori-market:v1:${id}:${BP}`);
     const sig = signBinding(B_ID, id, BP);
@@ -100,7 +100,7 @@ describe('pieces', () => {
     expect(await bindingSigner(id, BP, '0x1234')).toBeNull();
   });
   test("a listing: Lite's price_per_obs (satoshis, above 0) the one price; this chain, the Satori contract, SATORI and a payee; anything else is none", () => {
-    const m = { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: S_VAULT.evmAddress };
+    const m = { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token, payee: S_WALLET.evmAddress };
     expect(listingOf({ price_per_obs: 1000, metadata: { market: m } })).toEqual({ ...m, price: 1000n * SAT });
     for (const bad of [{ chain: 8453 }, { contract: '0x' + '1'.repeat(40) }, { token: '0x' + '2'.repeat(40) }, { payee: 'nope' }]) {
       expect(listingOf({ price_per_obs: 1000, metadata: { market: { ...m, ...bad } } }), JSON.stringify(bad)).toBeNull();
@@ -129,11 +129,11 @@ describe('selling and buying', () => {
     return v;
   }
 
-  test('sell: the listing (the vault paid, SATORI, the Satori contract); unsell: free again', async () => {
+  test('sell: the listing (the wallet paid, SATORI, the Satori contract); unsell: free again', async () => {
     await seller.sell(STREAM, PRICE);
     expect(seller.priced(STREAM)).toBe(true);
     expect(seller.listing(STREAM)).toEqual({ price_per_obs: 1000, market: { chain: 84532, contract: DEFAULTS.channels, token: DEFAULTS.token,
-      payee: S_VAULT.evmAddress } });
+      payee: S_WALLET.evmAddress } });
     expect(seller.status().selling).toEqual([{ stream: STREAM, price: '0.00001', buyers: [] }]);
     await expect(seller.sell(STREAM, SAT + 1n)).rejects.toThrow('at most 8 decimal places');
     await seller.unsell(STREAM);
@@ -141,11 +141,11 @@ describe('selling and buying', () => {
     expect(await seller.deliver(STREAM, { seq: 1, timestamp: clock, value: '1' })).toEqual([]);
   });
 
-  test('buy: the vault opens a channel to the payee, the 34602 names it with the binding; the seller accepts it from the chain', async () => {
+  test('buy: the wallet opens a channel to the payee, the 34602 names it with the binding; the seller accepts it from the chain', async () => {
     const v = await bought();
     expect(v).toMatchObject({ pubkey: SP, stream: STREAM, price: '0.00001', deposit: '0.00005', paid: '0', status: 'open' });
     const ch = chainApi.map.get(v.channel);
-    expect(ch).toMatchObject({ payer: B_VAULT.evmAddress, payee: S_VAULT.evmAddress, signer: B_ID.evmAddress, deposit: 5n * PRICE });
+    expect(ch).toMatchObject({ payer: B_WALLET.evmAddress, payee: S_WALLET.evmAddress, signer: B_ID.evmAddress, deposit: 5n * PRICE });
     const sub = last(KIND.SUBSCRIPTION);
     expect(verifyEvent(sub)).toBe(true);
     expect(sub.tags).toEqual([['d', STREAM], ['p', SP], ['stream', STREAM], ['satori', 'subscription']]);
@@ -205,17 +205,17 @@ describe('selling and buying', () => {
     expect(sale().delivered).toBe(0);
   });
 
-  test('forgeries: a channel bound to another Nostr key or signed by another identity, another payee, a closing channel; bad vouchers', async () => {
+  test('forgeries: a channel bound to another Nostr key or signed by another alias, another payee, a closing channel; bad vouchers', async () => {
     await seller.sell(STREAM, PRICE);
     const v = await buyer.buy(entryOf(), 5n * PRICE);
     const pc = JSON.parse(last(KIND.SUBSCRIPTION).content).payment_channel;
     const claim = (secret, channel) => signEvent(subscriptionEvent({ stream: STREAM, provider: SP, subscriber: nostrPubkey(secret), now: clock,
       paymentChannel: channel }), secret);
     await seller.onEvent(claim(X_NOSTR, pc)); // the buyer's channel claimed by another Nostr key
-    await seller.onEvent(claim(X_NOSTR, { ...pc, binding: signBinding(X_ID, v.channel, nostrPubkey(X_NOSTR)) })); // bound by another identity
+    await seller.onEvent(claim(X_NOSTR, { ...pc, binding: signBinding(X_ID, v.channel, nostrPubkey(X_NOSTR)) })); // bound by another alias
     expect(seller.status().selling[0].buyers).toEqual([]);
     // a channel paying someone else
-    const other = await chainApi.openChannel({ vault: B_VAULT, identity: B_ID, payee: X_ID.evmAddress, deposit: 5n * PRICE });
+    const other = await chainApi.openChannel({ wallet: B_WALLET, alias: B_ID, payee: X_ID.evmAddress, deposit: 5n * PRICE });
     await seller.onEvent(claim(B_NOSTR, { ...pc, id: other.id, binding: signBinding(B_ID, other.id, BP) }));
     expect(seller.status().selling[0].buyers).toEqual([]);
     // the real one
@@ -253,7 +253,7 @@ describe('selling and buying', () => {
     clock += 3600; // an hour later: something due, but no transaction until a day has passed
     await seller.pass();
     expect([settles(), chainApi.map.get(v.channel).settled]).toEqual([1, 2n * PRICE]);
-    chainApi.map.get(v.channel).closeRequestedAt = clock; // asked on chain (by its vault, say): no more deliveries, still owed
+    chainApi.map.get(v.channel).closeRequestedAt = clock; // asked on chain (by its wallet, say): no more deliveries, still owed
     await seller.pass();
     expect((await observe(4)).out).toEqual([]);
     expect(seller.status().selling[0].buyers).toHaveLength(1);
@@ -266,7 +266,7 @@ describe('selling and buying', () => {
     expect(settles()).toBe(2); // nothing due: no transaction
   });
 
-  test("stop: the identity asks to close, Lite's unsubscribe; the seller stops and settles in its daily settle; the refund after the grace period, in the pass", async () => {
+  test("stop: the alias asks to close, Lite's unsubscribe; the seller stops and settles in its daily settle; the refund after the grace period, in the pass", async () => {
     const v = await bought();
     await observe(1);
     await observe(2);
@@ -288,7 +288,7 @@ describe('selling and buying', () => {
     clock += CLOSE_GRACE_S;
     await buyer.pass();
     expect(chainApi.calls).toContain('withdraw');
-    expect(buyer.status().bought).toEqual([]); // refunded to the vault
+    expect(buyer.status().bought).toEqual([]); // refunded to the wallet
     expect(buyer.bought()).toEqual(new Set());
   });
 
@@ -306,16 +306,16 @@ describe('selling and buying', () => {
     expect(buyer.status().bought.map((b) => b.status)).toEqual(['closing', 'open']);
   });
 
-  test("what can't buy: locked vault, a stream not listed, a deposit under one price, a staked vault (in plain words, nothing kept)", async () => {
+  test("what can't buy: locked wallet, a stream not listed, a deposit under one price, a staked wallet (in plain words, nothing kept)", async () => {
     await seller.sell(STREAM, PRICE);
-    vaultOpen = false;
-    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow('Unlock the vault first');
-    vaultOpen = true;
+    walletOpen = false;
+    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow('Unlock the wallet first');
+    walletOpen = true;
     await expect(buyer.buy(entryOf(null), 5n * PRICE)).rejects.toThrow('not for sale on the Satori contract');
     await expect(buyer.buy(entryOf(), PRICE - 1n)).rejects.toThrow('at least one observation');
-    chainApi.refuse = new ChannelError("Your vault is staked with this app, so it can't send SATORI: a channel needs SATORI the vault can send.",
+    chainApi.refuse = new ChannelError("Your wallet is staked with this app, so it can't send SATORI: a channel needs SATORI the wallet can send.",
       { reason: 'Locked' });
-    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow("Your vault is staked with this app, so it can't send SATORI");
+    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow("Your wallet is staked with this app, so it can't send SATORI");
     expect(buyer.status().bought).toEqual([]);
     expect(relay.filter((e) => e.kind === KIND.SUBSCRIPTION)).toEqual([]);
     // the default deposit: 100 observations

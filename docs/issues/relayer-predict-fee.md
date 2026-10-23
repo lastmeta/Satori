@@ -1,4 +1,4 @@
-# Gasless predictions: the identity can't pay the relayer's Predict fee
+# Gasless predictions: the alias can't pay the relayer's Predict fee
 
 **Status:** owner ruling needed · **Matters for:** removing the Base ETH requirement (later)
 
@@ -14,12 +14,12 @@
 
 ## Problem
 
-The identity signs predictions and holds no SATORI (inferred: nothing funds it).
+The alias signs predictions and holds no SATORI (inferred: nothing funds it).
 So a gasless daily batch fails on the fee, and the user must fund Base ETH on
 two addresses instead, as Docker does today.
 
 ## Options
 
 1. Predict fee 0 in `fees.json` (the relayer bears gas for predictions).
-2. Keep the fee; the app tells users to send a little SATORI to the identity.
+2. Keep the fee; the app tells users to send a little SATORI to the alias.
 3. Keep v1 on ETH gas (current design) and decide later.

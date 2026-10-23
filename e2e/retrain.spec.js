@@ -9,7 +9,7 @@ import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { openApp, polled, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
-const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
 const v = fx.vectors[2];
 const PASS = 'correct horse battery';
 const H = 3600;
@@ -90,7 +90,6 @@ test('Retrain: Stop and a counting line, Home\'s hero, a reload mid-retrain cont
   test.setTimeout(300_000);
   const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
   const central = await stubCentral(context, { rpc });
-  central.vaults[v.pubkey] = v.ethAddress;
   // the latest observation 30 min before the end of a 12 h bucket: the same buckets (and models) on every run
   const STEP = 12 * H;
   const t = Math.floor((nowS() - 60 + STEP / 2) / STEP) * STEP - STEP / 2 - 1800;
@@ -102,13 +101,13 @@ test('Retrain: Stop and a counting line, Home\'s hero, a reload mid-retrain cont
   page.on('pageerror', (e) => errors.push(String(e)));
 
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   expect((await polled(page)).lastSubmit).toMatchObject({ successful: 8 });
   // staked, its batch sent: all is well, so the hero's tone is its work's
   const st = await page.evaluate(() => window.satori.base());
-  rpc.eth[st.identity.address.toLowerCase()] = 10n ** 17n;
-  rpc.eth[st.vault.address.toLowerCase()] = 10n ** 17n;
-  s.balance[st.vault.address.toLowerCase()] = 100n * E18;
+  rpc.eth[st.alias.address.toLowerCase()] = 10n ** 17n;
+  rpc.eth[st.wallet.address.toLowerCase()] = 10n ** 17n;
+  s.balance[st.wallet.address.toLowerCase()] = 100n * E18;
   await page.evaluate((p) => window.satori.unlock(p), PASS);
   await page.evaluate(() => window.satori.stake());
   await page.evaluate(() => window.satori.predictBase());

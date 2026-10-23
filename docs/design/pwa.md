@@ -11,7 +11,7 @@ nothing like it, so there is no Lite pattern to follow here.
 
 ## Why, in the owner's order
 
-1. **Keep the keys.** The identity, the vault and the Nostr key live only in
+1. **Keep the keys.** The alias, the wallet and the Nostr key live only in
    the OPFS DuckDB database, with the data. Safari deletes a site's
    script-writable storage (OPFS included) "after seven days of Safari use
    without user interaction on the site"; web apps added to the Home Screen
@@ -115,7 +115,7 @@ yes, then reads `estimate()`. Settings › This device shows it:
 each with what is used of the quota (`41 MB of 11 GB used`; the precache
 counts). `status().storage` is `{ persisted, usage, quota }` (bytes). After
 `appinstalled` it asks again, since an installed app's request is granted.
-Storage that is not kept, with no backup of the vault confirmed, is advice
+Storage that is not kept, with no backup of the wallet confirmed, is advice
 on Home: the Back up card, while the hero stays green ([health.md](health.md));
 a neuron that was asleep offers Install the same way when the browser offers
 it.

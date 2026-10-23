@@ -18,7 +18,7 @@ import { stubCentral as stubAt } from './stub.js';
 const CENTRAL_RELAY = 'ws://localhost:7782';
 const USER_RELAY = 'ws://localhost:7781';
 const PASS = 'correct horse battery';
-const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
 
 /** The stub central (e2e/stub.js), listing 7782 as its relay. */
 const stubCentral = (context) => stubAt(context, { relays: [CENTRAL_RELAY] });
@@ -53,7 +53,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   const me = s0.nostr.pubkey;
   await expect.poll(() => stub.registered.length).toBe(1);
   expect(stub.registered[0]['nostr-pubkey']).toBe(me);
-  const walletPubkey = stub.registered[0]['wallet-pubkey'];
+  const aliasPubkey = stub.registered[0]['alias-pubkey'];
   await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(me);
 
   // Relays: central's (read only on the dev server) and the user's, set to the e2e relay.
@@ -111,7 +111,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   expect(JSON.parse(ann.content)).toEqual({ stream_name: pred, nostr_pubkey: me, name: 'Predictions for E2E walk',
     description: '', encrypted: false, price_per_obs: 0, created_at: expect.any(Number), cadence_seconds: 60, tags: [],
     approval_required: false, metadata: { source_stream_name: stream, source_provider_pubkey: provider.pubkey,
-      wallet_pubkey: walletPubkey } });
+      alias_pubkey: aliasPubkey } });
   const [subEv] = await user.fetch([{ kinds: [34602], authors: [me], '#d': [stream] }]);
   expect(subEv.tags).toEqual([['d', stream], ['p', provider.pubkey], ['stream', stream], ['satori', 'subscription']]);
   const [list] = await user.fetch([{ kinds: [10002], authors: [me] }]);
@@ -144,7 +144,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   expect(last.tags).toContainEqual(['seq', '3']);
   expect(await centralRelay.fetch([{ authors: [me] }])).toEqual([]);
 
-  // The key's backup (the vault's passphrase each time, as the others'): nsec and hex; it is random, not from the words.
+  // The key's backup (the wallet's passphrase each time, as the others'): nsec and hex; it is random, not from the words.
   await expect(page.evaluate(() => window.satori.backup('nostr'))).rejects.toThrow(/passphrase is needed/);
   const backup = await page.evaluate((p) => window.satori.backup('nostr', p), PASS);
   expect(nostrPubkey(backup.secret)).toBe(me);
@@ -160,14 +160,14 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
 
 test('Dockerized Neuron import with nostr.yaml keeps its Nostr key; refused subscriptions are explained', async ({ context, page }) => {
   const stub = await stubCentral(context);
-  const wallet = fx.vectors[0];
+  const alias = fx.vectors[0];
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
-  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
-  await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
+  await page.getByLabel('Alias file').setInputFiles(file('wallet.yaml', alias.walletYaml));
+  await page.getByLabel('Wallet file').setInputFiles(file('vault.yaml', fx.wallets.current.yaml));
   await page.getByLabel(/nostr.yaml/).setInputFiles(file('nostr.yaml', fx.nostr.yaml));
-  await page.getByLabel('Vault password').fill(fx.vaults.password);
+  await page.getByLabel('Wallet password').fill(fx.wallets.password);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(fx.nostr.pubkeyHex, { timeout: 30_000 });
   await expect.poll(() => stub.registered.length).toBe(1);

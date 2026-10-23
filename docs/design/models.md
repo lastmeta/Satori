@@ -261,7 +261,7 @@ the Satori Network.
   spec one change away (swap a companion, add one, drop one, λ1 or λ2 one
   grid step, to or from `bar1`) in a seeded order, and moves to the first
   that scores better; at a local optimum (every neighbour tried) it
-  restarts from a seeded random draw. Seeded by identity + target + the
+  restarts from a seeded random draw. Seeded by alias + target + the
   target's retrain counter, so a retrain is reproducible.
 - **The goal**: better than no change, by the tab's rule (the median error
   over no change's, below 0.95).
@@ -394,7 +394,7 @@ the way back to no change) → Retrain:
 
 <img src="../screenshots/retrain-live-running-phone-light.png" alt="live: Retraining safetrade_cfb · tried 380 · best so far 65% better" width="240"> <img src="../screenshots/retrain-live-result-phone-light.png" alt="live: Couldn't find a model that beats no change. Kept the current one." width="240"> <img src="../screenshots/retrain-live-result-phone-dark.png" alt="live: the result, dark" width="240">
 
-The same with another fresh profile (another identity, so other specs),
+The same with another fresh profile (another alias, so other specs),
 through `satori.retrain(id)` on its ten worst models: none beat no change
 by 20 % on the last two weeks; four kept a closer one (safetrade_kcn from
 41.6 times no change's error to 28.3, safetrade_btcz 3.79 to 2.50,
@@ -519,7 +519,7 @@ stream"). Top to bottom, joined by short arrows:
   latest value, a chart, and where it went: Network ("Accepted Oct 18,
   16:23", or "Pending since …"), Contract ("Round 20743 · UP · tx 0xab…cd",
   linked to the explorer; or "left out: …"; a tie says its rule: "UP (a tie:
-  its last move)", "DOWN (a tie, flat)", [base.md](base.md#the-daily-batch-the-identity-on-its-own)), Relays ("`btc_pred` #12 · 2
+  its last move)", "DOWN (a tie, flat)", [base.md](base.md#the-daily-batch-the-alias-on-its-own)), Relays ("`btc_pred` #12 · 2
   relays").
 
 **Computed on demand** (`modelDetail`): the stored spec and the stored
@@ -708,7 +708,7 @@ asked): setup → the first poll at once: 83 streams, central's history for
 all 83 (54,761 rows), 83 of 83 accepted. The tab: *Resting*, "Trained just
 now · next run in 11 h", "83 models · 81 bvar · 2 naive", "Beats no change
 on 18 of 83 · ties 43 · worse 22", "Median model: the same error as no
-change". Each fresh profile draws its own specs (the identity seeds them):
+change". Each fresh profile draws its own specs (the alias seeds them):
 three others that day read 24 / 40 / 19, 17 / 49 / 17 and 19 / 32 / 32, the
 median model between 1% less error and the same. Nothing scrolls sideways at
 390 px.

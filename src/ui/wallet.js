@@ -1,9 +1,10 @@
-// Wallet: Base (docs/design/base.md): the vault's and the identity's balances, Stake with this neuron or Unstake, claims,
-// send, the gas for the daily batch, the last batch, and who plays (this neuron, or Satori Daily by hand). The vault's
+// Wallet: Base (docs/design/base.md): the wallet's and the alias's balances, Stake with this app or Unstake, claims,
+// send, the gas for the daily batch, the alias (the only place it shows), the last batch, and who plays (this app, or
+// Satori Daily by hand). The wallet's
 // actions ask for the passphrase in place (the inline Unlock) when it is locked.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
-import { fact, form, idRow, unlockPrompt } from './parts.js';
+import { backupPanel, fact, form, idRow, unlockPrompt } from './parts.js';
 import {
   amountText, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
   referralText, referralNote, REFERRAL_PCT,
@@ -29,11 +30,11 @@ const txLink = (hash, label = '', title = '') => {
 
 export function walletTab(a) {
   const b = () => state.base;
-  const staked = () => b().vault.staked === 'identity';
-  const notStaked = () => b().vault.staked === 'none';
-  const lowEth = () => b().identity.lowEth && staked(); // gas matters once the identity has a batch to send
+  const staked = () => b().wallet.staked === 'alias';
+  const notStaked = () => b().wallet.staked === 'none';
+  const lowEth = () => b().alias.lowEth && staked(); // gas matters once the alias has a batch to send
   const busy = () => !!state.baseBusy;
-  const play = () => playNote(b().vault.staked);
+  const play = () => playNote(b().wallet.staked);
   const q = () => state.sendReview;
   return html`
   <section class="tab-page" data-test="wallet-tab" hidden="${() => state.tab !== 'wallet'}">
@@ -44,27 +45,33 @@ export function walletTab(a) {
     </header>
     <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Network\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>
-    <p class="error small" role="alert" data-test="base-sync" hidden="${() => b().vault.inSync !== false}">Staking is out of sync. ${OUT_OF_SYNC}</p>
+    <p class="error small" role="alert" data-test="base-sync" hidden="${() => b().wallet.inSync !== false}">Staking is out of sync. ${OUT_OF_SYNC}</p>
     <dl class="facts">
-      ${fact('Vault', 'base-vault', () => `${amountText(b().vault.satori, 'SATORI')} · ${amountText(b().vault.eth, 'ETH')}`)}
+      ${fact('Wallet', 'base-wallet', () => `${amountText(b().wallet.satori, 'SATORI')} · ${amountText(b().wallet.eth, 'ETH')}`)}
       ${fact('Claimable', 'base-claimable', () => claimableText(b().claimable))}
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this app, below' : delegationText(b())))}
       ${fact('Referral', 'base-referral', () => referralText(b()))}
-      ${fact('Transfers', 'base-lock', () => lockText(b().vault.lock))}
-      ${fact('Alias', 'base-identity', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().identity) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
+      ${fact('Transfers', 'base-lock', () => lockText(b().wallet.lock))}
+      ${fact('Alias', 'base-alias', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().alias) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
       ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
       ${fact('Contract batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
     : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
       ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
     </dl>
+    <div class="alias">
+      ${idRow('Alias', 'alias', () => state.alias, a)}
+      <p class="muted small">The app's own signing address; the daily batch's gas is paid from it.</p>
+      <div class="actions"><button class="small-btn" data-test="alias-key" @click="${() => a.askBackup('alias')}">Private key</button></div>
+      ${backupPanel(a, ['alias'], 'alias-backup', 'Wallet passphrase to show the alias\'s private key')}
+    </div>
     <p class="muted small" data-test="base-play" hidden="${() => !play()}">${() => play()?.[0] ?? ''}<a href="${SATORI_DAILY_URL}" target="_blank" rel="noopener">Satori Daily</a>${() => play()?.[1] ?? ''}</p>
     <div class="actions">
-      <button class="primary" data-test="base-stake" hidden="${staked}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? BUSY.stake : 'Stake with this app')}</button>
-      <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
-      <button data-test="base-claim" disabled="${busy}" @click="${() => a.vaultAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
+      <button class="primary" data-test="base-stake" hidden="${staked}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? BUSY.stake : 'Stake with this app')}</button>
+      <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
+      <button data-test="base-claim" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
     </div>
-    <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().vault.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
-    <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your vault's SATORI every round. The SATORI stays in the vault and earns; it can't be sent while staked, or through the round after you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.</p>
+    <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().wallet.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
+    <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your wallet's SATORI every round. The SATORI stays in the wallet and earns; it can't be sent while staked, or through the round after you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.</p>
     <div hidden="${() => !b().inviteLink}">
       ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
       <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you get ${REFERRAL_PCT}% of the rewards they earn, forever, in Claimable.</p>
@@ -73,20 +80,20 @@ export function walletTab(a) {
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
       <input name="to" aria-label="To (0x address)" placeholder="To: 0x…" autocomplete="off" spellcheck="false" required>
-      <button type="submit" disabled="${() => busy() || state.sendQuoting}">${() => (state.sendQuoting ? 'Reading the fee…' : 'Send from the vault')}</button>
+      <button type="submit" disabled="${() => busy() || state.sendQuoting}">${() => (state.sendQuoting ? 'Reading the fee…' : 'Send from the wallet')}</button>
     </form>
     <div class="review" data-test="send-review" hidden="${() => !state.sendReview}">
       <h3>Check before sending</h3>
       <dl class="facts">
         ${fact('Send', 'review-amount', () => (q() ? `${q().amount} ${q().asset}` : ''))}
         ${fact('To', 'review-to', html`<code class="block">${() => q()?.to ?? ''}</code>`)}
-        ${fact('Fee', 'review-fee', () => (q() ? `about ${ethFeeText(q().fee.about)}, at most ${ethFeeText(q().fee.max)} (Base ETH, from the vault)` : ''))}
+        ${fact('Fee', 'review-fee', () => (q() ? `about ${ethFeeText(q().fee.about)}, at most ${ethFeeText(q().fee.max)} (Base ETH, from the wallet)` : ''))}
       </dl>
-      <form class="unlock" @submit="${(e) => a.confirmSend(form(e), e.target)}"><input name="pass" type="password" aria-label="Vault passphrase to send" placeholder="Vault passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send')}</button><button type="button" disabled="${busy}" @click="${a.backSend}">Back</button></form>
+      <form class="unlock" @submit="${(e) => a.confirmSend(form(e), e.target)}"><input name="pass" type="password" aria-label="Wallet passphrase to send" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : 'Send')}</button><button type="button" disabled="${busy}" @click="${a.backSend}">Back</button></form>
     </div>
-    ${unlockPrompt(a, 'wallet', 'use the vault')}
-    <p class="muted small" hidden="${() => state.unlocked}">Stake, Claim and Send ask for the vault's passphrase. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).</p>
-    <p class="muted small" hidden="${() => !state.unlocked}">Send asks for the vault's passphrase each time.</p>
+    ${unlockPrompt(a, 'wallet', 'use the wallet')}
+    <p class="muted small" hidden="${() => state.unlocked}">Stake, Claim and Send ask for the wallet's passphrase. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).</p>
+    <p class="muted small" hidden="${() => !state.unlocked}">Send asks for the wallet's passphrase each time.</p>
     <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>

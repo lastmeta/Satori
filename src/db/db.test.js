@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { memoryDb, memoryConn } from '../../test/memory-db.js';
 import { MIGRATIONS, ADDITIVE } from './schema.js';
 import { openDb } from './index.js';
-import { loadKeys, unlockVault, wordsOf } from '../keys/index.js';
+import { loadKeys, unlockWallet, wordsOf } from '../keys/index.js';
 import { nostrPubkey } from '../nostr/event.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 }); // DuckDB's wasm starts in the first beforeEach: slow on a busy box
@@ -47,7 +47,7 @@ test('a database from a newer app version is refused, not migrated, unless its l
   // what a reader must know: the migrations up to the last one that is not additive (schema.js ADDITIVE)
   const need = Math.max(...MIGRATIONS.map((_, i) => i + 1).filter((n) => !ADDITIVE.has(n)));
   expect(await first.get('schema_min')).toBe(need);
-  expect(need).toBe(10);
+  expect(need).toBe(16); // 16: the keys record names its keys alias and wallet
   // a newer build ran two more migrations, both additive: this build opens it as it is (a rollback, an offline old cache)
   await first.set('schema_version', MIGRATIONS.length + 2);
   const newer = await openDb(conn);
@@ -103,24 +103,24 @@ describe("migration 7: the keys move into this app's own record (meta `keys`), n
         for (const [k, v] of Object.entries(p.meta)) expect(await up.get(k), k).toEqual(v);
         return;
       }
-      expect(keys).toMatchObject({ v: 1, identity: p.expect.identity, vault: { yaml: p.meta.vault_yaml } });
+      expect(keys).toMatchObject({ v: 1, alias: p.expect.alias, wallet: { yaml: p.meta.vault_yaml } });
       if (p.expect.nostr) expect(keys.nostr).toBe(p.expect.nostr);
       else expect(nostrPubkey(keys.nostr)).toMatch(/^[0-9a-f]{64}$/);
       for (const k of ['wallet_yaml', 'vault_yaml', 'nostr_yaml']) expect(await up.get(k), k).toBeUndefined();
-      expect(loadKeys(keys).identity.pubkey).toBeTruthy();
-      // the vault at its next Unlock, as main.js stores it
-      const { vault, record } = await unlockVault(keys, p.passphrase);
+      expect(loadKeys(keys).alias.pubkey).toBeTruthy();
+      // the wallet at its next Unlock, as main.js stores it
+      const { wallet, record } = await unlockWallet(keys, p.passphrase);
       await up.set('keys', record);
-      expect(vault.backup().words).toBe(wordsOf(hexBytes(p.expect.vault)));
-      expect((await unlockVault(await up.get('keys'), p.passphrase)).record).toBe(null);
+      expect(wallet.backup().words).toBe(wordsOf(hexBytes(p.expect.wallet)));
+      expect((await unlockWallet(await up.get('keys'), p.passphrase)).record).toBe(null);
     });
   }
-  test("the step-1 prototype's meta.vault is never touched, next to a later neuron's keys too", async () => {
+  test("the step-1 prototype's meta.wallet is never touched, next to a later neuron's keys too", async () => {
     const step1 = profiles.find((x) => x.commit === '7be47fc');
     const later = profiles.find((x) => x.label.startsWith('step 5 on'));
     const up = await openDb(await profileConn({ ...later, meta: { ...later.meta, ...step1.meta } }));
-    expect(await up.get('vault')).toEqual(step1.meta.vault);
-    expect((await up.get('keys')).identity).toBe(later.expect.identity);
+    expect(await up.get('wallet')).toEqual(step1.meta.wallet);
+    expect((await up.get('keys')).alias).toBe(later.expect.alias);
   });
   test('rows it cannot read stop the open: nothing is changed, and the version stays (the app says it could not start)', async () => {
     const later = profiles.find((x) => x.label.startsWith('step 5 on'));

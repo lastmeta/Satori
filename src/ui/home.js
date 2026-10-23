@@ -15,8 +15,8 @@ const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', actio
 const cachedNow = () => !!state.cached && state.screen !== 'home';
 const h = () => state.health ?? (cachedNow() ? { ...EMPTY, ...state.cached.health } : EMPTY);
 /** What the wallet tile reads: the chain's status, or the last visit's. */
-const B = () => (cachedNow() ? { ...state.base, ...state.cached.base, identity: { ...state.base.identity, ...state.cached.base?.identity },
-  vault: { ...state.base.vault, ...state.cached.base?.vault } } : state.base);
+const B = () => (cachedNow() ? { ...state.base, ...state.cached.base, alias: { ...state.base.alias, ...state.cached.base?.alias },
+  wallet: { ...state.base.wallet, ...state.cached.base?.wallet } } : state.base);
 /**
  * The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). The last
  * visit's: its title and colour, the ring turning while the neuron opens, the line saying what it waits for.
@@ -55,18 +55,18 @@ const claimable = () => (B().claimable?.total == null ? '–' : fmtNum(Number(B(
 const claimBreakdown = () => claimParts(B().claimable).filter(([, x]) => Number(x) > 0).map(([what, x]) => `${fmtNum(Number(x))} ${what}`).join(' · ');
 const claimTitle = () => claimableText(B().claimable);
 
-function vaultLine() {
-  const v = B().vault;
+function walletLine() {
+  const v = B().wallet;
   if (v.satori == null) return '–';
-  const d = { identity: 'staked', none: 'not staked', other: 'staked elsewhere' }[v.staked] ?? '';
+  const d = { alias: 'staked', none: 'not staked', other: 'staked elsewhere' }[v.staked] ?? '';
   return `${amountText(v.satori, 'SATORI')}${d ? ` · ${d}` : ''}`;
 }
 
-/** The identity's gas as days of daily batches (one a day). */
+/** The alias's gas as days of daily batches (one a day). */
 const gasLine = () => {
-  const n = B().identity.batchesLeft;
+  const n = B().alias.batchesLeft;
   if (n == null) return '–';
-  if (n === 0) return 'No ETH on the alias';
+  if (n === 0) return 'No gas for the daily batch';
   return `${n >= 1000 ? '1,000+' : n} day${n === 1 ? '' : 's'} left`;
 };
 
@@ -131,12 +131,12 @@ export function home(a) {
     <section class="tile wallet-tile" data-test="claimable">
       <div class="tile-h desk-only"><b>Wallet</b><span>Base</span></div>
       <div class="earn">
-        <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div><div class="sub phone-only">${vaultLine}</div></div>
-        <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.vaultAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
+        <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div><div class="sub phone-only">${walletLine}</div></div>
+        <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.walletAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
       </div>
       ${unlockPrompt(a, 'claim', 'claim')}
       <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
-      <div class="line desk-only"><span>Vault</span><span data-test="home-vault">${vaultLine}</span></div>
+      <div class="line desk-only"><span>Wallet</span><span data-test="home-wallet">${walletLine}</span></div>
       <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
     </section>
 

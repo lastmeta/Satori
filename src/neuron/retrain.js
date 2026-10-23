@@ -22,7 +22,7 @@ export class RetrainError extends Error {}
 /**
  * @param {{db, work, seed: () => string, nameOf?: (uuid: string) => string, after?: (uuid, result) => Promise<void>,
  *   onChange?: () => void, busy?: () => boolean, now?: () => number, clock?: () => number, pause?: () => Promise<void>,
- *   sliceMs?: number, showMs?: number, saveMs?: number}} o seed: the identity's public key; busy: central's work runs
+ *   sliceMs?: number, showMs?: number, saveMs?: number}} o seed: the alias's public key; busy: central's work runs
  *   (a poll, its sign-in, the history); after: once a retrain ended and was stored (the app reads the list again)
  */
 export function createRetrain({ db, work, seed, nameOf = (u) => u, after = async () => {}, onChange = () => {},

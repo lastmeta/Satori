@@ -7,7 +7,7 @@ import {
 
 vi.setConfig({ testTimeout: 60_000 }); // shared box; noble builds tables on first use
 
-const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url)));
+const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/alias-parity.json', import.meta.url)));
 const hex = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
 const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 

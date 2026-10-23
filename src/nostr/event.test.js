@@ -8,7 +8,7 @@ import {
 
 const fx = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-parity.json', import.meta.url)));
 const live = JSON.parse(readFileSync(new URL('../../test/fixtures/nostr-live.json', import.meta.url)));
-const id = JSON.parse(readFileSync(new URL('../../test/fixtures/identity-parity.json', import.meta.url))).nostr;
+const id = JSON.parse(readFileSync(new URL('../../test/fixtures/alias-parity.json', import.meta.url))).nostr;
 
 describe('the Nostr key', () => {
   test("pubkey from the secret, as nostr_sdk's Keys", () => {

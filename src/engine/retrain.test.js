@@ -178,7 +178,7 @@ describe('the search', () => {
     expect(outcomes.kept).toBeLessThanOrEqual(1); // the same test against the champion
   });
 
-  test('reproducible from identity + target + the retrain counter; another counter, another path', () => {
+  test('reproducible from alias + target + the retrain counter; another counter, another path', () => {
     const h = market(7);
     const a = run(retrainer({ target: 'gold', histories: h, champion: TIGHT, seed: ID, n: 1 }));
     expect(run(retrainer({ target: 'gold', histories: h, champion: TIGHT, seed: ID, n: 1 }))).toEqual(a);

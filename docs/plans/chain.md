@@ -3,7 +3,7 @@
 [← Roadmap](README.md)
 
 Step 6 built Base: config, the status multicall, stake and unstake, the
-identity's daily batch, claims (`hub.claim`, merkle, airdrop) and sends.
+alias's daily batch, claims (`hub.claim`, merkle, airdrop) and sends.
 [../design/base.md](../design/base.md) is the source of truth, with
 Lite's and the dapp's file:line evidence and every deviation. What is left
 here is for later steps.
@@ -26,16 +26,16 @@ named games refuse bounties: none placed).
 SATORI fee (`contract/satori/contracts/next/SatoriHub.sol:899-990`); the relayer is live at
 `https://games.satorinet.io/relayer` with open CORS (probed). Fees: 0.25 SATORI
 default, Claim 0 (`contract/relayer/fees.json`). Predict is paid by the
-identity, which holds no SATORI, and staked wallets cannot pay a SATORI fee
+alias, which holds no SATORI, and staked wallets cannot pay a SATORI fee
 (`contract/relayer/README.md:37-39`). Needs a ruling
 ([issue](../issues/relayer-predict-fee.md)).
 
 ## The airdrop without Unlock (later)
 
 `airdrop.claimAirdropFor(user)` is permissionless and mints only to `user`
-(`contract/satori/contracts/SatoriAirdrop.sol:139-147`), so the identity could
-claim the vault's vested airdrop on its own schedule, paying the gas. Step 6
-claims it from the vault after Unlock, as Lite does.
+(`contract/satori/contracts/SatoriAirdrop.sol:139-147`), so the alias could
+claim the wallet's vested airdrop on its own schedule, paying the gas. Step 6
+claims it from the wallet after Unlock, as Lite does.
 
 This app is Base only (owner, 2026-10-16): no Evrmore balances, sends or
 payment channels are planned.

@@ -30,9 +30,9 @@ these is already researched and parked in [../plans/](../plans/README.md).
 
 Set by the owner; quoted where these are the owner's own words.
 
-- **Two keys, on purpose.** The **identity** is stored unencrypted so the
+- **Two keys, on purpose.** The **alias** is stored unencrypted so the
   neuron signs on its own (central's login, predictions, Nostr, the Base
-  batch). The **vault** is encrypted with the passphrase and holds the funds.
+  batch). The **wallet** is encrypted with the passphrase and holds the funds.
   The Docker neuron keeps them in `wallet.yaml` and `vault.yaml`; so does
   this app.
 - **Follow what Satori already made, simplified.** Satori Lite (the Docker
@@ -57,13 +57,13 @@ Set by the owner; quoted where these are the owner's own words.
 - **MIT** licensed.
 - **A reward address (owner, 2026-10-19).** "We need to be able to specify a
   reward address, in the settings or in the wallet." It is where the Satori
-  Network sends the neuron's rewards instead of the vault, such as a pool: a
-  Base (0x) address. With none set, rewards go to the vault. It has nothing
+  Network sends the neuron's rewards instead of the wallet, such as a pool: a
+  Base (0x) address. With none set, rewards go to the wallet. It has nothing
   to do with staking.
 - **The neuron is for automatic play.** It predicts on its own, off-chain
-  through central and on-chain through the identity's daily Base batch.
+  through central and on-chain through the alias's daily Base batch.
   Manual on-chain play belongs to a separate slim app, **Satori Daily**. A
-  vault staked with the neuron can't also play by hand in the same round.
+  wallet staked with the neuron can't also play by hand in the same round.
 - **The engine:** every neuron builds models that are unique for a good
   reason, in their algorithm, priors and, above all, data. See
   [engine.md](engine.md).

@@ -4,16 +4,26 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
-## Changed 2026-10-23 (the alias)
+## Changed 2026-10-23 (wallet and alias)
 
-- What the app called the identity is now the vault's **alias**: the app's
-  words say "Alias" (Settings' Keys and Backup, Wallet, Home's gas line,
-  `health()` reasons, errors, the Restore form's "Alias words"). Unchanged,
-  so no agent breaks: the field `identity` in `status()` and `base()`, the
-  `'identity'` names `backup()`, `reward().whose` and `staked` take, the
-  `identityWords` of `setup()`, and every `data-test` name. Read `identity`
-  as the alias. The design is docs/design/wallets.md (several accounts and a
-  connected vault come next; nothing of that is built yet).
+- The two keys are the **wallet** (the person's, holding the funds) and its
+  **alias** (the app's own signing key) everywhere: `status().wallet` and
+  `.alias`, `base().wallet` and `.alias` (`staked: 'alias' | 'none' |
+  'other'`), `setup({ passphrase, walletWords?, aliasWords?, nostrKey? })`,
+  `backup('alias' | 'wallet' | 'nostr', passphrase)`, `reward().whose`
+  `'wallet' | 'alias'`, and the `data-test` names (`wallet`, `wallet-state`,
+  `lock-wallet`, `base-wallet`, `base-alias`, `alias`, `reward-alias`).
+- The alias shows only on the Wallet tab: its address, Copy and "Private
+  key" (`alias-key`, then `alias-backup-prompt`, `alias-backup-key`).
+  Settings' Keys and Backup are the wallet's and the Nostr key's.
+- The wallet signs a link to its alias, sent with every register
+  (docs/design/wallets.md); `status().central.registration` has
+  `wallet_address` (the linked wallet the Satori Network pays) and
+  `walletLinkError`; `walletMismatch: 'none'` is "wallet not linked", fixed
+  by an Unlock.
+- Import Docker files takes "Wallet file" and "Alias file" (either layout:
+  a newer install's `wallet.yaml` + `alias.yaml`, an older one's `vault.yaml`
+  + `wallet.yaml`) and "Nostr file".
 
 ## Changed 2026-10-23 (the word "neuron")
 
@@ -25,8 +35,6 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   PWA name and the share sheet's title are "Satori app". Match on the new words.
 - Earlier activity rows are rewritten the same way (`activity()` shows "Staked
   with this app").
-- Unchanged: `window.satori`'s methods, `data-test` names, and the
-  `neuron-version` header sent to the Satori Network.
 
 ## Changed 2026-10-23 (the app's address)
 
@@ -41,7 +49,7 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 - The app is on the D7 contracts (Base Sepolia, chain 84532, redeployed
   2026-10-23): new addresses for the token, hub, engine, rewards, registry,
-  games, airdrop, merkle, lens and voting. D6's contracts are retired: a vault staked, or holding
+  games, airdrop, merkle, lens and voting. D6's contracts are retired: a wallet staked, or holding
   SATORI, on D6 shows nothing here. The keys and the Base addresses are
   unchanged; only what sits at them on chain is new.
 - The Satori Network may still name D6's addresses in its config: the app
@@ -52,10 +60,10 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 ## Changed 2026-10-22 (referral)
 
 - Invite links, as the dapp has them: `base().inviteLink` is `<origin>/?ref=<the
-  vault>`; a page opened with `?ref=<0x address>` holds it (`base().pendingReferrer`,
-  nothing sent), and `stake()` registers it first from the vault
+  wallet>`; a page opened with `?ref=<0x address>` holds it (`base().pendingReferrer`,
+  nothing sent), and `stake()` registers it first from the wallet
   (`setReferral(referrer)`, once; a step in its `steps`), then
-  `base().vault.referral` is the address. A vault that has a referral keeps it.
+  `base().wallet.referral` is the address. A wallet that has a referral keeps it.
 
 ## Changed 2026-10-21 (paid streams: one price, a daily settle)
 
@@ -149,23 +157,23 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 ## Changed 2026-10-19 (the reward address)
 
 - A **reward address**: where the Satori Network sends this neuron's
-  rewards instead of the vault, such as a pool's; a Base (0x) address. The
-  Satori Network keeps it; the identity signs it in (no Unlock, no gas).
+  rewards instead of the wallet, such as a pool's; a Base (0x) address. The
+  Satori Network keeps it; the alias signs it in (no Unlock, no gas).
 - `await satori.rewardAddress()` → `{ address: '0x…' | null, whose:
-  'vault' | 'identity' | null, at }` (null: not set, rewards go to the
-  vault), read from the Satori Network now: the Base address it pays at.
+  'wallet' | 'alias' | null, at }` (null: not set, rewards go to the
+  wallet), read from the Satori Network now: the Base address it pays at.
 - `await satori.setRewardAddress('0x…' | null | '')` → `{ address, whose,
   at }`, only on the person's request (Safety): set, or clear. Checked first
   (0x and 40 hex, its EIP-55 checksum, not the zero address, not this
-  neuron's identity: the app claims only from the vault) and sent
+  neuron's alias: the app claims only from the wallet) and sent
   checksummed.
 - `status().central.reward`: `{ address, whose, at, error, reading }`, as
   last read. `health().work` may be `{ task: 'reward', step: 'login' |
   'save' | 'clear' }`. `health().notices` may have `what: 'reward'`
   ("Reward address set to 0x…", "Reward address cleared: rewards go to your
-  vault").
+  wallet").
 - Settings has a **Reward address** card after Backup (`reward-address`,
-  `reward-whose`, `reward-identity`, `reward-none`, `reward-reading`,
+  `reward-whose`, `reward-alias`, `reward-none`, `reward-reading`,
   `reward-saving`, `reward-read-error`, `reward-retry`, `reward-line`,
   `reward-error`, `reward-save`, `reward-clear`).
 
@@ -291,48 +299,48 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   neuron runs, so wait for it as before. Another tab's route shows
   "Opening…" with the step (`opening`).
 
-## Changed 2026-10-19 (the vault locks on its own; Backup and Send ask for the passphrase each time)
+## Changed 2026-10-19 (the wallet locks on its own; Backup and Send ask for the passphrase each time)
 
-- The vault locks on its own 5 minutes after the last interaction (a key, a
-  tap, the wheel, or a vault call such as `stake()`; never in the middle of
+- The wallet locks on its own 5 minutes after the last interaction (a key, a
+  tap, the wheel, or a wallet call such as `stake()`; never in the middle of
   one) while it is unlocked or a backup is on screen, and at once on a wake
   past that time. `status().lockAt`: when (ms since the epoch), or null.
   The header shows "Locks in 4 min" beside Lock (`lock-in`). Unlock again
   (`unlock(passphrase)`) when `stake()`, `unstake()` or `claim()` say
-  "Unlock the vault first".
+  "Unlock the wallet first".
 - An inline Unlock (the passphrase asked in place for Stake, Unstake or
-  Claim while locked) locks the vault again once that action ends.
+  Claim while locked) locks the wallet again once that action ends.
 - `backup(which, passphrase)` (it was `backup(which)` while unlocked): the
   passphrase each time, unlocked or not (~0.3 s); all three:
-  `backup(undefined, passphrase)` (or `null`). Without it: "The vault's
+  `backup(undefined, passphrase)` (or `null`). Without it: "The wallet's
   passphrase is needed: it is asked each time."; a wrong one: "Wrong
   passphrase". The UI's Backup asks in place every time (`backup-prompt`,
-  "Vault passphrase to show the backup", Show, Cancel); the `backup` inline
+  "Wallet passphrase to show the backup", Show, Cancel); the `backup` inline
   Unlock slot is gone.
 - `send({ asset, to, amount, passphrase })` (it needed Unlock): the
-  passphrase each time, unlocked or not; the vault is opened for that send
+  passphrase each time, unlocked or not; the wallet is opened for that send
   alone. The zero address is refused ("The zero address (0x000…000) burns
   what is sent to it: refused."). New: `quoteSend({ asset, to, amount })` →
   `{ asset, to, amount, fee: { gas, about, max } }` (no key: the checks,
   SATORI's transfer lock, the fee in ETH: `about` at the base fee + tip,
   `max` at the gas limit and the max fee), the review a person should see
-  before a send. The UI's send form ("Send from the vault") opens that
+  before a send. The UI's send form ("Send from the wallet") opens that
   review (`send-review`: `review-amount`, `review-to` in full,
-  `review-fee`), then "Vault passphrase to send", Send or Back.
+  `review-fee`), then "Wallet passphrase to send", Send or Back.
 
 ## Changed 2026-10-19 (the Satori Network's reward drop, before it is claimed)
 
 - `base().claimable` → `{ rewards, drop, airdrop, total }` (decimal SATORI;
   it was `{ rewards, airdrop }`): `drop` is the Satori Network's reward drop
-  still to claim, `max(0, amountWei − alreadyMintedTo(vault))` from
+  still to claim, `max(0, amountWei − alreadyMintedTo(wallet))` from
   central's merkle proof (asked at most hourly) and the chain; 0 when no
-  drop is published or this vault is not in it; null when the central does
+  drop is published or this wallet is not in it; null when the central does
   not serve the route (prod on `main`): unknown, not 0. `total`: the parts
   known. Home's Claimable rewards is the total (it left the drop out), with
   the parts above 0 under it (`claimable-parts`, "from the Satori
   Network"); the Wallet card's Claimable fact lists all three.
-- `base().vault.lowEth`: the vault's ETH is under one transaction's gas.
-  Claim then says "The vault needs a little Base ETH for gas to claim."
+- `base().wallet.lowEth`: the wallet's ETH is under one transaction's gas.
+  Claim then says "The wallet needs a little Base ETH for gas to claim."
   before trying (no Unlock asked), and `claim()` throws it.
 
 ## Changed 2026-10-19 (a tie on Base follows the stream's last move)
@@ -352,25 +360,25 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 ## Changed 2026-10-19 (staking while the contract bug is live)
 
 The token-hook bug (docs/issues/token-hook-gas-estimate.md) is live on D6
-until D7: SATORI sent to a staked vault with a normal gas estimate (anyone's
-1 wei) is not booked into the identity's power, and unstaking then fails.
+until D7: SATORI sent to a staked wallet with a normal gas estimate (anyone's
+1 wei) is not booked into the alias's power, and unstaking then fails.
 
 - `health()`: the reason `stake` is `advice` (it was `warn`): Home is not
-  amber for an unstaked vault; the card (button "Stake", `do: 'stake'`)
+  amber for an unstaked wallet; the card (button "Stake", `do: 'stake'`)
   says "Stake with this neuron to earn on the Satori contract. While
   staked, your SATORI can't be sent until you unstake. A known contract
   issue can block unstaking; a fix is coming in the next contract
   release." The Contract chip stays "Not staked" (`tone: 'off'`).
-- `base().vault.inSync`: `true` (the identity's power equals the vault's
-  SATORI), `false` (under it: out of sync; `vault.shortfall`, decimal
-  SATORI) or `null` (not checked: the identity accepts other stakers too,
+- `base().wallet.inSync`: `true` (the alias's power equals the wallet's
+  SATORI), `false` (under it: out of sync; `wallet.shortfall`, decimal
+  SATORI) or `null` (not checked: the alias accepts other stakers too,
   not staked here, or not read). `false` is the `bad` reason
   `stake-out-of-sync`: line "Staking is out of sync.", the Contract chip
   "Out of sync", and an `action` with only `{ id, text }` ("Unstaking will
-  fail until the contract fix. Don't add SATORI to the vault."): no
+  fail until the contract fix. Don't add SATORI to the wallet."): no
   `button`, no `do`. `action.button` and `do` are absent only there.
 - `unstake()` out of sync rejects with "Staking is out of sync. Unstaking
-  will fail until the contract fix. Don't add SATORI to the vault." (it was
+  will fail until the contract fix. Don't add SATORI to the wallet." (it was
   "reverted: Panic"); nothing is sent.
 - On D7, a transfer whose hook runs out of gas reverts with
   `HookFailedWithoutReason`; errors say "The transaction ran out of gas;
@@ -556,22 +564,22 @@ The page has five tabs: Home · **Models** · Streams · Wallet · Settings
 
 ## Changed 2026-10-18 (staking: the words and the agent API)
 
-The vault giving its prediction power to the identity (on-chain, the
-vault's `delegatePredictionPower(identity)`) is called **staking**: "Stake
+The wallet giving its prediction power to the alias (on-chain, the
+wallet's `delegatePredictionPower(alias)`) is called **staking**: "Stake
 with this neuron", "Unstake". The old names are gone, with no aliases:
 
 - `satori.delegate()` → `satori.stake()`, `satori.undelegate()` →
   `satori.unstake()`; the same results.
-- `base()` (and `status().base`): `vault.delegated` → `vault.staked` (the
-  same values: `'identity'`, `'none'`, `'other'`, null before the first
-  read), `vault.delegate` → `vault.stakedWith` (the address it stakes with),
-  `identity.allowedDelegator` → `identity.allowedStaker`.
+- `base()` (and `status().base`): `wallet.delegated` → `wallet.staked` (the
+  same values: `'alias'`, `'none'`, `'other'`, null before the first
+  read), `wallet.delegate` → `wallet.stakedWith` (the address it stakes with),
+  `alias.allowedDelegator` → `alias.allowedStaker`.
 - `health()`: the reason `delegate` → `stake` (and the action card's
   `data-action`), its action's `do: 'delegate'` → `do: 'stake'`, button
-  "Stake", text "Your vault's SATORI isn't earning on Base. Stake with this
+  "Stake", text "Your wallet's SATORI isn't earning on Base. Stake with this
   neuron."; `work.task` `delegate` / `undelegate` → `stake` / `unstake`; the
   Base chip "Not staked", "Staked elsewhere", "No SATORI staked".
-- `predictBase()`'s skip `no prediction power delegated to the identity` →
+- `predictBase()`'s skip `no prediction power delegated to the alias` →
   `nothing staked with this neuron`.
 - `data-test`: `base-delegation` → `base-staking`, `base-delegate` →
   `base-stake`, `base-undelegate` → `base-unstake`.
@@ -586,8 +594,8 @@ with this neuron", "Unstake". The old names are gone, with no aliases:
   plays: "Your SATORI is staked with this neuron, so it can't also play
   Satori Daily by hand. Unstake to play manually." / "Stake with this
   neuron to let it predict every round, or play Satori Daily by hand.";
-  Home's vault line "· staked"; the inline prompt "Vault passphrase to
-  stake"; the transactions "Vault: stakes with this neuron" / "Vault:
+  Home's wallet line "· staked"; the inline prompt "Wallet passphrase to
+  stake"; the transactions "Wallet: stakes with this neuron" / "Wallet:
   unstakes"; the feed "Staked with this neuron" / "Unstaked" (migration 10
   rewrites the log's earlier rows in these words).
 
@@ -624,7 +632,7 @@ with this neuron", "Unstake". The old names are gone, with no aliases:
   confirmed, the keys being written); its `text` begins "Keep Satori open · ".
   `text`: the words Home shows ("Loading history · 34 of 82 streams"). The
   entry that leads is shown: a critical one first, else central, base, the
-  vault's actions, keys, discover, subscribe.
+  wallet's actions, keys, discover, subscribe.
 - `health().tone`: the colour Home shows, alongside `status`: `'working'`
   (regular green: working as expected; starting and catching up are working),
   `'critical'` (vivid green: closing would lose work), `'idle'` (sky green:
@@ -659,7 +667,7 @@ with this neuron", "Unstake". The old names are gone, with no aliases:
 - `health().title` is one of `'Not predicting'`, `'Starting'`,
   `'Was asleep'`, `'Predicting'` (and `'Partly predicting'`, below), read
   from the log whichever reason leads:
-  a new neuron with a vault mismatch said "Predicting" and now says
+  a new neuron with a wallet mismatch said "Predicting" and now says
   "Starting". "Retrying", "Base is failing" and "Network is down" are gone
   (`status`, `line` and `action` say so), and "Was asleep" ends once it
   caught up.
@@ -667,11 +675,11 @@ with this neuron", "Unstake". The old names are gone, with no aliases:
   (a new neuron's strip was 13 grey "closed" days). Its cell has
   `data-code="before"` and the title "<date>: Before this neuron".
 - The keys record gains `created` (unix seconds) for keys made from now on.
-- `status().central.registration` gains `vault` (this vault's Base address)
-  and `vault_base_address` (central's answer: the Base address it pays this
-  vault's rewards to, or null). `vaultMismatch` compares the two,
+- `status().central.registration` gains `wallet` (this wallet's Base address)
+  and `wallet_address` (central's answer: the Base address it pays this
+  wallet's rewards to, or null). `walletMismatch` compares the two,
   case-insensitively, and may now be `null`: unknown, a central that does
-  not send `vault_base_address` (prod on `main`); that is not a mismatch.
+  not send `wallet_address` (prod on `main`); that is not a mismatch.
   The mismatch text names both addresses.
 - A poll forecasts each stream in its batch whose latest observation has no
   prediction made from it, not only the streams with a new row: a reload
@@ -703,15 +711,15 @@ For agents written against the earlier UI and API:
   `<details>` → the **Settings** tab, its forms always open. Elements of a
   tab not shown are in the DOM but hidden: `go(tab)` first, or query visible
   elements.
-- Unlock: Settings › Keys keeps "Vault passphrase" and `unlock`. Delegate,
+- Unlock: Settings › Keys keeps "Wallet passphrase" and `unlock`. Delegate,
   Claim, Send and Backup, asked for while locked, open one inline prompt in
   place (`unlock-prompt`, `data-unlock-for` = `card` | `claim` | `wallet` |
-  `backup`, labelled "Vault passphrase to delegate", "… to claim", "… to use
-  the vault", "… to back up"), then do the action. The Wallet's buttons are
-  shown while locked (they were hidden until Unlock); "Unlock the vault to
-  delegate, claim or send." and "Unlock the vault to back up your keys." are
-  gone. The header's Lock stays (`lock`); Settings adds "Lock the vault"
-  (`lock-vault`). `base-delegation` while not delegated says "Not delegated:
+  `backup`, labelled "Wallet passphrase to delegate", "… to claim", "… to use
+  the wallet", "… to back up"), then do the action. The Wallet's buttons are
+  shown while locked (they were hidden until Unlock); "Unlock the wallet to
+  delegate, claim or send." and "Unlock the wallet to back up your keys." are
+  gone. The header's Lock stays (`lock`); Settings adds "Lock the wallet"
+  (`lock-wallet`). `base-delegation` while not delegated says "Not delegated:
   Delegate prediction power, below" (it said "Unlock, then …").
 - `status().central.lastPoll` may carry `local: true` (the database or the
   engine failed, not central); a failed `lastSubmit` is `{ at, error,
@@ -723,44 +731,44 @@ For agents written against the earlier UI and API:
   `action-button`, `days` with `day` cells (`data-date`, `data-code`),
   `days-summary`, `channels` with `chip` (`data-channel`: network, contract, relays; `data-state`) and
   `chip-text`, `claimable`, `claimable-amount`, `claim`, `claim-result`,
-  `home-vault`, `home-gas`, `home-stream`, `activity`, `feed`, `feed-item`
+  `home-wallet`, `home-gas`, `home-stream`, `activity`, `feed`, `feed-item`
   (`data-level`), `nav-<tab>` (the computer's top nav) and `tab-<tab>` (the
   phone's tab bar), `streams-tab`, `wallet-tab`, `settings-tab`,
   `streams-count`, `stream-detail`, `stream-prediction`, `unlock-prompt`,
-  `lock-vault`, `update-settings`. None removed: every earlier `data-test`
+  `lock-wallet`, `update-settings`. None removed: every earlier `data-test`
   keeps its name and meaning (`streams` is now the Streams card itself).
 - Settings' sections have ids: `#settings-keys`, `#settings-backup`,
   `#settings-central`, `#settings-relays`, `#settings-base`,
   `#settings-device`.
 - The database has an activity log (migration 8) and `meta.backup_at` (the
-  vault's backup confirmed); docs/design/storage.md.
+  wallet's backup confirmed); docs/design/storage.md.
 
 ## Changed 2026-10-16 (the keys in this app's own format; Base only)
 
 For agents written against the earlier API:
 
-- `status().identity` and `status().vault` are the keys' **Base (0x)
+- `status().alias` and `status().wallet` are the keys' **Base (0x)
   addresses** (they were Evrmore "E…" addresses). No Evrmore address is
   shown or returned anywhere.
 - `status().central.registration` has no `wallet_address` or
-  `vault_address`; `vaultMismatch` is `false`, `'other'` (central has
-  another vault for this identity) or `'none'` (it kept none).
+  `wallet_address`; `walletMismatch` is `false`, `'other'` (central has
+  another wallet for this alias) or `'none'` (it kept none).
 - `setup()`: the passphrase is any Unicode, at least 8 characters (it was 4,
   Latin-1 only); a new optional `nostrKey` (nsec or hex).
-- `backup('identity' | 'vault')` → `{ words, privateKey }` (`privateKey`:
+- `backup('alias' | 'wallet')` → `{ words, privateKey }` (`privateKey`:
   `0x` hex; it was `{ words, wif }`); new: `backup('nostr')` → `{ nsec,
   secret }` and `backup()` → all three.
 - `file()` is **removed**: no Docker files (`wallet.yaml`, `vault.yaml`,
   `nostr.yaml`) are made any more. Import still reads them.
-- A new screen, `finish`: an earlier version's vault whose public key was
+- A new screen, `finish`: an earlier version's wallet whose public key was
   not in clear; `unlock(passphrase)` there finishes the update and starts
   the neuron.
 - Prediction texts (`value`, `t1_value`, `observed_at`) are JS's number
   text (`100`, not `100.0`), and Nostr content is compact JSON.
 - Central's login is signed with EIP-191 (Ethereum `personal_sign`) by the
-  identity, as central (base-upgrade f4d72f5) and Satori Lite (satorilib
+  alias, as central (base-upgrade f4d72f5) and Satori Lite (satorilib
   5028913) now do; it was an Evrmore signed message. There is no Evrmore
   anywhere in the app.
-- `data-test`: `identity` and `vault` now hold the Base addresses;
-  `identity-base`, `vault-base`, `wif` and `download-*` are gone;
+- `data-test`: `alias` and `wallet` now hold the Base addresses;
+  `alias-base`, `wallet-base`, `wif` and `download-*` are gone;
   `backup-key`, `backup-hex`, `pass-note` and `finish` are new.

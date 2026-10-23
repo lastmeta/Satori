@@ -88,7 +88,7 @@ describe('createWork', () => {
     expect(w.current()).toMatchObject({ task: 'base', step: 'send', critical: true });
   });
 
-  test('critical: sending predictions, the Base batch sent and confirming, and every step of the vault\'s actions', () => {
+  test('critical: sending predictions, the Base batch sent and confirming, and every step of the wallet\'s actions', () => {
     const w = createWork();
     const crit = (task, step) => { const j = w.start(task); j.step(step); const c = w.of(task).critical; j.end(); return c; };
     expect(['register', 'observations', 'history', 'models', 'send'].map((st) => crit('central', st))).toEqual([false, false, false, false, true]);

@@ -23,14 +23,14 @@ The full set is in Claude memory; this is the short version.
 - **Do only what was asked.** No extra steps, features or hardening passes. Before designing anything, look at how Satori Lite / satorilib already does it and port that (2026-10-21: an unasked-for "track record" step cost a day).
 - **Essentialism.** Keep it small and correct. Follow Satori Lite's *network behaviour* (central, the contracts, the relays), but not its local formats.
 - **Migrate in, never back.** Import and translate what users bring. Don't keep old formats or limits for compatibility's sake.
-- **Two keys.** The identity is plaintext and signs on its own. The vault is encrypted with PBKDF2-SHA256 at 600k rounds plus AES-GCM, and holds the funds. The Nostr key is random and plaintext.
-- **Base only, no Evrmore.** Central's login is EIP-191. A tiny Evrmore helper remains only if central lacks `vault_base_address`; it has it now.
+- **Two keys.** The alias is plaintext and signs on its own. The wallet is encrypted with PBKDF2-SHA256 at 600k rounds plus AES-GCM, and holds the funds. The Nostr key is random and plaintext.
+- **Base only, no Evrmore.** Central's login is EIP-191. A tiny Evrmore helper remains only if central lacks `wallet_address`; it has it now.
 - **Words people see:**
   - central is the **Satori Network** (free);
   - Nostr is the **Satori relays**;
   - the Base contracts are the **Satori contract** (costs gas);
   - delegating is "**stake with** this neuron" / "Unstake";
-  - Lock and Unlock refer only to the vault passphrase;
+  - Lock and Unlock refer only to the wallet passphrase;
   - never say "central" or "server" to users.
 - **UI rules:**
   - phone first, with a dashboard on desktop;
@@ -103,7 +103,7 @@ curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" ht
 - **Central `base-upgrade`, done this session and live on dev:**
   - `bc043d2`: observations history endpoint;
   - `d5984b2` / `f4d72f5`: EIP-191 login, with Evrmore as a marked transitional branch; `docs/issues/remove-evrmore-login.md` says when to remove it;
-  - `d8a2085`: register and login return `vault_base_address`.
+  - `d8a2085`: register and login return `wallet_address`.
 - **Satori Lite / satorilib `base-upgrade`:** `bb945df` / `5028913` sign login with EIP-191 only (v3.2.14). The `:base-test` image still predates this and needs a rebuild.
 - **Contracts:** `/code/Satori/contract` (branch `humble`) is owned by another Claude session, **code-37**. Don't edit that tree; coordinate with SendMessage.
   - The token-hook out-of-gas root fix is B1 `86e2bdb3` on humble, and goes live with D7.

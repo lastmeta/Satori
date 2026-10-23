@@ -203,8 +203,8 @@ below leaves it alone, and the poll's one proposal for it is to add a
 companion back (its λ's don't move a `bar1` forecast).
 
 - **First draw**, when a target is first forecast: a deterministic RNG
-  seeded from the identity's public key and the target's uuid
-  (sha256 of `identity|target|draw|i` per draw), so neurons start
+  seeded from the alias's public key and the target's uuid
+  (sha256 of `alias|target|draw|i` per draw), so neurons start
   differently and each one reproducibly. The number of companions is drawn
   from 1–3, then the companions from the pool (sorted by uuid), then λ1 and
   λ2, each uniformly.
@@ -218,7 +218,7 @@ companion back (its λ's don't move a `bar1` forecast).
   neuron has no aligned stream, so it draws from every other central stream:
   the spec exists from the first poll, falls back until the data arrive, and
   is repaired then (Evolution, step 2).
-- **Mutations** are seeded from identity + target + generation, so a
+- **Mutations** are seeded from alias + target + generation, so a
   neuron's whole path is reproducible.
 
 ### The model
@@ -300,7 +300,7 @@ made from it yet (a new row, or one an interrupted poll stored):
 
 1. Read the champion spec (or draw the first one).
 2. **Repair** it: each companion not in the pool now is replaced, in its
-   place, by one drawn from the pool (seeded by identity + target +
+   place, by one drawn from the pool (seeded by alias + target +
    generation + "repair"), or dropped when the pool has none left. A spec
    drawn blind before there was history, or reading a stream that stopped,
    is fixed before it is scored. With no aligned stream at all the draw
@@ -309,7 +309,7 @@ made from it yet (a new row, or one an interrupted poll stored):
    `bar1` after 30 days.)
 3. Score it on the backtest. With fewer than 5 origins, stop here: no
    proposal, the generation stays.
-4. Propose **one** mutation (seeded by identity + target + generation), one
+4. Propose **one** mutation (seeded by alias + target + generation), one
    of those that apply, uniformly: swap a companion for another from the
    pool, add one (fewer than 3), drop one (more than 1), or move λ1 or λ2 to
    a neighbouring grid value (a `bar1` spec: add one, or nothing without a
@@ -481,7 +481,7 @@ From Satori Lite:
   steps by 12 h buckets rather than by rows. Lite's rows arrive every ~11 h, so
   a step is about the same length.
 - Per-node diversity comes from the spec (the data each model reads, and
-  its λ's), drawn from the identity and evolved on the neuron's own
+  its λ's), drawn from the alias and evolved on the neuron's own
   backtest; Lite redraws hyperparameters at random on every fit
   (`adapters/_rng.py`).
 
@@ -532,28 +532,28 @@ From Satori Lite:
   - **no look-ahead**: changing every series after an origin's actual leaves
     that origin's error unchanged; where the spec can't fit at an origin,
     `bar1`'s error stands in;
-  - the identity-seeded RNG (the same parts the same stream); the first
-    draw (reproducible, valid, 40 identities give 36+ specs and every count
+  - the alias-seeded RNG (the same parts the same stream); the first
+    draw (reproducible, valid, 40 aliases give 36+ specs and every count
     and λ); each mutation changes one thing to a valid spec (no add at 3, no
     drop at 1, λ at a grid end moves inward); the 5 % rule; one proposal per
     poll, none below 5 origins; evolution finds a leading companion and
-    keeps it; six identities end with different champions.
+    keeps it; six aliases end with different champions.
 - `npm test`, the cycle: history and engine (`src/neuron/history.test.js`,
   `neuron.test.js`): the backfill against a mocked fetch (200, 404 held a
   day per central, partial lists, a failure stopping the run, 4 calls at a
   time, rows counted across overlapping calls), backfilled rows never
   predicted while the poll's new row is; specs drawn, stored and evolved
-  over 40 polls, `bvar` predictions; the same identity draws the same specs.
+  over 40 polls, `bvar` predictions; the same alias draws the same specs.
 - `npm run e2e`: the app in Chrome makes `naive` until the stream has 8
   back-to-back buckets, then `bar1` with the same t1, t2, φ and weight as
   node, and sends them as Lite's payload. With a stub central that serves
   history, the first Poll now backfills 3 streams (600 hourly rows each) and
   forecasts each with `bvar`, with the same specs, scores and numbers as node
-  running `runModels` with the identity's pubkey; the Model column shows
+  running `runModels` with the alias's pubkey; the Model column shows
   "bvar · +eth +gold" and the History line "3 streams, 1,800 rows".
 - Live, on the dev server against central2 (2026-10-16), in a fresh profile
   with throwaway keys: Poll now stored 83 streams; each got its own spec,
-  drawn from the identity (31 with 1 companion, 28 with 2, 24 with 3; a
+  drawn from the alias (31 with 1 companion, 28 with 2, 24 with 3; a
   second fresh profile drew others); central accepted 83 of 83 predictions.
   Central2 has no history route yet: the first 4 calls (in flight together)
   answered 404, the rest were not asked, and the History line says "Not on
@@ -611,7 +611,7 @@ History available on 2026-10-15:
 
 ### `bvar` with evolution: 5 neurons
 
-`--neurons 5` simulates five neurons (identity seeds `backtest-neuron-0…4`),
+`--neurons 5` simulates five neurons (alias seeds `backtest-neuron-0…4`),
 each running `runModels` on all 21 symbols at once, as the app runs
 central's streams: every symbol a target, the other 20 its pool, one
 proposal per target per poll. The same polls, the same scoring; `bar1` and

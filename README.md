@@ -27,24 +27,24 @@ README, the design docs and the code keep the code's names.
 
 ## What it does
 
-Satori's two keys (identity and vault; a Dockerized Neuron's import), a DuckDB-WASM
+Satori's two keys (alias and wallet; a Dockerized Neuron's import), a DuckDB-WASM
 database in the browser, central's data flow as the Docker neuron (Satori
 Lite) runs it, Lite's Nostr flow (subscribe to streams, publish
-`<stream>_pred`), and Lite's Base flow (the vault stakes with this neuron,
-whose identity sends a batch of up/down predictions every UTC round on its
+`<stream>_pred`), and Lite's Base flow (the wallet stakes with this neuron,
+whose alias sends a batch of up/down predictions every UTC round on its
 own):
 
 ```
 register ─▶ poll central (at once when due, then every 11 h) ─▶ store ─▶ forecast what is not predicted yet ─▶ submit the batch
 relays ─▶ subscribed stream's observation (34601) ─▶ store ─▶ forecast two cadences ahead (t2) ─▶ publish <stream>_pred (34601)
-Base: Unlock ─▶ stake ─▶ each round the identity: registry streams ─▶ forecast ─▶ UP/DOWN ─▶ one batch tx; claims, sends
+Base: Unlock ─▶ stake ─▶ each round the alias: registry streams ─▶ forecast ─▶ UP/DOWN ─▶ one batch tx; claims, sends
 ```
 
-The **identity** is stored unencrypted, so the neuron runs and signs from page
-load; the **vault** holds the funds, encrypted with your passphrase. **Unlock**
-opens the vault (needed for backup and Base's stake, claims and sends);
+The **alias** is stored unencrypted, so the neuron runs and signs from page
+load; the **wallet** holds the funds, encrypted with your passphrase. **Unlock**
+opens the wallet (needed for backup and Base's stake, claims and sends);
 **Lock** wipes it from memory. The keys are stored in this app's own format
-(the vault: PBKDF2-SHA256 and AES-256-GCM, any Unicode passphrase of 8 or
+(the wallet: PBKDF2-SHA256 and AES-256-GCM, any Unicode passphrase of 8 or
 more); each key's address is its Base address. Setup can also restore from
 words or import a Docker neuron's `wallet.yaml`, `vault.yaml` and
 `nostr.yaml`, translated into that format ([keys](docs/design/keys.md)). Only one tab
@@ -95,8 +95,8 @@ nothing to a public chain). Fund the neuron's Base addresses (in the Keys
 card), then Unlock and **Stake with this neuron**:
 
 ```sh
-node scripts/fork.mjs fund 0xIDENTITY                  # gas for the daily batch
-node scripts/fork.mjs fund 0xVAULT --satori 100        # gas, and SATORI: the prediction power
+node scripts/fork.mjs fund 0xALIAS                  # gas for the daily batch
+node scripts/fork.mjs fund 0xWALLET --satori 100        # gas, and SATORI: the prediction power
 node scripts/fork.mjs --help                           # airdrop, merkle, advance, predict, stream, stop
 ```
 

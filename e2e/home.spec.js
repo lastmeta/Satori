@@ -9,8 +9,8 @@ import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { openApp, polled, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
-const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
-const v = fx.vectors[2]; // the vault: its words, and central's name for it
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
+const v = fx.vectors[2]; // the wallet: its words, and central's name for it
 const PASS = 'correct horse battery';
 const H = 3600;
 const D = 86400;
@@ -31,7 +31,6 @@ function centralAt(stub, t, k = 600) {
 async function setup(context) {
   const chain = fakeSatori({ round: ROUND, hour: 9 });
   const central = await stubCentral(context, { rpc: chain.rpc });
-  central.vaults[v.pubkey] = v.ethAddress; // central pays this vault: no mismatch
   return { ...chain, central };
 }
 
@@ -78,7 +77,7 @@ const hero = (page) => page.locator('[data-test=health]');
 
 async function start(page) {
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
 }
 
@@ -126,8 +125,8 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   centralAt(central, nowS() - 60);
   await start(page);
   const st = await page.evaluate(() => window.satori.base());
-  rpc.eth[st.identity.address.toLowerCase()] = 10n ** 17n;
-  rpc.eth[st.vault.address.toLowerCase()] = 10n ** 17n;
+  rpc.eth[st.alias.address.toLowerCase()] = 10n ** 17n;
+  rpc.eth[st.wallet.address.toLowerCase()] = 10n ** 17n;
   await page.evaluate(() => window.satori.base());
 
   // A month in: this session's first poll runs at once, central's 8 streams with their history, each forecast
@@ -163,9 +162,9 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Checked the Satori Network: up to date' })).toHaveCount(1);
   await page.setViewportSize({ width: 1280, height: 900 });
 
-  // The vault gets SATORI: staking is offered as advice while the contract bug is live (the hero stays green), and the
+  // The wallet gets SATORI: staking is offered as advice while the contract bug is live (the hero stays green), and the
   // card says the risk before staking. One card, one button.
-  s.balance[st.vault.address.toLowerCase()] = 100n * E18;
+  s.balance[st.wallet.address.toLowerCase()] = 100n * E18;
   await page.evaluate(() => window.satori.base());
   h = await health(page);
   expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 11 h',
@@ -179,9 +178,9 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await phoneChecks(page, 360, 740); // with the action card, the answer still fits
   await page.setViewportSize({ width: 1280, height: 900 });
 
-  // Stake: the vault is locked, so the passphrase is asked for in the card; then it stakes.
+  // Stake: the wallet is locked, so the passphrase is asked for in the card; then it stakes.
   await page.locator('[data-test=action-button]').click();
-  const prompt = page.getByLabel('Vault passphrase to stake');
+  const prompt = page.getByLabel('Wallet passphrase to stake');
   await expect(prompt).toBeVisible();
   await prompt.fill('not it');
   await page.locator('[data-unlock-for=card]').getByRole('button', { name: 'Unlock' }).click();
@@ -193,22 +192,22 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   // unlocked in the card for the Stake alone: locked again once it is done
   await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
   expect(await page.evaluate(async () => (await window.satori.status()).unlocked)).toBe(false);
-  // the identity's batch, on its own, 10 s after staking
+  // the alias's batch, on its own, 10 s after staking
   await expect(chip('contract').locator('[data-test=chip-text]')).toHaveText(`Round ${ROUND} sent`, { timeout: 30_000 });
   h = await health(page);
   expect(h).toMatchObject({ status: 'ok', channels: { contract: { state: 'ok', text: `Round ${ROUND} sent` } } });
   const texts = h.feed.map((f) => f.text);
   expect(texts.indexOf(`Satori contract batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Staked with this app')); // newest first
 
-  // Staked, the identity's gas runs low: something needs the person (amber), and the card goes to the Wallet.
-  rpc.eth[st.identity.address.toLowerCase()] = 10n ** 12n;
+  // Staked, the alias's gas runs low: something needs the person (amber), and the card goes to the Wallet.
+  rpc.eth[st.alias.address.toLowerCase()] = 10n ** 12n;
   await page.evaluate(() => window.satori.base());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "The Satori Network is fine. The alias's gas is running low.",
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Network is fine. Gas for the daily batch is running low.',
     action: { id: 'gas-low', button: 'Add gas', do: 'go', tab: 'wallet' } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
   await shots(page, 'warn');
-  rpc.eth[st.identity.address.toLowerCase()] = 10n ** 17n;
+  rpc.eth[st.alias.address.toLowerCase()] = 10n ** 17n;
   await page.evaluate(() => window.satori.base());
 
   // Base's RPC goes down while central is fine: the batch check fails twice, Base is red, and the neuron predicts
@@ -345,7 +344,7 @@ test('register fails, then succeeds: it registers again before each poll until i
   // Try again: the poll registers first, and central takes it this time
   await page.locator('[data-test=action-button]').click();
   await expect.poll(async () => (await health(page)).reasons.map((r) => r.id), { timeout: LOAD_TIMEOUT }).not.toContain('not-registered');
-  expect((await page.evaluate(() => window.satori.status())).central.registration).toMatchObject({ ok: true, vaultMismatch: false });
+  expect((await page.evaluate(() => window.satori.status())).central.registration).toMatchObject({ ok: true, walletMismatch: false });
   await polled(page); // that poll, done
   // registered: the next poll does not register again
   await page.evaluate(() => window.satori.poll());
@@ -360,7 +359,7 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   centralAt(central, nowS() - 60);
   const release = central.hold(); // the first poll runs at once after register; held here to see it
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   const h = await health(page);
   expect(h).toMatchObject({ status: 'idle', title: 'Starting', line: 'Getting its first predictions…', action: null });
   expect(h.channels.network.text).toBe('First poll now…');
@@ -382,26 +381,26 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   expect(central.prod).toEqual([]);
 });
 
-test('starting with a vault mismatch: the title says Starting; the mismatch leads the status, the line and the card', async ({ context, page }) => {
+test('starting with a wallet mismatch: the title says Starting; the mismatch leads the status, the line and the card', async ({ context, page }) => {
   const { central } = await setup(context);
-  central.otherVault = fx.vectors[3].ethAddress; // central pays this vault's rewards to another Base address
+  central.otherWallet = fx.vectors[3].ethAddress; // central pays this wallet's rewards to another Base address
   const release = central.hold(); // the first poll runs at once after register; held here to see the title before it
   await start(page);
   await expect(hero(page)).toHaveAttribute('data-s', 'warn'); // registered: the mismatch
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Network pays this vault's rewards to another address.",
-    action: { id: 'vault-mismatch', button: 'Open Settings', do: 'go', tab: 'settings', section: 'keys' } });
-  expect(h.reasons.map((r) => r.id)).toEqual(['vault-mismatch', 'starting']);
+  expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Network pays this wallet's rewards to another address.",
+    action: { id: 'wallet-mismatch', button: 'Open Settings', do: 'go', tab: 'settings', section: 'keys' } });
+  expect(h.reasons.map((r) => r.id)).toEqual(['wallet-mismatch', 'starting']);
   await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');
   await expect(page.locator('[data-test=health-line]')).toHaveText("Fetching today's observations…"); // the poll, held: its step
-  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'vault-mismatch');
+  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'wallet-mismatch');
 
   // The first poll: predicting, the mismatch still there.
   centralAt(central, nowS() - 60);
   release();
   await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT }); // history, bvar
   h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'vault-mismatch' } });
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'wallet-mismatch' } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
   expect(central.prod).toEqual([]);
 });
@@ -455,7 +454,7 @@ test('an iPhone: Setup and Settings say how Satori runs; the hero says Keep Sato
 
   // a phone: every step of the work says to keep Satori open, not only the sending
   const release = central.hold();
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]); // central pays it: no mismatch
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]); // central pays it: no mismatch
   await expect(page.locator('[data-test=health-line]')).toHaveText("Keep Satori open · Fetching today's observations…");
   await expect(hero(page)).toHaveAttribute('data-tone', 'working'); // the words, not the colour: vivid stays for what is critical
   expect((await health(page)).work.text).toBe("Fetching today's observations…"); // agents read the step itself

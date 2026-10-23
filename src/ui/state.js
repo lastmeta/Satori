@@ -4,7 +4,7 @@ import { themeOf } from './theme.js';
 import { readPref, SORT_KEY, INSTALL_KEY } from './prefs.js';
 
 export const state = reactive({
-  screen: 'loading', // loading | elsewhere | fatal | damaged (the database file won't open) | setup | finish (an earlier version's vault: Unlock once) | home
+  screen: 'loading', // loading | elsewhere | fatal | damaged (the database file won't open) | setup | finish (an earlier version's wallet: Unlock once) | home
   // the database's start (src/db/opfs.js): { step: 'download', loaded, total } (bytes on the wire) | { step: 'start' |
   // 'open' | 'ready' }; null before it begins (docs/design/storage.md#the-first-visit)
   engine: null,
@@ -21,22 +21,22 @@ export const state = reactive({
   confirmAt: [],
   passNote: '', // the passphrase step's note (an import whose password can't be reused)
   // the keys
-  identity: '', // the identity's Base address
-  vault: '', // the vault's Base address (shown while locked)
+  alias: '', // the alias's Base address
+  wallet: '', // the wallet's Base address (shown while locked)
   unlocked: false,
-  lockAt: null, // when the vault locks on its own (ms), or null (src/keys/autolock.js)
+  lockAt: null, // when the wallet locks on its own (ms), or null (src/keys/autolock.js)
   lockNow: 0, // the clock "Locks in 4 min" is counted from (ms; moves every 15 s while unlocked)
-  vaultError: '',
+  walletError: '',
   unlockFor: '', // the inline Unlock prompt that is open: '' | 'card' | 'claim' | 'wallet' | 'buy'
   unlockError: '',
-  backupAsk: '', // the key whose backup asks for the passphrase (each time): '' | 'identity' | 'vault' | 'nostr'
+  backupAsk: '', // the key whose backup asks for the passphrase (each time): '' | 'alias' | 'wallet' | 'nostr'
   backupError: '',
   revealing: false, // a backup's passphrase is being checked (~0.3 s)
-  backup: '', // '' | 'identity' | 'vault' | 'nostr': which key's backup is shown
-  backupWords: '', // identity, vault: the 24 words
-  backupKey: '', // identity, vault: the private key (0x hex); nostr: the nsec
+  backup: '', // '' | 'alias' | 'wallet' | 'nostr': which key's backup is shown
+  backupWords: '', // alias, wallet: the 24 words
+  backupKey: '', // alias, wallet: the private key (0x hex); nostr: the nsec
   backupHex: '', // nostr: the secret (hex)
-  backupAt: null, // when the vault's backup was confirmed (meta.backup_at), or null
+  backupAt: null, // when the wallet's backup was confirmed (meta.backup_at), or null
   copied: '',
   // health (docs/design/health.md): the activity log's revision, and Home's answer
   activityRev: 0,
@@ -45,7 +45,7 @@ export const state = reactive({
   // can read (src/ui/hold.js), the hero's view ({ key, working, status, title, line }) and the action lines
   work: {},
   hero: null,
-  actionLine: '', // the vault's action in progress: its card's line
+  actionLine: '', // the wallet's action in progress: its card's line
   networkLine: '', // discover or subscribe, once it lasts a second
   // Models (docs/design/models.md): the list and the open model live in src/ui/models.js's box; these say they changed
   modelsRev: 0,
@@ -98,12 +98,12 @@ export const state = reactive({
   // Base (docs/design/base.md): the status (window.satori.base()'s shape), what runs, the last action's result
   base: {
     rpc: [], rpcSetting: '', maxFeeSetting: null, maxFeeGwei: null, localFork: false, explorer: null, config: null, error: '', round: null,
-    identity: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false },
-    vault: { address: '', eth: null, satori: null, stakedWith: null, referral: null, staked: null, inSync: null, shortfall: null, lock: null, lowEth: false },
+    alias: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false },
+    wallet: { address: '', eth: null, satori: null, stakedWith: null, referral: null, staked: null, inSync: null, shortfall: null, lock: null, lowEth: false },
     claimable: { rewards: null, drop: null, airdrop: null, total: null }, pendingReferrer: null, inviteLink: '', lastBatch: null, lastCheck: null, nextCheck: null, checking: false,
   },
   baseBusy: '', // '' | 'refresh' | 'stake' | 'unstake' | 'claim' | 'send'
-  baseDid: '', // the last vault action ('stake' | 'unstake' | 'claim' | 'send'): where its result shows
+  baseDid: '', // the last wallet action ('stake' | 'unstake' | 'claim' | 'send'): where its result shows
   baseError: '',
   baseResult: '',
   baseTxs: [], // the last action's transactions: [{ label, hash }]

@@ -96,17 +96,17 @@ forge or change one: the signature is checked against the chain.
 - **Transfer locks.** The token blocks transfers out of a wallet that is
   staked with a neuron, or that predicted this round or the last
   (`SatoriToken.sol` lock lanes; `relayer/README.md`). A neuron playing on
-  chain therefore can't open or top up a channel from its vault or its
-  identity. Spending from a channel moves nothing out of those wallets, so a
-  channel funded once keeps working after the vault stakes. And sellers can
+  chain therefore can't open or top up a channel from its wallet or its
+  alias. Spending from a channel moves nothing out of those wallets, so a
+  channel funded once keeps working after the wallet stakes. And sellers can
   receive while locked: the lock checks only the sender.
   - *Proposed:* `open` names a payer separate from the wallet that funds
-    it, so any unlocked wallet can fund a neuron's channel (the vault before
+    it, so any unlocked wallet can fund a neuron's channel (the wallet before
     it stakes, a reward address, an exchange withdrawal). The refund always
     goes to the payer.
 - **Permit.** SATORI has EIP-2612 `permit`, so opening a channel is one
   transaction, with no separate approve.
-- **The hook.** A payment to a staked vault runs the token's delegation
+- **The hook.** A payment to a staked wallet runs the token's delegation
   hook. A `settle` sent with a bare gas estimate could starve it: the
   token-hook issue, fixed on `humble` (86e2bdb3), live with D7. The app
   already pads its gas.
@@ -141,13 +141,13 @@ events: Opened, ToppedUp, Settled, CloseRequested, CloseCancelled, Closed
   every voucher it gave by adding code to its signer's address (EIP-7702);
   the adversarial review found this and it is fixed. A contract signer can
   still change its answer, so **a seller accepts only key (EOA) signers**:
-  the neuron's identity is one.
+  the neuron's alias is one.
 - **Only the payer cancels a close** (`cancelClose`, which moves no tokens,
-  so a staked vault can still use it). If the signer could, a leaked
-  identity could keep a refund from ever coming due.
+  so a staked wallet can still use it). If the signer could, a leaked
+  alias could keep a refund from ever coming due.
 
 - `settle` is open to anyone, because the money can only go to the payee
-  and only up to what the signer signed. So the seller's identity, or anyone
+  and only up to what the signer signed. So the seller's alias, or anyone
   else, can submit it.
 - `requestClose` and `withdraw` are open to the signer, because the refund
   can only go to the payer. Unsubscribing then needs no Unlock.
@@ -158,21 +158,21 @@ events: Opened, ToppedUp, Settled, CloseRequested, CloseCancelled, Closed
 
 ### Two keys, as everywhere in Satori
 
-- **The vault** funds a channel (Unlock, gas). That is the only step that
+- **The wallet** funds a channel (Unlock, gas). That is the only step that
   moves the buyer's money.
-- **The identity is the channel's signer.** It signs vouchers on its own,
+- **The alias is the channel's signer.** It signs vouchers on its own,
   per observation, with no Unlock. On the seller's side it sends `settle`,
   paying the gas it already holds for the daily batch, and the money lands
-  in the vault.
-- **If the identity leaks,** the thief can only overpay the sellers you
+  in the wallet.
+- **If the alias leaks,** the thief can only overpay the sellers you
   already have channels with, up to their deposits. It can't redirect money
-  to itself. That is the same bounded risk the identity carries today.
+  to itself. That is the same bounded risk the alias carries today.
 
 ### Over the relays
 
 1. **Announce.** The 34600 carries the price per observation (in the
    token's smallest unit, as a string), the chain, the token, the payee (the
-   seller's vault) and the contract's address.
+   seller's wallet) and the contract's address.
 2. **Subscribe.** The buyer opens a channel on chain, then sends a 34602
    naming the channel. The seller checks it on chain: its payee, its token,
    enough left, not closing.
@@ -180,7 +180,7 @@ events: Opened, ToppedUp, Settled, CloseRequested, CloseCancelled, Closed
    subscriber, encrypted to that subscriber's Nostr key (NIP-44). Each event
    has its own `d` tag per subscriber; today's code shares one, so a relay
    keeps only the last subscriber's event.
-4. **Pay.** On receiving observation n, the buyer's identity signs the
+4. **Pay.** On receiving observation n, the buyer's alias signs the
    voucher for the new total and sends it to the seller, encrypted (34603).
    The seller checks the signature, that the total rose by the price, and
    that it fits the deposit, then sends observation n + 1. The first

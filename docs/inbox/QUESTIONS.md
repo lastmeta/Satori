@@ -3,7 +3,7 @@
 Open questions the code can't settle on its own. Each says what the app does
 today, so nothing waits on an answer.
 
-1. **The token hook (fixed in D7, 2026-10-23).** A staked vault that receives SATORI
+1. **The token hook (fixed in D7, 2026-10-23).** A staked wallet that receives SATORI
    in a transaction sent with a bare gas estimate can't unstake (Panic
    0x11), and anyone can cause it with 1 wei. The root fix is on the
    contracts' `humble` branch (86e2bdb3) and shipped with D7, which is deployed and bundled
@@ -22,10 +22,10 @@ today, so nothing waits on an answer.
    (satorilib's scheme). A neuron moving from Docker keeps the same keys and
    Base addresses from its words, so this stays for every existing key. The
    open question is whether **new** neurons should use the standard BIP39
-   seed → BIP32 path (`m/44'/60'/0'/0/0` for the vault), so the vault's words
+   seed → BIP32 path (`m/44'/60'/0'/0/0` for the wallet), so the wallet's words
    open the same account in MetaMask or any Ethereum wallet. Today a user
    gets there with the private key Backup shows (`0x…`, "Import account").
-   - *For:* the words alone recover the vault in any wallet; it is what users
+   - *For:* the words alone recover the wallet in any wallet; it is what users
      of Base wallets expect.
    - *Against:* two schemes forever: the record must say which one each key
      uses, and Restore from words must ask (the same words give different
@@ -65,9 +65,9 @@ today, so nothing waits on an answer.
   `base-upgrade` f4d72f5 verifies EIP-191 (`personal_sign`) at
   `/auth/login`, Satori Lite signs only EIP-191 since satorilib 5028913, and
   this app signs only EIP-191 (842d491). Since central d8a2085 answers
-  register with the vault's Base address (`vault_base_address`), the app
+  register with the wallet's Base address (`wallet_address`), the app
   has no Evrmore code at all
-  ([../design/central.md](../design/central.md#the-vault-in-registers-answer)).
+  ([../design/central.md](../design/central.md#the-wallets-link)).
 
 - **A wss relay** (was item 3). Done 2026-10-20: `wss://relay.satorinet.io`
   is a TLS front for satorian on central's nginx-proxy (certbot, the same

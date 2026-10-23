@@ -14,10 +14,10 @@ const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
   return { evmAddress: evmAddress(publicKey(secret)), signDigest: (h) => signDigest(secret, h) };
 };
-const identity = signerOf('11'.repeat(32));
-const vault = signerOf('22'.repeat(32));
-const I = identity.evmAddress.toLowerCase();
-const V = vault.evmAddress.toLowerCase();
+const alias = signerOf('11'.repeat(32));
+const wallet = signerOf('22'.repeat(32));
+const I = alias.evmAddress.toLowerCase();
+const V = wallet.evmAddress.toLowerCase();
 const ROUND = 20741;
 
 let s, rpc, chain;
@@ -26,7 +26,7 @@ beforeEach(() => {
   s.balance[V] = 100n * E18;
   chain = createChain({ config: DEFAULTS, transport: rpc.transport, pollingInterval: 1, settle: { tries: 5, ms: 1 } });
 });
-const sentBy = () => rpc.sent.map((t) => [t.from === I ? 'identity' : t.from === V ? 'vault' : t.from, t.functionName, t.args]);
+const sentBy = () => rpc.sent.map((t) => [t.from === I ? 'alias' : t.from === V ? 'wallet' : t.from, t.functionName, t.args]);
 
 describe('the transfer lock: blocked while lockedUntil >= round (SatoriToken.sol:816-821)', () => {
   test('free, while staked, after unstaking (through the next round), then free', () => {
@@ -43,72 +43,72 @@ describe('status: one multicall', () => {
     s.rewards[V] = 3n * E18;
     s.airdrop[V] = 7n * E18;
     const before = rpc.log.length;
-    const st = await chain.status({ identity: identity.evmAddress, vault: vault.evmAddress });
+    const st = await chain.status({ alias: alias.evmAddress, wallet: wallet.evmAddress });
     expect(rpc.log.slice(before).filter((m) => m === 'eth_call')).toHaveLength(1);
     expect(st).toMatchObject({
       round: ROUND, chainTime: ROUND * 86400 + 9 * 3600, gasPrice: 1_000_000n,
-      identity: { eth: 10n ** 16n, delegate: zeroAddress, power: 0n, fee: 1000, allowedDelegator: zeroAddress },
-      vault: { eth: 10n ** 16n, satori: 100n * E18, delegate: zeroAddress, lockedUntil: 0, lock: { locked: false }, referral: zeroAddress },
+      alias: { eth: 10n ** 16n, delegate: zeroAddress, power: 0n, fee: 1000, allowedDelegator: zeroAddress },
+      wallet: { eth: 10n ** 16n, satori: 100n * E18, delegate: zeroAddress, lockedUntil: 0, lock: { locked: false }, referral: zeroAddress },
       claimable: { rewards: 3n * E18, rewardsComplete: true, airdrop: 7n * E18 },
       errors: [],
     });
   });
 });
 
-describe('stake: delegatePredictionPower(identity) (Lite\'s Enable staking + the dapp\'s instant signing)', () => {
-  test('fee → 0 and allowedDelegator → vault (identity), then the vault\'s delegatePredictionPower(identity); the reads show it', async () => {
-    const r = await chain.delegate({ identity, vault });
+describe('stake: delegatePredictionPower(alias) (Lite\'s Enable staking + the dapp\'s instant signing)', () => {
+  test('fee → 0 and allowedDelegator → wallet (alias), then the wallet\'s delegatePredictionPower(alias); the reads show it', async () => {
+    const r = await chain.delegate({ alias, wallet });
     expect(sentBy()).toEqual([
-      ['identity', 'setPredictorFee', [0]],
-      ['identity', 'setAllowedDelegator', [vault.evmAddress]],
-      ['vault', 'delegatePredictionPower', [identity.evmAddress]],
+      ['alias', 'setPredictorFee', [0]],
+      ['alias', 'setAllowedDelegator', [wallet.evmAddress]],
+      ['wallet', 'delegatePredictionPower', [alias.evmAddress]],
     ]);
     expect(r).toEqual({ settled: true, steps: rpc.sent.map((t, i) => ({ ...r.steps[i], hash: t.hash })) });
-    const st = await chain.status({ identity: identity.evmAddress, vault: vault.evmAddress });
-    expect(st.identity).toMatchObject({ fee: 0, power: 100n * E18, allowedDelegator: vault.evmAddress });
-    expect(st.vault).toMatchObject({ delegate: identity.evmAddress, lockedUntil: INDEFINITE, lock: { locked: true, indefinite: true } });
+    const st = await chain.status({ alias: alias.evmAddress, wallet: wallet.evmAddress });
+    expect(st.alias).toMatchObject({ fee: 0, power: 100n * E18, allowedDelegator: wallet.evmAddress });
+    expect(st.wallet).toMatchObject({ delegate: alias.evmAddress, lockedUntil: INDEFINITE, lock: { locked: true, indefinite: true } });
   });
   test('only the missing steps: nothing at all when in place', async () => {
     s.feeStored[I] = 1000; // fee already 0
-    await chain.delegate({ identity, vault });
+    await chain.delegate({ alias, wallet });
     expect(sentBy().map((x) => x[1])).toEqual(['setAllowedDelegator', 'delegatePredictionPower']);
-    expect(await chain.delegate({ identity, vault })).toEqual({ steps: [], settled: true });
+    expect(await chain.delegate({ alias, wallet })).toEqual({ steps: [], settled: true });
     expect(rpc.sent).toHaveLength(2);
   });
   describe('a referrer (docs/design/base.md#referral-invite-links)', () => {
     const R = '0x' + 'ab'.repeat(20);
-    test('the vault registers it first, once; the status reads it', async () => {
-      const r = await chain.delegate({ identity, vault, referrer: R });
-      expect(sentBy().map((x) => x.slice(0, 2).join(':'))).toEqual(['vault:setReferral', 'identity:setPredictorFee', 'identity:setAllowedDelegator',
-        'vault:delegatePredictionPower']);
+    test('the wallet registers it first, once; the status reads it', async () => {
+      const r = await chain.delegate({ alias, wallet, referrer: R });
+      expect(sentBy().map((x) => x.slice(0, 2).join(':'))).toEqual(['wallet:setReferral', 'alias:setPredictorFee', 'alias:setAllowedDelegator',
+        'wallet:delegatePredictionPower']);
       expect(sentBy()[0][2].map((a) => a.toLowerCase())).toEqual([R]);
-      expect(r.steps[0]).toMatchObject({ step: 'setReferral(referrer)', by: 'vault' });
-      expect((await chain.status({ identity: identity.evmAddress, vault: vault.evmAddress })).vault.referral.toLowerCase()).toBe(R);
+      expect(r.steps[0]).toMatchObject({ step: 'setReferral(referrer)', by: 'wallet' });
+      expect((await chain.status({ alias: alias.evmAddress, wallet: wallet.evmAddress })).wallet.referral.toLowerCase()).toBe(R);
     });
-    test('none when the vault has a referral already (set once)', async () => {
+    test('none when the wallet has a referral already (set once)', async () => {
       s.referral[V] = '0x' + 'cd'.repeat(20);
-      await chain.delegate({ identity, vault, referrer: R });
+      await chain.delegate({ alias, wallet, referrer: R });
       expect(sentBy().map((x) => x[1])).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower']);
       expect(s.referral[V]).toBe('0x' + 'cd'.repeat(20));
     });
-    test('none when it is the vault itself (the contract refuses it), or when none is held', async () => {
-      await chain.delegate({ identity, vault, referrer: vault.evmAddress });
+    test('none when it is the wallet itself (the contract refuses it), or when none is held', async () => {
+      await chain.delegate({ alias, wallet, referrer: wallet.evmAddress });
       expect(sentBy().map((x) => x[1])).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower']);
       expect(s.referral[V]).toBeUndefined();
     });
   });
   test('a fee set once to something else: the simulate says AlreadySet, nothing is sent', async () => {
     s.feeStored[I] = 500;
-    const err = await chain.delegate({ identity, vault }).catch((e) => e);
+    const err = await chain.delegate({ alias, wallet }).catch((e) => e);
     expect(revertName(err)).toBe('AlreadySet');
     expect(errorText(err)).toBe('reverted: AlreadySet');
     expect(rpc.sent).toHaveLength(0);
   });
   test('a frozen stake: unstaking underflows (Panic 0x11), named by panicOf; nothing is sent', async () => {
-    await chain.delegate({ identity, vault });
+    await chain.delegate({ alias, wallet });
     rpc.sent.length = 0;
     s.skipHook(V, 1n);
-    const err = await chain.undelegate({ vault }).catch((e) => e);
+    const err = await chain.undelegate({ wallet }).catch((e) => e);
     expect([revertName(err), panicOf(err)]).toEqual(['Panic', 0x11]);
     expect(rpc.sent).toHaveLength(0);
     expect(panicOf(new Error('x'))).toBeNull();
@@ -124,29 +124,29 @@ describe('stake: delegatePredictionPower(identity) (Lite\'s Enable staking + the
     let lag = 99;
     const real = s.delegateOf;
     s.delegateOf = new Proxy(real, { get: (t, k) => (k === V && lag-- > 0 ? undefined : t[k]) });
-    const r = await chain.delegate({ identity, vault });
+    const r = await chain.delegate({ alias, wallet });
     expect(r.settled).toBe(false);
     expect(rpc.sent).toHaveLength(3);
   });
   test('unstake: delegatePredictionPower(0x0); SATORI can\'t be sent through the next round', async () => {
-    await chain.delegate({ identity, vault });
-    const r = await chain.undelegate({ vault });
-    expect(sentBy().at(-1)).toEqual(['vault', 'delegatePredictionPower', [zeroAddress]]);
-    expect(r).toMatchObject({ settled: true, steps: [{ step: 'delegatePredictionPower(0x0)', by: 'vault' }] });
-    const st = await chain.status({ identity: identity.evmAddress, vault: vault.evmAddress });
-    expect(st.vault.lock).toEqual({ locked: true, indefinite: false, untilRound: ROUND + 1, freeAt: (ROUND + 2) * 86400 });
-    expect(st.identity.power).toBe(0n);
-    expect(await chain.undelegate({ vault })).toEqual({ steps: [], settled: true });
+    await chain.delegate({ alias, wallet });
+    const r = await chain.undelegate({ wallet });
+    expect(sentBy().at(-1)).toEqual(['wallet', 'delegatePredictionPower', [zeroAddress]]);
+    expect(r).toMatchObject({ settled: true, steps: [{ step: 'delegatePredictionPower(0x0)', by: 'wallet' }] });
+    const st = await chain.status({ alias: alias.evmAddress, wallet: wallet.evmAddress });
+    expect(st.wallet.lock).toEqual({ locked: true, indefinite: false, untilRound: ROUND + 1, freeAt: (ROUND + 2) * 86400 });
+    expect(st.alias.power).toBe(0n);
+    expect(await chain.undelegate({ wallet })).toEqual({ steps: [], settled: true });
   });
   test('accounts as 0x private keys too (scripts, the fork test)', async () => {
-    await chain.delegate({ identity: '0x' + '11'.repeat(32), vault: '0x' + '22'.repeat(32) });
+    await chain.delegate({ alias: '0x' + '11'.repeat(32), wallet: '0x' + '22'.repeat(32) });
     expect(rpc.sent.map((t) => t.from)).toEqual([I, I, V]);
   });
 });
 
 describe('the batch\'s pieces', () => {
-  test('batchState: round, chain time, the identity\'s power and this round\'s count', async () => {
-    expect(await chain.batchState(identity.evmAddress)).toEqual({ round: ROUND, chainTime: ROUND * 86400 + 9 * 3600, power: 0n, predicted: 0 });
+  test('batchState: round, chain time, the alias\'s power and this round\'s count', async () => {
+    expect(await chain.batchState(alias.evmAddress)).toEqual({ round: ROUND, chainTime: ROUND * 86400 + 9 * 3600, power: 0n, predicted: 0 });
   });
   test('streams with a game the engine pays (voting weight > 0, SatoriEngine.sol:828); named; the cadence', async () => {
     s.streams[2] = { game: 0, named: false, cadence: 60, history: [] }; // no game
@@ -174,25 +174,25 @@ describe('the batch\'s pieces', () => {
     expect([payload(UP), payload(DOWN)]).toEqual(['0x01', '0x02']);
   });
   test('simulateGame: null when it passes, the error name when not; an RPC failure throws', async () => {
-    expect(await chain.simulateGame(identity, { gameId: 1, direction: DOWN })).toBe(null);
+    expect(await chain.simulateGame(alias, { gameId: 1, direction: DOWN })).toBe(null);
     s.deadGames[1] = 'StaleValue';
-    expect(await chain.simulateGame(identity, { gameId: 1, direction: DOWN })).toBe('StaleValue');
+    expect(await chain.simulateGame(alias, { gameId: 1, direction: DOWN })).toBe('StaleValue');
     s.streams[4] = { game: 4, named: false, cadence: 60, history: [{ hour: 1, value: 1n }] };
     s.deadGames[4] = ''; // a bare revert: no error data
-    expect(await chain.simulateGame(identity, { gameId: 4, direction: UP })).toBe('reverted');
+    expect(await chain.simulateGame(alias, { gameId: 4, direction: UP })).toBe('reverted');
     rpc.state.down = true; // the node's internal error (-32603), which viem reads as a revert with a message
-    await expect(chain.simulateGame(identity, { gameId: 1, direction: DOWN })).rejects.toThrow();
+    await expect(chain.simulateGame(alias, { gameId: 1, direction: DOWN })).rejects.toThrow();
   });
-  test('sendBatch: one tx from the identity; the hash as soon as it is sent; the receipt\'s block time', async () => {
+  test('sendBatch: one tx from the alias; the hash as soon as it is sent; the receipt\'s block time', async () => {
     s.streams[3] = { game: 9, named: false, cadence: 60, history: [{ hour: 1, value: 5n }] };
     const seen = [];
-    const r = await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }, { gameId: 9, direction: UP }],
+    const r = await chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }, { gameId: 9, direction: UP }],
       { onSent: (hash) => seen.push([hash, rpc.sent.length]) });
-    expect(sentBy()).toEqual([['identity', 'predictMultipleWithPayloads', [[{ gameId: 1, payload: '0x02' }, { gameId: 9, payload: '0x01' }]]]]);
+    expect(sentBy()).toEqual([['alias', 'predictMultipleWithPayloads', [[{ gameId: 1, payload: '0x02' }, { gameId: 9, payload: '0x01' }]]]]);
     expect(r).toEqual({ hash: rpc.sent[0].hash, at: ROUND * 86400 + 9 * 3600, blockNumber: 1 });
     expect(seen).toEqual([[r.hash, 1]]);
     expect(s.predicted[`${I}:${ROUND}`]).toBe(2);
-    await expect(chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }])).rejects.toThrow(/AlreadyPredicted/);
+    await expect(chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }])).rejects.toThrow(/AlreadyPredicted/);
     expect(rpc.sent).toHaveLength(1); // the simulate stopped it: no gas
   });
 });
@@ -202,35 +202,35 @@ describe('fees, receipts, the chain id', () => {
     rpc.state.tip = 3n;
     rpc.state.baseFee = 7n;
     expect(await chain.fees()).toEqual({ maxFeePerGas: 17n, maxPriorityFeePerGas: 3n });
-    await chain.claimAirdrop(vault).catch(() => {});
+    await chain.claimAirdrop(wallet).catch(() => {});
     s.airdrop[V] = 1n;
-    await chain.claimAirdrop(vault);
+    await chain.claimAirdrop(wallet);
     expect(rpc.sent[0]).toMatchObject({ maxFeePerGas: 17n, maxPriorityFeePerGas: 3n, gas: 0x30000n + HOOK_GAS });
-    await chain.sendEth(vault, '0x' + '55'.repeat(20), 1n);
+    await chain.sendEth(wallet, '0x' + '55'.repeat(20), 1n);
     expect(rpc.sent[1]).toMatchObject({ maxFeePerGas: 17n, maxPriorityFeePerGas: 3n, gas: 0x30000n }); // a plain transfer: no hook, no pad
   });
   test('given fees are used as they are (the batch checks them against its ceiling first)', async () => {
-    await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }], { fees: { maxFeePerGas: 99n, maxPriorityFeePerGas: 9n } });
+    await chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }], { fees: { maxFeePerGas: 99n, maxPriorityFeePerGas: 9n } });
     expect(rpc.sent[0]).toMatchObject({ maxFeePerGas: 99n, maxPriorityFeePerGas: 9n });
   });
   test('receipt: the status and the block time of a sent tx; null while it is not mined', async () => {
-    const { hash } = await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }]);
+    const { hash } = await chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }]);
     expect(await chain.receipt(hash)).toEqual({ status: 'success', at: ROUND * 86400 + 9 * 3600, blockNumber: 1, hash });
     expect(await chain.receipt('0x' + '12'.repeat(32), { timeout: 50 })).toBe(null);
   });
   test('minedAny: the one of a batch and its replacements that was mined; the nonce, mined and sent', async () => {
-    const A = identity.evmAddress;
+    const A = alias.evmAddress;
     expect([await chain.nonce(A), await chain.nonce(A, 'pending')]).toEqual([0, 0]);
     rpc.state.mine = false;
     const sent = [];
     // its own wait ends (timeout) before the replacement: writes are one at a time, the wait included
-    const p = chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }], { timeout: 300, onSent: (hash, tx) => sent.push({ hash, ...tx }) });
+    const p = chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }], { timeout: 300, onSent: (hash, tx) => sent.push({ hash, ...tx }) });
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toMatchObject({ nonce: 0, gas: expect.any(BigInt), maxFeePerGas: expect.any(BigInt), maxPriorityFeePerGas: expect.any(BigInt) });
     expect([await chain.nonce(A), await chain.nonce(A, 'pending')]).toEqual([0, 1]); // sent, not mined
     expect(await chain.minedAny([sent[0].hash], { timeout: 50 })).toBe(null);
     const fees = { maxFeePerGas: sent[0].maxFeePerGas * 2n, maxPriorityFeePerGas: sent[0].maxPriorityFeePerGas * 2n };
-    const again = await chain.replaceBatch(identity, [{ gameId: 1, direction: DOWN }], { nonce: 0, gas: sent[0].gas, fees });
+    const again = await chain.replaceBatch(alias, [{ gameId: 1, direction: DOWN }], { nonce: 0, gas: sent[0].gas, fees });
     expect(rpc.sent.map((t) => [t.nonce, !!t.replaced])).toEqual([[0, true], [0, false]]);
     rpc.release();
     expect(await chain.minedAny([sent[0].hash, again], { timeout: 1000 })).toMatchObject({ status: 'success', hash: again });
@@ -241,43 +241,43 @@ describe('fees, receipts, the chain id', () => {
   });
 });
 
-describe('claims and sends (the vault)', () => {
+describe('claims and sends (the wallet)', () => {
   test('hub.claim()', async () => {
     s.rewards[V] = 3n * E18;
-    const { hash } = await chain.claimRewards(vault);
-    expect(sentBy()).toEqual([['vault', 'claim', undefined]]);
+    const { hash } = await chain.claimRewards(wallet);
+    expect(sentBy()).toEqual([['wallet', 'claim', undefined]]);
     expect(hash).toBe(rpc.sent[0].hash);
     expect(s.balance[V]).toBe(103n * E18);
   });
   test('claimMerkle with central\'s proof; a wrong proof is refused before sending', async () => {
     const proof = ['0x' + 'ab'.repeat(32)];
     s.merkle.drop[V] = { amount: 5n * E18, proof };
-    await expect(chain.claimMerkle(vault, { amountWei: '5000000000000000000', proof: ['0x' + 'cd'.repeat(32)] }))
+    await expect(chain.claimMerkle(wallet, { amountWei: '5000000000000000000', proof: ['0x' + 'cd'.repeat(32)] }))
       .rejects.toThrow(/InvalidProof/);
-    expect(await chain.alreadyMinted(vault.evmAddress)).toBe(0n);
-    await chain.claimMerkle(vault, { amountWei: '5000000000000000000', proof });
-    expect(sentBy()).toEqual([['vault', 'claimMerkle', [5n * E18, proof]]]);
-    expect(await chain.alreadyMinted(vault.evmAddress)).toBe(5n * E18);
+    expect(await chain.alreadyMinted(wallet.evmAddress)).toBe(0n);
+    await chain.claimMerkle(wallet, { amountWei: '5000000000000000000', proof });
+    expect(sentBy()).toEqual([['wallet', 'claimMerkle', [5n * E18, proof]]]);
+    expect(await chain.alreadyMinted(wallet.evmAddress)).toBe(5n * E18);
   });
   test('claimAirdrop', async () => {
     s.airdrop[V] = 7n * E18;
-    await chain.claimAirdrop(vault);
-    expect(sentBy()).toEqual([['vault', 'claimAirdrop', undefined]]);
+    await chain.claimAirdrop(wallet);
+    expect(sentBy()).toEqual([['wallet', 'claimAirdrop', undefined]]);
     expect(s.balance[V]).toBe(107n * E18);
   });
   test('SATORI: the token reverts Locked while staked, sent when free', async () => {
     const to = '0x' + '33'.repeat(20);
-    await chain.delegate({ identity, vault });
-    await expect(chain.sendSatori(vault, to, E18)).rejects.toThrow(/Locked/);
+    await chain.delegate({ alias, wallet });
+    await expect(chain.sendSatori(wallet, to, E18)).rejects.toThrow(/Locked/);
     s.lock[V] = 0;
-    await chain.sendSatori(vault, to, E18);
+    await chain.sendSatori(wallet, to, E18);
     expect(s.balance[to]).toBe(E18);
   });
   test('ETH: estimated first; more than the balance throws before sending', async () => {
     const to = '0x' + '44'.repeat(20);
-    await expect(chain.sendEth(vault, to, 10n ** 18n)).rejects.toThrow();
+    await expect(chain.sendEth(wallet, to, 10n ** 18n)).rejects.toThrow();
     expect(rpc.sent).toHaveLength(0);
-    await chain.sendEth(vault, to, 10n ** 15n);
+    await chain.sendEth(wallet, to, 10n ** 15n);
     expect(rpc.eth[to]).toBe(10n ** 15n);
   });
 });
@@ -293,25 +293,25 @@ describe('the max fee on every transaction (the security review, 2026-10-19)', (
     s.merkle.drop[V] = { amount: E18, proof: ['0x' + 'ab'.repeat(32)] };
     const to = '0x' + '44'.repeat(20);
     const over = /above the max fee: 3.000000002 gwei > 2 gwei/;
-    await expect(capped.delegate({ identity, vault })).rejects.toThrow(over); // the identity's setPredictorFee(0), the first step
-    await expect(capped.undelegate({ vault })).resolves.toEqual({ steps: [], settled: true }); // not staked: nothing to send
-    await expect(capped.claimRewards(vault)).rejects.toThrow(over);
-    await expect(capped.claimMerkle(vault, { amountWei: E18.toString(), proof: ['0x' + 'ab'.repeat(32)] })).rejects.toThrow(over);
-    await expect(capped.claimAirdrop(vault)).rejects.toThrow(over);
-    await expect(capped.sendEth(vault, to, 1n)).rejects.toThrow(over);
-    await expect(capped.sendSatori(vault, to, 1n)).rejects.toThrow(over);
-    await expect(capped.sendBatch(identity, [{ gameId: 1, direction: DOWN }])).rejects.toThrow(over);
-    await expect(capped.sendFee(vault.evmAddress, { asset: 'ETH', to, wei: 1n })).rejects.toThrow(over); // the send's review says it
+    await expect(capped.delegate({ alias, wallet })).rejects.toThrow(over); // the alias's setPredictorFee(0), the first step
+    await expect(capped.undelegate({ wallet })).resolves.toEqual({ steps: [], settled: true }); // not staked: nothing to send
+    await expect(capped.claimRewards(wallet)).rejects.toThrow(over);
+    await expect(capped.claimMerkle(wallet, { amountWei: E18.toString(), proof: ['0x' + 'ab'.repeat(32)] })).rejects.toThrow(over);
+    await expect(capped.claimAirdrop(wallet)).rejects.toThrow(over);
+    await expect(capped.sendEth(wallet, to, 1n)).rejects.toThrow(over);
+    await expect(capped.sendSatori(wallet, to, 1n)).rejects.toThrow(over);
+    await expect(capped.sendBatch(alias, [{ gameId: 1, direction: DOWN }])).rejects.toThrow(over);
+    await expect(capped.sendFee(wallet.evmAddress, { asset: 'ETH', to, wei: 1n })).rejects.toThrow(over); // the send's review says it
     expect(rpc.sent).toHaveLength(0);
     rpc.state.tip = 10n ** 6n; // Base's usual 0.001 gwei
-    await capped.delegate({ identity, vault });
-    await capped.undelegate({ vault });
+    await capped.delegate({ alias, wallet });
+    await capped.undelegate({ wallet });
     expect(rpc.sent.map((t) => t.functionName)).toEqual(['setPredictorFee', 'setAllowedDelegator', 'delegatePredictionPower', 'delegatePredictionPower']);
   });
   test('no ceiling given (tests, scripts): no check', async () => {
     rpc.state.tip = 3n * GWEI;
     s.airdrop[V] = 1n;
-    await chain.claimAirdrop(vault);
+    await chain.claimAirdrop(wallet);
     expect(rpc.sent).toHaveLength(1);
   });
 });

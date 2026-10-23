@@ -1,8 +1,8 @@
 // The app in Chrome against a stub central (the dev server's default,
-// central2, routed here; prod is blocked): create (identity + vault) with a
+// central2, routed here; prod is blocked): create (alias + wallet) with a
 // non-Latin passphrase → register → Poll now: observations in, predictions out
 // → reload keeps the schedule → Unlock/Lock, backup (words, keys, the Nostr
-// key); Dockerized Neuron import (a vault mismatch; a short Docker password
+// key); Dockerized Neuron import (a wallet mismatch; a short Docker password
 // asks for a new passphrase); words restore; the agent API.
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { runModels } from '../src/engine/evolve.js';
 import { openApp, reloadApp, polled, LOAD_TIMEOUT } from './load.js';
 import { stubCentral as stubAt, CENTRAL } from './stub.js';
 
-const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
 const { profiles } = JSON.parse(readFileSync(new URL('../test/fixtures/profiles.json', import.meta.url)));
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
 const PASS = '密码 correct horse 🔑'; // any Unicode (docs/design/keys.md)
@@ -51,14 +51,13 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
     document.addEventListener('securitypolicyviolation', (e) => window.violations.push(`${e.violatedDirective} ${e.blockedURI}`));
   });
 
-  // Setup: create, the vault's words, confirm three, passphrase.
+  // Setup: create, the wallet's words, confirm three, passphrase.
   await openApp(page);
   await page.getByRole('button', { name: 'Create a wallet' }).click();
   const words = await visible(page.locator('ol.words li')).allTextContents();
   expect(words).toHaveLength(24);
-  const vaultPub = publicKey(secretFromWords(words.join(' ')));
-  const vaultAddress = evmAddress(vaultPub);
-  stub.vaults[vaultPub] = vaultAddress; // central pays this vault: its vault_base_address
+  const walletPub = publicKey(secretFromWords(words.join(' ')));
+  const walletAddress = evmAddress(walletPub);
   await page.getByRole('button', { name: 'I wrote them down' }).click();
   for (const input of await visible(page.getByLabel(/^Word #\d+/)).all()) {
     const n = Number((await input.evaluate((el) => el.closest('label').textContent)).match(/#(\d+)/)[1]);
@@ -74,23 +73,26 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await page.getByLabel('Repeat passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-  // Home: two Base addresses, the vault locked, registered with central2 (headers only, no token).
-  const idAddr = page.locator('[data-test=identity]');
-  const vaultAddr = page.locator('[data-test=vault]');
-  await expect(idAddr).toHaveText(ADDRESS, { timeout: LOAD_TIMEOUT }); // the vault's encryption, then the neuron starts
+  // Home: two Base addresses, the wallet locked, registered with central2 (headers only, no token).
+  const idAddr = page.locator('[data-test=alias]');
+  const walletAddr = page.locator('[data-test=wallet]');
+  await expect(idAddr).toHaveText(ADDRESS, { timeout: LOAD_TIMEOUT }); // the wallet's encryption, then the neuron starts
   await expect.poll(() => page.evaluate(() => document.body.dataset.screen)).toBe('home'); // was 'setup': kept current
-  await expect(vaultAddr).toHaveText(vaultAddress);
-  const identity = await idAddr.textContent();
-  expect(identity).not.toBe(vaultAddress);
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+  await expect(walletAddr).toHaveText(walletAddress);
+  const alias = await idAddr.textContent();
+  expect(alias).not.toBe(walletAddress);
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked');
   await expect(page.locator('[data-test=central-url]')).toHaveText(CENTRAL);
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   await expect(page.locator('[data-test=mismatch]')).toBeHidden();
   expect(stub.registered).toHaveLength(1);
   const reg = stub.registered[0];
-  expect(reg['wallet-pubkey']).toMatch(/^0[23][0-9a-f]{64}$/);
-  expect(reg['vault-pubkey']).toBe(vaultPub);
-  expect(evmAddress(reg['wallet-pubkey'])).toBe(identity);
+  expect(reg['alias-pubkey']).toMatch(/^0[23][0-9a-f]{64}$/);
+  expect(evmAddress(reg['alias-pubkey'])).toBe(alias);
+  // the wallet's link to the alias, signed by the wallet (docs/design/wallets.md)
+  const link = Buffer.from(reg['wallet-link'], 'base64').toString('utf8');
+  expect(link).toMatch(new RegExp(`^Satori: link this alias to my wallet\nalias: ${alias}\nwallet: ${walletAddress}\nissued: \\d+$`));
+  expect(await verifyMessage({ address: walletAddress, message: link, signature: reg['wallet-signature'] })).toBe(true);
   // the build's version: browser-<package version>+<git short sha>, stamped by vite.config.js (the dev server's at its start)
   expect(reg['neuron-version']).toMatch(new RegExp(`^browser-${version.replaceAll('.', '\\.')}\\+[0-9a-f]{7,}$`));
   expect((await status(page)).version).toBe(reg['neuron-version']);
@@ -98,7 +100,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(reg.authorization).toBeUndefined();
 
   // The first poll runs at once, right after register (no 5–30 min wait, no Poll now): two streams stored,
-  // forecast, sent after an identity-signed login.
+  // forecast, sent after an alias-signed login.
   await go(page, 'streams');
   await expect(page).toHaveURL(/#streams$/);
   await expect(page.locator('[data-test=last-submit]')).toContainText('2 of 2 accepted');
@@ -112,9 +114,9 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(btc.locator('[data-test=t2]')).toHaveText('67,000.50');
   await expect(btc.locator('[data-test=status]')).toHaveText('Sent');
   expect(stub.logins).toHaveLength(1);
-  expect(stub.logins[0]).toMatchObject({ ok: true, message: 'c-0', 'wallet-pubkey': reg['wallet-pubkey'] });
+  expect(stub.logins[0]).toMatchObject({ ok: true, message: 'c-0', 'alias-pubkey': reg['alias-pubkey'] });
   expect(stub.logins[0].signature).toMatch(/^0x[0-9a-f]{128}1[bc]$/); // EIP-191: r ‖ s ‖ v, v 27/28
-  expect(await verifyMessage({ address: identity, message: 'c-0', signature: stub.logins[0].signature })).toBe(true);
+  expect(await verifyMessage({ address: alias, message: 'c-0', signature: stub.logins[0].signature })).toBe(true);
   const [items] = stub.batches;
   expect(items.map((i) => [i.stream_uuid, i.stream_name, i.value, i.t1_value]))
     .toEqual([['u-btc', 'bitcoin', '67000.5', '67000.5'], ['u-eth', 'eth', '2500', '2500']]);
@@ -135,38 +137,38 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   // Reload: running at once with no passphrase; registered again; the schedule and the data are kept; the tab too.
   await reloadApp(page);
   await expect(page.locator('[data-test=streams-tab]')).toBeVisible();
-  await expect(idAddr).toHaveText(identity);
+  await expect(idAddr).toHaveText(alias);
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered).toHaveLength(2);
   await expect.poll(async () => (await status(page)).central.nextPoll).toBe(after.central.nextPoll);
   expect(stub.polls).toEqual([1]); // not due yet: it waits
   await expect(page.locator('[data-test=stream]')).toHaveCount(2);
   await expect(page.locator('[data-test=last-submit]')).toContainText('2 of 2 accepted');
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked');
   await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
 
-  // Unlock (Settings, Keys): wrong passphrase refused, then the vault opens.
+  // Unlock (Settings, Keys): wrong passphrase refused, then the wallet opens.
   await go(page, 'settings');
-  const pass = page.getByLabel('Vault passphrase', { exact: true });
+  const pass = page.getByLabel('Wallet passphrase', { exact: true });
   await pass.fill('wrong passphrase');
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Wrong passphrase' })).toBeVisible();
   await pass.fill(PASS);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Unlocked');
   await expect(page.locator('[data-test=lock-in]')).toHaveText('Locks in 5 min'); // it locks on its own (src/keys/autolock.js)
 
-  // Backup: the passphrase each time, unlocked or not (docs/design/keys.md#backup). The vault's words are the ones from
-  // setup; the identity's are its own; each private key is its address's; the Nostr key (random, not from the words) as
+  // Backup: the passphrase each time, unlocked or not (docs/design/keys.md#backup). The wallet's words are the ones from
+  // setup; the alias's are its own; each private key is its address's; the Nostr key (random, not from the words) as
   // nsec and hex. Nothing to download.
   await expect(page.getByRole('button', { name: /^Download/ })).toHaveCount(0);
-  const askBackup = page.getByLabel('Vault passphrase to show the backup');
+  const askBackup = page.getByLabel('Wallet passphrase to show the backup');
   const showBackup = async (name, passphrase = PASS) => {
     await page.getByRole('button', { name }).click();
     await askBackup.fill(passphrase);
     await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   };
-  await showBackup('Vault words', 'not the passphrase');
+  await showBackup('Wallet words', 'not the passphrase');
   await expect(page.locator('[data-test=backup-prompt] [role=alert]')).toHaveText('Wrong passphrase');
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
   await askBackup.fill(PASS);
@@ -175,40 +177,46 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(page.locator('[data-test=backup-prompt]')).toBeHidden();
   const key = page.locator('[data-test=backup-key]');
   await expect(key).toHaveText(/^0x[0-9a-f]{64}$/);
-  expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(vaultAddress);
-  await showBackup('Alias words');
-  await expect(page.locator('[data-test=backup-prompt]')).toBeHidden();
-  await expect(visible(page.locator('ol.words li'))).not.toHaveText(words);
+  expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(walletAddress);
+  // the alias's private key is on the Wallet tab only, for the rare case funds were sent to it
+  await go(page, 'wallet');
+  await page.locator('[data-test=alias-key]').click();
+  await page.getByLabel("Wallet passphrase to show the alias's private key").fill(PASS);
+  await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Show' }).click();
+  const aliasKey = page.locator('[data-test=alias-backup-key]');
+  await expect(aliasKey).toHaveText(/^0x[0-9a-f]{64}$/);
   const idWords = await visible(page.locator('ol.words li')).allTextContents();
   expect(idWords).toHaveLength(24);
   expect(idWords).not.toEqual(words);
-  const idSecret = hex((await key.textContent()).slice(2));
+  const idSecret = hex((await aliasKey.textContent()).slice(2));
   expect(wordsOf(idSecret)).toBe(idWords.join(' '));
-  expect(publicKey(idSecret)).toBe(reg['wallet-pubkey']);
+  expect(publicKey(idSecret)).toBe(reg['alias-pubkey']);
+  await go(page, 'settings');
+  await expect(page.getByRole('button', { name: 'Alias words' })).toHaveCount(0); // not in Settings
   await showBackup('Nostr key');
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
   await expect(key).toHaveText(/^nsec1[02-9ac-hj-np-z]{58}$/);
   const nostrHex = await page.locator('[data-test=backup-hex]').textContent();
   expect(nostrPubkey(nostrHex)).toBe(reg['nostr-pubkey']);
 
-  // Lock: the vault and the backup are gone (showing it again asks for the passphrase, in place, as it always does); the
+  // Lock: the wallet and the backup are gone (showing it again asks for the passphrase, in place, as it always does); the
   // neuron still polls and submits.
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked');
   await expect(page.locator('[data-test=lock-in]')).toBeHidden();
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
   // nothing of the backup is left in the page, hidden or not: every word slot and key blanked in place
-  const leftover = () => page.evaluate(() => [...document.querySelectorAll('ol.words li, [data-test=backup-key], [data-test=backup-hex]')]
+  const leftover = () => page.evaluate(() => [...document.querySelectorAll('ol.words li, [data-test$=backup-key], [data-test$=backup-hex]')]
     .map((el) => el.textContent).join(''));
   expect(await leftover()).toBe('');
-  await page.getByRole('button', { name: 'Vault words' }).click();
+  await page.getByRole('button', { name: 'Wallet words' }).click();
   await expect(askBackup).toBeVisible();
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Cancel' }).click();
   await expect(askBackup).toBeHidden();
   // locked, the passphrase alone shows it (it is asked each time anyway); Hide
-  await showBackup('Vault words');
+  await showBackup('Wallet words');
   await expect(visible(page.locator('ol.words li'))).toHaveText(words);
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked'); // shown, not unlocked
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked'); // shown, not unlocked
   await page.evaluate(() => { window.shown = [...document.querySelectorAll('#settings-backup ol.words li')]; });
   await page.getByRole('button', { name: 'Hide' }).click();
   await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
@@ -229,12 +237,12 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(stub.prod).toEqual([]);
   expect(await page.evaluate(() => window.violations)).toEqual([]);
 
-  // What is stored: this app's record, the vault sealed (PBKDF2-SHA256 600,000, AES-256-GCM), nothing of Docker's.
+  // What is stored: this app's record, the wallet sealed (PBKDF2-SHA256 600,000, AES-256-GCM), nothing of Docker's.
   await page.goto('/e2e/store/'); // the app's tab is gone: its database can be read
   const { value: keys } = await page.evaluate(() => window.probe({ cmd: 'app-meta', key: 'keys' }));
-  expect(keys).toMatchObject({ v: 1, identity: Buffer.from(idSecret).toString('hex'), nostr: nostrHex,
-    vault: { pubkey: vaultPub, kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000 }, cipher: { name: 'AES-GCM' } } });
-  expect(Object.keys(keys.vault).sort()).toEqual(['cipher', 'data', 'kdf', 'pubkey']);
+  expect(keys).toMatchObject({ v: 1, alias: Buffer.from(idSecret).toString('hex'), nostr: nostrHex,
+    wallet: { pubkey: walletPub, kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000 }, cipher: { name: 'AES-GCM' } } });
+  expect(Object.keys(keys.wallet).sort()).toEqual(['cipher', 'data', 'kdf', 'pubkey']);
 });
 
 test('a second tab waits, and becomes the neuron when the first closes: no reload; it polls (docs/design/pwa.md#one-neuron)', async ({ context, page }) => {
@@ -252,29 +260,26 @@ test('a second tab waits, and becomes the neuron when the first closes: no reloa
   expect(r.poll).toMatchObject({ streams: 2 });
   expect(r.poll.error).toBeUndefined();
   expect(stub.polls.length).toBe(before + 1);
-  expect((await other.evaluate(() => window.satori.status())).identity).toMatch(ADDRESS);
+  expect((await other.evaluate(() => window.satori.status())).alias).toMatch(ADDRESS);
 });
 
 test('agent API: poll, dedupe, a kept queue resent, the central URL setting', async ({ context, page }) => {
   const stub = await stubCentral(context);
   const elsewhere = await stubCentral(context, 'https://central.test');
   const v = fx.vectors[2];
-  stub.vaults[v.pubkey] = v.ethAddress; // central pays this vault: its vault_base_address
   await openApp(page);
   await expect(page.getByRole('button', { name: 'Create a wallet' })).toBeVisible();
   await expect(page.evaluate(() => window.satori.poll())).rejects.toThrow(/Set up first/);
   const s0 = await page.evaluate((w) => {
     const { setup } = window.satori; // destructured: no `this`
-    return setup({ passphrase: 'pass phrase', vaultWords: w });
+    return setup({ passphrase: 'pass phrase', walletWords: w });
   }, v.words);
-  expect(s0).toMatchObject({ screen: 'home', vault: v.ethAddress, unlocked: false });
-  expect(s0.identity).toMatch(ADDRESS);
+  expect(s0).toMatchObject({ screen: 'home', wallet: v.ethAddress, unlocked: false });
+  expect(s0.alias).toMatch(ADDRESS);
   expect(s0.central).toMatchObject({ url: CENTRAL });
   await expect.poll(async () => (await status(page)).central.registration?.ok).toBe(true);
   const registration = (await status(page)).central.registration;
-  expect(registration).toMatchObject({ peer_id: 7, vault: v.ethAddress, vault_base_address: v.ethAddress, vaultMismatch: false });
-  expect(registration).not.toHaveProperty('vault_address'); // central's other address forms are not passed on
-  expect(registration).not.toHaveProperty('wallet_address');
+  expect(registration).toMatchObject({ peer_id: 7, wallet: v.ethAddress, wallet_address: v.ethAddress, walletLinkError: null, walletMismatch: false });
   await expect(page.evaluate(() => window.satori.setup({ passphrase: 'short' }))).rejects.toThrow(/already set up/i);
 
   const poll = () => page.evaluate(() => window.satori.poll());
@@ -333,11 +338,11 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   await expect(page.evaluate(() => window.satori.setCentral('http://central.test'))).rejects.toThrow(/https:\/\//);
   expect((await status(page)).central.pending).toBe(1); // a refused URL changes nothing
   elsewhere.batch = [{ ...entry('u-btc-2', 'bitcoin', T0 + 120, '67005.5'), stream: { uuid: 'u-btc-2', name: 'bitcoin', meta: '{"unit":"USD"}' } }];
-  elsewhere.noVaultBase = true; // a central without vault_base_address (prod, on main): unknown, no mismatch
+  elsewhere.noWalletAddress = true; // a central without wallet_address: unknown, no mismatch
   const c = await page.evaluate(() => window.satori.setCentral('https://central.test/'));
-  expect(c).toMatchObject({ url: 'https://central.test', registration: { ok: true, peer_id: 7, vault: v.ethAddress, vault_base_address: null,
-    vaultMismatch: null }, pending: 0, lastPoll: null, lastSubmit: null });
-  expect((await page.evaluate(() => window.satori.health())).reasons.map((r) => r.id)).not.toContain('vault-mismatch');
+  expect(c).toMatchObject({ url: 'https://central.test', registration: { ok: true, peer_id: 7, wallet: v.ethAddress, wallet_address: null,
+    walletLinkError: null, walletMismatch: null }, pending: 0, lastPoll: null, lastSubmit: null });
+  expect((await page.evaluate(() => window.satori.health())).reasons.map((r) => r.id)).not.toContain('wallet-mismatch');
   await expect(page.locator('[data-test=mismatch]')).toHaveText('');
   expect(elsewhere.registered).toHaveLength(1);
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://central.test');
@@ -368,8 +373,8 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
 
   // The keys: backup(which, passphrase) of one key or all three, the passphrase each time, unlocked or not; file() is
   // gone (no Docker files are made).
-  await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow("The vault's passphrase is needed: it is asked each time.");
-  await expect(page.evaluate(() => window.satori.backup('vault', 'not the passphrase'))).rejects.toThrow(/Wrong passphrase/);
+  await expect(page.evaluate(() => window.satori.backup('wallet'))).rejects.toThrow("The wallet's passphrase is needed: it is asked each time.");
+  await expect(page.evaluate(() => window.satori.backup('wallet', 'not the passphrase'))).rejects.toThrow(/Wrong passphrase/);
   await expect(page.evaluate(() => window.satori.unlock('nope'))).rejects.toThrow(/Wrong passphrase/);
   // One Unlock at a time, as the UI's: a second while one runs is refused.
   const unlocks = await page.evaluate(() => Promise.allSettled([window.satori.unlock('pass phrase'), window.satori.unlock('pass phrase')])
@@ -378,24 +383,24 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   const s1 = await status(page);
   expect(s1.lockAt - Date.now()).toBeGreaterThan(4 * 60_000); // it locks on its own in 5 minutes
   expect(s1.lockAt - Date.now()).toBeLessThanOrEqual(5 * 60_000);
-  await expect(page.evaluate(() => window.satori.backup('vault'))).rejects.toThrow(/passphrase is needed/); // unlocked: still asked
-  expect(await page.evaluate(() => window.satori.backup('vault', 'pass phrase'))).toEqual({ words: v.words, privateKey: `0x${v.entropyHex}` });
+  await expect(page.evaluate(() => window.satori.backup('wallet'))).rejects.toThrow(/passphrase is needed/); // unlocked: still asked
+  expect(await page.evaluate(() => window.satori.backup('wallet', 'pass phrase'))).toEqual({ words: v.words, privateKey: `0x${v.entropyHex}` });
   const all = await page.evaluate(() => window.satori.backup(undefined, 'pass phrase'));
-  expect(Object.keys(all)).toEqual(['identity', 'vault', 'nostr']);
-  expect(evmAddress(publicKey(hex(all.identity.privateKey.slice(2))))).toBe(s0.identity);
+  expect(Object.keys(all)).toEqual(['alias', 'wallet', 'nostr']);
+  expect(evmAddress(publicKey(hex(all.alias.privateKey.slice(2))))).toBe(s0.alias);
   expect(all.nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: expect.stringMatching(/^[0-9a-f]{64}$/) });
   expect(nostrPubkey(all.nostr.secret)).toBe((await status(page)).nostr.pubkey);
   expect(await page.evaluate(() => typeof window.satori.file)).toBe('undefined');
-  for (const which of ['Vault', 'vaults', '', 'wallet.yaml']) {
-    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'identity' \(the alias\), 'vault' or 'nostr'/);
+  for (const which of ['Wallet', 'wallets', '', 'wallet.yaml']) {
+    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'alias', 'wallet' or 'nostr'/);
   }
   await page.evaluate(() => window.satori.lock());
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Locked');
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked');
   expect((await status(page)).lockAt).toBe(null);
   expect(stub.prod).toEqual([]);
 });
 
-test('central with history: the first poll backfills each stream and forecasts it with bvar (its spec from the identity)', async ({ context, page }) => {
+test('central with history: the first poll backfills each stream and forecasts it with bvar (its spec from the alias)', async ({ context, page }) => {
   const stub = await stubAt(context);
   const names = ['bitcoin', 'eth', 'gold'];
   const at = T0 - 3600; // the poll's rows; history ends an hour before
@@ -412,8 +417,8 @@ test('central with history: the first poll backfills each stream and forecasts i
   expect(stub.historyCalls.map((q) => [q.stream_uuid, q.limit])).toEqual(names.map((n) => [`u-${n}`, '1000']));
   const models = await page.evaluate(() => window.satori.models());
   expect(models.map((m) => [m.name, m.model])).toEqual(names.map((n) => [n, 'bvar']));
-  // node, from the same history and the identity's pubkey (the specs' seed), makes the same specs and numbers
-  const seed = stub.registered[0]['wallet-pubkey'];
+  // node, from the same history and the alias's pubkey (the specs' seed), makes the same specs and numbers
+  const seed = stub.registered[0]['alias-pubkey'];
   const histories = new Map(names.map((n, i) => [`u-${n}`, [...stub.history[`u-${n}`].map((o) => ({ ts: Math.floor(Number(o.observed_at)), value: Number(o.value) })),
     { ts: at, value: price(i, 600) }]]));
   const out = runModels({ fresh: names.map((n) => `u-${n}`), histories, seed });
@@ -439,39 +444,39 @@ test('central with history: the first poll backfills each stream and forecasts i
   expect(stub.prod).toEqual([]);
 });
 
-test("import Docker files; central pays this vault's rewards to another Base address: a mismatch shows both; Settings", async ({ context, page }) => {
+test("import Docker files; central pays this wallet's rewards to another Base address: a mismatch shows both; Settings", async ({ context, page }) => {
   const stub = await stubCentral(context);
-  stub.otherVault = fx.vectors[3].ethAddress; // central pays this vault's rewards to another Base address
-  const wallet = fx.vectors[0];
-  const vault = fx.vectors[fx.vaults.current.vector];
+  stub.otherWallet = fx.vectors[3].ethAddress; // central pays this wallet's rewards to another Base address
+  const alias = fx.vectors[0];
+  const wallet = fx.vectors[fx.wallets.current.vector];
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
 
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
   // In the wrong slots: refused, and the message says so.
-  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
-  await page.getByLabel('vault.yaml').setInputFiles(file('wallet.yaml', wallet.walletYaml));
-  await page.getByLabel('Vault password').fill(fx.vaults.password);
+  await page.getByLabel('Alias file').setInputFiles(file('vault.yaml', fx.wallets.current.yaml));
+  await page.getByLabel('Wallet file').setInputFiles(file('wallet.yaml', alias.walletYaml));
+  await page.getByLabel('Wallet password').fill(fx.wallets.password);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'The files are swapped' })).toBeVisible();
-  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
-  await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
-  await page.getByLabel('Vault password').fill(fx.vaults.wrongPassword);
+  await page.getByLabel('Alias file').setInputFiles(file('wallet.yaml', alias.walletYaml));
+  await page.getByLabel('Wallet file').setInputFiles(file('vault.yaml', fx.wallets.current.yaml));
+  await page.getByLabel('Wallet password').fill(fx.wallets.wrongPassword);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'vault.yaml: Wrong passphrase' })).toBeVisible({ timeout: 30_000 });
-  await page.getByLabel('Vault password').fill(fx.vaults.password);
+  await expect(page.getByRole('alert').filter({ hasText: 'The wallet file: Wrong passphrase' })).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel('Wallet password').fill(fx.wallets.password);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   // the same Base addresses as the Docker neuron's (satorilib's ethAddress)
-  await expect(page.locator('[data-test=identity]')).toHaveText(wallet.ethAddress, { timeout: 30_000 });
-  await expect(page.locator('[data-test=vault]')).toHaveText(vault.ethAddress);
+  await expect(page.locator('[data-test=alias]')).toHaveText(alias.ethAddress, { timeout: 30_000 });
+  await expect(page.locator('[data-test=wallet]')).toHaveText(wallet.ethAddress);
 
-  // Registered with Docker's keys; central pays this vault's rewards to another Base address.
+  // Registered with Docker's keys; central pays this wallet's rewards to another Base address.
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
-  expect(stub.registered[0]).toMatchObject({ 'wallet-pubkey': wallet.pubkey, 'vault-pubkey': vault.pubkey });
+  expect(stub.registered[0]).toMatchObject({ 'alias-pubkey': alias.pubkey, 'wallet-signature': expect.stringMatching(/^0x[0-9a-f]{130}$/) });
   await expect(page.locator('[data-test=mismatch]')).toHaveText(
-    `Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`);
-  expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'vault-mismatch',
-    text: expect.stringContaining(`a different Base address, ${stub.otherVault}, not this vault's ${vault.ethAddress}.`) });
+    `Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${stub.otherWallet}, not this wallet's ${wallet.ethAddress}.`);
+  expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'wallet-mismatch',
+    text: expect.stringContaining(`a different Base address, ${stub.otherWallet}, not this wallet's ${wallet.ethAddress}.`) });
 
   // Settings: https only; an unreachable central is shown, not thrown.
   await go(page, 'settings');
@@ -492,40 +497,40 @@ test("import Docker files; central pays this vault's rewards to another Base add
   await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.locator('[data-test=central-url]')).toHaveText(CENTRAL);
 
-  // The imported vault unlocks with the Docker password (reused: 8 characters or more) and shows the same words.
-  await page.getByLabel('Vault passphrase', { exact: true }).fill(fx.vaults.password);
+  // The imported wallet unlocks with the Docker password (reused: 8 characters or more) and shows the same words.
+  await page.getByLabel('Wallet passphrase', { exact: true }).fill(fx.wallets.password);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
-  await page.getByRole('button', { name: 'Vault words' }).click();
-  await page.getByLabel('Vault passphrase to show the backup').fill(fx.vaults.password);
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Unlocked');
+  await page.getByRole('button', { name: 'Wallet words' }).click();
+  await page.getByLabel('Wallet passphrase to show the backup').fill(fx.wallets.password);
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
-  await expect(visible(page.locator('ol.words li'))).toHaveText(vault.words.split(' '));
+  await expect(visible(page.locator('ol.words li'))).toHaveText(wallet.words.split(' '));
 });
 
-test('import: a Docker vault password under 8 characters asks for a new passphrase, which then unlocks', async ({ context, page }) => {
+test('import: a Docker wallet password under 8 characters asks for a new passphrase, which then unlocks', async ({ context, page }) => {
   await stubCentral(context);
   // Docker files with the password 'pass' (written in satorilib's format by this app's step-2 code, test/fixtures/profiles.json)
   const p = profiles.find((x) => x.label.startsWith('steps 2-4'));
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
-  await page.getByLabel('wallet.yaml (alias)').setInputFiles(file('wallet.yaml', p.meta.wallet_yaml));
-  await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', p.meta.vault_yaml));
-  await page.getByLabel('Vault password').fill(p.passphrase);
+  await page.getByLabel('Alias file').setInputFiles(file('wallet.yaml', p.meta.wallet_yaml));
+  await page.getByLabel('Wallet file').setInputFiles(file('vault.yaml', p.meta.vault_yaml));
+  await page.getByLabel('Wallet password').fill(p.passphrase);
   await expect(page.getByLabel(/Use it as this app’s passphrase too/)).toBeChecked();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.locator('[data-test=pass-note]')).toHaveText(/vault password is shorter than 8 characters/, { timeout: 30_000 });
+  await expect(page.locator('[data-test=pass-note]')).toHaveText(/wallet password is shorter than 8 characters/, { timeout: 30_000 });
   const NEW = 'новый пароль';
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(NEW);
   await page.getByLabel('Repeat passphrase').fill(NEW);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  const vaultAddress = evmAddress(publicKey(hex(p.expect.vault)));
-  await expect(page.locator('[data-test=vault]')).toHaveText(vaultAddress, { timeout: LOAD_TIMEOUT });
-  await expect(page.locator('[data-test=identity]')).toHaveText(evmAddress(publicKey(hex(p.expect.identity))));
+  const walletAddress = evmAddress(publicKey(hex(p.expect.wallet)));
+  await expect(page.locator('[data-test=wallet]')).toHaveText(walletAddress, { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(publicKey(hex(p.expect.alias))));
   await expect.poll(() => page.evaluate(() => document.body.dataset.screen)).toBe('home');
   await expect(page.evaluate((x) => window.satori.unlock(x), p.passphrase)).rejects.toThrow(/Wrong passphrase/);
   expect(await page.evaluate((x) => window.satori.unlock(x), NEW)).toBe(true);
-  expect((await page.evaluate((x) => window.satori.backup('vault', x), NEW)).words).toBe(wordsOf(hex(p.expect.vault)));
+  expect((await page.evaluate((x) => window.satori.backup('wallet', x), NEW)).words).toBe(wordsOf(hex(p.expect.wallet)));
 });
 
 test('restore from words', async ({ context, page }) => {
@@ -533,32 +538,32 @@ test('restore from words', async ({ context, page }) => {
   const [v, id] = [fx.vectors[0], fx.vectors[3]];
   await openApp(page);
   await page.getByRole('button', { name: 'Restore from words' }).click();
-  await page.getByLabel('Vault words (24)').fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
+  await page.getByLabel('Wallet words (24)').fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'vault words are not 24 valid' })).toBeVisible();
-  await page.getByLabel('Vault words (24)').fill(v.words);
+  await expect(page.getByRole('alert').filter({ hasText: 'wallet words are not 24 valid' })).toBeVisible();
+  await page.getByLabel('Wallet words (24)').fill(v.words);
   await page.getByLabel(/Alias words/).fill(id.words);
   await page.getByLabel(/^Nostr key \(nsec or hex/).fill('nsec1nope');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Not a Nostr key' })).toBeVisible();
-  await page.getByLabel('Vault words (24)').fill(v.words);
+  await page.getByLabel('Wallet words (24)').fill(v.words);
   await page.getByLabel(/Alias words/).fill(id.words);
   await page.getByLabel(/^Nostr key \(nsec or hex/).fill(nsec(fx.nostr.secretHex)); // as Backup shows it
   await page.getByRole('button', { name: 'Continue' }).click();
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
   await page.getByLabel('Repeat passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await expect(page.locator('[data-test=vault]')).toHaveText(v.ethAddress, { timeout: LOAD_TIMEOUT });
-  await expect(page.locator('[data-test=identity]')).toHaveText(id.ethAddress);
+  await expect(page.locator('[data-test=wallet]')).toHaveText(v.ethAddress, { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=alias]')).toHaveText(id.ethAddress);
   await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(fx.nostr.pubkeyHex);
 });
 
 test('setup: one at a time, and it leaves rows it does not own', async ({ context, page }) => {
   await stubCentral(context);
-  // A meta row this app does not own (the step-1 prototype kept its key as meta.vault).
+  // A meta row this app does not own (the step-1 prototype kept its key as meta.wallet).
   await page.goto('/e2e/store/');
   const row0 = { v: 1, note: 'not ours' };
-  expect(await page.evaluate((r) => window.probe({ cmd: 'app-meta', key: 'vault', value: r }), row0)).toEqual({ value: row0 });
+  expect(await page.evaluate((r) => window.probe({ cmd: 'app-meta', key: 'wallet', value: r }), row0)).toEqual({ value: row0 });
 
   await openApp(page);
   await expect(page.getByRole('button', { name: 'Create a wallet' })).toBeVisible();
@@ -574,12 +579,12 @@ test('setup: one at a time, and it leaves rows it does not own', async ({ contex
 
   // What was stored is what the winner reported.
   await reloadApp(page);
-  await expect(page.locator('[data-test=identity]')).toHaveText(done[0].identity);
-  await expect(page.locator('[data-test=vault]')).toHaveText(done[0].vault);
+  await expect(page.locator('[data-test=alias]')).toHaveText(done[0].alias);
+  await expect(page.locator('[data-test=wallet]')).toHaveText(done[0].wallet);
   await expect(page.evaluate(() => window.satori.setup({ passphrase: 'pass phrase' }))).rejects.toThrow(/already set up/i);
 
   await page.goto('/e2e/store/');
-  expect(await page.evaluate(() => window.probe({ cmd: 'app-meta', key: 'vault' }))).toEqual({ value: row0 });
+  expect(await page.evaluate(() => window.probe({ cmd: 'app-meta', key: 'wallet' }))).toEqual({ value: row0 });
 });
 
 test('the dev server has no service worker, and removes one left on its origin; status() has storage and app (docs/design/pwa.md)', async ({ context, page }) => {

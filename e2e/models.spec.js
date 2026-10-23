@@ -10,7 +10,7 @@ import { connectProvider } from '../scripts/provider.mjs';
 import { openApp, polled, reloadApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
-const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
 const v = fx.vectors[2];
 const PASS = 'correct horse battery';
 const H = 3600;
@@ -105,12 +105,11 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     history: Array.from({ length: 168 }, (_, k) => ({ hour: ROUND * 24 - 167 + k, value: BigInt(Math.round(5e6 * (1 + 0.03 * Math.sin(k / 9)))) })) };
   s.weights[13] = E18;
   const central = await stubCentral(context, { rpc: rpc, relays: [CENTRAL_RELAY] });
-  central.vaults[v.pubkey] = v.ethAddress;
   centralAt(central, nowS() - 60);
 
   // A new neuron: its first poll at once, central's history for the 8 streams, a model each.
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   expect((await polled(page)).lastSubmit).toMatchObject({ successful: 8 });
   await page.evaluate(() => window.satori.go('models'));
   await expect(page).toHaveURL(/#models$/);
@@ -149,11 +148,11 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   release();
   await expect(page.locator('[data-test=engine-title]')).toHaveText('Resting');
 
-  // Base: stake (Unlock first), and the identity's batch: a model per registry stream with a game.
+  // Base: stake (Unlock first), and the alias's batch: a model per registry stream with a game.
   const st = await page.evaluate(() => window.satori.base());
-  rpc.eth[st.identity.address.toLowerCase()] = 10n ** 17n;
-  rpc.eth[st.vault.address.toLowerCase()] = 10n ** 17n;
-  s.balance[st.vault.address.toLowerCase()] = 100n * E18;
+  rpc.eth[st.alias.address.toLowerCase()] = 10n ** 17n;
+  rpc.eth[st.wallet.address.toLowerCase()] = 10n ** 17n;
+  s.balance[st.wallet.address.toLowerCase()] = 100n * E18;
   await page.evaluate((p) => window.satori.unlock(p), PASS);
   await page.evaluate(() => window.satori.stake());
   await page.evaluate(() => window.satori.predictBase());

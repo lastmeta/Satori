@@ -94,7 +94,7 @@ function sellRow(sub, a) {
     : html`<form class="sell" @submit="${(e) => a.sell(stream, form(e))}"><input name="price" inputmode="decimal" autocomplete="off" required aria-label="${`Price per observation of ${stream}, in SATORI`}" placeholder="SATORI each" data-test="sell-price"><button class="small-btn primary" type="submit" data-test="sell" disabled="${() => !!state.marketBusy}">${() => (busy() ? '…' : 'Sell')}</button></form>`)}</div>`;
 }
 
-/** A stream we buy: the deposit left and Stop; stopped, when the rest comes back to the vault. */
+/** A stream we buy: the deposit left and Stop; stopped, when the rest comes back to the wallet. */
 function boughtRow(b, a) {
   // One root node, no whitespace around it (see streamRow).
   const key = `${b.pubkey}:${b.stream}`;

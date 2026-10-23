@@ -41,14 +41,14 @@ const chipOf = ({ state, tone, text }) => ({ state, tone, text });
 
 /**
  * What Home draws, small, to paint at once on the next visit until live data arrives: the health without its card (its
- * buttons need the running neuron), its work or the chips' traffic; the claimable rewards, the vault and the gas.
+ * buttons need the running neuron), its work or the chips' traffic; the claimable rewards, the wallet and the gas.
  */
 export function snapshotOf({ health, base, at }) {
   const { status, tone, title, line, days, feed, channels } = health;
   return { v: 1, at, health: { status, tone, title, line, days, feed,
     channels: { network: chipOf(channels.network), contract: chipOf(channels.contract), relays: chipOf(channels.relays) } },
-  base: base ? { claimable: base.claimable, vault: { satori: base.vault.satori, staked: base.vault.staked },
-    identity: { batchesLeft: base.identity.batchesLeft } } : null };
+  base: base ? { claimable: base.claimable, wallet: { satori: base.wallet.satori, staked: base.wallet.staked },
+    alias: { batchesLeft: base.alias.batchesLeft } } : null };
 }
 
 /** The last visit's Home, or null (none, storage blocked, or not one this version wrote). */

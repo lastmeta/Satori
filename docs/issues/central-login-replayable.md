@@ -4,9 +4,9 @@
 
 ## Precondition
 
-An attacker obtains one `(wallet-pubkey, message, signature)` header set from a
+An attacker obtains one `(alias-pubkey, message, signature)` header set from a
 past login: proxy or server logs, a browser extension, devtools capture. With it
-they can mint JWTs for that wallet indefinitely.
+they can mint JWTs for that alias indefinitely.
 
 ## Finding (verified)
 

@@ -1,16 +1,17 @@
 // Central's API as Satori Lite uses it (docs/design/central.md):
-//   const c = createCentral({ url, identity, version })
-//   await c.register({ vaultPubkey, nostrPubkey })   // POST /peer/register (its vault_base_address: neuron register())
+//   const c = createCentral({ url, alias, version })
+//   await c.register({ link, nostrPubkey })   // POST /peer/register (its wallet_address: neuron register())
 //   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.history(uuid, { limit, since })  // GET /observations/history: one stream's past (beyond Lite; may 404)
-//   await c.submitPredictions(items)         // login (identity) → POST /predictions/batch; one retry on 401
+//   await c.submitPredictions(items)         // login (alias) → POST /predictions/batch; one retry on 401
 //   await c.rewardAddress() / c.setRewardAddress(address | null)   // login → GET / POST /peer/reward-address
 //   await c.baseConfig() / c.merkleProof(address)   // Base (docs/design/base.md); 404 is a CentralError
 // Errors are CentralError: status 0 for a timeout or a network failure. A
 // network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
+import { base64 } from '@scure/base';
 import { emit } from '../traffic.js';
 
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)
@@ -73,10 +74,10 @@ export class CentralError extends Error {
 }
 
 /**
- * @param {{url: string, identity: {pubkey: string, signCentralLogin: (msg: string) => string}, version: string, fetch?: typeof fetch,
+ * @param {{url: string, alias: {pubkey: string, signCentralLogin: (msg: string) => string}, version: string, fetch?: typeof fetch,
  *   onTraffic?: () => void}} opts onTraffic: each request and each answer (Home's glow, src/traffic.js)
  */
-export function createCentral({ url, identity, version, fetch: fetchFn = globalThis.fetch, onTraffic = () => emit('central') }) {
+export function createCentral({ url, alias, version, fetch: fetchFn = globalThis.fetch, onTraffic = () => emit('central') }) {
   const base = url.replace(/\/+$/, '');
 
   async function once(method, path, headers, body) {
@@ -109,14 +110,14 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
   }
 
   /**
-   * A fresh token: the identity signs central's challenge, EIP-191 (login.js; satorilib server.py:87-118).
+   * A fresh token: the alias signs central's challenge, EIP-191 (login.js; satorilib server.py:87-118).
    * Central refusing it is a CentralError with `login: true` (Home's health tells it from a refused batch).
    */
   async function login() {
     const { challenge } = await call('GET', '/api/v1/auth/challenge');
-    const signature = identity.signCentralLogin(challenge);
+    const signature = alias.signCentralLogin(challenge);
     try {
-      return (await call('POST', '/api/v1/auth/login', { 'wallet-pubkey': identity.pubkey, message: challenge, signature })).access_token;
+      return (await call('POST', '/api/v1/auth/login', { 'alias-pubkey': alias.pubkey, message: challenge, signature })).access_token;
     } catch (err) {
       if (err instanceof CentralError && err.status > 0) err.login = true;
       throw err;
@@ -145,11 +146,15 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
   return {
     url: base,
 
-    /** POST /peer/register as satorilib's checkin (server.py:384-434): headers only, no token. */
-    async register({ vaultPubkey, nostrPubkey }) {
-      const headers = { 'wallet-pubkey': identity.pubkey, 'vault-pubkey': vaultPubkey };
+    /**
+     * POST /peer/register, headers only, no token: the alias, the Nostr key, this version (browser-0.1.0+3f11d8c) and the
+     * wallet's link to the alias (base64 of its text, a header being one line; docs/design/wallets.md).
+     */
+    async register({ link, nostrPubkey }) {
+      const headers = { 'alias-pubkey': alias.pubkey, 'neuron-version': version };
       if (nostrPubkey) headers['nostr-pubkey'] = nostrPubkey;
-      return call('POST', '/api/v1/peer/register', { ...headers, 'neuron-version': version }); // browser-0.1.0+3f11d8c
+      if (link) Object.assign(headers, { 'wallet-link': base64.encode(utf8ToBytes(link.message)), 'wallet-signature': link.signature });
+      return call('POST', '/api/v1/peer/register', headers);
     },
 
     /** Central's relays, [{relay_url, nostr_pubkey, …}] (peer.py:123-163). */
@@ -178,8 +183,8 @@ export function createCentral({ url, identity, version, fetch: fetchFn = globalT
     },
 
     /**
-     * Where the Satori Network sends this neuron's rewards, as central answers it: { reward_address } (a 0x address, or
-     * null: the vault; src/neuron/reward.js reads it). Signed in (the owner, 2026-10-19; Lite asks by ?wallet_pubkey=).
+     * Where the Satori Network sends this wallet's rewards, as central answers it: { reward_address } (a 0x address, or
+     * null: the wallet; src/neuron/reward.js reads it). Signed in (the owner, 2026-10-19).
      */
     rewardAddress: ({ onStep } = {}) => signedIn((token) => call('GET', REWARD, bearer(token)), 'read', onStep),
     /** Set it (a checked 0x address: src/neuron/reward.js) or clear it (null) → the stored { reward_address }. */

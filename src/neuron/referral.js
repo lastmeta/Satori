@@ -7,8 +7,8 @@ export function referrerOf(search) {
   return ref && isAddress(ref) && getAddress(ref) !== zeroAddress ? ref : null;
 }
 
-/** The link that makes whoever opens it this vault's referral. */
-export const inviteLink = (origin, vault) => (origin && vault ? `${origin}/?ref=${vault}` : '');
+/** The link that makes whoever opens it this wallet's referral. */
+export const inviteLink = (origin, wallet) => (origin && wallet ? `${origin}/?ref=${wallet}` : '');
 
 /**
  * Share a link: the device's share sheet when it has one, else copied. → 'shared' | 'cancelled' (the sheet closed with

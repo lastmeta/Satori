@@ -56,7 +56,7 @@ test('a first visit: Setup at once while the engine downloads; the keys wait for
   engine.release();
   await expect.poll(() => screen(page), { timeout: LOAD_TIMEOUT }).toBe('home');
   await expect(wait).toBeHidden();
-  expect(await page.evaluate(async () => (await window.satori.status()).vault)).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  expect(await page.evaluate(async () => (await window.satori.status()).wallet)).toMatch(/^0x[0-9a-fA-F]{40}$/);
 });
 
 test('an agent\'s setup() on the first screen waits for the engine, then runs', async ({ context, page }) => {

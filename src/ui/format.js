@@ -42,14 +42,15 @@ export function registrationText(r) {
   return `No: ${r.error}`;
 }
 
-/** Why the Satori Network does not pay this vault (register's vault_base_address), or '' (it does, or it does not say). */
+/** Why the Satori Network does not pay this wallet (register's wallet_address), or '' (it does, or it does not say). */
 export function mismatchText(r) {
-  if (!r?.ok || !r.vaultMismatch) return '';
-  if (r.vaultMismatch === 'other') {
-    return `Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${r.vault_base_address}, not this vault's ${r.vault}.`;
+  if (!r?.ok || !r.walletMismatch) return '';
+  const refused = r.walletLinkError ? ` It refused the wallet's link: ${r.walletLinkError}.` : '';
+  if (r.walletMismatch === 'other') {
+    return `Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${r.wallet_address}, not this wallet's ${r.wallet}.${refused}`;
   }
-  return "Vault mismatch: the Satori Network kept no vault for this alias, so it has no Base address to pay this app's rewards to"
-    + ' (this vault may be registered to another alias).';
+  return `Wallet not linked: the Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.${refused}`
+    + ' Unlock the wallet: the app links it.';
 }
 
 export function pollText(p) {
@@ -134,9 +135,9 @@ export function saleText(sale) {
   return `${sale.price} SATORI each${n ? ` · ${n} buying` : ''}`;
 }
 
-/** A stream we buy (nostr().market.bought's entry): the deposit left, or, stopped, when the rest comes back to the vault. */
+/** A stream we buy (nostr().market.bought's entry): the deposit left, or, stopped, when the rest comes back to the wallet. */
 export const boughtText = (b) => (b.status === 'open' ? `${b.left} of ${b.deposit} SATORI left`
-  : `Stopped: ${b.left} SATORI back to the vault after ${b.closeAt ? fmtWhen(b.closeAt) : '7 days'}`);
+  : `Stopped: ${b.left} SATORI back to the wallet after ${b.closeAt ? fmtWhen(b.closeAt) : '7 days'}`);
 
 /** A Nostr pubkey, shortened: the first 8 and last 4 hex. */
 export const shortKey = (k) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : '');
@@ -196,10 +197,10 @@ export const rpcTitle = (b) => `${b.rpc.join(', ')}${b.localFork ? ' → 127.0.0
 
 const STEPS = {
   'setPredictorFee(0)': 'Alias: fee to 0',
-  'setAllowedDelegator(vault)': 'Alias: accepts this vault',
-  'setReferral(referrer)': 'Vault: registers who invited you',
-  'delegatePredictionPower(identity)': 'Vault: stakes with this app',
-  'delegatePredictionPower(0x0)': 'Vault: unstakes',
+  'setAllowedDelegator(wallet)': 'Alias: accepts this wallet',
+  'setReferral(referrer)': 'Wallet: registers who invited you',
+  'delegatePredictionPower(alias)': 'Wallet: stakes with this app',
+  'delegatePredictionPower(0x0)': 'Wallet: unstakes',
 };
 /** A step of Stake or Unstake (satori.stake() / unstake()) in plain words. */
 export const stepText = (step) => STEPS[step] ?? step;
@@ -214,7 +215,7 @@ export function amountText(x, unit) {
 }
 
 /**
- * What the vault can claim, part by part (base().claimable): its staking rewards, the Satori Network's reward drop
+ * What the wallet can claim, part by part (base().claimable): its staking rewards, the Satori Network's reward drop
  * ("from the Satori Network"; '–' when this Satori Network does not say), the airdrop.
  */
 export const claimParts = (c) => [['rewards', c?.rewards], ['from the Satori Network', c?.drop], ['airdrop', c?.airdrop]];
@@ -222,29 +223,29 @@ export function claimableText(c) {
   return claimParts(c).map(([what, x]) => `${amountText(x, 'SATORI')} ${what}`).join(' · ');
 }
 
-/** The vault's stake in a few words. */
+/** The wallet's stake in a few words. */
 export function delegationText(v) {
-  const d = v?.vault?.staked;
-  if (d === 'identity') return `Staked: ${amountText(v.identity.power, 'SATORI')} with this app${v.vault.inSync === false ? ' · out of sync' : ''}`;
+  const d = v?.wallet?.staked;
+  if (d === 'alias') return `Staked: ${amountText(v.alias.power, 'SATORI')} with this app${v.wallet.inSync === false ? ' · out of sync' : ''}`;
   if (d === 'none') return 'Not staked';
-  if (d === 'other') return `Staked with ${v.vault.stakedWith}, not this app`;
+  if (d === 'other') return `Staked with ${v.wallet.stakedWith}, not this app`;
   return '–';
 }
 
 /** The referral cut: `REFERRAL_BPS = 500` in SatoriRewards.sol (internal, so it cannot be read). */
 export const REFERRAL_PCT = 5;
 
-/** Who invited this vault: registered on the contract, held until Stake, or no one. */
+/** Who invited this wallet: registered on the contract, held until Stake, or no one. */
 export function referralText(b) {
-  if (b?.vault?.referral) return shortHash(b.vault.referral);
+  if (b?.wallet?.referral) return shortHash(b.wallet.referral);
   if (b?.pendingReferrer) return `Invited by ${shortHash(b.pendingReferrer)}, registered when you stake`;
   return 'None';
 }
 
 /** What Stake also does when an invite is held, said before it does it. */
-export const referralNote = (ref) => `Invited by ${ref}. Staking registers them as your referral, once and for good: ${REFERRAL_PCT}% of the rewards your vault earns goes to them instead of to the project, and you earn the same either way.`;
+export const referralNote = (ref) => `Invited by ${ref}. Staking registers them as your referral, once and for good: ${REFERRAL_PCT}% of the rewards your wallet earns goes to them instead of to the project, and you earn the same either way.`;
 
-/** The identity's gas: its ETH and about how many daily batches it pays for. */
+/** The alias's gas: its ETH and about how many daily batches it pays for. */
 export function gasText(id) {
   if (id?.eth == null) return '–';
   const n = id.batchesLeft;
@@ -275,7 +276,7 @@ export function ethFeeText(x) {
   return `${Number(x).toLocaleString('en-US', { maximumSignificantDigits: 2, maximumFractionDigits: 20 })} ETH`;
 }
 
-/** When the vault locks on its own (ms; null: it is locked), said by Lock: 'Locks in 4 min' (whole minutes, up). */
+/** When the wallet locks on its own (ms; null: it is locked), said by Lock: 'Locks in 4 min' (whole minutes, up). */
 export function lockInText(lockAt, now) {
   if (lockAt == null) return '';
   const s = (lockAt - now) / 1000;
@@ -326,12 +327,12 @@ export function storageText(s) {
 }
 
 /**
- * The Base card's note on who plays (docs/design/base.md): the neuron automatically, or the vault by hand in
- * Satori Daily, never both (the engine refuses a staked vault's own predictions). [before, after] the
+ * The Base card's note on who plays (docs/design/base.md): the neuron automatically, or the wallet by hand in
+ * Satori Daily, never both (the engine refuses a staked wallet's own predictions). [before, after] the
  * "Satori Daily" link, or null (staked elsewhere, or not read yet).
  */
 export function playNote(staked) {
-  if (staked === 'identity') {
+  if (staked === 'alias') {
     return ["Your SATORI is staked with this app, so it can't also play ", ' by hand. Unstake to play manually.'];
   }
   return staked === 'none' ? ['Stake with this app to let it predict every round, or play ', ' by hand.'] : null;

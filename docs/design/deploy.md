@@ -104,7 +104,7 @@ and xslt; `brotli_static` needs ngx_brotli), so:
   and `Vary: Accept-Encoding` is said once (`gzip_vary off` there). Its
   location repeats the server's headers (the CSP, nosniff, Cache-Control),
   since an `add_header` in a location drops them.
-- Checked by `e2e/deploy.spec.js`: br, gzip and identity each give the same
+- Checked by `e2e/deploy.spec.js`: br, gzip and alias each give the same
   wasm with the CSP and the cache rule; br under 70 % of gzip; the mvp
   wasm's gzip.
 
@@ -152,7 +152,7 @@ build.
 
 This deployment uses the dev central until the owner moves to the production
 one. Its Base RPC is pinned (2026-10-19), so the central it uses, dev or
-production, can't choose the RPC that quotes the vault's fees. Central
+production, can't choose the RPC that quotes the wallet's fees. Central
 lists only `ws://satorian.satorinet.io:7777`, which an https page can't open
 ([issue](../issues/relays-not-wss.md)): the app reaches it through its wss
 stand-in, `wss://relay.satorinet.io` (a TLS front on central's nginx-proxy,

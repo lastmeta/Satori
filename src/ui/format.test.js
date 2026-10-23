@@ -30,13 +30,13 @@ test('registrationText and mismatchText', () => {
   expect(registrationText({ ok: false, error: 'Satori Network 409: taken' })).toBe('No: Satori Network 409: taken');
   expect(mismatchText(null)).toBe('');
   const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
-  expect(mismatchText({ ok: true, vault: ours, vault_base_address: ours, vaultMismatch: false })).toBe('');
-  expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: null })).toBe(''); // central does not say: unknown
-  expect(mismatchText({ ok: true, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' }))
-    .toBe(`Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}.`);
-  expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: 'none' }))
-    .toBe("Vault mismatch: the Satori Network kept no vault for this alias, so it has no Base address to pay this app's rewards to"
-      + ' (this vault may be registered to another alias).');
+  expect(mismatchText({ ok: true, wallet: ours, wallet_address: ours, walletMismatch: false })).toBe('');
+  expect(mismatchText({ ok: true, wallet: ours, wallet_address: null, walletMismatch: null })).toBe(''); // central does not say: unknown
+  expect(mismatchText({ ok: true, wallet: ours, wallet_address: theirs, walletMismatch: 'other' }))
+    .toBe(`Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.`);
+  expect(mismatchText({ ok: true, wallet: ours, wallet_address: null, walletMismatch: 'none' }))
+    .toBe('Wallet not linked: the Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.'
+      + ' Unlock the wallet: the app links it.');
 });
 
 test('pollText and submitText', () => {
@@ -131,14 +131,14 @@ test('Base: amounts, the stake, the transfer rule (sent from round N + 1 at 00:0
   expect(amountText('0.000123456', 'ETH')).toBe('0.000123 ETH');
   expect(amountText(null, 'ETH')).toBe('–');
   expect(fmtUtc(20743 * 86400)).toBe('Oct 17, 00:00 UTC');
-  const v = { identity: { power: '100' }, vault: { staked: 'identity', stakedWith: '0xI' } };
+  const v = { alias: { power: '100' }, wallet: { staked: 'alias', stakedWith: '0xI' } };
   expect(delegationText(v)).toBe('Staked: 100 SATORI with this app');
-  expect(delegationText({ ...v, vault: { ...v.vault, inSync: false } })).toBe('Staked: 100 SATORI with this app · out of sync');
+  expect(delegationText({ ...v, wallet: { ...v.wallet, inSync: false } })).toBe('Staked: 100 SATORI with this app · out of sync');
   // what can be claimed, part by part: the Satori Network's drop in plain words; unknown (a central without the route) is '–', not 0
   expect(claimableText({ rewards: '3', drop: '3.61850955', airdrop: '0' })).toBe('3 SATORI rewards · 3.6185 SATORI from the Satori Network · 0 SATORI airdrop');
   expect(claimableText({ rewards: '0', drop: null, airdrop: '0' })).toBe('0 SATORI rewards · – from the Satori Network · 0 SATORI airdrop');
-  expect(delegationText({ ...v, vault: { staked: 'none' } })).toBe('Not staked');
-  expect(delegationText({ ...v, vault: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this app');
+  expect(delegationText({ ...v, wallet: { staked: 'none' } })).toBe('Not staked');
+  expect(delegationText({ ...v, wallet: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this app');
   expect(delegationText(null)).toBe('–');
   expect(lockText({ locked: false })).toBe('Free to send');
   expect(lockText({ locked: true, indefinite: true })).toBe("Staked SATORI can't be sent until you unstake");
@@ -161,7 +161,7 @@ test('Base: gas, the last batch, the check, a claim', () => {
   expect(checkText({ error: 'boom' }, null)).toBe('failed: boom');
   expect(shortHash('0x' + 'ab'.repeat(32))).toBe('0xabab…abab');
   expect(claimLine('Rewards', { hash: '0x' + 'ab'.repeat(32), amount: '3' })).toBe('Rewards: claimed 3 SATORI (0xabab…abab)');
-  expect(claimLine('Merkle', { skipped: 'this vault is not in the current drop' })).toBe('Merkle: this vault is not in the current drop');
+  expect(claimLine('Merkle', { skipped: 'this wallet is not in the current drop' })).toBe('Merkle: this wallet is not in the current drop');
   expect(claimLine('Airdrop', { error: 'reverted: NothingToClaim' })).toBe('Airdrop: failed: reverted: NothingToClaim');
 });
 
@@ -178,8 +178,8 @@ test('rpcText, rpcTitle, stepText: plain words on the card, the detail in the ho
   expect(rpcText({ rpc: ['https://mine.example/rpc'], rpcSetting: 'https://mine.example/rpc', localFork: false })).toBe('mine.example');
   expect(rpcText({ rpc: [], rpcSetting: '', localFork: false })).toBe('–');
   expect(stepText('setPredictorFee(0)')).toBe('Alias: fee to 0');
-  expect(stepText('delegatePredictionPower(identity)')).toBe('Vault: stakes with this app');
-  expect(stepText('delegatePredictionPower(0x0)')).toBe('Vault: unstakes');
+  expect(stepText('delegatePredictionPower(alias)')).toBe('Wallet: stakes with this app');
+  expect(stepText('delegatePredictionPower(0x0)')).toBe('Wallet: unstakes');
   expect(stepText('somethingNew()')).toBe('somethingNew()');
 });
 
@@ -191,9 +191,9 @@ test('storageText: kept or not (docs/design/pwa.md), and the usage of the quota 
   expect(storageText({ persisted: true, usage: null, quota: null })).toBe('Storage: kept');
 });
 
-test('playNote: the neuron plays on-chain automatically, Satori Daily by hand, never both with one vault (docs/design/base.md)', () => {
+test('playNote: the neuron plays on-chain automatically, Satori Daily by hand, never both with one wallet (docs/design/base.md)', () => {
   const text = (d) => playNote(d)?.join('Satori Daily');
-  expect(text('identity')).toBe("Your SATORI is staked with this app, so it can't also play Satori Daily by hand. "
+  expect(text('alias')).toBe("Your SATORI is staked with this app, so it can't also play Satori Daily by hand. "
     + 'Unstake to play manually.');
   expect(text('none')).toBe('Stake with this app to let it predict every round, or play Satori Daily by hand.');
   expect(playNote('other')).toBe(null); // staked elsewhere: the Staking line says with whom
@@ -233,7 +233,7 @@ test('historyText: the Satori Network\'s history for our streams (its card on St
   expect(historyText({ needed: 5 })).toBe('5 streams wait for the next poll');
 });
 
-test('lockInText: the vault locks on its own, said by Lock (docs/design/keys.md#the-vault-locks-on-its-own)', () => {
+test('lockInText: the wallet locks on its own, said by Lock (docs/design/keys.md#the-wallet-locks-on-its-own)', () => {
   const now = 1_800_000_000_000;
   expect(lockInText(null, now)).toBe('');
   expect(lockInText(now + 5 * 60_000, now)).toBe('Locks in 5 min');
@@ -289,16 +289,16 @@ test('paid streams (docs/design/market.md): a sale and a buy in words', () => {
   expect(saleText({ price: '0.001', buyers: [{ closing: false }, { closing: true }, { closing: false }] })).toBe('0.001 SATORI each · 2 buying');
   expect(boughtText({ status: 'open', left: '0.004', deposit: '0.005' })).toBe('0.004 of 0.005 SATORI left');
   const at = Date.UTC(2026, 9, 28, 12, 0) / 1000;
-  expect(boughtText({ status: 'closing', left: '0.004', closeAt: at })).toBe(`Stopped: 0.004 SATORI back to the vault after ${fmtWhen(at)}`);
-  expect(boughtText({ status: 'closing', left: '0.004', closeAt: null })).toBe('Stopped: 0.004 SATORI back to the vault after 7 days');
+  expect(boughtText({ status: 'closing', left: '0.004', closeAt: at })).toBe(`Stopped: 0.004 SATORI back to the wallet after ${fmtWhen(at)}`);
+  expect(boughtText({ status: 'closing', left: '0.004', closeAt: null })).toBe('Stopped: 0.004 SATORI back to the wallet after 7 days');
 });
 
 test('Referral: registered, held until Stake, or none; the note says what Stake does with it', () => {
   const R = '0x' + 'ab'.repeat(20);
-  expect(referralText({ vault: { referral: R }, pendingReferrer: null })).toBe(shortHash(R));
-  expect(referralText({ vault: { referral: R }, pendingReferrer: '0x' + 'cd'.repeat(20) })).toBe(shortHash(R)); // set once: the held one is moot
-  expect(referralText({ vault: { referral: null }, pendingReferrer: R })).toBe(`Invited by ${shortHash(R)}, registered when you stake`);
-  expect(referralText({ vault: { referral: null }, pendingReferrer: null })).toBe('None');
-  expect(referralNote('0xabab…abab')).toBe('Invited by 0xabab…abab. Staking registers them as your referral, once and for good: 5% of the rewards your vault earns goes to them instead of to the project, and you earn the same either way.');
-  expect(stepText('setReferral(referrer)')).toBe('Vault: registers who invited you');
+  expect(referralText({ wallet: { referral: R }, pendingReferrer: null })).toBe(shortHash(R));
+  expect(referralText({ wallet: { referral: R }, pendingReferrer: '0x' + 'cd'.repeat(20) })).toBe(shortHash(R)); // set once: the held one is moot
+  expect(referralText({ wallet: { referral: null }, pendingReferrer: R })).toBe(`Invited by ${shortHash(R)}, registered when you stake`);
+  expect(referralText({ wallet: { referral: null }, pendingReferrer: null })).toBe('None');
+  expect(referralNote('0xabab…abab')).toBe('Invited by 0xabab…abab. Staking registers them as your referral, once and for good: 5% of the rewards your wallet earns goes to them instead of to the project, and you earn the same either way.');
+  expect(stepText('setReferral(referrer)')).toBe('Wallet: registers who invited you');
 });

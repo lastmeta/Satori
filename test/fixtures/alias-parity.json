@@ -50,7 +50,7 @@
       "walletYaml": "entropy: ANI0vGXY0JPM/OsLUlzByfBenZMYnyaKCiaqEVLd6+o=\nevr:\n  address: ES7zyYc1LTu2CZbQ5AMtCUd9rfFg9u1KTE\nprivateKey: KwFJm658E95uj1m4cSVgQhTBhFwjYjHvECC9MrzmqSUVk5nBxSQE\npublicKey: 0317006619f0c9d21786b75dc63d82d4ba0e3a5a6e862ecb8c49dd62d5f7f1b8d9\nscripthash: 0c2732e9c5b977e744be45dd0b22070c90c2d07a4e55fc38ab4e885260557727\nwords: absorb museum congress slight minimum enemy crop output area napkin corn negative\n  album excite erase become charge expect meadow feature benefit humble quick earth\n"
     }
   ],
-  "vaults": {
+  "wallets": {
     "password": "fixture-pass-1",
     "wrongPassword": "fixture-wrong-pass",
     "current": {

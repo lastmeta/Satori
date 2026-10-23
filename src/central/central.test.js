@@ -74,45 +74,45 @@ function mockFetch(routes) {
   return { fetch, calls };
 }
 
-const identity = { pubkey: '02ab', signCentralLogin: vi.fn((message) => `sig(${message})`) };
+const alias = { pubkey: '02ab', signCentralLogin: vi.fn((message) => `sig(${message})`) };
 const login = () => ({
   'GET /api/v1/auth/challenge': () => json(200, { challenge: 'c-uuid' }),
   'POST /api/v1/auth/login': () => json(200, { access_token: 'jwt', expires_in: 3600 }),
 });
-const client = (fetch, url = BASE) => createCentral({ url, fetch, identity, version: 'browser-0.1.0+3f11d8c' });
+const client = (fetch, url = BASE) => createCentral({ url, fetch, alias, version: 'browser-0.1.0+3f11d8c' });
 const paths = (calls) => calls.map((c) => `${c.method} ${c.path}`);
 
 test('traffic: each request to central and each answer', async () => {
   const fired = [];
   const { fetch } = mockFetch({ 'GET /api/v1/observations/batch?limit=100': json(200, []) });
-  await createCentral({ url: BASE, fetch, identity, version: '0.1.0', onTraffic: () => fired.push(1) }).observations();
+  await createCentral({ url: BASE, fetch, alias, version: '0.1.0', onTraffic: () => fired.push(1) }).observations();
   expect(fired).toHaveLength(2);
   const down = async () => { throw new TypeError('Failed to fetch'); };
-  await expect(createCentral({ url: BASE, fetch: down, identity, version: '0.1.0', onTraffic: () => fired.push(1) }).observations())
+  await expect(createCentral({ url: BASE, fetch: down, alias, version: '0.1.0', onTraffic: () => fired.push(1) }).observations())
     .rejects.toThrow('Satori Network unreachable');
   expect(fired).toHaveLength(4); // two tries, no answer
 });
 
 describe('register', () => {
-  test('identity and vault pubkeys and our version as headers; no login, no token, no body', async () => {
-    // central base-upgrade d8a2085's answer (PeerRegisterResponse); its other address forms are not read
-    const res = { success: true, peer_id: 7, wallet_address: 'w', vault_address: 'v',
-      vault_base_address: '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', nostr_pubkey: null, message: 'Peer registered successfully' };
+  test('the alias, our version and the wallet\'s link as headers (the link base64, one line); no login, no token, no body', async () => {
+    const res = { success: true, peer_id: 7, wallet_address: '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', nostr_pubkey: null,
+      message: 'Peer registered successfully' };
     const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, res) });
-    expect(await client(fetch).register({ vaultPubkey: '03cd' })).toEqual(res);
+    const link = { message: 'Satori: link this alias to my wallet\nalias: 0xA\nwallet: 0xW\nissued: 1', signature: '0xsig' };
+    expect(await client(fetch).register({ link })).toEqual(res);
     expect(paths(calls)).toEqual(['POST /api/v1/peer/register']);
-    expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'neuron-version': 'browser-0.1.0+3f11d8c' });
+    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'neuron-version': 'browser-0.1.0+3f11d8c',
+      'wallet-link': Buffer.from(link.message).toString('base64'), 'wallet-signature': '0xsig' });
     expect(calls[0].body).toBeUndefined();
   });
-  test('the Nostr pubkey as nostr-pubkey, when there is one (satorilib server.py:394-399)', async () => {
+  test('the Nostr pubkey as nostr-pubkey, when there is one; no link headers without a link', async () => {
     const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, {}) });
-    await client(fetch).register({ vaultPubkey: '03cd', nostrPubkey: 'ee'.repeat(32) });
-    expect(calls[0].headers).toEqual({ 'wallet-pubkey': '02ab', 'vault-pubkey': '03cd', 'nostr-pubkey': 'ee'.repeat(32),
-      'neuron-version': 'browser-0.1.0+3f11d8c' });
+    await client(fetch).register({ nostrPubkey: 'ee'.repeat(32) });
+    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'nostr-pubkey': 'ee'.repeat(32), 'neuron-version': 'browser-0.1.0+3f11d8c' });
   });
   test('a refusal is a CentralError with the status and detail', async () => {
     const { fetch } = mockFetch({ 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });
-    const err = await client(fetch).register({ vaultPubkey: '03cd' }).catch((e) => e);
+    const err = await client(fetch).register({}).catch((e) => e);
     expect(err).toBeInstanceOf(CentralError);
     expect(err).toMatchObject({ status: 409, detail: 'wallet conflicts', message: 'Satori Network 409: wallet conflicts' });
   });
@@ -160,15 +160,15 @@ test('observations: GET the batch with a limit, no token', async () => {
 });
 
 describe('submitPredictions', () => {
-  test('challenge → identity signs → login → POST with the token', async () => {
+  test('challenge → alias signs → login → POST with the token', async () => {
     const { fetch, calls } = mockFetch({
       ...login(), 'POST /api/v1/predictions/batch': json(200, { total_submitted: 1, successful: 1 }),
     });
     const items = [{ stream_uuid: 'u', value: '1.0' }];
     expect(await client(fetch).submitPredictions(items)).toEqual({ total_submitted: 1, successful: 1 });
     expect(paths(calls)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/auth/login', 'POST /api/v1/predictions/batch']);
-    expect(identity.signCentralLogin).toHaveBeenCalledWith('c-uuid');
-    expect(calls[1].headers).toEqual({ 'wallet-pubkey': '02ab', message: 'c-uuid', signature: 'sig(c-uuid)' });
+    expect(alias.signCentralLogin).toHaveBeenCalledWith('c-uuid');
+    expect(calls[1].headers).toEqual({ 'alias-pubkey': '02ab', message: 'c-uuid', signature: 'sig(c-uuid)' });
     expect(calls[2].headers).toEqual({ authorization: 'Bearer jwt', 'content-type': 'application/json' });
     expect(JSON.parse(calls[2].body)).toEqual({ predictions: items });
   });
@@ -210,7 +210,7 @@ describe('submitPredictions', () => {
 describe('the reward address (peer.py:26-120): signed in, as the predictions batch', () => {
   const PATH = '/api/v1/peer/reward-address';
   const ADDR = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';
-  test('read: challenge → identity signs → login → GET with the token alone; the steps said', async () => {
+  test('read: challenge → alias signs → login → GET with the token alone; the steps said', async () => {
     const { fetch, calls } = mockFetch({ ...login(), [`GET ${PATH}`]: json(200, { reward_address: ADDR }) });
     const steps = [];
     expect(await client(fetch).rewardAddress({ onStep: (s) => steps.push(s) })).toEqual({ reward_address: ADDR });

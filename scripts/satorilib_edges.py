@@ -34,7 +34,7 @@ tmp = tempfile.mkdtemp()
 
 
 def make(label, name, password=None):
-    """A wallet/vault file through Docker's own generate + save path."""
+    """A wallet file through Docker's own generate + save path."""
     entropy = hashlib.sha256(label.encode()).digest()
     orig = IdentityBase.generateEntropy
     IdentityBase.generateEntropy = staticmethod(lambda: entropy)
@@ -53,13 +53,13 @@ out = {
         p: version(p) for p in ['python-evrmorelib', 'mnemonic', 'pycryptodome', 'PyYAML']}},
 }
 
-# The vault password goes into PBKDF2 as Latin-1 (pycryptodome tobytes), not UTF-8.
+# The wallet password goes into PBKDF2 as Latin-1 (pycryptodome tobytes), not UTF-8.
 entropy, ident, text = make('satori-edges-latin1', 'latin1.yaml', 'pässwörd')
 out['latin1Vault'] = {'password': 'pässwörd', 'entropy': base64.b64encode(entropy).decode(),
                       'yaml': text}
 
 # A password outside Latin-1 cannot be encoded: satorilib's encryptWallet swallows
-# the error and saves the vault in plain text.
+# the error and saves the wallet in plain text.
 try:
     secret.encrypt('x', 'p€ss')
     error = None

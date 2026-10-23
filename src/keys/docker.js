@@ -3,7 +3,7 @@
 // vault.yaml and nostr.yaml at import, and the same texts this app's earlier
 // versions stored, at the forward migration. Nothing is ever written in them.
 //
-// satorilib's vault field: base64(salt16 ‖ iv16 ‖ AES-256-CBC(PKCS7(utf8))), key =
+// satorilib's wallet field: base64(salt16 ‖ iv16 ‖ AES-256-CBC(PKCS7(utf8))), key =
 // PBKDF2-HMAC-SHA1(latin1(password), salt, 1e6, 32) (satorilib utils/secret.py;
 // pycryptodome turns a str password into bytes as Latin-1).
 import { load } from 'js-yaml';
@@ -18,7 +18,7 @@ const subtle = globalThis.crypto.subtle;
 /**
  * A password's bytes: 'latin1', one byte per character, as pycryptodome takes a
  * str (null when a character is outside Latin-1); or 'utf8', as this app's
- * vaults of 2026-10-15 06:29-14:04 took it.
+ * wallets of 2026-10-15 06:29-14:04 took it.
  */
 function passwordBytes(password, encoding) {
   if (encoding === 'utf8') return new TextEncoder().encode(password);
@@ -31,7 +31,7 @@ async function cbcKey(bytes, salt) {
     base, { name: 'AES-CBC', length: 256 }, false, ['decrypt']);
 }
 
-/** Decrypt one vault field. Throws on a wrong password (bad padding or not UTF-8). */
+/** Decrypt one wallet field. Throws on a wrong password (bad padding or not UTF-8). */
 export async function decryptField(field, password, encoding = 'latin1') {
   const bytes = passwordBytes(password, encoding);
   if (!bytes) throw new Error('Not a Latin-1 password');
@@ -61,7 +61,7 @@ export function parse(text) {
   } catch (err) {
     throw new Error(`not valid YAML (line ${Number.isInteger(err?.mark?.line) ? err.mark.line + 1 : '?'})`);
   }
-  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new Error('not a wallet file');
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new Error('not a key file');
   return doc;
 }
 
@@ -79,7 +79,7 @@ export function secrecy(text) {
 }
 
 /** A vault.yaml's public key in plain text (read while locked), or null. */
-export function vaultPubkey(text) {
+export function walletPubkey(text) {
   const p = parse(text).publicKey;
   return typeof p === 'string' && PUBKEY.test(p) ? p : null;
 }
@@ -89,13 +89,13 @@ export function vaultPubkey(text) {
  * (password: its key must be encrypted). The key is the entropy, which every
  * file satorilib writes has (identity.py loadFromYaml); a file without one is
  * refused (watch-only; satorilib cannot load a WIF-only file either). An old
- * vault also encrypted its publicKey (identity.py:666-676, by length). The
+ * wallet also encrypted its publicKey (identity.py:666-676, by length). The
  * public key and the words are derived from the secret and compared with the
  * stored ones; the other fields (privateKey's WIF, the nested address,
  * scripthash) are not read. `encodings`: the password's byte forms to try, in order.
  * @returns {Promise<{secret: Uint8Array, pubkey: string, mismatches: string[]}>}
  */
-export async function readWallet(text, { password, encodings = ['latin1'] } = {}) {
+export async function readKeyFile(text, { password, encodings = ['latin1'] } = {}) {
   const doc = parse(text);
   const kind = secrecy(text);
   if (typeof password === 'string' && (kind === 'plain' || kind === 'mixed')) throw new Error('This file is not encrypted');

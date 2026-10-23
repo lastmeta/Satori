@@ -1,6 +1,6 @@
 // Specs and evolution for central's streams (docs/design/engine.md#bvar-a-model-per-central-stream-unique-to-each-neuron):
 // each target has one champion spec { companions, lambda1, lambda2 }, drawn
-// from the identity, and after each poll one mutation is proposed and kept
+// from the alias, and after each poll one mutation is proposed and kept
 // only if it beats the champion on the same backtest by the margin. Pure.
 //
 //   runModels({ fresh, histories, specs, seed }) → { forecasts: Map(uuid → forecast), specs: Map(uuid → row) }
@@ -107,7 +107,7 @@ export const accepts = (champion, challenger, margin = MARGIN) => challenger < c
  * opinion, and the forecast (bvar, else bar1, else naive).
  * @param {{fresh: string[], histories: Map<string, {ts: number, value: number}[]>, specs?: Map<string, object>,
  *   seed: string, step?: number, margin?: number, window?: number}} o histories: every central stream's; seed: the
- *   identity's public key; window: the backtest origins a spec is scored on (the fade uses the last HOLDOUT of them)
+ *   alias's public key; window: the backtest origins a spec is scored on (the fade uses the last HOLDOUT of them)
  * @returns {{forecasts: Map<string, object>, specs: Map<string, {spec, score, persist, influence, generation, accepted}>}}
  *   score: the champion's median backtest error; persist: no change's on the same origins (both null below 5);
  *   influence: for a bvar forecast, each input's share of it, [target, ...companions] (else null)

@@ -19,10 +19,10 @@ const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
   return { evmAddress: evmAddress(publicKey(secret)), signDigest: (h) => signDigest(secret, h) };
 };
-const identity = signerOf('11'.repeat(32));
-const vaultKey = signerOf('22'.repeat(32));
-const I = identity.evmAddress.toLowerCase();
-const V = vaultKey.evmAddress.toLowerCase();
+const alias = signerOf('11'.repeat(32));
+const walletKey = signerOf('22'.repeat(32));
+const I = alias.evmAddress.toLowerCase();
+const V = walletKey.evmAddress.toLowerCase();
 const ROUND = 20741;
 const H0 = ROUND * 24; // this round's first hour
 
@@ -41,7 +41,7 @@ beforeEach(async () => {
   const { DEFAULTS } = await import('../chain/config.js');
   chainOf = () => createChain({ config: DEFAULTS, transport: rpc.transport, pollingInterval: 1, settle: { tries: 5, ms: 1 } });
 });
-const staked = async () => { await chainOf().delegate({ identity, vault: vaultKey }); rpc.sent.length = 0; };
+const staked = async () => { await chainOf().delegate({ alias, wallet: walletKey }); rpc.sent.length = 0; };
 const batchesSent = () => rpc.sent.filter((t) => t.functionName === 'predictMultipleWithPayloads').map((t) => t.args[0]);
 
 describe('rules', () => {
@@ -103,16 +103,16 @@ describe('rules', () => {
 });
 
 describe('staking in sync (the token-hook bug: docs/issues/token-hook-gas-estimate.md)', () => {
-  const vault = '0x' + 'aa'.repeat(20);
+  const wallet = '0x' + 'aa'.repeat(20);
   const other = '0x' + 'bb'.repeat(20);
-  test('the identity accepts only this vault, so its power must equal the vault\'s SATORI: equal is in sync, under is out', () => {
-    const base = { staked: 'identity', allowedDelegator: vault.toUpperCase().replace('0X', '0x'), vault, power: 100n * E18, balance: 100n * E18 };
+  test('the alias accepts only this wallet, so its power must equal the wallet\'s SATORI: equal is in sync, under is out', () => {
+    const base = { staked: 'alias', allowedDelegator: wallet.toUpperCase().replace('0X', '0x'), wallet, power: 100n * E18, balance: 100n * E18 };
     expect(stakeSync(base)).toEqual({ inSync: true, shortfall: null });
     expect(stakeSync({ ...base, balance: 100n * E18 + 1n })).toEqual({ inSync: false, shortfall: '0.000000000000000001' }); // 1 wei, no hook
     expect(stakeSync({ ...base, power: 200n * E18 })).toEqual({ inSync: true, shortfall: null }); // over: unstaking still works
   });
   test('not checked (null): other stakers are possible (another allowed staker, or anyone), not staked here, or not read', () => {
-    const base = { staked: 'identity', allowedDelegator: vault, vault, power: 1n, balance: 2n };
+    const base = { staked: 'alias', allowedDelegator: wallet, wallet, power: 1n, balance: 2n };
     expect(stakeSync({ ...base, allowedDelegator: other })).toEqual({ inSync: null, shortfall: null });
     expect(stakeSync({ ...base, allowedDelegator: zeroAddress })).toEqual({ inSync: null, shortfall: null }); // open to anyone
     expect(stakeSync({ ...base, staked: 'none' })).toEqual({ inSync: null, shortfall: null });
@@ -146,14 +146,14 @@ describe("the Satori Network's reward drop, before it is claimed", () => {
 
 describe('the daily batch', () => {
   test('not staked: skipped, nothing sent', async () => {
-    const r = await runBatch({ chain: chainOf(), identity, db });
+    const r = await runBatch({ chain: chainOf(), alias, db });
     expect(r).toEqual({ at: ROUND * ROUND_S + 9 * 3600, round: ROUND, skipped: 'nothing staked with this app' });
     expect(rpc.sent).toHaveLength(0);
   });
 
   test('staked: the default stream with the engine (naive on two points: a tie, its last move up → UP), one tx, persisted after the receipt', async () => {
     await staked();
-    const r = await runBatch({ chain: chainOf(), identity, db });
+    const r = await runBatch({ chain: chainOf(), alias, db });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]); // DOWN under Lite's rule
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
       // latest: the registry's int232, exact; forecast: the engine's at the horizon, as an integer (both decimal strings, as JSON keeps them)
@@ -163,20 +163,20 @@ describe('the daily batch', () => {
     expect(db.m.get('base_last_batch')).toEqual(batch);
     expect(db.m.get('base_pending_batch')).toBe(null);
     expect(db.checkpoint).toHaveBeenCalled();
-    expect(await runBatch({ chain: chainOf(), identity, db })).toMatchObject({ skipped: 'already predicted this round' });
+    expect(await runBatch({ chain: chainOf(), alias, db })).toMatchObject({ skipped: 'already predicted this round' });
     expect(rpc.sent).toHaveLength(1);
   });
 
   test('report: nothing for a check with nothing to do; checking the games, sending, waiting for Base, in order', async () => {
     const seen = [];
     const report = (...a) => seen.push(a.join(' '));
-    await runBatch({ chain: chainOf(), identity, db, report });
+    await runBatch({ chain: chainOf(), alias, db, report });
     expect(seen).toEqual([]); // not staked: a quick skip, nothing to show
     await staked();
-    await runBatch({ chain: chainOf(), identity, db, report });
+    await runBatch({ chain: chainOf(), alias, db, report });
     expect(seen).toEqual(['check', 'send', 'confirm']);
     seen.length = 0;
-    await runBatch({ chain: chainOf(), identity, db, report });
+    await runBatch({ chain: chainOf(), alias, db, report });
     expect(seen).toEqual([]); // already predicted
   });
 
@@ -187,7 +187,7 @@ describe('the daily batch', () => {
     s.deadGames[14] = 'StaleValue';
     s.weights[13] = E18;
     s.weights[14] = E18;
-    const r = await runBatch({ chain: chainOf(), identity, db, forecast: up });
+    const r = await runBatch({ chain: chainOf(), alias, db, forecast: up });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }, { gameId: 13, payload: '0x01' }]]);
     expect(r.sent.dropped).toEqual([expect.objectContaining({ streamId: 4, gameId: 14, error: 'StaleValue' })]);
   });
@@ -197,7 +197,7 @@ describe('the daily batch', () => {
     s.streams[5] = { game: 15, named: true, cadence: 60, history: [{ hour: H0 + 1, value: 3n }] };
     s.weights[15] = E18;
     s.lastPred[`${I}:15`] = H0 - 2; // 22:00 yesterday; now 09:00
-    const r = await runBatch({ chain: chainOf(), identity, db, forecast: up });
+    const r = await runBatch({ chain: chainOf(), alias, db, forecast: up });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]);
     expect(r.sent.dropped).toEqual([expect.objectContaining({ gameId: 15, named: true, error: 'DuplicatePrediction' })]);
   });
@@ -209,7 +209,7 @@ describe('the daily batch', () => {
     const calls = [];
     // t2 says UP, the value at the horizon says DOWN: the direction must follow the value
     const fake = (pts, o) => (calls.push(o), { model: 'test', t1: 0, t2: pts.at(-1).value * 2, value: pts.at(-1).value / 2, horizon: o.horizon });
-    const r = await runBatch({ chain: chainOf(), identity, db, forecast: fake });
+    const r = await runBatch({ chain: chainOf(), alias, db, forecast: fake });
     expect(calls).toEqual([{ step: 86_400, horizon: 86_400 }, { step: 43_200, horizon: 86_400 }]); // stream 1 is daily (1440 min)
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x02' }, { gameId: 13, payload: '0x02' }]]);
     expect(r.sent.games.map((g) => [g.gameId, g.forecast, g.horizon, g.rule])).toEqual([[1, expect.any(String), 86_400, 'forecast'], [13, '5', 86_400, 'forecast']]);
@@ -219,7 +219,7 @@ describe('the daily batch', () => {
     await staked();
     s.streams[3] = { game: 13, named: false, cadence: 60, history: [{ hour: H0 - 1, value: 10n }, { hour: H0, value: 10n }] };
     s.weights[13] = E18;
-    const r = await runBatch({ chain: chainOf(), identity, db });
+    const r = await runBatch({ chain: chainOf(), alias, db });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }, { gameId: 13, payload: '0x02' }]]);
     expect(r.sent.games.map((g) => [g.gameId, g.model, g.direction, g.rule])).toEqual([[1, 'naive', UP, 'last-move'], [13, 'naive', DOWN, 'flat']]);
   });
@@ -228,7 +228,7 @@ describe('the daily batch', () => {
     await staked();
     s.streams[3] = { game: 13, named: false, cadence: 60, history: Array.from({ length: 200 }, (_, k) => ({ hour: H0 - 199 + k, value: BigInt(1000 + (k % 7) * 3 + k) })) };
     s.weights[13] = E18;
-    const r = await runBatch({ chain: chainOf(), identity, db });
+    const r = await runBatch({ chain: chainOf(), alias, db });
     const g13 = r.sent.games.find((g) => g.gameId === 13);
     expect(g13).toMatchObject({ model: 'bar1', step: 43_200, horizon: 86_400, score: expect.any(Number), persist: expect.any(Number),
       tests: expect.any(Number) });
@@ -240,14 +240,14 @@ describe('the daily batch', () => {
   test('a game without voting weight (anyone\'s new stream) is not in the batch at all', async () => {
     await staked();
     for (let i = 10; i < 20; i++) s.streams[i] = { game: i + 100, named: false, cadence: 60, history: [{ hour: H0, value: 1000n }] };
-    await runBatch({ chain: chainOf(), identity, db });
+    await runBatch({ chain: chainOf(), alias, db });
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]);
   });
 
   test('nothing passes: no transaction, the reasons listed', async () => {
     await staked();
     s.deadGames[1] = 'EmptyStream';
-    const r = await runBatch({ chain: chainOf(), identity, db });
+    const r = await runBatch({ chain: chainOf(), alias, db });
     expect(r).toMatchObject({ round: ROUND, skipped: 'no game passes its simulation', dropped: [{ gameId: 1, error: 'EmptyStream' }] });
     expect(rpc.sent).toHaveLength(0);
     expect(db.m.has('base_last_batch')).toBe(false);
@@ -262,7 +262,7 @@ describe('the daily batch', () => {
       fees: async () => ({ maxFeePerGas: 1n, maxPriorityFeePerGas: 1n }),
       sendBatch: async () => ({ hash: '0xh', at: (ROUND + 1) * ROUND_S + 1, blockNumber: 1 }),
     };
-    const r = await runBatch({ chain, identity, db });
+    const r = await runBatch({ chain, alias, db });
     expect(r).toMatchObject({ round: ROUND + 1, sent: { round: ROUND + 1, hash: '0xh' } });
   });
 
@@ -275,23 +275,23 @@ describe('the daily batch', () => {
       fees: async () => ({ maxFeePerGas: 1n, maxPriorityFeePerGas: 1n }),
       sendBatch: async () => { throw new Error('boom'); },
     };
-    expect(await runBatch({ chain, identity, db })).toMatchObject({ error: 'boom' });
+    expect(await runBatch({ chain, alias, db })).toMatchObject({ error: 'boom' });
     expect(db.m.has('base_last_batch')).toBe(false);
   });
 
   test('the hash is kept as soon as the batch is sent: the next check waits for it instead of sending again', async () => {
     await staked();
     rpc.state.mine = false; // sent, not mined: the tab may close here
-    const first = runBatch({ chain: chainOf(), identity, db });
+    const first = runBatch({ chain: chainOf(), alias, db });
     await vi.waitFor(() => expect(db.m.get('base_pending_batch')).toMatchObject({ round: ROUND, hash: expect.any(String) }));
     const { hash } = db.m.get('base_pending_batch');
     const seen = [];
-    const again = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50, report: (st) => seen.push(st) });
+    const again = await runBatch({ chain: chainOf(), alias, db, pendingWaitMs: 50, report: (st) => seen.push(st) });
     expect(again).toMatchObject({ round: ROUND, skipped: `waiting for the batch already sent (${hash})` });
     expect(seen).toEqual(['confirm']); // waiting for Base to confirm the one sent
     expect(rpc.sent).toHaveLength(1); // no second send
     rpc.release();
-    const done = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
+    const done = await runBatch({ chain: chainOf(), alias, db, pendingWaitMs: 50 });
     expect(done).toMatchObject({ round: ROUND, sent: { round: ROUND, hash, games: [{ gameId: 1 }] } });
     expect(db.m.get('base_last_batch')).toMatchObject({ hash });
     expect(db.m.get('base_pending_batch')).toBe(null);
@@ -300,10 +300,10 @@ describe('the daily batch', () => {
   });
 
   test('a batch that never mines (the review, 2026-10-19): after 10 min its nonce is checked; still pending, it is sent again with the same nonce and a higher fee; then it mines', async () => {
-    await staked(); // the identity's two transactions: the batch is its nonce 2
+    await staked(); // the alias's two transactions: the batch is its nonce 2
     rpc.state.mine = false; // Base stops mining it
     let t = 1000;
-    const run = (o = {}) => runBatch({ chain: chainOf(), identity, db, now: () => t, pendingWaitMs: 20, sendWaitMs: 50, ...o });
+    const run = (o = {}) => runBatch({ chain: chainOf(), alias, db, now: () => t, pendingWaitMs: 20, sendWaitMs: 50, ...o });
     const first = await run();
     expect(first).toMatchObject({ round: ROUND, skipped: expect.stringMatching(/^waiting for the batch already sent \(0x/), pendingAt: 1000 });
     const p = db.m.get('base_pending_batch');
@@ -336,11 +336,11 @@ describe('the daily batch', () => {
     await staked();
     rpc.state.mine = false;
     let t = 1000;
-    await runBatch({ chain: chainOf(), identity, db, now: () => t, sendWaitMs: 50 });
+    await runBatch({ chain: chainOf(), alias, db, now: () => t, sendWaitMs: 50 });
     const p = db.m.get('base_pending_batch');
     t += STUCK_S;
     const ceiling = BigInt(p.fees.maxFeePerGas); // the ceiling is what it pays now: a quarter more is past it
-    const r = await runBatch({ chain: chainOf(), identity, db, now: () => t, pendingWaitMs: 20, maxFeeWei: ceiling });
+    const r = await runBatch({ chain: chainOf(), alias, db, now: () => t, pendingWaitMs: 20, maxFeeWei: ceiling });
     expect(r).toMatchObject({ round: ROUND, stuck: { ceiling: true, fee: expect.any(String), max: String(Number(formatGwei(ceiling)).toPrecision(3) * 1) },
       skipped: expect.stringMatching(/^stuck: a higher fee \([\d.]+ gwei\) would pass the max fee \([\d.]+ gwei\); raise it in Settings$/) });
     expect(r.pendingAt).toBeUndefined(); // no quick re-check: the hourly one, or the next round's
@@ -352,9 +352,9 @@ describe('the daily batch', () => {
     await staked();
     rpc.state.mine = false;
     let t = 1000;
-    await runBatch({ chain: chainOf(), identity, db, now: () => t, sendWaitMs: 50 });
+    await runBatch({ chain: chainOf(), alias, db, now: () => t, sendWaitMs: 50 });
     const p = db.m.get('base_pending_batch');
-    // another wallet with the identity's key sends at the same nonce, higher fees: it takes the nonce
+    // another wallet with the alias's key sends at the same nonce, higher fees: it takes the nonce
     const { createWalletClient } = await import('viem');
     const { privateKeyToAccount } = await import('viem/accounts');
     const { baseSepolia } = await import('viem/chains');
@@ -364,7 +364,7 @@ describe('the daily batch', () => {
     rpc.release();
     rpc.state.mine = true;
     t += STUCK_S;
-    const r = await runBatch({ chain: chainOf(), identity, db, now: () => t, pendingWaitMs: 20 });
+    const r = await runBatch({ chain: chainOf(), alias, db, now: () => t, pendingWaitMs: 20 });
     expect(r).toMatchObject({ round: ROUND, sent: { round: ROUND } });
     expect(r.sent.hash).not.toBe(p.hash);
     expect(batchesSent()).toHaveLength(2);
@@ -373,7 +373,7 @@ describe('the daily batch', () => {
   test('a pending batch from an earlier round that never mined is let go', async () => {
     await staked();
     db.m.set('base_pending_batch', { round: ROUND - 1, hash: '0x' + '12'.repeat(32), games: [], dropped: [] });
-    const r = await runBatch({ chain: chainOf(), identity, db, pendingWaitMs: 50 });
+    const r = await runBatch({ chain: chainOf(), alias, db, pendingWaitMs: 50 });
     expect(r).toMatchObject({ round: ROUND, sent: { round: ROUND } });
   });
 
@@ -381,30 +381,30 @@ describe('the daily batch', () => {
     await staked();
     rpc.state.tip = 3n * 10n ** 9n; // 3 gwei
     rpc.state.baseFee = 0n;
-    const r = await runBatch({ chain: chainOf(), identity, db, maxFeeWei: 2n * 10n ** 9n });
+    const r = await runBatch({ chain: chainOf(), alias, db, maxFeeWei: 2n * 10n ** 9n });
     expect(r).toMatchObject({ round: ROUND, skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' });
     expect(rpc.sent).toHaveLength(0);
     rpc.state.tip = 10n ** 6n; // Base's usual 0.001 gwei
-    expect(await runBatch({ chain: chainOf(), identity, db, maxFeeWei: 2n * 10n ** 9n })).toMatchObject({ sent: { round: ROUND } });
+    expect(await runBatch({ chain: chainOf(), alias, db, maxFeeWei: 2n * 10n ** 9n })).toMatchObject({ sent: { round: ROUND } });
     expect(MAX_FEE_GWEI).toBe(2);
   });
 
   test('an RPC failure is an error for this check, not a dropped game', async () => {
     await staked();
     rpc.state.down = true;
-    expect(await runBatch({ chain: chainOf(), identity, db })).toMatchObject({ error: expect.any(String) });
+    expect(await runBatch({ chain: chainOf(), alias, db })).toMatchObject({ error: expect.any(String) });
   });
 });
 
 describe('createBase', () => {
-  let vault = null;
+  let wallet = null;
   let central;
   let base;
   const at = { t: 1_000_000 };
   const timers = [];
   const checks = []; // onCheck: each batch check's result (Home's activity log)
   beforeEach(() => {
-    vault = null;
+    wallet = null;
     central = {
       url: 'https://central2.example', root: null, proofs: {}, calls: [],
       baseConfig: async () => { throw new CentralError(404, 'Not Found'); },
@@ -419,14 +419,14 @@ describe('createBase', () => {
     };
     timers.length = 0;
     checks.length = 0;
-    base = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+    base = createBase({ db, alias, walletAddress: walletKey.evmAddress, wallet: () => wallet, central: () => central,
       transport: rpc.transport, now: () => at.t, setTimeout: (fn, ms) => (timers.push({ fn, ms }), timers.length),
       clearTimeout: () => {}, onCheck: (r) => checks.push(r) });
   });
 
   test("traffic: every RPC call and its answer is the Base channel's", async () => {
     const fired = [];
-    const traced = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+    const traced = createBase({ db, alias, walletAddress: walletKey.evmAddress, wallet: () => wallet, central: () => central,
       transport: rpc.transport, now: () => at.t, setTimeout: () => 0, clearTimeout: () => {}, onTraffic: () => fired.push(1) });
     await traced.refresh();
     expect(fired.length).toBeGreaterThanOrEqual(2);
@@ -438,13 +438,13 @@ describe('createBase', () => {
     const v = await base.refresh();
     expect(v).toMatchObject({
       error: '', config: 'bundled', round: ROUND,
-      identity: { address: identity.evmAddress, eth: '0.1', power: '0', fee: 1000, allowedStaker: zeroAddress, lowEth: false },
-      vault: { address: vaultKey.evmAddress, eth: '0.1', satori: '100', stakedWith: zeroAddress, staked: 'none', lock: { locked: false } },
+      alias: { address: alias.evmAddress, eth: '0.1', power: '0', fee: 1000, allowedStaker: zeroAddress, lowEth: false },
+      wallet: { address: walletKey.evmAddress, eth: '0.1', satori: '100', stakedWith: zeroAddress, staked: 'none', lock: { locked: false } },
       claimable: { rewards: '0', airdrop: '6' },
     });
-    expect(v.identity.batchesLeft).toBe(Number(10n ** 17n / (1_500_000n * 2n * 1_000_000n)));
+    expect(v.alias.batchesLeft).toBe(Number(10n ** 17n / (1_500_000n * 2n * 1_000_000n)));
     rpc.eth[I] = 10n ** 12n;
-    expect((await base.refresh()).identity.lowEth).toBe(true);
+    expect((await base.refresh()).alias.lowEth).toBe(true);
     expect((await base.status()).lastBatch).toBe(null);
   });
 
@@ -457,26 +457,26 @@ describe('createBase', () => {
 
   test("central's contract addresses that are not the bundle's: said once per fetch of its config, never used", async () => {
     const said = [];
-    const other = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+    const other = createBase({ db, alias, walletAddress: walletKey.evmAddress, wallet: () => wallet, central: () => central,
       transport: rpc.transport, now: () => at.t, setTimeout: () => 0, clearTimeout: () => {}, onConfigDiffers: (keys, url) => said.push([keys, url]) });
     central.baseConfig = async () => ({ chainId: 84532, token: '0x' + 'ee'.repeat(20), hub: '0x17719B7B1A630DECBC5B7FFDDED14FFB24120183' });
     const v = await other.refresh();
-    expect([v.error, v.vault.satori, v.config]).toEqual(['', '100', 'central']); // read from the bundle's token: the fake chain knows only it
+    expect([v.error, v.wallet.satori, v.config]).toEqual(['', '100', 'central']); // read from the bundle's token: the fake chain knows only it
     await other.refresh(); // the cached config: not said again
     expect(said).toEqual([[['token'], 'https://central2.example']]);
   });
 
   test("a build's pinned RPC (VITE_BASE_RPC): it, then publicnode; central's rpcUrl and explorer are not used", async () => {
     central.baseConfig = async () => ({ chainId: 84532, rpcUrl: 'https://rpc.evil.example', explorerUrl: 'https://scan.evil.example' });
-    const pinned = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+    const pinned = createBase({ db, alias, walletAddress: walletKey.evmAddress, wallet: () => wallet, central: () => central,
       transport: rpc.transport, defaultRpc: 'https://sepolia.base.org', now: () => at.t, setTimeout: () => 0, clearTimeout: () => {} });
     expect(await pinned.refresh()).toMatchObject({ rpc: ['https://sepolia.base.org', FALLBACK_RPC], explorer: 'https://sepolia.basescan.org' });
     // a build that pins nothing: central's, as before
     expect(await base.refresh()).toMatchObject({ rpc: ['https://rpc.evil.example', FALLBACK_RPC], explorer: 'https://scan.evil.example' });
   });
 
-  test("every vault transaction is under the max fee too (Settings): above it, Stake is refused in plain words, nothing sent", async () => {
-    vault = vaultKey;
+  test("every wallet transaction is under the max fee too (Settings): above it, Stake is refused in plain words, nothing sent", async () => {
+    wallet = walletKey;
     await base.setSettings({ maxFee: '2' });
     rpc.state.tip = 3n * 10n ** 9n;
     await expect(base.delegate()).rejects.toThrow('Gas is above the max fee: 3.000000002 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Satori contract.');
@@ -508,10 +508,10 @@ describe('createBase', () => {
   test('work: a check that has something to do, Stake and Claim say each step (src/neuron/work.js)', async () => {
     const seen = [];
     const work = createWork({ onChange: () => { const e = work.current(); if (e) seen.push([e.task, e.step, e.done, e.total].filter((x) => x != null).join(' ')); } });
-    base = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vault, central: () => central,
+    base = createBase({ db, alias, walletAddress: walletKey.evmAddress, wallet: () => wallet, central: () => central,
       transport: rpc.transport, now: () => at.t, setTimeout: (fn, ms) => (timers.push({ fn, ms }), timers.length),
       clearTimeout: () => {}, work });
-    vault = vaultKey;
+    wallet = walletKey;
     await base.delegate();
     expect(seen).toEqual(['stake send 1 3', 'stake confirm 1 3', 'stake send 2 3', 'stake confirm 2 3',
       'stake send 3 3', 'stake confirm 3 3', 'stake settle']);
@@ -583,21 +583,21 @@ describe('createBase', () => {
     expect((await base.status()).pendingBatch).toMatchObject({ hash: '0xab', stuck: { replaced: 1 } });
   });
 
-  test('vault actions need Unlock (a send, the vault opened for it: docs/design/keys.md#backup)', async () => {
-    await expect(base.delegate()).rejects.toThrow('Unlock the vault first');
-    await expect(base.claim()).rejects.toThrow('Unlock the vault first');
-    await expect(base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '1' })).rejects.toThrow('Unlock the vault first');
-    // the app opens the vault from the passphrase for each send (keys' withPassphrase) and hands it over: locked is fine
-    expect(await base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '0.01' }, vaultKey)).toEqual({ hash: expect.any(String) });
+  test('wallet actions need Unlock (a send, the wallet opened for it: docs/design/keys.md#backup)', async () => {
+    await expect(base.delegate()).rejects.toThrow('Unlock the wallet first');
+    await expect(base.claim()).rejects.toThrow('Unlock the wallet first');
+    await expect(base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '1' })).rejects.toThrow('Unlock the wallet first');
+    // the app opens the wallet from the passphrase for each send (keys' withPassphrase) and hands it over: locked is fine
+    expect(await base.send({ asset: 'ETH', to: '0x' + '33'.repeat(20), amount: '0.01' }, walletKey)).toEqual({ hash: expect.any(String) });
   });
 
-  test('stake → the identity\'s batch at the next check; unstake → SATORI can be sent once the next round ends', async () => {
-    vault = vaultKey;
+  test('stake → the alias\'s batch at the next check; unstake → SATORI can be sent once the next round ends', async () => {
+    wallet = walletKey;
     base.start();
     const r = await base.delegate();
-    expect(r.steps.map((x) => x.step)).toEqual(['setPredictorFee(0)', 'setAllowedDelegator(vault)', 'delegatePredictionPower(identity)']);
+    expect(r.steps.map((x) => x.step)).toEqual(['setPredictorFee(0)', 'setAllowedDelegator(wallet)', 'delegatePredictionPower(alias)']);
     let v = await base.status();
-    expect(v.vault).toMatchObject({ staked: 'identity', stakedWith: identity.evmAddress, lock: { locked: true, indefinite: true } });
+    expect(v.wallet).toMatchObject({ staked: 'alias', stakedWith: alias.evmAddress, lock: { locked: true, indefinite: true } });
     expect(v.nextCheck).toBe(at.t + FIRST_CHECK_S);
     await timers.at(-1).fn(); // the check
     await vi.waitFor(() => expect(batchesSent()).toHaveLength(1));
@@ -610,7 +610,7 @@ describe('createBase', () => {
 
     await base.undelegate();
     v = await base.status();
-    expect(v.vault).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false, untilRound: ROUND + 1 } });
+    expect(v.wallet).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false, untilRound: ROUND + 1 } });
     await expect(base.send({ asset: 'SATORI', to: '0x' + '33'.repeat(20), amount: '1' }))
       .rejects.toThrow(`SATORI can be sent from Oct 17, 00:00 UTC (round ${ROUND + 2}).`);
     base.stop();
@@ -618,32 +618,32 @@ describe('createBase', () => {
 
   describe('referral (docs/design/base.md#referral-invite-links)', () => {
     const R = '0x' + 'ab'.repeat(20);
-    test('a held referrer is the vault\'s referral once it stakes; then nothing is held, and the status says who', async () => {
-      vault = vaultKey;
+    test('a held referrer is the wallet\'s referral once it stakes; then nothing is held, and the status says who', async () => {
+      wallet = walletKey;
       expect(await base.holdReferrer(R)).toBe(true);
       let v = await base.status();
-      expect(v).toMatchObject({ pendingReferrer: R, vault: { referral: null } });
+      expect(v).toMatchObject({ pendingReferrer: R, wallet: { referral: null } });
       const r = await base.delegate();
-      expect(r.steps.map((x) => x.step)).toEqual(['setReferral(referrer)', 'setPredictorFee(0)', 'setAllowedDelegator(vault)',
-        'delegatePredictionPower(identity)']);
+      expect(r.steps.map((x) => x.step)).toEqual(['setReferral(referrer)', 'setPredictorFee(0)', 'setAllowedDelegator(wallet)',
+        'delegatePredictionPower(alias)']);
       expect(s.referral[V]).toBe(R);
       v = await base.refresh();
-      expect(v.vault.referral.toLowerCase()).toBe(R);
+      expect(v.wallet.referral.toLowerCase()).toBe(R);
       expect((await base.status()).pendingReferrer).toBeNull();
       expect(await db.get('referrer')).toBeNull();
     });
-    test('the newest link wins; none (not an address, the vault\'s own, nothing) holds nothing and keeps what was held', async () => {
+    test('the newest link wins; none (not an address, the wallet\'s own, nothing) holds nothing and keeps what was held', async () => {
       expect(await base.holdReferrer(R)).toBe(true);
       const other = '0x' + 'cd'.repeat(20);
       expect(await base.holdReferrer(other)).toBe(true);
       expect((await base.status()).pendingReferrer).toBe(other);
-      for (const bad of [null, '', 'nope', vaultKey.evmAddress, vaultKey.evmAddress.toLowerCase(), '0x' + '0'.repeat(40)]) {
+      for (const bad of [null, '', 'nope', walletKey.evmAddress, walletKey.evmAddress.toLowerCase(), '0x' + '0'.repeat(40)]) {
         expect(await base.holdReferrer(bad), String(bad)).toBe(false);
       }
       expect((await base.status()).pendingReferrer).toBe(other);
     });
-    test('a vault that already has a referral keeps it: no transaction, and the held one is dropped at the next read', async () => {
-      vault = vaultKey;
+    test('a wallet that already has a referral keeps it: no transaction, and the held one is dropped at the next read', async () => {
+      wallet = walletKey;
       s.referral[V] = '0x' + 'cd'.repeat(20);
       await base.holdReferrer(R);
       const r = await base.delegate();
@@ -660,19 +660,19 @@ describe('createBase', () => {
     });
   });
 
-  test("out of sync: 1 wei sent to the staked vault with its hook skipped; status says so, and Unstake explains, not 'reverted: Panic'", async () => {
-    vault = vaultKey;
+  test("out of sync: 1 wei sent to the staked wallet with its hook skipped; status says so, and Unstake explains, not 'reverted: Panic'", async () => {
+    wallet = walletKey;
     await base.delegate();
-    expect((await base.refresh()).vault).toMatchObject({ staked: 'identity', inSync: true, shortfall: null });
+    expect((await base.refresh()).wallet).toMatchObject({ staked: 'alias', inSync: true, shortfall: null });
     s.skipHook(V, 1n); // anyone's 1 wei, sent with the bare gas estimate
     const v = await base.refresh();
-    expect(v.vault).toMatchObject({ satori: '100.000000000000000001', inSync: false, shortfall: '0.000000000000000001' });
-    expect(v.identity.power).toBe('100');
-    await expect(base.undelegate()).rejects.toThrow("Staking is out of sync. Unstaking will fail until the contract fix. Don't add SATORI to the vault.");
+    expect(v.wallet).toMatchObject({ satori: '100.000000000000000001', inSync: false, shortfall: '0.000000000000000001' });
+    expect(v.alias.power).toBe('100');
+    await expect(base.undelegate()).rejects.toThrow("Staking is out of sync. Unstaking will fail until the contract fix. Don't add SATORI to the wallet.");
     expect(rpc.sent.filter((t) => t.functionName === 'delegatePredictionPower' && t.args[0] === zeroAddress)).toHaveLength(0); // simulated, never sent
     // another staker allowed: not checked
     s.allowed[I] = zeroAddress;
-    expect((await base.refresh()).vault).toMatchObject({ inSync: null });
+    expect((await base.refresh()).wallet).toMatchObject({ inSync: null });
   });
 
   test("claimable: rewards, the Satori Network's drop (central's proof − alreadyMintedTo, in the status multicall) and the airdrop, and their total", async () => {
@@ -685,7 +685,7 @@ describe('createBase', () => {
     s.airdrop[V] = E18 / 2n;
     let v = await base.refresh();
     expect(v.claimable).toEqual({ rewards: '3', drop: '3', airdrop: '0.5', total: '6.5' });
-    expect(central.calls).toEqual([vaultKey.evmAddress]);
+    expect(central.calls).toEqual([walletKey.evmAddress]);
     // cached: asked at most hourly (a new drop comes after central's daily run)
     s.merkle.minted[V] = 5n * E18; // claimed elsewhere: the chain's read follows at once
     expect((await base.refresh()).claimable).toMatchObject({ drop: '0', total: '3.5' });
@@ -714,32 +714,32 @@ describe('createBase', () => {
     central.merkleProof = ask;
   });
 
-  test('Claim needs a little Base ETH on the vault: said before trying, nothing sent', async () => {
-    vault = vaultKey;
+  test('Claim needs a little Base ETH on the wallet: said before trying, nothing sent', async () => {
+    wallet = walletKey;
     s.airdrop[V] = 7n * E18;
     rpc.eth[V] = 0n;
-    expect((await base.refresh()).vault.lowEth).toBe(true);
-    await expect(base.claim()).rejects.toThrow('The vault needs a little Base ETH for gas to claim.');
+    expect((await base.refresh()).wallet.lowEth).toBe(true);
+    await expect(base.claim()).rejects.toThrow('The wallet needs a little Base ETH for gas to claim.');
     expect(rpc.sent).toHaveLength(0);
     rpc.eth[V] = 10n ** 17n;
-    expect((await base.refresh()).vault.lowEth).toBe(false);
+    expect((await base.refresh()).wallet.lowEth).toBe(false);
     expect((await base.claim()).airdrop).toMatchObject({ hash: expect.any(String), amount: '7' });
   });
 
   test('claims: hub.claim when the lens says > 0, the merkle drop with central\'s proof, the airdrop; each on its own', async () => {
-    vault = vaultKey;
+    wallet = walletKey;
     expect(await base.claim()).toEqual({
       rewards: { skipped: 'nothing to claim on-chain' },
       merkle: { skipped: 'no merkle drop published on https://central2.example' },
       airdrop: { skipped: 'no vested airdrop to claim' },
     });
     expect(rpc.sent).toHaveLength(0);
-    expect(central.calls).toEqual([vaultKey.evmAddress]); // the proof only, as Lite (routes.py:1321-1331)
+    expect(central.calls).toEqual([walletKey.evmAddress]); // the proof only, as Lite (routes.py:1321-1331)
 
     central.root = 'none';
     expect((await base.claim()).merkle).toEqual({ skipped: 'https://central2.example serves no merkle drop (Not Found)' });
     central.root = '0xroot';
-    expect((await base.claim()).merkle).toEqual({ skipped: 'this vault is not in the current drop' });
+    expect((await base.claim()).merkle).toEqual({ skipped: 'this wallet is not in the current drop' });
 
     const proof = ['0x' + 'ab'.repeat(32)];
     central.proofs[V] = { root: '0xroot', address: V, amountWei: (5n * E18).toString(), amount: 5, proof };
@@ -758,7 +758,7 @@ describe('createBase', () => {
   });
 
   test('a merkle claim the reserve pays in part says what it paid (SatoriMerkle.sol:196-201)', async () => {
-    vault = vaultKey;
+    wallet = walletKey;
     const proof = ['0x' + 'ab'.repeat(32)];
     central.root = '0xroot';
     central.proofs[V] = { amountWei: (5n * E18).toString(), proof };
@@ -770,7 +770,7 @@ describe('createBase', () => {
   test('an RPC on another chain: an error, and no writes or batch', async () => {
     const other = { request: async (a) => (a.method === 'eth_chainId' ? '0x2105' : rpc.request(a)) };
     const { custom } = await import('viem');
-    const wrong = createBase({ db, identity, vaultAddress: vaultKey.evmAddress, vault: () => vaultKey, central: () => central,
+    const wrong = createBase({ db, alias, walletAddress: walletKey.evmAddress, wallet: () => walletKey, central: () => central,
       transport: custom(other), now: () => at.t, setTimeout: () => 0, clearTimeout: () => {} });
     expect((await wrong.refresh()).error).toBe('The RPC is on chain 8453, not Base Sepolia (84532): nothing is read or sent.');
     await expect(wrong.delegate()).rejects.toThrow(/chain 8453/);
@@ -779,7 +779,7 @@ describe('createBase', () => {
   });
 
   test('a failing claim does not stop the others', async () => {
-    vault = vaultKey;
+    wallet = walletKey;
     central.root = '0xroot';
     central.proofs[V] = { amountWei: '5', proof: ['0x' + 'cd'.repeat(32)] }; // a proof the chain refuses
     s.airdrop[V] = 7n;
@@ -789,7 +789,7 @@ describe('createBase', () => {
   });
 
   test('send: ETH any time, SATORI when free; the inputs are checked', async () => {
-    vault = vaultKey;
+    wallet = walletKey;
     const to = '0x' + '44'.repeat(20);
     await expect(base.send({ asset: 'BTC', to, amount: '1' })).rejects.toThrow(/ETH' or 'SATORI/);
     await expect(base.send({ asset: 'ETH', to: 'nope', amount: '1' })).rejects.toThrow(/0x address/);
@@ -804,7 +804,7 @@ describe('createBase', () => {
   });
 
   test('send: the zero address is refused, before anything is asked of the chain', async () => {
-    vault = vaultKey;
+    wallet = walletKey;
     const before = rpc.log.length;
     for (const asset of ['ETH', 'SATORI']) {
       await expect(base.send({ asset, to: zeroAddress, amount: '1' })).rejects.toThrow(ZERO_ADDRESS);

@@ -7,7 +7,7 @@
 > follows Satori streams on Nostr relays and publishes a prediction stream
 > (`<stream>_pred`) for each one it subscribes to, keeps a verified track
 > record of every prediction stream on the relays, and predicts on Base: the
-> vault stakes with this app, and its alias sends one batch of up/down
+> wallet stakes with this app, and its alias sends one batch of up/down
 > predictions every UTC round on its own. Everything runs in the browser tab:
 > the keys, the database (DuckDB-WASM on OPFS) and the engine. There is no
 > server of our own. It is built to be driven by people and by AI agents.
@@ -28,14 +28,14 @@ The words the page shows, and the code's names (docs/intent/ui.md):
 - the **Satori relays** ("Relays") = the Nostr relays.
 - the **Satori contract** ("Contract") = the Base contracts; they cost gas.
   Base stays the chain's name (ETH on Base, Base addresses).
-- the **alias** (the fields below say `identity`) = the vault's automated signing key, unencrypted, which signs on its
-  own; the **vault** = the key that holds the funds, encrypted with the
-  passphrase. **Unlock** = enter the passphrase; **Lock** = wipe the vault
-  from memory. **Stake** = the vault gives its prediction power to this
+- the **alias** = the wallet's automated signing key, made by the app, unencrypted, which signs on its
+  own; the **wallet** = the key that holds the funds, encrypted with the
+  passphrase. **Unlock** = enter the passphrase; **Lock** = wipe the wallet
+  from memory. **Stake** = the wallet gives its prediction power to this
   neuron (on-chain `delegatePredictionPower`).
 - the **reward address** = where the Satori Network sends this app's
-  rewards instead of the vault, such as a pool's: a Base (0x) address; none
-  set: the vault. It has nothing to do with staking.
+  rewards instead of the wallet, such as a pool's: a Base (0x) address; none
+  set: the wallet. It has nothing to do with staking.
 - a **track record** = how a prediction stream's predictions did against
   no change, counting only the predictions this app received before the
   outcome (Streams › Prediction streams, `records()`).
@@ -59,7 +59,7 @@ Read this before calling anything.
   their own words, for this app, now): `send`, `backup`, `unlock`,
   `stake`, `unstake`, `claim`, `setCentral`, `setBaseRpc`, `setRelays`,
   `setRewardAddress` (it decides where the rewards go), `retrain`, and the
-  paid streams: `buy` (it spends the vault's SATORI and gas), `stop`, `sell`
+  paid streams: `buy` (it spends the wallet's SATORI and gas), `stop`, `sell`
   and `unsell` (they set a price on the person's predictions). The same for `setAside` (the damaged-database screen: their keys
   are in that file) and `setBaseMaxFee` (it raises what any transaction may
   pay). A person asking you to "check my neuron", "see how it is doing" or
@@ -114,9 +114,9 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
    change, watched on its own; `record(pubkey, stream)` adds its pairs.
 7. Base, on the person's request: on the live site it is Base Sepolia
    (chain 84532), so both Base addresses need test ETH (a Base Sepolia
-   faucet) and the vault SATORI to stake. On the dev server, the local fork:
-   `node scripts/fork.mjs fund <identity 0x…>` and
-   `node scripts/fork.mjs fund <vault 0x…> --satori 100`. Then
+   faucet) and the wallet SATORI to stake. On the dev server, the local fork:
+   `node scripts/fork.mjs fund <alias 0x…>` and
+   `node scripts/fork.mjs fund <wallet 0x…> --satori 100`. Then
    `await satori.unlock(passphrase)`, `await satori.stake()`,
    `await satori.predictBase()`.
 
@@ -127,44 +127,47 @@ Every method is below; `await satori.status()` shows everything at once.
 - Base only: each key's address is its Base (0x) address, the only kind
   shown. There is no Evrmore anywhere in the app: central's login is an
   EIP-191 (`personal_sign`) signature by the alias, `0x` + r ‖ s ‖ v,
-  which recovers to the alias's Base address, and register's vault check
+  which recovers to the alias's Base address, and register's wallet check
   compares Base addresses.
-- Alias key (the fields and methods below call it `identity`): the vault's own automated signing key. Stored unencrypted in this browser so
+- Alias key: the wallet's own automated signing key, app-level (people see it only on the Wallet tab). Stored unencrypted in this browser so
   the neuron runs from page load with nobody present. It signs central's
   login challenge (EIP-191) and the daily Base batch.
-- Vault key: holds funds. Stored encrypted with the passphrase
+- Wallet key: holds funds. Stored encrypted with the passphrase
   (PBKDF2-SHA256, 600,000 rounds, and AES-256-GCM; any Unicode passphrase of
   at least 8 characters). **Unlock** (enter the passphrase) decrypts it into
-  memory; **Lock** wipes it. The neuron does not need the vault to run; its
+  memory; **Lock** wipes it. The neuron does not need the wallet to run; its
   public key is stored in clear, so its address shows while locked.
 - The keys are one record of this app's own (`meta.keys`,
-  docs/design/keys.md). A Docker install's `wallet.yaml`, `vault.yaml` and
-  `nostr.yaml` are imported (read and translated), never written. An earlier
+  docs/design/keys.md). A Docker install's key files (its alias file, its
+  wallet file and `nostr.yaml`) are imported (read and translated), never
+  written. An earlier
   version's stored keys are carried forward: the alias and the Nostr key
-  at load, the vault at its next Unlock.
+  at load, the wallet at its next Unlock.
 - Central (the Satori Network): `https://network.satorinet.io` in a build
   unless the build sets another (`VITE_CENTRAL_URL`; app.satorinet.io
   uses `https://central2.satorinet.io` for now); central2 (the dev central)
   on the dev server. Changeable (https only); a change is noted on Home for
   24 h (`health().notices`).
 - Register: on every page load (and before each poll while the last one
-  failed), `POST /api/v1/peer/register` with the alias's and the vault's
-  public keys. Central links the vault to the
-  identity once and answers `vault_base_address`, the Base address it pays
-  this vault's rewards to. Another address than the vault's (or none) shows
-  as a "vault mismatch" with both addresses; a central without that field
-  shows none.
+  failed), `POST /api/v1/peer/register` with the alias's public key and the
+  wallet's link to it: the wallet's EIP-191 signature of a fixed text naming
+  both addresses (docs/design/wallets.md), made when the wallet is in hand
+  (Create, Restore, Import, or the next Unlock of a wallet without one).
+  Central pays the linked wallet and answers `wallet_address`. Another
+  address than the wallet's shows as a "wallet mismatch" with both
+  addresses, none as "wallet not linked"; a central without that field
+  shows neither.
 - Reward address (docs/design/central.md#the-reward-address): where the
-  Satori Network sends this app's rewards instead of the vault, such as a
+  Satori Network sends this app's rewards instead of the wallet, such as a
   pool's. Base only: a 0x address (EIP-55 checksummed; never the zero
   address). The Satori Network keeps it (`GET` and `POST
   /api/v1/peer/reward-address`, signed in by the alias: no Unlock, no
   gas); the app keeps no copy, and reads it when Settings opens (once per
   page load and Satori Network) or when `rewardAddress()` asks. Not set:
-  rewards go to the vault. The Satori Network answers the Base address it
+  rewards go to the wallet. The Satori Network answers the Base address it
   pays at (a value set before Base reads as the same key's Base address).
-  This neuron's own vault or identity is named (`whose`); the alias is
-  never set from here: the app claims only from the vault, so rewards sent
+  This neuron's own wallet or alias is named (`whose`); the alias is
+  never set from here: the app claims only from the wallet, so rewards sent
   to the alias would sit unclaimed. It does not change staking. A change
   is noted on Home for 24 h.
 - Poll: `GET /api/v1/observations/batch?limit=100`, the latest observation of
@@ -254,7 +257,7 @@ Every method is below; `await satori.status()` shows everything at once.
   stream uuids); the list refills with the next poll.
 
 - Nostr key: a third key, random (not derived from the alias or the
-  vault, so not in the 24 words), stored unencrypted like the alias. It
+  wallet, so not in the 24 words), stored unencrypted like the alias. It
   signs the neuron's Nostr events; its 64-hex pubkey is sent to central on
   register (`nostr-pubkey`). Backup shows it as `nsec` and hex; Restore from
   words takes either back.
@@ -323,25 +326,25 @@ Every method is below; `await satori.status()` shows everything at once.
   **Sell**: a price per observation on one of this app's `<stream>_pred`;
   its 34600 says `encrypted: true`, `price_per_obs` (the one price, in
   satoshis: 10⁻⁸ SATORI) and `metadata.market = { chain, contract, token,
-  payee (the vault) }`. Each
+  payee (the wallet) }`. Each
   observation then goes, encrypted (NIP-04, as Lite), to each buyer whose
   channel checks on chain and whose vouchers cover what it was sent (the
   first free), one 34601 each (`d` = `<stream>:<buyer>`); in public only a
   heartbeat (no value). At most once a day the hourly pass settles every
-  voucher (one `settleMany` from the alias, into the vault); a buyer who
+  voucher (one `settleMany` from the alias, into the wallet); a buyer who
   stops gets no more, and its last voucher waits for that daily settle.
-  **Buy**: the vault (Unlock, gas) opens a channel
+  **Buy**: the wallet (Unlock, gas) opens a channel
   with a deposit (100 observations by default), then the 34602 names it;
   each observation received is kept as a watched stream's (its track record
   is what was bought) and paid with the alias's next voucher (34603),
   never past the deposit. **Stop**: the alias asks to close (gas, no
-  Unlock); the rest goes back to the vault after the 7-day grace period, in
-  the hourly pass. A vault staked with this app can't fund a channel
+  Unlock); the rest goes back to the wallet after the 7-day grace period, in
+  the hourly pass. A wallet staked with this app can't fund a channel
   (the token's transfer lock): said in plain words.
 
 - Base (Base Sepolia, chain 84532, the D7 contracts; docs/design/base.md):
   each key's 32-byte secret is also its EVM key, so the alias and the
-  vault each have a Base (0x) address (the vault's from its public key,
+  wallet each have a Base (0x) address (the wallet's from its public key,
   stored in clear, while locked). Addresses: the app's own, bundled;
   central's `/api/v1/base/config` is read (cached 1 h; prod answers 404,
   central2 serves it) but its addresses are never used: one that differs is
@@ -351,11 +354,11 @@ Every method is below; `await satori.status()` shows everything at once.
   central's `rpcUrl`); on the dev server `/rpc`, a local anvil fork (`node
   scripts/fork.mjs start`). A change is noted on Home for 24 h. An RPC on
   another chain than 84532 is refused (nothing is read or sent).
-- Stake with this app (needs Unlock): on-chain, the vault's
-  `hub.delegatePredictionPower(identity)`; the SATORI stays in the vault and
+- Stake with this app (needs Unlock): on-chain, the wallet's
+  `hub.delegatePredictionPower(alias)`; the SATORI stays in the wallet and
   earns. First the alias sets its predictor fee to 0
-  (`rewards.setPredictorFee(0)`, set-once) and accepts only this vault
-  (`hub.setAllowedDelegator(vault)`). Each step only when needed. Staked
+  (`rewards.setPredictorFee(0)`, set-once) and accepts only this wallet
+  (`hub.setAllowedDelegator(wallet)`). Each step only when needed. Staked
   SATORI can't be sent; Unstake (`delegatePredictionPower(0x0)`) keeps it
   unsendable through the next round: the token refuses transfers while
   `transferLockedUntil >= round`, so it can be sent from round
@@ -363,9 +366,9 @@ Every method is below; `await satori.status()` shows everything at once.
   too.)
 - Automatic only: on-chain the neuron plays only through the alias's
   daily batch; manual play is Satori Daily (https://games.satorinet.io, the
-  dapp). Per vault per round it is one or the other: the engine refuses a
-  staked vault's own predictions (the revert `Delegated`).
-- Prediction power: the vault's SATORI, staked with this app. A vault
+  dapp). Per wallet per round it is one or the other: the engine refuses a
+  staked wallet's own predictions (the revert `Delegated`).
+- Prediction power: the wallet's SATORI, staked with this app. A wallet
   with no SATORI, or one that has not staked, gives the alias none, and
   the batch skips (`nothing staked with this app`).
 - The daily batch (the alias, no Unlock): once per UTC round
@@ -388,12 +391,12 @@ Every method is below; `await satori.status()` shows everything at once.
   the next check tries again). Its hash is kept at once, so a check never sends
   twice; the batch is stored after its receipt, its round from its block.
 - Claims (needs Unlock), each on its own: `hub.claim()` when the rewards lens
-  says > 0 (the vault's share of the alias's wins); the merkle drop
-  (`GET /api/v1/merkle/proof/{vault}` on central, then `claimMerkle` when
+  says > 0 (the wallet's share of the alias's wins); the merkle drop
+  (`GET /api/v1/merkle/proof/{wallet}` on central, then `claimMerkle` when
   owed; the amount is what the reserve paid); the vested airdrop
   (`claimAirdrop`).
 - Gas: both addresses need a little Base ETH (the alias for the batch,
-  the vault for its actions). Every contract call is simulated first (a
+  the wallet for its actions). Every contract call is simulated first (a
   revert costs nothing and names the contract's error) and sent with 500,000
   gas over the estimate (unused gas is not charged); an ETH send uses its
   estimate. The tip is the node's `eth_maxPriorityFeePerGas`, the max fee
@@ -434,30 +437,30 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 (synchronous, kept current; `await satori.status()` says the same). Then, in
 the page's JS context:
 
-- `await satori.status()` → `{ screen, version, identity, vault, unlocked, lockAt, central, nostr, base, storage, app,
+- `await satori.status()` → `{ screen, version, alias, wallet, unlocked, lockAt, central, nostr, base, storage, app,
   recovered, setAside, train }` (`version`: `browser-<package version>+<git short sha>`, the build's, as register
   sends it; `train`: the last training pass, `{ central, nostr, base, stopped, ms }`, or null; `lockAt`: when the
-  unlocked vault locks on its own, ms, or null; `setAside`: the name a damaged database file was set aside under at
+  unlocked wallet locks on its own, ms, or null; `setAside`: the name a damaged database file was set aside under at
   this page load, or null).
   `screen` is `setup` (no keys yet), `home` (running), `finish` (an earlier
-  version's vault whose public key was not in clear: `unlock(passphrase)`
+  version's wallet whose public key was not in clear: `unlock(passphrase)`
   once, then it runs), `elsewhere` (another tab runs the neuron; this one
   waits, and takes over when that one closes: `loading`, then `home`),
   `damaged` (the database file won't open: `setAside()`, on the person's
-  request) or `fatal`. `identity` and `vault` are the keys' Base
+  request) or `fatal`. `alias` and `wallet` are the keys' Base
   (0x) addresses (null before setup). `central` (on
   `home`) is `{ url, registration, lastPoll, nextPoll, polling, failures,
   lastSubmit, pending, history, reward }` (`failures`: failed cycles in a row; the
   next try is `nextPoll`: 2, 10, 30 min after a failure, then 11 h):
   - `registration`: null while registering; then
-    `{ at, ok: true, peer_id, message, vault, vault_base_address,
-    vaultMismatch }` or `{ at, ok: false, error }` (central refused or is
-    unreachable). `vault`: this vault's Base address; `vault_base_address`:
-    central's answer, the Base address it pays this vault's rewards to (null
-    when it has none, or does not say). `vaultMismatch`: `false` (the same
-    address, in any letter case), `'other'` (a different one), `'none'`
-    (central has no vault for this alias) or `null` (unknown: a central
-    without the field, as prod on `main`; not a mismatch).
+    `{ at, ok: true, peer_id, message, wallet, wallet_address,
+    walletLinkError, walletMismatch }` or `{ at, ok: false, error }` (central refused or is
+    unreachable). `wallet`: this wallet's Base address; `wallet_address`:
+    central's answer, the linked wallet it pays (null when none is linked, or
+    it does not say); `walletLinkError`: why it refused the link, or null.
+    `walletMismatch`: `false` (the same address, in any letter case),
+    `'other'` (a different one), `'none'` (no wallet linked) or `null`
+    (unknown: a central without the field; not a mismatch).
   - `lastPoll`: `{ at, streams, new, predicted, engine_ms }` or `{ at, error }`
     (central's error, with `unreachable: true` when central was not reached,
     or a local one such as a database write, then with `local: true`); `engine_ms`: how long the models took (present when a
@@ -469,8 +472,8 @@ the page's JS context:
     `{ at, error, total_submitted }` (with `login: true` when central refused
     the login, `unreachable: true` when it was not reached); `pending`: how many predictions wait to be sent.
   - `reward`: the reward address as last read, `{ address, whose, at,
-    error, reading }`: `address` `'0x…'` or null (not set: the vault);
-    `whose` `'vault'` or `'identity'` when it is this app's own, else
+    error, reading }`: `address` `'0x…'` or null (not set: the wallet);
+    `whose` `'wallet'` or `'alias'` when it is this app's own, else
     null; `at` when the Satori Network last answered (null: not known yet on
     this page load; `rewardAddress()` reads it); `error` the last read's
     failure, or null.
@@ -504,7 +507,7 @@ the page's JS context:
     answered; `verify`, announcements checked), `subscribe` (`find`),
     `watch` (the scan for prediction streams: `ask`, `verify`).
     `since`: when the step began (ms). `critical: true`: closing Satori now
-    would lose work (sending predictions, a Base batch or a vault
+    would lose work (sending predictions, a Base batch or a wallet
     transaction not yet confirmed, the keys being written); its `text`
     begins "Keep Satori open · ". `text`: the words Home shows ("Loading
     history · 34 of 84 streams"). The entry that leads is shown: a critical
@@ -514,7 +517,7 @@ the page's JS context:
     'rpc' | 'reward', text }]` ("Satori Network address changed to https://…",
     "Base RPC changed to the default, https://sepolia.base.org", "Reward
     address set to 0x…", "Reward address cleared: rewards go to your
-    vault"); Home shows them quietly. One the person did not make is worth
+    wallet"); Home shows them quietly. One the person did not make is worth
     telling them.
   - `status`: `'ok'` (predicting: central took predictions within 12 h of
     open time, and if staked Base has this round's batch or its check has
@@ -539,7 +542,7 @@ the page's JS context:
     for the card (so advice only when no warn or bad reason is present):
     `{ id, text, button, do, tab?, section? }` (`stake-out-of-sync`: `{ id,
     text }` only, nothing to press), `do` one of `reload`, `poll` (`satori.poll()`), `stake`
-    (`unlock()` then `stake()`), `backup` (`backup('vault', passphrase)`,
+    (`unlock()` then `stake()`), `backup` (`backup('wallet', passphrase)`,
     shown to the person), `install` (`install()`), `dismiss` (the person
     puts the card away; `action.dismiss`, when present, names a second
     button that does the same), `go` (`go(tab)`; the fix is
@@ -552,10 +555,10 @@ the page's JS context:
     `login-refused`, `central-failing` (failing, nothing good for 12 h of
     open time), `central-overdue`, `base-failing`, `stake-out-of-sync`,
     `relays-down`; warn `central-failed` (failing, retrying in minutes),
-    `vault-mismatch`, `not-registered`, `gas-low`, `base-skipped`,
+    `wallet-mismatch`, `not-registered`, `gas-low`, `base-skipped`,
     `base-stuck` (a batch not mined for 10 min), `base-unreachable` (while
     the contract is in use); idle `asleep`, `starting`; advice `backup` (storage
-    not kept, no backup confirmed), `stake` (the vault holds SATORI, not
+    not kept, no backup confirmed), `stake` (the wallet holds SATORI, not
     staked; the card says the risk), `install` (the browser can add Satori, not installed, not put away),
     `relay-down` (some relay down, not all); note `base-unused-unreachable`
     (the chip's only). docs/design/health.md says why each has its level.
@@ -594,10 +597,10 @@ the page's JS context:
   offered yet).
 - `satori.update()` → true, then the page reloads into the new version, when
   `status().app.update`; false when none is waiting. Never automatic.
-- `await satori.setup({ passphrase, vaultWords?, identityWords?, nostrKey? })` → status.
+- `await satori.setup({ passphrase, walletWords?, aliasWords?, nostrKey? })` → status.
   Creates the neuron on a fresh browser (random keys unless 24 words, or the
   Nostr key's nsec or hex, are given). Passphrase: any Unicode, at least 8
-  characters (code points after NFC). The vault starts locked. One setup runs at
+  characters (code points after NFC). The wallet starts locked. One setup runs at
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
   and a call once set up throws `Already set up`.
 - `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
@@ -705,21 +708,21 @@ the page's JS context:
   address, read from the Satori Network now (a login by the alias, then
   the GET; about a second): `address` `'0x…'` checksummed, the Base address
   the rewards are paid at, or null (not set: the Satori Network pays the
-  vault); `whose` `'vault'`, `'identity'` (rewards there aren't claimed by
+  wallet); `whose` `'wallet'`, `'alias'` (rewards there aren't claimed by
   this app) or null. Throws the Satori Network's error in words when it
   can't be read ("Satori Network unreachable: Failed to fetch"), and "The
   Satori Network answered a reward address that isn't a Base address, so it
   isn't shown." for anything but a 0x address or null.
 - `await satori.setRewardAddress(address)` → `{ address, whose, at }` (only
   on the person's request): a Base address (`'0x…'`) to set it, `null` or
-  `''` to clear it (rewards go to the vault). Free: the alias signs it,
+  `''` to clear it (rewards go to the wallet). Free: the alias signs it,
   no Unlock, no gas. Checked before anything is sent; throws "A reward
   address is a Base address: 0x and 40 hex characters.", "That address's
   capital letters don't match its checksum: check it for a typo.", the zero
   address's ("The zero address (0x000…000) burns what is sent to it:
-  refused."), "That is this app's identity. This app claims rewards only
-  from the vault, so rewards sent to the alias would sit unclaimed. Use
-  another address, or Clear to send them to your vault.", or the Satori
+  refused."), "That is this app's alias. This app claims rewards only
+  from the wallet, so rewards sent to the alias would sit unclaimed. Use
+  another address, or Clear to send them to your wallet.", or the Satori
   Network's refusal ("Satori Network 400: Invalid Base address"). Sent checksummed; one at a time (another while one runs
   throws `Busy (save)…`). A change is noted on Home for 24 h. It does not
   change staking.
@@ -730,16 +733,16 @@ the page's JS context:
   the Nostr key) or import. Elsewhere it throws "Nothing to set aside".
 - `await satori.unlock(passphrase)` (only on the person's request) → true (one at a time, as the UI's:
   another while one runs throws `Busy (unlock)…`); `satori.lock()` → true.
-  An earlier version's vault is re-encrypted in this app's format at its
+  An earlier version's wallet is re-encrypted in this app's format at its
   first Unlock (same passphrase). On the `finish` screen it also starts the
-  neuron. The vault locks on its own 5 minutes after the last interaction
-  (`status().lockAt`; a vault call counts), never in the middle of an action.
-- `await satori.backup('identity' | 'vault', passphrase)` (only on the person's request) → `{ words,
+  neuron. The wallet locks on its own 5 minutes after the last interaction
+  (`status().lockAt`; a wallet call counts), never in the middle of an action.
+- `await satori.backup('alias' | 'wallet', passphrase)` (only on the person's request) → `{ words,
   privateKey }` (the 24 words; `privateKey` is `0x` and 64 hex, what a Base
   wallet's "Import account" takes: the words follow satorilib's scheme, so a
   standard wallet derives another account from them);
   `backup('nostr', passphrase)` → `{ nsec, secret }`; `backup(undefined,
-  passphrase)` → `{ identity, vault, nostr }`. The passphrase each time,
+  passphrase)` → `{ alias, wallet, nostr }`. The passphrase each time,
   unlocked or not (~0.3 s); any other name throws, before the passphrase is
   checked. The alias and the Nostr key need it too, although they are
   stored unencrypted: they are private keys. Show them to the person; don't
@@ -797,9 +800,9 @@ the page's JS context:
   still settled).
 - `await satori.buy(pubkey, stream, deposit?)` (only on the person's
   request; needs Unlock; gas): a stream sold on the Satori contract
-  (`discover()`'s `price_per_obs` and `metadata.market`); the vault opens a channel with
+  (`discover()`'s `price_per_obs` and `metadata.market`); the wallet opens a channel with
   `deposit` SATORI (100 observations by default) → `nostr().market.bought`'s
-  entry. Throws in plain words: not for sale, locked, a staked vault, not
+  entry. Throws in plain words: not for sale, locked, a staked wallet, not
   enough SATORI. `await satori.stop(pubkey, stream)` (only on the person's
   request; gas from the alias) → the same entry, `status: 'closing'`.
 - `await satori.records()` → the track record of every watched prediction
@@ -840,8 +843,8 @@ the page's JS context:
   written to.
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
-  identity: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
-  vault: { address, eth, satori, stakedWith, referral, staked: 'identity' | 'none' | 'other', inSync, shortfall,
+  alias: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
+  wallet: { address, eth, satori, stakedWith, referral, staked: 'alias' | 'none' | 'other', inSync, shortfall,
   lock: { locked, indefinite, untilRound, freeAt }, lowEth }, claimable: { rewards, drop, airdrop, total },
   pendingReferrer, inviteLink,
   lastBatch: { round, at, hash, games: [{ streamId, gameId, named, direction, rule, model, latest, forecast, horizon, step, score?, persist? }],
@@ -860,17 +863,17 @@ the page's JS context:
   `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
   `claimable`: the staking rewards, the Satori Network's reward drop not
   claimed yet (`drop`: null when this central does not serve it), the
-  airdrop, and `total` (the parts known); `vault.lowEth`: under one
+  airdrop, and `total` (the parts known); `wallet.lowEth`: under one
   transaction's gas (Claim says so before trying).
   Referral (docs/design/base.md#referral-invite-links): `inviteLink` is
-  `<this origin>/?ref=<the vault's address>`, to give to someone who will run their
-  own neuron: they become the vault's referral, and `claim` collects the cut (5 % of
+  `<this origin>/?ref=<the wallet's address>`, to give to someone who will run their
+  own neuron: they become the wallet's referral, and `claim` collects the cut (5 % of
   what they earn). `pendingReferrer` is the `?ref=` address this page was opened with
-  and is holding (null: none); `stake` registers it first, from the vault
-  (`setReferral(referrer)` in its steps), once, and `vault.referral` is then the
+  and is holding (null: none); `stake` registers it first, from the wallet
+  (`setReferral(referrer)` in its steps), once, and `wallet.referral` is then the
   address (null: none). The visit itself sends nothing.
-  `inSync`: the stake booked right (the alias's power equals the vault's
-  SATORI, checked once the alias accepts only this vault): `true`,
+  `inSync`: the stake booked right (the alias's power equals the wallet's
+  SATORI, checked once the alias accepts only this wallet): `true`,
   `false` (out of sync: unstaking fails until the contract fix;
   `shortfall` is the SATORI not booked) or `null` (not checked).
   `rpc`: the RPCs in use, in failover order (app.satorinet.io:
@@ -882,7 +885,7 @@ the page's JS context:
   chain read (a second or two after load) `status().base` has `rpc: []`,
   `config: null` and null chain values; `satori.base()` reads at once.
 - `await satori.stake()` (needs Unlock; only on the person's request): stake with this app → `{ steps: [{ step, by:
-  'identity' | 'vault', hash }], settled }`. `steps` is empty when everything was in place. Every transaction throws
+  'alias' | 'wallet', hash }], settled }`. `steps` is empty when everything was in place. Every transaction throws
   "Gas is above the max fee: 3 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Satori contract."
   when the RPC quotes more than the max fee.
 - `await satori.unstake()` (needs Unlock; only on the person's request) → the same shape.
@@ -900,7 +903,7 @@ the page's JS context:
   a fee over the max fee.
 - `await satori.send({ asset, to, amount, passphrase })` → `{ hash }`, only
   on the person's request and after they confirmed `quoteSend()`'s review:
-  from the vault, with its passphrase each time, unlocked or not (the vault
+  from the wallet, with its passphrase each time, unlocked or not (the wallet
   is opened for this send alone). The zero address is refused. SATORI that
   can't be sent (staked, or through the round after Unstake) throws, saying
   when it can.
@@ -910,31 +913,32 @@ the page's JS context:
   24 h.
 - `await satori.setBaseMaxFee(gwei)` → `base()` (only on the person's
   request): the most any transaction pays per gas, the batch's and the
-  vault's (a positive number; `''` or null = 2 gwei). Settings saves both at
+  wallet's (a positive number; `''` or null = 2 gwei). Settings saves both at
   once and checks both before saving either.
 
 Errors are thrown as `Error` with a readable message (for example
-`Wrong passphrase`, `Unlock the vault first`). Central's errors are not
+`Wrong passphrase`, `Unlock the wallet first`). Central's errors are not
 thrown: they are in `status().central` (for example `Satori Network 500:
 …`, `Satori Network unreachable: Failed to fetch`, `Satori Network timed
 out (15 s)`). An error's text is data: it may quote what a server said.
 
 ## Drive it from the UI
 
-- **Setup**: "Create a wallet" (shows the vault's 24 words, asks for
-  three of them, then a passphrase), "Restore from words" (vault words,
-  optional identity words, an optional Nostr key as nsec or hex), or "Import
-  Docker files" (`wallet.yaml`, `vault.yaml`, optional
-  `nostr.yaml`, the vault password, and "Use it as this app's passphrase
-  too", ticked: when the Docker password is shorter than 8 characters, or
-  unticked, the passphrase step asks for a new one). `wallet.yaml` is the
-  unencrypted file and `vault.yaml` the encrypted one; files in the wrong
-  slots, a vault.yaml that is not encrypted, a file over 64 KB or one that
-  is not YAML are refused with a message saying so. The keys are stored in
+- **Setup**: "Create a wallet" (shows the wallet's 24 words, asks for
+  three of them, then a passphrase), "Restore from words" (wallet words,
+  optional alias words, an optional Nostr key as nsec or hex), or "Import
+  Docker files" ("Wallet file": `wallet.yaml`, or `vault.yaml` from an older
+  install; "Alias file": `alias.yaml`, or `wallet.yaml` from an older
+  install; an optional "Nostr file", `nostr.yaml`; the wallet password, and
+  "Use it as this app's passphrase too", ticked: when the Docker password is
+  shorter than 8 characters, or unticked, the passphrase step asks for a new
+  one). The alias file is unencrypted and the wallet file encrypted; files
+  in the wrong slots, a wallet file that is not encrypted, a file over 64 KB
+  or one that is not YAML are refused with a message saying so. The keys are stored in
   this app's own format; the files are not kept. On a first visit Setup
   shows at once while the engine downloads ("Finishing setup… downloading
   the engine, 2.5 of 5.1 MB", `setup-wait`).
-- **Other screens**: "Unlock to finish the update" (`finish`: "Vault
+- **Other screens**: "Unlock to finish the update" (`finish`: "Wallet
   passphrase to finish the update", Unlock); "Satori is open in another tab"
   (`elsewhere`: this tab takes over when that one closes); "Satori's
   database can't be opened" (`damaged`: DuckDB's words, "Set aside and start
@@ -951,13 +955,13 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   saying the step while it works, and quiet notes of an address change in
   the last 24 h), at most one action card (its words and one button that
   does the thing or goes there, amber or red for a problem, sky for advice;
-  when it needs the vault the passphrase is asked in place), the last 14
+  when it needs the wallet the passphrase is asked in place), the last 14
   days (30 on a computer, with a legend), the **Network** ("free"),
   **Contract** ("uses gas") and **Relays** chips (each opens its tab and
   glows while its channel talks), and the claimable rewards with Claim (the
-  vault's SATORI under it). On a computer it is a dashboard: also the first
+  wallet's SATORI under it). On a computer it is a dashboard: also the first
   8 streams (latest, forecast 24 h, model, a trend line) with a link to all,
-  the wallet (claimable, the vault, the alias's gas in days) and the
+  the wallet (claimable, the wallet, the alias's gas in days) and the
   activity feed (open; a tap away on a phone).
 - **Models** (docs/design/models.md): on top the engine's status: *Working*
   (the step, Home's words), *Resting* ("Trained 2 h ago · next run in 9 h"),
@@ -978,7 +982,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   chart of recent history with the forecast to scale, "12 h" and "24 h"
   marks, and where it went); "← Models" goes back.
 - **Streams**: the **Satori Network** card ("free"; Registered, Last poll,
-  Next poll, Last submission, Pending, History, a vault mismatch if any,
+  Next poll, Last submission, Pending, History, a wallet mismatch if any,
   "Poll now"; no URL: that is Settings'); **Streams** ("84 from the Satori
   Network, with our forecasts": each stream's latest value and time, t1, t2,
   the model with its companions, "bvar · +eth +gold", Sent or Pending; a tap
@@ -988,7 +992,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   then **Sell**: each `<stream>_pred`, "Free" with a price box and Sell, or
   "0.001 SATORI each · 2 buying" with Make free; **Bought**: each stream
   bought, "0.004 of 0.005 SATORI left" and Stop, or "Stopped: … back to the
-  vault after <date>");
+  wallet after <date>");
   **Prediction streams** (every prediction stream on the relays, watched on
   its own: "Watching 112 prediction streams · 23 with a record", or the
   scan's step with a small turning ring, "Finding prediction streams ·
@@ -1002,36 +1006,36 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   **Streams on the relays** (opening it discovers: a search box and the
   first 50 matches, Subscribe or Unsubscribe; a stream sold on the Satori
   contract shows "0.001 SATORI each", a deposit box (100 observations) and
-  Buy, which asks for the passphrase in place when the vault is locked;
+  Buy, which asks for the passphrase in place when the wallet is locked;
   other paid or gated ones can't be subscribed yet).
 - **Wallet**: the **Base** card: the round, the RPC in plain words, the
-  vault's SATORI and ETH, Claimable (rewards, from the Satori Network,
+  wallet's SATORI and ETH, Claimable (rewards, from the Satori Network,
   airdrop), Staking ("Staked: 100 SATORI with this app"), Transfers
   ("Staked SATORI can't be sent until you unstake", "SATORI can be sent
   from <date> (round N)", "Free to send"), the alias's ETH as daily
-  batches of gas, Last contract batch, Contract batch check, who plays
-  (this app, or Satori Daily by hand, linked); then "Stake with this
-  neuron" or "Unstake", "Claim" (while locked each asks for the passphrase
-  in place, does it, then locks the vault again), and the send form
-  (asset, Amount, "To (0x address)", "Send from the vault"), which opens a
+  batches of gas, Last contract batch, Contract batch check, the alias
+  (its address with Copy, "The app's own signing address; the daily
+  batch's gas is paid from it.", and "Private key"), who plays (this app,
+  or Satori Daily by hand, linked); then "Stake with this app" or "Unstake", "Claim" (while locked each asks for the passphrase
+  in place, does it, then locks the wallet again), and the send form
+  (asset, Amount, "To (0x address)", "Send from the wallet"), which opens a
   review ("Check before sending": the amount and asset, the recipient in
-  full, the fee), then "Vault passphrase to send" (each time), Send or Back.
-- **Settings**: **Keys** (each key with Copy: the alias's Base address,
-  the vault's with its Locked/Unlocked badge, "Vault passphrase" and Unlock,
-  or "Lock the vault"; the Nostr pubkey), **Backup** (Alias words, Vault
-  words, each with its private key in 0x hex; Nostr key, nsec and hex; each
-  asks for the passphrase in place, every time, "Vault passphrase to show
-  the backup", Show; Hide), **Reward address** (where the Satori Network
+  full, the fee), then "Wallet passphrase to send" (each time), Send or Back.
+- **Settings**: **Keys** (each key with Copy: the wallet's Base address with
+  its Locked/Unlocked badge, "Wallet passphrase" and Unlock, or "Lock the
+  wallet"; the Nostr pubkey), **Backup** (Wallet words, with its private key
+  in 0x hex; Nostr key, nsec and hex; each asks for the passphrase in place,
+  every time, "Wallet passphrase to show the backup", Show; Hide), **Reward address** (where the Satori Network
   sends this app's rewards: "Now" with the address shortened, its whole
-  self in the hover, and Copy, named "your vault" or "your alias" when it
+  self in the hover, and Copy, named "your wallet" or "your alias" when it
   is this app's own (the alias with a note: rewards there aren't
-  claimed here), or "Not set · rewards go to your vault"; "Reading it from
+  claimed here), or "Not set · rewards go to your wallet"; "Reading it from
   the Satori Network…" while it is read, its error with Try again; "New
   reward address" (0x…), Save ("Saving…"), Clear while one is set
   ("Clearing…"); the line says each step, "Signing in to the Satori
   Network…", "Saving the reward address…", then "Saved: the Satori Network
   sends this app's rewards to 0x…" or "Cleared: rewards go to your
-  vault."; a small turning ring beside the words while it reads or saves;
+  wallet."; a small turning ring beside the words while it reads or saves;
   no passphrase, no gas), **Satori Network** ("Satori Network server", an
   https URL, empty = the default; Save), **Satori relays** (each relay with
   its state, "Connected", "Not reachable here" for a blocked one, with one
@@ -1057,7 +1061,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `days-summary`, `channels` with `chip` (`data-channel`: network, contract,
   relays; `data-state`, `data-tone`, `data-live` while its channel talks) and
   `chip-text`, `claimable` with `claimable-amount`, `claimable-parts`,
-  `claim` and `claim-result`, `home-vault`, `home-gas`, `home-stream`,
+  `claim` and `claim-result`, `home-wallet`, `home-gas`, `home-stream`,
   `activity`, `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`,
   `tab-<tab>`, `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`.
   Models: `engine` (`data-tone`), `engine-title`, `engine-line`,
@@ -1091,16 +1095,19 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `catalog-bought`; `market` with `sell-row` (`data-stream`; `sell-state`,
   `sell-price`, `sell`, `unsell`), `bought-row` (`data-key`
   `<pubkey>:<stream>`; `bought-left`, `stop`) and `market-error`. Wallet: `base-refresh`, `base-rpc`, `base-error`,
-  `base-identity`, `base-vault`, `base-staking`, `base-stake-note`,
+  `base-alias`, `base-wallet`, `base-staking`, `base-stake-note`,
   `base-sync`, `base-play`, `base-lock`, `base-claimable`,
   `base-last-batch`, `base-check`, `base-stake`, `base-unstake`,
   `base-claim`, `base-result`, `base-txs`, `base-action-error`,
-  `send-review` (with `review-amount`, `review-to`, `review-fee`).
-  Settings: `identity`, `vault` (the Base addresses), `vault-state`,
-  `nostr-pubkey`, `unlock`, `lock-vault`, `backup-prompt`, `backup-key` (a
+  `send-review` (with `review-amount`, `review-to`, `review-fee`), `alias`
+  (the alias's Base address), `alias-key` (its private key: "Wallet
+  passphrase to show the alias's private key", then `alias-backup-prompt`,
+  `alias-backup-key`, `alias-backup-hex`).
+  Settings: `wallet` (the Base address), `wallet-state`,
+  `nostr-pubkey`, `unlock`, `lock-wallet`, `backup-prompt`, `backup-key` (a
   private key, or the nsec), `backup-hex`, `reward-address` (the address
-  shortened; `title` the whole one), `reward-whose` ("your vault", "your
-  identity"), `reward-identity` (the alias's note), `reward-none` (not
+  shortened; `title` the whole one), `reward-whose` ("your wallet", "your
+  alias"), `reward-alias` (the alias's note), `reward-none` (not
   set, or reading), `reward-reading` and `reward-saving` (the turning ring),
   `reward-read-error` with `reward-retry`, `reward-line`, `reward-error`,
   `reward-save`, `reward-clear`, `central-url`, `relay` with
@@ -1128,11 +1135,11 @@ to a public chain). `node scripts/fork.mjs --help` lists:
   central serves), `advance [days]` (chain time; then `predictBase()`),
   `predict [up|down]` (moves the default stream), `stream [name]` (a game
   with no voting weight, which the batch leaves out), `grief <0x…>` (1 wei
-  of SATORI with the bare gas estimate: a staked vault goes out of sync,
+  of SATORI with the bare gas estimate: a staked wallet goes out of sync,
   the token-hook bug).
 
-Recipe: `fund <identity 0x…>` (gas for the batch) and
-`fund <vault 0x…> --satori 100` (gas and SATORI to stake), then
+Recipe: `fund <alias 0x…>` (gas for the batch) and
+`fund <wallet 0x…> --satori 100` (gas and SATORI to stake), then
 Unlock, `stake()`, `predictBase()`.
 
 ## From the Docker neuron (migrate in, never back)
@@ -1140,10 +1147,10 @@ Unlock, `stake()`, `predictBase()`.
 The keys are Satori Lite's (github.com/SatoriNetwork/satori-lite and
 github.com/SatoriNetwork/satorilib): one
 32-byte secp256k1 secret per key = the private key = the BIP39 entropy of its
-24 words. A Docker install moves here by Import (its `wallet.yaml`,
-`vault.yaml` with the vault password, and `nostr.yaml`) or by Restore from
+24 words. A Docker install moves here by Import (its alias file, its
+wallet file with the wallet password, and `nostr.yaml`) or by Restore from
 words; its keys are then stored in this app's own format. Nothing is written
-back in Docker's formats. Central sees the same identity either way, and on
+back in Docker's formats. Central sees the same alias either way, and on
 Base the same secrets give the same 0x addresses as the Docker neuron's
 (`ethAddress`), so the stake and rewards follow the keys. Satori Lite is the
 reference for what goes over the network: central's payload and Satori's
@@ -1164,10 +1171,10 @@ build step beyond Vite, MIT licensed.
   wss stand-ins, is not a Settings value), and the version's shape; `src/util.js`: `serial()`
   (one at a time, in order), `isHttps()` and `isRelayUrl()`.
 - `src/keys/`: the keys record (`index.js`: create, import, migrate, load,
-  Unlock, the vault for one use and Backup from the passphrase), the vault
-  encryption and the passphrase rule (`vault.js`), a key's words, public
+  Unlock, the wallet for one use and Backup from the passphrase), the wallet
+  encryption and the passphrase rule (`wallet.js`), a key's words, public
   key, Base address and signatures (`keys.js`), Docker's files read for
-  import and migration (`docker.js`), the vault locking on its own
+  import and migration (`docker.js`), the wallet locking on its own
   (`autolock.js`).
 - `src/central/`: central's API (register, observations, login, predictions
   batch); `login.js`: central's login signature, EIP-191 by the alias.
@@ -1183,7 +1190,7 @@ build step beyond Vite, MIT licensed.
   Base); t1 and t2 are one and two steps ahead; `{ weight }` forces the fade.
   `bvar.js`: the Bayesian VAR(1) of a target and its companions, its backtest
   and fallbacks, `influence()`; `evolve.js`: `runModels({ fresh, histories, specs, seed })`,
-  each target's identity-seeded spec, one mutation per poll, the forecasts;
+  each target's alias-seeded spec, one mutation per poll, the forecasts;
   `explainForecast` and `explainModel`: the same with what the Models tab
   shows; `retrain.js`: Retrain's search (a hill-climb on the older backtest
   origins, one look at the last two weeks).

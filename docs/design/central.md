@@ -9,10 +9,10 @@ any origin and header (`central/src/main.py:63-69`, `allow_origin_regex=r".*"`
 at `:65`).
 
 ```
-page load ─▶ register (wallet-pubkey, vault-pubkey)            once per start
+page load ─▶ register (alias-pubkey, the wallet's link)         once per start
          └─▶ schedule: first poll at once (a stored time still ahead is kept), then every 11 h
 poll ─▶ GET observations/batch ─▶ store (insert or ignore) ─▶ history for new streams ─▶ forecast streams not predicted yet
-     ─▶ queue {value: t2, t1_value: t1, observed_at, hash} ─▶ login (identity) ─▶ POST predictions/batch
+     ─▶ queue {value: t2, t1_value: t1, observed_at, hash} ─▶ login (alias) ─▶ POST predictions/batch
 ```
 
 **How it earns** (verified in central's code, 2026-10-14): central scores
@@ -20,10 +20,11 @@ these predictions in its daily run (`central/src/scripts/daily_run.py:1-8,25`)
 and keeps a predictor only with a reward, or a balance plus pool contribution
 of at least `stake_requirement` = 250 SATORI (`central/src/scripts/score.py:1992`,
 `mint.py:5`). Payouts go to `base_earnings` under the Base address of the
-registered **vault** pubkey (`central/src/scripts/distribution.py:48-53,278-280`),
-which the merkle drop publishes (`publish_merkle_root.py:1-6,34-37`) and the
-vault claims on Base ([base.md](base.md)). So register's `vault-pubkey`, and
-250 SATORI on the vault's Base address (or pool membership), are what make
+**wallet** linked to the alias (`central/src/scripts/distribution.py`),
+which the merkle drop publishes (`publish_merkle_root.py`) and the wallet
+claims on Base ([base.md](base.md)). So register's link
+([wallets.md](wallets.md#the-satori-network-register-login-and-the-link)), and
+250 SATORI on the wallet's Base address (or pool membership), are what make
 central-lite earn.
 
 Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
@@ -36,16 +37,16 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 
 | Step | Satori Lite | Browser (`src/central/`, `src/neuron/`) |
 |---|---|---|
-| Register | On every start, `authWithCentral` (`start.py:4976-5006`) reads the vault's address and `publicKey` from `vault.yaml` without decrypting it (`start.py:4637-4667`) and calls `checkin` → `POST /api/v1/peer/register` with headers `wallet-pubkey` (identity), `vault-pubkey`, optional `nostr-pubkey`, `neuron-version` (`v3.2.13`); no body, no token, 10 s timeout; only when there is a vault pubkey; a failure is only logged (`server.py:384-434`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)) and `neuron-version: browser-<package version>+<git short sha>` (stamped at build, 2026-10-19: it was `browser-0.1.0` for every build). The vault's public key is in clear in the keys record ([keys.md](keys.md#the-record)), so it is always sent. The result is shown, never retried in a loop. |
-| Central's side | Creates the peer, or for a known identity sets the vault only if none is stored yet; a vault that conflicts with another peer is silently dropped (`vault_base_address: null`); an identity conflict is a 409 (`c/main.py:772-907`). | Compares the returned `vault_base_address` (the Base address central pays this vault's rewards to) with our vault's Base address, case-insensitively, and shows a **vault mismatch** with both addresses when they differ, or when central has none ([below](#the-vault-in-registers-answer)). The result is `vaultMismatch: false \| 'other' \| 'none' \| null` (null: a central without the field, unknown). |
+| Register | On every start, `checkin` → `POST /api/v1/peer/register` with headers `alias-pubkey`, optional `nostr-pubkey`, `neuron-version`, and the wallet's link (`wallet-link`, `wallet-signature`) once the wallet is set up; no body, no token, 10 s timeout; a failure is only logged (satorilib `server.py`). | The same on every page load, with `nostr-pubkey` (the Nostr key, [nostr.md](nostr.md)), `neuron-version: browser-<package version>+<git short sha>` (stamped at build) and the link from the keys record ([keys.md](keys.md#the-record)), made when the wallet was in hand. The result is shown, never retried in a loop. |
+| Central's side | Creates the peer for the alias; accepts the link when its signature, alias and time check out ([wallets.md](wallets.md#the-satori-network-register-login-and-the-link)), moving the wallet off any other alias; answers `wallet_address` (the linked wallet, or null) and `wallet_link_error` when it refused the link. | Compares the returned `wallet_address` with our wallet's Base address, case-insensitively, and shows a **wallet mismatch** with both addresses when they differ, or **wallet not linked** when central has none ([below](#the-wallets-link)). The result is `walletMismatch: false \| 'other' \| 'none' \| null` (null: a central without the field, unknown) and `walletLinkError`. |
 | Schedule | First poll after `random.randint(300, 1800)` s (`start.py:4777-4779`), on every start, then `sleep(11 h)` after every poll, whatever the result (`start.py:4785-4876`). | The first poll right after register, with no random wait: a new neuron at once, a reopened one at once when a poll came due while it was closed; then 11 h after every good poll, as Lite; after a failed cycle it tries again 2, 10 and 30 min later, then on the 11 h rhythm ([Errors](#errors)). `meta.next_poll_at` is stored, so a reload keeps a time still ahead (see Deviations). **Poll now** runs a cycle at once. A poll whose time passed while the device slept with the page open runs within one heartbeat of waking ([the catch-up pass](../plans/runtime.md#catch-up-pass)). |
 | Poll | `GET /api/v1/observations/batch?limit=100` (`server.py:1304-1377`). Central returns each stream's latest observation if under 48 h old (`c/main.py:292-341`). `value` and `observed_at` are strings. | Same call, no token (central needs none). |
 | Store | `value` = float; epoch = `observed_at`, falling back to `ts` (`data_helper.py:40-93`), truncated to whole seconds (`engine.py:669-673`); `INSERT OR IGNORE` on `(stream_uuid, epoch)` (`stream_store.py:48-56,150-170`); the stream's name/meta are upserted (`server.py:1334-1358`). | Same rule into `observations (stream_uuid, ts, value)`, primary key `(stream_uuid, ts)`; `streams (uuid, name, meta)`. Rows with no stream, no finite value or no time are dropped. |
 | Which streams | Every stream in the batch; a model predicts only when its stream got a **newly inserted** row (`engine.py:695-712`, test at `:707`). | Each stream in the batch whose latest stored observation has **no prediction made from it** (`db.unpredicted()`: newer than `streams.predicted_ts`, which each prediction sets): a new row, as in Lite, and also a row an interrupted cycle stored but never forecast (a reload mid-poll, a local failure). An observation is still predicted once ([Deviations](#deviations-from-satori-lite-and-why)). |
-| Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `runModels` (`src/engine/evolve.js`) for those streams, over every central stream's history: each target's own `bvar` spec (a Bayesian VAR(1) with 1–3 companion streams, drawn from the identity and evolved), falling back to `bar1` (a Bayesian AR(1) on 12 h returns) or `naive` ([engine.md](engine.md)): t1 is 12 h ahead, t2 24 h. |
+| Forecast | `t1` = one step ahead; `t2` = forecast again with `t1` appended, falling back to `t1` (`engine.py:1153-1186`). | `runModels` (`src/engine/evolve.js`) for those streams, over every central stream's history: each target's own `bvar` spec (a Bayesian VAR(1) with 1–3 companion streams, drawn from the alias and evolved), falling back to `bar1` (a Bayesian AR(1) on 12 h returns) or `naive` ([engine.md](engine.md)): t1 is 12 h ahead, t2 24 h. |
 | Payload | `{stream_uuid, stream_name, value: str(t2), t1_value: str(t1), observed_at: str(time.time() at prediction), hash: sha256(value + observed_at)[:16]}` (`engine.py:1044-1106,1188-1206`). | The same fields. Numbers are text as JS prints them (`String(n)`: `100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`): central keeps the text and reads it with `float()` ([the protocol audit](#the-protocol-audit)). |
 | Queue | `collectAndSubmitPredictions` right after the poll (`start.py:4693-4736`, called at `:4870`); `flushPredictionQueue` keeps the whole queue when `successful == 0` or the call failed, and clears it otherwise (`engine.py:432-454`). | Predictions are stored with `status = 'pending'`; after every successful poll the pending ones made in the last 2 × 11 h are sent (older ones are dropped); on `successful > 0` all are marked `sent`, otherwise they stay pending for the next cycle. |
-| Submit | Log in (`POST /api/v1/auth/login`, headers `wallet-pubkey`, `message`, `signature`: an [EIP-191 signature](#login-signature) by the **identity**, `wallet.ethSign` since satorilib 5028913; `server.py:86-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
+| Submit | Log in (`POST /api/v1/auth/login`, headers `alias-pubkey`, `message`, `signature`: an [EIP-191 signature](#login-signature) by the **alias**, `wallet.ethSign` since satorilib 5028913; `server.py:86-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
 
 Not used (dropped from Lite): the `checkinCheck` watchdog and restarts
 (`start.py:4883-4892`), `/auth/refresh` and its timer (`server.py:120-140`), the
@@ -58,11 +59,11 @@ address is used ([below](#the-reward-address)).
 
 | Call | Auth | Central | When |
 |---|---|---|---|
-| `POST /api/v1/peer/register` (headers `wallet-pubkey`, `vault-pubkey`, `nostr-pubkey`, `neuron-version`) → `{success, peer_id, wallet_address, vault_address, vault_base_address, nostr_pubkey, message}` (only `peer_id`, `message` and `vault_base_address` are read) | none | `c/main.py:772-907`; `vault_base_address` since `base-upgrade` d8a2085 | every page load; again when the central URL changes; before each poll while the last one failed |
+| `POST /api/v1/peer/register` (headers `alias-pubkey`, `nostr-pubkey`, `neuron-version`, `wallet-link`, `wallet-signature`) → `{success, peer_id, wallet_address, wallet_link_error, nostr_pubkey, message}` (`peer_id`, `message`, `wallet_address` and `wallet_link_error` are read) | none | `c/main.py` register; the link: `base-upgrade`, 2026-10-23 | every page load; again when the central URL changes; after an Unlock that made the link; before each poll while the last one failed |
 | `GET /api/v1/observations/batch?limit=100` → `[{id, observed_at, value, hash, stream_id, stream: {uuid, name, meta, …}, ts, stream_uuid}]` | none | `c/main.py:292-341` | each poll |
 | `GET /api/v1/observations/history?stream_uuid=<uuid>&limit=1000&since=<now − 1,000 h>` → `[{id, stream_uuid, observed_at, value, ts}]`, oldest first | none | `central` bc043d2 (the most recent `limit` rows; 404 `Stream not found: <uuid>` for an unknown or malformed uuid, 422 for a bad limit or since); not deployed on central2 yet (404 `Not Found`) | once per stream ([below](#history-an-addition-beyond-lite)) |
 | `GET /api/v1/auth/challenge` → `{challenge}` (a UUID) | none | `c/main.py:268-281` | before each login |
-| `POST /api/v1/auth/login` (headers `wallet-pubkey`, `message`, `signature`: EIP-191) → `{access_token, expires_in: 3600, …}` | signature | `c/auth.py:21-86`, `central/src/utils/auth.py:20-56` | before each submission, once more on a 401 |
+| `POST /api/v1/auth/login` (headers `alias-pubkey`, `message`, `signature`: EIP-191) → `{access_token, expires_in: 3600, …}` | signature | `c/auth.py:21-86`, `central/src/utils/auth.py:20-56` | before each submission, once more on a 401 |
 | `POST /api/v1/predictions/batch` → `{total_submitted, successful, failed, prediction_ids, errors}` | Bearer | `c/main.py:483-602`; schema `central/src/models/schemas.py:92-113` | right after each poll, when anything is pending |
 | `GET /api/v1/peer/relays` → `[{relay_url, nostr_pubkey, …}]`; `GET /api/v1/peer/relay-config` → `{max_streams}` | none | `central/src/api/v1/endpoints/peer.py:123-173` | Nostr ([nostr.md](nostr.md)): relays at start and hourly, the config once per start |
 | `GET /api/v1/peer/reward-address` → `{reward_address}`; `POST` the same with `{"reward_address": "0x…" \| null}` → the stored one | Bearer (the login's) | `central/src/api/v1/endpoints/peer.py:26-120`; the Base check is central's change on `base-upgrade` (2026-10-19) | read when Settings opens (once per page load and central) and by `rewardAddress()`; set and cleared from Settings or `setRewardAddress()` ([below](#the-reward-address)) |
@@ -121,7 +122,7 @@ newest. `src/neuron/history.js`:
 
 ## Login signature
 
-The identity signs central's challenge with **EIP-191** (Ethereum
+The alias signs central's challenge with **EIP-191** (Ethereum
 `personal_sign`), the one way central's `/auth/login` is to verify it
 (central `base-upgrade` f4d72f5, `central/src/utils/auth.py:20-56`) and the
 way Satori Lite signs it since satorilib 5028913 (`wallet.ethSign`,
@@ -132,13 +133,13 @@ way Satori Lite signs it since satorilib 5028913 (`wallet.ethSign`,
 - the signature is `0x` + r ‖ s ‖ v in 130 hex characters: RFC 6979
   (deterministic), low s, v = 27 or 28;
 - central recovers the signer and compares it with the Ethereum address of
-  the `wallet-pubkey` header (the compressed pubkey, unchanged), which is the
-  identity's Base address. The headers are unchanged.
+  the `alias-pubkey` header (the compressed pubkey), which is the alias's
+  Base address.
 
 `src/central/login.js` (`loginSignature`) is that: viem's `hashMessage`, and
-the same `signDigest` that signs the identity's Base transactions
-(`src/keys/keys.js`). The keys module gives the identity's signer a
-`signCentralLogin(challenge)`; the vault has none. Tests: central's own vector
+the same `signDigest` that signs the alias's Base transactions
+(`src/keys/keys.js`). The keys module gives the alias's signer a
+`signCentralLogin(challenge)`; the wallet has none. Tests: central's own vector
 reproduced exactly, and a login against a mock central that verifies with
 viem's `verifyMessage` (`src/central/login.test.js`); the e2e's stub central
 verifies EIP-191 only and refuses anything else (`e2e/stub.js`). Checked live
@@ -149,71 +150,65 @@ Central still takes an Evrmore signed message from neurons in the field
 until they upgrade, a marked transitional branch it will remove. This app
 never sends one: there is no Evrmore code in it.
 
-### The vault in register's answer
+### The wallet's link
 
-Central (`base-upgrade` d8a2085) answers register with `vault_base_address`:
-the EIP-55 Base address it pays this vault's rewards to, `peers.base_address`
-when the row has one, else derived from the stored vault pubkey
-(`payout_base_address`, `central/src/services/base_distribution.py:71`;
-`PeerRegisterResponse`, `central/src/models/schemas.py:217-226`). It is null
-when no vault is stored, including one register dropped as a conflict
-(central keeps the first vault registered for an identity). Satori Lite
-ignores register's answer (`server.py:402-405`); this app checks it, because
-the neuron's rewards go to that address.
+Register carries the wallet's link to the alias: an EIP-191 signature by the
+wallet of a fixed text naming both addresses and when it was made
+([wallets.md](wallets.md#the-satori-network-register-login-and-the-link)).
+Central recovers the wallet from the signature, checks the text, and pays
+that wallet; its answer names it, `wallet_address` (EIP-55), or null when it
+holds no link, with `wallet_link_error` when it refused the one sent. The app
+makes the link whenever the wallet is in hand: at Create, Restore and Import,
+and for a stored wallet without one at its next Unlock, which registers again
+at once (`src/keys/index.js` `linkOf`, `src/main.js` `unlock`).
 
-`register()` (`src/neuron/index.js`) compares it with the vault's own Base
-address, case-insensitively. The result carries both, `vault` (ours) and
-`vault_base_address` (central's), and `vaultMismatch`:
+`register()` (`src/neuron/index.js`) compares `wallet_address` with the
+wallet's own Base address, case-insensitively. The result carries both,
+`wallet` (ours) and `wallet_address` (central's), `walletLinkError`, and
+`walletMismatch`:
 
 - `false`: the same address;
 - `'other'`: a different one. Home's action card and the Central card say
-  that central pays this vault's rewards to a different Base address, and
+  that central pays this wallet's rewards to a different Base address, and
   show both;
-- `'none'`: null, central has no vault for this identity;
-- `null`: unknown. A central without the field (prod runs `main` today)
-  shows no mismatch, and nothing else is derived to check.
+- `'none'`: null, no wallet linked: the card says so and that an Unlock
+  links it;
+- `null`: unknown. A central without the field shows no mismatch.
 
-Checked live on central2 (dev server, 2026-10-17): a fresh profile's
-register answered its vault's own Base address (`vaultMismatch: false`),
-Poll now sent 82 of 82 accepted and Home was ok once the backup was
-confirmed ([screenshot](../screenshots/central-vault-base.png)); a new
-identity registering that same vault got null (central dropped it as a
-conflict: `'none'`). The `'other'` text, central2's answer with another
-address swapped in by the browser, on a phone:
-[Home](../screenshots/vault-mismatch-phone.png),
-[the Central card](../screenshots/vault-mismatch-central-phone.png).
+The `'other'` text on a phone: [Home](../screenshots/wallet-mismatch-phone.png),
+[the Central card](../screenshots/wallet-mismatch-central-phone.png).
 
 ## The reward address
 
 The owner (2026-10-19, [../intent/INTENT.md](../intent/INTENT.md)): "We need
 to be able to specify a reward address, in the settings or in the wallet."
 It is where the Satori Network sends this neuron's rewards instead of the
-vault, such as a pool. Satori is Base only, so it is a Base (0x) address.
-With none set, rewards go to the vault (register's `vault_base_address`,
-[above](#the-vault-in-registers-answer)). It has nothing to do with staking:
-Stake with this app gives the vault's prediction power on the Satori
+wallet, such as a pool. Satori is Base only, so it is a Base (0x) address.
+With none set, rewards go to the wallet (register's `wallet_address`,
+[above](#the-wallets-link)). It has nothing to do with staking:
+Stake with this app gives the wallet's prediction power on the Satori
 contract; the reward address only says where the Satori Network pays.
 
 **Where: Settings › Reward address**, a card of its own after Keys and
 Backup (`#settings-reward`). Not the Wallet: the Wallet is the Base card,
-the vault's balances and its transactions, each one asking for the
+the wallet's balances and its transactions, each one asking for the
 passphrase and using gas. The reward address is none of that: the Satori
-Network keeps it, the identity signs it on its own, it is free, and it is
+Network keeps it, the alias signs it on its own, it is free, and it is
 set and forgotten. The UI intent puts addresses and endpoints behind
 Settings ([../intent/ui.md](../intent/ui.md)); the card comes right after
-the keys, whose vault it replaces as the payee.
+the keys, whose wallet it replaces as the payee.
 
 **The calls** (central `peer.py:26-120`): `GET /api/v1/peer/reward-address`
 → `{"reward_address": "0x…" | null}`, and `POST` the same path with
 `{"reward_address": "0x…"}` to set it (central stores it EIP-55
 checksummed and answers it) or `{"reward_address": null}` to clear it. Both
-are signed in: the identity's login (the challenge, EIP-191,
+are signed in: the alias's login (the challenge, EIP-191,
 [below](#login-signature)), then `Authorization: Bearer`, and a 401 logs in
 again and retries once, as the predictions batch does. Central answers 400
 "Invalid Base address" for anything that is not a 20-byte 0x address, and
 for the zero address. Lite reads it without a login
-(`?wallet_pubkey=`, satorilib `server.py:878`) and keeps a copy in its
-config, synced on each start (`start.py:5020-5085`); this app keeps no copy:
+(by its alias's pubkey, satorilib `server.py`) and keeps a copy in its
+config, synced on each start (`start.py`); this app keeps no copy:
 the Satori Network's answer is the one source.
 
 **When it is read**: when Settings opens, once per page load and Satori
@@ -229,31 +224,31 @@ is the last read (`at` null: not read yet).
 trimmed; `0x` and 40 hex characters; a mixed-case address must match its
 EIP-55 checksum (viem's `isAddress`, strict, as Send's recipient), while
 all lower or all upper case carries no checksum (EIP-55) and is taken as
-it is; not the zero address; not this neuron's identity (the app claims
-rewards only from the vault, Wallet › Claim, so rewards paid to the
-identity would sit unclaimed); sent checksummed (viem's `getAddress`). The
-vault's own address is allowed: it is where they go anyway. An empty field is not
+it is; not the zero address; not this neuron's alias (the app claims
+rewards only from the wallet, Wallet › Claim, so rewards paid to the
+alias would sit unclaimed); sent checksummed (viem's `getAddress`). The
+wallet's own address is allowed: it is where they go anyway. An empty field is not
 a clear: Clear is its own button (and `setRewardAddress(null)` or `''`).
 The words: "A reward address is a Base address: 0x and 40 hex characters.",
 "That address's capital letters don't match its checksum: check it for a
-typo.", the zero address's (as Send's), "That is this neuron's identity.
-This app claims rewards only from the vault, so rewards sent to the
-identity would sit unclaimed. Use another address, or Clear to send them to
-your vault."
+typo.", the zero address's (as Send's), "That is this neuron's alias.
+This app claims rewards only from the wallet, so rewards sent to the
+alias would sit unclaimed. Use another address, or Clear to send them to
+your wallet."
 
 **Central's answer** (`rewardFrom`): since `base-upgrade` 8dcc016 the GET
 answers the Base address the reward is paid at: a value set before Base
 reads as the same key's Base address (a pool's, or this neuron's own
-identity or vault), and null when unset or unknown. A 0x address is shown
-checksummed; null (or `''`) is **not set**: rewards go to the vault.
+alias or wallet), and null when unset or unknown. A 0x address is shown
+checksummed; null (or `''`) is **not set**: rewards go to the wallet.
 Anything else (it should not happen) is an error, "The Satori Network
 answered a reward address that isn't a Base address, so it isn't shown.",
-never read as not set. This neuron's own addresses are named: "your vault",
-or "your identity" with a note that rewards there aren't claimed in this
+never read as not set. This neuron's own addresses are named: "your wallet",
+or "your alias" with a note that rewards there aren't claimed in this
 app (Save another address, or Clear). `status().central.reward.whose` and
-`rewardAddress().whose` say the same (`'vault'`, `'identity'` or null).
+`rewardAddress().whose` say the same (`'wallet'`, `'alias'` or null).
 
-**Shown**: "Not set · rewards go to your vault", or the address shortened
+**Shown**: "Not set · rewards go to your wallet", or the address shortened
 (`0x3a91…B6E7`, as the Wallet shortens a recipient; the full one in its
 hover) with Copy and its name when it is this neuron's own; while it is read,
 "Reading it from the Satori Network…"; when it could not be read, the error
@@ -262,7 +257,7 @@ one is set). Save and Clear say "Saving…", "Clearing…", and the card's line
 says each step at Home's pace (`src/ui/hold.js`): "Signing in to the Satori
 Network…", "Saving the reward address…" (or "Clearing the reward
 address…"), then "Saved: the Satori Network sends this neuron's rewards to
-0x…" with the full address, or "Cleared: rewards go to your vault". It is
+0x…" with the full address, or "Cleared: rewards go to your wallet". It is
 the `reward` task in `health().work`, which Home's hero shows too. While it
 reads or saves, a small ring turns beside the words: the hero's ring
 (`.spin`, the same `ring-turn`, still under reduced motion), so the wait is
@@ -276,7 +271,7 @@ save's line ("Cleared: …" may no longer hold when it changed elsewhere).
 **Noted**: like an address change, a reward address set or cleared, from
 Settings or an agent, is a `setting` row, and Home notes it for 24 h
 ("Reward address set to 0x…", "Reward address cleared: rewards go to your
-vault"; [health.md](health.md#address-changes)). Saving the same address
+wallet"; [health.md](health.md#address-changes)). Saving the same address
 again is not a change.
 
 **Central**: the route's Base check (`base-upgrade` be14949: a 0x address
@@ -285,20 +280,20 @@ never sends) and the GET's Base answer (8dcc016) are live on central2.
 Tests: the stub central (`e2e/stub.js`) answers as that route
 (`e2e/reward.spec.js`: not read at load; read when Settings opens, its
 words and turning ring meanwhile; a checksum typo, a non-Base address and
-this neuron's identity refused before any call; Save's steps with the ring,
+this neuron's alias refused before any call; Save's steps with the ring,
 the address shortened with its hover, Home's note; the same address again
-is no change; Clear; this neuron's vault and identity named; the agent API;
+is no change; Clear; this neuron's wallet and alias named; the agent API;
 a refusal in the Satori Network's words; another Satori Network forgets the
 last words). Unit tests: `src/neuron/reward.test.js` (the checks, the
-identity refused, central's answers, an unreadable one never "not set",
+alias refused, central's answers, an unreadable one never "not set",
 whose, the read and the set, a read overtaken by a set),
 `src/central/central.test.js` (signed in, the body, a 401 retried once, a
 400's words).
 
-<img src="../screenshots/reward-set-phone-light.png" alt="Settings › Reward address on a phone: 0x3a91…B6E7 with Copy, Saved: the Satori Network sends this neuron's rewards to 0x3a91ecc0…" width="240"> <img src="../screenshots/reward-none-phone-dark.png" alt="Settings › Reward address, dark: Not set · rewards go to your vault" width="240"> <img src="../screenshots/reward-identity-phone-light.png" alt="Settings › Reward address: the identity's address, named your identity, with its note" width="240">
+<img src="../screenshots/reward-set-phone-light.png" alt="Settings › Reward address on a phone: 0x3a91…B6E7 with Copy, Saved: the Satori Network sends this neuron's rewards to 0x3a91ecc0…" width="240"> <img src="../screenshots/reward-none-phone-dark.png" alt="Settings › Reward address, dark: Not set · rewards go to your wallet" width="240"> <img src="../screenshots/reward-alias-phone-light.png" alt="Settings › Reward address: the alias's address, named your alias, with its note" width="240">
 [desktop](../screenshots/reward-set-desktop-light.png),
 [desktop, dark, not set](../screenshots/reward-none-desktop-dark.png),
-[desktop, the identity](../screenshots/reward-identity-desktop-light.png),
+[desktop, the alias](../screenshots/reward-alias-desktop-light.png),
 [saving, the ring turning](../screenshots/reward-saving-phone-light.png).
 
 **Live** (2026-10-19, the dev server on :5180 against central2, fresh
@@ -306,7 +301,7 @@ profiles with throwaway keys). Read only, before central2 took the Base
 check: register, the first poll at once, 84 of 84 accepted; nothing asked
 of the reward address until Settings opened; then the signed `GET
 /api/v1/peer/reward-address` (Bearer) answered 200 `{"reward_address":
-null}` and the card read "Not set · rewards go to your vault" 0.8 s after
+null}` and the card read "Not set · rewards go to your wallet" 0.8 s after
 the tab opened; `rewardAddress()` the same; in a first try Settings opened
 during the first poll, and both logins and both calls were answered
 ([phone](../screenshots/reward-live-central2-phone.png),
@@ -316,7 +311,7 @@ accepted; `setRewardAddress()` with a padded lower-case address answered
 it checksummed in about 1 s, and `rewardAddress()` read it back; a set
 alongside a poll went through; Save in the card said "Saving…" with
 "Signing in to the Satori Network…", then "Saving the reward address…",
-then "Saved: …"; the identity's own address was refused before any call;
+then "Saved: …"; the alias's own address was refused before any call;
 cleared at the end (null). Nothing was sent to prod.
 
 ## The protocol audit
@@ -331,8 +326,8 @@ depends on it.
 |---|---|---|---|
 | Prediction numbers as Python's `str(float)` (`pyFloatStr`, a 439-float parity fixture) | network | **Plain JS text** (`String(n)`); the fixture, `src/py.js` and `scripts/central-parity.py` are gone | The batch schema is `value: str`, `t1_value`, `observed_at`, `hash: Optional[str]` (`c/models/schemas.py:103-110`), stored as given in `String` columns (`c/main.py:624-631`, `c/models/prediction.py:16-19`); `value` is only read with `float()` / `astype(float)` (`c/scripts/score.py:203,504,595,893,2222,2243`, `c/services/consensus_service.py:131`, `c/scripts/consensus_snapshot.py:74-84`), `t1_value` with `pd.to_numeric` (`consensus_service.py:142`); the hash is never recomputed or compared, and a prediction's `observed_at` is never parsed (scoring orders by central's own `ts`, `score.py:345-376`). Python 3.11 and pydantic 2.5.3 read `0.00001`, `1e-7`, `100`, `-0`, `1e+21`, `1760000000` to the same numbers. They must stay JSON strings: a JSON number is a 422. |
 | The hash `sha256(value + observed_at)[:16]` | network | Kept, over the text sent | Lite's field; central stores it unread. |
-| Login: an Evrmore signed message by the identity | network | **Changed to EIP-191** (2026-10-16): central's login since f4d72f5, Lite's since satorilib 5028913; the Evrmore signing is gone | [Login signature](#login-signature). |
-| Register's vault check | network | **`vault_base_address`** (2026-10-17, central d8a2085), compared with the vault's Base address; central's other address forms are not read | [The vault in register's answer](#the-vault-in-registers-answer). |
+| Login: an Evrmore signed message by the alias | network | **Changed to EIP-191** (2026-10-16): central's login since f4d72f5, Lite's since satorilib 5028913; the Evrmore signing is gone | [Login signature](#login-signature). |
+| Register's wallet check | network | **The wallet's link** (2026-10-23): the wallet signs its link to the alias, central answers `wallet_address` | [The wallet's link](#the-wallets-link). |
 | Pubkeys as lowercase hex | network | Kept | Peers are found by exact string (`c/main.py:180,576`, `auth.py:53`); ours are lowercase. |
 | `neuron-version` | network | Kept (`browser-<version>+<git short sha>`, e.g. `browser-0.1.0+3f11d8c`) | Stored and shown only (`c/main.py:790,841-842`). |
 
@@ -420,9 +415,9 @@ relay list and Base's config are read from the new central at once.
 | A failed cycle is tried again 2, 10 and 30 min later, then every 11 h; Lite waits 11 h whatever the result (`start.py:4785-4876`). | A browser neuron runs only while open: a send that failed for a blip (a network change, a 502) would otherwise lose a whole cycle of a short session. The retries are three requests per failure, under central's limits. |
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
 | Prediction numbers are sent as JS prints them (`100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`). | Central reads them with `float()`; nothing depends on the layout ([the protocol audit](#the-protocol-audit)). |
-| The register result checks the vault (`vaultMismatch`, with both Base addresses); Lite ignores register's answer (`server.py:402-405`). | Central keeps the first vault registered for an identity and pays that vault's Base address: a mismatch means this vault is not paid ([the vault in register's answer](#the-vault-in-registers-answer)). |
-| The reward address is read signed in (the login's Bearer token), not by `?wallet_pubkey=`; no copy is kept in the app, and it is read when Settings opens (and by `rewardAddress()`), not synced both ways (Lite: `start.py:5020-5085`). | The owner's call (2026-10-19): read it as the app's other signed calls. The Satori Network is the one source, so nothing local can disagree with it ([the reward address](#the-reward-address)). |
-| The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the identity and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
+| The register result checks the wallet (`walletMismatch`, with both Base addresses). | Central pays the linked wallet: a mismatch, or no link, means this wallet is not paid ([the wallet's link](#the-wallets-link)). |
+| The reward address is read signed in (the login's Bearer token), not by the alias's pubkey alone; no copy is kept in the app, and it is read when Settings opens (and by `rewardAddress()`), not synced both ways (Lite: `start.py:5020-5085`). | The owner's call (2026-10-19): read it as the app's other signed calls. The Satori Network is the one source, so nothing local can disagree with it ([the reward address](#the-reward-address)). |
+| The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the alias and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
 | Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |
 
 ## Live: the first poll at once
@@ -439,7 +434,7 @@ prod.
 ## Live: a reload mid-poll
 
 2026-10-17 16:59, the dev server on :5180 against central2, two fresh
-browser profiles with new random keys (the vault's words given at setup),
+browser profiles with new random keys (the wallet's words given at setup),
 no stubs:
 
 - A new neuron: register, the first poll at once: 82 streams, 82 new, 82

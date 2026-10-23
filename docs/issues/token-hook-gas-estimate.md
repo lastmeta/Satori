@@ -1,6 +1,6 @@
-# A staked vault that receives SATORI with an estimated gas limit can never unstake
+# A staked wallet that receives SATORI with an estimated gas limit can never unstake
 
-**Status:** Fixed in contracts (humble 86e2bdb3); live on D7 (Base Sepolia, 2026-10-23, bundled in the app) · **Kind:** fixable flaw (contracts) · **Fix in:** `contract/satori` branch `humble` (86e2bdb3, sweep item B1, stamped in 43412a4a) · **Severity:** on D6 (deployed from d9d22632, now retired), anyone could trap any staked vault's SATORI for good
+**Status:** Fixed in contracts (humble 86e2bdb3); live on D7 (Base Sepolia, 2026-10-23, bundled in the app) · **Kind:** fixable flaw (contracts) · **Fix in:** `contract/satori` branch `humble` (86e2bdb3, sweep item B1, stamped in 43412a4a) · **Severity:** on D6 (deployed from d9d22632, now retired), anyone could trap any staked wallet's SATORI for good
 
 **The fix (contracts, humble 86e2bdb3).** The token reverts a transfer with
 `HookFailedWithoutReason()` when its hook fails with no revert data (out of
@@ -12,14 +12,14 @@ and `SatoriToken.test.js` (MockTransferHook modes 1 to 3). D7, deployed from
 
 **What the app did on D6, and still does as a guard** (2026-10-19, [../design/health.md](../design/health.md#staking-out-of-sync)):
 Stake is advice, its card saying the risk before staking; the frozen state
-is detected exactly (the identity accepts only this vault, so its power must
-equal the vault's SATORI) and shown as *Staking is out of sync* on Home, the
+is detected exactly (the alias accepts only this wallet, so its power must
+equal the wallet's SATORI) and shown as *Staking is out of sync* on Home, the
 Contract chip and the Wallet card ("Unstaking will fail until the contract
-fix. Don't add SATORI to the vault."); Unstake says the same instead of
+fix. Don't add SATORI to the wallet."); Unstake says the same instead of
 "reverted: Panic". On D7 a starved transfer reverts with
 `HookFailedWithoutReason`, which the app says as "The transaction ran out of
 gas; try again" (`src/chain/abi.js`). `node scripts/fork.mjs
-grief <vault>` reproduces the freeze on the local fork.
+grief <wallet>` reproduces the freeze on the local fork.
 
 Found on the fork while building step 6; confirmed independently on a fork of
 Base Sepolia (block 48160485, round 20741; the deployed D6 bytecode is source
@@ -32,7 +32,7 @@ A staked address (one that has called `delegatePredictionPower`) receives
 SATORI (any transfer in, a claim, a mint) in a transaction whose gas limit is
 the node's `eth_estimateGas` answer, the default of every wallet and library
 (viem, ethers, web3.py's `build_transaction`, cast). Anyone can send it: 1 wei
-of SATORI to the vault, or the permissionless `airdrop.claimAirdropFor(vault)`.
+of SATORI to the wallet, or the permissionless `airdrop.claimAirdropFor(wallet)`.
 
 ## Mechanism (verified)
 
@@ -48,7 +48,7 @@ of SATORI to the vault, or the permissionless `airdrop.claimAirdropFor(vault)`.
    (`C/next/SatoriHub.sol:874`), and rewards subtracts it from that
    power: `predictionDelegateInfo[previousDelegate].power - uint96(power)`
    (`C/SatoriRewards.sol:1884`): Panic 0x11, now and in every later round.
-5. The vault stays locked `LOCK_INDEFINITE` (`C/next/SatoriHub.sol:75,426-429`;
+5. The wallet stays locked `LOCK_INDEFINITE` (`C/next/SatoriHub.sol:75,426-429`;
    `C/SatoriRewards.sol:2024`): a transfer out reverts `Locked`; unstaking,
    staking with another address and `burnForVote` all panic. Only `claim()` still works.
 
@@ -56,7 +56,7 @@ of SATORI to the vault, or the permissionless `airdrop.claimAirdropFor(vault)`.
 nested frames each keep back 1/64, so the hook needs about 4.1 % over the gas
 used. At 150k–169,648 the inner catch fires (`ChildSyncFailed`); lower, the
 outer one (`TransferHookFailed`). The public Base Sepolia RPC (reth) estimates
-165,420 for a transfer to a real staked vault, so **on the real chain it is
+165,420 for a transfer to a real staked wallet, so **on the real chain it is
 `ChildSyncFailed`**; anvil estimates 110,574 (`TransferHookFailed`).
 Monitoring must watch both events. ("The estimate is the least gas at which
 the transaction succeeds" holds for anvil only; reth's estimate falls in the
@@ -64,17 +64,17 @@ inner band.)
 
 ## Exposure
 
-- **Any third party can grief any staked vault**: 1 wei with a default
-  estimate, or `claimAirdropFor(vault)` with its estimate.
-- **The real D6 vault `0x03AbFED741a344C578304040D6CACAc86960e97d`** (100
+- **Any third party can grief any staked wallet**: 1 wei with a default
+  estimate, or `claimAirdropFor(wallet)` with its estimate.
+- **The real D6 wallet `0x03AbFED741a344C578304040D6CACAc86960e97d`** (100
   SATORI, staked with `0xe8Dfe519…1FFF`) is exposed now.
 - **Co-stakers**: the shortfall lands on whichever staker with that
   address unstakes last.
 - **No admin recovery**: no function resets that power or the lock.
   The only workaround: another wallet stakes at least the shortfall with the
-  same address, so the stuck vault can leave; that wallet is then stuck in
+  same address, so the stuck wallet can leave; that wallet is then stuck in
   its place.
-- **Satori Lite** claims from the vault through `build_transaction`, which
+- **Satori Lite** claims from the wallet through `build_transaction`, which
   uses the raw estimate (`neuron/web/routes.py:1382,1431`; satorilib
   `chain/evm.py:60-93`). **The dapp** claims through ethers v6, which uses the
   raw estimate (`contract/satori-ui/src/hooks/useDashboard.ts:288-311`).
@@ -84,16 +84,16 @@ inner band.)
   (MetaMask's) are unverified.
 - **This app** sends its own contract calls with 500,000 gas over the
   estimate (`HOOK_GAS`, `src/chain/index.js`), so its claims keep the books
-  right (`src/chain/fork.test.js` checks the identity's power equals the
-  vault's balance after them, and that the vault then unstakes). That
+  right (`src/chain/fork.test.js` checks the alias's power equals the
+  wallet's balance after them, and that the wallet then unstakes). That
   protects only its own writes: a transfer or `claimAirdropFor` that someone
-  else sends to its user's vault can still brick it.
+  else sends to its user's wallet can still brick it.
 
 ## Fix
 
 **Now: a rewards UUPS upgrade** (tested on the fork, `upgradeTo`
 0x5a886170…): at `C/SatoriRewards.sol:1884`, subtract what this staker
-(`delegator` below) **booked**, not its live balance. The stuck vault then
+(`delegator` below) **booked**, not its live balance. The stuck wallet then
 unstakes, co-stakers stay exact, and staking again books the live balance.
 
 ```solidity

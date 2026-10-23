@@ -32,7 +32,7 @@ export const MAX_CHECKS = 1;
  */
 export const BAR = 0.8;
 
-/** A spec's identity in the search: its companions as a set and its λ's; every single-stream spec is one. */
+/** A spec's alias in the search: its companions as a set and its λ's; every single-stream spec is one. */
 export const keyOf = (s) => (isAlone(s) ? ALONE : `${[...s.companions].sort().join(',')}|${s.lambda1}|${s.lambda2}`);
 const bvar = (companions, lambda1, lambda2) => ({ companions, lambda1, lambda2 });
 const alone = ({ lambda1, lambda2 }) => ({ companions: [], lambda1, lambda2, algorithm: ALONE });
@@ -117,7 +117,7 @@ export function canRetrain({ target, histories, step = STEP_S }) {
 
 /**
  * The search: a hill-climb over neighbours() in a seeded order (the first candidate with a better search score moves
- * it), from the champion, with a seeded random restart (drawSpec) at each local optimum. Seeded by identity + target +
+ * it), from the champion, with a seeded random restart (drawSpec) at each local optimum. Seeded by alias + target +
  * `n` (the target's retrain counter), so a retrain is reproducible. The held-out origins are looked at once: at the
  * first local optimum that is the best so far and beats no change on the search origins, or when the search ends.
  * The best is accepted ('found') when it beats no change there by BAR (beats()) and, when the champion already beats no

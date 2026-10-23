@@ -1,7 +1,7 @@
-// The vault's encryption (docs/design/keys.md#the-vault-encryption).
+// The wallet's encryption (docs/design/keys.md#the-wallet-encryption).
 import { describe, expect, test, vi } from 'vitest';
 import { pbkdf2Sync, createDecipheriv } from 'node:crypto';
-import { sealSecret, openSecret, checkNewPassphrase, passphraseOk, MIN_PASSPHRASE, ITERATIONS } from './vault.js';
+import { sealSecret, openSecret, checkNewPassphrase, passphraseOk, MIN_PASSPHRASE, ITERATIONS } from './wallet.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -70,9 +70,9 @@ describe('PBKDF2-SHA256 → AES-256-GCM over the 32-byte secret', () => {
 
   test('a record it does not know is refused, not guessed at', async () => {
     const r = await sealSecret(secret, 'correct horse battery', { iterations: 1_000 });
-    await expect(openSecret({ ...r, kdf: { ...r.kdf, hash: 'SHA-1' } }, 'x')).rejects.toThrow(/vault format/);
-    await expect(openSecret({ ...r, cipher: { ...r.cipher, name: 'AES-CBC' } }, 'x')).rejects.toThrow(/vault format/);
-    await expect(openSecret({ ...r, kdf: { ...r.kdf, iterations: 0 } }, 'x')).rejects.toThrow(/vault format/);
+    await expect(openSecret({ ...r, kdf: { ...r.kdf, hash: 'SHA-1' } }, 'x')).rejects.toThrow(/wallet format/);
+    await expect(openSecret({ ...r, cipher: { ...r.cipher, name: 'AES-CBC' } }, 'x')).rejects.toThrow(/wallet format/);
+    await expect(openSecret({ ...r, kdf: { ...r.kdf, iterations: 0 } }, 'x')).rejects.toThrow(/wallet format/);
   });
 });
 

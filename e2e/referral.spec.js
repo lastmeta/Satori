@@ -1,6 +1,6 @@
 // Referral in the app (docs/design/base.md#referral-invite-links), against the fake D6 behind /rpc and the stub
 // central2 as base.spec.js: an invite link opened by a new neuron sends nothing; Stake registers its referrer from the
-// vault first; the neuron's own invite link names the vault.
+// wallet first; the neuron's own invite link names the wallet.
 import { expect, test } from '@playwright/test';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
@@ -13,19 +13,19 @@ const REFERRER = '0x' + 'ab'.repeat(20);
 const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
 const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
 
-test('an invite link: held on the visit, registered by the vault at Stake; the neuron\'s own link is the vault\'s', async ({ context, page }) => {
+test('an invite link: held on the visit, registered by the wallet at Stake; the neuron\'s own link is the wallet\'s', async ({ context, page }) => {
   test.setTimeout(180_000);
   const chain = fakeSatori({ round: ROUND, hour: 9 });
   const { s, rpc } = chain;
   await stubCentral(context, { rpc });
   await openApp(page, `/?ref=${REFERRER}`);
   await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
-  await expect(page.locator('[data-test=identity]')).toHaveText(/^0x[0-9a-fA-F]{40}$/, { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=alias]')).toHaveText(/^0x[0-9a-fA-F]{40}$/, { timeout: LOAD_TIMEOUT });
   const base = await page.evaluate(() => window.satori.base());
-  const I = base.identity.address.toLowerCase();
-  const V = base.vault.address.toLowerCase();
+  const I = base.alias.address.toLowerCase();
+  const V = base.wallet.address.toLowerCase();
   expect(base.pendingReferrer).toBe(REFERRER);
-  expect(base.inviteLink).toBe(`http://localhost:5180/?ref=${base.vault.address}`);
+  expect(base.inviteLink).toBe(`http://localhost:5180/?ref=${base.wallet.address}`);
   expect(rpc.sent).toHaveLength(0); // opening the link sends nothing
 
   await go(page, 'wallet');
@@ -47,13 +47,13 @@ test('an invite link: held on the visit, registered by the vault at Stake; the n
   rpc.eth[V] = 10n ** 17n;
   s.balance[V] = 100n * E18;
   await fact(page, 'refresh').click();
-  await expect(fact(page, 'vault')).toContainText('100 SATORI');
+  await expect(fact(page, 'wallet')).toContainText('100 SATORI');
   await go(page, 'settings');
-  await page.getByLabel('Vault passphrase', { exact: true }).fill(PASS);
+  await page.getByLabel('Wallet passphrase', { exact: true }).fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
-  await expect(page.locator('[data-test=vault-state]')).toHaveText('Unlocked');
-  await page.getByRole('button', { name: 'Alias words' }).click(); // a word list first: ArrowJS 1.0.6 reuses its <li> for other lists
-  await page.getByLabel('Vault passphrase to show the backup').fill(PASS);
+  await expect(page.locator('[data-test=wallet-state]')).toHaveText('Unlocked');
+  await page.getByRole('button', { name: 'Wallet words' }).click(); // a word list first: ArrowJS 1.0.6 reuses its <li> for other lists
+  await page.getByLabel('Wallet passphrase to show the backup').fill(PASS);
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();
   await go(page, 'wallet');
@@ -66,7 +66,7 @@ test('an invite link: held on the visit, registered by the vault at Stake; the n
   expect(s.referral[V]).toBe(REFERRER);
   await expect(fact(page, 'referral')).toHaveText(/^0xabab…abab$/i);
   await expect(fact(page, 'referral-note')).toBeHidden();
-  await expect(page.locator('[data-test=base-txs] code').first()).toHaveText(/^Vault: registers who invited you 0x/);
+  await expect(page.locator('[data-test=base-txs] code').first()).toHaveText(/^Wallet: registers who invited you 0x/);
   expect((await page.evaluate(() => window.satori.base())).pendingReferrer).toBeNull();
 
   const size = page.viewportSize();

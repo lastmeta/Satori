@@ -34,7 +34,7 @@ describe("the events, as satorilib's client makes them", () => {
       fx.events.prediction);
   });
   test('_pred announcement (34600), metadata as start.py builds it', () => {
-    const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02' + '11'.repeat(32) });
+    const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, aliasPubkey: '02' + '11'.repeat(32) });
     same(sign(announceEvent(meta, now)), fx.events.announce);
   });
   test('_pred tombstone (34600, status=deleted)', () => {
@@ -52,7 +52,7 @@ describe("the events, as satorilib's client makes them", () => {
     expect(KIND).toEqual({ ANNOUNCE: 34600, OBSERVATION: 34601, SUBSCRIPTION: 34602, PAYMENT: 34603, RELAY_LIST: 10002 });
   });
   test('a name falls back to the stream; no cadence is null', () => {
-    const meta = predMetadata({ sub: { ...sub, name: '', cadence_seconds: null }, pubkey: fx.pubkeyHex, walletPubkey: '02ab' });
+    const meta = predMetadata({ sub: { ...sub, name: '', cadence_seconds: null }, pubkey: fx.pubkeyHex, aliasPubkey: '02ab' });
     expect(meta).toMatchObject({ stream_name: 'btc-usd-price_pred', name: 'Predictions for btc-usd-price', cadence_seconds: null });
   });
 });
@@ -62,13 +62,13 @@ describe("the paid stream's events (docs/design/market.md#selling-and-buying-ove
   const market = { chain: 84532, contract: '0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c', token: '0x4dee947383d5C9c8E421F55Fe3518a29324aE469',
     payee: '0x' + '12'.repeat(20) };
   test("a priced `_pred` announcement: encrypted, Lite's price_per_obs (satoshis) the one price, the channel in metadata.market; free again without one", () => {
-    const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02ab', listing: { price_per_obs: 100000, market } });
+    const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, aliasPubkey: '02ab', listing: { price_per_obs: 100000, market } });
     expect(meta).toMatchObject({ encrypted: true, price_per_obs: 100000,
-      metadata: { source_stream_name: 'btc-usd-price', source_provider_pubkey: PROVIDER, wallet_pubkey: '02ab', market } });
+      metadata: { source_stream_name: 'btc-usd-price', source_provider_pubkey: PROVIDER, alias_pubkey: '02ab', market } });
     const e = sign(announceEvent(meta, now));
     expect(Object.keys(JSON.parse(e.content))).toEqual(Object.keys(JSON.parse(fx.events.announce.content))); // Lite's fields, no more
     expect(catalog([e])[0]).toMatchObject({ encrypted: true, price_per_obs: 100000, metadata: { market } });
-    const free = predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02ab', listing: null });
+    const free = predMetadata({ sub, pubkey: fx.pubkeyHex, aliasPubkey: '02ab', listing: null });
     expect(free).toMatchObject({ encrypted: false, price_per_obs: 0 });
     expect(free.metadata).not.toHaveProperty('market');
   });
@@ -196,7 +196,7 @@ describe('the catalog (discover)', () => {
     }
   });
   test('events are not mutated and the source event is kept for the subscribe check', () => {
-    const e = sign(announceEvent(predMetadata({ sub, pubkey: fx.pubkeyHex, walletPubkey: '02' }), now));
+    const e = sign(announceEvent(predMetadata({ sub, pubkey: fx.pubkeyHex, aliasPubkey: '02' }), now));
     const [s] = catalog([e]);
     expect(s.event).toBe(e);
     expect(verifyEvent(s.event)).toBe(true);

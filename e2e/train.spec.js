@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { openApp, polled, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
-const fx = JSON.parse(readFileSync(new URL('../test/fixtures/identity-parity.json', import.meta.url)));
+const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
 const v = fx.vectors[2];
 const PASS = 'correct horse battery';
 const H = 3600;
@@ -42,10 +42,9 @@ const RECORD = () => {
 test('stored specs with no scores: it scores them on open, without a poll or a submission ("Scoring models", then Resting)', async ({ context, page }) => {
   test.setTimeout(240_000);
   const central = await stubCentral(context);
-  central.vaults[v.pubkey] = v.ethAddress;
   streams(central);
   await openApp(page);
-  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, vaultWords: w }), [PASS, v.words]);
+  await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   expect((await polled(page)).lastSubmit).toMatchObject({ successful: 8 });
   const scored = (await page.evaluate(() => window.satori.models())).map((m) => [m.name, m.quality]);
   expect(scored.every(([, q]) => q.mark)).toBe(true);

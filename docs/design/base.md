@@ -3,35 +3,35 @@
 [← OVERVIEW](OVERVIEW.md)
 
 The neuron predicts on Base the way Satori Lite (`../neuron`, the Docker
-neuron) does: the **vault** stakes with this app, and the **identity**
+neuron) does: the **wallet** stakes with this app, and the **alias**
 signs one batch of up/down predictions a day on its own, with no passphrase.
-The vault signs only what moves or locks its funds: Stake, Unstake, claims
+The wallet signs only what moves or locks its funds: Stake, Unstake, claims
 and sends, each after **Unlock**. Where the dapp (`../contract/satori-ui`)
-goes further than Lite (it claims on-chain rewards, lets only our vault
-stake with the identity, mirrors the engine's predict gate), the browser
+goes further than Lite (it claims on-chain rewards, lets only our wallet
+stake with the alias, mirrors the engine's predict gate), the browser
 follows the dapp.
 
 **Staking (the owner's word, 2026-10-18).** On-chain, staking with this
-neuron is the vault's `delegatePredictionPower(identity)`: the SATORI stays
-in the vault, can't be transferred while staked, and earns. Everything
+neuron is the wallet's `delegatePredictionPower(alias)`: the SATORI stays
+in the wallet, can't be transferred while staked, and earns. Everything
 people and agents read says stake and unstake (Lite's word); the contracts
 and the code keep their names, and Lock and Unlock stay the passphrase's.
 
 **Automatic only (the owner's split, 2026-10-15).** On-chain the neuron plays
-only automatically, through the identity's daily batch; manual play is
+only automatically, through the alias's daily batch; manual play is
 **Satori Daily**, the dapp at https://games.satorinet.io (`SATORI_DAILY_URL`,
-`src/chain/config.js`). The two are mutually exclusive per vault per round:
-the engine refuses a staked vault's own predictions
+`src/chain/config.js`). The two are mutually exclusive per wallet per round:
+the engine refuses a staked wallet's own predictions
 (`if (delegate != address(0)) revert Delegated();`,
 `C/next/SatoriEngine.sol:711`). The Base card says which one is in force.
 
 ```
 page load ─▶ config (bundled D7 addresses, central's /api/v1/base/config over them, 1 h)
           └─▶ status: one multicall (ETH ×2, SATORI, stake ×2, fee, allowedDelegator, lock, round, claimable ×2, alreadyMintedTo)
-                      + central's merkle proof for the vault (at most hourly)
-Unlock ─▶ Stake with this app: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
+                      + central's merkle proof for the wallet (at most hourly)
+Unlock ─▶ Stake with this app: alias setPredictorFee(0) → alias setAllowedDelegator(wallet) → wallet delegatePredictionPower(alias)
        └─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH, or SATORI when it can be sent
-each round (the identity, no unlock): a batch already sent? wait for it ─▶ power > 0 and no batch yet
+each round (the alias, no unlock): a batch already sent? wait for it ─▶ power > 0 and no batch yet
           ─▶ registry streams whose game has voting weight ─▶ history ─▶ engine ─▶ UP/DOWN per game
           ─▶ simulate each game alone ─▶ fees under the ceiling? ─▶ predictMultipleWithPayloads(the ones that pass)
           ─▶ keep the hash ─▶ receipt ─▶ persist (its round from its block)
@@ -50,9 +50,9 @@ Sepolia, chain 84532).
 Each key's 32-byte secret is also its EVM private key, as satorilib makes it
 (`Account.from_key(entropy)`, satorilib `wallet/wallet.py:220-232`,
 `wallet/ethereum/wallet.py:114-121`): the Base address is keccak-256 of the
-uncompressed public key. The vault's Base address is computed from its public
+uncompressed public key. The wallet's Base address is computed from its public
 key, kept in clear in the keys record ([keys.md](keys.md#the-record)), so the
-status needs no Unlock (Lite's `vault.ethAddress` needs the decrypted vault).
+status needs no Unlock (Lite's `wallet.ethAddress` needs the decrypted wallet).
 Base is the only chain this app shows: each key's address in the app is its
 Base address. Transactions are signed inside the key's signer
 (`src/keys/index.js`), which Lock wipes; the private key is never handed to
@@ -68,7 +68,7 @@ account).
   there). **Now D7** (the redeploy of 2026-10-23, Base Sepolia, from `humble`
   `59151a65`; deployment block 49048034, round 20749; the record:
   `contract/HANDOFF-sepolia-redeploy.md`). D6 (2026-10-14, `d9d22632`) is
-  retired: a vault staked there is not seen from here. `explorerUrl` links tx hashes on the
+  retired: a wallet staked there is not seen from here. `explorerUrl` links tx hashes on the
   card (not on a local fork). Central's `GET /api/v1/base/config` is read
   (only for chain 84532), cached 1 h in memory as BCFG does (`:16,66-88`), but
   **its contract addresses are never used**: the app keeps its own, and an
@@ -76,7 +76,7 @@ account).
   in the activity feed, "The Satori Network's contract addresses differ from
   the app's (token): the app's are used" (`config` row, merged), and a
   `console.warn` (the security review, 2026-10-19: Lite takes them, BCFG's
-  overlay, but a central that could point the vault at other contracts would
+  overlay, but a central that could point the wallet at other contracts would
   move its funds; a new deployment is a new build). central2 answers with the
   bundle's own values (`base().config` `'central'`: it answered; the
   Wallet card's tooltip says its addresses are checked, never used) once it
@@ -108,19 +108,19 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 
 | Read | For |
 |---|---|
-| `getEthBalance(identity)`, `getEthBalance(vault)` | gas; the identity's balance is shown as days of batches left |
-| `token.balanceOf(vault)` | the vault's SATORI |
-| `rewards.predictionDelegateInfo(vault)` | whom the vault stakes with |
-| `rewards.predictionDelegateInfo(identity)` | the identity's incoming power (BP:243-248) |
-| `rewards.effectivePredictorFee(identity)` | 10 % until set to 0 (`C/SatoriRewards.sol:119-143`) |
-| `hub.allowedDelegator(identity)` | the one vault that may stake with the identity (`C/next/SatoriHub.sol:813-819,1007`) |
-| `token.transferLockedUntil(vault)` | when the vault's SATORI can be sent |
-| (the identity's power and `allowedDelegator`, the vault's SATORI, above) | whether the stake is booked right: `vault.inSync` ([below](#staking-out-of-sync-the-token-hook-bug)) |
+| `getEthBalance(alias)`, `getEthBalance(wallet)` | gas; the alias's balance is shown as days of batches left |
+| `token.balanceOf(wallet)` | the wallet's SATORI |
+| `rewards.predictionDelegateInfo(wallet)` | whom the wallet stakes with |
+| `rewards.predictionDelegateInfo(alias)` | the alias's incoming power (BP:243-248) |
+| `rewards.effectivePredictorFee(alias)` | 10 % until set to 0 (`C/SatoriRewards.sol:119-143`) |
+| `hub.allowedDelegator(alias)` | the one wallet that may stake with the alias (`C/next/SatoriHub.sol:813-819,1007`) |
+| `token.transferLockedUntil(wallet)` | when the wallet's SATORI can be sent |
+| (the alias's power and `allowedDelegator`, the wallet's SATORI, above) | whether the stake is booked right: `wallet.inSync` ([below](#staking-out-of-sync-the-token-hook-bug)) |
 | `token.getCurrentRound()`, `getCurrentBlockTimestamp()` | the round (`block.timestamp / 86400`, `C/next/SatoriToken.sol:329-331`) and chain time |
-| `lens.getTotalClaimableRewards(vault)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
-| `airdrop.claimableAirdrop(vault)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
-| `rewards.referral(vault)` | who the vault's referral is, if set ([Referral](#referral-invite-links)) |
-| `merkle.alreadyMintedTo(vault)` | the Satori Network's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims-unlock)) |
+| `lens.getTotalClaimableRewards(wallet)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
+| `airdrop.claimableAirdrop(wallet)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
+| `rewards.referral(wallet)` | who the wallet's referral is, if set ([Referral](#referral-invite-links)) |
+| `merkle.alreadyMintedTo(wallet)` | the Satori Network's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims-unlock)) |
 
 Each read may fail on its own (`allowFailure`), so one reverting view does
 not hide the rest.
@@ -139,23 +139,23 @@ you unstake", then "SATORI can be sent from <date> (round N + 1)". Lite's `stake
 Lite's "Enable staking" (`ensure_delegation`, BP:273-290; ROUTES:1485-1529)
 plus the dapp's instant-signing setup (`UI/components/GameWalletPanel.tsx:536-595`):
 
-1. If `effectivePredictorFee(identity) != 0`, the identity sends
+1. If `effectivePredictorFee(alias) != 0`, the alias sends
    `rewards.setPredictorFee(0)` (BP:281-282). It is set-once
    (`C/SatoriRewards.sol:651-669`, `AlreadySet`): a key whose fee was ever
    set to something else keeps it, and the simulate says so before any gas.
-2. If `allowedDelegator(identity) != vault`, the identity sends
-   `hub.setAllowedDelegator(vault)`, as the dapp does (`GameWalletPanel.tsx:545`):
-   only our vault can then stake with the identity
+2. If `allowedDelegator(alias) != wallet`, the alias sends
+   `hub.setAllowedDelegator(wallet)`, as the dapp does (`GameWalletPanel.tsx:545`):
+   only our wallet can then stake with the alias
    (`C/next/SatoriHub.sol:842-846`). Lite skips this step.
-3. If `predictionDelegateInfo(vault).delegate != identity`, the vault sends
-   `hub.delegatePredictionPower(identity)` (BP:286-287).
+3. If `predictionDelegateInfo(wallet).delegate != alias`, the wallet sends
+   `hub.delegatePredictionPower(alias)` (BP:286-287).
 
 A referrer the app is holding ([Referral](#referral-invite-links)) is
-registered first: if `rewards.referral(vault)` is zero, the vault sends
+registered first: if `rewards.referral(wallet)` is zero, the wallet sends
 `rewards.setReferral(referrer)`, before the stake, so a failure leaves nothing
 half done and Stake can be tried again.
 
-**Unstake**: the vault sends `delegatePredictionPower(0x0)`
+**Unstake**: the wallet sends `delegatePredictionPower(0x0)`
 (BP:292-301). Its SATORI can't be sent through the next round (above).
 
 ## Referral (invite links)
@@ -169,24 +169,24 @@ On the contract the cut is the earner's: `_creditReward` takes
 `referral[who]`, or to the marketing wallet when `who` has none
 (`C/SatoriRewards.sol:826-837`). `referral` is set once, by the address itself
 (`setReferral`, `:847-852`) or, in the dapp, for the predictor by
-`predictMultipleWithReferral`. Here the earner is the **vault**: the identity's
-fee is 0 and the vault is its delegator, so the rewards are the vault's
+`predictMultipleWithReferral`. Here the earner is the **wallet**: the alias's
+fee is 0 and the wallet is its delegator, so the rewards are the wallet's
 delegator accrual (`:380-383`). The dapp's way, setting it on the first
-prediction, would register the identity, which earns nothing; so the vault
+prediction, would register the alias, which earns nothing; so the wallet
 registers it, as part of Stake.
 
 - **Capture.** `?ref=<0x address>` on any URL of the app is kept in `meta`
   (`referrer`), checked as an address; the newest link wins. Nothing happens on
   the visit: no transaction, no banner (the dapp's rule).
 - **Register.** [Stake](#stake-with-this-neuron-unlock) sends
-  `setReferral(referrer)` from the vault when `referral(vault)` is zero, then
-  forgets the held referrer; when the vault already has a referral (set once,
-  never changed), or the held one is the vault itself (the contract refuses a
+  `setReferral(referrer)` from the wallet when `referral(wallet)` is zero, then
+  forgets the held referrer; when the wallet already has a referral (set once,
+  never changed), or the held one is the wallet itself (the contract refuses a
   self-referral), it is dropped with no transaction. A neuron that is
   already staked has no Stake to press, so a link opened later does nothing
   (the dapp's referral is likewise for a new user's first prediction).
-- **Invite.** `<this origin>/?ref=<the vault's Base address>`: the referrer is
-  paid into `unclaimedRewards[vault]`, which Claim already collects. The
+- **Invite.** `<this origin>/?ref=<the wallet's Base address>`: the referrer is
+  paid into `unclaimedRewards[wallet]`, which Claim already collects. The
   Wallet tab shows the link with a Copy button, and the header's **Share**
   (top right, on every tab once the neuron runs) sends it to the device's share
   sheet, or copies it where there is none (a computer without one).
@@ -200,9 +200,9 @@ registers it, as part of Stake.
 
 On D6 (D7, 2026-10-23, carries the fix from `humble` 86e2bdb3: see the last
 bullet), SATORI that reaches
-a staked vault in a transaction sent with the node's gas estimate (anyone's
-1 wei, `claimAirdropFor(vault)`) skips the hook that books it into the
-identity's power, and unstaking then underflows (Panic 0x11) for good
+a staked wallet in a transaction sent with the node's gas estimate (anyone's
+1 wei, `claimAirdropFor(wallet)`) skips the hook that books it into the
+alias's power, and unstaking then underflows (Panic 0x11) for good
 ([issue](../issues/token-hook-gas-estimate.md)). The checks below stay as a guard. While it was live:
 
 - Home offers Stake as advice (not warn), and its card, like the Wallet
@@ -210,10 +210,10 @@ identity's power, and unstaking then underflows (Panic 0x11) for good
   SATORI can't be sent until you unstake. A known contract issue can block
   unstaking; a fix is coming in the next contract release."
 - `stakeSync` (`src/neuron/base.js`) checks it exactly from the status
-  multicall: once the identity accepts only this vault (`allowedDelegator ==
-  vault`) and the vault stakes with it, the vault is its only staker, so
-  `predictionDelegateInfo(identity).power` must equal `balanceOf(vault)`.
-  `status().base.vault.inSync`: `true`; `false` when the power is under the
+  multicall: once the alias accepts only this wallet (`allowedDelegator ==
+  wallet`) and the wallet stakes with it, the wallet is its only staker, so
+  `predictionDelegateInfo(alias).power` must equal `balanceOf(wallet)`.
+  `status().base.wallet.inSync`: `true`; `false` when the power is under the
   balance (`shortfall`: the SATORI not booked), Home's bad reason
   `stake-out-of-sync` ([health.md](health.md#staking-out-of-sync)) and the
   Wallet card's line; `null` (not checked) when `allowedDelegator` is
@@ -221,20 +221,20 @@ identity's power, and unstaking then underflows (Panic 0x11) for good
   could hide or fake a shortfall), when not staked here, or not read.
 - Unstake simulates first: the underflow is said plainly ("Staking is out of
   sync. Unstaking will fail until the contract fix. Don't add SATORI to the
-  vault.") and nothing is sent.
+  wallet.") and nothing is sent.
 - On D7 a starved transfer reverts with `HookFailedWithoutReason()` instead
   (`src/chain/abi.js`), said as "The transaction ran out of gas; try again".
   The Stake and Unstake words above are still those of D6 and not yet changed.
 
 Reproduced on the fork (the real D6 contracts, 2026-10-19): Stake, then
-`node scripts/fork.mjs grief <vault>` (1 wei at the bare estimate, 110,514
+`node scripts/fork.mjs grief <wallet>` (1 wei at the bare estimate, 110,514
 gas, `TransferHookFailed`): power 100, balance 100.000000000000000001,
 `inSync: false`, Home red, Unstake refused in plain words
 ([screenshots](health.md#staking-out-of-sync)).
 
 Words: "Stake with this app" / "Unstake", "Staked: 100 SATORI with this
-neuron" / "Not staked", as Lite says it ("Stake your vault & predict on
-Base"). The app says Unlock/Lock for the vault's passphrase, so the token's
+neuron" / "Not staked", as Lite says it ("Stake your wallet & predict on
+Base"). The app says Unlock/Lock for the wallet's passphrase, so the token's
 transfer lock is "can't be sent" / "can be sent from <date>".
 
 **Sending a transaction** (`src/chain/index.js`, `write()`), as EVM:60-93:
@@ -248,26 +248,26 @@ replacement) is refused before it is sent when that max fee is over the
 ceiling, Settings' max fee (2 gwei by default; `FeeCeilingError`, "Gas is
 above the max fee: 3 gwei > 2 gwei. Try again later, or raise the max fee in
 Settings › Satori contract."): the RPC quotes the tip, so a hostile or broken
-one must not set what the vault pays (the security review, 2026-10-19). The
+one must not set what the wallet pays (the security review, 2026-10-19). The
 send's review says it before the passphrase. viem's **CCIP-read is off**
 (`ccipRead: false`): a contract revert asking for an EIP-3668 off-chain
 lookup is a revert, and the page fetches nothing it names. The gas limit of a
 contract call is the estimate + 500,000 (`HOOK_GAS`; unused gas is not
 charged): the token runs its transfer hook in a try/catch, so the bare
-estimate starves the hook, and SATORI that reaches a staked vault that way
+estimate starves the hook, and SATORI that reaches a staked wallet that way
 (any claim) leaves it unable to ever unstake. Found on the fork while
 building this step ([issue](../issues/token-hook-gas-estimate.md));
 Lite and the dapp send with the bare estimate. **The pad protects only our
-own writes**: a transfer or a `claimAirdropFor(vault)` someone else sends
-to our staked vault with a bare estimate (1 wei is enough) still bricks
+own writes**: a transfer or a `claimAirdropFor(wallet)` someone else sends
+to our staked wallet with a bare estimate (1 wei is enough) still bricks
 it; that needs the contract fix. A plain ETH transfer runs no hook and is
 sent with its estimate. After a write the app re-reads until the change shows, 5 × 1 s
 as Lite (`_stake_status_after`, ROUTES:1449-1463), then trusts the receipt:
 the public RPC is load-balanced and lags a block or two. Writes run one at a
-time (one queue for both keys), so the identity's batch and its setup never
+time (one queue for both keys), so the alias's batch and its setup never
 race for a nonce.
 
-## The daily batch (the identity, on its own)
+## The daily batch (the alias, on its own)
 
 Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 (BP:157-174), with the dapp's predict gate done by simulation
@@ -281,8 +281,8 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    pending, the check says so and the next one looks again 10 min after it
    was sent ([a batch that never mines](#a-batch-that-never-mines)). The
    send's own wait for the receipt ends after viem's 3 min the same way.
-1. **Due** once per UTC round: skip when the identity's incoming power is 0
-   (START:1171) or `engine.predictedStreamsCount(identity, round) != 0`
+1. **Due** once per UTC round: skip when the alias's incoming power is 0
+   (START:1171) or `engine.predictedStreamsCount(alias, round) != 0`
    (START:1174, BP:213-217).
 2. **Streams**: `registry.getAllDataStreams()`, then in one multicall
    `games.binaryGameByStream(id)` (keep `!= 0`), `registry.isNamedStream(id)`
@@ -337,7 +337,7 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    value ≤ 0 on changes (`bar1d`, [engine.md](engine.md#bar1d-a-series-with-values--0-step-6)),
    where before it fell back to `naive` and so voted DOWN forever.
 6. **Simulate each game alone** as a one-game `predictMultipleWithPayloads`
-   from the identity, and keep the ones that pass. A revert names the reason
+   from the alias, and keep the ones that pass. A revert names the reason
    (`StaleValue`, `EmptyStream`, `DuplicatePrediction`, …); an RPC failure is
    not a revert and stops the batch until the next check. This fixes Lite's
    "one stale game sinks the batch"
@@ -356,7 +356,7 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    base fee 0.005 gwei, tip 0.001 gwei, so a max fee of 0.011 gwei): 2 gwei
    stops only a spike of ~200× or an RPC quoting nonsense, and caps a batch
    at about 0.003 ETH (its 1.5M gas limit). It sits above the 1 gwei tip
-   anvil quotes, so the local fork works. Since 2026-10-19 the vault's
+   anvil quotes, so the local fork works. Since 2026-10-19 the wallet's
    actions have the same ceiling (above): attended or not, a quoted fee over
    it is not paid.
 8. **Send** `predictMultipleWithPayloads` with the games that passed, and
@@ -375,11 +375,11 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
 ### A batch that never mines
 
 The reliability review (2026-10-19) found a batch that is never mined was
-silent, and worse: it holds the identity's nonce, so every later batch waits
+silent, and worse: it holds the alias's nonce, so every later batch waits
 behind it. Now (`runBatch`, `unstick`, `src/neuron/base.js`):
 
 1. **10 minutes** (`STUCK_S`) after it was sent, a check looks at the
-   identity's mined nonce (`eth_getTransactionCount(identity, 'latest')`).
+   alias's mined nonce (`eth_getTransactionCount(alias, 'latest')`).
    Above the batch's: its nonce was used (by one of ours, or another
    transaction): let go, and the round's batch is made afresh.
 2. **Still pending**: logged (`console.warn` and the activity log, amber),
@@ -402,7 +402,7 @@ sends with its node's nonce and never replaces a stuck batch.
 
 Checked on the fork (`src/chain/fork.test.js`, anvil's interval mining off
 and automine off): the batch waits in the pool; replaced at its nonce with a
-quarter more fee, which anvil's pool takes in its place; a second identity's
+quarter more fee, which anvil's pool takes in its place; a second alias's
 stuck batch past the ceiling is not sent again; mining resumed, the
 replacement is mined (the first never is), and the other batch at its old
 fee.
@@ -410,7 +410,7 @@ fee.
 ### When in the round
 
 **At the first check of the round, never held.** Checks run 10 s after the
-page loads, or at once when a batch is due (the identity has power and no
+page loads, or at once when a batch is due (the alias has power and no
 batch this round, or a batch sent before waits for its receipt: the first
 status read says so; 2026-10-19), and 10 s after Stake (the load-balanced
 RPC lags a block or two behind the stake), then at the next round's start
@@ -447,35 +447,35 @@ whole rounds (sent at 16:00 one day, open 09:00–15:30 the next: nothing).
 
 ## Claims (Unlock)
 
-`claim()` runs three independent claims from the vault; each says what it
+`claim()` runs three independent claims from the wallet; each says what it
 did, why it skipped, or its error.
 
 1. **On-chain rewards**: `hub.claim()` (`C/next/SatoriHub.sol:802`) when
-   `lens.getTotalClaimableRewards(vault)` > 0, as the dapp
-   (`UI/hooks/useDashboard.ts:128,288-311`). The vault earns as a staker:
-   its share of the identity's correct calls (fee 0), folded in at claim time
+   `lens.getTotalClaimableRewards(wallet)` > 0, as the dapp
+   (`UI/hooks/useDashboard.ts:128,288-311`). The wallet earns as a staker:
+   its share of the alias's correct calls (fee 0), folded in at claim time
    (`C/SatoriRewards.sol:1285-1320`). Lite never claims these.
-2. **Merkle**: `GET {central}/api/v1/merkle/proof/{vault}` alone, as Lite
+2. **Merkle**: `GET {central}/api/v1/merkle/proof/{wallet}` alone, as Lite
    (ROUTES:1321-1331). Its 404 says which case
    (`central/src/api/v1/endpoints/merkle.py:45-58`): "no reward drop has been
    published yet", or "… is not in the current drop"; prod, which lacks the
    route ([issue](../issues/central-prod-missing-base-routes.md)),
    answers a plain "Not Found". Then `merkle.claimMerkle(amountWei, proof)`
-   when `amountWei > alreadyMintedTo(vault)` (ROUTES:1360-1388, BC:94-104).
+   when `amountWei > alreadyMintedTo(wallet)` (ROUTES:1360-1388, BC:94-104).
    The contract pays what its reserve allows and keeps the rest for a later
    claim (`C/SatoriMerkle.sol:196-201`), so the amount reported is
    `alreadyMintedTo` at the claim's block minus before.
-3. **Airdrop**: `airdrop.claimAirdrop()` when `claimableAirdrop(vault)` > 0
+3. **Airdrop**: `airdrop.claimAirdrop()` when `claimableAirdrop(wallet)` > 0
    (ROUTES:1394-1440, BC:107-121).
 
 **What can be claimed, before claiming** (2026-10-19; Home said 0 while the
 owner had an unclaimed drop: it summed only the first and the third). The
 status reads all three: the lens's rewards, the airdrop, and the Satori
-Network's reward drop, `max(0, amountWei − alreadyMintedTo(vault))`
-(`dropClaimable`), from central's proof for the vault (`proofState`: cached,
+Network's reward drop, `max(0, amountWei − alreadyMintedTo(wallet))`
+(`dropClaimable`), from central's proof for the wallet (`proofState`: cached,
 asked again at most hourly, since central publishes a new drop after its
 daily run, and kept from a claim's own call) and `alreadyMintedTo` in the
-status multicall. No drop published, or this vault not in it: 0. A central
+status multicall. No drop published, or this wallet not in it: 0. A central
 without the route (prod on `main`): unknown (`null`), not 0; a central that
 did not answer keeps the last answer and is asked again at the next read.
 Nothing is shown as an error. `base().claimable` = `{ rewards, drop, airdrop,
@@ -483,17 +483,17 @@ total }` (`total`: the parts known). Home shows the total, the parts above 0
 under it ("2 from the Satori Network · 1 airdrop"; all three on hover), the
 Wallet card all three ("0 SATORI rewards · 3.6185 SATORI from the Satori
 Network · 0 SATORI airdrop"). Claim stays one button and runs the three.
-Read-only, the owner's vault `0xda47…8c91`: central2's proof 3.61850955
+Read-only, the owner's wallet `0xda47…8c91`: central2's proof 3.61850955
 SATORI, `alreadyMintedTo` 0, so 3.61850955 claimable.
 
-**Gas.** A claim is a vault transaction. While the vault's ETH is under one
+**Gas.** A claim is a wallet transaction. While the wallet's ETH is under one
 transaction's gas (1.5M gas at twice the gas price, the batch's measure;
-`vault.lowEth`), Claim says "The vault needs a little Base ETH for gas to
+`wallet.lowEth`), Claim says "The wallet needs a little Base ETH for gas to
 claim." before it tries (before Unlock too), and `claim()` throws it.
 
 ## Send: the passphrase each time
 
-From the vault: ETH (a plain transfer, estimated first, no pad), or SATORI
+From the wallet: ETH (a plain transfer, estimated first, no pad), or SATORI
 (`token.transfer`) when it is not transfer-locked by the rule above (the app
 says until when before it simulates). Two steps (2026-10-19, the security
 review):
@@ -502,15 +502,15 @@ review):
    (`checkSend`: the asset, a 0x address, a positive amount; **the zero
    address is refused**, "The zero address (0x000…000) burns what is sent to
    it: refused."), SATORI's transfer lock is said, and the fee is estimated
-   from the vault's address: "about" = the estimate at the latest base fee +
+   from the wallet's address: "about" = the estimate at the latest base fee +
    the tip, "at most" = the gas limit (SATORI: + `HOOK_GAS`) at the max fee.
    The card shows **Check before sending**: the amount and the asset ("1.5
    SATORI"), the recipient in full, the fee ("about 0.00000013 ETH, at most
-   0.0000003 ETH (Base ETH, from the vault)"), the passphrase, **Send** and
+   0.0000003 ETH (Base ETH, from the wallet)"), the passphrase, **Send** and
    **Back** (the form again, as typed).
-2. **Send** with the vault's passphrase, asked each time, unlocked or not:
-   the vault is derived for this send alone and wiped after it
-   (`withPassphrase`, [keys.md](keys.md#backup)), so a vault left unlocked
+2. **Send** with the wallet's passphrase, asked each time, unlocked or not:
+   the wallet is derived for this send alone and wiped after it
+   (`withPassphrase`, [keys.md](keys.md#backup)), so a wallet left unlocked
    can't move funds without it. A wrong passphrase sends nothing.
 
 `window.satori.quoteSend({ asset, to, amount })` is the review for agents
@@ -518,7 +518,7 @@ and `send({ asset, to, amount, passphrase })` the send.
 
 <img src="../screenshots/send-review.png" alt="Check before sending: the amount, the recipient in full, the fee, the passphrase, Send and Back" width="320">
 
-The card shows the identity's ETH as
+The card shows the alias's ETH as
 daily batches of gas and warns below 7: a batch is counted at 1,500,000 gas
 (the estimate + `HOOK_GAS`, which the node wants covered up front) at 2 × the
 gas price. Measured on the fork: 408k gas for a round's first one-game batch,
@@ -533,21 +533,21 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | Due once per UTC round at the first check, not every 24 h from the last submit (START:1256-1274). | A tab is open part of the day ([when in the round](#when-in-the-round)). |
 | Each game is simulated alone and only passing games are sent; Lite sends all. Lite's named-game wait (24 h since its last submit) and its resend without named games are not kept. | One stale game no longer sinks the batch. Lite needs the wait and the resend because it does not simulate; the simulate applies the contract's own named rule. |
 | The hash is kept when the batch is sent and the batch stored after its receipt; Lite stores its time before sending. | A reverted send no longer loses the day, and a tab closed before the receipt never sends twice. |
-| A batch not mined for 10 min is sent again at its nonce with a quarter more fee, within the ceiling; Lite never replaces one. | A stuck batch holds the identity's nonce: every later batch would wait behind it, silently (the review, 2026-10-19). |
-| A max-fee ceiling on every transaction, the batch's and the vault's (2 gwei by default); the tip from `eth_maxPriorityFeePerGas`. | Nobody watches the batch, and the RPC quotes the tip: a hostile one must not set what the vault pays. Lite pays whatever the gas price is. |
-| Central's contract addresses are never used (a different one is said in the feed); a build's pinned RPC is never overridden by central's `rpcUrl` or `explorerUrl`. Lite overlays central's config on its defaults (BCFG:66-88). | A central, or whoever controls it, must not choose the contracts the vault talks to or the RPC that quotes its fees (the security review, 2026-10-19). |
+| A batch not mined for 10 min is sent again at its nonce with a quarter more fee, within the ceiling; Lite never replaces one. | A stuck batch holds the alias's nonce: every later batch would wait behind it, silently (the review, 2026-10-19). |
+| A max-fee ceiling on every transaction, the batch's and the wallet's (2 gwei by default); the tip from `eth_maxPriorityFeePerGas`. | Nobody watches the batch, and the RPC quotes the tip: a hostile one must not set what the wallet pays. Lite pays whatever the gas price is. |
+| Central's contract addresses are never used (a different one is said in the feed); a build's pinned RPC is never overridden by central's `rpcUrl` or `explorerUrl`. Lite overlays central's config on its defaults (BCFG:66-88). | A central, or whoever controls it, must not choose the contracts the wallet talks to or the RPC that quotes its fees (the security review, 2026-10-19). |
 | viem's CCIP-read is off. | A contract's revert must not make the page fetch a URL it names. |
 | An RPC on another chain is refused. | A wrong RPC must not take writes. |
-| `setAllowedDelegator(vault)` is sent by the identity (the dapp); Lite does not. | Only our vault can stake with the identity. |
-| Referral: the vault's `setReferral` at Stake, and an invite link with the vault's address; the dapp sets the predictor's through `predictMultipleWithReferral`, and Lite has none. | The vault is the earner here ([Referral](#referral-invite-links)); the identity's referral would never be paid. |
-| `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the vault's staking earnings. |
+| `setAllowedDelegator(wallet)` is sent by the alias (the dapp); Lite does not. | Only our wallet can stake with the alias. |
+| Referral: the wallet's `setReferral` at Stake, and an invite link with the wallet's address; the dapp sets the predictor's through `predictMultipleWithReferral`, and Lite has none. | The wallet is the earner here ([Referral](#referral-invite-links)); the alias's referral would never be paid. |
+| `hub.claim()` when the lens says > 0 (the dapp); Lite never claims on-chain rewards. | They are the wallet's staking earnings. |
 | The transfer lock is shown with `>=` (the token's rule); Lite's display uses `>`. | Lite shows the tokens free one round early. |
 | Words: Lite's "Stake" / "Unstake" (the owner's choice, 2026-10-18), not the dapp's; the token's transfer lock is "can't be sent". | The app's Lock/Unlock is the passphrase. |
 | A send has a review step (the recipient in full, the amount, the asset, the fee), asks for the passphrase each time, and refuses the zero address; Lite sends from its unlocked dashboard. | The security review (2026-10-19): an unlocked tab must not move funds without the passphrase, and a typo should be seen before it is sent. |
-| The vault's Base address is computed from its public key, in clear in the keys record. | Status without Unlock; Lite needs the decrypted vault. |
+| The wallet's Base address is computed from its public key, in clear in the keys record. | Status without Unlock; Lite needs the decrypted wallet. |
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
-| Stake is offered as advice with the risk said, and a stake out of sync is detected and shown (Lite and the dapp do neither). | The token-hook bug was live on D6 (fixed in D7): staking could freeze the vault, through anyone else's transaction. |
+| Stake is offered as advice with the risk said, and a stake out of sync is detected and shown (Lite and the dapp do neither). | The token-hook bug was live on D6 (fixed in D7): staking could freeze the wallet, through anyone else's transaction. |
 | A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
 | A tie (the forecast equals the latest value) follows the stream's last move; only a flat history is DOWN. Lite answers DOWN on every tie (`direction_from`, BP:141-143). | The owner's choice (2026-10-19): a no-opinion model should not cast the same DOWN on every stream and every neuron. |
 
@@ -555,11 +555,11 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 
 - **Settings › Keys** holds both Base addresses, the only addresses the app
   shows. Home has the claimable rewards with Claim, and on a computer the
-  vault and the gas in days ([health.md](health.md)).
+  wallet and the gas in days ([health.md](health.md)).
   The **Wallet** tab's **Base** card: the round, the active RPC in plain words (the local fork
-  named "Local test chain"; the URLs on hover); the identity's ETH as daily
-  batches of gas (red below 7, once staked: before that the identity has
-  no batch to pay for); the vault's SATORI and ETH; Staking ("Staked: 100
+  named "Local test chain"; the URLs on hover); the alias's ETH as daily
+  batches of gas (red below 7, once staked: before that the alias has
+  no batch to pay for); the wallet's SATORI and ETH; Staking ("Staked: 100
   SATORI with this app"; until then "Not staked: Stake with this app,
   below"); Transfers ("Staked SATORI can't be sent until you unstake", after
   Unstake "SATORI can be sent from <date> (round N)", then "Free to send");
@@ -570,11 +570,11 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
   hand. Unstake to play manually.", while not "Stake with this app to let
   it predict every round, or play Satori Daily by hand.", with Satori Daily
   linked; the Referral fact, and under the card's actions Your invite link
-  (`<origin>/?ref=<the vault>`) with Copy ([Referral](#referral-invite-links)). Stake with this app or Unstake and Claim, each asking
-  for the passphrase in place while the vault is locked (and locking it again
-  after, [keys.md](keys.md#the-vault-locks-on-its-own)), and Send from the
-  vault (SATORI or ETH: [the review and the passphrase each time](#send-the-passphrase-each-time)); each action lists its
-  transactions in plain words ("Identity: fee to 0"; the call on hover). Tx
+  (`<origin>/?ref=<the wallet>`) with Copy ([Referral](#referral-invite-links)). Stake with this app or Unstake and Claim, each asking
+  for the passphrase in place while the wallet is locked (and locking it again
+  after, [keys.md](keys.md#the-wallet-locks-on-its-own)), and Send from the
+  wallet (SATORI or ETH: [the review and the passphrase each time](#send-the-passphrase-each-time)); each action lists its
+  transactions in plain words ("Alias: fee to 0"; the call on hover). Tx
   hashes link to the explorer, except on a local fork. **Settings**: Base
   RPC and the batch's max fee (gwei), prefilled with what is stored, both
   checked before either is saved (`base.setSettings`).
@@ -632,7 +632,7 @@ asked at once.
   stake (three steps), the registry's streams (a new junk stream left
   out: no voting weight) and history, a batch and
   `AlreadyPredicted` after it, the airdrop and merkle claims a round later
-  (and that the identity's power then equals the vault's balance), unstake, the
+  (and that the alias's power then equals the wallet's balance), unstake, the
   lock still on in round N, a SATORI send in round N + 1, an ETH send.
 
 ### Live, in the running app (2026-10-15)
@@ -641,19 +641,19 @@ The dev server (`/rpc` → the fork on 8545), a fresh throwaway browser
 profile, central2 for register (its `base/config` answered, so the card says
 "central addresses"), its merkle routes stubbed with the fork's proof:
 
-1. Funded: the vault 100 SATORI and 0.1 ETH, the identity 0.1 ETH. Before:
-   `predictionDelegateInfo(vault).delegate` 0x0, `effectivePredictorFee(identity)`
-   1000, `transferLockedUntil(vault)` 0.
+1. Funded: the wallet 100 SATORI and 0.1 ETH, the alias 0.1 ETH. Before:
+   `predictionDelegateInfo(wallet).delegate` 0x0, `effectivePredictorFee(alias)`
+   1000, `transferLockedUntil(wallet)` 0.
 2. Unlock → Stake: `setPredictorFee(0)` and
-   `setAllowedDelegator(vault)` by the identity, `delegatePredictionPower(identity)`
-   by the vault. After: `predictionDelegateInfo(vault)` = the identity, the identity's
+   `setAllowedDelegator(wallet)` by the alias, `delegatePredictionPower(alias)`
+   by the wallet. After: `predictionDelegateInfo(wallet)` = the alias, the alias's
    power 100 SATORI, fee 0, `transferLockedUntil` 16,777,215.
-3. 10 s later the identity's batch, on its own: round 20741, game 1 DOWN;
-   `predictedStreamsCount(identity, 20741)` = 1.
+3. 10 s later the alias's batch, on its own: round 20741, game 1 DOWN;
+   `predictedStreamsCount(alias, 20741)` = 1.
 4. Airdrop loaded (600) and a merkle root (5); a round later: the next batch
    (round 20742), then Claim: merkle 5 SATORI and airdrop 100.69 SATORI
    claimed, on-chain rewards skipped (the lens said 0: a staker's share
-   needs its loyalty, which lags). The identity's power followed the vault's
+   needs its loyalty, which lags). The alias's power followed the wallet's
    balance (205.69). Batches each round to 20752, the deployer predicting
    every other round so the default stream moves; at round 20752 the lens
    said 341.82 SATORI and Claim sent `hub.claim()`: claimed.
@@ -665,26 +665,26 @@ profile, central2 for register (its `base/config` answered, so the card says
 After the review (the same day, a fresh fork and profile): a junk stream
 made with `fork.mjs stream` (stream 2, game 2, voting weight 0) was on the
 registry; Unlock → Stake (three transactions, listed on the card); 10 s
-later the identity's batch held one game, game 1 DOWN (`predictedStreamsCount`
+later the alias's batch held one game, game 1 DOWN (`predictedStreamsCount`
 1), stream 2 left out; the card's first fact named the RPC "/rpc: the local
 fork of Base Sepolia"; Unstake: `transferLockedUntil` 20742 at round
 20741.
 
 The finishing pass's smoke (2026-10-15 21:05, a fresh profile, the UI only):
 setup, Poll now (central2: 83 of 83 accepted), subscribe to `demo-walk` on
-the test relay, `fork.mjs fund` (the identity 0.1 ETH; the vault 0.1 ETH and
+the test relay, `fork.mjs fund` (the alias 0.1 ETH; the wallet 0.1 ETH and
 50 SATORI), Unlock → Stake (three transactions) → 12 s later the
-identity's batch, round 20741, game 1 DOWN.
+alias's batch, round 20741, game 1 DOWN.
 
 The staking words, live (2026-10-18 01:48 UTC chain time, a fresh profile on
-the dev app, the fork; `fork.mjs fund`: the identity 0.1 ETH, the vault 0.1
-ETH and 100 SATORI): Home's card said "Your vault's SATORI isn't earning on
+the dev app, the fork; `fork.mjs fund`: the alias 0.1 ETH, the wallet 0.1
+ETH and 100 SATORI): Home's card said "Your wallet's SATORI isn't earning on
 Base. Stake with this app." (button Stake, chip "Not staked"); Settings ›
 Unlock, then the Wallet's "Stake with this app": "Staked with this
 neuron." with its three transactions, Staking "Staked: 100 SATORI with this
 neuron", Transfers "Staked SATORI can't be sent until you unstake"; 19 s
-later the identity's batch, round 20744, game 1 DOWN, and Home's Base chip
-"Round 20744 sent", the vault "100 SATORI · staked"; Unstake: "Unstaked.",
+later the alias's batch, round 20744, game 1 DOWN, and Home's Base chip
+"Round 20744 sent", the wallet "100 SATORI · staked"; Unstake: "Unstaked.",
 Transfers "SATORI can be sent from Oct 20, 00:00 UTC (round 20746)",
 `transferLockedUntil` 20745; `window.satori` has `stake` and `unstake`, the old names gone.
 The Wallet's card staked, with the batch and the Stake transactions
@@ -712,7 +712,7 @@ The Wallet's card staked, with the batch and the Stake transactions
   one value; its game has no voting weight, so the batch leaves it out.
 - `grief <address>`: the token-hook bug: 1 wei of SATORI from the deployer
   with the bare gas estimate, as any wallet sends it; it prints the hook
-  events (`TransferHookFailed` on anvil). A staked vault is then out of
+  events (`TransferHookFailed` on anvil). A staked wallet is then out of
   sync and can't unstake until D7.
 - `stop [--port 8545]`: stops the fork `start` began (its pid is in
   `.fork.<port>.pid`, its log in `.fork.<port>.log`).

@@ -32,7 +32,7 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     batches: [], // [{ from, round, hour, requests }]
     delegateOf: {}, // addr → delegate
     feeStored: {}, // addr → bps (0 = never set: the 10 % default)
-    allowed: {}, // addr → the one vault it accepts (allowedDelegator)
+    allowed: {}, // addr → the one wallet it accepts (allowedDelegator)
     referral: {}, // addr → its referrer (set once)
     lock: {}, // addr → round (transferLockedUntil)
     balance: {}, // SATORI

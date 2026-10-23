@@ -2,7 +2,7 @@
 // market (satori_nostr/client.py), its Evrmore parts replaced by the Satori contract's payment channels (src/chain/channels.js).
 //   sell: our `<stream>_pred` announced with Lite's price_per_obs (satoshis); each observation encrypted (NIP-04) to each
 //   buyer in good standing
-//   buy: the vault opens a channel (Unlock), the 34602 names it; each delivery received → the identity's next voucher (34603)
+//   buy: the wallet opens a channel (Unlock), the 34602 names it; each delivery received → the alias's next voucher (34603)
 //   the seller checks the channel on chain and each voucher; it settles (settleMany) at most once a day; refunds withdrawn
 // Kept in meta `market`: { prices (wei), sales, buys, settledAt }, amounts as decimal strings.
 import { formatEther, hashMessage, hexToBytes, parseEther, recoverMessageAddress, serializeSignature, isAddress } from 'viem';
@@ -20,11 +20,11 @@ const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 const B = (x) => BigInt(x ?? 0);
 const sat = (wei) => formatEther(B(wei));
 
-/** What the identity signs to say this Nostr key may use the channel (EIP-191). */
+/** What the alias signs to say this Nostr key may use the channel (EIP-191). */
 export const bindingText = (channelId, nostrPubkey) => `satori-market:v1:${String(channelId).toLowerCase()}:${nostrPubkey}`;
-/** The identity's binding (our signer: signDigest, inside it; no Unlock). */
-export const signBinding = (identity, channelId, nostrPubkey) =>
-  serializeSignature(identity.signDigest(hexToBytes(hashMessage(bindingText(channelId, nostrPubkey)))));
+/** The alias's binding (our signer: signDigest, inside it; no Unlock). */
+export const signBinding = (alias, channelId, nostrPubkey) =>
+  serializeSignature(alias.signDigest(hexToBytes(hashMessage(bindingText(channelId, nostrPubkey)))));
 /** Who signed a binding, or null. */
 export async function bindingSigner(channelId, nostrPubkey, binding) {
   try {
@@ -70,14 +70,14 @@ export const deliverable = (s) => !s.closing && B(s.cumulative) >= owed(s) && B(
  * @param {object} o
  * @param {object} o.db get/set/checkpoint
  * @param {{secret: string, pubkey: string}} o.key the Nostr key
- * @param {object|null} o.identity our signer (signDigest, evmAddress): vouchers, the binding, settle, close, withdraw
- * @param {string|null} o.vaultAddress the seller's payee
- * @param {() => object|null} o.vault the vault while unlocked (a Buy opens the channel from it)
+ * @param {object|null} o.alias our signer (signDigest, evmAddress): vouchers, the binding, settle, close, withdraw
+ * @param {string|null} o.walletAddress the seller's payee
+ * @param {() => object|null} o.wallet the wallet while unlocked (a Buy opens the channel from it)
  * @param {() => Promise<{channels: object, config: object, chainTime: () => Promise<number>}>} o.chain the channel client on the current chain
  * @param {(event: object) => Promise<number>} o.publish to the relays we write to → how many took it
  * @param {(events: object[]) => Promise<void>} o.sendKept the same, kept until each relay took it (a subscription, a payment, an unsubscribe)
  */
-export function createMarket({ db, key, identity = null, vaultAddress = null, vault = () => null, chain, publish, sendKept = async () => {},
+export function createMarket({ db, key, alias = null, walletAddress = null, wallet = () => null, chain, publish, sendKept = async () => {},
   now = () => Date.now() / 1000, onChange = () => {}, config = DEFAULTS }) {
   let m = { prices: {}, sales: {}, buys: {} };
   let lastError = null; // the hourly pass's last failure
@@ -91,21 +91,21 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
   };
   const salesOf = (stream) => Object.values(m.sales).filter((s) => s.stream === stream);
   const openBuy = (pubkey, stream) => Object.values(m.buys).find((b) => b.pubkey === pubkey && b.stream === stream && b.status === 'open');
-  const needIdentity = () => {
-    if (!identity) throw new Error('No alias to sign with.');
-    return identity;
+  const needAlias = () => {
+    if (!alias) throw new Error('No alias to sign with.');
+    return alias;
   };
 
   /**
-   * Once a day at most: every sale's newest voucher above what is settled, in one transaction (the seller's identity,
-   * into the vault). A closing sale goes once nothing is due.
+   * Once a day at most: every sale's newest voucher above what is settled, in one transaction (the seller's alias,
+   * into the wallet). A closing sale goes once nothing is due.
    */
   async function collect() {
     const list = Object.values(m.sales);
     const due = list.filter((s) => s.signature && B(s.cumulative) > B(s.settled));
     if (due.length && t() - (m.settledAt ?? 0) >= SETTLE_EVERY_S) {
       const { channels } = await chain();
-      const r = await channels.settleMany(needIdentity(), due.map((s) => ({ id: s.channel, cumulative: B(s.cumulative), signature: s.signature })));
+      const r = await channels.settleMany(needAlias(), due.map((s) => ({ id: s.channel, cumulative: B(s.cumulative), signature: s.signature })));
       for (const x of r.settled) for (const s of due) if (s.channel === x.id) s.settled = String(x.settled);
       m.settledAt = t();
     }
@@ -134,7 +134,7 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
     const { channels } = await chain();
     const ch = await channels.readChannel(c.id);
     const signer = await bindingSigner(c.id, e.pubkey, c.binding);
-    if (!ch || !same(ch.payee, vaultAddress) || !same(ch.token, config.token) || !same(ch.signer, signer) || ch.closed || ch.closeRequestedAt
+    if (!ch || !same(ch.payee, walletAddress) || !same(ch.token, config.token) || !same(ch.signer, signer) || ch.closed || ch.closeRequestedAt
       || ch.deposit - ch.settled < B(price)) return;
     close();
     m.sales[c.id] = { stream: sub.stream_name, buyer: e.pubkey, channel: c.id, signer: ch.signer, price, base: String(ch.settled),
@@ -167,10 +167,10 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
     priced: (stream) => !!m.prices[stream],
     /** Its listing for the announcement (predMetadata's): price_per_obs in satoshis and the channel's market, or null when it is free. */
     listing: (stream) => (m.prices[stream] ? { price_per_obs: Number(B(m.prices[stream]) / SAT),
-      market: { chain: config.chainId, contract: config.channels, token: config.token, payee: vaultAddress } } : null),
+      market: { chain: config.chainId, contract: config.channels, token: config.token, payee: walletAddress } } : null),
     /** A price in wei, whole satoshis, on our stream (the caller re-announces it). */
     async sell(stream, wei) {
-      if (!vaultAddress) throw new Error('No vault to be paid into.');
+      if (!walletAddress) throw new Error('No wallet to be paid into.');
       if (B(wei) <= 0n || B(wei) % SAT) throw new Error('The price can have at most 8 decimal places.');
       m.prices[stream] = String(wei);
       await save();
@@ -203,8 +203,8 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
 
     // ── buying ──
     /**
-     * Buy a listed stream (`entry`: its verified catalog entry): the vault opens a channel to the payee with `deposit`
-     * (wei; 100 observations by default), then the 34602 names it, with the identity's binding to our Nostr key. → its view
+     * Buy a listed stream (`entry`: its verified catalog entry): the wallet opens a channel to the payee with `deposit`
+     * (wei; 100 observations by default), then the 34602 names it, with the alias's binding to our Nostr key. → its view
      */
     async buy(entry, deposit) {
       const l = listingOf(entry, config);
@@ -213,26 +213,26 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
       if (was) return this.view(was.channel);
       const amount = deposit ?? l.price * BigInt(DEPOSIT_OBS);
       if (amount < l.price) throw new Error(`The deposit must cover at least one observation (${sat(l.price)} SATORI).`);
-      const v = vault();
-      if (!v) throw new Error('Unlock the vault first');
+      const v = wallet();
+      if (!v) throw new Error('Unlock the wallet first');
       const { channels } = await chain();
       let r;
       try {
-        r = await channels.openChannel({ vault: v, identity: needIdentity(), payee: l.payee, deposit: amount });
+        r = await channels.openChannel({ wallet: v, alias: needAlias(), payee: l.payee, deposit: amount });
       } catch (err) {
         throw new Error(channelErrorText(err), { cause: err });
       }
       m.buys[r.id] = { pubkey: entry.pubkey, stream: entry.stream_name, name: entry.name ?? '', channel: r.id, hash: r.hash, price: String(l.price),
         deposit: String(amount), cumulative: '0', seq: null, status: 'open', closeAt: null, at: t() };
       await save();
-      const binding = signBinding(identity, r.id, key.pubkey);
+      const binding = signBinding(alias, r.id, key.pubkey);
       await sendKept([sign(subscriptionEvent({ stream: entry.stream_name, provider: entry.pubkey, subscriber: key.pubkey, now: t(),
         paymentChannel: { chain: config.chainId, contract: config.channels, id: r.id, binding } }))]); // kept until a relay takes it
       return this.view(r.id);
     },
     /**
      * A 34601 that may be a delivery to us of a stream we bought: verified, decrypted → the observation (parseObservation's
-     * shape), and paid: the identity signs the next voucher (never past the deposit) and sends it (34603). Else null.
+     * shape), and paid: the alias signs the next voucher (never past the deposit) and sends it (34603). Else null.
      */
     async received(e) {
       const d = deliveryOf(e);
@@ -243,7 +243,7 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
       b.seq = d.seq;
       const next = B(b.cumulative) + B(b.price);
       if (next <= B(b.deposit)) {
-        const signature = await signVoucher(needIdentity(), { chainId: config.chainId, contract: config.channels, channelId: b.channel, cumulative: next });
+        const signature = await signVoucher(needAlias(), { chainId: config.chainId, contract: config.channels, channelId: b.channel, cumulative: next });
         b.cumulative = String(next);
         await save(); // kept before it is sent: a reload never signs it again
         const voucher = { channel: b.channel, cumulative: String(next), signature };
@@ -255,13 +255,13 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
       }
       return { stream_name: d.stream_name, provider: d.provider, timestamp: d.timestamp, value, seq: d.seq, id: e.id };
     },
-    /** Stop: the identity asks to close the channel (no Unlock), then Lite's unsubscribe; the refund comes after the 7-day grace period. → its view */
+    /** Stop: the alias asks to close the channel (no Unlock), then Lite's unsubscribe; the refund comes after the 7-day grace period. → its view */
     async stop(pubkey, stream) {
       const b = openBuy(pubkey, stream);
       if (!b) throw new Error(`Not buying ${stream} from ${pubkey.slice(0, 8)}….`);
       const { channels } = await chain();
       try {
-        await channels.requestClose(needIdentity(), b.channel);
+        await channels.requestClose(needAlias(), b.channel);
       } catch (err) {
         throw new Error(channelErrorText(err), { cause: err });
       }
@@ -286,7 +286,7 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
     /**
      * The hourly pass (and the catch-up's): each sale's channel read again (its deposit, what is settled, a close asked:
      * no more deliveries, closed: gone), then, once a day at most, one settleMany for every voucher above what is settled;
-     * each bought channel whose grace period has ended is withdrawn (the refund to the vault).
+     * each bought channel whose grace period has ended is withdrawn (the refund to the wallet).
      */
     async pass() {
       try {
@@ -308,8 +308,8 @@ export function createMarket({ db, key, identity = null, vaultAddress = null, va
           const ch = await channels.readChannel(b.channel);
           if (ch?.graceEndsAt != null) b.closeAt = ch.graceEndsAt;
           if (ch && !ch.closed && !(ch.graceEndsAt != null && ch.graceEndsAt <= at)) continue; // its grace period runs
-          if (ch && !ch.closed) await channels.withdraw(needIdentity(), b.channel);
-          delete m.buys[b.channel]; // refunded to the vault
+          if (ch && !ch.closed) await channels.withdraw(needAlias(), b.channel);
+          delete m.buys[b.channel]; // refunded to the wallet
         }
         await save();
         lastError = null;

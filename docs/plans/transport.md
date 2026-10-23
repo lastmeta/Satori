@@ -37,7 +37,7 @@ Not to do: **Base bridge streams** (`satori-<chainId>-<id>`, which Lite
 subscribes to automatically, `neuron/neuron-lite/start.py:453-517`, and
 dedupes by the on-chain round, `network_db.py:597-636`). Step 6 reads the
 registry on the chain instead, the values the engine anchors on, with no
-relay ([base.md](../design/base.md#the-daily-batch-the-identity-on-its-own)).
+relay ([base.md](../design/base.md#the-daily-batch-the-alias-on-its-own)).
 
 ## Inherent and accepted
 

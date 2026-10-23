@@ -44,9 +44,8 @@ function setup(a) {
   <section class="card narrow setup" hidden="${show('setup')}">
     <div hidden="${showStep('choose')}">
       <h2>Set up Satori</h2>
-      <p class="muted">Satori has two keys. The <strong>alias</strong> acts for your vault on its own,
-        so it stays unencrypted in this browser. The <strong>vault</strong> holds your funds and is
-        encrypted with your passphrase.</p>
+      <p class="muted">Your <strong>wallet</strong> holds your funds and is encrypted with your passphrase in this
+        browser. The app signs its own work with a key it keeps for itself, so it runs on its own.</p>
       <p class="muted" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
       <div class="actions">
         <button class="primary" @click="${a.newWords}">Create a wallet</button>
@@ -57,9 +56,9 @@ function setup(a) {
     </div>
 
     <div hidden="${showStep('words')}">
-      <h2>Your vault’s 24 words</h2>
+      <h2>Your wallet’s 24 words</h2>
       <p class="muted">Write them down in order and keep them safe. They are the only way to recover
-        your vault if this browser loses its data.</p>
+        your wallet if this browser loses its data.</p>
       ${wordList(() => state.words)}
       <div class="actions">
         <button class="primary" @click="${a.toConfirm}">I wrote them down</button>
@@ -84,11 +83,11 @@ function setup(a) {
 
     <form hidden="${showStep('restore')}" @submit="${(e) => a.restoreWords(form(e), e.target)}">
       <h2>Restore from words</h2>
-      <label>Vault words (24)
-        <textarea name="vault" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
+      <label>Wallet words (24)
+        <textarea name="wallet" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
       </label>
-      <label>Alias words (24, optional: a new alias is made if empty)
-        <textarea name="identity" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+      <label>Alias words (optional: a new alias is made if empty)
+        <textarea name="alias" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
       <label>Nostr key (nsec or hex, optional: a new one is made if empty)
         <input name="nostr" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -104,10 +103,10 @@ function setup(a) {
       <h2>Import Docker files</h2>
       <p class="muted">The files from a Docker install’s wallet folder (unzip “Download Wallet” first). Their keys
         are read here and stored in this app’s own way; the files themselves are not kept.</p>
-      <label>wallet.yaml (alias) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
-      <label>vault.yaml <input name="vault" type="file" accept=".yaml,.yml" required></label>
-      <label>nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
-      <label>Vault password (the Docker install’s) <input name="pass" type="password" autocomplete="current-password" required></label>
+      <label>Wallet file: wallet.yaml (vault.yaml in an older install) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
+      <label>Alias file: alias.yaml (wallet.yaml in an older install) <input name="alias" type="file" accept=".yaml,.yml" required></label>
+      <label>Nostr file: nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
+      <label>Wallet password (the Docker install’s) <input name="pass" type="password" autocomplete="current-password" required></label>
       <label class="check"><input name="reuse" type="checkbox" checked> Use it as this app’s passphrase too (if it has at least ${MIN_PASSPHRASE} characters)</label>
       ${errorLine()}
       <div class="actions">
@@ -119,7 +118,7 @@ function setup(a) {
     <form hidden="${showStep('passphrase')}" @submit="${(e) => a.createKeys(form(e), e.target)}">
       <h2>Choose a passphrase</h2>
       <p class="muted" data-test="pass-note" hidden="${() => !state.passNote}">${() => state.passNote}</p>
-      <p class="muted">It encrypts the vault in this browser. At least ${MIN_PASSPHRASE} characters, in any
+      <p class="muted">It encrypts the wallet in this browser. At least ${MIN_PASSPHRASE} characters, in any
         language or script; a longer phrase is stronger.</p>
       <label>Passphrase <input name="pass1" type="password" autocomplete="new-password" required></label>
       <label>Repeat passphrase <input name="pass2" type="password" autocomplete="new-password" required></label>
@@ -175,7 +174,7 @@ export function render(root, a) {
       <p class="error" data-test="damaged-error">${() => state.fatal}</p>
       <p class="muted small">It may be damaged. You can set it aside and start again: the file is kept in this browser's
         storage for this site under another name, never deleted. Your keys are in it too, so you then restore
-        from your vault's 24 words (and the alias's, and the Nostr key from Backup), or import the Docker files.
+        from your wallet's 24 words (and the Nostr key from Backup), or import the Docker files.
         Reload first if you want to try again.</p>
       <div class="actions">
         <button class="primary" data-test="set-aside" disabled="${() => state.busy === 'setAside'}" @click="${a.setAside}">${() => (state.busy === 'setAside' ? 'Setting aside…' : 'Set aside and start again')}</button>
@@ -185,14 +184,14 @@ export function render(root, a) {
     </section>
     <section class="card narrow" hidden="${show('finish')}">
       <h2>Unlock to finish the update</h2>
-      <p class="muted">An earlier version stored this vault with its public key encrypted, so its address can’t
-        be shown until it is opened once. Enter its passphrase: the vault is then stored in this app’s own format,
+      <p class="muted">An earlier version stored this wallet with its public key encrypted, so its address can’t
+        be shown until it is opened once. Enter its passphrase: the wallet is then stored in this app’s own format,
         and the app starts.</p>
       <form class="unlock" @submit="${(e) => a.finishUpdate(form(e), e.target)}">
-        <input name="pass" type="password" aria-label="Vault passphrase to finish the update" placeholder="Vault passphrase" autocomplete="current-password" required>
+        <input name="pass" type="password" aria-label="Wallet passphrase to finish the update" placeholder="Wallet passphrase" autocomplete="current-password" required>
         <button class="primary" type="submit" data-test="finish" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>
       </form>
-      <p class="error small" role="alert" hidden="${() => !state.vaultError}">${() => state.vaultError}</p>
+      <p class="error small" role="alert" hidden="${() => !state.walletError}">${() => state.walletError}</p>
     </section>
     ${setup(a)}
     <div hidden="${() => state.screen !== 'home' && !(state.screen === 'loading' && state.cached)}">

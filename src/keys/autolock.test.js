@@ -1,5 +1,5 @@
-// The vault locks on its own (docs/design/keys.md#the-vault-locks-on-its-own): 5 minutes after the last interaction
-// while it is open, never in the middle of a vault action, and at once on a wake past the deadline. Fake timers.
+// The wallet locks on its own (docs/design/keys.md#the-wallet-locks-on-its-own): 5 minutes after the last interaction
+// while it is open, never in the middle of a wallet action, and at once on a wake past the deadline. Fake timers.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createAutoLock, IDLE_MS } from './autolock.js';
 
@@ -62,7 +62,7 @@ describe('createAutoLock', () => {
     expect(locks).toBe(0);
   });
 
-  test('never in the middle of a vault action: it locks once the action ends', () => {
+  test('never in the middle of a wallet action: it locks once the action ends', () => {
     auto.start();
     busy = true; // a Stake's three transactions, say
     vi.advanceTimersByTime(IDLE_MS + 30_000);

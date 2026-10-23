@@ -18,9 +18,9 @@ owner's tie rule (2026-10-19): a tie follows the stream's last move, and only
 a flat history is DOWN. The alternative studied, still set aside:
 
 1. Direction = sign of an OLS slope over the last *k* registry values, *k* drawn
-   once per (node, stream) from the identity seed in [5, 20] (Docker's Starter
+   once per (node, stream) from the alias seed in [5, 20] (Docker's Starter
    also fits OLS on an RNG window, `starter_model.py:50-106`).
-2. A zero slope (flat series) → identity-seeded coin flip, never a fixed DOWN.
+2. A zero slope (flat series) → alias-seeded coin flip, never a fixed DOWN.
 3. Fewer than 5 values → seeded coin flip.
 
 Inferred: on random-walk prices no rule beats ~50%; this one at least matches
@@ -30,7 +30,7 @@ Docker's spread of votes.
 
 Built as the owner directed (2026-10-15, [../intent/engine.md](../intent/engine.md)):
 each central target has its own `bvar` spec (1–3 companion streams, λ1, λ2),
-drawn from the identity and evolved after each poll
+drawn from the alias and evolved after each poll
 ([../design/engine.md](../design/engine.md#bvar-a-model-per-central-stream-unique-to-each-neuron)).
 Left for later:
 

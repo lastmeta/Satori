@@ -20,23 +20,23 @@ const signer = () => {
 
 describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on a local fork of Base Sepolia', () => {
   test('stake, the batch, claims, unstake, the transfer rule, a send', { timeout: 180_000 }, async () => {
-    const identity = signer();
-    const vault = signer();
-    const I = identity.evmAddress;
-    const V = vault.evmAddress;
+    const alias = signer();
+    const wallet = signer();
+    const I = alias.evmAddress;
+    const V = wallet.evmAddress;
     const chain = createChain({ config: DEFAULTS, transport: http(RPC), pollingInterval: 250, settle: { tries: 5, ms: 500 } });
-    const st = () => chain.status({ identity: I, vault: V });
+    const st = () => chain.status({ alias: I, wallet: V });
     await fund(RPC, [I], { eth: '0.1' });
     await fund(RPC, [V], { eth: '0.1', satori: '100' });
 
     const before = await st();
-    expect(before).toMatchObject({ errors: [], identity: { fee: 1000, power: 0n }, vault: { satori: 100n * E18, delegate: zeroAddress, lockedUntil: 0 } });
+    expect(before).toMatchObject({ errors: [], alias: { fee: 1000, power: 0n }, wallet: { satori: 100n * E18, delegate: zeroAddress, lockedUntil: 0 } });
 
-    const d = await chain.delegate({ identity, vault });
-    expect(d.steps.map((x) => x.step)).toEqual(['setPredictorFee(0)', 'setAllowedDelegator(vault)', 'delegatePredictionPower(identity)']);
+    const d = await chain.delegate({ alias, wallet });
+    expect(d.steps.map((x) => x.step)).toEqual(['setPredictorFee(0)', 'setAllowedDelegator(wallet)', 'delegatePredictionPower(alias)']);
     const on = await st();
-    expect(on.identity).toMatchObject({ fee: 0, power: 100n * E18, allowedDelegator: V });
-    expect(on.vault).toMatchObject({ delegate: I, lockedUntil: INDEFINITE, lock: { locked: true, indefinite: true } });
+    expect(on.alias).toMatchObject({ fee: 0, power: 100n * E18, allowedDelegator: V });
+    expect(on.wallet).toMatchObject({ delegate: I, lockedUntil: INDEFINITE, lock: { locked: true, indefinite: true } });
 
     const junk = await stream(RPC, `junk-${Date.now()}`); // anyone's stream: a game, but no voting weight
     expect(junk.gameId).toBeGreaterThan(0);
@@ -45,11 +45,11 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     expect(streams.find((g) => g.streamId === junk.streamId)).toBeUndefined();
     expect((await chain.history(1)).length).toBeGreaterThan(1);
     expect(await chain.batchState(I)).toMatchObject({ round: on.round, power: 100n * E18, predicted: 0 });
-    expect(await chain.simulateGame(identity, { gameId: 1, direction: DOWN })).toBe(null);
-    const batch = await chain.sendBatch(identity, [{ gameId: 1, direction: DOWN }]);
+    expect(await chain.simulateGame(alias, { gameId: 1, direction: DOWN })).toBe(null);
+    const batch = await chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }]);
     expect(batch.hash).toMatch(/^0x[0-9a-f]{64}$/);
     expect((await chain.batchState(I)).predicted).toBe(1);
-    expect(await chain.simulateGame(identity, { gameId: 1, direction: DOWN })).toBe('AlreadyPredicted');
+    expect(await chain.simulateGame(alias, { gameId: 1, direction: DOWN })).toBe('AlreadyPredicted');
 
     // Claims a round later: the airdrop (loaded now), the merkle drop (the reserve accrues per round).
     await airdrop(RPC, V, 600);
@@ -57,32 +57,32 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     await advance(RPC, 1);
     const later = await st();
     expect(later.claimable.airdrop).toBeGreaterThan(0n);
-    await chain.claimAirdrop(vault);
+    await chain.claimAirdrop(wallet);
     expect(await chain.alreadyMinted(V)).toBe(0n);
-    await chain.claimMerkle(vault, proof);
+    await chain.claimMerkle(wallet, proof);
     expect(await chain.alreadyMinted(V)).toBe(5n * E18);
     const claimed = await st();
-    expect(claimed.vault.satori).toBeGreaterThan(105n * E18);
-    // The token's hook kept the identity's power in step with the vault's new balance (HOOK_GAS):
+    expect(claimed.wallet.satori).toBeGreaterThan(105n * E18);
+    // The token's hook kept the alias's power in step with the wallet's new balance (HOOK_GAS):
     // with the bare estimate it fails silently and the unstake below panics (0x11).
-    expect(claimed.identity.power).toBe(claimed.vault.satori);
+    expect(claimed.alias.power).toBe(claimed.wallet.satori);
 
     // Unstake: transfer-locked through the next round (>=), then free.
-    const off = await chain.undelegate({ vault });
+    const off = await chain.undelegate({ wallet });
     expect(off.steps).toHaveLength(1);
     const stopped = await st();
-    expect(stopped.vault.lock).toMatchObject({ locked: true, untilRound: stopped.round + 1 });
+    expect(stopped.wallet.lock).toMatchObject({ locked: true, untilRound: stopped.round + 1 });
     const to = '0x000000000000000000000000000000000000dEaD';
-    expect(revertName(await chain.sendSatori(vault, to, E18).catch((e) => e))).toBe('Locked');
+    expect(revertName(await chain.sendSatori(wallet, to, E18).catch((e) => e))).toBe('Locked');
     await advance(RPC, 1);
-    expect((await st()).vault.lock.locked).toBe(true); // round N itself is still locked (Lite would say free)
-    expect(revertName(await chain.sendSatori(vault, to, E18).catch((e) => e))).toBe('Locked');
+    expect((await st()).wallet.lock.locked).toBe(true); // round N itself is still locked (Lite would say free)
+    expect(revertName(await chain.sendSatori(wallet, to, E18).catch((e) => e))).toBe('Locked');
     await advance(RPC, 1);
-    expect((await st()).vault.lock.locked).toBe(false);
-    await chain.sendSatori(vault, to, E18);
+    expect((await st()).wallet.lock.locked).toBe(false);
+    await chain.sendSatori(wallet, to, E18);
     const { pub } = clients(RPC);
     const ethBefore = await pub.getBalance({ address: to });
-    await chain.sendEth(vault, to, 10n ** 15n);
+    await chain.sendEth(wallet, to, 10n ** 15n);
     expect(await pub.getBalance({ address: to })).toBe(ethBefore + 10n ** 15n);
   });
 
@@ -97,18 +97,18 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     };
     const chain = createChain({ config: DEFAULTS, transport: http(RPC), pollingInterval: 250, settle: { tries: 5, ms: 500 } });
     const staked = async () => {
-      const identity = signer();
-      const vault = signer();
-      await fund(RPC, [identity.evmAddress], { eth: '0.1' });
-      await fund(RPC, [vault.evmAddress], { eth: '0.1', satori: '10' });
-      await chain.delegate({ identity, vault });
-      return identity;
+      const alias = signer();
+      const wallet = signer();
+      await fund(RPC, [alias.evmAddress], { eth: '0.1' });
+      await fund(RPC, [wallet.evmAddress], { eth: '0.1', satori: '10' });
+      await chain.delegate({ alias, wallet });
+      return alias;
     };
     const flat = () => ({ model: 'naive', value: 1, horizon: 86_400 }); // any forecast: the stuck path is the point
     const one = await staked();
     const two = await staked();
     let t = 1_000;
-    const run = (identity, db, o = {}) => runBatch({ chain, identity, db, forecast: flat, now: () => t, pendingWaitMs: 500, sendWaitMs: 3000,
+    const run = (alias, db, o = {}) => runBatch({ chain, alias, db, forecast: flat, now: () => t, pendingWaitMs: 500, sendWaitMs: 3000,
       maxFeeWei: 10n ** 9n * 2n, ...o });
     await anvil.setAutomine(false);
     await anvil.setIntervalMining({ interval: 0 }); // Base stops mining
@@ -124,7 +124,7 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
       expect(q.hashes).toEqual([p.hash, q.hash]);
       expect(BigInt(q.fees.maxFeePerGas) * 4n).toBeGreaterThanOrEqual(BigInt(p.fees.maxFeePerGas) * 5n);
 
-      // past the ceiling: nothing sent, said (another identity's batch, stuck the same way)
+      // past the ceiling: nothing sent, said (another alias's batch, stuck the same way)
       const db2 = mem();
       await run(two, db2);
       const p2 = db2.m.get('base_pending_batch');

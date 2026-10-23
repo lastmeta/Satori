@@ -50,13 +50,13 @@ export const tombstoneEvent = (stream, pubkey, now) => ({
  * (start.py:3442-3482; the publication from routes.py:2700-2711). Priced (`listing`: { price_per_obs, market: { chain,
  * contract, token, payee } }, docs/design/market.md#selling-and-buying-over-the-relays): encrypted, Lite's price_per_obs
  * (satoshis) the one price, and the channel's details in metadata.market.
- * @param {{sub: object, pubkey: string, walletPubkey: string, listing?: object|null}} p sub: a relay_streams row
+ * @param {{sub: object, pubkey: string, aliasPubkey: string, listing?: object|null}} p sub: a relay_streams row
  */
-export const predMetadata = ({ sub, pubkey, walletPubkey, listing = null }) => ({
+export const predMetadata = ({ sub, pubkey, aliasPubkey, listing = null }) => ({
   stream_name: sub.stream_name + PRED, nostr_pubkey: pubkey, name: `Predictions for ${sub.name || sub.stream_name}`,
   description: '', encrypted: !!listing, price_per_obs: listing?.price_per_obs ?? 0, created_at: sub.pred_created_at,
   cadence_seconds: sub.cadence_seconds ?? null, tags: [],
-  metadata: { source_stream_name: sub.stream_name, source_provider_pubkey: sub.provider_pubkey, wallet_pubkey: walletPubkey,
+  metadata: { source_stream_name: sub.stream_name, source_provider_pubkey: sub.provider_pubkey, alias_pubkey: aliasPubkey,
     ...(listing && { market: listing.market }) },
 });
 
@@ -121,7 +121,7 @@ export const paymentEvent = ({ stream, provider, seq, content, now }) => ({
 
 /**
  * PaymentNotification's JSON (models.py:173-205) on Base: amount_sats as Lite's (the price, satoshis), and `voucher` in
- * place of tx_id ({ channel, cumulative, signature }: the identity's cumulative EIP-712 voucher, src/chain/channels.js).
+ * place of tx_id ({ channel, cumulative, signature }: the alias's cumulative EIP-712 voucher, src/chain/channels.js).
  */
 export const paymentJson = ({ from, to, stream, seq, amountSats, timestamp, voucher }) => JSON.stringify({
   from_pubkey: from, to_pubkey: to, stream_name: stream, seq_num: seq, amount_sats: amountSats, timestamp, voucher,

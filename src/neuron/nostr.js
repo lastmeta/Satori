@@ -55,18 +55,18 @@ const parseRaw = (raw) => {
  * @param {object} o.db the app's db
  * @param {{secret: string, pubkey: string}} o.key the Nostr key
  * (onPublished(relays): a `_pred` the relays took; onError(err): an intake that failed: both for Home's activity log)
- * @param {string} o.walletPubkey the identity's compressed pubkey (the announcement's wallet_pubkey)
+ * @param {string} o.aliasPubkey the alias's compressed pubkey (the announcement's alias_pubkey)
  * @param {() => object} o.central the current central client (relays(), relayConfig())
  * @param {{relays: string[], centralWrite: boolean, wss?: Record<string, string>}} o.defaults Settings before the user
  * changes them, and `wss`: a ws:// relay → the wss:// address of the same relay, its stand-in where ws:// can't open (src/config.js)
  * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): discover and subscribe say their steps
  * @param {boolean} [o.ws] whether the page's CSP allows ws:// (the dev server's does; a build's does not: csp.js)
  * @param {() => void} [o.onRecords] a watched stream's observation kept: the track records changed (records())
- * @param {object} [o.identity] our signer (the market's vouchers, binding, settle, close, withdraw); o.vaultAddress the
- * seller's payee; o.vault() the vault while unlocked (a Buy); o.chain() the channel client (src/neuron/base.js channels())
+ * @param {object} [o.alias] our signer (the market's vouchers, binding, settle, close, withdraw); o.walletAddress the
+ * seller's payee; o.wallet() the wallet while unlocked (a Buy); o.chain() the channel client (src/neuron/base.js channels())
  */
-export function createNostr({ db, key, walletPubkey, central, defaults, makeRelay = createRelay, identity = null, vaultAddress = null,
-  vault = () => null, chain = async () => { throw new Error('No Base chain.'); },
+export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay = createRelay, alias = null, walletAddress = null,
+  wallet = () => null, chain = async () => { throw new Error('No Base chain.'); },
   forecast = engineForecast, now = () => Date.now() / 1000, https = globalThis.location?.protocol === 'https:', ws = true,
   onChange = () => {}, onPublished = () => {}, onError = () => {}, onRecords = () => {}, setInterval: si = setInterval,
   clearInterval: ci = clearInterval, openWaitMs = 10_000, work: progress = createWork() }) {
@@ -87,7 +87,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   // the track record: the watched prediction streams and their sources (src/neuron/records.js)
   const watch = createWatch({ db, me: key.pubkey, now, onChange: onRecords });
   // paid streams (src/neuron/market.js): what we sell and buy
-  const market = createMarket({ db, key, identity, vaultAddress, vault, chain, now, onChange: () => onChange(),
+  const market = createMarket({ db, key, alias, walletAddress, wallet, chain, now, onChange: () => onChange(),
     publish: (ev) => background(publish(ev)), sendKept: (events) => background(sendKept(events)) }); // idle() waits for them
   const marketLine = serial(); // the seller's 34602/34603, in order, beside the intake (each may read the chain)
   let watchedAt = -Infinity; // when the last scan for prediction streams worked (s)
@@ -155,7 +155,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   }
 
   /** A `_pred`'s announcement: priced, with its listing (market.listing: price_per_obs and the channel's market). */
-  const announcementOf = (sub, at) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, walletPubkey,
+  const announcementOf = (sub, at) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, aliasPubkey,
     listing: market.listing(sub.stream_name + PRED) }), at));
   const announcements = async (at) => (await db.relayStreams({ active: true })).map((sub) => announcementOf(sub, at));
 
@@ -660,7 +660,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       return this.status();
     },
     /**
-     * Buy a stream sold on the Satori contract: its announcement looked up and verified, the vault (unlocked) opens a
+     * Buy a stream sold on the Satori contract: its announcement looked up and verified, the wallet (unlocked) opens a
      * channel with `deposit` SATORI (100 observations by default), the 34602 names it; followed, and watched. → its view
      */
     async buy(pubkey, stream, deposit) {
@@ -679,7 +679,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
       onChange();
       return v;
     },
-    /** Stop buying (window.satori.stop): the identity asks to close the channel, the unsubscribe is sent; the refund after the 7-day grace period. → its view */
+    /** Stop buying (window.satori.stop): the alias asks to close the channel, the unsubscribe is sent; the refund after the 7-day grace period. → its view */
     async stopBuying(pubkey, stream) {
       const [p, s] = checkStream(pubkey, stream);
       const v = await market.stop(p, s);

@@ -27,7 +27,7 @@ function predAnn(secret, source, { at = 1000, name, cadence = 900, tags = true, 
   const pub = nostrPubkey(secret);
   const m = {
     stream_name: stream ?? `${source.stream}_pred`, nostr_pubkey: pub, name: name ?? `Predictions for ${source.name ?? source.stream}`,
-    cadence_seconds: cadence, metadata: meta ? { source_stream_name: source.stream, source_provider_pubkey: source.pubkey, wallet_pubkey: '02ab' } : null,
+    cadence_seconds: cadence, metadata: meta ? { source_stream_name: source.stream, source_provider_pubkey: source.pubkey, alias_pubkey: '02ab' } : null,
   };
   const e = announceEvent(m, at);
   if (!tags) e.tags = e.tags.filter((t) => !['source_stream', 'source_pubkey'].includes(t[0]));
