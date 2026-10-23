@@ -1107,7 +1107,7 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     expect(u.subs.get(MARKET_ID)).toEqual([{ kinds: [34602, 34603], '#p': [ME_PUB] }]); // to us, on every relay
     relays.get(CENTRAL_RELAY).stored.push(announce('btc'));
     await nostr.subscribe(PROV_PUB, 'btc');
-    await expect(nostr.sell('eth_pred', '1')).rejects.toThrow('eth_pred is not a stream this neuron publishes');
+    await expect(nostr.sell('eth_pred', '1')).rejects.toThrow('eth_pred is not a stream this app publishes');
     await expect(nostr.sell('btc_pred', '0')).rejects.toThrow('positive amount of SATORI');
     await expect(nostr.sell('btc_pred', '0.000000001')).rejects.toThrow('at most 8 decimal places'); // under a satoshi
     u.published = [];

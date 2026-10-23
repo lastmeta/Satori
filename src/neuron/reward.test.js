@@ -6,7 +6,7 @@ import { CentralError } from '../central/index.js';
 
 const ADDR = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7'; // EIP-55
 const LOWER = ADDR.toLowerCase();
-const ME = '0xCf07Dd9F7Dfc0031300b271aFe93a8308df14237'; // this neuron's identity
+const ME = '0xCf07Dd9F7Dfc0031300b271aFe93a8308df14237'; // this app's identity
 const VAULT = '0x10319eaa0A323a3Cf225B9D8f9C490CD53fD7bE5'; // its vault
 
 describe('checkRewardAddress: a Base address, checked before any call', () => {
@@ -31,9 +31,9 @@ describe('checkRewardAddress: a Base address, checked before any call', () => {
   test('the zero address burns: refused, as Send refuses it', () => {
     expect(() => checkRewardAddress(`0x${'0'.repeat(40)}`)).toThrow(ZERO_ADDRESS);
   });
-  test("this neuron's own identity: refused, in any case (the app claims only from the vault: they would sit unclaimed)", () => {
+  test("this app's own identity: refused, in any case (the app claims only from the vault: they would sit unclaimed)", () => {
     expect(() => checkRewardAddress(ME.toLowerCase(), { identity: ME })).toThrow(IDENTITY);
-    expect(IDENTITY).toBe("That is this neuron's identity. This app claims rewards only from the vault, so rewards sent to "
+    expect(IDENTITY).toBe("That is this app's identity. This app claims rewards only from the vault, so rewards sent to "
       + 'the identity would sit unclaimed. Use another address, or Clear to send them to your vault.');
     expect(checkRewardAddress(VAULT, { identity: ME })).toBe(VAULT); // the vault itself is fine: where they go anyway
     expect(checkRewardAddress(ME)).toBe(ME); // no identity given: nothing to compare
@@ -102,7 +102,7 @@ describe('createReward: read and set, with the status', () => {
     expect(await fresh.read()).toMatchObject({ address: null, at: null, error: UNREADABLE }); // unknown: never "not set"
     expect(fresh.known).toBe(false);
   });
-  test("whose: the vault's or this neuron's identity's address is named, in any case", async () => {
+  test("whose: the vault's or this app's identity's address is named, in any case", async () => {
     const central = fakeCentral(VAULT.toLowerCase());
     const r = createReward({ central: () => central, now: at, identity: ME, vault: VAULT });
     expect(await r.read()).toMatchObject({ address: VAULT, whose: 'vault' });
@@ -112,7 +112,7 @@ describe('createReward: read and set, with the status', () => {
     expect(await r.read()).toMatchObject({ address: ADDR, whose: null });
     expect(await r.set(null)).toEqual({ address: null, whose: null, changed: true });
   });
-  test("set: this neuron's identity is refused before any call", async () => {
+  test("set: this app's identity is refused before any call", async () => {
     const central = fakeCentral(null);
     const r = createReward({ central: () => central, now: at, identity: ME, vault: VAULT });
     await expect(r.set(ME.toLowerCase())).rejects.toThrow(IDENTITY);

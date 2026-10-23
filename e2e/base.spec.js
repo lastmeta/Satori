@@ -51,8 +51,8 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   expect(base).toMatchObject({ rpc: ['/rpc'], config: 'bundled', round: ROUND, vault: { staked: 'none', satori: '0' } });
   await go(page, 'wallet');
   await expect(fact(page, 'identity')).toHaveText('0 ETH · about 0 daily batches'); // no warning before staking
-  await expect(fact(page, 'staking')).toHaveText('Not staked: Stake with this neuron, below');
-  const CHOICE = 'Stake with this neuron to let it predict every round, or play Satori Daily by hand.';
+  await expect(fact(page, 'staking')).toHaveText('Not staked: Stake with this app, below');
+  const CHOICE = 'Stake with this app to let it predict every round, or play Satori Daily by hand.';
   await expect(fact(page, 'play')).toHaveText(CHOICE);
   await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://games.satorinet.io');
   await expect(fact(page, 'check')).toContainText('Waits until you stake');
@@ -66,7 +66,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'identity')).not.toContainText('low');
   await expect(fact(page, 'lock')).toHaveText('Free to send');
 
-  // Unlock → Stake with this neuron: the identity's two steps, then the vault's.
+  // Unlock → Stake with this app: the identity's two steps, then the vault's.
   await go(page, 'settings');
   await page.getByLabel('Vault passphrase', { exact: true }).fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();
@@ -77,13 +77,13 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();
   await go(page, 'wallet');
-  await page.getByRole('button', { name: 'Stake with this neuron' }).click();
-  await expect(fact(page, 'result')).toHaveText('Staked with this neuron.', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Stake with this app' }).click();
+  await expect(fact(page, 'result')).toHaveText('Staked with this app.', { timeout: 30_000 });
   expect(rpc.sent.map((t) => [t.from, t.functionName])).toEqual([
     [I, 'setPredictorFee'], [I, 'setAllowedDelegator'], [V, 'delegatePredictionPower'],
   ]);
-  await expect(fact(page, 'staking')).toHaveText('Staked: 100 SATORI with this neuron');
-  await expect(fact(page, 'play')).toHaveText("Your SATORI is staked with this neuron, so it can't also play Satori Daily by hand. "
+  await expect(fact(page, 'staking')).toHaveText('Staked: 100 SATORI with this app');
+  await expect(fact(page, 'play')).toHaveText("Your SATORI is staked with this app, so it can't also play Satori Daily by hand. "
     + 'Unstake to play manually.');
   await expect(fact(page, 'lock')).toHaveText("Staked SATORI can't be sent until you unstake");
   await expect(page.getByRole('button', { name: 'Unstake' })).toBeVisible();
@@ -91,7 +91,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(page.locator('[data-test=base-txs] > *')).toHaveCount(3);
   await expect(page.locator('[data-test=base-txs]')).not.toContainText('renderTemplate');
   await expect(page.locator('[data-test=base-txs] code')).toHaveText([/^Identity: fee to 0 0x/, /^Identity: accepts this vault 0x/,
-    /^Vault: stakes with this neuron 0x/]); // plain words; a local fork: no explorer link
+    /^Vault: stakes with this app 0x/]); // plain words; a local fork: no explorer link
   await expect(page.locator('[data-test=base-txs] code').first()).toHaveAttribute('title', /^setPredictorFee\(0\) by the identity · 0x/);
 
   // The identity's batch, on its own, 10 s after staking: the default game, UP (naive on two values: a tie, which
@@ -299,7 +299,7 @@ test('staking out of sync (the token-hook bug): Home red on the Contract chip, t
   await expect(page.locator('[data-test=action-button]')).toBeHidden();
   await go(page, 'wallet');
   await expect(fact(page, 'sync')).toHaveText("Staking is out of sync. Unstaking will fail until the contract fix. Don't add SATORI to the vault.");
-  await expect(fact(page, 'staking')).toHaveText('Staked: 100 SATORI with this neuron · out of sync');
+  await expect(fact(page, 'staking')).toHaveText('Staked: 100 SATORI with this app · out of sync');
   // Unstake: the simulate underflows (Panic 0x11); the plain words, not "reverted: Panic", and nothing sent
   const before = rpc.sent.length;
   await page.getByRole('button', { name: 'Unstake' }).click();

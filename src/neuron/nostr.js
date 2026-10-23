@@ -520,7 +520,7 @@ export function createNostr({ db, key, walletPubkey, central, defaults, makeRela
   /** One of our `_pred` streams (an active subscription's), by its name. */
   async function ownPred(stream) {
     const sub = (await db.relayStreams({ active: true })).find((r) => r.stream_name + PRED === String(stream ?? ''));
-    if (!sub) throw new Error(`${stream} is not a stream this neuron publishes (one of its <stream>${PRED}).`);
+    if (!sub) throw new Error(`${stream} is not a stream this app publishes (one of its <stream>${PRED}).`);
     return sub;
   }
 

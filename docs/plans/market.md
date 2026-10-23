@@ -242,7 +242,7 @@ can charge" doesn't work.
    2026-10-20 (not yet deployed; [../design/track-record.md](../design/track-record.md)):
    every `_pred` on the relays naming its source (up to 200) is watched on
    its own with its source; each prediction is scored against the source's
-   next observation, only if this neuron received it first; the last 28
+   next observation, only if this app received it first; the last 28
    against no change in the Models tab's words, on the Streams tab and in
    `records()`. Satorian's 120 are watched 2 s after a load.
 2. **The channel contract:** TDD, an adversarial review, then Base Sepolia

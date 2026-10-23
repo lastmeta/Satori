@@ -231,7 +231,7 @@ test('a database file that will not open (damaged): "Set aside and start again" 
   expect((await page.evaluate(() => window.satori.status())).setAside).toBe(aside[0]);
   // Setup offers Restore from words (and the Nostr key) and Import; the same vault comes back
   await expect(page.getByRole('button', { name: 'Restore from words' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Import Dockerized Neuron files' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import Docker files' })).toBeVisible();
   const s = await page.evaluate((w) => window.satori.setup({ passphrase: 'pass phrase', vaultWords: w }), words);
   expect([s.screen, s.vault]).toEqual(['home', vault]);
 });

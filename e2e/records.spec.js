@@ -32,7 +32,7 @@ async function reader(url) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const watching = (page) => page.evaluate(async () => (await window.satori.nostr()).watching);
 
-test('every prediction stream watched on its own and scored by what this neuron received before the outcome; shown on Streams', async ({ context, page }) => {
+test('every prediction stream watched on its own and scored by what this app received before the outcome; shown on Streams', async ({ context, page }) => {
   test.setTimeout(240_000);
   await stubCentral(context, { relays: [CENTRAL_RELAY] });
   const stream = `rec-${Date.now().toString(36)}`;
@@ -137,7 +137,7 @@ test('every prediction stream watched on its own and scored by what this neuron 
   const detail = row(good.pubkey).locator('[data-test=record-detail]');
   await expect(detail).toContainText('75% less error than no change');
   await expect(detail).toContainText(`Right way ${CYCLES} of ${CYCLES}`);
-  await expect(detail.locator('[data-test=record-note]')).toHaveText(/^Seen by this neuron since .+\. It counts only predictions this neuron received before the outcome\.$/);
+  await expect(detail.locator('[data-test=record-note]')).toHaveText(/^Seen by this app since .+\. It counts only predictions this app received before the outcome\.$/);
   await expect(detail.locator('.rchart path.ra')).toHaveAttribute('d', /^M0\.0 /);
   await expect(detail.locator('[data-test=record-source-line]')).toHaveText(`Source: Test walk (${stream}) by ${provider.pubkey.slice(0, 8)}…${provider.pubkey.slice(-4)}`);
   await page.setViewportSize({ width: 390, height: 2400 }); // tall, so the phone's tab bar is not over the card

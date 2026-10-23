@@ -107,13 +107,13 @@ describe('Base checks', () => {
     await a.base({ at: clock, error: 'HTTP request failed' });
     clock += 3600;
     await a.base({ at: clock, error: 'HTTP request failed' });
-    await a.base({ at: clock, round: 8, skipped: 'nothing staked with this neuron' });
+    await a.base({ at: clock, round: 8, skipped: 'nothing staked with this app' });
     const base = a.rows().filter((r) => r.kind === 'base');
     expect(base.map((r) => [r.level, r.count, r.data])).toEqual([
       ['ok', 1, { round: 7, hash: '0xab', games: [1], dropped: [70] }],
       ['warn', 2, { round: 8, skipped: 'gas above the ceiling: a max fee of 4 gwei > 2 gwei; the next check tries again' }],
       ['bad', 2, { round: null, error: 'HTTP request failed' }],
-      ['idle', 1, { round: 8, skipped: 'nothing staked with this neuron' }],
+      ['idle', 1, { round: 8, skipped: 'nothing staked with this app' }],
     ]);
     expect(base[1]).toMatchObject({ at: T + 86400, until: T + 86400 + 3600 });
     expect(await db.activity(0)).toEqual(a.rows());
@@ -150,12 +150,12 @@ test('history (only a run that loaded or failed; a central without the route is 
   await a.history({ at: T, streams: 0, rows: 0, error: 'central 404: Not Found', retryAt: T + 86400 });
   await a.history({ at: T, streams: 3, rows: 30, left: 80, error: 'central unreachable: Failed to fetch' });
   await a.history(null);
-  await a.wallet('stake', 'Staked with this neuron');
+  await a.wallet('stake', 'Staked with this app');
   await a.error('nostr', new Error('IO Error'));
   expect(a.rows().slice(1).map((r) => [r.kind, r.level, r.data])).toEqual([
     ['history', 'ok', { streams: 83, rows: 83000 }],
     ['history', 'warn', { streams: 3, rows: 30, error: 'central unreachable: Failed to fetch' }],
-    ['wallet', 'ok', { action: 'stake', text: 'Staked with this neuron' }],
+    ['wallet', 'ok', { action: 'stake', text: 'Staked with this app' }],
     ['error', 'bad', { where: 'nostr', message: 'IO Error' }],
   ]);
 });

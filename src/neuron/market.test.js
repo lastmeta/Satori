@@ -313,9 +313,9 @@ describe('selling and buying', () => {
     vaultOpen = true;
     await expect(buyer.buy(entryOf(null), 5n * PRICE)).rejects.toThrow('not for sale on the Satori contract');
     await expect(buyer.buy(entryOf(), PRICE - 1n)).rejects.toThrow('at least one observation');
-    chainApi.refuse = new ChannelError("Your vault is staked with this neuron, so it can't send SATORI: a channel needs SATORI the vault can send.",
+    chainApi.refuse = new ChannelError("Your vault is staked with this app, so it can't send SATORI: a channel needs SATORI the vault can send.",
       { reason: 'Locked' });
-    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow("Your vault is staked with this neuron, so it can't send SATORI");
+    await expect(buyer.buy(entryOf(), 5n * PRICE)).rejects.toThrow("Your vault is staked with this app, so it can't send SATORI");
     expect(buyer.status().bought).toEqual([]);
     expect(relay.filter((e) => e.kind === KIND.SUBSCRIPTION)).toEqual([]);
     // the default deposit: 100 observations

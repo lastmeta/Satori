@@ -56,7 +56,7 @@ test.describe.serial('a build, in a browser profile', () => {
     const m = await cdp.send('Page.getAppManifest');
     expect(m.url).toBe(`${APP}manifest.webmanifest`);
     expect(m.errors).toEqual([]);
-    expect(JSON.parse(m.data)).toMatchObject({ name: 'Satori neuron', short_name: 'Satori', start_url: '/', scope: '/', display: 'standalone',
+    expect(JSON.parse(m.data)).toMatchObject({ name: 'Satori app', short_name: 'Satori', start_url: '/', scope: '/', display: 'standalone',
       theme_color: '#f6f7f9', background_color: '#f6f7f9' });
     expect(JSON.parse(m.data).icons.map((i) => `${i.sizes} ${i.purpose ?? 'any'}`)).toEqual(['192x192 any', '512x512 any', '512x512 maskable']);
     for (const icon of ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png']) {

@@ -18,7 +18,7 @@ export async function shareLink(link, nav = globalThis.navigator) {
   if (!link) return null;
   if (nav?.share) {
     try {
-      await nav.share({ title: 'Satori neuron', url: link });
+      await nav.share({ title: 'Satori app', url: link });
       return 'shared';
     } catch (err) {
       if (err?.name === 'AbortError') return 'cancelled';

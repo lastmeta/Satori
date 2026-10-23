@@ -183,9 +183,9 @@ publicKey: 02aa
   });
   test('a file over 64 KB is refused before it is read: no Dockerized Neuron file is that big', async () => {
     const big = `entropy: ${'A'.repeat(70_000)}\n`;
-    await expect(readDockerFiles({ walletText: big, vaultText: fx.vaults.current.yaml, password })).rejects.toThrow('wallet.yaml: over 64 KB, so not a Dockerized Neuron file.');
+    await expect(readDockerFiles({ walletText: big, vaultText: fx.vaults.current.yaml, password })).rejects.toThrow('wallet.yaml: over 64 KB, so not a Docker file.');
     await expect(readDockerFiles({ walletText: a.walletYaml, vaultText: fx.vaults.current.yaml, password, nostrText: big }))
-      .rejects.toThrow('nostr.yaml: over 64 KB, so not a Dockerized Neuron file.');
+      .rejects.toThrow('nostr.yaml: over 64 KB, so not a Docker file.');
     expect(IMPORT_MAX).toBe(65_536);
   });
   test('the same key twice, and a bad nostr.yaml, are refused', async () => {

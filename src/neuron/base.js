@@ -245,7 +245,7 @@ export async function runBatch({ chain, identity, db, forecast = engineForecast,
     const state = await chain.batchState(identity.evmAddress);
     at = state.chainTime;
     const { round } = state;
-    if (state.power === 0n) return { at, round, skipped: 'nothing staked with this neuron' };
+    if (state.power === 0n) return { at, round, skipped: 'nothing staked with this app' };
     if (state.predicted !== 0) return { at, round, skipped: 'already predicted this round' };
 
     report('check');

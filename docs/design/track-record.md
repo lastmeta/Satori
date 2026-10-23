@@ -219,7 +219,7 @@ uses 28 origins):
 
 It is the Models tab's comparison made live: the backtest asks how a model
 would have done on past data; this asks how the stream's predictions did on
-data that came after this neuron received them.
+data that came after this app received them.
 
 **A known deviation, not special-cased.** Lite publishes its `_pred` two
 cadences ahead (t2, `engine-lite/engine.py:733-735, 1176-1186`); this
@@ -309,15 +309,15 @@ A **Prediction streams** card, after the Satori relays card:
   ("Right way 15 of 20"), the pairs as a chart (the outcomes as a line, the
   predictions dashed, on one scale, `sparkPath` with a shared range;
   "Actual" and "Predicted" beside their lines; "the last 21 outcomes, from
-  98.2 to 104"), and in plain words: "Seen by this neuron since Oct 20,
-  14:05. It counts only predictions this neuron received before the
+  98.2 to 104"), and in plain words: "Seen by this app since Oct 20,
+  14:05. It counts only predictions this app received before the
   outcome."
 - records are read again while Streams shows, when a watched stream gets
   an observation or the watched set changes, at most about once a second.
 
 The words people see: the Satori relays, never central or server.
 
-<img src="../screenshots/streams-records-phone-light.png" alt="Prediction streams on a phone (the e2e): Watching 3 prediction streams · 2 with a record; 75% better from 9, 100% worse from 9, Not scored yet 2 of 5" width="240"> <img src="../screenshots/streams-record-detail-phone-light.png" alt="One opened: 75% less error than no change over the last 9 predictions, Right way 9 of 9, the outcomes and the predictions (dashed), Seen by this neuron since …" width="240">
+<img src="../screenshots/streams-records-phone-light.png" alt="Prediction streams on a phone (the e2e): Watching 3 prediction streams · 2 with a record; 75% better from 9, 100% worse from 9, Not scored yet 2 of 5" width="240"> <img src="../screenshots/streams-record-detail-phone-light.png" alt="One opened: 75% less error than no change over the last 9 predictions, Right way 9 of 9, the outcomes and the predictions (dashed), Seen by this app since …" width="240">
 
 **Measured live** (2026-10-20, the dev server: satorian read only and the
 dev relay): 120 prediction streams and 77 sources watched 2 s after a

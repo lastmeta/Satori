@@ -193,7 +193,7 @@ describe('the list and the status', () => {
 
   test('what the quality is, in one plain line: the neuron\'s own backtest, made as it trains; not the network\'s score of what it sent', () => {
     const v = statusView(summaryOf([TWO]));
-    expect(v.note).toBe("The neuron's own backtest, made as it trains: how each model would have done on past data against no change."
+    expect(v.note).toBe("The app's own backtest, made as it trains: how each model would have done on past data against no change."
       + " Not the Satori Network's score of the predictions it sent.");
     expect(statusView(summaryOf([])).note).toBe('');
   });

@@ -191,7 +191,7 @@ It is where the Satori Network sends this neuron's rewards instead of the
 vault, such as a pool. Satori is Base only, so it is a Base (0x) address.
 With none set, rewards go to the vault (register's `vault_base_address`,
 [above](#the-vault-in-registers-answer)). It has nothing to do with staking:
-Stake with this neuron gives the vault's prediction power on the Satori
+Stake with this app gives the vault's prediction power on the Satori
 contract; the reward address only says where the Satori Network pays.
 
 **Where: Settings › Reward address**, a card of its own after Keys and

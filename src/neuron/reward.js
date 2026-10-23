@@ -10,7 +10,7 @@ import { ZERO_ADDRESS } from './base.js';
 export const NOT_BASE = 'A reward address is a Base address: 0x and 40 hex characters.';
 export const BAD_CHECKSUM = "That address's capital letters don't match its checksum: check it for a typo.";
 /** The app claims rewards only from the vault (Wallet › Claim): rewards paid to the identity would sit unclaimed. */
-export const IDENTITY = "That is this neuron's identity. This app claims rewards only from the vault, so rewards sent to "
+export const IDENTITY = "That is this app's identity. This app claims rewards only from the vault, so rewards sent to "
   + 'the identity would sit unclaimed. Use another address, or Clear to send them to your vault.';
 export const UNREADABLE = "The Satori Network answered a reward address that isn't a Base address, so it isn't shown.";
 

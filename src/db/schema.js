@@ -9,9 +9,10 @@ import { recordFromRows } from '../keys/index.js';
  * column that no code before it reads and whose null means "not yet" (computed again, asked again). An older build
  * may open a database whose newer migrations are all additive (docs/design/storage.md#migrations): a rollback, or an
  * old cache offline, does not dead-end. Not additive: a table dropped or recreated (1, 2), a column the code must keep
- * in step at every write (5's obs_*, 9's predicted_ts), the keys' move (7), rows rewritten (10).
+ * in step at every write (5's obs_*, 9's predicted_ts), the keys' move (7), rows rewritten (10). 15 rewrites words an older
+ * build only displays, and writes again in its own: it lives with either.
  */
-export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13, 14]);
+export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13, 14, 15]);
 
 export const MIGRATIONS = [
   // 1 (step 1): streams fetched from a URL; times in ms.
@@ -145,4 +146,8 @@ export const MIGRATIONS = [
      seen_at BIGINT NOT NULL, added_at BIGINT NOT NULL);
    CREATE TABLE watch_observations (stream_uuid VARCHAR NOT NULL, seq BIGINT NOT NULL, ts BIGINT, value DOUBLE,
      received_at BIGINT NOT NULL, event_id VARCHAR NOT NULL UNIQUE, PRIMARY KEY (stream_uuid, seq));`,
+  // 15 (2026-10-23): the word "neuron" is phased out for "the Satori app": the activity log's earlier rows say "this
+  // app" too ("Staked with this app", "nothing staked with this app"), so the feed never shows the old words.
+  `UPDATE activity SET data = replace(data, 'this neuron', 'this app'), mkey = replace(mkey, 'this neuron', 'this app')
+   WHERE data LIKE '%this neuron%' OR mkey LIKE '%this neuron%';`,
 ];

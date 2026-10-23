@@ -330,11 +330,11 @@ describe('openChannel: the vault funds it (Unlock), the identity signs for it', 
     expect(r.approve).toBeUndefined();
     expect(sentBy()).toEqual([['buyer vault', 'open']]);
   });
-  test('the lock: a vault staked with this neuron can\'t fund a channel; said plainly, before any signature or gas', async () => {
+  test('the lock: a vault staked with this app can\'t fund a channel; said plainly, before any signature or gas', async () => {
     s.lock[BV] = INDEFINITE;
     const err = await opened().catch((e) => e);
     expect(err).toBeInstanceOf(ChannelError);
-    expect(err.message).toBe("Your vault is staked with this neuron, so it can't send SATORI: a channel needs SATORI the vault can send.");
+    expect(err.message).toBe("Your vault is staked with this app, so it can't send SATORI: a channel needs SATORI the vault can send.");
     expect(err.reason).toBe('Locked');
     expect(rpc.sent).toHaveLength(0);
     expect(buyerV.signDigest).not.toHaveBeenCalled();
@@ -387,7 +387,7 @@ describe('topUp and cancelClose (the vault), requestClose and withdraw (the iden
   });
   test('topUp: the same lock rule, said before anything is sent; an unknown channel in plain words', async () => {
     s.lock[BV] = INDEFINITE;
-    await expect(channels.topUp(buyerV, id, E18)).rejects.toThrow(/staked with this neuron/);
+    await expect(channels.topUp(buyerV, id, E18)).rejects.toThrow(/staked with this app/);
     await expect(channels.topUp(buyerV, `0x${'99'.repeat(32)}`, E18)).rejects.toThrow('There is no such channel.');
     expect(rpc.sent).toHaveLength(0);
   });

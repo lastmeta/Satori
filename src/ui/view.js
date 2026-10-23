@@ -43,15 +43,15 @@ function setup(a) {
   return html`
   <section class="card narrow setup" hidden="${show('setup')}">
     <div hidden="${showStep('choose')}">
-      <h2>Set up this neuron</h2>
-      <p class="muted">A neuron has two keys. The <strong>identity</strong> runs the neuron on its own,
+      <h2>Set up Satori</h2>
+      <p class="muted">Satori has two keys. The <strong>identity</strong> runs the app on its own,
         so it stays unencrypted in this browser. The <strong>vault</strong> holds your funds and is
         encrypted with your passphrase.</p>
       <p class="muted" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
       <div class="actions">
-        <button class="primary" @click="${a.newWords}">Create a new neuron</button>
+        <button class="primary" @click="${a.newWords}">Create a wallet</button>
         <button @click="${() => a.goStep('restore')}">Restore from words</button>
-        <button @click="${() => a.goStep('docker')}">Import Dockerized Neuron files</button>
+        <button @click="${() => a.goStep('docker')}">Import Docker files</button>
       </div>
       ${install(a)}
     </div>
@@ -101,13 +101,13 @@ function setup(a) {
     </form>
 
     <form hidden="${showStep('docker')}" @submit="${(e) => { e.preventDefault(); a.importDocker(e.target); }}">
-      <h2>Import Dockerized Neuron files</h2>
-      <p class="muted">The files from a Dockerized Neuron’s wallet folder (unzip “Download Wallet” first). Their keys
+      <h2>Import Docker files</h2>
+      <p class="muted">The files from a Docker install’s wallet folder (unzip “Download Wallet” first). Their keys
         are read here and stored in this app’s own way; the files themselves are not kept.</p>
       <label>wallet.yaml (identity) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
       <label>vault.yaml <input name="vault" type="file" accept=".yaml,.yml" required></label>
       <label>nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
-      <label>Vault password (the Dockerized Neuron’s) <input name="pass" type="password" autocomplete="current-password" required></label>
+      <label>Vault password (the Docker install’s) <input name="pass" type="password" autocomplete="current-password" required></label>
       <label class="check"><input name="reuse" type="checkbox" checked> Use it as this app’s passphrase too (if it has at least ${MIN_PASSPHRASE} characters)</label>
       ${errorLine()}
       <div class="actions">
@@ -153,12 +153,12 @@ export function render(root, a) {
       <button class="small-btn" @click="${a.dismissNotice}">Dismiss</button>
     </div>
     <div class="notice small" role="status" data-test="set-aside-notice" hidden="${() => !state.setAside || state.screen !== 'setup'}">
-      <span>${() => `The old database was set aside as ${state.setAside}, in this site's storage. Restore this neuron from your words, or import its files.`}</span>
+      <span>${() => `The old database was set aside as ${state.setAside}, in this site's storage. Restore from your words, or import its files.`}</span>
     </div>
     <p class="muted center" data-test="opening" hidden="${() => state.screen !== 'loading' || !!state.cached}">${() => openingText(state.engine)}</p>
     <section class="card narrow" hidden="${show('elsewhere')}">
       <h2>Satori is open in another tab</h2>
-      <p class="muted">Only one tab can run the neuron. Switch to that tab, or close it.</p>
+      <p class="muted">Only one tab can run the app. Switch to that tab, or close it.</p>
       <p class="muted">This tab takes over when that one closes.</p>
     </section>
     <section class="card narrow" hidden="${show('fatal')}">
@@ -167,15 +167,15 @@ export function render(root, a) {
       <p class="muted small">Nothing was deleted: your keys and data stay in this browser’s storage for this site.
         Reload to try again. If it keeps failing, report this message at
         <a href="https://github.com/lastmeta/Satori/issues" target="_blank" rel="noopener">github.com/lastmeta/Satori/issues</a>.
-        Meanwhile your 24 words (or the Dockerized Neuron files) can set the neuron up in another browser.</p>
+        Meanwhile your 24 words (or the Docker files) can set the app up in another browser.</p>
       <div class="actions"><button class="primary" @click="${() => location.reload()}">Reload</button></div>
     </section>
     <section class="card narrow" hidden="${show('damaged')}">
       <h2>Satori's database can't be opened</h2>
       <p class="error" data-test="damaged-error">${() => state.fatal}</p>
       <p class="muted small">It may be damaged. You can set it aside and start again: the file is kept in this browser's
-        storage for this site under another name, never deleted. Your keys are in it too, so you then restore this neuron
-        from your vault's 24 words (and the identity's, and the Nostr key from Backup), or import the Dockerized Neuron files.
+        storage for this site under another name, never deleted. Your keys are in it too, so you then restore
+        from your vault's 24 words (and the identity's, and the Nostr key from Backup), or import the Docker files.
         Reload first if you want to try again.</p>
       <div class="actions">
         <button class="primary" data-test="set-aside" disabled="${() => state.busy === 'setAside'}" @click="${a.setAside}">${() => (state.busy === 'setAside' ? 'Setting aside…' : 'Set aside and start again')}</button>
@@ -187,7 +187,7 @@ export function render(root, a) {
       <h2>Unlock to finish the update</h2>
       <p class="muted">An earlier version stored this vault with its public key encrypted, so its address can’t
         be shown until it is opened once. Enter its passphrase: the vault is then stored in this app’s own format,
-        and the neuron starts.</p>
+        and the app starts.</p>
       <form class="unlock" @submit="${(e) => a.finishUpdate(form(e), e.target)}">
         <input name="pass" type="password" aria-label="Vault passphrase to finish the update" placeholder="Vault passphrase" autocomplete="current-password" required>
         <button class="primary" type="submit" data-test="finish" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>

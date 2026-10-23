@@ -53,7 +53,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
 
   // Setup: create, the vault's words, confirm three, passphrase.
   await openApp(page);
-  await page.getByRole('button', { name: 'Create a new neuron' }).click();
+  await page.getByRole('button', { name: 'Create a wallet' }).click();
   const words = await visible(page.locator('ol.words li')).allTextContents();
   expect(words).toHaveLength(24);
   const vaultPub = publicKey(secretFromWords(words.join(' ')));
@@ -261,7 +261,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   const v = fx.vectors[2];
   stub.vaults[v.pubkey] = v.ethAddress; // central pays this vault: its vault_base_address
   await openApp(page);
-  await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create a wallet' })).toBeVisible();
   await expect(page.evaluate(() => window.satori.poll())).rejects.toThrow(/Set up first/);
   const s0 = await page.evaluate((w) => {
     const { setup } = window.satori; // destructured: no `this`
@@ -439,7 +439,7 @@ test('central with history: the first poll backfills each stream and forecasts i
   expect(stub.prod).toEqual([]);
 });
 
-test("import Dockerized Neuron files; central pays this vault's rewards to another Base address: a mismatch shows both; Settings", async ({ context, page }) => {
+test("import Docker files; central pays this vault's rewards to another Base address: a mismatch shows both; Settings", async ({ context, page }) => {
   const stub = await stubCentral(context);
   stub.otherVault = fx.vectors[3].ethAddress; // central pays this vault's rewards to another Base address
   const wallet = fx.vectors[0];
@@ -447,7 +447,7 @@ test("import Dockerized Neuron files; central pays this vault's rewards to anoth
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
 
   await openApp(page);
-  await page.getByRole('button', { name: 'Import Dockerized Neuron files' }).click();
+  await page.getByRole('button', { name: 'Import Docker files' }).click();
   // In the wrong slots: refused, and the message says so.
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('wallet.yaml', wallet.walletYaml));
@@ -508,7 +508,7 @@ test('import: a Docker vault password under 8 characters asks for a new passphra
   const p = profiles.find((x) => x.label.startsWith('steps 2-4'));
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
-  await page.getByRole('button', { name: 'Import Dockerized Neuron files' }).click();
+  await page.getByRole('button', { name: 'Import Docker files' }).click();
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', p.meta.wallet_yaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', p.meta.vault_yaml));
   await page.getByLabel('Vault password').fill(p.passphrase);
@@ -561,7 +561,7 @@ test('setup: one at a time, and it leaves rows it does not own', async ({ contex
   expect(await page.evaluate((r) => window.probe({ cmd: 'app-meta', key: 'vault', value: r }), row0)).toEqual({ value: row0 });
 
   await openApp(page);
-  await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create a wallet' })).toBeVisible();
   await expect(page.getByText(/prototype/)).toHaveCount(0);
   // Two setups at once (an agent retrying, or an agent and the UI): one wins, the other is refused.
   const results = await page.evaluate(() => Promise.allSettled([
@@ -570,7 +570,7 @@ test('setup: one at a time, and it leaves rows it does not own', async ({ contex
   const done = results.filter((r) => r.screen === 'home');
   expect(done).toHaveLength(1);
   expect(results.find((r) => r.error)?.error).toMatch(/busy|already set up/i);
-  await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Create a wallet' })).toBeHidden();
 
   // What was stored is what the winner reported.
   await reloadApp(page);

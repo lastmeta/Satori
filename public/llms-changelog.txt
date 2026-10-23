@@ -4,6 +4,19 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-23 (the word "neuron")
+
+- The app no longer calls itself a neuron in what it shows or returns: "this
+  app" replaces "this neuron" ("Stake with this app", "Staked with this app.",
+  "nothing staked with this app" as the batch's `skipped`, Home's and Settings'
+  lines, `health()` reasons, errors), Setup's button is "Create a wallet" (was
+  "Create a new neuron") and the Docker import is "Import Docker files". The
+  PWA name and the share sheet's title are "Satori app". Match on the new words.
+- Earlier activity rows are rewritten the same way (`activity()` shows "Staked
+  with this app").
+- Unchanged: `window.satori`'s methods, `data-test` names, and the
+  `neuron-version` header sent to the Satori Network.
+
 ## Changed 2026-10-23 (the app's address)
 
 - The app is served at https://app.satorinet.io. neuron.satorinet.io and

@@ -144,7 +144,7 @@ no warn or bad reason is present.
 | 3 | `central-failing` | bad | the failures span a real cycle: nothing went out for 12 h of open time | network | the last cycle failed, and no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Try again (a poll) |
 | 4 | `central-overdue` | bad | nothing went out for a whole cycle of open time | network | no good cycle within `WINDOW_S` of open time (`FIRST_S` with none yet) | Poll now |
 | 5 | `base-failing` | bad | the paying Base batch keeps failing: each round's earning is lost | contract | the batch check failed twice in a row while Base is in use (staked, or a batch sent before) | Open Settings (Base) |
-| 5b | `stake-out-of-sync` | bad | the vault's SATORI can't be unstaked until the contract fix (the token-hook bug), and more SATORI in the vault only adds to it | contract | staked with this neuron, the identity accepts only this vault, and its power is under the vault's SATORI (`base.vault.inSync === false`, [below](#staking-out-of-sync)) | none: the card says "Unstaking will fail until the contract fix. Don't add SATORI to the vault." |
+| 5b | `stake-out-of-sync` | bad | the vault's SATORI can't be unstaked until the contract fix (the token-hook bug), and more SATORI in the vault only adds to it | contract | staked with this app, the identity accepts only this vault, and its power is under the vault's SATORI (`base.vault.inSync === false`, [below](#staking-out-of-sync)) | none: the card says "Unstaking will fail until the contract fix. Don't add SATORI to the vault." |
 | 6 | `relays-down` | bad | the streams the person subscribed are not predicted at all | relays | streams are subscribed and every relay is down: not open for 10 min (`RELAY_GRACE_S`, [below](#relays-blocked-and-reconnecting)); a blocked one is not counted | Open Settings (relays) |
 | 7 | `central-failed` | warn | it retries in minutes on its own (2, 10, 30 min), but something may need fixing | network | the last cycle failed (once or more), within `WINDOW_S` of open time of the last good one | Try again |
 | 8 | `vault-mismatch` | warn | central pays this vault's rewards to another address, or to none: earning lost | network | register's `vault_base_address` is another Base address than this vault's (the card shows both), or null (central has no vault for this identity); not when a central does not send it | Open Settings (keys) |
@@ -152,11 +152,11 @@ no warn or bad reason is present.
 | 11 | `gas-low` | warn | under 7 days of batches left, then Base earning stops; only the person can add ETH | contract | staked, and the identity's ETH pays for under 7 batches | Add gas (Wallet) |
 | 12 | `base-skipped` | warn | this round's Base batch, and its earning, is lost unless it is fixed | contract | staked, and this round's check skipped for a fixable reason (the gas ceiling; no game passed its simulation) | Open Settings (Base) / Open Wallet |
 | 12b | `base-stuck` | warn | the round's batch is not on the chain, and the identity's later transactions wait behind it | contract | a batch sent and not mined for 10 min ([base.md](base.md#a-batch-that-never-mines)): sent again with a higher fee ("The Satori contract batch is stuck; retrying with a higher fee."), or a higher fee would pass the max fee ("The Satori contract batch is stuck.") | none (it retries) / Open Settings (Base) |
-| 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | contract | the chain did not answer, while the contract is in use (staked with this neuron, or a batch sent before) | Open Settings (Base) |
+| 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | contract | the chain did not answer, while the contract is in use (staked with this app, or a batch sent before) | Open Settings (Base) |
 | 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | network | *Was asleep* (above) | none |
 | 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | network | *Starting* (above) | none |
 | 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the vault | – | storage is not persistent and no backup is confirmed | Back up |
-| 16b | `stake` | advice (warn until 2026-10-19) | nothing is wrong: the vault's SATORI could earn on the Satori contract, and staking carries a known risk until the contract fix, which the card says before staking; the chip stays "Not staked" (off, grey) | contract | not staked, and the vault holds SATORI: "Stake with this neuron to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." | Stake |
+| 16b | `stake` | advice (warn until 2026-10-19) | nothing is wrong: the vault's SATORI could earn on the Satori contract, and staking carries a known risk until the contract fix, which the card says before staking; the chip stays "Not staked" (off, grey) | contract | not staked, and the vault holds SATORI: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." | Stake |
 | 17 | `install` | advice | nothing is wrong now: installed, Satori stays open in its own window and misses less | – | not installed, the browser can add Satori (its prompt, or the steps on iOS, Safari on a Mac, Firefox on Android: `app.addTo`), and the card was not put away on this device; any state, not only *Was asleep* ([pwa.md](pwa.md#install)) | Install and Not now (the prompt); Got it (the steps) |
 | 18 | `relay-down` | advice | another relay still carries the predictions and it keeps retrying; the network is not paid | relays | streams are subscribed and some relay, not all, is down (10 min, not blocked) | Open Settings (relays) |
 | 19 | `base-unused-unreachable` | note | nothing is predicted or earned there: not staked, no batch ever sent | contract | the chain did not answer while the contract is unused: the Contract chip says "Unreachable", grey; no card, never the status, the tone, the title, the line or the day strip ([below](#the-contract-unused)) | none |
@@ -249,7 +249,7 @@ holds:
 | Title | When |
 |---|---|
 | *Not predicting* | central's predictions are failing: a bad central reason (`db-error`, `login-refused`, `central-failing`, `central-overdue`) |
-| *Partly predicting* | central predicts (a good cycle in the log, no bad central reason; one failed poll still counts, as for *Predicting*), but Base, which should be predicting, has a red reason (`base-failing`). Base should be predicting when the vault is staked with this neuron, or when the stake is not read (its RPC down since the page loaded) and a batch went out before |
+| *Partly predicting* | central predicts (a good cycle in the log, no bad central reason; one failed poll still counts, as for *Predicting*), but Base, which should be predicting, has a red reason (`base-failing`). Base should be predicting when the vault is staked with this app, or when the stake is not read (its RPC down since the page loaded) and a batch went out before |
 | *Starting* | no good cycle in the log yet (the rows this session read) |
 | *Was asleep* | a session missed work and has not caught up: no good cycle since it began |
 | *Predicting* | otherwise |
@@ -440,7 +440,7 @@ health.js map them).
 
 ### The contract unused
 
-Not staked with this neuron and no batch ever sent: nothing is predicted or
+Not staked with this app and no batch ever sent: nothing is predicted or
 earned on the Satori contract, so its RPC's trouble is not Home's
 (the reliability review, 2026-10-19: an RPC error turned Home amber with
 nothing staked). The error stays on the Contract chip as a grey note,
@@ -534,7 +534,7 @@ health changes, and when the page is hidden or left.
 - **Marked**: the hero says "From your last visit, 2 h ago", the rest of
   Home is faded, the ring turns and the line says the step ("Opening…
   downloading the engine, 1.2 of 5.1 MB", "starting the engine…", "opening
-  the database…", "starting the neuron…"). No tab bar and no card yet; the
+  the database…", "starting the app…"). No tab bar and no card yet; the
   chips and Claim do nothing.
 - The neuron's own Home replaces it as soon as it starts; for agents
   `<body data-screen>` stays `loading` until then.
@@ -558,7 +558,7 @@ on every day from `at` to `until`):
 | `part` | some channels |
 | `error` | only failures |
 | `closed` | nothing went out and nothing failed: the app never ran that day (`ran: false`), or ran with nothing due |
-| `before` | the day ended before the neuron began: an empty outlined cell, "Before this neuron", not a closed day |
+| `before` | the day ended before the neuron began: an empty outlined cell, "Before this app", not a closed day |
 
 The neuron began at its first session in the log (`activity.first()`, read
 from the whole log, not only the rows loaded), or when its keys were made
@@ -568,7 +568,7 @@ Records from before `created` have only the log.
 Today has an outline. Each day is `{ date: 'YYYY-MM-DD', code, ran, today }`.
 The summary counts the neuron's own days: "12 of 14 full days"; a neuron
 younger than the strip, "1 full day" on its first day, then "2 of 3 full
-days". The legend shows "Before this neuron" only while such a day is shown.
+days". The legend shows "Before this app" only while such a day is shown.
 
 ## Address changes
 
@@ -601,7 +601,7 @@ to send), "Caught up: sent 83 predictions" ("Caught up: up to date"), "The
 Satori Network refused the batch: Satori Network 401: Invalid signature",
 "Satori contract batch for round 20742: 1 game", "Satori contract batch
 skipped: gas above the ceiling (×3)", "Published 3 forecasts to the Satori
-relays", "Satori was closed for 2 d", "Staked with this neuron",
+relays", "Satori was closed for 2 d", "Staked with this app",
 "Satori Network address changed to https://central.example", "The Satori
 Network's contract addresses differ from the app's (token): the app's are
 used". A session that missed nothing is not shown.

@@ -3,7 +3,7 @@
 [← OVERVIEW](OVERVIEW.md)
 
 The neuron predicts on Base the way Satori Lite (`../neuron`, the Docker
-neuron) does: the **vault** stakes with this neuron, and the **identity**
+neuron) does: the **vault** stakes with this app, and the **identity**
 signs one batch of up/down predictions a day on its own, with no passphrase.
 The vault signs only what moves or locks its funds: Stake, Unstake, claims
 and sends, each after **Unlock**. Where the dapp (`../contract/satori-ui`)
@@ -29,7 +29,7 @@ the engine refuses a staked vault's own predictions
 page load ─▶ config (bundled D7 addresses, central's /api/v1/base/config over them, 1 h)
           └─▶ status: one multicall (ETH ×2, SATORI, stake ×2, fee, allowedDelegator, lock, round, claimable ×2, alreadyMintedTo)
                       + central's merkle proof for the vault (at most hourly)
-Unlock ─▶ Stake with this neuron: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
+Unlock ─▶ Stake with this app: identity setPredictorFee(0) → identity setAllowedDelegator(vault) → vault delegatePredictionPower(identity)
        └─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH, or SATORI when it can be sent
 each round (the identity, no unlock): a batch already sent? wait for it ─▶ power > 0 and no batch yet
           ─▶ registry streams whose game has voting weight ─▶ history ─▶ engine ─▶ UP/DOWN per game
@@ -134,7 +134,7 @@ round N + 1, at 00:00 UTC. The card says "Staked SATORI can't be sent until
 you unstake", then "SATORI can be sent from <date> (round N + 1)". Lite's `stake_status` uses `lock_round > current`
 (BP:316) and so shows the tokens as free one round early.
 
-## Stake with this neuron (Unlock)
+## Stake with this app (Unlock)
 
 Lite's "Enable staking" (`ensure_delegation`, BP:273-290; ROUTES:1485-1529)
 plus the dapp's instant-signing setup (`UI/components/GameWalletPanel.tsx:536-595`):
@@ -232,7 +232,7 @@ gas, `TransferHookFailed`): power 100, balance 100.000000000000000001,
 `inSync: false`, Home red, Unstake refused in plain words
 ([screenshots](health.md#staking-out-of-sync)).
 
-Words: "Stake with this neuron" / "Unstake", "Staked: 100 SATORI with this
+Words: "Stake with this app" / "Unstake", "Staked: 100 SATORI with this
 neuron" / "Not staked", as Lite says it ("Stake your vault & predict on
 Base"). The app says Unlock/Lock for the vault's passphrase, so the token's
 transfer lock is "can't be sent" / "can be sent from <date>".
@@ -560,17 +560,17 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
   named "Local test chain"; the URLs on hover); the identity's ETH as daily
   batches of gas (red below 7, once staked: before that the identity has
   no batch to pay for); the vault's SATORI and ETH; Staking ("Staked: 100
-  SATORI with this neuron"; until then "Not staked: Stake with this neuron,
+  SATORI with this app"; until then "Not staked: Stake with this app,
   below"); Transfers ("Staked SATORI can't be sent until you unstake", after
   Unstake "SATORI can be sent from <date> (round N)", then "Free to send");
   what is claimable (rewards, from the Satori Network, airdrop: [above](#claims-unlock)); the last batch (round, time, each game's direction, what
   was left out, the tx); the last check and the next ("Waits until you stake"
   until then); under them, who plays (`base-play`): while staked "Your
-  SATORI is staked with this neuron, so it can't also play Satori Daily by
-  hand. Unstake to play manually.", while not "Stake with this neuron to let
+  SATORI is staked with this app, so it can't also play Satori Daily by
+  hand. Unstake to play manually.", while not "Stake with this app to let
   it predict every round, or play Satori Daily by hand.", with Satori Daily
   linked; the Referral fact, and under the card's actions Your invite link
-  (`<origin>/?ref=<the vault>`) with Copy ([Referral](#referral-invite-links)). Stake with this neuron or Unstake and Claim, each asking
+  (`<origin>/?ref=<the vault>`) with Copy ([Referral](#referral-invite-links)). Stake with this app or Unstake and Claim, each asking
   for the passphrase in place while the vault is locked (and locking it again
   after, [keys.md](keys.md#the-vault-locks-on-its-own)), and Send from the
   vault (SATORI or ETH: [the review and the passphrase each time](#send-the-passphrase-each-time)); each action lists its
@@ -679,8 +679,8 @@ identity's batch, round 20741, game 1 DOWN.
 The staking words, live (2026-10-18 01:48 UTC chain time, a fresh profile on
 the dev app, the fork; `fork.mjs fund`: the identity 0.1 ETH, the vault 0.1
 ETH and 100 SATORI): Home's card said "Your vault's SATORI isn't earning on
-Base. Stake with this neuron." (button Stake, chip "Not staked"); Settings ›
-Unlock, then the Wallet's "Stake with this neuron": "Staked with this
+Base. Stake with this app." (button Stake, chip "Not staked"); Settings ›
+Unlock, then the Wallet's "Stake with this app": "Staked with this
 neuron." with its three transactions, Staking "Staked: 100 SATORI with this
 neuron", Transfers "Staked SATORI can't be sent until you unstake"; 19 s
 later the identity's batch, round 20744, game 1 DOWN, and Home's Base chip

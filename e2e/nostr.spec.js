@@ -47,7 +47,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
 
   // Setup: the Nostr key is made and registered with central.
   await openApp(page);
-  await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create a wallet' })).toBeVisible();
   const s0 = await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
   expect(s0.nostr.pubkey).toMatch(/^[0-9a-f]{64}$/);
   const me = s0.nostr.pubkey;
@@ -163,7 +163,7 @@ test('Dockerized Neuron import with nostr.yaml keeps its Nostr key; refused subs
   const wallet = fx.vectors[0];
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
-  await page.getByRole('button', { name: 'Import Dockerized Neuron files' }).click();
+  await page.getByRole('button', { name: 'Import Docker files' }).click();
   await page.getByLabel('wallet.yaml (identity)').setInputFiles(file('wallet.yaml', wallet.walletYaml));
   await page.getByLabel('vault.yaml').setInputFiles(file('vault.yaml', fx.vaults.current.yaml));
   await page.getByLabel(/nostr.yaml/).setInputFiles(file('nostr.yaml', fx.nostr.yaml));

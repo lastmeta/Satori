@@ -169,7 +169,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await page.evaluate(() => window.satori.base());
   h = await health(page);
   expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 11 h',
-    action: { id: 'stake', button: 'Stake', do: 'stake', text: "Stake with this neuron to earn on the Satori contract. While staked, your SATORI "
+    action: { id: 'stake', button: 'Stake', do: 'stake', text: "Stake with this app to earn on the Satori contract. While staked, your SATORI "
       + "can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." },
     channels: { contract: { state: 'idle', tone: 'off', text: 'Not staked' } } });
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
@@ -198,7 +198,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   h = await health(page);
   expect(h).toMatchObject({ status: 'ok', channels: { contract: { state: 'ok', text: `Round ${ROUND} sent` } } });
   const texts = h.feed.map((f) => f.text);
-  expect(texts.indexOf(`Satori contract batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Staked with this neuron')); // newest first
+  expect(texts.indexOf(`Satori contract batch for round ${ROUND}: 1 game`)).toBeLessThan(texts.indexOf('Staked with this app')); // newest first
 
   // Staked, the identity's gas runs low: something needs the person (amber), and the card goes to the Wallet.
   rpc.eth[st.identity.address.toLowerCase()] = 10n ** 12n;
@@ -319,7 +319,7 @@ test('a failed send: amber, named, retried in minutes; a second quick failure st
   central.refuseLogin = true;
   await page.evaluate(() => window.satori.poll());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Network refused this neuron's login.",
+  expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Network refused this app's login.",
     action: { id: 'login-refused', button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' },
     channels: { network: { state: 'bad', text: 'Login refused' } } });
   await expect(hero(page)).toHaveAttribute('data-s', 'bad');
@@ -371,7 +371,7 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   expect(h.days.slice(0, -1).every((d) => d.code === 'before' && !d.ran)).toBe(true);
   const before = page.locator('[data-test=day][data-code=before]');
   await expect(before).toHaveCount(29);
-  await expect(before.first()).toHaveAttribute('title', /^\w+ \d+: Before this neuron$/);
+  await expect(before.first()).toHaveAttribute('title', /^\w+ \d+: Before this app$/);
   await expect(page.locator('[data-test=days-summary]')).toHaveText('0 full days');
   release();
   await expect(hero(page)).toHaveAttribute('data-s', 'ok', { timeout: LOAD_TIMEOUT }); // history, bvar

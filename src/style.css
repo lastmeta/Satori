@@ -237,7 +237,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .cell[data-code="full"] { background: var(--ok); }
 .cell[data-code="part"] { background: linear-gradient(to top, var(--ok) 50%, var(--cell-off) 50%); }
 .cell[data-code="error"] { background: var(--bad); }
-.cell[data-code="before"] { background: none; border: 1px dashed var(--muted); opacity: 0.5; } /* before this neuron: an empty slot */
+.cell[data-code="before"] { background: none; border: 1px dashed var(--muted); opacity: 0.5; } /* before this app: an empty slot */
 .cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
 .strip .cell:nth-child(-n+16) { display: none; } /* the phone shows the last 14 of 30 */
 @media (max-width: 1023px) { .desk-only { display: none !important; } }

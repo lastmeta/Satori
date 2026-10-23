@@ -147,7 +147,7 @@ describe("the Satori Network's reward drop, before it is claimed", () => {
 describe('the daily batch', () => {
   test('not staked: skipped, nothing sent', async () => {
     const r = await runBatch({ chain: chainOf(), identity, db });
-    expect(r).toEqual({ at: ROUND * ROUND_S + 9 * 3600, round: ROUND, skipped: 'nothing staked with this neuron' });
+    expect(r).toEqual({ at: ROUND * ROUND_S + 9 * 3600, round: ROUND, skipped: 'nothing staked with this app' });
     expect(rpc.sent).toHaveLength(0);
   });
 

@@ -1,7 +1,7 @@
 // The reward address (docs/design/central.md#the-reward-address) against the stub central: not read at load; Settings
 // reads it when it opens (its moving mark and words meanwhile), Save checks the address before any call (this
 // neuron's identity refused), saves it signed in by the identity with its steps said and the mark turning, shows it
-// shortened with Copy, and Home notes it; Clear; this neuron's vault and identity named; the agent API; a refusal; another
+// shortened with Copy, and Home notes it; Clear; this app's vault and identity named; the agent API; a refusal; another
 // Satori Network forgets the last words. No vault, no chain. SHOTS=1 writes
 // docs/screenshots/reward-{none,set,identity}-{phone,desktop}-{light,dark}.png and reward-saving-phone-light.png (else the
 // test's output).
@@ -10,7 +10,7 @@ import { openApp, polled } from './load.js';
 import { stubCentral } from './stub.js';
 
 const POOL = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7'; // EIP-55
-const IDENTITY = "That is this neuron's identity. This app claims rewards only from the vault, so rewards sent to the "
+const IDENTITY = "That is this app's identity. This app claims rewards only from the vault, so rewards sent to the "
   + 'identity would sit unclaimed. Use another address, or Clear to send them to your vault.';
 
 const status = (page) => page.evaluate(() => window.satori.status());
@@ -74,7 +74,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   expect(stub.rewardCalls).toHaveLength(1); // once per page load
   await shots(page, 'none');
 
-  // Checked before any call: a typo in the checksum, not a Base address, this neuron's own identity.
+  // Checked before any call: a typo in the checksum, not a Base address, this app's own identity.
   const input = card.getByLabel('New reward address');
   const save = card.locator('[data-test=reward-save]');
   await input.fill(POOL.replace('D5f', 'd5f'));
@@ -103,7 +103,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/reward-saving-phone-light.png' : test.info().outputPath('reward-saving.png') });
   expect((await page.evaluate(() => window.satori.health())).work).toMatchObject({ task: 'reward', step: 'save', critical: false });
   release();
-  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Network sends this neuron's rewards to ${POOL}.`);
+  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Network sends this app's rewards to ${POOL}.`);
   await expect(card.locator('[data-test=reward-saving]')).toBeHidden();
   await expect(save).toHaveText('Save');
   expect(stub.rewardCalls.at(-1)).toMatchObject({ method: 'POST', body: { reward_address: POOL } });
@@ -132,7 +132,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   // Saving the same again is no change; Clear: back to the vault, noted.
   await input.fill(POOL);
   await save.click();
-  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Network sends this neuron's rewards to ${POOL}.`);
+  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Network sends this app's rewards to ${POOL}.`);
   await card.locator('[data-test=reward-clear]').click();
   await expect(card.locator('[data-test=reward-none]')).toHaveText('Not set · rewards go to your vault');
   await expect(card.locator('[data-test=reward-line]')).toHaveText('Cleared: rewards go to your vault.');
@@ -154,7 +154,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   expect(stub.rewardCalls).toHaveLength(n);
   expect(await page.evaluate(() => window.satori.setRewardAddress(''))).toMatchObject({ address: null });
 
-  // Central holds this neuron's own address (an old value reads as the same key's Base address: central 8dcc016): named.
+  // Central holds this app's own address (an old value reads as the same key's Base address: central 8dcc016): named.
   await go(page, 'settings');
   stub.reward = vault.toLowerCase();
   expect(await page.evaluate(() => window.satori.rewardAddress())).toMatchObject({ address: vault, whose: 'vault' });

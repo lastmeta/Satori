@@ -9,7 +9,8 @@ reference for `window.satori`: [/llms.txt](../../public/llms.txt).
 
 Component docs: [health.md](health.md) (Home: is the neuron predicting, is
 anything broken), [models.md](models.md) (the Models tab: the engine's
-status, every model, a model's In, Model and Out), [keys.md](keys.md), [central.md](central.md),
+status, every model, a model's In, Model and Out), [keys.md](keys.md),
+[accounts.md](accounts.md) (a vault, its alias, and several accounts), [central.md](central.md),
 [engine.md](engine.md), [nostr.md](nostr.md), [base.md](base.md),
 [market.md](market.md) (paid streams, step 3 of the market: selling and
 buying streams over the relays, `src/neuron/market.js`, on the
@@ -87,7 +88,7 @@ on each (re)connect and hourly: announce `<stream>_pred`; hourly: relay list, re
 It also watches every prediction stream the relays announce (`<name>_pred`
 naming its source, up to 200) and each one's source, and keeps a **verified
 track record** for each: its predictions against no change, counting only
-those this neuron received before the outcome ([track-record.md](track-record.md)).
+those this app received before the outcome ([track-record.md](track-record.md)).
 Watching only reads; the Streams tab and `records()` show it.
 
 ```
@@ -102,7 +103,7 @@ relays, and its own relays are `VITE_NOSTR_RELAYS` (none unless set; the
 deployment's: `wss://nostr.satorinet.io`).
 
 On Base the neuron predicts as Lite does ([base.md](base.md)): the vault
-stakes with this neuron once (Unlock; on-chain its
+stakes with this app once (Unlock; on-chain its
 `delegatePredictionPower(identity)`), and the identity sends one batch of
 up/down predictions each UTC round on its own.
 
@@ -440,7 +441,7 @@ The deploy image added none to npm; it is
   batch on its own, ok again); idle after two days closed (catching up, caught
   up, ok at the next cycle); bad after two refused batches, then a refused
   login whose card opens Settings; starting on a fresh neuron (the days
-  before it outlined, "Before this neuron", not closed). At 390 × 844
+  before it outlined, "Before this app", not closed). At 390 × 844
   and 360 × 740 the answer is on the first screen, every tap target is 44 px
   and no tab scrolls sideways. `SHOTS=1` writes the screenshots below.
 - `npm run e2e:pwa` (a build on `vite preview` :5181, `e2e/pwa.spec.js`, each

@@ -186,8 +186,8 @@ describe('bad: predictions are failing', () => {
 
   test('login refused: bad at once', () => {
     const h = health({ rows: [...running(), failed(NOW - H, 'Satori Network 401: Invalid signature', { login: true })] });
-    expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Network refused this neuron's login." });
-    expect(h.action).toEqual({ id: 'login-refused', text: "The Satori Network rejects this neuron's login. Check its address in Settings.",
+    expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Network refused this app's login." });
+    expect(h.action).toEqual({ id: 'login-refused', text: "The Satori Network rejects this app's login. Check its address in Settings.",
       button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' });
     expect(h.channels.network).toEqual({ state: 'bad', tone: 'bad', text: 'Login refused' });
   });
@@ -243,7 +243,7 @@ describe('bad: predictions are failing', () => {
   });
 });
 
-const STAKE_TEXT = "Stake with this neuron to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. "
+const STAKE_TEXT = "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. "
   + 'A known contract issue can block unstaking; a fix is coming in the next contract release.';
 
 describe('staking while the contract bug is live (docs/issues/token-hook-gas-estimate.md)', () => {
@@ -321,9 +321,9 @@ describe('warn: predicting, but something needs you', () => {
       text: `The Satori Network pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}. Check the keys in Settings.` });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Vault mismatch' });
     h = health({ central: reg(null, 'none') });
-    expect(h).toMatchObject({ status: 'warn', line: 'The Satori Network has no vault for this neuron.' });
+    expect(h).toMatchObject({ status: 'warn', line: 'The Satori Network has no vault for this app.' });
     expect(h.action).toMatchObject({ id: 'vault-mismatch', text: "The Satori Network kept no vault for this identity, so it has no Base address to pay this "
-      + "neuron's rewards to (the vault may be registered to another neuron). Check the keys in Settings." });
+      + "app's rewards to (the vault may be registered to another identity). Check the keys in Settings." });
     // a match, or a central that does not say (no vault_base_address: prod on main): no reason
     for (const r of [reg(ours, false), reg(null, null)]) {
       h = health({ central: r });
@@ -653,7 +653,7 @@ describe('the day strip: local days', () => {
   test('a merged failure counts on every day it spans; a skip that is not a failure counts on none', () => {
     const rows = [open(day(2, 1), NOW), good(day(2, 2)), good(day(1, 2)), good(day(0, 2)),
       row('base', day(2, 3), 'bad', { error: 'x' }, { until: day(1, 3), count: 20 }),
-      row('base', day(2, 3), 'idle', { skipped: 'nothing staked with this neuron' }, { until: day(0, 3), count: 30 })];
+      row('base', day(2, 3), 'idle', { skipped: 'nothing staked with this app' }, { until: day(0, 3), count: 30 })];
     expect(daysOf(rows, NOW).slice(-3).map((d) => d.code)).toEqual(['part', 'part', 'full']);
   });
 });
@@ -668,7 +668,7 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
     row('base', NOW - 50 * M, 'warn', { round: 20742, skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' },
       { count: 3, until: NOW - 10 * M }),
     row('nostr', NOW - 40 * M, 'ok', { published: 3 }),
-    row('wallet', NOW - 30 * M, 'ok', { action: 'stake', text: 'Staked with this neuron' }),
+    row('wallet', NOW - 30 * M, 'ok', { action: 'stake', text: 'Staked with this app' }),
     failed(NOW - 20 * M, 'Satori Network 401: Invalid signature', { login: true }),
     row('error', NOW - 10 * M, 'bad', { where: 'nostr', message: 'IO Error' }),
     open(NOW - 5 * M, NOW, { gap: 30 }),
@@ -677,7 +677,7 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
   expect(feed.map((f) => [f.level, f.text])).toEqual([
     ['bad', 'A relay forecast failed: IO Error'],
     ['bad', 'The Satori Network refused the login: Satori Network 401: Invalid signature'],
-    ['ok', 'Staked with this neuron'],
+    ['ok', 'Staked with this app'],
     ['ok', 'Published 3 forecasts to the Satori relays'],
     ['warn', 'Satori contract batch skipped: gas above the ceiling (×3)'],
     ['ok', 'Caught up: sent 83 predictions'],

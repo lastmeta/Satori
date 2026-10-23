@@ -35,7 +35,7 @@ describe('a row', () => {
   test('the predictor (a short key, or you), the pill (the Models tab\'s), from N, the cadence; its title names the source and its author', () => {
     expect(recordRow(rec())).toEqual({ key: `${P}:btc_pred`, title: 'Predictions for Bitcoin by e5e5e5e5…e5e5', by: 'aaaaaaaa…b1c2',
       byTitle: P, mine: false, own: '', mark: 'better', markText: '12% better', markShort: '12% better', from: 'from 21', cadence: '15 min',
-      markTitle: '12% less error than no change, over the last 21 predictions this neuron received before the outcome' });
+      markTitle: '12% less error than no change, over the last 21 predictions this app received before the outcome' });
     expect(recordRow(rec({ mine: true })).by).toBe('you');
     expect(recordRow(rec({ mark: 'tie', ratio: 1.02, markText: 'Same as no change' }))).toMatchObject({ mark: 'tie', markShort: 'Same' });
     expect(recordRow(rec({ source: { pubkey: E5, stream: 'btc', name: null, announced: false } })).title)
@@ -95,7 +95,7 @@ describe('a stream\'s detail', () => {
       '12% less error than no change over the last 21 predictions (median error 0.88; no change 1)',
       'Right way 15 of 20',
     ]);
-    expect(d.note).toMatch(/^Seen by this neuron since Oct \d+, \d\d:\d\d\. It counts only predictions this neuron received before the outcome\.$/);
+    expect(d.note).toMatch(/^Seen by this app since Oct \d+, \d\d:\d\d\. It counts only predictions this app received before the outcome\.$/);
     expect(recordDetail(rec({ mine: true })).sub).toBe('btc_pred by you · every 15 min');
     expect(recordDetail(rec({ direction: { right: 0, total: 0 } })).lines).toHaveLength(1);
   });
@@ -110,7 +110,7 @@ describe('a stream\'s detail', () => {
     expect(d.lines[0]).toBe('Not scored yet: 2 of the 5 predictions it needs');
     const none = recordDetail(rec({ mark: null, scored: 0, since: null, received: 0, direction: { right: 0, total: 0 }, markText: 'Not scored yet' }));
     expect(none.lines).toEqual(['Not scored yet: no prediction received before its outcome so far']);
-    expect(none.note).toBe('It counts only predictions this neuron received before the outcome.');
+    expect(none.note).toBe('It counts only predictions this app received before the outcome.');
   });
   test('the chart: the outcomes as a line and the predictions dashed, on one scale; its top and bottom values', () => {
     const pairs = [{ ts: 1, predicted: 101, actual: 100, baseline: 99 }, { ts: 2, predicted: 104, actual: 102, baseline: 100 },

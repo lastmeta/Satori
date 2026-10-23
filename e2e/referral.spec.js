@@ -36,7 +36,7 @@ test('an invite link: held on the visit, registered by the vault at Stake; the n
   // Share, top right: the invite link to the device's share sheet (a stub here), else copied
   await page.evaluate(() => { window.__shared = []; navigator.share = async (d) => void window.__shared.push(d); });
   await page.locator('[data-test=share]').click();
-  expect(await page.evaluate(() => window.__shared)).toEqual([{ title: 'Satori neuron', url: base.inviteLink }]);
+  expect(await page.evaluate(() => window.__shared)).toEqual([{ title: 'Satori app', url: base.inviteLink }]);
   await page.evaluate(() => { navigator.share = undefined; });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.locator('[data-test=share]').click();
@@ -57,8 +57,8 @@ test('an invite link: held on the visit, registered by the vault at Stake; the n
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
   await page.getByRole('button', { name: 'Hide' }).click();
   await go(page, 'wallet');
-  await page.getByRole('button', { name: 'Stake with this neuron' }).click();
-  await expect(fact(page, 'result')).toHaveText('Staked with this neuron.', { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Stake with this app' }).click();
+  await expect(fact(page, 'result')).toHaveText('Staked with this app.', { timeout: 30_000 });
 
   expect(rpc.sent.map((t) => [t.from, t.functionName])).toEqual([
     [V, 'setReferral'], [I, 'setPredictorFee'], [I, 'setAllowedDelegator'], [V, 'delegatePredictionPower'],

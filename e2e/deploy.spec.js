@@ -121,7 +121,7 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     const cdp = await context.newCDPSession(page);
     const m = await cdp.send('Page.getAppManifest');
     expect([m.url, m.errors]).toEqual([`${APP}manifest.webmanifest`, []]);
-    expect(JSON.parse(m.data)).toMatchObject({ name: 'Satori neuron', start_url: '/', display: 'standalone' });
+    expect(JSON.parse(m.data)).toMatchObject({ name: 'Satori app', start_url: '/', display: 'standalone' });
     await expect.poll(async () => (await cdp.send('Page.getInstallabilityErrors')).installabilityErrors).toEqual([]);
 
     // a neuron, on this deployment's defaults: it registers with its central and opens its relays

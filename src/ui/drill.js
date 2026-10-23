@@ -279,7 +279,7 @@ export function rowView(m) {
 const MARKS = ['better', 'tie', 'worse', 'unscored'];
 const MARK_WORDS = { better: 'better', tie: 'same as no change', worse: 'worse', unscored: 'not scored yet' };
 /** What the quality is (docs/design/models.md#quality-against-no-change): the owner asked whose score it is. */
-export const QUALITY_NOTE = "The neuron's own backtest, made as it trains: how each model would have done on past data against no change."
+export const QUALITY_NOTE = "The app's own backtest, made as it trains: how each model would have done on past data against no change."
   + " Not the Satori Network's score of the predictions it sent.";
 
 /** The engine's quality at a glance (summaryOf's): by kind, by mark (a bar of the four), the median model. */

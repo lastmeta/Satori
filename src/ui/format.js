@@ -48,8 +48,8 @@ export function mismatchText(r) {
   if (r.vaultMismatch === 'other') {
     return `Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${r.vault_base_address}, not this vault's ${r.vault}.`;
   }
-  return "Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
-    + ' (this vault may be registered to another neuron).';
+  return "Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this app's rewards to"
+    + ' (this vault may be registered to another identity).';
 }
 
 export function pollText(p) {
@@ -198,7 +198,7 @@ const STEPS = {
   'setPredictorFee(0)': 'Identity: fee to 0',
   'setAllowedDelegator(vault)': 'Identity: accepts this vault',
   'setReferral(referrer)': 'Vault: registers who invited you',
-  'delegatePredictionPower(identity)': 'Vault: stakes with this neuron',
+  'delegatePredictionPower(identity)': 'Vault: stakes with this app',
   'delegatePredictionPower(0x0)': 'Vault: unstakes',
 };
 /** A step of Stake or Unstake (satori.stake() / unstake()) in plain words. */
@@ -225,9 +225,9 @@ export function claimableText(c) {
 /** The vault's stake in a few words. */
 export function delegationText(v) {
   const d = v?.vault?.staked;
-  if (d === 'identity') return `Staked: ${amountText(v.identity.power, 'SATORI')} with this neuron${v.vault.inSync === false ? ' · out of sync' : ''}`;
+  if (d === 'identity') return `Staked: ${amountText(v.identity.power, 'SATORI')} with this app${v.vault.inSync === false ? ' · out of sync' : ''}`;
   if (d === 'none') return 'Not staked';
-  if (d === 'other') return `Staked with ${v.vault.stakedWith}, not this neuron`;
+  if (d === 'other') return `Staked with ${v.vault.stakedWith}, not this app`;
   return '–';
 }
 
@@ -306,7 +306,7 @@ export function engineText(e) {
 }
 
 /** What a revisit waits for (the last visit's Home, or "Opening…"): the engine's step, then the neuron's start. */
-export const openingText = (e) => (e ? `Opening… ${engineText(e) || 'starting the neuron…'}` : 'Opening…');
+export const openingText = (e) => (e ? `Opening… ${engineText(e) || 'starting the app…'}` : 'Opening…');
 
 /** One claim's result (base.claim()): claimed, skipped (why) or failed. */
 export function claimLine(name, r) {
@@ -332,7 +332,7 @@ export function storageText(s) {
  */
 export function playNote(staked) {
   if (staked === 'identity') {
-    return ["Your SATORI is staked with this neuron, so it can't also play ", ' by hand. Unstake to play manually.'];
+    return ["Your SATORI is staked with this app, so it can't also play ", ' by hand. Unstake to play manually.'];
   }
-  return staked === 'none' ? ['Stake with this neuron to let it predict every round, or play ', ' by hand.'] : null;
+  return staked === 'none' ? ['Stake with this app to let it predict every round, or play ', ' by hand.'] : null;
 }

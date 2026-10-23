@@ -5,7 +5,7 @@ import { fmtNum, fmtWhen, fmtCadence, shortKey, sparkPath } from './format.js';
 import { MIN_SCORED, compareRecords } from '../neuron/records.js';
 
 export const SHOWN = 25; // rows before "Show all"
-const COUNTS = 'It counts only predictions this neuron received before the outcome.';
+const COUNTS = 'It counts only predictions this app received before the outcome.';
 const OWN = 'predicts its own stream';
 const NOT_ANNOUNCED = 'not announced';
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -49,7 +49,7 @@ export function recordRow(r) {
     mark: r.mark ?? 'none', markText: r.markText, markShort: r.mark === 'tie' ? 'Same' : r.markText,
     from: scoredYet ? `from ${r.scored}` : r.scored ? `${r.scored} of ${MIN_SCORED}` : '',
     cadence: fmtCadence(r.cadence_seconds),
-    markTitle: scoredYet ? `${againstText(r)}, over the last ${plural(r.scored, 'prediction')} this neuron received before the outcome`
+    markTitle: scoredYet ? `${againstText(r)}, over the last ${plural(r.scored, 'prediction')} this app received before the outcome`
       : `Not scored yet: ${r.scored} of the ${MIN_SCORED} predictions it needs, received before their outcomes`,
   };
 }
@@ -117,7 +117,7 @@ export function recordDetail(r) {
     source: `Source: ${sourceName(r)}${r.source?.stream && sourceName(r) !== r.source.stream ? ` (${r.source.stream})` : ''} by `
       + `${shortKey(r.source?.pubkey)}${r.source?.announced ? '' : `, ${NOT_ANNOUNCED}`}${r.sameAuthor ? `: it ${OWN}` : ''}`,
     mark: r.mark ?? 'none', markText: r.markText, lines,
-    note: r.since != null ? `Seen by this neuron since ${fmtWhen(r.since)}. ${COUNTS}` : COUNTS,
+    note: r.since != null ? `Seen by this app since ${fmtWhen(r.since)}. ${COUNTS}` : COUNTS,
     chart: recordChart(r.pairs),
   };
 }

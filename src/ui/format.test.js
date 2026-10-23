@@ -35,8 +35,8 @@ test('registrationText and mismatchText', () => {
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: theirs, vaultMismatch: 'other' }))
     .toBe(`Vault mismatch: the Satori Network pays this vault's rewards to a different Base address, ${theirs}, not this vault's ${ours}.`);
   expect(mismatchText({ ok: true, vault: ours, vault_base_address: null, vaultMismatch: 'none' }))
-    .toBe("Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this neuron's rewards to"
-      + ' (this vault may be registered to another neuron).');
+    .toBe("Vault mismatch: the Satori Network kept no vault for this identity, so it has no Base address to pay this app's rewards to"
+      + ' (this vault may be registered to another identity).');
 });
 
 test('pollText and submitText', () => {
@@ -132,13 +132,13 @@ test('Base: amounts, the stake, the transfer rule (sent from round N + 1 at 00:0
   expect(amountText(null, 'ETH')).toBe('–');
   expect(fmtUtc(20743 * 86400)).toBe('Oct 17, 00:00 UTC');
   const v = { identity: { power: '100' }, vault: { staked: 'identity', stakedWith: '0xI' } };
-  expect(delegationText(v)).toBe('Staked: 100 SATORI with this neuron');
-  expect(delegationText({ ...v, vault: { ...v.vault, inSync: false } })).toBe('Staked: 100 SATORI with this neuron · out of sync');
+  expect(delegationText(v)).toBe('Staked: 100 SATORI with this app');
+  expect(delegationText({ ...v, vault: { ...v.vault, inSync: false } })).toBe('Staked: 100 SATORI with this app · out of sync');
   // what can be claimed, part by part: the Satori Network's drop in plain words; unknown (a central without the route) is '–', not 0
   expect(claimableText({ rewards: '3', drop: '3.61850955', airdrop: '0' })).toBe('3 SATORI rewards · 3.6185 SATORI from the Satori Network · 0 SATORI airdrop');
   expect(claimableText({ rewards: '0', drop: null, airdrop: '0' })).toBe('0 SATORI rewards · – from the Satori Network · 0 SATORI airdrop');
   expect(delegationText({ ...v, vault: { staked: 'none' } })).toBe('Not staked');
-  expect(delegationText({ ...v, vault: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this neuron');
+  expect(delegationText({ ...v, vault: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this app');
   expect(delegationText(null)).toBe('–');
   expect(lockText({ locked: false })).toBe('Free to send');
   expect(lockText({ locked: true, indefinite: true })).toBe("Staked SATORI can't be sent until you unstake");
@@ -178,7 +178,7 @@ test('rpcText, rpcTitle, stepText: plain words on the card, the detail in the ho
   expect(rpcText({ rpc: ['https://mine.example/rpc'], rpcSetting: 'https://mine.example/rpc', localFork: false })).toBe('mine.example');
   expect(rpcText({ rpc: [], rpcSetting: '', localFork: false })).toBe('–');
   expect(stepText('setPredictorFee(0)')).toBe('Identity: fee to 0');
-  expect(stepText('delegatePredictionPower(identity)')).toBe('Vault: stakes with this neuron');
+  expect(stepText('delegatePredictionPower(identity)')).toBe('Vault: stakes with this app');
   expect(stepText('delegatePredictionPower(0x0)')).toBe('Vault: unstakes');
   expect(stepText('somethingNew()')).toBe('somethingNew()');
 });
@@ -193,9 +193,9 @@ test('storageText: kept or not (docs/design/pwa.md), and the usage of the quota 
 
 test('playNote: the neuron plays on-chain automatically, Satori Daily by hand, never both with one vault (docs/design/base.md)', () => {
   const text = (d) => playNote(d)?.join('Satori Daily');
-  expect(text('identity')).toBe("Your SATORI is staked with this neuron, so it can't also play Satori Daily by hand. "
+  expect(text('identity')).toBe("Your SATORI is staked with this app, so it can't also play Satori Daily by hand. "
     + 'Unstake to play manually.');
-  expect(text('none')).toBe('Stake with this neuron to let it predict every round, or play Satori Daily by hand.');
+  expect(text('none')).toBe('Stake with this app to let it predict every round, or play Satori Daily by hand.');
   expect(playNote('other')).toBe(null); // staked elsewhere: the Staking line says with whom
   expect(playNote(null)).toBe(null); // before the first chain read
 });
@@ -280,7 +280,7 @@ test('openingText: a revisit\'s wait, step by step', () => {
   expect(openingText(null)).toBe('Opening…');
   expect(openingText({ step: 'download', loaded: 1_200_000, total: 5_065_391 })).toBe('Opening… downloading the engine, 1.2 of 5.1 MB');
   expect(openingText({ step: 'open' })).toBe('Opening… opening the database…');
-  expect(openingText({ step: 'ready' })).toBe('Opening… starting the neuron…'); // the database is open; the neuron starts
+  expect(openingText({ step: 'ready' })).toBe('Opening… starting the app…'); // the database is open; the neuron starts
 });
 
 test('paid streams (docs/design/market.md): a sale and a buy in words', () => {

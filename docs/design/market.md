@@ -44,7 +44,7 @@ not part of it.
   was bought.
 - **Kept** in the meta key `market`: `{ prices, sales, buys }`, amounts as
   decimal strings ([storage.md](storage.md#meta-keys)).
-- **Words:** Sell, Make free, Buy, Stop; a vault staked with this neuron
+- **Words:** Sell, Make free, Buy, Stop; a vault staked with this app
   can't fund a channel, and `channelErrorText` says why.
 
 ## The chain client
@@ -138,9 +138,9 @@ while it is staked with a neuron (`2^24 − 1`), through the round after it
 unstakes, and through the round after it predicted by hand. Opening or
 topping up a channel pulls the deposit from the vault, so:
 
-- **A vault staked with this neuron can't fund a channel.** `openChannel`
+- **A vault staked with this app can't fund a channel.** `openChannel`
   and `topUp` read the lock first and throw, before any signature or gas:
-  "Your vault is staked with this neuron, so it can't send SATORI: a
+  "Your vault is staked with this app, so it can't send SATORI: a
   channel needs SATORI the vault can send."
 - **After unstaking** it can, from the round the lock ends: "Your vault's
   SATORI can't be sent until Oct 22, 00:00 UTC (round 20748): a channel
@@ -314,8 +314,8 @@ Its run on a fork of its own (2026-10-20, port 8547):
   ok: Settled: paid 0.024 SATORI
   ok: the seller's stake is still in sync: the hook ran in full
 5. the buyer's vault stakes with its identity: it can't fund a channel now, the channel keeps paying
-  ok: refused, nothing sent: "Your vault is staked with this neuron, so it can't send SATORI: a channel needs SATORI the vault can send."
-  ok: refused, nothing sent: "Your vault is staked with this neuron, so it can't send SATORI: a channel needs SATORI the vault can send."
+  ok: refused, nothing sent: "Your vault is staked with this app, so it can't send SATORI: a channel needs SATORI the vault can send."
+  ok: refused, nothing sent: "Your vault is staked with this app, so it can't send SATORI: a channel needs SATORI the vault can send."
   settle (a later one)                     seller identity    138915 gas
   ok: a channel funded before staking keeps paying: 0.012 SATORI more
 6. close: asked by the buyer's identity, cancelled by its (staked) vault, asked again

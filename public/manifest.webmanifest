@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Satori neuron",
+  "name": "Satori app",
   "short_name": "Satori",
-  "description": "The Satori neuron in your browser: it forecasts Satori's data streams with keys that stay on this device.",
+  "description": "The Satori app in your browser: it forecasts Satori's data streams with keys that stay on this device.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

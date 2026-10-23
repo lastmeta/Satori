@@ -360,7 +360,7 @@ const setReward = (address) => exclusive(address == null || !String(address).tri
   const r = await reward.set(address);
   if (r.changed) await activity.setting('reward', r.address ?? '');
   state.rewardDone = !r.address ? 'Cleared: rewards go to your vault.'
-    : `Saved: the Satori Network sends this neuron's rewards to ${r.address}${r.whose === 'vault' ? ', your vault' : ''}.`;
+    : `Saved: the Satori Network sends this app's rewards to ${r.address}${r.whose === 'vault' ? ', your vault' : ''}.`;
   return reward.status;
 }, 'rewardBusy');
 
@@ -514,7 +514,7 @@ const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => {
 const vaultOps = {
   async delegate() {
     const r = await base.delegate();
-    if (r.steps.length) activity.wallet('stake', 'Staked with this neuron');
+    if (r.steps.length) activity.wallet('stake', 'Staked with this app');
     return r;
   },
   async undelegate() {
@@ -705,7 +705,7 @@ const actions = {
     const f = new FormData(el);
     await setup(async () => {
       for (const [field, name] of [['wallet', 'wallet.yaml'], ['vault', 'vault.yaml'], ['nostr', 'nostr.yaml']]) {
-        if (f.get(field)?.size > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Dockerized Neuron file.`); // not read at all
+        if (f.get(field)?.size > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Docker file.`); // not read at all
       }
       const n = f.get('nostr');
       const password = String(f.get('pass') ?? '');
@@ -726,7 +726,7 @@ const actions = {
       wipePending();
       pending = secrets;
       state.passNote = reuse
-        ? `The Dockerized Neuron's vault password is shorter than ${MIN_PASSPHRASE} characters. Choose a new passphrase for this app.`
+        ? `The Docker install's vault password is shorter than ${MIN_PASSPHRASE} characters. Choose a new passphrase for this app.`
         : 'Choose a passphrase for this app.';
       goStep('passphrase');
       return null;
@@ -911,7 +911,7 @@ const actions = {
   },
   baseDelegate: () => baseUi('stake', async () => {
     const r = await vaultOps.delegate();
-    return { text: r.steps.length ? 'Staked with this neuron.' : 'Already staked with this neuron.',
+    return { text: r.steps.length ? 'Staked with this app.' : 'Already staked with this app.',
       txs: stepTxs(r.steps) };
   }),
   baseUndelegate: () => baseUi('unstake', async () => {
@@ -1317,7 +1317,7 @@ async function boot() {
     await startNeuron();
   } catch (err) {
     // the database file itself won't open (damaged): offer to set it aside; anything else, "could not start"
-    state.fatal = err?.dbFile ? `The database file could not be opened: ${err?.message ?? err}` : `The neuron did not start: ${err?.message ?? err}`;
+    state.fatal = err?.dbFile ? `The database file could not be opened: ${err?.message ?? err}` : `The app did not start: ${err?.message ?? err}`;
     Object.assign(state, { screen: err?.dbFile ? 'damaged' : 'fatal', cached: null });
   }
 }

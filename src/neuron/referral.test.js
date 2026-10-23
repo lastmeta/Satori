@@ -36,7 +36,7 @@ describe('shareLink: the device\'s share sheet, else copied', () => {
   test('the share sheet when there is one', async () => {
     const nav = { share: vi.fn(async () => {}), clipboard: clipboard() };
     expect(await shareLink(A, nav)).toBe('shared');
-    expect(nav.share).toHaveBeenCalledWith({ title: 'Satori neuron', url: A });
+    expect(nav.share).toHaveBeenCalledWith({ title: 'Satori app', url: A });
     expect(nav.clipboard.writeText).not.toHaveBeenCalled();
   });
   test('a sheet closed with no choice is not an error and copies nothing', async () => {

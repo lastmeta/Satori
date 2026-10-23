@@ -138,7 +138,7 @@ export function settledOf(receipt, contract = DEFAULTS.channels) {
 /** SATORI's transfer lock, said before anything is signed or sent (a funded channel needs SATORI the vault can send). */
 function lockError(lock) {
   if (!lock.locked) return null;
-  const why = lock.indefinite ? "Your vault is staked with this neuron, so it can't send SATORI"
+  const why = lock.indefinite ? "Your vault is staked with this app, so it can't send SATORI"
     : `Your vault's SATORI can't be sent until ${fmtUtc(lock.freeAt)} (round ${lock.untilRound + 1})`;
   return new ChannelError(`${why}: a channel needs SATORI the vault can send.`, { reason: 'Locked' });
 }

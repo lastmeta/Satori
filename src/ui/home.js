@@ -30,7 +30,7 @@ function hero() {
   return state.hero ?? { ...h(), key: 'idle', working: false };
 }
 const HOME_ROWS = 8;
-const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this neuron' };
+const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this app' };
 // the Satori Network (free to submit to), the Satori contract (uses gas), the Satori relays (docs/intent/ui.md)
 const CHANNEL_TAB = { network: 'streams', contract: 'wallet', relays: 'streams' };
 
@@ -111,7 +111,7 @@ export function home(a) {
     <section class="tile days-tile">
       <div class="tile-h"><b class="phone-only">Last 14 days</b><b class="desk-only">Last 30 days</b><span class="phone-only" data-test="days-summary">${() => fullDays(14)}</span><span class="desk-only">${() => fullDays(30)}</span></div>
       <div class="strip" data-test="days">${() => h().days.map((d) => cell(d).key(`${d.date}:${d.code}:${d.ran}:${d.today}`))}</div>
-      <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this neuron</span></div>
+      <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 
     <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}</section>

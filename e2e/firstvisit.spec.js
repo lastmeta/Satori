@@ -34,9 +34,9 @@ test('a first visit: Setup at once while the engine downloads; the keys wait for
   await page.goto('/');
   await expect.poll(() => screen(page), { timeout: LOAD_TIMEOUT }).toBe('setup'); // before DuckDB: it is still held
   await expect.poll(() => engine.asked).toBeGreaterThan(0); // its download began at once
-  await expect(page.getByRole('button', { name: 'Create a new neuron' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create a wallet' })).toBeVisible();
   // Setup's first steps need no database: the words, their check, the passphrase
-  await page.getByRole('button', { name: 'Create a new neuron' }).click();
+  await page.getByRole('button', { name: 'Create a wallet' }).click();
   const words = await visible(page.locator('ol.words li')).allTextContents();
   await page.getByRole('button', { name: 'I wrote them down' }).click();
   for (const input of await visible(page.getByLabel(/^Word #\d+/)).all()) {

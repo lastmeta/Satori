@@ -38,7 +38,7 @@ review, live). Now (`boot()` in `src/main.js`, `src/db/opfs.js`):
 - **A revisit** paints the last visit's Home at once
   ([health.md](health.md#the-last-visit)), or, on another tab's route,
   "Opening… downloading the engine, 1.2 of 5.1 MB" (from the worker's cache)
-  … "starting the neuron…".
+  … "starting the app…".
 - **The service worker registers once the database is open**
   ([pwa.md](pwa.md#caching)): on a first visit its precache would download
   the same wasm beside the page's, and the browser's cache lock can hold the
@@ -296,7 +296,7 @@ additive; a later build keeps `schema_min` current.
    observation is never predicted twice), one never predicted is due.
 10. **Staking words** (2026-10-18, [base.md](base.md)): the activity log's
    earlier rows say staking as the app now does: a wallet row's action and
-   text become `stake` "Staked with this neuron" and `unstake` "Unstaked",
+   text become `stake` "Staked with this app" and `unstake` "Unstaked",
    and a Base skip (its data and merge key) "nothing staked with this
    neuron", so the feed never shows the old words.
 11. **The Models tab** (2026-10-18, [models.md](models.md)): `model_specs.persist`,
@@ -340,6 +340,12 @@ additive; a later build keeps `schema_min` current.
    Pruned with the relay streams to 400 cadences; a stream no scan has
    selected for 7 days goes with its rows. Two new tables, so an older
    build opens the database and never reads them.
+15. **"This app", not "this neuron"** (2026-10-23, additive): the app's own
+   word for itself changed (the owner is phasing out "neuron"), so the
+   activity log's earlier rows are rewritten: `this neuron` becomes `this app`
+   in `data` and `mkey` ("Staked with this app", "nothing staked with this
+   app"). An older build only displays those words and writes its own again,
+   so it opens the database either way.
 
 The Models tab's drill-in reads its streams' history with `db.histories(uuids)`:
 one statement for the target and its companions (one per stream took ~100 ms

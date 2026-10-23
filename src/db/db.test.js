@@ -328,9 +328,31 @@ test('a step-9 database: the activity log says staking in its earlier rows too (
   const up = await openDb(conn);
   expect(up.version).toBe(MIGRATIONS.length);
   expect((await up.activity(0)).map((r) => [r.kind, r.data, r.mkey])).toEqual([
-    ['wallet', { action: 'stake', text: 'Staked with this neuron' }, null],
+    ['wallet', { action: 'stake', text: 'Staked with this app' }, null],
     ['wallet', { action: 'unstake', text: 'Unstaked' }, null],
-    ['base', { round: 8, skipped: 'nothing staked with this neuron' }, 'skip:nothing staked with this neuron'],
+    ['base', { round: 8, skipped: 'nothing staked with this app' }, 'skip:nothing staked with this app'],
+    ['wallet', { action: 'claim', text: 'Claimed 3 SATORI' }, null],
+  ]);
+});
+
+test('a step-14 database: the activity log says "this app" in its earlier rows (the word neuron is phased out)', async () => {
+  const conn = await memoryConn();
+  await conn.query('CREATE TABLE meta (key VARCHAR PRIMARY KEY, value VARCHAR)');
+  for (const m of MIGRATIONS.slice(0, 14)) if (typeof m === 'string') await conn.query(m);
+  await conn.query(`INSERT INTO meta VALUES ('schema_version', '14')`);
+  const rows = [
+    ['wallet', 'ok', { action: 'stake', text: 'Staked with this neuron' }, null],
+    ['base', 'idle', { round: 8, skipped: 'nothing staked with this neuron' }, 'skip:nothing staked with this neuron'],
+    ['wallet', 'ok', { action: 'claim', text: 'Claimed 3 SATORI' }, null],
+  ];
+  for (const [kind, level, data, mkey] of rows) {
+    await conn.query(`INSERT INTO activity (ts, kind, level, data, mkey) VALUES (1000, '${kind}', '${level}', '${JSON.stringify(data)}', ${mkey ? `'${mkey}'` : 'NULL'})`);
+  }
+  const up = await openDb(conn);
+  expect(up.version).toBe(MIGRATIONS.length);
+  expect((await up.activity(0)).map((r) => [r.kind, r.data, r.mkey])).toEqual([
+    ['wallet', { action: 'stake', text: 'Staked with this app' }, null],
+    ['base', { round: 8, skipped: 'nothing staked with this app' }, 'skip:nothing staked with this app'],
     ['wallet', { action: 'claim', text: 'Claimed 3 SATORI' }, null],
   ]);
 });

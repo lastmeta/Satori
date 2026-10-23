@@ -27,7 +27,7 @@ function keys(a) {
     <div class="key">
       <h3>Identity</h3>
       ${idRow('Address', 'identity', () => state.identity, a)}
-      <p class="muted small">Runs the neuron on its own: signs in to the Satori Network and sends the daily batch to the Satori contract. Unencrypted.</p>
+      <p class="muted small">Runs the app on its own: signs in to the Satori Network and sends the daily batch to the Satori contract. Unencrypted.</p>
     </div>
     <div class="key">
       <h3>Vault <span class="${() => (state.unlocked ? 'badge on' : 'badge')}" data-test="vault-state">${() => (state.unlocked ? 'Unlocked' : 'Locked')}</span></h3>
@@ -43,7 +43,7 @@ function keys(a) {
     <div class="key">
       <h3>Nostr</h3>
       ${idRow('Pubkey', 'nostr-pubkey', () => state.nostr.pubkey, a, () => state.nostr.npub)}
-      <p class="muted small">Signs the neuron's Nostr events on its own. Unencrypted, as the identity.</p>
+      <p class="muted small">Signs the app's Nostr events on its own. Unencrypted, as the identity.</p>
     </div>
   </section>`;
 }
@@ -100,9 +100,9 @@ function rewardCard(a) {
   <section class="card settings-section" id="settings-reward">
     <form class="fields reward-form" @submit="${(e) => a.saveReward(form(e), e.target)}">
       <h2>Reward address</h2>
-      <p class="muted small">Where the Satori Network sends this neuron's rewards. Not set, they go to your vault. A Base address (0x…) sends them there instead, such as a pool's.</p>
+      <p class="muted small">Where the Satori Network sends this app's rewards. Not set, they go to your vault. A Base address (0x…) sends them there instead, such as a pool's.</p>
       <div class="id reward-now"><span class="label">Now</span><span class="reward-val"><code data-test="reward-address" title="${() => r().address ?? ''}" hidden="${() => !r().address}">${() => shortHash(r().address)}</code><span class="badge" data-test="reward-whose" hidden="${() => !r().whose}">${() => WHOSE[r().whose] ?? ''}</span><span data-test="reward-none" hidden="${() => !!r().address}">${() => rewardWhen(r())}</span>${spin('reward-reading', () => !r().reading || busy())}</span><button class="small-btn" type="button" hidden="${() => !r().address}" @click="${() => a.copy('reward-address', r().address)}">${() => (state.copied === 'reward-address' ? 'Copied' : 'Copy')}</button></div>
-      <p class="error small" data-test="reward-identity" hidden="${() => r().whose !== 'identity'}">That is this neuron's identity: this app claims rewards only from the vault, so rewards sent there aren't claimed here. Save another address, or Clear to send them to your vault.</p>
+      <p class="error small" data-test="reward-identity" hidden="${() => r().whose !== 'identity'}">That is this app's identity: this app claims rewards only from the vault, so rewards sent there aren't claimed here. Save another address, or Clear to send them to your vault.</p>
       <p class="error small" role="alert" data-test="reward-read-error" hidden="${() => !r().error}">${() => r().error ?? ''} <button class="small-btn" type="button" data-test="reward-retry" disabled="${() => r().reading}" @click="${a.readReward}">Try again</button></p>
       <label>New reward address
         <input name="address" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="0x…" required>
@@ -123,7 +123,7 @@ function centralForm(a) {
   <section class="card settings-section" id="settings-central">
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
       <h2>Satori Network</h2>
-      <p class="muted small">Where the neuron gets its streams and sends its predictions. Free: sending costs nothing.</p>
+      <p class="muted small">Where the app gets its streams and sends its predictions. Free: sending costs nothing.</p>
       <label>Satori Network server
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>

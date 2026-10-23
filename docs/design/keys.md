@@ -152,7 +152,7 @@ migration re-encrypts the vault with it as it is.
   identity's (optional; a new identity if left empty) and the Nostr key as
   Backup shows it, `nsec` or hex (optional; a new one if left empty: it is
   not in the words), then the passphrase.
-- **Setup → Import Dockerized Neuron files**: [below](#import-translate).
+- **Setup → Import Docker files**: [below](#import-translate).
 - One setup runs at a time, from the UI or an agent; a second one is refused.
 - **Settings › Keys** shows each key's Base address (the identity's, and the
   vault's while locked) and the Nostr pubkey. The neuron runs from page load
@@ -168,9 +168,9 @@ migration re-encrypts the vault with it as it is.
 
 ## Import: translate
 
-![Import Dockerized Neuron files, with "Use it as this app's passphrase too"](../screenshots/import.png)
+![Import Docker files, with "Use it as this app's passphrase too"](../screenshots/import.png)
 
-**Import Dockerized Neuron files** takes `wallet.yaml`, `vault.yaml`, the
+**Import Docker files** takes `wallet.yaml`, `vault.yaml`, the
 Docker vault password and, optionally, `nostr.yaml`. `src/keys/docker.js`
 reads them, read only, as satorilib wrote them; the keys are then sealed in
 this app's record. The files themselves are not kept.
@@ -199,7 +199,7 @@ this app's record. The files themselves are not kept.
   entropy: `vault.yaml: Wrong passphrase`.
 - **Not a wallet file** (2026-10-19, the security review): a file over 64 KB
   (`IMPORT_MAX`; satorilib's are under 2 KB) is refused before it is read,
-  "wallet.yaml: over 64 KB, so not a Dockerized Neuron file." (a file of
+  "wallet.yaml: over 64 KB, so not a Docker file." (a file of
   gigabytes froze the tab). A file that is not YAML says only where,
   "wallet.yaml: not valid YAML (line 5)": js-yaml's own message quotes the
   lines around the fault, which in a wallet are its words and keys, and Setup
@@ -207,7 +207,7 @@ this app's record. The files themselves are not kept.
 - **This app's passphrase**: by default the Docker vault password is reused
   ("Use it as this app's passphrase too", ticked) when it meets the
   [rule](#passphrases); otherwise, or unticked, the passphrase step asks for
-  a new one ("The Dockerized Neuron's vault password is shorter than 8
+  a new one ("The Docker install's vault password is shorter than 8
   characters…").
 - `nostr.yaml` (`start.py:120-149`): `secret_hex`, checked against
   `pubkey_hex`; none means a new Nostr key.

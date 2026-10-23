@@ -133,8 +133,8 @@ function centralReasons({ now, rows, sessions, central, work }) {
       out.push(reason('db-error', 'network', { line: 'The database failed.', chip: 'Database error',
         text: `Saving or forecasting failed: ${err}. Reload Satori; your keys are safe.`, button: 'Reload', act: { do: 'reload' } }));
     } else if (d.login) {
-      out.push(reason('login-refused', 'network', { line: "The Satori Network refused this neuron's login.", chip: 'Login refused',
-        text: "The Satori Network rejects this neuron's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
+      out.push(reason('login-refused', 'network', { line: "The Satori Network refused this app's login.", chip: 'Login refused',
+        text: "The Satori Network rejects this app's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
     } else if (overdue) {
       out.push(reason('central-failing', 'network', { line: `Nothing sent for ${fmtDur(ran)}: ${what[0].toLowerCase()}${what.slice(1)}.`, chip,
         text: `${err}. Nothing went out for ${fmtDur(ran)} while Satori was open. It keeps trying; try now, or check the Satori Network's address in Settings.`,
@@ -154,14 +154,14 @@ function centralReasons({ now, rows, sessions, central, work }) {
   if (reg?.ok && reg.vaultMismatch) {
     const other = reg.vaultMismatch === 'other';
     out.push(reason('vault-mismatch', 'network', { chip: 'Vault mismatch',
-      line: other ? "The Satori Network pays this vault's rewards to another address." : 'The Satori Network has no vault for this neuron.',
+      line: other ? "The Satori Network pays this vault's rewards to another address." : 'The Satori Network has no vault for this app.',
       text: `${other ? `The Satori Network pays this vault's rewards to a different Base address, ${reg.vault_base_address}, not this vault's ${reg.vault}.`
-        : "The Satori Network kept no vault for this identity, so it has no Base address to pay this neuron's rewards to (the vault may be registered to another neuron)."
+        : "The Satori Network kept no vault for this identity, so it has no Base address to pay this app's rewards to (the vault may be registered to another identity)."
       } Check the keys in Settings.`,
       button: 'Open Settings', act: go('settings', 'keys') }));
   }
   if (reg && !reg.ok) {
-    out.push(reason('not-registered', 'network', { line: "The Satori Network didn't register this neuron.", chip: 'Not registered',
+    out.push(reason('not-registered', 'network', { line: "The Satori Network didn't register this app.", chip: 'Not registered',
       text: `Registering with the Satori Network failed: ${reg.error}. It registers again before each poll until it succeeds.`,
       button: 'Try again', act: { do: 'poll' } }));
   }
@@ -226,7 +226,7 @@ function baseReasons({ rows, base }) {
   // advice while the contract bug is live (docs/issues/token-hook-gas-estimate.md): the card offers it and says the risk;
   // the chip keeps the plain "Not staked" (off)
   if (d === 'none' && Number(base.vault.satori) > 0) {
-    out.push(reason('stake', 'contract', { text: "Stake with this neuron to earn on the Satori contract. While staked, your SATORI can't be "
+    out.push(reason('stake', 'contract', { text: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be "
       + 'sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.',
     button: 'Stake', act: { do: 'stake' } }));
   }

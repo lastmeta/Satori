@@ -94,7 +94,7 @@ export async function readDockerFiles({ walletText, vaultText, password, nostrTe
   for (const [name, text] of [['wallet.yaml', walletText], ['vault.yaml', vaultText], ['nostr.yaml', nostrText]]) {
     // UTF-8 never has fewer bytes than UTF-16 units: a long text is refused before it is encoded
     const t = String(text ?? '');
-    if (t.length > IMPORT_MAX || new TextEncoder().encode(t).length > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Dockerized Neuron file.`);
+    if (t.length > IMPORT_MAX || new TextEncoder().encode(t).length > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Docker file.`);
   }
   const [w, v] = [named('wallet.yaml', () => secrecy(walletText)), named('vault.yaml', () => secrecy(vaultText))];
   if (w === 'encrypted' && v === 'plain') {
