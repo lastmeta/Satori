@@ -106,6 +106,7 @@ test('every prediction stream watched on its own and scored by what this app rec
   // Streams › Prediction streams, grouped by source: Test walk (announced) first, the cheat's unannounced one after it
   await page.evaluate(() => window.satori.go('streams'));
   const card = page.locator('[data-test=records]');
+  await card.locator('summary').first().click(); // folded until tapped
   await expect(card.locator('[data-test=records-status]')).toContainText(/Watching \d+ prediction streams · \d+ with a record/);
   const group = (pubkey) => card.locator(`[data-test=record-source][data-key="${pubkey}:${stream}"]`);
   const real = group(provider.pubkey);

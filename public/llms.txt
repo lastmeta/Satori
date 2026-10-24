@@ -1019,19 +1019,22 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   Network model), **Out** (each output: the forecast, the latest value, a
   chart of recent history with the forecast to scale, "12 h" and "24 h"
   marks, and where it went); "← Models" goes back.
-- **Streams**: the **Satori Network** card ("free"; Registered, Last poll,
-  Next poll, Last submission, Pending, History, a wallet mismatch if any,
-  "Poll now"; no URL: that is Settings'); **Streams** ("84 from the Satori
-  Network, with our forecasts": each stream's latest value and time, t1, t2,
-  the model with its companions, "bvar · +eth +gold", Sent or Pending; a tap
-  on the name opens its trend, its model in words and its latest
-  predictions); **Satori relays** (each subscribed stream: latest value and
+- **Streams**: the **Satori Network** card ("free"; one line, "Sent 82
+  predictions Oct 24, 20:18, all accepted · next Oct 25, 07:18", red when it
+  fails; a wallet mismatch if any; "Poll now"; under its closed Details:
+  Registered, Last poll, Next poll, Last submission, Pending, History; no
+  URL: that is Settings'); **Streams** ("84 from the Satori Network, with our
+  forecasts": each stream on one line, its latest value (and time, on a
+  computer), its forecast "In 24 h", Sent or Pending; a tap on the name opens
+  it in place under the row: its trend, "In 12 h", the model with its
+  companions, "bvar · +eth +gold", in words, and its latest predictions); **Satori relays** (each subscribed stream: latest value and
   time, our `_pred` value, its seq, how many relays took it, Unsubscribe;
   then **Sell**: each `<stream>_pred`, "Free" with a price box and Sell, or
   "0.001 SATORI each · 2 buying" with Make free; **Bought**: each stream
   bought, "0.004 of 0.005 SATORI left" and Stop, or "Stopped: … back to the
   wallet after <date>");
-  **Prediction streams** (every prediction stream on the relays, watched on
+  **Prediction streams** (folded until tapped, "112 on the relays" beside
+  its name; every prediction stream on the relays, watched on
   its own: "Watching 112 prediction streams · 23 with a record", or the
   scan's step with a small turning ring, "Finding prediction streams ·
   checking signatures 400 of 1,061"; each row "Predictions for <source>",
@@ -1121,12 +1124,15 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (`data-stream`), `model-output-name`, `model-output-forecast`,
   `model-chart`, `model-endpoint`, `model-readout`, `model-destination`
   (`data-to`), `model-retrain` (`data-action`), `model-retrain-line`
-  (`data-r`), `model-retrain-note`. Streams: `registered`, `last-poll`,
-  `next-poll`, `last-submit`, `pending`, `history`, `mismatch`, `poll-now`,
-  `streams` with `streams-count` and `stream` rows (`obs`, `t1`, `t2`,
-  `model`, `status`), `stream-detail` with `stream-prediction`, `sub` (with
+  (`data-r`), `model-retrain-note`. Streams: `network-line`, `mismatch`,
+  `poll-now`, `network-details` (a closed `<details>` with `registered`,
+  `last-poll`, `next-poll`, `last-submit`, `pending`, `history`),
+  `streams` with `streams-count` and `stream` rows (`obs`, `t2`, `status`;
+  a tap on `.sname` opens `stream-detail` inside the row, with `t1`, `model`
+  and `stream-prediction`), `sub` (with
   `sub-obs`, `sub-pred`, `sub-seq`, `sub-relays`, `unsubscribe`), `records`
-  (with `records-status`, `records-all`, `record-source` groups (`data-key`
+  (a closed `<details>`: open it to click inside; with `records-count`,
+  `records-status`, `records-all`, `record-source` groups (`data-key`
   `<source pubkey>:<source stream>`, with `record-source-name`,
   `record-source-by`, `record-source-note`) holding `record` rows (`data-key`
   `<pubkey>:<stream>`, `data-mark`) with `record-by`, `record-own`,

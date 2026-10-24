@@ -110,6 +110,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(page.locator('[data-test=stream]')).toHaveCount(2);
   const btc = row(page, 'bitcoin');
   await expect(btc.locator('[data-test=obs]')).toHaveText('67,000.50');
+  await btc.locator('.sname').click(); // the forecast in 12 h and the model are in its detail, under the row
   await expect(btc.locator('[data-test=t1]')).toHaveText('67,000.50');
   await expect(btc.locator('[data-test=t2]')).toHaveText('67,000.50');
   await expect(btc.locator('[data-test=status]')).toHaveText('Sent');
@@ -228,6 +229,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await go(page, 'streams');
   await page.getByRole('button', { name: 'Poll now' }).click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('2 streams, 1 new, 1 predicted');
+  if (await btc.locator('[data-test=stream-detail]').count() === 0) await btc.locator('.sname').click();
   await expect(btc.locator('[data-test=t1]')).toHaveText('67,100.50'); // two observations: naive, the last value
   await expect(btc.locator('[data-test=t2]')).toHaveText('67,100.50');
   await expect(btc.locator('[data-test=model]')).toHaveText('naive · spec +eth'); // its bvar spec waits for aligned history
@@ -317,6 +319,8 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
 
   // The engine: naive until a stream has 8 buckets of 12 h, then bar1, with the same numbers as in node.
   const ZIG = [67100.5, 67000.5, 67200.5, 67100.5, 67300.5, 67200.5, 67400.5];
+  await go(page, 'streams');
+  await row(page, 'bitcoin').locator('.sname').click(); // its model is in its detail, under the row
   for (const [k, value] of ZIG.entries()) {
     stub.batch = [entry('u-btc', 'bitcoin', T0 + (k + 1) * STEP_S, String(value)), BATCH[1]];
     expect((await poll()).poll).toMatchObject({ new: 1, predicted: 1 });
@@ -433,13 +437,13 @@ test('central with history: the first poll backfills each stream and forecasts i
   }
   expect(stub.batches[0].map((x) => x.value)).toEqual(models.map((m) => String(out.forecasts.get(m.uuid).t2)));
   await go(page, 'streams');
+  await row(page, 'gold').locator('.sname').click(); // its detail, under the row: the model, its latest prediction
   const gold = row(page, 'gold').locator('[data-test=model]');
   const spec = models.find((m) => m.name === 'gold').spec;
   await expect(gold).toHaveText(`bvar · ${spec.companions.map((c) => `+${c.name}`).join(' ')}`);
   await expect(gold).toHaveAttribute('title', new RegExp(`^Bayesian VAR\\(1\\) on 12 h steps of this stream with .* · λ1 ${spec.lambda1} · λ2 ${spec.lambda2} · .*generation`));
   await expect(page.locator('[data-test=history]')).toContainText('3 streams, 1,800 rows');
-  // a stream's detail: its model in words and its latest prediction
-  await row(page, 'gold').locator('.sname').click();
+  // the stream's detail: its model in words and its latest prediction
   await expect(page.locator('[data-test=stream-detail]')).toContainText('Bayesian VAR(1)');
   await expect(page.locator('[data-test=stream-prediction]')).toHaveCount(1);
   expect(stub.prod).toEqual([]);

@@ -67,6 +67,20 @@ export function submitText(s) {
   return `${fmtWhen(s.at)} · ${s.successful} of ${s.total_submitted} accepted${s.successful > 0 ? '' : kept}`;
 }
 
+/** The Satori Network card in one line (Streams); its facts sit under Details. */
+export function networkLine(c) {
+  const r = c.registration;
+  if (!r) return 'Registering…';
+  if (!r.ok) return `Not registered: ${r.error}`;
+  const s = c.lastSubmit;
+  const next = ` · next ${fmtWhen(c.nextPoll)}`;
+  if (!s) return `Nothing sent yet${next}`;
+  if (s.error) return `Sending failed ${fmtWhen(s.at)}: ${s.error}; kept for the next poll`;
+  const sent = `Sent ${s.total_submitted} predictions ${fmtWhen(s.at)}`;
+  if (!s.successful) return `${sent}, none accepted; kept for the next poll`;
+  return `${sent}, ${s.successful === s.total_submitted ? 'all' : s.successful} accepted${next}`;
+}
+
 const short = (x, digits) => String(Number(x.toFixed(digits))).replace('-', '−');
 
 /** A stream row's spec (JSON text, as stored), or null. */

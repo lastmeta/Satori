@@ -146,7 +146,7 @@ stream with zeros or negatives (a temperature, a rate) is modeled on changes
 too, where before its non-positive values were gaps.
 
 `phi` and `weight` are stored on the prediction,
-and the Streams list (in the Central card) shows the model, with φ and w on hover. An option
+and a stream's detail on the Streams tab (a tap on its row) shows the model, with φ and w on hover. An option
 `{weight}` forces w, as `MODEL_WEIGHT` does; the backtest uses it.
 
 ### Constants

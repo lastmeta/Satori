@@ -4,6 +4,17 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (Streams: one line each, details folded away)
+
+- The Satori Network card is one line, `network-line`; `registered`,
+  `last-poll`, `next-poll`, `last-submit`, `pending` and `history` moved
+  into `network-details`, a closed `<details>`.
+- A `stream` row has `obs`, `t2` (headed "In 24 h") and `status`; `t1`
+  ("In 12 h") and `model` moved into `stream-detail`, which now opens inside
+  the row (a tap on `.sname`; again closes it).
+- `records` is a closed `<details>` with `records-count`: open it before
+  clicking inside.
+
 ## Changed 2026-10-24 (Wallet: details folded away)
 
 - The Wallet tab's Base card keeps balances, Claimable, Staking and the

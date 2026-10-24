@@ -1,6 +1,6 @@
-// Streams: the Satori Network's (central: the data flow's facts and Poll now; each stream with its forecast, model and
-// companions, and its history on a tap), the subscriptions on the Satori relays (Nostr), every prediction stream on the
-// relays with its verified track record (docs/design/track-record.md#ui-streams), and the relays' streams to discover.
+// Streams: the Satori Network's (central: one line, its facts under Details, and Poll now; each stream with its latest
+// value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori relays (Nostr), every prediction stream on the
+// relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
 // Paid streams (docs/design/market.md): a price on our own `_pred`s, the streams we buy (the deposit left, Stop), Buy in the catalog.
 // The words people see (docs/intent/ui.md); the addresses are Settings'.
 import { html } from '@arrow-js/core';
@@ -8,7 +8,7 @@ import { formatEther } from 'viem';
 import { state } from './state.js';
 import { fact, form, sparkPath, unlockPrompt } from './parts.js';
 import {
-  fmtNum, fmtWhen, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
+  fmtNum, fmtWhen, networkLine, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
   fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText, saleText, boughtText,
 } from './format.js';
 import { listingOf, DEPOSIT_OBS } from '../neuron/market.js';
@@ -18,44 +18,42 @@ export const CATALOG_SHOWN = 50;
 
 function centralCard(a) {
   const c = () => state.central;
+  const failing = () => (c().registration && !c().registration.ok) || !!c().lastSubmit?.error || c().lastSubmit?.successful === 0;
   return html`
   <section class="card central">
     <header class="card-head">
       <h2>Satori Network <small class="muted">free</small></h2>
       <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>
     </header>
-    <dl class="facts">
-      ${fact('Registered', 'registered', () => registrationText(c().registration))}
-      ${fact('Last poll', 'last-poll', () => pollText(c().lastPoll))}
-      ${fact('Next poll', 'next-poll', () => fmtWhen(c().nextPoll))}
-      ${fact('Last submission', 'last-submit', () => submitText(c().lastSubmit))}
-      ${fact('Pending', 'pending', () => String(c().pending))}
-      ${fact('History', 'history', () => historyText(c().history))}
-    </dl>
+    <p data-test="network-line" class="${() => (failing() ? 'error' : '')}">${() => networkLine(c())}</p>
     <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration)}">${() => mismatchText(c().registration)}</p>
+    <details class="mdetails" data-test="network-details">
+      <summary>Details</summary>
+      <dl class="facts">
+        ${fact('Registered', 'registered', () => registrationText(c().registration))}
+        ${fact('Last poll', 'last-poll', () => pollText(c().lastPoll))}
+        ${fact('Next poll', 'next-poll', () => fmtWhen(c().nextPoll))}
+        ${fact('Last submission', 'last-submit', () => submitText(c().lastSubmit))}
+        ${fact('Pending', 'pending', () => String(c().pending))}
+        ${fact('History', 'history', () => historyText(c().history))}
+      </dl>
+    </details>
   </section>`;
 }
 
 function streamRow(r, names, a) {
   // One root node, no whitespace around it: ArrowJS 1.0.6 breaks a keyed list
-  // of multi-node items once it goes empty and back.
+  // of multi-node items once it goes empty and back. The detail opens in place under the row.
   const sent = r.status === 'sent';
-  return html`<div class="row srow" data-test="stream"><button class="sname" title="${r.uuid}" @click="${() => a.openStream(r.uuid)}">${r.name}</button><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num" data-label="t1" data-test="t1">${fmtNum(r.t1)}</span><span class="num accent" data-label="t2" data-test="t2">${fmtNum(r.t2)}</span><span class="model" data-label="Model" data-test="model" title="${modelTitle(r, names)}">${modelText(r, names)}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>`;
+  const open = () => state.streamOpen === r.uuid;
+  return html`<div class="sitem" data-test="stream"><div class="row srow"><button class="sname" title="${r.uuid}" aria-expanded="${() => String(open())}" @click="${() => a.openStream(open() ? '' : r.uuid)}">${r.name}</button><span class="num" data-label="Latest" data-test="obs">${fmtNum(r.obs_value)}</span><span class="muted small" data-label="Observed">${fmtWhen(r.obs_ts)}</span><span class="num accent" data-label="In 24 h" data-test="t2">${fmtNum(r.t2)}</span><span class="${r.status ? (sent ? 'badge on' : 'badge') : 'muted'}" data-test="status">${r.status ? (sent ? 'Sent' : 'Pending') : '–'}</span></div>${() => (open() ? detail(r, names, a) : '')}</div>`;
 }
 
-const predRow = (p) => html`<li data-test="stream-prediction"><span>${fmtWhen(p.made_at)}</span><span>${p.model}</span><span>${`t2 ${fmtNum(p.t2)}`}</span><span>${p.status === 'sent' ? 'Sent' : 'Pending'}</span></li>`;
+const predRow = (p) => html`<li data-test="stream-prediction"><span>${fmtWhen(p.made_at)}</span><span>${p.model}</span><span>${`in 24 h ${fmtNum(p.t2)}`}</span><span>${p.status === 'sent' ? 'Sent' : 'Pending'}</span></li>`;
 
-/** The open stream: its trend, its model in words, its latest predictions. */
-function detail(a) {
-  const r = () => state.streams.find((s) => s.uuid === state.streamOpen);
-  const names = () => new Map(state.streams.map((s) => [s.uuid, s.name]));
-  return html`
-    <div class="detail" data-test="stream-detail" hidden="${() => !r()}">
-      <div class="card-head"><h3>${() => r()?.name ?? ''}</h3><button class="small-btn" @click="${() => a.openStream('')}">Close</button></div>
-      <svg class="spark" viewBox="0 0 70 20" preserveAspectRatio="none" aria-hidden="true"><path d="${() => sparkPath(state.sparks[state.streamOpen])}"></path></svg>
-      <p class="small muted">${() => (r() ? modelTitle(r(), names()) || 'No model yet' : '')}</p>
-      <ol>${() => state.streamPreds.map((p) => predRow(p).key(`${p.id}:${p.status}`))}</ol>
-    </div>`;
+/** An open stream, under its row: its trend, the forecast in 12 h, its model, its latest predictions. */
+function detail(r, names, a) {
+  return html`<div class="detail" data-test="stream-detail"><div class="card-head"><h3>${r.name}</h3><button class="small-btn" @click="${() => a.openStream('')}">Close</button></div><svg class="spark" viewBox="0 0 70 20" preserveAspectRatio="none" aria-hidden="true"><path d="${() => sparkPath(state.sparks[r.uuid])}"></path></svg><dl class="facts">${fact('In 12 h', 't1', fmtNum(r.t1))}<div class="fact"><dt>Model</dt><dd data-test="model" title="${modelTitle(r, names)}">${modelText(r, names)}</dd></div></dl><p class="small muted">${modelTitle(r, names) || 'No model yet'}</p><ol>${() => state.streamPreds.map((p) => predRow(p).key(`${p.id}:${p.status}`))}</ol></div>`;
 }
 
 function streamsCard(a) {
@@ -64,13 +62,12 @@ function streamsCard(a) {
     <header class="card-head"><h2>Streams</h2><span class="muted small" data-test="streams-count">${() => (state.streams.length ? `${state.streams.length} from the Satori Network, with our forecasts` : '')}</span></header>
     <p class="muted small" hidden="${() => state.streams.length > 0}">Streams: none yet. They arrive with the first poll.</p>
     <div class="srows" hidden="${() => !state.streams.length}">
-      <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">t1</span><span class="num">t2</span><span>Model</span><span></span></div>
+      <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">In 24 h</span><span></span></div>
       <div>${() => {
         const names = new Map(state.streams.map((r) => [r.uuid, r.name]));
         return state.streams.map((r) => streamRow(r, names, a).key(r.uuid));
       }}</div>
     </div>
-    ${detail(a)}
   </section>`;
 }
 
@@ -159,15 +156,15 @@ function recordsCard(a) {
   const groups = () => recordGroups(state.records);
   const shown = () => (state.recordsAll ? groups() : firstRows(groups(), SHOWN));
   return html`
-  <section class="card records" data-test="records">
-    <header class="card-head"><h2>Prediction streams</h2></header>
+  <details class="card records" data-test="records">
+    <summary>Prediction streams <span class="muted small" data-test="records-count">${() => (state.records.length ? `${state.records.length} on the relays` : '')}</span></summary>
     <p class="muted small rstatus" data-test="records-status"><i class="spin" aria-hidden="true" hidden="${() => !state.watchLine}"></i><span>${() => state.watchLine || watchText(state.nostr.watching, state.records)}</span></p>
     <div class="rrows" hidden="${() => !state.records.length}">
       <div class="rrow head" aria-hidden="true"><span>Source, then its predictors</span><span>Against no change</span><span class="rfrom">Scored</span><span>Cadence</span></div>
       <div>${() => shown().map((g) => recordGroup(g, a).key(groupKey(g)))}</div>
     </div>
     <button class="small-btn" data-test="records-all" hidden="${() => state.recordsAll || state.records.length <= SHOWN}" @click="${() => { state.recordsAll = true; }}">${() => `Show all ${state.records.length}`}</button>
-  </section>`;
+  </details>`;
 }
 
 /** A stream sold on the Satori contract: its price, a deposit (100 observations) and Buy; bought, the deposit left. */

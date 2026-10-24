@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import {
-  fmtNum, fmtWhen, pickIndexes, registrationText, mismatchText, pollText, submitText, modelTitle,
+  fmtNum, fmtWhen, pickIndexes, registrationText, networkLine, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, relaysText, BLOCKED_NOTE, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText, referralText, referralNote,
   storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText, openingText,
@@ -49,6 +49,23 @@ test('pollText and submitText', () => {
   expect(submitText({ at, total_submitted: 2, successful: 0, failed: 2, errors: ['x'] }))
     .toBe('Oct 15, 14:03 · 0 of 2 accepted; kept for the next poll');
   expect(submitText({ at, error: 'Satori Network 500: boom' })).toBe('Oct 15, 14:03 · failed: Satori Network 500: boom; kept for the next poll');
+});
+
+test('networkLine: the Satori Network card in one line; its facts are under Details', () => {
+  const at = new Date(2026, 9, 15, 14, 3).getTime() / 1000;
+  const nextPoll = new Date(2026, 9, 16, 2, 3).getTime() / 1000;
+  const ok = { ok: true, peer_id: 7 };
+  expect(networkLine({ registration: null })).toBe('Registering…');
+  expect(networkLine({ registration: { ok: false, error: 'timed out' } })).toBe('Not registered: timed out');
+  expect(networkLine({ registration: ok, lastSubmit: null, nextPoll })).toBe('Nothing sent yet · next Oct 16, 02:03');
+  expect(networkLine({ registration: ok, lastSubmit: { at, total_submitted: 80, successful: 80 }, nextPoll }))
+    .toBe('Sent 80 predictions Oct 15, 14:03, all accepted · next Oct 16, 02:03');
+  expect(networkLine({ registration: ok, lastSubmit: { at, total_submitted: 80, successful: 78 }, nextPoll }))
+    .toBe('Sent 80 predictions Oct 15, 14:03, 78 accepted · next Oct 16, 02:03');
+  expect(networkLine({ registration: ok, lastSubmit: { at, error: 'Satori Network 500: boom' }, nextPoll }))
+    .toBe('Sending failed Oct 15, 14:03: Satori Network 500: boom; kept for the next poll');
+  expect(networkLine({ registration: ok, lastSubmit: { at, total_submitted: 2, successful: 0 }, nextPoll }))
+    .toBe('Sent 2 predictions Oct 15, 14:03, none accepted; kept for the next poll');
 });
 
 test('pickIndexes', () => {

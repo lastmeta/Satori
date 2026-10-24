@@ -272,7 +272,8 @@ and its source.
 
 ## UI (Streams)
 
-A **Prediction streams** card, after the Satori relays card:
+A **Prediction streams** card, after the Satori relays card, folded until
+tapped ("112 on the relays" beside its name):
 
 - the status line: "Watching 112 prediction streams · 23 with a record"
   ("· none with a record yet"; past the cap, "(14 more on the relays not

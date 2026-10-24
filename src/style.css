@@ -335,7 +335,9 @@ details.tile[open] > summary { margin-bottom: 0; }
 .central .error { margin: 10px 0 0; }
 .srows { margin-top: 8px; }
 .row { display: grid; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.92rem; }
-.srow { grid-template-columns: minmax(0, 1.2fr) 1fr max-content 1fr 1fr minmax(0, 1.7fr) 64px; }
+.srow { grid-template-columns: minmax(0, 1.5fr) 1fr max-content 1fr 64px; }
+.sitem > .detail { margin: 0 0 10px; }
+.records > summary .muted { margin-left: 8px; font-weight: 400; }
 .nrow { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) max-content minmax(0, 1fr) 36px 52px max-content; }
 .row.head { border-top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .row .sname { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
@@ -603,6 +605,13 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .srow > .muted.small { display: none; }
   .row [data-label]::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.75rem; }
   .row .num { text-align: left; }
+  /* a stream on one line: name, latest, in 24 h, sent; the column heads once above (not per cell) */
+  .srow, .srow.head { grid-template-columns: minmax(0, 1fr) 5.6rem 5.6rem 3.2rem; gap: 2px 8px; }
+  .srow.head { display: grid; padding: 0 0 4px; font-size: 0.7rem; }
+  .srow.head > :nth-child(3) { display: none; }
+  .srow .sname, .srow > :last-child { grid-column: auto; grid-row: auto; }
+  .srow [data-label]::before { content: none; }
+  .srow .num { text-align: right; }
   .crow { flex-wrap: wrap; }
   .card { padding: 14px; }
   .hero { padding: 14px; gap: 12px; }

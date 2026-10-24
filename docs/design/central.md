@@ -115,7 +115,7 @@ newest. `src/neuron/history.js`:
   warning) and remembered for a day (`meta.central_history.retryAt`), then
   asked again. (Before, one deleted stream failed first every day and held
   all the others with it.)
-- **Shown**: the Streams tab's Central card has a History line ("Oct 16, 09:30 · 83
+- **Shown**: the Streams tab's Satori Network card has, under its Details, a History line ("Oct 16, 09:30 · 83
   streams, 81,234 rows", or "Not on this central (central 404: Not Found);
   next try …"); `status().central.history` = the last run `{at, url, streams,
   rows, left, error, retryAt}` and `needed` (streams with no history yet).
