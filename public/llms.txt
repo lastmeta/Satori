@@ -607,12 +607,17 @@ the page's JS context:
   in this app…`.
 - A connected wallet (docs/design/wallets.md#a-connected-wallet): the
   person's own wallet app (MetaMask or another, found by EIP-6963, else
-  `window.ethereum`) instead of a wallet sealed here. On Setup:
-  `await satori.connectWallets()` → `[{ rdns, name }]`, then
+  `window.ethereum`; with none, as on a phone: MetaMask (MetaMask Connect:
+  the MetaMask app opens to approve) or another wallet app (WalletConnect))
+  instead of a wallet sealed here. On Setup:
+  `await satori.connectWallets()` → `[{ rdns, name }]` (`metamask-connect`
+  and `walletconnect` when no wallet is in the browser), then
   `await satori.connect(rdns)` → status (the wallet app asks the person for
   the account, then to sign the link). Then `status().walletKind` is
-  `'connected'` and `status().connected` `{ name, found }` (found: its wallet
-  app is in this browser); there is no passphrase: `unlock()` throws, and
+  `'connected'` and `status().connected` `{ name, found, relay }` (found: its
+  wallet app is in this browser, or its relay session is still on; relay:
+  MetaMask Connect or WalletConnect, whose ended session the person
+  reconnects in Settings, `wallet-reconnect`); there is no passphrase: `unlock()` throws, and
   `stake()`, `unstake()`, `claim()`, `send()` (no passphrase) and a buy's
   channel are each approved in the wallet app; its "no" is `Declined in the
   wallet app.` `backup('alias' | 'nostr')` asks the wallet app to sign a

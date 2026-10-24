@@ -18,6 +18,8 @@ import {
   withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
+import { openRelay, RELAYS } from './keys/relay.js';
+import { DEFAULTS as CHAIN } from './chain/config.js';
 import { createAutoLock } from './keys/autolock.js';
 import { nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
@@ -415,11 +417,36 @@ async function saveKeys(r, { backedUp = false } = {}) {
  */
 async function findConnected() {
   const { rdns, name } = walletPublic.connected;
-  const w = (await findWallets()).find((x) => x.rdns === rdns);
-  wallet = w ? connectedWallet({ address: walletPublic.evmAddress, name, provider: w.provider }) : null;
-  state.connected = { name, found: !!w };
+  const relay = RELAYS.includes(rdns);
+  const provider = relay ? await relayed(rdns) : (await findWallets()).find((x) => x.rdns === rdns)?.provider;
+  wallet = provider ? connectedWallet({ address: walletPublic.evmAddress, name, provider }) : null;
+  state.connected = { name, found: !!provider, relay };
 }
-const notHere = () => new Error(`${state.connected.name} isn't in this browser: open the app where it is installed.`);
+
+/** A phone path's stored session (src/keys/relay.js), if it is still this wallet's: its provider, else null. Never a prompt. */
+async function relayed(rdns) {
+  try {
+    const r = await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect });
+    const accounts = r ? await r.provider.request({ method: 'eth_accounts' }) : [];
+    return accounts.some((a) => a.toLowerCase() === walletPublic.evmAddress.toLowerCase()) ? r.provider : null;
+  } catch (err) {
+    console.warn('[satori] the wallet\'s relay session', err);
+    return null;
+  }
+}
+
+const notHere = () => new Error(state.connected.relay ? `The link to ${state.connected.name} has ended: reconnect it in Settings › Keys.`
+  : `${state.connected.name} isn't in this browser: open the app where it is installed.`);
+
+/** Reconnect a phone path whose session ended: the person approves again, and it must be the same account. */
+const reconnect = () => exclusive('reconnect', async () => {
+  const { rdns, name } = walletPublic.connected;
+  const { provider } = await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect, connect: true });
+  const address = await requestAddress(provider);
+  if (address !== walletPublic.evmAddress) throw new Error(`That is another account: choose ${walletPublic.evmAddress} in ${name}.`);
+  wallet = connectedWallet({ address, name, provider });
+  state.connected = { name, found: true, relay: true };
+});
 
 /** The list stored and shown. */
 async function keepWallets(list) {
@@ -602,12 +629,15 @@ const walletOps = {
  * no passphrase. Its words are in its wallet app, so there is no backup to ask for.
  */
 const connectTo = (rdns) => setup(async () => {
-  const w = foundWallets.find((x) => x.rdns === rdns);
-  if (!w) throw new Error('That wallet is not in this browser.');
-  state.connecting = w.name;
+  const relay = RELAYS.includes(rdns);
+  const w = relay ? null : foundWallets.find((x) => x.rdns === rdns);
+  if (!relay && !w) throw new Error('That wallet is not in this browser.');
+  state.connecting = relay ? (rdns === RELAYS[0] ? 'MetaMask' : 'your wallet app') : w.name;
   try {
-    const address = await requestAddress(w.provider);
-    return await connectedRecord({ address, rdns: w.rdns, name: w.name, signLink: (m) => signText(w.provider, address, m) });
+    const { provider, name } = relay ? await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect, connect: true }) : w;
+    state.connecting = name;
+    const address = await requestAddress(provider);
+    return await connectedRecord({ address, rdns, name, signLink: (m) => signText(provider, address, m) });
   } finally {
     state.connecting = '';
   }
@@ -784,8 +814,10 @@ const actions = {
     Object.assign(state, { connectFound: null, error: '' });
     foundWallets = await findWallets();
     state.connectFound = foundWallets.map(({ rdns, name }) => ({ rdns, name }));
+    state.walletConnectReady = !!DEFAULTS.walletConnect;
   },
   connect: shownAt('error', (rdns) => connectTo(rdns)),
+  reconnect: shownAt('walletError', () => reconnect()),
   importDocker: shownAt('error', async (el) => {
     const f = new FormData(el);
     await setup(async () => {
@@ -1100,10 +1132,13 @@ window.satori = {
       train: trainer?.last ?? null,
     };
   },
-  /** On Setup: the wallets in this browser that can be connected (EIP-6963, else window.ethereum) → [{ rdns, name }]. */
+  /** On Setup: the wallets in this browser that can be connected (EIP-6963, else window.ethereum; with none, MetaMask Connect and
+   * WalletConnect) → [{ rdns, name }]. */
   async connectWallets() {
     foundWallets = await findWallets();
-    return foundWallets.map(({ rdns, name }) => ({ rdns, name }));
+    const found = foundWallets.map(({ rdns, name }) => ({ rdns, name }));
+    // none in this browser (a phone's Chrome or Safari): the dapp's two relay paths
+    return found.length ? found : [{ rdns: RELAYS[0], name: 'MetaMask' }, ...(DEFAULTS.walletConnect ? [{ rdns: RELAYS[1], name: 'Other wallet' }] : [])];
   },
   /** On Setup: connect one of them (connectWallets() first); its wallet app asks the person for the account and the link. → status */
   async connect(rdns) {

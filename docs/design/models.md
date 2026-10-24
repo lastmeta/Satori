@@ -552,7 +552,7 @@ readout gives is also in the text above it or the table of history the agent
 API returns. It is drawn px for px at the block's measured width
 (`ResizeObserver`), so text and dots keep their size on a phone and a
 computer, from the theme's tokens, light and dark. Two constraints shaped
-it: the CSP allows no inline style (`style-src 'self'`), so geometry is SVG
+it: the app sets no inline style (its own rule; the CSP allows it only for the phone wallets' screens), so geometry is SVG
 attributes; and ArrowJS 1.0.6 builds an inserted chunk outside the SVG
 namespace, so a chart's children are fixed and only their attributes move.
 A third, found with Retrain (whose end always recomputes the open model):

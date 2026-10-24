@@ -153,18 +153,38 @@ injected `window.ethereum`), the person picks one, `eth_requestAccounts`
 gives its address, and before a transaction the wallet is switched to Base
 Sepolia (added with the chain's EIP-3085 fields when it answers 4902). The
 app uses viem over the wallet's EIP-1193 provider (the dapp uses ethers).
-WalletConnect, for a phone's wallet app, comes later.
 
-- **Connect** (Setup's fourth way, `src/keys/connect.js`): one button per
-  wallet found ("Connect MetaMask"); none found says so ("No wallet in this
-  browser: install one, such as MetaMask, or open this page in your wallet
-  app's browser"). Connecting makes the alias and the Nostr key, and the
+**On a phone**, or any browser with no wallet in it, the dapp's other two
+paths, ported as they are (`useWallet.ts` `getOrInitMetaMask`,
+`getOrInitWalletConnect`; the same package versions):
+
+- **MetaMask** (MetaMask Connect, `@metamask/connect-evm`): the page stays
+  where it is and talks to the MetaMask app over MetaMask's own relay; the
+  phone switches to MetaMask only to approve, then comes back. On a
+  computer it shows a code to scan with the phone. Analytics off; no
+  EIP-6963 announcement of its own.
+- **Other wallet** (WalletConnect, `@walletconnect/ethereum-provider` with its
+  QR modal and wallet list): Rainbow, Trust, Coinbase and the rest, with the
+  Satori project id the dapp uses (`VITE_WALLETCONNECT_PROJECT_ID`).
+
+Both keep their session in this browser (their own local storage), so each
+start restores it without asking; a session that has ended (removed in the
+wallet app, storage cleared) shows as "The link to <name> has ended" with
+**Reconnect**, which must give back the same account. Their libraries load
+only when one is used. A relay must reach this page's origin, so neither
+works on a private address (a LAN IP, localhost): said so, as the dapp does.
+
+- **Connect** (Setup's fourth way, `src/keys/connect.js`, `src/keys/relay.js`):
+  one button per wallet found in the browser ("Connect MetaMask"); with none
+  found, as the dapp: "MetaMask" (opens the app to approve) and "Other
+  wallet" (WalletConnect). Connecting makes the alias and the Nostr key, and the
   wallet signs the link to the alias once (`personal_sign`, checked: it must
   recover to the wallet's address). Nothing is encrypted and there is no
   passphrase.
 - **The record**: `wallet: { kind: 'connected', address, rdns, name }` (the
   wallet's EIP-6963 id and name, to find it again; `injected` for a plain
-  `window.ethereum`), and the link. No secret of the wallet's is ever in the
+  `window.ethereum`; `metamask-connect` or `walletconnect` for the phone
+  paths), and the link. No secret of the wallet's is ever in the
   app.
 - **Each start** finds the same wallet again by its id. Not found (another
   browser, the extension removed): the app still predicts, and an action
@@ -197,7 +217,8 @@ WalletConnect, for a phone's wallet app, comes later.
 - **B. Several wallets**: the list, a file each, the switch, Add and Remove (2026-10-23).
 - **C. A connected wallet**: an injected EIP-1193 provider (EIP-6963 when
   several), the link at connect, the outside wallet asked for each action
-  (2026-10-23).
+  (2026-10-23); on a phone, MetaMask Connect and WalletConnect, as the dapp
+  (2026-10-24).
 - **Later**: replacing the alias on purpose (a new alias, a new link, Unstake
   and Stake again; the network then sees a new peer with new streams);
-  WalletConnect for a phone's outside wallet; shared preferences.
+  shared preferences.

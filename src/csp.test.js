@@ -26,5 +26,13 @@ test('the installed app (docs/design/pwa.md): the service worker, the manifest a
   const src = directives(CSP);
   expect(src['worker-src']).toEqual(["'self'"]); // /sw.js and DuckDB's worker
   expect(src['manifest-src']).toBeUndefined(); // default-src 'self'
-  expect(src['img-src']).toEqual(["'self'", 'data:']);
+  expect(src['img-src']).toEqual(["'self'", 'data:', 'blob:']);
+});
+
+test("the phone wallets' screens (docs/design/wallets.md#a-connected-wallet): inline styles, blob: icons, Reown's font; scripts still the app's", () => {
+  const src = directives(CSP);
+  expect(src['style-src']).toEqual(["'self'", "'unsafe-inline'"]);
+  expect(src['font-src']).toEqual(["'self'", 'https://fonts.reown.com']);
+  expect(src['frame-src']).toEqual(['https://verify.walletconnect.org', 'https://verify.walletconnect.com']);
+  expect(src['script-src']).toEqual(["'self'", "'wasm-unsafe-eval'"]);
 });

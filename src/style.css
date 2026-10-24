@@ -641,3 +641,7 @@ a.chan:hover { border-color: var(--muted); }
 .wallet-row code { flex: 1 1 auto; min-width: 0; }
 .confirm { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--warn-soft); }
 .confirm .actions { margin-top: 10px; }
+
+/* Setup › Connect a wallet: a phone's choices (docs/design/wallets.md#a-connected-wallet) */
+.connect-choices .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+.connect-choices .choice .small { font-weight: 400; opacity: 0.8; }

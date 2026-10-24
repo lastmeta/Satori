@@ -17,10 +17,12 @@
   "dependencies": {
     "@arrow-js/core": "1.0.6",
     "@duckdb/duckdb-wasm": "1.32.0",
+    "@metamask/connect-evm": "2.1.1",
     "@noble/curves": "1.9.7",
     "@noble/hashes": "1.8.0",
     "@scure/base": "1.2.6",
     "@scure/bip39": "1.6.0",
+    "@walletconnect/ethereum-provider": "2.23.9",
     "js-yaml": "5.4.2",
     "viem": "2.37.0"
   },

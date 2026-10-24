@@ -45,7 +45,10 @@ Neither file holds a copy. The script refuses a CSP that contains `"`, `$` or
 Every response, 404s included, carries:
 
 - `Content-Security-Policy` (`csp.js`'s `CSP`, a build's: `connect-src
-  'self' https: wss:` with no `ws:`, and `form-action 'none'`; the dev
+  'self' https: wss:` with no `ws:`, and `form-action 'none'`; scripts only
+  the app's own; inline styles, `blob:` images, Reown's font and
+  WalletConnect's Verify frame for the phone wallets' screens
+  ([wallets.md](wallets.md#a-connected-wallet)); the dev
   server sends `DEV_CSP`, the same with `ws:` for its `ws://localhost` test
   relay). It sits at the server level; the one location with an
   `add_header` of its own (the wasm's, for brotli, [below](#compression))
@@ -133,6 +136,7 @@ build.
 | `VITE_NOSTR_WSS` | relays' wss stand-ins, a comma list of `ws://…=wss://…` pairs: a `ws://` relay the page can't open (a build, an https page) is reached at its `wss://` address, as that same relay ([nostr.md](nostr.md#relays-and-the-read-only-flag)); set, it replaces the default map; not in Settings | `ws://satorian.satorinet.io:7777=wss://relay.satorinet.io` | the same (unused on its plain-http page, which opens `ws://`) | unset (the default) |
 | `VITE_NOSTR_CENTRAL_WRITE` | `true` or `false`: whether central's relays are written to (Settings › Publish to central's relays) | `true` | `false` | unset (`true`) |
 | `VITE_BASE_RPC` | the Base RPC used when none is saved: `https://…` (then publicnode as the fallback), or a same-origin path (alone); central's `rpcUrl` and `explorerUrl` never override it (Settings › Base RPC) | none: central's `rpcUrl`, then publicnode | `/rpc` (the local fork) | `https://sepolia.base.org` (then publicnode) |
+| `VITE_WALLETCONNECT_PROJECT_ID` | the WalletConnect project id for Connect's "Other wallet" ([wallets.md](wallets.md#a-connected-wallet)) | Satori's (the dapp's) | Satori's | Satori's |
 
 - An empty variable counts as unset.
 - A bad value stops `vite build`, because `vite.config.js` runs the same

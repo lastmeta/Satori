@@ -42,7 +42,8 @@ const rawDuckdbWorker = {
 
 // Builds only: dist/sw.js, the service worker (src/pwa/sw.js; docs/design/pwa.md), with the files it
 // precaches: the page, /theme.js (the page's pre-paint theme, public/) and every hashed asset but DuckDB's
-// mvp bundle (for browsers without wasm exceptions, fetched only there). Its cache is named after the
+// mvp bundle (for browsers without wasm exceptions, fetched only there) and the code loaded only on demand (the phone
+// wallets' libraries, src/keys/relay.js: they need the network anyway). Its cache is named after the
 // files, the page and theme.js, so a build that changes any is a new worker, which waits for the page's
 // "Update ready, reload".
 const serviceWorker = {
@@ -50,7 +51,11 @@ const serviceWorker = {
   apply: 'build',
   enforce: 'post', // after the page (index.html) is in the bundle
   generateBundle(_, bundle) {
-    const files = ['/', '/theme.js', ...Object.keys(bundle).filter((f) => f.startsWith('assets/') && !f.includes('-mvp')).sort().map((f) => `/${f}`)];
+    const eager = new Set(); // the JS chunks the page loads: its entries and what they import statically
+    const walk = (f) => { if (!eager.has(f) && bundle[f]?.type === 'chunk') { eager.add(f); bundle[f].imports.forEach(walk); } };
+    Object.values(bundle).filter((c) => c.type === 'chunk' && c.isEntry).forEach((c) => walk(c.fileName));
+    const kept = (f) => f.startsWith('assets/') && !f.includes('-mvp') && (bundle[f].type !== 'chunk' || eager.has(f));
+    const files = ['/', '/theme.js', ...Object.keys(bundle).filter(kept).sort().map((f) => `/${f}`)];
     const theme = readFileSync(new URL('./public/theme.js', import.meta.url), 'utf8');
     const name = `satori-${createHash('sha256').update(files.join() + bundle['index.html'].source + theme).digest('hex').slice(0, 12)}`;
     const code = readFileSync(new URL('./src/pwa/sw.js', import.meta.url), 'utf8').replace(/^export /gm, '');

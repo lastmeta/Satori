@@ -4,6 +4,15 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-24 (wallets on a phone)
+
+- With no wallet in the browser (a phone's Chrome or Safari), Connect offers
+  MetaMask (MetaMask Connect: the MetaMask app opens to approve; a code to
+  scan on a computer) and Other wallet (WalletConnect), as the dapp does:
+  `connectWallets()` lists them as `metamask-connect` and `walletconnect`.
+  Their sessions are kept in this browser; an ended one is reconnected in
+  Settings (`wallet-reconnect`); `status().connected.relay` says which kind.
+
 ## Added 2026-10-23 (a connected wallet)
 
 - Setup's fourth way, "Connect a wallet": the person's own wallet app

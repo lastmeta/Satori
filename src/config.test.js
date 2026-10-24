@@ -2,6 +2,7 @@
 import { expect, test } from 'vitest';
 import { BUILD_DEFAULTS, DEV_DEFAULTS, defaultsFrom, versionOf } from './config.js';
 
+const WC = '7083cdebe0e7b120435178285d0a6758'; // Satori's WalletConnect project id, the dapp's too
 const SATORIAN = { 'ws://satorian.satorinet.io:7777': 'wss://relay.satorinet.io' }; // central's relay → its TLS front
 
 test("the neuron's version: browser-<package version>+<git short sha>, as register sends it and Settings shows it", () => {
@@ -11,18 +12,18 @@ test("the neuron's version: browser-<package version>+<git short sha>, as regist
 
 test("unset, a build keeps today's defaults: prod central, no user relay, central's relays written to, central's RPC, satorian's stand-in", () => {
   expect(defaultsFrom({ DEV: false, PROD: true, MODE: 'production' }, BUILD_DEFAULTS)).toEqual({
-    central: 'https://network.satorinet.io', relays: [], centralWrite: true, rpc: undefined, wss: SATORIAN,
+    central: 'https://network.satorinet.io', relays: [], centralWrite: true, rpc: undefined, wss: SATORIAN, walletConnect: WC,
   });
 });
 
 test("unset, the dev server keeps its own: the dev central, the test relay, central's relays read only, the local fork; the same stand-in", () => {
   expect(defaultsFrom({ DEV: true }, DEV_DEFAULTS)).toEqual({
-    central: 'https://central2.satorinet.io', relays: ['ws://localhost:7778'], centralWrite: false, rpc: '/rpc', wss: SATORIAN,
+    central: 'https://central2.satorinet.io', relays: ['ws://localhost:7778'], centralWrite: false, rpc: '/rpc', wss: SATORIAN, walletConnect: WC,
   });
 });
 
 test('empty is unset', () => {
-  const empty = { VITE_CENTRAL_URL: '', VITE_NOSTR_RELAYS: ' ', VITE_NOSTR_CENTRAL_WRITE: '', VITE_BASE_RPC: '', VITE_NOSTR_WSS: ' ' };
+  const empty = { VITE_CENTRAL_URL: '', VITE_NOSTR_RELAYS: ' ', VITE_NOSTR_CENTRAL_WRITE: '', VITE_BASE_RPC: '', VITE_NOSTR_WSS: ' ', VITE_WALLETCONNECT_PROJECT_ID: '' };
   expect(defaultsFrom(empty, BUILD_DEFAULTS)).toEqual(defaultsFrom({}, BUILD_DEFAULTS));
   expect(defaultsFrom(empty, DEV_DEFAULTS)).toEqual(defaultsFrom({}, DEV_DEFAULTS));
 });
@@ -34,6 +35,7 @@ test('set, each one replaces its default, in a build and on the dev server', () 
     VITE_NOSTR_CENTRAL_WRITE: 'false',
     VITE_BASE_RPC: 'https://rpc.example.com',
     VITE_NOSTR_WSS: ' ws://a.example.com:7777=wss://a.example.com , ,ws://b.example.com/x?k=v=wss://tls.example.com/b?k=v',
+    VITE_WALLETCONNECT_PROJECT_ID: 'abc123',
   };
   const want = {
     central: 'https://central2.satorinet.io', // no trailing slash, as Settings saves it
@@ -42,6 +44,7 @@ test('set, each one replaces its default, in a build and on the dev server', () 
     rpc: 'https://rpc.example.com',
     // replaces the default map (satorian is not in it); a pair splits at the = before the wss:// address
     wss: { 'ws://a.example.com:7777': 'wss://a.example.com', 'ws://b.example.com/x?k=v': 'wss://tls.example.com/b?k=v' },
+    walletConnect: 'abc123',
   };
   expect(defaultsFrom(env, BUILD_DEFAULTS)).toEqual(want);
   expect(defaultsFrom({ ...env, VITE_NOSTR_CENTRAL_WRITE: 'true' }, DEV_DEFAULTS)).toEqual({ ...want, centralWrite: true });
@@ -49,7 +52,7 @@ test('set, each one replaces its default, in a build and on the dev server', () 
   // this deployment's two (deploy/build.env): the rest stay a build's
   expect(defaultsFrom({ VITE_CENTRAL_URL: 'https://central2.satorinet.io', VITE_NOSTR_RELAYS: 'wss://nostr.satorinet.io' },
     BUILD_DEFAULTS)).toEqual({ central: 'https://central2.satorinet.io', relays: ['wss://nostr.satorinet.io'], centralWrite: true, rpc: undefined,
-    wss: SATORIAN });
+    wss: SATORIAN, walletConnect: WC });
 });
 
 test('a bad value is refused, so `vite build` stops (vite.config.js) instead of baking it in', () => {

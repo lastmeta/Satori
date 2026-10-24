@@ -66,7 +66,7 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await page.getByRole('button', { name: 'Connect TestWallet' }).click();
   await expect.poll(() => page.evaluate(() => document.body.dataset.screen), { timeout: LOAD_TIMEOUT }).toBe('home');
   const st = await status(page);
-  expect([st.wallet, st.walletKind, st.connected, st.unlocked]).toEqual([app.address, 'connected', { name: 'TestWallet', found: true }, false]);
+  expect([st.wallet, st.walletKind, st.connected, st.unlocked]).toEqual([app.address, 'connected', { name: 'TestWallet', found: true, relay: false }, false]);
   expect(app.calls.slice(0, 2)).toEqual(['eth_requestAccounts', 'personal_sign']);
   await expect.poll(() => central.registered.length).toBe(1);
   const link = Buffer.from(central.registered[0]['wallet-link'], 'base64').toString('utf8');
@@ -126,7 +126,7 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await page.evaluate(() => localStorage.setItem('noWallet', '1'));
   await page.reload();
   expect(await loaded(page)).toBe('home');
-  expect((await status(page)).connected).toEqual({ name: 'TestWallet', found: false });
+  expect((await status(page)).connected).toEqual({ name: 'TestWallet', found: false, relay: false });
   await go(page, 'settings');
   await expect(page.locator('[data-test=wallet-connected]')).toContainText("TestWallet, which isn't in this browser");
   await go(page, 'wallet');
@@ -134,9 +134,16 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await expect(fact(page, 'action-error')).toHaveText("TestWallet isn't in this browser: open the app where it is installed.");
 });
 
-test('no wallet in this browser: Connect says so', async ({ page }) => {
+test('no wallet in this browser (a phone): Connect offers MetaMask and Other wallet (WalletConnect), as the dapp', async ({ page }) => {
   await stubCentral(page.context());
   expect(await openApp(page)).toBe('setup');
   await page.locator('[data-test=connect-wallet]').click();
-  await expect(page.locator('[data-test=no-wallet]')).toHaveText("No wallet in this browser: install one, such as MetaMask, or open this page in your wallet app's browser.");
+  await expect(page.locator('[data-test=relay-choices]')).toContainText('No wallet in this browser: connect your wallet app instead.');
+  await expect(page.getByRole('button', { name: /^MetaMask/ })).toContainText('Opens the app to approve');
+  await expect(page.getByRole('button', { name: /^Other wallet/ })).toContainText('Rainbow, Trust, Coinbase');
+  expect(await page.evaluate(() => window.satori.connectWallets())).toEqual([{ rdns: 'metamask-connect', name: 'MetaMask' },
+    { rdns: 'walletconnect', name: 'Other wallet' }]);
+  // the dev server is on localhost, which a relay can't reach: said, nothing loaded
+  await page.getByRole('button', { name: /^MetaMask/ }).click();
+  await expect(page.locator('[data-test=connect-step] [role=alert]')).toContainText('on your private network');
 });

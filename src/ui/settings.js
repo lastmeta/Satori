@@ -30,7 +30,9 @@ function keys(a) {
       <p class="muted small" hidden="${() => !!state.connected}">Holds your funds. Encrypted with your passphrase.</p>
       <p class="muted small" data-test="wallet-connected" hidden="${() => !state.connected}">${() => (!state.connected ? ''
         : state.connected.found ? `Holds your funds, in ${state.connected.name}: it asks you each time the wallet is needed.`
-          : `Holds your funds, in ${state.connected.name}, which isn't in this browser: open the app where it is installed to stake, claim or send.`)}</p>
+          : state.connected.relay ? `Holds your funds, in ${state.connected.name}. The link to it has ended: reconnect to stake, claim or send.`
+            : `Holds your funds, in ${state.connected.name}, which isn't in this browser: open the app where it is installed to stake, claim or send.`)}</p>
+      <div class="actions" hidden="${() => !state.connected?.relay || state.connected.found}"><button class="primary" data-test="wallet-reconnect" disabled="${() => state.busy === 'reconnect'}" @click="${a.reconnect}">${() => (state.busy === 'reconnect' ? 'Reconnecting…' : 'Reconnect')}</button></div>
       <form class="unlock" hidden="${() => state.unlocked || !!state.connected}" @submit="${(e) => a.unlock(form(e), e.target)}">
         <input name="pass" type="password" aria-label="Wallet passphrase" placeholder="Wallet passphrase" autocomplete="current-password" required>
         <button class="primary" type="submit" data-test="unlock" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button>

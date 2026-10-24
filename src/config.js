@@ -15,7 +15,11 @@ import { checkRpcSetting } from './chain/config.js';
 // Base transactions to /rpc, which Vite proxies to a local fork on 127.0.0.1:8545
 // (scripts/fork.mjs): by default a dev checkout writes nothing to production.
 // (Plain objects: a build drops the one it does not use, which it can't do with Object.freeze's call.)
+/** Satori's WalletConnect project id (cloud.reown.com), the dapp's too: a public client id, in every bundle that uses it. */
+const WALLETCONNECT_PROJECT_ID = '7083cdebe0e7b120435178285d0a6758';
+
 export const DEV_DEFAULTS = {
+  walletConnect: WALLETCONNECT_PROJECT_ID,
   central: 'https://central2.satorinet.io', relays: ['ws://localhost:7778'], centralWrite: false, rpc: '/rpc',
   wss: { 'ws://satorian.satorinet.io:7777': 'wss://relay.satorinet.io' },
 };
@@ -25,6 +29,7 @@ export const DEV_DEFAULTS = {
 // as ws:// only, and wss://relay.satorinet.io is its TLS front. The dev server's plain-http page opens ws:// and never
 // needs it, but one default for both is simpler.
 export const BUILD_DEFAULTS = {
+  walletConnect: WALLETCONNECT_PROJECT_ID,
   central: 'https://network.satorinet.io', relays: [], centralWrite: true, rpc: undefined,
   wss: { 'ws://satorian.satorinet.io:7777': 'wss://relay.satorinet.io' },
 };
@@ -61,7 +66,8 @@ export const versionOf = (version, sha) => `browser-${version}${sha ? `+${sha}` 
  * server's defaults are not in a build's bundle.
  * @param {Record<string, any>} env import.meta.env, or loadEnv's VITE_* variables
  * @param {typeof BUILD_DEFAULTS} base DEV_DEFAULTS or BUILD_DEFAULTS
- * @returns {{central: string, relays: string[], centralWrite: boolean, rpc: string|undefined, wss: Record<string, string>}}
+ * @returns {{central: string, relays: string[], centralWrite: boolean, rpc: string|undefined, wss: Record<string, string>,
+ *   walletConnect: string}} walletConnect: the WalletConnect project id (docs/design/wallets.md#a-connected-wallet)
  */
 export function defaultsFrom(env, base) {
   const central = value(env.VITE_CENTRAL_URL)?.replace(/\/+$/, '') ?? base.central;
@@ -83,5 +89,6 @@ export function defaultsFrom(env, base) {
   const pairs = value(env.VITE_NOSTR_WSS);
   const wss = pairs ? standIns(pairs) : { ...base.wss };
 
-  return { central, relays, centralWrite, rpc, wss };
+  const walletConnect = value(env.VITE_WALLETCONNECT_PROJECT_ID) ?? base.walletConnect;
+  return { central, relays, centralWrite, rpc, wss, walletConnect };
 }

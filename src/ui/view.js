@@ -4,7 +4,6 @@
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, watch } from '@arrow-js/core';
 import { MIN_PASSPHRASE } from '../keys/index.js';
-import { NO_WALLET } from '../keys/connect.js';
 import { state } from './state.js';
 import { form, wordList } from './parts.js';
 import { lockInText, engineText, openingText, shortHash } from './format.js';
@@ -114,7 +113,13 @@ function setup(a) {
       <p class="muted">Your wallet stays in your wallet app. It asks you each time the wallet is needed: to stake, claim
         or send. The app predicts on its own meanwhile.</p>
       <p class="muted" hidden="${() => state.connectFound !== null}">Looking for wallets in this browser…</p>
-      <p class="muted" data-test="no-wallet" hidden="${() => state.connectFound?.length !== 0}">${NO_WALLET}</p>
+      <div data-test="relay-choices" hidden="${() => state.connectFound?.length !== 0}">
+        <p class="muted small">No wallet in this browser: connect your wallet app instead.</p>
+        <div class="actions connect-choices">
+          <button class="primary choice" data-test="connect-to" data-rdns="metamask-connect" disabled="${() => !!state.connecting}" @click="${() => a.connect('metamask-connect')}"><span>MetaMask</span><span class="small">Opens the app to approve</span></button>
+          <button class="choice" data-test="connect-to" data-rdns="walletconnect" hidden="${() => !state.walletConnectReady}" disabled="${() => !!state.connecting}" @click="${() => a.connect('walletconnect')}"><span>Other wallet</span><span class="small">Rainbow, Trust, Coinbase, …</span></button>
+        </div>
+      </div>
       <div class="actions">${() => (state.connectFound ?? []).map((w) => html`<button class="primary" data-test="connect-to" data-rdns="${w.rdns}" disabled="${() => !!state.connecting}" @click="${() => a.connect(w.rdns)}">${`Connect ${w.name}`}</button>`.key(w.rdns))}</div>
       <p class="muted small" hidden="${() => !state.connecting}">${() => `Waiting for ${state.connecting}: approve the account, then the link to this app.`}</p>
       ${errorLine()}
