@@ -490,6 +490,12 @@ SATORI, `alreadyMintedTo` 0, so 3.61850955 claimable.
 transaction's gas (1.5M gas at twice the gas price, the batch's measure;
 `wallet.lowEth`), Claim says "The wallet needs a little Base ETH for gas to
 claim." before it tries (before Unlock too), and `claim()` throws it.
+Stake the same way, on both keys: the alias signs two of its steps (and then
+the daily batch), so while the alias is under that (`alias.noGas`) it says
+"The alias needs a little Base ETH for gas: send some from the wallet to the
+alias's address, then stake.", and while the wallet is, "The wallet needs a
+little Base ETH for gas to stake." (2026-10-24: a raw "gas required exceeds
+allowance (0)" before).
 
 ## Send: the passphrase each time
 

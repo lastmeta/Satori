@@ -875,7 +875,7 @@ the page's JS context:
   written to.
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
-  alias: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth },
+  alias: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth, noGas },
   wallet: { address, eth, satori, stakedWith, referral, staked: 'alias' | 'none' | 'other', inSync, shortfall,
   lock: { locked, indefinite, untilRound, freeAt }, lowEth }, claimable: { rewards, drop, airdrop, total },
   pendingReferrer, inviteLink,
@@ -896,7 +896,9 @@ the page's JS context:
   `claimable`: the staking rewards, the Satori Network's reward drop not
   claimed yet (`drop`: null when this central does not serve it), the
   airdrop, and `total` (the parts known); `wallet.lowEth`: under one
-  transaction's gas (Claim says so before trying).
+  transaction's gas (Claim and Stake say so before trying); `alias.noGas`:
+  the same for the alias, which signs two of Stake's steps and the daily
+  batch (Stake says so before trying).
   Referral (docs/design/base.md#referral-invite-links): `inviteLink` is
   `<this origin>/?ref=<the wallet's address>`, to give to someone who will run their
   own neuron: they become the wallet's referral, and `claim` collects the cut (5 % of

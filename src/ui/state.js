@@ -105,7 +105,7 @@ export const state = reactive({
   // Base (docs/design/base.md): the status (window.satori.base()'s shape), what runs, the last action's result
   base: {
     rpc: [], rpcSetting: '', maxFeeSetting: null, maxFeeGwei: null, localFork: false, explorer: null, config: null, error: '', round: null,
-    alias: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false },
+    alias: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false, noGas: false },
     wallet: { address: '', eth: null, satori: null, stakedWith: null, referral: null, staked: null, inSync: null, shortfall: null, lock: null, lowEth: false },
     claimable: { rewards: null, drop: null, airdrop: null, total: null }, pendingReferrer: null, inviteLink: '', lastBatch: null, lastCheck: null, nextCheck: null, checking: false,
   },

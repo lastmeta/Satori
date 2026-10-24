@@ -107,6 +107,9 @@ const lowOnGas = (eth, gas) => eth != null && (eth === 0n || (gas != null && eth
 export const PROOF_TTL_S = 3600;
 /** A wallet transaction needs Base ETH for gas (Claim says so before it tries). */
 export const NEED_GAS = 'The wallet needs a little Base ETH for gas to claim.';
+/** Stake's two alias steps and its wallet step need gas on each (said before trying, as Claim). */
+export const NEED_ALIAS_GAS = "The alias needs a little Base ETH for gas: send some from the wallet to the alias's address, then stake.";
+export const NEED_STAKE_GAS = 'The wallet needs a little Base ETH for gas to stake.';
 export const ZERO_ADDRESS = 'The zero address (0x000…000) burns what is sent to it: refused.';
 
 /**
@@ -429,6 +432,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
         address: alias.evmAddress, eth: plainAmount(s?.alias.eth), power: plainAmount(s?.alias.power),
         fee: s?.alias.fee ?? null, allowedStaker: s?.alias.allowedDelegator ?? null,
         batchesLeft, lowEth: batchesLeft != null && batchesLeft < LOW_BATCHES,
+        noGas: lowOnGas(s?.alias.eth, gas), // under one transaction's gas: Stake says so before it tries
       },
       wallet: {
         address: walletAddress, eth: plainAmount(s?.wallet.eth), satori: plainAmount(s?.wallet.satori),
@@ -589,7 +593,13 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     async delegate() {
       const v = needWallet();
       const referrer = (await db.get('referrer')) ?? null;
-      const r = await act('stake', (chain, step) => chain.delegate({ alias, wallet: v, referrer, onStep: step }));
+      const r = await act('stake', async (chain, step) => {
+        const st = await chain.status({ alias: alias.evmAddress, wallet: v.evmAddress });
+        const gas = st.gasPrice ? BATCH_GAS * 2n * st.gasPrice : null;
+        if (lowOnGas(st.alias.eth, gas)) throw new Error(NEED_ALIAS_GAS);
+        if (lowOnGas(st.wallet.eth, gas)) throw new Error(NEED_STAKE_GAS);
+        return chain.delegate({ alias, wallet: v, referrer, onStep: step });
+      });
       schedule.arm(now() + FIRST_CHECK_S);
       return r;
     },

@@ -726,6 +726,21 @@ describe('createBase', () => {
     expect((await base.claim()).airdrop).toMatchObject({ hash: expect.any(String), amount: '7' });
   });
 
+  test('Stake needs a little Base ETH on the alias (its two steps, then the daily batch) and on the wallet: said before trying', async () => {
+    wallet = walletKey;
+    const I = alias.evmAddress.toLowerCase();
+    rpc.eth[I] = 0n;
+    expect((await base.refresh()).alias.noGas).toBe(true);
+    await expect(base.delegate()).rejects.toThrow("The alias needs a little Base ETH for gas: send some from the wallet to the alias's address, then stake.");
+    rpc.eth[I] = 10n ** 16n;
+    rpc.eth[V] = 0n;
+    await expect(base.delegate()).rejects.toThrow('The wallet needs a little Base ETH for gas to stake.');
+    expect(rpc.sent).toHaveLength(0);
+    rpc.eth[V] = 10n ** 17n;
+    expect((await base.refresh()).alias.noGas).toBe(false);
+    expect((await base.delegate()).steps).toHaveLength(3);
+  });
+
   test('claims: hub.claim when the lens says > 0, the merkle drop with central\'s proof, the airdrop; each on its own', async () => {
     wallet = walletKey;
     expect(await base.claim()).toEqual({

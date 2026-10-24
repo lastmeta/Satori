@@ -32,7 +32,7 @@ import { box as modelBox, modelHref } from './ui/models.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
-import { createBase, checkSend, NEED_GAS } from './neuron/base.js';
+import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink } from './neuron/referral.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
@@ -930,7 +930,7 @@ const actions = {
     else if (a.do === 'poll') actions.pollNow();
     else if (a.do === 'install') actions.install();
     else if (a.do === 'dismiss') actions.dismissAdvice(a.id);
-    else if (a.do === 'stake') withWallet('card', actions.baseDelegate);
+    else if (a.do === 'stake') actions.walletAction('card', 'baseDelegate');
     else if (a.do === 'backup') {
       go('settings', 'backup');
       actions.askBackup('wallet');
@@ -1030,6 +1030,8 @@ const actions = {
     if (name === 'baseClaim' && state.base.wallet.lowEth) { // a claim is a wallet transaction: said before trying (and before Unlock)
       return void Object.assign(state, { baseDid: 'claim', baseResult: '', baseTxs: [], baseError: NEED_GAS });
     }
+    const noGas = name === 'baseDelegate' && (state.base.alias.noGas ? NEED_ALIAS_GAS : state.base.wallet.lowEth && NEED_STAKE_GAS);
+    if (noGas) return void Object.assign(state, { baseDid: 'stake', baseResult: '', baseTxs: [], baseError: noGas }); // as Claim
     return withWallet(slot, () => actions[name]());
   },
   baseDelegate: () => baseUi('stake', async () => {

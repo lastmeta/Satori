@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (Stake and gas)
+
+- `stake()` checks gas first, as `claim()` does: the alias needs a little
+  Base ETH (`base().alias.noGas`), then the wallet (`wallet.lowEth`); each
+  is said plainly, nothing is sent.
+
 ## Changed 2026-10-24 (Import)
 
 - Setup's "Restore from words" is now "Import": the wallet's (and the
