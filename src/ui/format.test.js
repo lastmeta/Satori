@@ -159,6 +159,8 @@ test('Base: gas, the last batch, the check, a claim', () => {
   expect(checkText({ round: 20741, sent: {} }, at)).toBe('sent round 20741 · next Oct 15, 09:00');
   expect(checkText({ skipped: 'already predicted this round' }, null)).toBe('already predicted this round');
   expect(checkText({ error: 'boom' }, null)).toBe('failed: boom');
+  expect(checkText({ skipped: 'no game passes its simulation', dropped: [{ streamId: 1, named: true, error: 'StaleValue' }] }, null))
+    .toBe('no game passes its simulation (Sentiment stream 1: no new value since the last prediction)');
   expect(shortHash('0x' + 'ab'.repeat(32))).toBe('0xabab…abab');
   expect(claimLine('Rewards', { hash: '0x' + 'ab'.repeat(32), amount: '3' })).toBe('Rewards: claimed 3 SATORI (0xabab…abab)');
   expect(claimLine('Merkle', { skipped: 'this wallet is not in the current drop' })).toBe('Merkle: this wallet is not in the current drop');

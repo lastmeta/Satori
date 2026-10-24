@@ -62,7 +62,8 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   rpc.eth[V] = 10n ** 17n;
   s.balance[V] = 100n * E18;
   await fact(page, 'refresh').click();
-  await expect(fact(page, 'wallet')).toContainText('100 SATORI · 0.1 ETH');
+  await expect(fact(page, 'wallet-satori')).toHaveText('100');
+  await expect(fact(page, 'wallet-eth')).toHaveText('0.1');
   await expect(fact(page, 'alias')).not.toContainText('low');
   await expect(fact(page, 'lock')).toHaveText('Free to send');
 
@@ -118,7 +119,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'result')).toContainText('Merkle: claimed 5 SATORI');
   await expect(fact(page, 'result')).toContainText('Airdrop: claimed 7 SATORI');
   expect(new Set(central.merkleCalls)).toEqual(new Set([`/api/v1/merkle/proof/${base.wallet.address}`])); // the proof alone, as Lite
-  await expect(fact(page, 'wallet')).toContainText('115 SATORI');
+  await expect(fact(page, 'wallet-satori')).toHaveText('115');
 
   // Above the batch's max-fee ceiling it waits for the next check, and says why.
   await page.evaluate(() => window.satori.setBaseMaxFee(0.0000001));
@@ -340,10 +341,11 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
 
   // the max fee holds for the wallet's transactions too: above it, Stake and a send's review are refused in plain words
   await page.evaluate(() => window.satori.unlock('pass phrase'));
+  const keys = await page.evaluate(() => window.satori.status());
+  for (const k of [keys.alias, keys.wallet]) rpc.eth[k.toLowerCase()] = 10n ** 17n; // gas on both: the max fee is what refuses
   await page.evaluate(() => window.satori.setBaseMaxFee('0.0001')); // the fake chain asks 0.001 gwei
   const over = 'Gas is above the max fee: 0.001000002 gwei > 0.0001 gwei. Try again later, or raise the max fee in Settings › Satori contract.';
   await expect(page.evaluate(() => window.satori.stake())).rejects.toThrow(over);
-  rpc.eth[(await page.evaluate(() => window.satori.status())).wallet.toLowerCase()] = 10n ** 17n;
   await expect(page.evaluate((to) => window.satori.quoteSend({ asset: 'ETH', to, amount: '0.001' }), '0x' + '44'.repeat(20))).rejects.toThrow(over);
   expect(rpc.sent).toEqual([]);
 });

@@ -35,6 +35,20 @@ export const LEVEL = {
 export const PRIORITY = Object.keys(LEVEL);
 export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
 
+/** The engine's refusals a batch's simulate names (SatoriEngine.sol predictMultipleWithPayloads), in a few words. */
+const REFUSED = {
+  DuplicatePrediction: 'predicted less than 24 hours ago', AlreadyPredicted: 'already predicted this round',
+  StaleValue: 'no new value since the last prediction', EmptyStream: 'the stream has no values yet',
+  StreamPullFailed: "the stream's source did not answer", Delegated: 'the alias has staked its own power elsewhere',
+  ZeroBalance: 'no prediction power yet (the stake may not show on the chain yet)', UnknownStream: 'the game has no stream',
+};
+/** A check's skip, with each game left out and why: 'no game passes … (Sentiment stream 1: predicted less than 24 hours ago)'. */
+export function skipText(check) {
+  const why = (check?.dropped ?? []).map((g) => `${g.named ? 'Sentiment stream' : 'stream'} ${g.streamId}: ${
+    REFUSED[g.error] ?? (g.error ? `the contract refused it, ${g.error}` : 'refused')}`);
+  return why.length ? `${check.skipped} (${why.join('; ')})` : check?.skipped ?? '';
+}
+
 // ── times in a few words ──
 const M = 60;
 const H = 3600;
@@ -249,7 +263,8 @@ function baseReasons({ rows, base }) {
     const why = check.skipped.split(':')[0];
     const gas = why.startsWith('gas');
     out.push(reason('base-skipped', 'contract', { line: 'The Satori contract batch was skipped.', chip: `Skipped: ${why}`,
-      text: `Satori contract batch skipped: ${check.skipped}.`, button: gas ? 'Open Settings' : 'Open Wallet',
+      text: gas ? `Satori contract batch skipped: ${check.skipped}.` : `Satori contract batch skipped: ${skipText(check)}. The next check tries again.`,
+      button: gas ? 'Open Settings' : 'Open Wallet',
       act: gas ? go('settings', 'base') : go('wallet') }));
   }
   return out;

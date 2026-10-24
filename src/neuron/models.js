@@ -161,7 +161,8 @@ export function nostrModels(subscriptions) {
  */
 export function baseModels(batch, baseFits = new Map()) {
   if (!batch) return [];
-  const all = [...batch.games.map((g) => [g, true]), ...(batch.dropped ?? []).filter((g) => g.model).map((g) => [g, false])];
+  // a game with no model (no values yet: sent by the no-opinion rule) has no forecast to show
+  const all = [...batch.games.filter((g) => g.model).map((g) => [g, true]), ...(batch.dropped ?? []).filter((g) => g.model).map((g) => [g, false])];
   return all.map(([g, sent]) => {
     const name = `${g.named ? 'Named stream' : 'Stream'} ${g.streamId}`;
     const stream = String(g.streamId);

@@ -4,6 +4,16 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (the batch on a new deployment; balances)
+
+- The daily batch predicts a stream with no values yet (DOWN, `rule:
+  'no-history'`): a Sentiment stream records its first value when first
+  predicted. Before, D7's empty default stream skipped every batch.
+- A skip names each game left out and why, in words (`health()` card text,
+  the Wallet tab's batch check).
+- The wallet's SATORI and ETH are big figures on Home and atop the Wallet
+  tab (`[data-test=home-satori]`, `base-wallet-satori`, `base-wallet-eth`).
+
 ## Changed 2026-10-24 (Stake and gas)
 
 - `stake()` checks gas first, as `claim()` does: the alias needs a little

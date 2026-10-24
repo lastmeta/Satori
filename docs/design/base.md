@@ -325,9 +325,15 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    weight or φ 0) answers UP if the most recent change in the stream's
    registry history was up, DOWN if it was down; the int232 values are
    compared exactly. **The last fallback:** a history with no change at all
-   (flat, or a single value) stays DOWN. A forecast above or below the latest
+   (flat, or a single value) stays DOWN, and so does a stream with **no
+   values yet** (`rule: 'no-history'`, 2026-10-24): a Sentiment stream records
+   its first value when it is first predicted (the engine's
+   `updateValuesStrict` at predict time), so skipping an empty one, as the
+   batch did, left D7's default stream empty and every batch skipped. The
+   simulate still decides: an empty stream the contract refuses is left out
+   (`EmptyStream`). A forecast above or below the latest
    is decided as before. Each stored game says which rule decided it,
-   `rule: 'forecast' | 'last-move' | 'flat'` (`base_last_batch`, the Models
+   `rule: 'forecast' | 'last-move' | 'flat' | 'no-history'` (`base_last_batch`, the Models
    drill-in: "UP (a tie: its last move)"). Lite answers DOWN on every tie, so
    a `naive` neuron voted DOWN forever (D6's daily default stream has two
    values, 0 then its first, so a browser neuron now votes UP there). The

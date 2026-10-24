@@ -1026,12 +1026,12 @@ const actions = {
   }),
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
   /** A wallet action from the UI: Unlock first (inline, at `slot`) when the wallet is locked. */
-  walletAction(slot, name) {
-    if (name === 'baseClaim' && state.base.wallet.lowEth) { // a claim is a wallet transaction: said before trying (and before Unlock)
-      return void Object.assign(state, { baseDid: 'claim', baseResult: '', baseTxs: [], baseError: NEED_GAS });
-    }
-    const noGas = name === 'baseDelegate' && (state.base.alias.noGas ? NEED_ALIAS_GAS : state.base.wallet.lowEth && NEED_STAKE_GAS);
-    if (noGas) return void Object.assign(state, { baseDid: 'stake', baseResult: '', baseTxs: [], baseError: noGas }); // as Claim
+  async walletAction(slot, name) {
+    // Claim and Stake are transactions: no gas is said before trying (and before Unlock), after a fresh read (it may have just come)
+    const noGas = () => (name === 'baseClaim' ? state.base.wallet.lowEth && NEED_GAS
+      : name === 'baseDelegate' && (state.base.alias.noGas ? NEED_ALIAS_GAS : state.base.wallet.lowEth && NEED_STAKE_GAS));
+    if (noGas()) await base.refresh().then((v) => { state.base = v; }, () => {});
+    if (noGas()) return void Object.assign(state, { baseDid: name === 'baseClaim' ? 'claim' : 'stake', baseResult: '', baseTxs: [], baseError: noGas() });
     return withWallet(slot, () => actions[name]());
   },
   baseDelegate: () => baseUi('stake', async () => {

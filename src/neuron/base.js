@@ -259,7 +259,15 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
       const step = stepFor(g.cadenceMinutes);
       const f = history.length ? forecast(toPoints(history), { step, horizon: horizonFor(g.cadenceMinutes) }) : null;
       const base = { streamId: g.streamId, gameId: g.gameId, named: g.named };
-      if (!f) { dropped.push({ ...base, error: 'no history' }); continue; }
+      if (!f) {
+        // no values yet: nothing to forecast, so the no-opinion rule (DOWN, as 'flat'). A Sentiment stream records its
+        // first value when it is first predicted (updateValuesStrict), so skipping it would leave it empty for good
+        const game = { ...base, direction: DOWN, rule: 'no-history', step };
+        const error = await chain.simulateGame(alias, game);
+        if (error) dropped.push({ ...game, error });
+        else games.push(game);
+        continue;
+      }
       const last = history.at(-1).value; // int232, in the stream's own units
       // As decimal strings, as amounts are: an int232 is often beyond 2^53 (the default stream is a ratio × 1e18).
       // score, persist, tests: the engine's backtest (its median error and no change's, null below 5 origins, and its

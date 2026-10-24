@@ -22,7 +22,8 @@ const lc = (a) => a.toLowerCase();
  */
 export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
   const s = {
-    // streams: id → { game, named, cadence (minutes), history: [{hour, value}] }; stream 1 is the default stream
+    // streams: id → { game, named, cadence (minutes), history: [{hour, value}], pulls? }; stream 1 is the default stream;
+    // pulls: a Sentiment stream on D7, which records its first value when it is first predicted (updateValuesStrict)
     streams: {
       1: { game: 1, named: false, cadence: 1440, history: [{ hour: (round - 1) * 24, value: 0n }, { hour: round * 24, value: 59058240589371161n }] },
     },
@@ -79,7 +80,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       const st = byGame[r.gameId];
       if (r.gameId in s.deadGames) revert(s.deadGames[r.gameId]); // '' = a bare revert
       const latest = st.id === 1 ? flushed : latestHour(st);
-      if (!st.history.length && st.id !== 1) revert('EmptyStream');
+      if (!st.history.length && st.id !== 1 && !st.pulls) revert('EmptyStream');
+      if (!st.history.length && st.pulls && ctx.write) s.streams[st.id].history.push({ hour: ctx.round * 24 + ctx.hour % 24, value: 0n });
       const last = s.lastPred[`${ctx.from}:${r.gameId}`];
       if (last) {
         if (Math.floor(last / 24) === ctx.round) revert('DuplicatePrediction');

@@ -167,6 +167,17 @@ describe('the daily batch', () => {
     expect(rpc.sent).toHaveLength(1);
   });
 
+  test('a stream with no values yet (a Sentiment stream on a new deployment): predicted anyway, DOWN; the contract records its first value', async () => {
+    await staked();
+    s.streams[2] = { game: 2, named: true, cadence: 60, history: [], pulls: true }; // records its first value when predicted
+    s.streams[3] = { game: 3, named: false, cadence: 1440, history: [] }; // a price stream with none: the contract refuses it
+    Object.assign(s.weights, { 2: 1n, 3: 1n }); // voted for: eligible
+    const r = await runBatch({ chain: chainOf(), alias, db });
+    expect(r.sent.games.map((g) => [g.gameId, g.direction, g.rule])).toEqual([[1, UP, 'last-move'], [2, DOWN, 'no-history']]);
+    expect(r.sent.dropped).toEqual([expect.objectContaining({ gameId: 3, error: 'EmptyStream' })]);
+    expect(s.streams[2].history).toHaveLength(1);
+  });
+
   test('report: nothing for a check with nothing to do; checking the games, sending, waiting for Base, in order', async () => {
     const seen = [];
     const report = (...a) => seen.push(a.join(' '));

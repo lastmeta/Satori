@@ -267,6 +267,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .big small { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-left: 4px; }
 .sub { color: var(--muted); font-size: 0.8rem; }
 .wallet-tile { display: grid; gap: 10px; }
+.balance { display: flex; gap: 32px; margin: 4px 0 12px; }
 .wallet-tile .line { display: flex; justify-content: space-between; gap: 12px; font-size: 0.88rem; }
 .wallet-tile .line span:first-child { color: var(--muted); }
 .wallet-tile .line span:last-child { text-align: right; overflow-wrap: anywhere; }

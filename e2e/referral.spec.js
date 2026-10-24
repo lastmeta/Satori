@@ -47,7 +47,7 @@ test('an invite link: held on the visit, registered by the wallet at Stake; the 
   rpc.eth[V] = 10n ** 17n;
   s.balance[V] = 100n * E18;
   await fact(page, 'refresh').click();
-  await expect(fact(page, 'wallet')).toContainText('100 SATORI');
+  await expect(fact(page, 'wallet-satori')).toHaveText('100');
   await go(page, 'settings');
   await page.getByLabel('Wallet passphrase', { exact: true }).fill(PASS);
   await page.getByRole('button', { name: 'Unlock' }).click();

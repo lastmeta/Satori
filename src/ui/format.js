@@ -1,4 +1,5 @@
 // Small display helpers. Times are unix seconds.
+import { skipText } from '../neuron/health.js';
 
 export function fmtNum(n) {
   if (n == null || !Number.isFinite(n)) return '–';
@@ -263,10 +264,13 @@ export function batchText(b) {
 }
 
 /** The last check of the batch and when the next one runs. */
+/** A balance's figure for a big number: '1,000.00', '0.002' (a decimal string; '–' while not read). */
+export const figure = (x) => (x == null ? '–' : fmtNum(Number(x)));
+
 export function checkText(c, next) {
   const when = next ? `next ${fmtWhen(next)}` : '';
   if (!c) return when || 'Not yet';
-  const what = c.sent ? `sent round ${c.round}` : c.skipped ? c.skipped : c.error ? `failed: ${c.error}` : '';
+  const what = c.sent ? `sent round ${c.round}` : c.skipped ? skipText(c) : c.error ? `failed: ${c.error}` : '';
   return [what, when].filter(Boolean).join(' · ');
 }
 

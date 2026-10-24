@@ -5,7 +5,7 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { mark, sparkPath, unlockPrompt } from './parts.js';
-import { fmtNum, modelText, amountText, daysText, claimParts, claimableText, openingText } from './format.js';
+import { fmtNum, figure, modelText, amountText, daysText, claimParts, claimableText, openingText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 
 const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [], notices: [],
@@ -55,11 +55,12 @@ const claimable = () => (B().claimable?.total == null ? '–' : fmtNum(Number(B(
 const claimBreakdown = () => claimParts(B().claimable).filter(([, x]) => Number(x) > 0).map(([what, x]) => `${fmtNum(Number(x))} ${what}`).join(' · ');
 const claimTitle = () => claimableText(B().claimable);
 
+/** Under the wallet's SATORI: its ETH and whether it is staked here ('0.002 ETH · staked'). */
 function walletLine() {
   const v = B().wallet;
-  if (v.satori == null) return '–';
+  if (v.eth == null) return '–';
   const d = { alias: 'staked', none: 'not staked', other: 'staked elsewhere' }[v.staked] ?? '';
-  return `${amountText(v.satori, 'SATORI')}${d ? ` · ${d}` : ''}`;
+  return `${amountText(v.eth, 'ETH')}${d ? ` · ${d}` : ''}`;
 }
 
 /** The alias's gas as days of daily batches (one a day). */
@@ -130,13 +131,13 @@ export function home(a) {
 
     <section class="tile wallet-tile" data-test="claimable">
       <div class="tile-h desk-only"><b>Wallet</b><span>Base</span></div>
+      <div><div class="sub">Wallet</div><div class="big"><span data-test="home-satori">${() => figure(B().wallet.satori)}</span><small>SATORI</small></div><div class="sub" data-test="home-wallet">${walletLine}</div></div>
       <div class="earn">
-        <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div><div class="sub phone-only">${walletLine}</div></div>
+        <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div></div>
         <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.walletAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
       </div>
       ${unlockPrompt(a, 'claim', 'claim')}
       <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
-      <div class="line desk-only"><span>Wallet</span><span data-test="home-wallet">${walletLine}</span></div>
       <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
     </section>
 

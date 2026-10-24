@@ -6,7 +6,7 @@ import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { backupPanel, fact, form, idRow, unlockPrompt } from './parts.js';
 import {
-  amountText, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
+  amountText, figure, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
   referralText, referralNote, REFERRAL_PCT,
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
@@ -46,8 +46,11 @@ export function walletTab(a) {
     <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Network\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>
     <p class="error small" role="alert" data-test="base-sync" hidden="${() => b().wallet.inSync !== false}">Staking is out of sync. ${OUT_OF_SYNC}</p>
+    <div class="balance" data-test="base-balance">
+      <div><div class="sub">SATORI</div><div class="big" data-test="base-wallet-satori">${() => figure(b().wallet.satori)}</div></div>
+      <div><div class="sub">ETH</div><div class="big" data-test="base-wallet-eth">${() => figure(b().wallet.eth)}</div></div>
+    </div>
     <dl class="facts">
-      ${fact('Wallet', 'base-wallet', () => `${amountText(b().wallet.satori, 'SATORI')} · ${amountText(b().wallet.eth, 'ETH')}`)}
       ${fact('Claimable', 'base-claimable', () => claimableText(b().claimable))}
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this app, below' : delegationText(b())))}
       ${fact('Referral', 'base-referral', () => referralText(b()))}
