@@ -48,7 +48,9 @@ async function linkOf(h, heldIssued = 0) {
     if (alias !== `alias: ${evmAddress(h['alias-pubkey'])}`) return { error: 'the link names another alias' };
     const signer = await recoverMessageAddress({ message, signature: h['wallet-signature'] });
     if (wallet !== `wallet: ${signer}`) return { error: 'the signature is not the wallet\'s' };
-    if (Number(message.split('\n')[3].replace('issued: ', '')) < heldIssued) return { error: 'the link is older than the one held for this wallet' };
+    const issued = /^issued: (\d+)$/.exec(message.split('\n')[3] ?? ''); // as central: whole unix seconds
+    if (!issued) return { error: "the link message's issued line must be 'issued: <unix seconds>'" };
+    if (Number(issued[1]) < heldIssued) return { error: 'the link is older than the one held for this wallet' };
     return { wallet: signer };
   } catch {
     return { error: 'not a link' };

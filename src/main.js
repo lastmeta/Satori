@@ -760,7 +760,7 @@ const shownAt = (key, fn) => async (...args) => {
  */
 async function relinkWallet() {
   if (!wallet) throw new Error(walletPublic.connected ? notHere().message : 'Unlock the wallet first.');
-  const issued = nowS();
+  const issued = Math.floor(nowS()); // whole seconds: the network refuses any other issued line
   let link;
   if (walletPublic.connected) {
     const message = linkMessage({ alias: alias.evmAddress, wallet: walletPublic.evmAddress, issued });
