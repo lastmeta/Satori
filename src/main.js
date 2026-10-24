@@ -61,6 +61,7 @@ const DEFAULT_CENTRAL = DEFAULTS.central;
 let db;
 let wallets = null; // this app's wallets as stored (src/wallets.js; null: one, in the first file)
 let dbPath = pathOf(activeOf(null)); // the active wallet's database
+let releaseTab = () => {}; // lets the one-tab lock go (claimTab)
 let dbOpening = null; // the database's open, begun at boot: a first visit's Setup runs meanwhile, and its keys wait for it
 let record = null; // the keys as stored (meta `keys`)
 let alias = null;
@@ -460,7 +461,11 @@ async function reopenWith(list) {
   lock();
   await writeWallets(list);
   dropSnapshot();
-  setTimeout(() => location.reload(), 50); // after an agent's call has its answer
+  const other = pathOf(activeOf(list)) !== dbPath;
+  setTimeout(() => {
+    if (other) releaseTab(); // the next page opens another wallet's file: this page's open database is not in its way
+    location.reload();
+  }, 50); // after an agent's call has its answer
 }
 
 const addWallet = () => exclusive('wallets', () => reopenWith(withAdded(wallets, state.wallet || null)));
@@ -1445,7 +1450,7 @@ async function boot() {
   glowChips();
   startPwa();
   // one tab runs the neuron; another waits, says so, and takes over when that one closes (no reload)
-  await claimTab(undefined, undefined, { onWait: () => { state.screen = 'elsewhere'; } });
+  releaseTab = await claimTab(undefined, undefined, { onWait: () => { state.screen = 'elsewhere'; } });
   if (state.screen === 'elsewhere') state.screen = 'loading';
   wallets = await readWallets().catch(() => null); // IndexedDB can't say: the first wallet, as before any list
   dbPath = pathOf(activeOf(wallets));

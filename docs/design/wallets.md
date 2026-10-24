@@ -134,7 +134,10 @@ else tells the forms apart.
 - **Switching = lock, set the active wallet, reload.** The page's end takes
   the old wallet's keys, workers, sockets and timers with it, and the last
   visit's Home (a snapshot on this device) is dropped so the next one is not
-  shown under another wallet.
+  shown under another wallet. Just before the reload the page lets the
+  one-tab lock go ([pwa.md](pwa.md#one-neuron)): the next page opens another
+  wallet's file, and a browser that keeps the old page's lock a while (seen
+  on a phone, 2026-10-24) would otherwise show "Satori is open in another tab".
 - **On the Wallet tab**, a **Wallets** card: each wallet's address, the
   active one marked; Switch on the others; Remove on the others (it asks
   first, says its words are its only backup, then deletes its database file

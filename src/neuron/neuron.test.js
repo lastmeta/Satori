@@ -620,15 +620,17 @@ test('centralStatus: the URL, the register result, the last poll and submission,
   expect(await centralStatus({ db })).toMatchObject({ url: null, nextPoll: null, polling: false });
 });
 
-/** navigator.locks, as far as claimTab uses it: requests queue per name; close(name) is the holder's tab going. */
+/** navigator.locks, as far as claimTab uses it: requests queue per name; close(name) is the holder's tab going, as is
+ * the end of the promise its callback returned. */
 function fakeLocks() {
   const holders = new Set();
   const queues = new Map();
+  let locks;
   const grant = (name, cb) => {
     holders.add(name);
-    setTimeout(() => cb({ name }), 1);
+    setTimeout(() => Promise.resolve(cb({ name })).then(() => locks.close(name)), 1);
   };
-  return {
+  return locks = {
     request(name, a, b) {
       const [opts, cb] = typeof a === 'function' ? [{}, a] : [a, b];
       if (opts.ifAvailable) throw new Error('claimTab queues its request: no ifAvailable');
@@ -656,4 +658,13 @@ test('claimTab: the first tab holds the lock; a second is told to wait (onWait),
   locks.close('x'); // the first tab closes
   await p;
   expect(second).toBe(true);
+});
+
+test('claimTab: its release lets the lock go while the page stays (a reload for another wallet), so the next page holds it at once', async () => {
+  const locks = fakeLocks();
+  const release = await claimTab('x', locks, { waitMs: 50 });
+  const waits = [];
+  release(); // the old page, just before location.reload()
+  await claimTab('x', locks, { onWait: () => waits.push('next'), waitMs: 50 });
+  expect(waits).toEqual([]);
 });
