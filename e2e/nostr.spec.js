@@ -228,6 +228,7 @@ test("an https page: a ws:// relay is blocked, said once, and neither down nor c
   expect(h.reasons.map((r) => r.id)).not.toContain('relay-down');
   // said once, in the relays' detail (Settings); the stand-in says what it stands in for, in small words
   await page.evaluate(() => window.satori.go('settings'));
+  await page.locator('#settings-advanced > summary').click(); // folded under Advanced
   await expect(page.locator('[data-test=relay]').filter({ hasText: BLOCKED }).locator('[data-test=relay-state]')).toHaveText('Not reachable here');
   await expect(page.locator('[data-test=relays-blocked]')).toHaveText("A ws:// relay can't be reached from this page (only wss:// can), so it is left out: it doesn't count as down.");
   const standIn = page.locator('[data-test=relay]').filter({ hasText: STAND_IN });

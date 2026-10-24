@@ -4,6 +4,13 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (Settings: Advanced)
+
+- The Satori Network server, the Satori relays and the Satori contract
+  settings moved to the bottom of Settings, into `settings-advanced`, a
+  closed `<details>`: open it before typing there. Home's action card opens
+  it when it points to one of them.
+
 ## Changed 2026-10-24 (Streams: one line each, details folded away)
 
 - The Satori Network card is one line, `network-line`; `registered`,

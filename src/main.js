@@ -697,7 +697,11 @@ function go(where, section) {
   if (tab === 'models') showModel(model);
   requestAnimationFrame(() => {
     const el = section && document.getElementById(`${tab}-${section}`);
-    if (el) el.scrollIntoView({ block: 'start' });
+    if (el) {
+      const folded = el.closest('details'); // Settings › Advanced
+      if (folded) folded.open = true;
+      el.scrollIntoView({ block: 'start' });
+    }
     else if (changed && !opened) scrollTo(0, 0);
   });
   return model ? `models/${model}` : tab;

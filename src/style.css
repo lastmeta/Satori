@@ -330,6 +330,10 @@ details.tile[open] > summary { margin-bottom: 0; }
 .segmented { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 8px; }
 .segmented button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .settings-section form.fields > label:first-of-type { margin-top: 4px; }
+.advanced > summary { flex-wrap: wrap; gap: 0 10px; }
+.advanced > summary .muted { font-weight: 400; }
+.advanced > .adv { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 4px; }
+.adv h3 { margin: 10px 0 4px; }
 
 /* ── Streams ── */
 .central .error { margin: 10px 0 0; }

@@ -319,6 +319,7 @@ test('the Base settings: the RPC (https or a path on this site; empty is the def
   await expect(page.evaluate(() => window.satori.setBaseRpc('http://127.0.0.1:8545'))).rejects.toThrow(/https:\/\/ URL or a path/);
   await expect(page.evaluate(() => window.satori.setBaseMaxFee('-1'))).rejects.toThrow(/positive number of gwei/);
   await go(page, 'settings');
+  await page.locator('#settings-advanced > summary').click(); // folded under Advanced
   await expect(page.getByLabel('Max fee (gwei)')).toHaveValue(''); // only what is stored: the default is the placeholder
   await page.getByLabel('Base RPC').fill('https://rpc.example');
   await page.getByLabel('Max fee (gwei)').fill('0');

@@ -1081,18 +1081,20 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   Network…", "Saving the reward address…", then "Saved: the Satori Network
   sends this app's rewards to 0x…" or "Cleared: rewards go to your
   wallet."; a small turning ring beside the words while it reads or saves;
-  no passphrase, no gas), **Satori Network** ("Satori Network server", an
+  no passphrase, no gas), **Appearance** (System, Light, Dark), **This device** (the storage line,
+  "Storage: kept" or "Storage: the browser may clear it; install Satori or
+  back up your words", with the usage of the quota; Install Satori when the
+  browser offers it, or how this browser adds it; "Satori works while it's
+  open…"; the version; "Update ready, reload" when one waits), then
+  **Advanced** at the bottom, folded until tapped (`settings-advanced`, a
+  `<details>`; Home's action card opens it when it points inside):
+  **Satori Network** ("Satori Network server", an
   https URL, empty = the default; Save), **Satori relays** (each relay with
   its state, "Connected", "Not reachable here" for a blocked one, with one
   note why; a wss stand-in with "for ws://…" under its address; "Your
   relays" one per line; "Publish to the Satori Network's
   relays"; Save relays), **Satori contract** ("Base RPC", "Max fee (gwei)",
-  the most any transaction pays per gas; Save contract settings),
-  **Appearance** (System, Light, Dark), **This device** (the storage line,
-  "Storage: kept" or "Storage: the browser may clear it; install Satori or
-  back up your words", with the usage of the quota; Install Satori when the
-  browser offers it, or how this browser adds it; "Satori works while it's
-  open…"; the version; "Update ready, reload" when one waits).
+  the most any transaction pays per gas; Save contract settings).
 - Every screen and tab is built once and shown or hidden (the `hidden`
   attribute), so other screens' labels and other tabs' elements stay in the
   DOM: query visible elements, use `data-test`, or `go(tab)` first.

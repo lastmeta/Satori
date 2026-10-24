@@ -1,7 +1,8 @@
 // Settings: the technical detail, behind Home (docs/intent/ui.md): the keys and their addresses with Unlock and Lock,
-// the backup, the reward address (where the Satori Network sends the rewards), the Satori Network's server (central's URL), the Satori relays, the Base RPC and the batch's max fee, the appearance (System, Light,
-// Dark: src/ui/theme.js), and this device (storage, install, update). Each section has an id (#settings-<name>) Home's
-// action card scrolls to.
+// the backup, the reward address (where the Satori Network sends the rewards), the appearance (System, Light, Dark:
+// src/ui/theme.js), this device (storage, install, update), and folded under Advanced the Satori Network's server
+// (central's URL), the Satori relays, the Base RPC and the batch's max fee. Each section has an id (#settings-<name>)
+// Home's action card scrolls to, opening Advanced when the section is in it.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { backupPanel, form, idRow } from './parts.js';
@@ -103,9 +104,9 @@ function rewardCard(a) {
 
 function centralForm(a) {
   return html`
-  <section class="card settings-section" id="settings-central">
+  <section class="adv" id="settings-central">
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
-      <h2>Satori Network</h2>
+      <h3>Satori Network</h3>
       <p class="muted small">Where the app gets its streams and sends its predictions. Free: sending costs nothing.</p>
       <label>Satori Network server
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
@@ -120,9 +121,9 @@ function centralForm(a) {
 
 function relaysForm(a) {
   return html`
-  <section class="card settings-section" id="settings-relays">
+  <section class="adv" id="settings-relays">
     <form class="fields relays-form" @submit="${(e) => a.saveRelays(form(e), e.target)}">
-      <h2>Satori relays</h2>
+      <h3>Satori relays</h3>
       <ul class="relays">${() => state.nostr.relays.map((r) => html`<li class="relay" data-test="relay"><span class="relay-name"><code>${r.url}</code>${r.for ? html`<span class="muted small relay-for" data-test="relay-for">for ${r.for}</span>` : ''}</span><span class="${r.state === 'open' ? 'badge on' : 'badge'}" data-test="relay-state">${relayText(r)}</span></li>`.key(`${r.url} ${r.state} ${r.write} ${r.for}`))}</ul>
       <p class="muted small" data-test="relays-blocked" hidden="${() => !state.nostr.relays.some((r) => r.state === 'blocked')}">${BLOCKED_NOTE}</p>
       <label>Your relays (Nostr; one per line, ws:// or wss://)
@@ -139,9 +140,9 @@ function relaysForm(a) {
 
 function baseForm(a) {
   return html`
-  <section class="card settings-section" id="settings-base">
+  <section class="adv" id="settings-base">
     <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
-      <h2>Satori contract</h2>
+      <h3>Satori contract</h3>
       <p class="muted small">The daily batch of predictions on Base. It uses gas, paid in Base ETH (the Wallet tab shows how much is left).</p>
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
@@ -183,16 +184,25 @@ function device(a) {
   </section>`;
 }
 
+/** The settings few people change, folded at the bottom; Home's action card opens it when it points inside (go()). */
+function advanced(a) {
+  return html`
+  <details class="card settings-section advanced" id="settings-advanced" data-test="settings-advanced">
+    <summary>Advanced <span class="muted small">Satori Network server, relays, Base RPC and fee</span></summary>
+    ${centralForm(a)}
+    ${relaysForm(a)}
+    ${baseForm(a)}
+  </details>`;
+}
+
 export function settingsTab(a) {
   return html`
   <section class="tab-page" data-test="settings-tab" hidden="${() => state.tab !== 'settings'}">
     ${keys(a)}
     ${backup(a)}
     ${rewardCard(a)}
-    ${centralForm(a)}
-    ${relaysForm(a)}
-    ${baseForm(a)}
     ${appearance(a)}
     ${device(a)}
+    ${advanced(a)}
   </section>`;
 }
