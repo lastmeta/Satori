@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { privateKeyToAccount, sign } from 'viem/accounts';
 import {
-  generateSecret, secretFromWords, wordsOf, publicKey, evmAddress, signDigest, privateKeyHex,
+  generateSecret, secretFromWords, secretFromText, wordsOf, publicKey, evmAddress, signDigest, privateKeyHex,
 } from './keys.js';
 
 vi.setConfig({ testTimeout: 60_000 }); // shared box; noble builds tables on first use
@@ -32,6 +32,18 @@ describe('one secret: its words, public key and Base address, as satorilib makes
     expect(() => secretFromWords([...w.slice(0, 23), w[0] === 'abandon' ? 'zoo' : 'abandon'].join(' '))).toThrow();
     expect(() => secretFromWords(w.slice(0, 12).join(' '))).toThrow();
     expect(() => secretFromWords(`${'abandon '.repeat(23)}art`)).toThrow(/range/); // valid words, key 0
+  });
+});
+
+describe('Import: the 24 words or the private key', () => {
+  test('either form gives the same secret; the key with or without 0x, any case, spaces around', () => {
+    const v = fx.vectors[0];
+    for (const t of [v.words, `0x${v.entropyHex}`, ` ${v.entropyHex.toUpperCase()} \n`]) expect(secretFromText(t)).toEqual(hex(v.entropyHex));
+  });
+  test('refuses what is neither, and a key out of range', () => {
+    expect(() => secretFromText(`0x${'ab'.repeat(31)}`)).toThrow();
+    expect(() => secretFromText('not words')).toThrow();
+    expect(() => secretFromText(`0x${'00'.repeat(32)}`)).toThrow(/range/);
   });
 });
 

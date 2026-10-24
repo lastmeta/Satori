@@ -40,6 +40,13 @@ export function secretFromWords(words) {
   return checkKey(e);
 }
 
+/** What Import takes: the 24 words, or the private key (64 hex, 0x optional, as a Base wallet exports it). → the secret */
+export function secretFromText(text) {
+  const t = String(text).trim();
+  const h = /^(0x)?([0-9a-fA-F]{64})$/.exec(t);
+  return h ? checkKey(Uint8Array.from(h[2].match(/../g), (b) => parseInt(b, 16))) : secretFromWords(t);
+}
+
 /** The compressed public key, hex (66). */
 export const publicKey = (secret) => bytesToHex(secp256k1.getPublicKey(checkKey(secret), true));
 

@@ -229,8 +229,8 @@ test('a database file that will not open (damaged): "Set aside and start again" 
   await expect(page.locator('[data-test=set-aside-notice]')).toContainText(aside[0]);
   await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/database-set-aside.png' : test.info().outputPath('set-aside.png') });
   expect((await page.evaluate(() => window.satori.status())).setAside).toBe(aside[0]);
-  // Setup offers Restore from words (and the Nostr key) and Import; the same wallet comes back
-  await expect(page.getByRole('button', { name: 'Restore from words' })).toBeVisible();
+  // Setup offers Import (the words, and the Nostr key) and Import Docker files; the same wallet comes back
+  await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import Docker files' })).toBeVisible();
   const s = await page.evaluate((w) => window.satori.setup({ passphrase: 'pass phrase', walletWords: w }), words);
   expect([s.screen, s.wallet]).toEqual(['home', wallet]);

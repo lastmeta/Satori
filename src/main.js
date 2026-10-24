@@ -14,7 +14,7 @@ import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
-  generateSecret, secretFromWords, wordsOf, newKeys, readDockerFiles, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
+  generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
   withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
@@ -548,7 +548,7 @@ async function connectedBackupOf(which) {
 
 /**
  * "Set aside and start again" (the database file won't open, docs/design/storage.md#recovery): the file renamed, never
- * deleted; a fresh database; Setup, which offers Restore from words and Import. The UI's button and setAside().
+ * deleted; a fresh database; Setup, which offers Import and Import Docker files. The UI's button and setAside().
  */
 const setAsideDb = () => exclusive('setAside', async () => {
   if (state.screen !== 'damaged') throw new Error(`Nothing to set aside (screen: ${state.screen}).`);
@@ -785,12 +785,12 @@ const actions = {
   },
   restoreWords(f, el) {
     wipePending();
-    const words = (text, which) => {
-      try { return secretFromWords(text); } catch { throw new Error(`The ${which} words are not 24 valid backup words.`); }
+    const secret = (text, which) => {
+      try { return secretFromText(text); } catch { throw new Error(`The ${which}: not 24 backup words or a private key.`); }
     };
     try {
-      pending = { wallet: words(f.wallet, 'wallet') };
-      if (f.alias.trim()) pending.alias = words(f.alias, 'alias');
+      pending = { wallet: secret(f.wallet, 'wallet') };
+      if (f.alias.trim()) pending.alias = secret(f.alias, 'alias');
       if (f.nostr.trim()) pending.nostr = nostrSecretOf(f.nostr);
     } catch (err) {
       wipePending();
@@ -1165,16 +1165,16 @@ window.satori = {
   update() { return applyUpdate(); },
   /**
    * On the 'damaged' screen (the database file won't open): set it aside (renamed, never deleted) and start again on
-   * Setup, to restore from words or import. Only on the person's request: their keys are in that file. → status()
+   * Setup, to import again. Only on the person's request: their keys are in that file. → status()
    */
   async setAside() { await setAsideDb(); return window.satori.status(); },
-  /** Create a neuron (random keys unless words, or the Nostr key's nsec or hex, are given). The wallet stays locked. */
+  /** Create a wallet (random keys unless words or private keys, or the Nostr key's nsec or hex, are given). Stays locked. */
   async setup({ passphrase, walletWords, aliasWords, nostrKey } = {}) {
     await setup(async () => {
       const keys = {};
       try {
-        keys.wallet = walletWords ? secretFromWords(walletWords) : generateSecret();
-        if (aliasWords) keys.alias = secretFromWords(aliasWords);
+        keys.wallet = walletWords ? secretFromText(walletWords) : generateSecret();
+        if (aliasWords) keys.alias = secretFromText(aliasWords);
         if (nostrKey) keys.nostr = nostrSecretOf(nostrKey);
         return await newKeys(keys, passphrase);
       } finally {

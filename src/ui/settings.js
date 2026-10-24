@@ -52,7 +52,7 @@ function backup(a) {
   return html`
   <section class="card settings-section" id="settings-backup">
     <h2>Backup</h2>
-    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Restore from words brings it back. The
+    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Import brings it back. The
       Nostr key is random, not from the words, so it is backed up on its own. Showing them asks for the wallet's passphrase each time.</p>
     <p class="muted small" hidden="${() => !state.connected}">${() => (state.connected ? `Your wallet is backed up in ${state.connected.name}. The Nostr key is the app's own: showing it asks ${state.connected.name} to confirm.` : '')}</p>
     <div class="backup-row">

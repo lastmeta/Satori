@@ -53,7 +53,7 @@ function setup(a) {
       <p class="muted" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
       <div class="actions">
         <button class="primary" @click="${a.newWords}">Create a wallet</button>
-        <button @click="${() => a.goStep('restore')}">Restore from words</button>
+        <button @click="${() => a.goStep('restore')}">Import</button>
         <button @click="${() => a.goStep('docker')}">Import Docker files</button>
         <button data-test="connect-wallet" @click="${a.lookForWallets}">Connect a wallet</button>
       </div>
@@ -91,11 +91,11 @@ function setup(a) {
     </form>
 
     <form hidden="${showStep('restore')}" @submit="${(e) => a.restoreWords(form(e), e.target)}">
-      <h2>Restore from words</h2>
-      <label>Wallet words (24)
+      <h2>Import a wallet</h2>
+      <label>Wallet: its 24 words or its private key
         <textarea name="wallet" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
       </label>
-      <label>Alias words (optional: a new alias is made if empty)
+      <label>Alias: its 24 words or private key (optional: a new alias is made if empty)
         <textarea name="alias" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
       <label>Nostr key (nsec or hex, optional: a new one is made if empty)
@@ -179,7 +179,7 @@ export function render(root, a) {
       <button class="small-btn" @click="${a.dismissNotice}">Dismiss</button>
     </div>
     <div class="notice small" role="status" data-test="set-aside-notice" hidden="${() => !state.setAside || state.screen !== 'setup'}">
-      <span>${() => `The old database was set aside as ${state.setAside}, in this site's storage. Restore from your words, or import its files.`}</span>
+      <span>${() => `The old database was set aside as ${state.setAside}, in this site's storage. Import your wallet again, or import its Docker files.`}</span>
     </div>
     <p class="muted center" data-test="opening" hidden="${() => state.screen !== 'loading' || !!state.cached}">${() => openingText(state.engine)}</p>
     <section class="card narrow" hidden="${show('elsewhere')}">
@@ -200,8 +200,8 @@ export function render(root, a) {
       <h2>Satori's database can't be opened</h2>
       <p class="error" data-test="damaged-error">${() => state.fatal}</p>
       <p class="muted small">It may be damaged. You can set it aside and start again: the file is kept in this browser's
-        storage for this site under another name, never deleted. Your keys are in it too, so you then restore
-        from your wallet's 24 words (and the Nostr key from Backup), or import the Docker files.
+        storage for this site under another name, never deleted. Your keys are in it too, so you then import
+        your wallet again from its 24 words or private key (and the Nostr key from Backup), or import the Docker files.
         Reload first if you want to try again.</p>
       <div class="actions">
         <button class="primary" data-test="set-aside" disabled="${() => state.busy === 'setAside'}" @click="${a.setAside}">${() => (state.busy === 'setAside' ? 'Setting aside…' : 'Set aside and start again')}</button>

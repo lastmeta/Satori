@@ -533,21 +533,21 @@ test('import: a Docker wallet password under 8 characters asks for a new passphr
   expect((await page.evaluate((x) => window.satori.backup('wallet', x), NEW)).words).toBe(wordsOf(hex(p.expect.wallet)));
 });
 
-test('restore from words', async ({ context, page }) => {
+test('import: the wallet by its private key, the alias by its words', async ({ context, page }) => {
   await stubCentral(context);
   const [v, id] = [fx.vectors[0], fx.vectors[3]];
   await openApp(page);
-  await page.getByRole('button', { name: 'Restore from words' }).click();
-  await page.getByLabel('Wallet words (24)').fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.getByLabel(/^Wallet: its 24 words or its private key/).fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'wallet words are not 24 valid' })).toBeVisible();
-  await page.getByLabel('Wallet words (24)').fill(v.words);
-  await page.getByLabel(/Alias words/).fill(id.words);
+  await expect(page.getByRole('alert').filter({ hasText: 'The wallet: not 24 backup words or a private key.' })).toBeVisible();
+  await page.getByLabel(/^Wallet: its 24 words or its private key/).fill(`0x${v.entropyHex}`); // the private key, as a Base wallet exports it
+  await page.getByLabel(/^Alias: its 24 words or private key/).fill(id.words);
   await page.getByLabel(/^Nostr key \(nsec or hex/).fill('nsec1nope');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Not a Nostr key' })).toBeVisible();
-  await page.getByLabel('Wallet words (24)').fill(v.words);
-  await page.getByLabel(/Alias words/).fill(id.words);
+  await page.getByLabel(/^Wallet: its 24 words or its private key/).fill(`0x${v.entropyHex}`); // the private key, as a Base wallet exports it
+  await page.getByLabel(/^Alias: its 24 words or private key/).fill(id.words);
   await page.getByLabel(/^Nostr key \(nsec or hex/).fill(nsec(fx.nostr.secretHex)); // as Backup shows it
   await page.getByRole('button', { name: 'Continue' }).click();
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);

@@ -57,7 +57,7 @@ Each way adds a wallet to the list (the first one too):
 | Way | Wallet | Alias | Nostr key |
 |---|---|---|---|
 | **Create** | new words, sealed with a new passphrase | new | new |
-| **Restore from words** | its 24 words, sealed with a new passphrase | its words when given, else new | the nsec or hex when given, else new |
+| **Import** | its 24 words or its private key, sealed with a new passphrase | its words or private key when given, else new | the nsec or hex when given, else new |
 | **Import Docker files** | the wallet file and its password, sealed with a new passphrase | the alias file | the Nostr file when given, else new |
 | **Connect a wallet** | not in the app: the outside wallet's address | new | new |
 

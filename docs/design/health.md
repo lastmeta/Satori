@@ -230,7 +230,7 @@ The card has no button here: the card is the highest reason with words for
 it (a reason with an action has a button; this one has only what to know).
 
 **Backup confirmed** (`meta.backup_at`) is set when the wallet's words are
-confirmed in Create, given at Restore (also `setup({ walletWords })`), brought
+confirmed in Create, given at Import, as words or a private key (also `setup({ walletWords })`), brought
 by a Dockerized Neuron import, or shown under Backup. The wallet holds the
 funds. A lost alias is replaced by a new one, and the wallet stakes with it.
 

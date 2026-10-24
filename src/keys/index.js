@@ -19,7 +19,7 @@
 //   signer: pubkey, evmAddress, signDigest(hash), backup() → { words, privateKey }, lock();
 //           the alias's also signCentralLogin(challenge) (EIP-191, central's login: src/central/login.js);
 //           the wallet's also signLink(aliasAddress) → the record's link
-export { generateSecret, secretFromWords, wordsOf, publicKey, evmAddress } from './keys.js';
+export { generateSecret, secretFromWords, secretFromText, wordsOf, publicKey, evmAddress } from './keys.js';
 export { MIN_PASSPHRASE, passphraseOk } from './wallet.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { checkKey, generateSecret, publicKey, wordsOf, evmAddress, signDigest, privateKeyHex } from './keys.js';

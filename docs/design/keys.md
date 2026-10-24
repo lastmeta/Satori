@@ -156,8 +156,9 @@ migration re-encrypts the wallet with it as it is.
 - **Setup → Create**: a new alias and a new wallet (both random), the
   wallet's 24 words shown and three of them checked (it holds the funds), one
   passphrase. A new random Nostr key. One record is stored.
-- **Setup → Restore from words**: the wallet's 24 words (required), the
-  alias's (optional; a new alias if left empty) and the Nostr key as
+- **Setup → Import**: the wallet's 24 words or its private key (`0x` and 64
+  hex, as a Base wallet exports it; required), the alias's the same way
+  (optional; a new alias if left empty) and the Nostr key as
   Backup shows it, `nsec` or hex (optional; a new one if left empty: it is
   not in the words), then the passphrase.
 - **Setup → Import Docker files**: [below](#import-translate).
@@ -302,11 +303,11 @@ locks. Docker shows the keys behind login; here the passphrase is asked
 per showing, the alias's and the Nostr key's too (they are stored
 unencrypted, but they are private keys). It shows:
 
-- **Alias words**, **Wallet words**: the 24 words (Restore from words
-  brings the key back) and the private key in `0x` hex, which imports into a
+- **Alias words**, **Wallet words**: the 24 words (Import
+  brings the key back, as does the private key) and the private key in `0x` hex, which imports into a
   Base wallet (the words don't, [above](#one-key-one-secret)).
 - **Nostr key**: its `nsec` (NIP-19) and its hex secret. It is random, so the
-  words don't bring it back; Restore from words takes either form.
+  words don't bring it back; Import takes either form.
 
 No files are downloaded: Docker's formats are not written any more.
 `window.satori.backup(undefined, passphrase)` gives all three,

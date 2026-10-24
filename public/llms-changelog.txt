@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (Import)
+
+- Setup's "Restore from words" is now "Import": the wallet's (and the
+  alias's) 24 words or private key (`0x` and 64 hex). `setup({ walletWords,
+  aliasWords })` takes either form.
+
 ## Changed 2026-10-24 (staking on Home)
 
 - New `health()` reason `staked-elsewhere` (advice, contract): the wallet is

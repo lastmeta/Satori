@@ -211,8 +211,8 @@ never replay another's WAL), never deleting either (`setAsideDatabase`,
 `src/db/recover.js`, retried while DuckDB's ended worker lets go), opens a
 fresh database, and shows Setup with a notice ("The old database was set
 aside as satori-mvp.duckdb.corrupt-…, in this site's storage. Restore this
-neuron from your words, or import its files."): Restore from words (the
-wallet's, the alias's and the Nostr key) or Import. `status().setAside` is
+neuron from your words, or import its files."): Import (the
+wallet's and the alias's words or private keys, and the Nostr key) or Import Docker files. `status().setAside` is
 the new name for that page load. Any other failure (the engine's download,
 OPFS itself) still shows "Satori could not start", which says nothing was
 deleted, offers Reload, links to the issue tracker, and points to the backup.
