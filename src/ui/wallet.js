@@ -1,7 +1,7 @@
-// Wallet: Base (docs/design/base.md): the wallet's and the alias's balances, Stake with this app or Unstake, claims,
-// send, the gas for the daily batch, the alias (the only place it shows), the last batch, and who plays (this app, or
-// Satori Daily by hand). The wallet's
-// actions ask for the passphrase in place (the inline Unlock) when it is locked.
+// Wallet: Base (docs/design/base.md). Up top what people use: the wallet's balances, claimable, staking, who plays (this
+// app, or Satori Daily by hand), Stake with this app or Unstake, Claim, Send. Under Details the rest: the round,
+// referral, transfers, the gas for the daily batch, the last batch and check, the RPC, the alias (the only place it
+// shows) and the invite link. The wallet's actions ask for the passphrase in place (the inline Unlock) when it is locked.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { backupPanel, fact, form, idRow, unlockPrompt } from './parts.js';
@@ -43,7 +43,6 @@ export function walletTab(a) {
       <h2>Base</h2>
       <button class="small-btn" data-test="base-refresh" @click="${a.baseRefresh}" disabled="${busy}">${() => (state.baseBusy === 'refresh' ? 'Reading…' : 'Refresh')}</button>
     </header>
-    <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Network\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
     <p class="error small" role="status" data-test="base-error" hidden="${() => !b().error}">${() => (b().error ? `The chain did not answer: ${b().error}` : '')}</p>
     <p class="error small" role="alert" data-test="base-sync" hidden="${() => b().wallet.inSync !== false}">Staking is out of sync. ${OUT_OF_SYNC}</p>
     <div class="balance" data-test="base-balance">
@@ -53,20 +52,8 @@ export function walletTab(a) {
     <dl class="facts">
       ${fact('Claimable', 'base-claimable', () => claimableText(b().claimable))}
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this app, below' : delegationText(b())))}
-      ${fact('Referral', 'base-referral', () => referralText(b()))}
-      ${fact('Transfers', 'base-lock', () => lockText(b().wallet.lock))}
-      ${fact('Daily batch gas', 'base-alias', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().alias) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
-      ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
-      ${fact('Contract batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
-    : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
-      ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
     </dl>
-    <div class="alias">
-      ${idRow('Alias', 'alias', () => state.alias, a)}
-      <p class="muted small">The app's own signing address; the daily batch's gas is paid from it.</p>
-      <div class="actions"><button class="small-btn" data-test="alias-key" @click="${() => a.askBackup('alias')}">Private key</button></div>
-      ${backupPanel(a, ['alias'], 'alias-backup', 'Wallet passphrase to show the alias\'s private key')}
-    </div>
+    <p class="error small" role="alert" data-test="base-low-gas" hidden="${() => !lowEth()}">The alias is low on Base ETH for the daily batch: ${() => gasText(b().alias)}. Send it a little (Details › Alias).</p>
     <p class="muted small" data-test="base-play" hidden="${() => !play()}">${() => play()?.[0] ?? ''}<a href="${SATORI_DAILY_URL}" target="_blank" rel="noopener">Satori Daily</a>${() => play()?.[1] ?? ''}</p>
     <div class="actions">
       <button class="primary" data-test="base-stake" hidden="${staked}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? BUSY.stake : 'Stake with this app')}</button>
@@ -75,10 +62,6 @@ export function walletTab(a) {
     </div>
     <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().wallet.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
     <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your wallet's SATORI every round. The SATORI stays in the wallet and earns; it can't be sent while staked, or through the round after you unstake.</p>
-    <div hidden="${() => !b().inviteLink}">
-      ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
-      <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you get ${REFERRAL_PCT}% of the rewards they earn, forever, in Claimable.</p>
-    </div>
     <form class="send" hidden="${() => !!state.sendReview}" @submit="${(e) => a.reviewSend(form(e), e.target)}">
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
@@ -101,6 +84,29 @@ export function walletTab(a) {
     <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="base-txs" hidden="${() => !state.baseTxs.length}">${() => state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash))}</div>
     <p class="error small" role="alert" data-test="base-action-error" hidden="${() => !state.baseError}">${() => state.baseError}</p>
+    <details class="mdetails" data-test="base-details">
+      <summary>Details</summary>
+      <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Network\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+      <dl class="facts">
+        ${fact('Referral', 'base-referral', () => referralText(b()))}
+        ${fact('Transfers', 'base-lock', () => lockText(b().wallet.lock))}
+        ${fact('Daily batch gas', 'base-alias', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().alias) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
+        ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
+        ${fact('Contract batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
+      : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
+        ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
+      </dl>
+      <div class="alias">
+        ${idRow('Alias', 'alias', () => state.alias, a)}
+        <p class="muted small">The app's own signing address; the daily batch's gas is paid from it.</p>
+        <div class="actions"><button class="small-btn" data-test="alias-key" @click="${() => a.askBackup('alias')}">Private key</button></div>
+        ${backupPanel(a, ['alias'], 'alias-backup', 'Wallet passphrase to show the alias\'s private key')}
+      </div>
+      <div hidden="${() => !b().inviteLink}">
+        ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
+        <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you get ${REFERRAL_PCT}% of the rewards they earn, forever, in Claimable.</p>
+      </div>
+    </details>
   </section>
   ${walletsCard(a)}
   </section>`;

@@ -180,6 +180,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(walletAddress);
   // the alias's private key is on the Wallet tab only, for the rare case funds were sent to it
   await go(page, 'wallet');
+  await page.locator('[data-test=base-details] summary').click();
   await page.locator('[data-test=alias-key]').click();
   await page.getByLabel("Wallet passphrase to show the alias's private key").fill(PASS);
   await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Show' }).click();

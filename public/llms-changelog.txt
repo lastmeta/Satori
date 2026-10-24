@@ -4,6 +4,14 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (Wallet: details folded away)
+
+- The Wallet tab's Base card keeps balances, Claimable, Staking and the
+  actions up top; the round, `base-referral`, `base-lock`, `base-alias`,
+  `base-last-batch`, `base-check`, `base-rpc`, the alias (`alias-key`) and
+  `base-invite` moved into `base-details`, a closed `<details>`: open it
+  before clicking inside. New: `base-low-gas`, the alias's low gas said up top.
+
 ## Changed 2026-10-24 (link again)
 
 - `wallet-mismatch`'s card is now "Link this wallet" (`do: 'relink'`), and

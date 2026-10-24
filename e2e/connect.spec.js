@@ -118,6 +118,7 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await expect(page.locator('[data-test=backup-key]')).toHaveText(/^nsec1/);
   expect(app.calls.filter((m) => m === 'personal_sign')).toHaveLength(2); // the link, then this
   await go(page, 'wallet');
+  await page.locator('[data-test=base-details] summary').click();
   await page.locator('[data-test=alias-key]').click();
   await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
   await expect(page.locator('[data-test=alias-backup-key]')).toHaveText(/^0x[0-9a-f]{64}$/);

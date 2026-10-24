@@ -568,7 +568,11 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 - **Settings › Keys** holds both Base addresses, the only addresses the app
   shows. Home has the claimable rewards with Claim, and on a computer the
   wallet and the gas in days ([health.md](health.md)).
-  The **Wallet** tab's **Base** card: the round, the active RPC in plain words (the local fork
+  The **Wallet** tab's **Base** card shows up top only what people use: the
+  wallet's SATORI and ETH, Claimable, Staking, who plays, Stake with this app
+  or Unstake, Claim and Send, plus a red line once staked when the alias's gas
+  runs low (`base-low-gas`). The rest sits under the card's **Details**
+  (`base-details`, closed until tapped): the round, the active RPC in plain words (the local fork
   named "Local test chain"; the URLs on hover); the alias's ETH as daily
   batches of gas (red below 7, once staked: before that the alias has
   no batch to pay for); the wallet's SATORI and ETH; Staking ("Staked: 100

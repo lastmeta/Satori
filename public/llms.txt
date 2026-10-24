@@ -1140,7 +1140,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `base-alias`, `base-wallet`, `base-staking`, `base-stake-note`,
   `base-sync`, `base-play`, `base-lock`, `base-claimable`,
   `base-last-batch`, `base-check`, `base-stake`, `base-unstake`,
-  `base-claim`, `base-result`, `base-txs`, `base-action-error`,
+  `base-claim`, `base-result`, `base-txs`, `base-action-error`, `base-low-gas`,
+  `base-details` (a closed `<details>`; open it to click inside: `base-referral`, `base-lock`, `base-alias`,
+  `base-last-batch`, `base-check`, `base-rpc`, `alias`, `alias-key`, `base-invite`),
   `send-review` (with `review-amount`, `review-to`, `review-fee`), `alias`
   (the alias's Base address), `alias-key` (its private key: "Wallet
   passphrase to show the alias's private key", then `alias-backup-prompt`,
