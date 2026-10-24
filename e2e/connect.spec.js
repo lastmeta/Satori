@@ -147,3 +147,32 @@ test('no wallet in this browser (a phone): Connect offers MetaMask and Other wal
   await page.getByRole('button', { name: /^MetaMask/ }).click();
   await expect(page.locator('[data-test=connect-step] [role=alert]')).toContainText('on your private network');
 });
+
+test('a wallet staked with another address (another app\'s alias): Home offers Stake here, which moves it in one step', async ({ context, page }) => {
+  test.setTimeout(180_000);
+  const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
+  await stubCentral(context, { rpc });
+  const app = fakeWallet({ key: `0x${'4d'.repeat(32)}`, transport: rpc.transport });
+  const W = app.address.toLowerCase();
+  const OTHER = '0x' + '5e'.repeat(20);
+  rpc.eth[W] = 10n ** 17n;
+  s.balance[W] = 100n * E18;
+  s.delegateOf[W] = OTHER; // staked from another app
+  await installWallet(context, app);
+
+  expect(await openApp(page)).toBe('setup');
+  await page.locator('[data-test=connect-wallet]').click();
+  await page.getByRole('button', { name: 'Connect TestWallet' }).click();
+  await expect.poll(() => page.evaluate(() => document.body.dataset.screen), { timeout: LOAD_TIMEOUT }).toBe('home');
+  const { alias } = await status(page);
+  rpc.eth[alias.toLowerCase()] = 10n ** 17n;
+  await page.evaluate(() => window.satori.base());
+  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'staked-elsewhere');
+  await expect(page.locator('[data-test=action]')).toContainText('Your wallet is staked with another address');
+  await expect(page.locator('[data-test=chip][data-channel=contract] [data-test=chip-text]')).toHaveText('Staked elsewhere');
+  await shot(page, page.locator('[data-test=action]'), 'staked-elsewhere-home');
+  await page.locator('[data-test=action-button]').click();
+  await expect(page.locator('[data-test=action]')).toBeHidden({ timeout: 60_000 });
+  expect(s.delegateOf[W]).toBe(alias.toLowerCase());
+  expect(rpc.sent.filter((t) => t.from === W).map((t) => t.functionName)).toEqual(['delegatePredictionPower']); // no Unstake first
+});

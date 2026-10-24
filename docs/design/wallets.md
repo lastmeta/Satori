@@ -38,9 +38,12 @@ wallet = sealed in the app (passphrase; Unlock / Lock)
   with it (`hub.delegatePredictionPower(alias)`, [base.md](base.md)); with
   the Satori Network, the wallet signs a **link** to its alias (below).
 - **The alias is random**, made with the wallet's entry in the app, never
-  derived. A wallet brought back from its words alone gets a new alias and
-  signs a new link; on chain it shows as staked with another address until
-  the person Unstakes and Stakes again.
+  derived. A wallet brought back from its words alone, or connected in
+  another app, gets a new alias and signs a new link, and the Satori Network
+  follows at once. On chain it stays staked with the other address until the
+  person Stakes with this app, which moves it in one transaction
+  (`delegatePredictionPower` closes the old period); Home suggests it
+  (`staked-elsewhere`, [health.md](health.md)).
 - **One at a time.** The app runs one wallet: the Satori Network, the relays
   and the Base batch are one alias's. Another wallet is another peer with its
   own streams, so wallets share nothing but the app's code.

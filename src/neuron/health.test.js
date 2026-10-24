@@ -245,6 +245,8 @@ describe('bad: predictions are failing', () => {
 
 const STAKE_TEXT = "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. "
   + 'A known contract issue can block unstaking; a fix is coming in the next contract release.';
+const STAKED_ELSEWHERE_TEXT = "Your wallet is staked with another address, so this app doesn't send its predictions to the Satori contract. "
+  + 'Stake with this app to move the stake here.';
 
 describe('staking while the contract bug is live (docs/issues/token-hook-gas-estimate.md)', () => {
   test('not staked while the wallet holds SATORI: advice, the Stake card saying the risk; the hero calm, the chip off', () => {
@@ -253,6 +255,12 @@ describe('staking while the contract bug is live (docs/issues/token-hook-gas-est
     expect(h.reasons).toEqual([{ id: 'stake', status: 'advice', channel: 'contract', text: STAKE_TEXT }]);
     expect(h.action).toEqual({ id: 'stake', text: STAKE_TEXT, button: 'Stake', do: 'stake' });
     expect(h.channels.contract).toEqual({ state: 'idle', tone: 'off', text: 'Not staked' });
+  });
+  test('staked with another address (another app\'s alias, after a new phone or a restore): advice, a Stake card to move it here', () => {
+    const h = health({ base: base({ wallet: { satori: '100', staked: 'other', stakedWith: '0x' + 'ab'.repeat(20) } }) });
+    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting' });
+    expect(h.action).toEqual({ id: 'staked-elsewhere', text: STAKED_ELSEWHERE_TEXT, button: 'Stake here', do: 'stake' });
+    expect(h.channels.contract).toEqual({ state: 'idle', tone: 'off', text: 'Staked elsewhere' });
   });
   test('out of sync (power under the wallet\'s SATORI): bad, on the Contract chip; the card explains, with no button; still predicting', () => {
     const h = health({ base: staked({ wallet: { satori: '100.000000000000000001', eth: '0.1', staked: 'alias', inSync: false,
@@ -386,7 +394,7 @@ test('each reason\'s level (docs/design/health.md): bad, warn, idle (a calm stat
     'central-failed': 'warn', 'wallet-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
     'base-stuck': 'warn', 'base-unreachable': 'warn',
     asleep: 'idle', starting: 'idle',
-    backup: 'advice', stake: 'advice', install: 'advice', 'relay-down': 'advice',
+    backup: 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
     'base-unused-unreachable': 'note',
   });
   expect(PRIORITY).toEqual(Object.keys(LEVEL)); // highest first: every advice after every warn and bad
@@ -513,6 +521,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     starting: (i) => i,
     backup: (i) => ({ ...i, storage: { persisted: false }, backedUp: false }),
     stake: (i) => ({ ...i, base: base({ wallet: { satori: '100', staked: 'none' } }) }),
+    'staked-elsewhere': (i) => ({ ...i, base: base({ wallet: { satori: '100', staked: 'other', stakedWith: '0x' + 'ab'.repeat(20) } }) }),
     install: (i) => ({ ...i, app: { installed: false, canInstall: true } }),
     'relay-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] }) }),
     'base-unused-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null }) }),
@@ -545,6 +554,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     starting:           ['S idle –',              X,                       X,                       X,                       X,                       X],
     backup:             ['S idle backup',         'A idle backup',         'P idle backup',         'P ok backup',           'P warn central-failed', 'N bad central-failing'],
     stake:              ['S idle stake',          'A idle stake',          'P idle stake',          'P ok stake',            'P warn central-failed', 'N bad central-failing'],
+    'staked-elsewhere': ['S idle staked-elsewhere', 'A idle staked-elsewhere', 'P idle staked-elsewhere', 'P ok staked-elsewhere', 'P warn central-failed', 'N bad central-failing'],
     install:            ['S idle install',        'A idle install',        'P idle install',        'P ok install',          'P warn central-failed', 'N bad central-failing'],
     'relay-down':       ['S idle relay-down',     'A idle relay-down',     'P idle relay-down',     'P ok relay-down',       'P warn central-failed', 'N bad central-failing'],
     'base-unused-unreachable': ['S idle –',       'A idle –',              'P idle –',              'P ok –',                'P warn central-failed', 'N bad central-failing'],

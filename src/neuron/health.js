@@ -29,7 +29,7 @@ export const LEVEL = {
   'central-failed': 'warn', 'wallet-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
   'base-stuck': 'warn', 'base-unreachable': 'warn',
   asleep: 'idle', starting: 'idle',
-  backup: 'advice', stake: 'advice', install: 'advice', 'relay-down': 'advice',
+  backup: 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
   'base-unused-unreachable': 'note',
 };
 export const PRIORITY = Object.keys(LEVEL);
@@ -229,6 +229,11 @@ function baseReasons({ rows, base }) {
     out.push(reason('stake', 'contract', { text: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be "
       + 'sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.',
     button: 'Stake', act: { do: 'stake' } }));
+  }
+  // staked with another address (another app's alias: a new phone, a restore): Stake moves it here in one step
+  if (d === 'other') {
+    out.push(reason('staked-elsewhere', 'contract', { text: "Your wallet is staked with another address, so this app doesn't send "
+      + 'its predictions to the Satori contract. Stake with this app to move the stake here.', button: 'Stake here', act: { do: 'stake' } }));
   }
   // the wallet is the alias's only staker, and its SATORI is more than the power booked: unstaking underflows until the fix
   if (d === 'alias' && base.wallet?.inSync === false) {
