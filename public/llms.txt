@@ -559,7 +559,8 @@ the page's JS context:
     `base-stuck` (a batch not mined for 10 min), `base-unreachable` (while
     the contract is in use); idle `asleep`, `starting`; advice `backup` (storage
     not kept, no backup confirmed), `stake` (the wallet holds SATORI, not
-    staked; the card says the risk), `install` (the browser can add Satori, not installed, not put away),
+    staked), `staked-elsewhere` (staked with another address, often another
+    app's alias: "Stake here" moves it), `install` (the browser can add Satori, not installed, not put away),
     `relay-down` (some relay down, not all); note `base-unused-unreachable`
     (the chip's only). docs/design/health.md says why each has its level.
   - `days`: the last 30 local days, oldest first: `{ date: 'YYYY-MM-DD',

@@ -4,6 +4,16 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (staking on Home)
+
+- New `health()` reason `staked-elsewhere` (advice, contract): the wallet is
+  staked with another address, often another app's alias; its card's button
+  "Stake here" (`do: 'stake'`) moves the stake in one transaction. The
+  Contract chip says "Staked elsewhere".
+- The `stake` card and the Wallet tab's staking note no longer say "A known
+  contract issue can block unstaking; a fix is coming in the next contract
+  release.": D7 carries the fix.
+
 ## Added 2026-10-24 (wallets on a phone)
 
 - With no wallet in the browser (a phone's Chrome or Safari), Connect offers

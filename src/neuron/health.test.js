@@ -243,13 +243,12 @@ describe('bad: predictions are failing', () => {
   });
 });
 
-const STAKE_TEXT = "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake. "
-  + 'A known contract issue can block unstaking; a fix is coming in the next contract release.';
+const STAKE_TEXT = "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake.";
 const STAKED_ELSEWHERE_TEXT = "Your wallet is staked with another address, so this app doesn't send its predictions to the Satori contract. "
   + 'Stake with this app to move the stake here.';
 
-describe('staking while the contract bug is live (docs/issues/token-hook-gas-estimate.md)', () => {
-  test('not staked while the wallet holds SATORI: advice, the Stake card saying the risk; the hero calm, the chip off', () => {
+describe('staking (docs/design/health.md: stake, staked-elsewhere, stake-out-of-sync)', () => {
+  test('not staked while the wallet holds SATORI: advice, the Stake card; the hero calm, the chip off', () => {
     const h = health({ base: base({ wallet: { satori: '100', staked: 'none' } }) });
     expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h' });
     expect(h.reasons).toEqual([{ id: 'stake', status: 'advice', channel: 'contract', text: STAKE_TEXT }]);

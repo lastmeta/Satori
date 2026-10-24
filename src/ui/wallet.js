@@ -71,7 +71,7 @@ export function walletTab(a) {
       <button data-test="base-claim" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
     </div>
     <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().wallet.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
-    <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your wallet's SATORI every round. The SATORI stays in the wallet and earns; it can't be sent while staked, or through the round after you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.</p>
+    <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your wallet's SATORI every round. The SATORI stays in the wallet and earns; it can't be sent while staked, or through the round after you unstake.</p>
     <div hidden="${() => !b().inviteLink}">
       ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
       <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you get ${REFERRAL_PCT}% of the rewards they earn, forever, in Claimable.</p>

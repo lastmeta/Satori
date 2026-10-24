@@ -284,7 +284,7 @@ test('staking out of sync (the token-hook bug): Home red on the Contract chip, t
   let h = await page.evaluate(() => window.satori.health());
   expect(h.reasons.find((r) => r.id === 'stake')).toMatchObject({ status: 'advice' });
   expect(h.reasons.filter((r) => r.status === 'warn' || r.status === 'bad')).toEqual([]); // nothing amber or red
-  await expect(page.locator('[data-test=action-text]')).toContainText('A known contract issue can block unstaking; a fix is coming in the next contract release.');
+  await expect(page.locator('[data-test=action-text]')).toHaveText("Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake.");
   await page.evaluate(() => window.satori.stake());
   expect((await page.evaluate(() => window.satori.base())).wallet).toMatchObject({ staked: 'alias', inSync: true });
 

@@ -223,11 +223,10 @@ function baseReasons({ rows, base }) {
           + 'It keeps checking.' }));
   }
   if (base.error || !base.config) return out;
-  // advice while the contract bug is live (docs/issues/token-hook-gas-estimate.md): the card offers it and says the risk;
-  // the chip keeps the plain "Not staked" (off)
+  // advice: the card offers it; the chip keeps the plain "Not staked" (off)
   if (d === 'none' && Number(base.wallet.satori) > 0) {
     out.push(reason('stake', 'contract', { text: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be "
-      + 'sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release.',
+      + 'sent until you unstake.',
     button: 'Stake', act: { do: 'stake' } }));
   }
   // staked with another address (another app's alias: a new phone, a restore): Stake moves it here in one step

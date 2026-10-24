@@ -169,7 +169,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   h = await health(page);
   expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 11 h',
     action: { id: 'stake', button: 'Stake', do: 'stake', text: "Stake with this app to earn on the Satori contract. While staked, your SATORI "
-      + "can't be sent until you unstake. A known contract issue can block unstaking; a fix is coming in the next contract release." },
+      + "can't be sent until you unstake." },
     channels: { contract: { state: 'idle', tone: 'off', text: 'Not staked' } } });
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
   await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'stake');
