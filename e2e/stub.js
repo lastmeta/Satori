@@ -37,8 +37,9 @@ async function eip191(h) {
   }
 }
 
-/** Register's link check, as central: → { wallet } (the linked wallet's address) or { error }; {} with no link. */
-async function linkOf(h) {
+/** Register's link check, as central: → { wallet } (the linked wallet's address) or { error }; {} with no link.
+ * heldIssued: the issued of a newer link central holds for the wallet (another alias's), so an older one is refused. */
+async function linkOf(h, heldIssued = 0) {
   if (!h['wallet-link']) return {};
   try {
     const message = Buffer.from(h['wallet-link'], 'base64').toString('utf8');
@@ -46,7 +47,9 @@ async function linkOf(h) {
     if (title !== 'Satori: link this alias to my wallet') return { error: 'not a link' };
     if (alias !== `alias: ${evmAddress(h['alias-pubkey'])}`) return { error: 'the link names another alias' };
     const signer = await recoverMessageAddress({ message, signature: h['wallet-signature'] });
-    return wallet === `wallet: ${signer}` ? { wallet: signer } : { error: 'the signature is not the wallet\'s' };
+    if (wallet !== `wallet: ${signer}`) return { error: 'the signature is not the wallet\'s' };
+    if (Number(message.split('\n')[3].replace('issued: ', '')) < heldIssued) return { error: 'the link is older than the one held for this wallet' };
+    return { wallet: signer };
   } catch {
     return { error: 'not a link' };
   }
@@ -134,7 +137,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
         }
         const answer = { success: true, peer_id: 7, message: 'Peer registered successfully' };
         if (!stub.noWalletAddress) {
-          const link = await linkOf(h);
+          const link = await linkOf(h, stub.heldIssued);
           answer.wallet_address = stub.otherWallet ?? link.wallet ?? null;
           if (link.error) answer.wallet_link_error = link.error;
         }

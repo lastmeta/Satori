@@ -542,7 +542,7 @@ the page's JS context:
     for the card (so advice only when no warn or bad reason is present):
     `{ id, text, button, do, tab?, section? }` (`stake-out-of-sync`: `{ id,
     text }` only, nothing to press), `do` one of `reload`, `poll` (`satori.poll()`), `stake`
-    (`unlock()` then `stake()`), `backup` (`backup('wallet', passphrase)`,
+    (`unlock()` then `stake()`), `relink` (`unlock()` then `relink()`), `backup` (`backup('wallet', passphrase)`,
     shown to the person), `install` (`install()`), `dismiss` (the person
     puts the card away; `action.dismiss`, when present, names a second
     button that does the same), `go` (`go(tab)`; the fix is
@@ -918,6 +918,9 @@ the page's JS context:
   null: the defaults); `maxFeeGwei` is the max fee in force. Before the first
   chain read (a second or two after load) `status().base` has `rpc: []`,
   `config: null` and null chain values; `satori.base()` reads at once.
+- `await satori.relink()` (needs Unlock, or a connected wallet's approval): a
+  fresh wallet link to this app's alias, sent with a register at once → the
+  register's answer; refused links are said (`wallet_link_error`).
 - `await satori.stake()` (needs Unlock; only on the person's request): stake with this app → `{ steps: [{ step, by:
   'alias' | 'wallet', hash }], settled }`. `steps` is empty when everything was in place. Every transaction throws
   "Gas is above the max fee: 3 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Satori contract."

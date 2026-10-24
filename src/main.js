@@ -15,7 +15,7 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup,
+  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
@@ -754,6 +754,26 @@ const shownAt = (key, fn) => async (...args) => {
 };
 
 /** A Base action from the card: its result (text, and its txs, linked) or error is shown there. */
+/**
+ * A fresh link (issued now), signed by the wallet, kept with the keys and sent with a register at once. The Satori Network
+ * keeps the newest link per wallet, so this takes the wallet back from another app's alias (docs/design/wallets.md).
+ */
+async function relinkWallet() {
+  if (!wallet) throw new Error(walletPublic.connected ? notHere().message : 'Unlock the wallet first.');
+  const issued = nowS();
+  let link;
+  if (walletPublic.connected) {
+    const message = linkMessage({ alias: alias.evmAddress, wallet: walletPublic.evmAddress, issued });
+    link = { message, signature: await signText(wallet.provider, walletPublic.evmAddress, message) };
+  } else link = wallet.signLink(alias.evmAddress, issued);
+  await storeKeys({ ...record, link });
+  await registerWith(central);
+  if (registration?.ok && registration.walletMismatch) {
+    throw new Error(`The Satori Network did not take the link${registration.walletLinkError ? `: ${registration.walletLinkError}` : ''}.`);
+  }
+  return registration;
+}
+
 const baseUi = (what, fn) => shownAt('baseError', async () => {
   Object.assign(state, { baseResult: '', baseTxs: [], baseDid: what });
   const { text, txs = [] } = await baseAction(what, fn);
@@ -931,6 +951,7 @@ const actions = {
     else if (a.do === 'install') actions.install();
     else if (a.do === 'dismiss') actions.dismissAdvice(a.id);
     else if (a.do === 'stake') actions.walletAction('card', 'baseDelegate');
+    else if (a.do === 'relink') withWallet('card', actions.baseRelink);
     else if (a.do === 'backup') {
       go('settings', 'backup');
       actions.askBackup('wallet');
@@ -1034,6 +1055,10 @@ const actions = {
     if (noGas()) return void Object.assign(state, { baseDid: name === 'baseClaim' ? 'claim' : 'stake', baseResult: '', baseTxs: [], baseError: noGas() });
     return withWallet(slot, () => actions[name]());
   },
+  baseRelink: () => baseUi('link', async () => {
+    await relinkWallet();
+    return { text: 'Linked: the Satori Network pays this wallet.' };
+  }),
   baseDelegate: () => baseUi('stake', async () => {
     const r = await walletOps.delegate();
     return { text: r.steps.length ? 'Staked with this app.' : 'Already staked with this app.',
@@ -1322,6 +1347,8 @@ window.satori = {
   async base() { ready(); await base.refresh(); return base.status(); },
   /** Stake with this neuron (needs Unlock): the wallet's prediction power to the alias. → { steps: [{ step, by, hash }], settled } */
   async stake() { ready(); return baseAction('stake', walletOps.delegate); },
+  /** A fresh wallet link to this app's alias, sent at once (needs Unlock, or a connected wallet's approval). → the register's answer */
+  async relink() { ready(); return baseAction('link', relinkWallet); },
   /** Unstake (needs Unlock): the SATORI can be sent once the next round ends. → the same shape */
   async unstake() { ready(); return baseAction('unstake', walletOps.undelegate); },
   /** hub.claim(), the merkle drop, the airdrop, from the wallet (needs Unlock). → { rewards, merkle, airdrop } */

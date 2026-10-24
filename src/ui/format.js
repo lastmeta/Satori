@@ -51,7 +51,7 @@ export function mismatchText(r) {
     return `Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${r.wallet_address}, not this wallet's ${r.wallet}.${refused}`;
   }
   return `Wallet not linked: the Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.${refused}`
-    + ' Unlock the wallet: the app links it.';
+    + ' Link this wallet, on Home: it signs a fresh link.';
 }
 
 export function pollText(p) {

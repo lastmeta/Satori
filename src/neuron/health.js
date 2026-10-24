@@ -33,6 +33,7 @@ export const LEVEL = {
   'base-unused-unreachable': 'note',
 };
 export const PRIORITY = Object.keys(LEVEL);
+const FRESH_LINK = ' Link this wallet: it signs a fresh link, and the Satori Network pays it.';
 export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
 
 /** The engine's refusals a batch's simulate names (SatoriEngine.sol predictMultipleWithPayloads), in a few words. */
@@ -170,9 +171,9 @@ function centralReasons({ now, rows, sessions, central, work }) {
     const refused = reg.walletLinkError ? ` It refused the wallet's link: ${reg.walletLinkError}.` : '';
     out.push(reason('wallet-mismatch', 'network', { chip: other ? 'Wallet mismatch' : 'Wallet not linked',
       line: other ? "The Satori Network pays this wallet's rewards to another address." : 'The Satori Network has no wallet linked to this app.',
-      text: other ? `The Satori Network pays this wallet's rewards to a different Base address, ${reg.wallet_address}, not this wallet's ${reg.wallet}.${refused}`
-        : `The Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.${refused} Unlock the wallet: the app links it.`,
-      button: 'Open Settings', act: go('settings', 'keys') }));
+      text: `${other ? `The Satori Network pays this wallet's rewards to a different Base address, ${reg.wallet_address}, not this wallet's ${reg.wallet}.`
+        : 'The Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.'}${refused}${FRESH_LINK}`,
+      button: 'Link this wallet', act: { do: 'relink' } }));
   }
   if (reg && !reg.ok) {
     out.push(reason('not-registered', 'network', { line: "The Satori Network didn't register this app.", chip: 'Not registered',

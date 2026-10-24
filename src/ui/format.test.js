@@ -36,7 +36,7 @@ test('registrationText and mismatchText', () => {
     .toBe(`Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.`);
   expect(mismatchText({ ok: true, wallet: ours, wallet_address: null, walletMismatch: 'none' }))
     .toBe('Wallet not linked: the Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.'
-      + ' Unlock the wallet: the app links it.');
+      + ' Link this wallet, on Home: it signs a fresh link.');
 });
 
 test('pollText and submitText', () => {

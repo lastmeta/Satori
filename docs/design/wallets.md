@@ -117,6 +117,12 @@ else tells the forms apart.
 - The app makes the link when the wallet is in hand (Create, Restore, Import,
   Connect; for a stored wallet without one, its next Unlock), keeps it with
   its keys, and sends it with every register.
+- **Link again** (2026-10-24): when the network pays this wallet elsewhere or
+  not at all (`wallet-mismatch`, often because another app linked the same
+  wallet later, so this app's link is "older than the one held"), Home's card
+  offers **Link this wallet**: the wallet signs a fresh link (issued now: the
+  passphrase, or the wallet app's approval), kept with the keys and sent with
+  a register at once (`satori.relink()`).
 
 ## Several wallets
 

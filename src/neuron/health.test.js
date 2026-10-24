@@ -327,13 +327,14 @@ describe('warn: predicting, but something needs you', () => {
       wallet_address, walletLinkError, walletMismatch } });
     let h = health({ central: reg(theirs, 'other') });
     expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "The Satori Network pays this wallet's rewards to another address." });
-    expect(h.action).toEqual({ id: 'wallet-mismatch', do: 'go', tab: 'settings', section: 'keys', button: 'Open Settings',
-      text: `The Satori Network pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.` });
+    expect(h.action).toEqual({ id: 'wallet-mismatch', do: 'relink', button: 'Link this wallet',
+      text: `The Satori Network pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.`
+        + ' Link this wallet: it signs a fresh link, and the Satori Network pays it.' });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Wallet mismatch' });
     h = health({ central: reg(null, 'none') });
     expect(h).toMatchObject({ status: 'warn', line: 'The Satori Network has no wallet linked to this app.' });
     expect(h.action).toMatchObject({ id: 'wallet-mismatch', text: 'The Satori Network has no wallet linked to this app, so it has no Base address '
-      + 'to pay its rewards to. Unlock the wallet: the app links it.' });
+      + 'to pay its rewards to. Link this wallet: it signs a fresh link, and the Satori Network pays it.' });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Wallet not linked' });
     h = health({ central: reg(null, 'none', 'stale link') });
     expect(h.action.text).toContain("It refused the wallet's link: stale link.");
@@ -486,7 +487,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     const h = health({ rows: [open(NOW - 10 * M)], central: central({ nextPoll: NOW + 12 * M, registration: mismatch }) });
     expect(ids(h)).toEqual(['wallet-mismatch', 'starting']);
     expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Network pays this wallet's rewards to another address.",
-      action: { id: 'wallet-mismatch', button: 'Open Settings' } });
+      action: { id: 'wallet-mismatch', button: 'Link this wallet' } });
   });
 
   // The title-defining states, from the log.

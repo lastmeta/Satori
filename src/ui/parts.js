@@ -27,7 +27,7 @@ export function idRow(kind, test, value, a, title = () => '') {
  * for while it is locked; Unlock, then the action.
  */
 export function unlockPrompt(a, slot, verb) {
-  return html`<form class="inline-unlock" data-test="unlock-prompt" data-unlock-for="${slot}" hidden="${() => state.unlockFor !== slot}" @submit="${(e) => a.unlockThen(form(e), e.target)}"><input name="pass" type="password" aria-label="${`Wallet passphrase to ${verb}`}" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button><button type="button" @click="${a.cancelUnlock}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.unlockError}">${() => state.unlockError}</p></form>`;
+  return html`<form class="inline-unlock" data-test="unlock-prompt" data-unlock-for="${slot}" hidden="${() => state.unlockFor !== slot}" @submit="${(e) => a.unlockThen(form(e), e.target)}"><input name="pass" type="password" aria-label="${typeof verb === 'function' ? () => `Wallet passphrase to ${verb()}` : `Wallet passphrase to ${verb}`}" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" disabled="${() => !!state.busy}">${() => (state.busy === 'unlock' ? 'Unlocking…' : 'Unlock')}</button><button type="button" @click="${a.cancelUnlock}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.unlockError}">${() => state.unlockError}</p></form>`;
 }
 
 /** A health state's mark: a colored disc with its icon (the shape from the state, in CSS). */

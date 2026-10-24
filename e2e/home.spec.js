@@ -389,7 +389,7 @@ test('starting with a wallet mismatch: the title says Starting; the mismatch lea
   await expect(hero(page)).toHaveAttribute('data-s', 'warn'); // registered: the mismatch
   let h = await health(page);
   expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Network pays this wallet's rewards to another address.",
-    action: { id: 'wallet-mismatch', button: 'Open Settings', do: 'go', tab: 'settings', section: 'keys' } });
+    action: { id: 'wallet-mismatch', button: 'Link this wallet', do: 'relink' } });
   expect(h.reasons.map((r) => r.id)).toEqual(['wallet-mismatch', 'starting']);
   await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');
   await expect(page.locator('[data-test=health-line]')).toHaveText("Fetching today's observations…"); // the poll, held: its step
@@ -477,4 +477,24 @@ test('an iPhone: Setup and Settings say how Satori runs; the hero says Keep Sato
   await expect(page.locator('#settings-device [data-test=install-hint]')).toHaveText(ADD);
   expect(central.prod).toEqual([]);
   await context.close();
+});
+
+test('the wallet linked from another app (a newer link held): Link this wallet signs a fresh one; the card goes', async ({ context, page }) => {
+  const { central } = await setup(context);
+  await start(page);
+  central.heldIssued = nowS() + 2; // another app links this wallet now: newer than this one's
+  await page.reload(); // it registers on each load
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'wallet-mismatch', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=action-text]')).toContainText('It refused the wallet\'s link: the link is older than the one held for this wallet.');
+  await page.waitForTimeout(2500); // past the held link's issued
+  const before = central.registered.length;
+  await page.locator('[data-test=action-button]').click();
+  await page.getByLabel('Wallet passphrase to link').fill(PASS);
+  await page.locator('[data-unlock-for=card]').getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.locator('[data-test=action]')).not.toHaveAttribute('data-action', 'wallet-mismatch', { timeout: 30_000 });
+  expect(central.registered.length).toBe(before + 1); // sent at once
+  const link = Buffer.from(central.registered.at(-1)['wallet-link'], 'base64').toString('utf8');
+  expect(Number(link.split('\n')[3].replace('issued: ', ''))).toBeGreaterThanOrEqual(central.heldIssued);
+  expect((await page.evaluate(() => window.satori.status())).central.registration).toMatchObject({ wallet_address: v.ethAddress, walletLinkError: null });
 });

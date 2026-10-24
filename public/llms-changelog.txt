@@ -4,6 +4,13 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-24 (link again)
+
+- `wallet-mismatch`'s card is now "Link this wallet" (`do: 'relink'`), and
+  `satori.relink()` signs a fresh link and registers at once: the network
+  keeps the newest link per wallet, so another app's later link wins until
+  this one signs again.
+
 ## Changed 2026-10-24 (the batch on a new deployment; balances)
 
 - The daily batch predicts a stream with no values yet (DOWN, `rule:
