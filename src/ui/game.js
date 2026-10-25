@@ -55,6 +55,14 @@ async function slide(dir, whole, change, from = 0) {
   const b = boardEl();
   if (sliding || !out || !b || reduced()) return void change();
   sliding = true;
+  try {
+    await slideOff(dir, whole, change, from, out, b);
+  } finally {
+    sliding = false; // whatever happens, the next move is never blocked
+  }
+}
+
+async function slideOff(dir, whole, change, from, out, b) {
   const [br, r] = [b.getBoundingClientRect(), out.getBoundingClientRect()];
   const copy = out.cloneNode(true);
   for (const el of [copy, ...copy.querySelectorAll('[data-test]')]) el.removeAttribute('data-test');
@@ -72,9 +80,8 @@ async function slide(dir, whole, change, from = 0) {
   const opts = { duration: SLIDE_MS, easing: 'cubic-bezier(0.3, 0, 0.2, 1)' };
   const gone = copy.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${-dir * w}px)` }], opts).finished;
   inc?.animate([{ transform: `translateX(${dir * w + from}px)` }, { transform: 'translateX(0)' }], opts);
-  await gone.catch(() => {});
+  await Promise.race([gone.catch(() => {}), new Promise((done) => setTimeout(done, SLIDE_MS + 200))]);
   copy.remove();
-  sliding = false;
 }
 
 /** The game's moves, each with its slide (the whole screen when it changes: gameflow.js stepOf). */
@@ -118,7 +125,10 @@ function swipe(m) {
       if (!start) return;
       const x = e.clientX - start.x;
       const y = e.clientY - start.y;
-      if (!dragging && Math.abs(x) > 8 && Math.abs(x) > Math.abs(y) * 1.5) dragging = true;
+      if (!dragging && Math.abs(x) > 8 && Math.abs(x) > Math.abs(y) * 1.5) {
+        dragging = true;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* gone */ } // the finger may leave the area
+      }
       if (!dragging) return;
       dx = (x < 0 ? canNext() : canBack()) ? x : x * 0.25;
       const el = target();

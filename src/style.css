@@ -123,6 +123,8 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .play-switch h2 { margin-top: 0; }
 .gmsg { align-self: center; justify-self: center; text-align: center; max-width: 420px; }
 .gplay, .gsubmit-screen { display: flex; flex-direction: column; min-height: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+/* every part, the scrolling list too: a sideways move is the game's swipe, never the browser's (it would cancel it) */
+.gplay *, .gsubmit-screen * { touch-action: pan-y; }
 .gstream { flex: 1; min-height: 0; display: grid; }
 .gview { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 .ghead { display: flex; align-items: center; gap: 4px; }
@@ -143,13 +145,13 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gbtn:active { transform: translateY(2px); box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.3); }
 .gbtn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 3px; }
 .gbtn svg { width: 46%; height: auto; max-height: 72%; fill: none; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-.gbtn svg .lit { stroke: rgb(255 255 255 / 0.45); transform: translateY(0.55px); }
+.gbtn svg .lit { stroke: rgb(255 255 255 / 0.16); transform: translateY(0.55px); } /* muted: the cut's light edge */
 .gbtn svg .shade { stroke: rgb(0 0 0 / 0.4); transform: translateY(-0.45px); }
 .gbtn.down svg .cut { stroke: #a5291f; }
 .gbtn.up svg .cut { stroke: #17703c; }
 .gbtn.submit { background: linear-gradient(#5a7cf0, #3a5bd9); aspect-ratio: auto; width: 100%; height: 56px; }
 .gbtn .engraved { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #2a43a6;
-  text-shadow: 0 1.5px 0 rgb(255 255 255 / 0.4), 0 -1px 0 rgb(0 0 0 / 0.35); }
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.16), 0 -1px 0 rgb(0 0 0 / 0.3); }
 .gwallet { flex: none; display: grid; gap: 10px; margin-bottom: 6px; }
 .gbalance { margin: 0; text-align: center; font-size: 2.1rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .gclaim { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; max-width: 560px; width: 100%; margin: 0 auto; }
