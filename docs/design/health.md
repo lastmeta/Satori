@@ -521,12 +521,12 @@ Close up (live on central2, a poll):
 
 ## The hero
 
-The box on top keeps **one height** whatever it says: room for the title,
-a two-line status and the last visit's line (`style.css`, `.hero`), so the
-page under it never jumps as the status changes. Text that needs more (a
-notice, a long line on a narrow phone) grows the box over 250 ms, and it
-shrinks back the same way (`smoothHero`, `src/main.js`); with reduced motion
-it just changes.
+The box on top fits its text, with no spare space. When the text changes
+height (the status wraps onto a second line, the last visit's line goes),
+the box grows or shrinks over 250 ms instead of snapping the page under it
+(`smoothHero`, `src/main.js`); with reduced motion it just changes. A fixed
+height was tried first and rejected by the owner (2026-10-25): it left blank
+space under a short status.
 
 ## The last visit
 

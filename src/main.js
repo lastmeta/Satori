@@ -1488,8 +1488,8 @@ function glowChips() {
 }
 
 /**
- * Home's hero keeps one height (style.css); when its text needs more or less than that, the box grows or shrinks over
- * 250 ms instead of snapping the page under it (docs/design/health.md#the-hero). Reduced motion: no animation.
+ * Home's hero fits its text; when that changes height (a line wraps, the last visit's line goes) the box grows or
+ * shrinks over 250 ms instead of snapping the page under it (docs/design/health.md#the-hero). Reduced motion: none.
  */
 function smoothHero() {
   const hero = document.querySelector('[data-test=health]');

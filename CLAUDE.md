@@ -29,7 +29,8 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   (a status line appears or goes) must not jump the page under it. First
   choice: give it one static height that fits every state. If that can't
   work, animate between states (height eased, content faded), never an
-  instant switch. Home's hero does both (style.css, main.js `smoothHero`).
+  instant switch. A fixed height must not leave visible blank space in
+  the short states; Home's hero couldn't, so it animates (main.js `smoothHero`).
 - Before engine work read `docs/intent/engine.md`; before relay, Nostr or market
   work read `docs/intent/network.md` and `docs/plans/market.md`. Market
   contracts are built from this session in the contract repo. Hold the relay
