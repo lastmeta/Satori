@@ -999,8 +999,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   when it needs the wallet the passphrase is asked in place), the last 14
   days (30 on a computer, with a legend), the **Network** ("free"),
   **Contract** ("uses gas") and **Relays** chips (each opens its tab and
-  glows while its channel talks), and the claimable rewards with Claim (the
-  wallet's SATORI under it). On a computer it is a dashboard: also the first
+  glows while its channel talks), the wallet's SATORI, then the claimable
+  rewards with Claim (two cards). On a computer it is a dashboard: also the first
   8 streams (latest, forecast 24 h, model, a trend line) with a link to all,
   the wallet (claimable, the wallet, the alias's gas in days) and the
   activity feed (open; a tap away on a phone).
@@ -1113,8 +1113,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `day-network`, `day-contract`,
   `days-summary`, `channels` with `chip` (`data-channel`: network, contract,
   relays; `data-state`, `data-tone`, `data-live` while its channel talks) and
-  `chip-text`, `claimable` with `claimable-amount`, `claimable-parts`,
-  `claim` and `claim-result`, `home-wallet`, `home-gas`, `home-stream`,
+  `chip-text`, `home-wallet-card` with `home-satori`, `home-wallet` and
+  `home-gas`, `claimable` (its own card) with `claimable-amount`,
+  `claimable-parts`, `claim` and `claim-result`, `home-stream`,
   `activity`, `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`,
   `tab-<tab>`, `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`.
   Models: `engine` (`data-tone`), `engine-title`, `engine-line`,

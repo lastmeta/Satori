@@ -519,6 +519,15 @@ Close up (live on central2, a poll):
 
 <img src="../screenshots/glow-chip-light.png" alt="the Central chip glowing, light" width="160"> <img src="../screenshots/glow-chip-dark.png" alt="the Central chip glowing, dark" width="160">
 
+## The hero
+
+The box on top keeps **one height** whatever it says: room for the title,
+a two-line status and the last visit's line (`style.css`, `.hero`), so the
+page under it never jumps as the status changes. Text that needs more (a
+notice, a long line on a narrow phone) grows the box over 250 ms, and it
+shrinks back the same way (`smoothHero`, `src/main.js`); with reduced motion
+it just changes.
+
 ## The last visit
 
 A revisit waits seconds for DuckDB and the neuron (11 s on Slow 4G with a

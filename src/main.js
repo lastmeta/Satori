@@ -1488,6 +1488,25 @@ function glowChips() {
 }
 
 /**
+ * Home's hero keeps one height (style.css); when its text needs more or less than that, the box grows or shrinks over
+ * 250 ms instead of snapping the page under it (docs/design/health.md#the-hero). Reduced motion: no animation.
+ */
+function smoothHero() {
+  const hero = document.querySelector('[data-test=health]');
+  if (!hero || typeof ResizeObserver === 'undefined') return;
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  let last = 0;
+  new ResizeObserver(() => {
+    hero.getAnimations().forEach((x) => x.cancel());
+    const now = hero.getBoundingClientRect().height;
+    if (last && now && now !== last && !motion.matches) {
+      hero.animate([{ height: `${last}px` }, { height: `${now}px` }], { duration: 250, easing: 'ease' });
+    }
+    if (now) last = now;
+  }).observe(hero.lastElementChild);
+}
+
+/**
  * The last visit's Home (docs/design/health.md#the-last-visit): painted at once on a revisit, marked "From your last
  * visit", until the neuron's own health arrives. Kept at most every 10 s while Home's health changes, and when the page
  * is hidden or left.
@@ -1519,6 +1538,7 @@ async function boot() {
   applyTheme(state.theme); // public/theme.js set data-theme before the first paint; this, the browser bar's color too
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => { state.systemDark = e.matches; });
   glowChips();
+  smoothHero();
   startPwa();
   // one tab runs the neuron; another waits, says so, and takes over when that one closes (no reload)
   releaseTab = await claimTab(undefined, undefined, { onWait: () => { state.screen = 'elsewhere'; } });

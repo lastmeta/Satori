@@ -4,6 +4,13 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (Home: two money cards; the hero's height)
+
+- Home's wallet tile is two cards: `home-wallet-card` (the wallet's SATORI,
+  its ETH and stake, the gas) and `claimable` (the claimable rewards and
+  Claim). The ids inside are unchanged.
+- The hero keeps one height whatever it says; taller text grows it smoothly.
+
 ## Changed 2026-10-25 (Settings: the order)
 
 - Settings, top to bottom: This device, Appearance, Backup, Keys, Reward

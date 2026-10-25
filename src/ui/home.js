@@ -158,17 +158,21 @@ export function home(a) {
       <p class="small" hidden="${() => state.streams.length <= HOME_ROWS}"><a href="#streams" @click="${(e) => { e.preventDefault(); a.go('streams'); }}">${() => `All ${state.streams.length} streams`}</a></p>
     </section>
 
-    <section class="tile wallet-tile" data-test="claimable">
-      <div class="tile-h desk-only"><b>Wallet</b><span>Base</span></div>
-      <div><div class="sub">Wallet</div><div class="big"><span data-test="home-satori">${() => figure(B().wallet.satori)}</span><small>SATORI</small></div><div class="sub" data-test="home-wallet">${walletLine}</div></div>
-      <div class="earn">
-        <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div></div>
-        <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.walletAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
-      </div>
-      ${unlockPrompt(a, 'claim', 'claim')}
-      <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
-      <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
-    </section>
+    <div class="money">
+      <section class="tile wallet-tile" data-test="home-wallet-card">
+        <div class="tile-h desk-only"><b>Wallet</b><span>Base</span></div>
+        <div><div class="sub">Wallet</div><div class="big"><span data-test="home-satori">${() => figure(B().wallet.satori)}</span><small>SATORI</small></div><div class="sub" data-test="home-wallet">${walletLine}</div></div>
+        <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
+      </section>
+      <section class="tile wallet-tile" data-test="claimable">
+        <div class="earn">
+          <div><div class="sub">Claimable rewards</div><div class="big" title="${claimTitle}"><span data-test="claimable-amount">${claimable}</span><small>SATORI</small></div><div class="sub" data-test="claimable-parts" hidden="${() => !claimBreakdown()}">${claimBreakdown}</div></div>
+          <button class="soft" data-test="claim" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.walletAction('claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? 'Claiming…' : 'Claim')}</button>
+        </div>
+        ${unlockPrompt(a, 'claim', 'claim')}
+        <p class="small" role="status" data-test="claim-result" hidden="${() => !(state.baseDid === 'claim' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
+      </section>
+    </div>
 
     <details class="tile feed-tile" data-test="activity">
       <summary>Activity</summary>

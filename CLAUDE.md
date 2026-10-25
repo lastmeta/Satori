@@ -25,6 +25,11 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   coming), say it calmly with what to do: "Unable to predict right now. Come
   back in about 3 hours." Never a warning colour or error wording. Orange/red
   are for things that are actually wrong.
+- **No layout snaps** (2026-10-25). A box whose content changes with state
+  (a status line appears or goes) must not jump the page under it. First
+  choice: give it one static height that fits every state. If that can't
+  work, animate between states (height eased, content faded), never an
+  instant switch. Home's hero does both (style.css, main.js `smoothHero`).
 - Before engine work read `docs/intent/engine.md`; before relay, Nostr or market
   work read `docs/intent/network.md` and `docs/plans/market.md`. Market
   contracts are built from this session in the contract repo. Hold the relay

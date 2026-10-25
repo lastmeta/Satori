@@ -226,6 +226,10 @@ details.card > summary { color: var(--text); font-weight: 600; }
 }
 .hero h2 { margin: 0; font-size: 1.35rem; line-height: 1.15; color: var(--hero-ink); }
 .hero p { margin: 3px 0 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+/* one height whatever it says (docs/design/health.md#the-hero): room for the title, a two-line status and the last
+   visit's line, so the page under it never jumps; anything taller grows and shrinks smoothly (main.js smoothHero) */
+.hero { overflow: hidden; }
+.hero > div:last-child { min-height: calc(1.35rem * 1.15 + 2 * (3px + 0.92rem * 1.5) + 3px + 0.8rem * 1.5); align-content: center; display: grid; }
 /* the last visit's Home (docs/design/health.md#the-last-visit): said in the hero; the rest a little faded until live */
 .hero .stale { font-size: 0.8rem; opacity: 0.8; }
 .hero .note { margin: 4px 0 0; color: var(--muted); overflow-wrap: anywhere; } /* an address change, quiet, for 24 h */
@@ -287,6 +291,7 @@ button.cell:disabled { cursor: default; }
 .big small { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-left: 4px; }
 .sub { color: var(--muted); font-size: 0.8rem; }
 .wallet-tile { display: grid; gap: 10px; }
+.money { display: grid; gap: inherit; align-content: start; } /* Home: the wallet, then the claimable rewards */
 .balance { display: flex; gap: 32px; margin: 4px 0 12px; }
 .wallet-tile .line { display: flex; justify-content: space-between; gap: 12px; font-size: 0.88rem; }
 .wallet-tile .line span:first-child { color: var(--muted); }
@@ -659,7 +664,8 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .dash > .action { order: 3; }
   .dash > .chans { order: 4; }
   .dash > .streams-tile { grid-column: span 8; order: 5; }
-  .dash > .wallet-tile { grid-column: span 4; order: 6; align-content: start; }
+  .dash > .money { grid-column: span 4; order: 6; }
+  .money > .wallet-tile { align-content: start; }
   .dash > .feed-tile { order: 7; }
   .engine { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.5fr); align-items: start; }
   .strip { grid-template-columns: repeat(30, minmax(0, 1fr)); }
