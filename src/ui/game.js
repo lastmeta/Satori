@@ -6,7 +6,7 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { unlockPrompt } from './parts.js';
-import { shortHash } from './format.js';
+import { shortHash, figure } from './format.js';
 import { latestText, linePoints, nothingText, submitEarly, stepOf } from './gameflow.js';
 import { UP, DOWN } from '../chain/index.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
@@ -145,6 +145,24 @@ const tap = (fn) => () => { if (!justDragged) fn(); };
 
 const callWord = (d) => (d === UP ? 'up' : 'down');
 
+// ── the wallet on top: its SATORI, always; what can be claimed, with CLAIM (Home's Claim), while there is some ──
+const claimable = () => Number(state.base.claimable?.total ?? 0);
+const claimed = () => state.baseDid === 'claim' && !!state.baseResult && !state.baseError;
+const claimShown = () => claimable() > 0 || (claimed() && g().claimAmount > 0);
+
+function wallet(a) {
+  return html`
+  <div class="gwallet">
+    <p class="gbalance" data-test="game-balance">${() => figure(state.base.wallet.satori)} <small>SATORI</small></p>
+    <div class="gclaim" data-test="game-claim-row" hidden="${() => !claimShown()}">
+      <b class="gclaimable" data-test="game-claimable">${() => figure(claimed() ? g().claimAmount : claimable())}</b>
+      <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="engraved">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>
+    </div>
+    ${unlockPrompt(a, 'game-claim', 'claim')}
+    <p class="error small" role="alert" data-test="game-claim-error" hidden="${() => !(state.baseDid === 'claim' && state.baseError)}">${() => state.baseError}</p>
+  </div>`;
+}
+
 function play(a) {
   const m = moves(a);
   const sw = swipe(m);
@@ -153,6 +171,7 @@ function play(a) {
   const early = () => submitEarly({ index: g().index, favorites: g().favs, picks: pickCount(), split: g().split });
   return html`
   <div class="gplay" data-test="game-play" hidden="${showing('play')}" @pointerdown="${sw.down}" @pointermove="${sw.move}" @pointerup="${sw.up}" @pointercancel="${sw.cancel}">
+    ${wallet(a)}
     <div class="gstream" data-move="${() => g().move || false}">${() => {
       const s = current();
       return s ? html`<div class="gview">

@@ -996,7 +996,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   while the app plays automatically the game is greyed out under
   `play-switch` with **Play by hand** (`play-manual`); back to automatic in
   Settings › Satori contract predictions (`play-setting`, with
-  `play-setting-auto` and `play-setting-manual`). The game (`game-board`): one stream at a
+  `play-setting-auto` and `play-setting-manual`). The game (`game-board`): on top `game-balance` (the wallet's SATORI) and, while
+  something is claimable, `game-claim-row` with `game-claimable` and `game-claim` (CLAIM, then CLAIMED); then one stream at a
   time, `game-name` with `game-star` (`aria-pressed`), `game-latest`,
   `game-chart`, `game-down` and `game-up` (a press picks and moves on; a
   swipe left skips, right goes back), `game-submit-early` (`data-open`) with

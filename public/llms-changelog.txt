@@ -6,6 +6,8 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- On top of the game: `game-balance`, and `game-claim-row` (`game-claimable`, `game-claim`) while something is claimable.
+
 - Played today: `game-dismiss` puts the Sent screen away for the session (`game-rest` where the buttons were).
 - The wallet's first prediction by hand from an invite link registers the referral
   (`predictMultipleWithReferral`), as the dapp's does; `pendingReferrer` is then null.

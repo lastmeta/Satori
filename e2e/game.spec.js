@@ -69,6 +69,22 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(1);
   await shot(page, 'game-play.png');
 
+  // the wallet on top: its balance always; something to claim: the amount and CLAIM, which claims (Unlock in place)
+  await expect(t(page, 'game-balance')).toHaveText('0 SATORI');
+  await expect(t(page, 'game-claim-row')).toBeHidden();
+  s.airdrop[V] = E18;
+  await page.evaluate(() => window.satori.base()); // read again
+  await expect(t(page, 'game-claimable')).toHaveText('1');
+  await shot(page, 'game-claim.png');
+  await t(page, 'game-claim').click();
+  const claimPrompt = page.locator('[data-unlock-for=game-claim]');
+  await expect(claimPrompt).toBeVisible();
+  await claimPrompt.locator('input').fill(PASS);
+  await claimPrompt.getByRole('button', { name: 'Unlock' }).click();
+  await expect(t(page, 'game-claim')).toHaveText('CLAIMED', { timeout: 30_000 });
+  await expect(t(page, 'game-claimable')).toHaveText('1');
+  await expect(t(page, 'game-balance')).toHaveText('1 SATORI');
+
   await t(page, 'game-up').click(); // bitcoin up
   await expect(name(page)).toHaveText('ether');
   await t(page, 'game-star').click(); // a favorite: shown first next time

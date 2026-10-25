@@ -1155,6 +1155,11 @@ const actions = {
     if (to) state.game = { ...g, ...to, move: dir > 0 ? 'next' : 'back', sendError: '' };
   },
   gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
+  /** The game's CLAIM: Home's Claim (Unlock in place); the amount kept to show beside CLAIMED. */
+  gameClaim() {
+    state.game = { ...state.game, claimAmount: Number(state.base.claimable?.total ?? 0) };
+    return actions.walletAction('game-claim', 'baseClaim');
+  },
   /** Played today: the Sent screen put away (for this session), the streams shown again to look at. */
   gameRest() { state.game = { ...state.game, rest: true, screen: 'play', index: 0 }; },
   /** Star a stream, or unstar it: kept on this device for this wallet; the next game shows favorites first. */
