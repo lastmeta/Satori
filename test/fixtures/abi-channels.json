@@ -1,5 +1,5 @@
 {
-  "deploy": "PaymentChannels v2 at 0xAB9408f9ec330351A21497c87E3d24218413b0C8, Base Sepolia 2026-10-25 (block 50192983), contract humble ffdbe07b",
+  "deploy": "PaymentChannels v3 at 0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c, Base Sepolia 2026-10-25 (block 50199562), contract humble e5c8830f",
   "functions": [
     "function CLOSE_GRACE_PERIOD() -> (uint64) view",
     "function VOUCHER_TYPEHASH() -> (bytes32) view",

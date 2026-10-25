@@ -59,7 +59,7 @@ describe("the events, as satorilib's client makes them", () => {
 
 describe("the paid stream's events (docs/design/market.md#selling-and-buying-over-the-relays), as satorilib's", () => {
   const SUB = 'ab'.repeat(32);
-  const market = { chain: 84532, contract: '0xAB9408f9ec330351A21497c87E3d24218413b0C8', token: '0x4dee947383d5C9c8E421F55Fe3518a29324aE469',
+  const market = { chain: 84532, contract: '0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c', token: '0x4dee947383d5C9c8E421F55Fe3518a29324aE469',
     payee: '0x' + '12'.repeat(20) };
   test("a priced `_pred` announcement: encrypted, Lite's price_per_obs (satoshis) the one price, the channel in metadata.market; free again without one", () => {
     const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, aliasPubkey: '02ab', listing: { price_per_obs: 100000, market } });

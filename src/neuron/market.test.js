@@ -46,7 +46,7 @@ let sdb;
 let bdb;
 let walletOpen;
 const make = (who, db, extra = {}) => createMarket({ db, key: who === 's' ? { secret: S_NOSTR, pubkey: nostrPubkey(S_NOSTR) } : { secret: B_NOSTR, pubkey: nostrPubkey(B_NOSTR) },
-  alias: who === 's' ? S_ID : B_ID, walletAddress: who === 's' ? S_WALLET.evmAddress : B_WALLET.evmAddress, wallet: () => (who === 'b' && walletOpen ? B_WALLET : null),
+  alias: who === 's' ? S_ID : B_ID, walletAddress: who === 's' ? S_WALLET.evmAddress : B_WALLET.evmAddress, wallet: () => (walletOpen ? (who === 'b' ? B_WALLET : S_WALLET) : null),
   chain: async () => ({ channels: chainApi, config: DEFAULTS, chainTime: async () => clock }), now: () => clock,
   publish: async (e) => { relay.push(e); return 1; }, sendKept: async (list) => { relay.push(...list); }, ...extra });
 const SP = nostrPubkey(S_NOSTR);
@@ -153,7 +153,7 @@ describe('selling and buying', () => {
     expect(pc).toMatchObject({ chain: 84532, contract: DEFAULTS.channels, id: v.channel });
     expect(await bindingSigner(v.channel, BP, pc.binding)).toBe(B_ID.evmAddress);
     expect(seller.status().selling[0].buyers).toEqual([{ pubkey: BP, channel: v.channel, delivered: 0, paid: '0', settled: '0', deposit: '0.00005',
-      closing: false }]);
+      closing: false, grace: CLOSE_GRACE_S, payout: S_WALLET.evmAddress, toWallet: true }]);
     expect(buyer.pairs()).toEqual([[SP, `${STREAM}:${BP}`]]); // its own d is followed
     expect(buyer.bought()).toEqual(new Set([`${SP}:${STREAM}`]));
     // again while it is open: the same channel, nothing opened
@@ -264,7 +264,7 @@ describe('selling and buying', () => {
     expect(settles()).toBe(2); // nothing due: no transaction
   });
 
-  test("stop: the alias asks to close, Lite's unsubscribe; the seller stops and settles in its daily settle; the refund after the grace period, in the pass", async () => {
+  test("stop: the alias asks to close, Lite's unsubscribe; the seller stops and settles at once; after the grace period the rest stays, taken back by the wallet", async () => {
     const v = await bought();
     await observe(1);
     await observe(2);
@@ -281,27 +281,61 @@ describe('selling and buying', () => {
     expect(seller.status().selling[0].buyers).toEqual([]);
     await expect(buyer.stop(SP, STREAM)).rejects.toThrow(/Not buying/);
     await buyer.pass(); // the grace period runs: nothing
-    expect(chainApi.calls).not.toContain('withdraw');
     expect(buyer.status().bought[0].status).toBe('closing');
+    await expect(buyer.takeBack(v.channel)).rejects.toThrow("The waiting period after the close request hasn't ended yet.");
     clock += CLOSE_GRACE_S;
     await buyer.pass();
-    expect(chainApi.calls).toContain('withdraw');
-    expect(buyer.status().bought).toEqual([]); // refunded to the wallet
-    expect(buyer.bought()).toEqual(new Set());
+    expect(chainApi.calls).not.toContain('withdraw'); // nothing moves by itself
+    const stopped = buyer.status().bought[0];
+    expect(stopped).toMatchObject({ status: 'stopped', refundable: '0.00003' }); // 5 prices deposited − 2 settled
+    walletOpen = false;
+    await expect(buyer.takeBack(v.channel)).rejects.toThrow('Unlock the wallet first');
+    walletOpen = true;
+    await expect(buyer.takeBack(v.channel, 4n * PRICE)).rejects.toThrow('Only 0.00003 SATORI is left in the channel.');
+    await expect(buyer.takeBack(v.channel, PRICE, 'nope')).rejects.toThrow('That is not a Base address.');
+    const elsewhere = '0x' + '5'.repeat(40);
+    expect(await buyer.takeBack(v.channel, PRICE, elsewhere)).toMatchObject({ status: 'stopped', refundable: '0.00002' });
+    expect(chainApi.calls).toContainEqual(['withdrawTo', PRICE, elsewhere]);
+    await buyer.takeBack(v.channel); // the rest, to the wallet
+    expect(buyer.status().bought[0].refundable).toBe('0');
+    expect(chainApi.map.get(v.channel).closed).toBe(false); // kept for the next Buy
   });
 
-  test('buy again after a stop: a new channel; the seller closes the old one and serves the new', async () => {
+  test('buy again after a stop: the same channel (the close taken back, topped up past what is spent); the seller serves it again', async () => {
     const v1 = await bought();
     await observe(1);
+    await observe(2);
     await buyer.stop(SP, STREAM);
-    const v2 = await buyer.buy(entryOf(), 5n * PRICE);
-    expect(v2.channel).not.toBe(v1.channel);
     await seller.onEvent(last(KIND.SUBSCRIPTION));
-    expect(seller.status().selling[0].buyers.map((b) => [b.channel, b.closing])).toEqual([[v1.channel, true], [v2.channel, false]]);
-    await seller.pass();
-    expect(seller.status().selling[0].buyers.map((b) => b.channel)).toEqual([v2.channel]);
-    expect(chainApi.map.get(v1.channel).settled).toBe(PRICE);
-    expect(buyer.status().bought.map((b) => b.status)).toEqual(['closing', 'open']);
+    await seller.pass(); // settled at once: 2 prices; the sale goes
+    expect(seller.status().selling[0].buyers).toEqual([]);
+    clock += CLOSE_GRACE_S;
+    await buyer.pass();
+    await buyer.takeBack(v1.channel, 2n * PRICE); // spent: 4 prices of 5
+    const v2 = await buyer.buy(entryOf(), 5n * PRICE);
+    expect(v2.channel).toBe(v1.channel);
+    expect(chainApi.calls).toContain('cancelClose');
+    expect(chainApi.calls).toContainEqual(['topUp', (4n + 5n - 5n) * PRICE]);
+    expect(v2).toMatchObject({ status: 'open', left: '0.00005' });
+    await seller.onEvent(last(KIND.SUBSCRIPTION));
+    expect(seller.status().selling[0].buyers.map((b) => [b.channel, b.closing])).toEqual([[v1.channel, false]]);
+    const next = await observe(3);
+    expect(next.out).toHaveLength(1); // served again
+  });
+
+  test('a grace period set by either wallet (longer by the buyer, shorter by the seller at once; otherwise asked); the seller settles before shortening; a payout address', async () => {
+    const v = await bought();
+    await observe(1);
+    await observe(2);
+    expect(buyer.status().bought[0].grace).toBe(CLOSE_GRACE_S);
+    expect(await buyer.setGrace(v.channel, 30 * 86_400)).toEqual({ applied: true, grace: 30 * 86_400 });
+    expect(await buyer.setGrace(v.channel, 86_400)).toEqual({ applied: false, grace: 30 * 86_400 });
+    const to = '0x' + '6'.repeat(40);
+    expect(await seller.setPayout(v.channel, to)).toMatchObject({ channel: v.channel, payout: to, toWallet: false });
+    const before = chainApi.calls.filter((c) => c[0] === 'settleMany').length;
+    expect(await seller.setGrace(v.channel, 86_400)).toEqual({ applied: true, grace: 86_400 });
+    expect(chainApi.calls.filter((c) => c[0] === 'settleMany').length).toBe(before + 1); // what was owed, settled first
+    await expect(buyer.setPayout(v.channel, to)).rejects.toThrow('No buyer of ours has that channel.');
   });
 
   test("what can't buy: locked wallet, a stream not listed, a deposit under one price, a staked wallet (in plain words, nothing kept)", async () => {

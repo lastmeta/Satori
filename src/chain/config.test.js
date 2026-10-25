@@ -37,7 +37,7 @@ describe('loadConfig', () => {
   test('PaymentChannels: the address its CREATE2 deploy recorded (the same on every chain)', () => {
     const f = '/code/Satori/contract/satori/deployments/payment-channels.json';
     if (existsSync(f)) expect(PAYMENT_CHANNELS).toBe(JSON.parse(readFileSync(f, 'utf8')).address);
-    expect(DEFAULTS.channels).toBe('0xAB9408f9ec330351A21497c87E3d24218413b0C8');
+    expect(DEFAULTS.channels).toBe('0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c');
   });
 
   test("central's contract addresses are taken only when they equal the bundle's; one that differs is listed, the bundle's kept", async () => {

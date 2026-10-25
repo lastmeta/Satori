@@ -106,7 +106,7 @@ step('requestClose', 'buyer alias', (await channels.requestClose(buyer.alias, id
 step('cancelClose', 'buyer wallet', (await channels.cancelClose(buyer.wallet, id)).receipt);
 step('requestClose (again)', 'buyer alias', (await channels.requestClose(buyer.alias, id)).receipt);
 c = await channels.readChannel(id);
-await refused(() => channels.withdraw(buyer.alias, id), "The 7-day grace period after the close request hasn't ended yet.",
+await refused(() => channels.withdraw(buyer.alias, id), "The waiting period after the close request hasn't ended yet.",
   buyer.alias.evmAddress);
 
 console.log('\n7. fork.mjs advance 8, then withdraw: the rest back to the buyer\'s wallet');

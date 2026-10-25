@@ -88,7 +88,7 @@ export const multicall3Abi = parseAbi([
  */
 export const CHANNEL_ERRORS = [
   'error BadInput()', 'error ChannelExists()', 'error UnknownChannel()', 'error ChannelClosed()', 'error NotPayee()',
-  'error NotPayer()', 'error NotPayerOrSigner()', 'error BadSignature()', 'error NothingToSettle()', 'error CloseNotRequested()',
+  'error NotPayer()', 'error NotPayerOrSigner()', 'error NotPayerOrPayee()', 'error BadSignature()', 'error NothingToSettle()', 'error CloseNotRequested()',
   'error CloseNotReady()', 'error UnsupportedToken()', 'error SafeERC20FailedOperation(address token)',
 ];
 export const channelsAbi = parseAbi([
@@ -102,6 +102,10 @@ export const channelsAbi = parseAbi([
   'function requestClose(bytes32 channelId)',
   'function cancelClose(bytes32 channelId)',
   'function withdraw(bytes32 channelId)',
+  'function withdrawTo(bytes32 channelId, uint96 amount, address to)',
+  'function setGrace(bytes32 channelId, uint32 grace)',
+  'function setPayout(bytes32 channelId, address payout)',
+  'function getTerms(bytes32 channelId) view returns (uint64 grace, address payout)',
   'function getChannel(bytes32 channelId) view returns (Channel)',
   'function computeChannelId(address payer, address payee, address token, address signer, bytes32 salt) pure returns (bytes32)',
   'function voucherDigest(bytes32 channelId, uint96 cumulativeAmount) view returns (bytes32)',
@@ -112,6 +116,10 @@ export const channelsAbi = parseAbi([
   'event CloseRequested(bytes32 indexed channelId, address indexed payer, address indexed payee, address by, uint64 graceEnds)',
   'event CloseCancelled(bytes32 indexed channelId, address indexed payer, address indexed payee)',
   'event Closed(bytes32 indexed channelId, address indexed payer, address indexed payee, address by, uint96 settled, uint96 refunded)',
+  'event Withdrawn(bytes32 indexed channelId, address indexed payer, address indexed payee, address to, uint96 amount, uint96 settled)',
+  'event GraceProposed(bytes32 indexed channelId, address indexed payer, address indexed payee, address by, uint32 grace)',
+  'event GraceChanged(bytes32 indexed channelId, address indexed payer, address indexed payee, address by, uint32 grace)',
+  'event PayoutSet(bytes32 indexed channelId, address indexed payer, address indexed payee, address payout)',
   ...CHANNEL_ERRORS,
   'error Locked()', 'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
   'error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)', 'error HookFailedWithoutReason()',

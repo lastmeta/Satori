@@ -1,8 +1,8 @@
 {
-  "made": "2026-10-25, from the deployed PaymentChannels v2 (0xAB9408f9ec330351A21497c87E3d24218413b0C8) on Base Sepolia (chain 84532), read-only, with foundry's cast: `cast call $C 'computeChannelId(address,address,address,address,bytes32)(bytes32)' payer payee token signer salt`, `cast call $C 'voucherDigest(bytes32,uint96)(bytes32)' channelId cumulative`, `cast call $C 'domainSeparator()(bytes32)'` and `cast call $C 'VOUCHER_TYPEHASH()(bytes32)'`. salt 0x808b\u2026 is `cast keccak satori`. The digests hold only for chain 84532 and this contract address.",
+  "made": "2026-10-25, from the deployed PaymentChannels v3 (0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c) on Base Sepolia (chain 84532), read-only, with foundry's cast: `cast call $C 'computeChannelId(address,address,address,address,bytes32)(bytes32)' payer payee token signer salt`, `cast call $C 'voucherDigest(bytes32,uint96)(bytes32)' channelId cumulative`, `cast call $C 'domainSeparator()(bytes32)'` and `cast call $C 'VOUCHER_TYPEHASH()(bytes32)'`. salt 0x808b\u2026 is `cast keccak satori`. The digests hold only for chain 84532 and this contract address.",
   "chainId": 84532,
-  "contract": "0xAB9408f9ec330351A21497c87E3d24218413b0C8",
-  "domainSeparator": "0x92651a0caf6ecbeca7757e24a109e88594a872690ed38f60de15600f1200a4c1",
+  "contract": "0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c",
+  "domainSeparator": "0x003efbdb6e6f7f3ec5507637623deced246466ea41872761419f580ee20d6a52",
   "voucherTypehash": "0x4730b4b2fe8de522475e80e010877c5b58ad10eb07fd0436615ee123f743bbe8",
   "ids": [
     {
@@ -34,22 +34,22 @@
     {
       "channelId": "0xc9e955c8ef07059281d4d02683cce1dffc9510cb9997e8d3820212ce28d288a9",
       "cumulative": "0",
-      "digest": "0x8fc9fef4579b9dea44407f6c54f4ba3b2a4d490aa959187ac40c62a758a5d95c"
+      "digest": "0x614201614d6a75ca6876811a838b3b099582b2b51f154f9a3c10cecd73cfbbb3"
     },
     {
       "channelId": "0xc9e955c8ef07059281d4d02683cce1dffc9510cb9997e8d3820212ce28d288a9",
       "cumulative": "1",
-      "digest": "0xf024d88eb3d70ea1bd1e2cad9d78aee6f2899af9f7d42d1dc4306a3b4ecfe8d8"
+      "digest": "0x36b56b29a5747e6951e3026a75a5f566c7bbfdfc84e325a64e20df76dbda0a1c"
     },
     {
       "channelId": "0x8583220d4efcb3f12a6812a3e36dad41949de1843f37bfe07b3bacdcf4c658a8",
       "cumulative": "24000000000000000",
-      "digest": "0x1eff13d0b356d36bbbe9c2e96bb4eed7831c610b5d327ef4a2136c4fbb40c699"
+      "digest": "0xb4b54f63cdd08476db050acf3da5de610ef6c9a4bab55fd8cfc826625582a8c7"
     },
     {
       "channelId": "0xd7d0214baff63c23ee8e0c96bc53304624cb4992cedcfbaae529ce2c9e90297b",
       "cumulative": "79228162514264337593543950335",
-      "digest": "0xb64f8330338403cadab68ec8998520f48f80a04150ef665f1973f4492b013dcf"
+      "digest": "0xf732eee7680c55189f1ee7340b8144d7ae518afb2599eac9aec37ce6976d6a5b"
     }
   ]
 }

@@ -59,7 +59,8 @@ export function marketTab(a) {
     <section class="card" data-test="market-bought">
       <h2>Bought</h2>
       <p class="muted small" hidden="${() => m().bought.length > 0}">Nothing bought yet.</p>
-      <div class="crows">${() => m().bought.map((b) => boughtRow(b, a).key(`${b.channel}:${b.status}:${b.left}:${b.closeAt}`))}</div>
+      <div class="crows">${() => m().bought.map((b) => boughtRow(b, a).key(`${b.channel}:${b.status}:${b.left}:${b.refundable}:${b.closeAt}:${b.grace}`))}</div>
     </section>
+    ${unlockPrompt(a, 'market', 'change the channel')}
   </section>`;
 }

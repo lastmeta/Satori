@@ -9,16 +9,18 @@
 //   await channels.openChannel({ wallet, alias, payee, deposit }) → { id, hash, receipt, permit }
 //   await signVoucher(alias, { chainId, channelId, cumulative }) / verifyVoucher({ …, signature, signer })
 //   await channels.settleMany(alias, [{ id, cumulative, signature }]) → { hash, receipt, settled, skipped }
-//   await channels.requestClose(alias, id) … CLOSE_GRACE_S … channels.withdraw(alias, id)
+//   await channels.requestClose(alias, id) … its grace period … channels.withdrawTo(wallet, id, amount, to)   // the channel stays, for reuse
+//   await channels.cancelClose(wallet, id)   // resume; setGrace(wallet, id, seconds), setPayout(wallet, id, address)
 import {
-  domainSeparator, encodeAbiParameters, hashTypedData, keccak256, parseEventLogs, parseSignature, recoverTypedDataAddress,
+  domainSeparator, encodeAbiParameters, hashTypedData, isAddress, keccak256, parseEventLogs, parseSignature, recoverTypedDataAddress,
   toHex, zeroAddress,
 } from 'viem';
 import { channelsAbi, erc20PermitAbi, multicall3Abi, tokenAbi } from './abi.js';
 import { DEFAULTS } from './config.js';
 import { FeeCeilingError, HOOK_GAS, errorText, fmtUtc, revertName, same, toAccount, transferLock } from './index.js';
 
-export const CLOSE_GRACE_S = 7 * 86400; // CLOSE_GRACE_PERIOD: requestClose → withdraw
+export const CLOSE_GRACE_S = 7 * 86400; // CLOSE_GRACE_PERIOD: a channel's grace period until one side changes it (setGrace)
+export const MAX_GRACE_S = 2 ** 32 - 1; // setGrace takes a uint32
 export const MAX_AMOUNT = 2n ** 96n - 1n; // amounts are uint96 wei
 /**
  * Gas per payment in a settleMany, over HOOK_GAS: each payment into a staked wallet runs the token's delegation hook
@@ -51,10 +53,11 @@ const PLAIN = {
   NotPayee: "Only the seller (the channel's payee) can do that.",
   NotPayer: 'Only the wallet that funded the channel can do that.',
   NotPayerOrSigner: "Only the channel's wallet or alias can do that.",
+  NotPayerOrPayee: "Only the buyer's or the seller's wallet can do that.",
   BadSignature: "The voucher's signature isn't the channel's signer's.",
   NothingToSettle: 'Nothing new to settle: the voucher pays no more than is already paid.',
   CloseNotRequested: 'No close was asked for this channel.',
-  CloseNotReady: "The 7-day grace period after the close request hasn't ended yet.",
+  CloseNotReady: "The waiting period after the close request hasn't ended yet.",
   UnsupportedToken: "The token takes a fee on transfer, which channels can't hold.",
   SafeERC20FailedOperation: 'The token refused the transfer.',
   Locked: "The wallet's SATORI can't be sent now: it is staked, or it predicted by hand this round or the last.",
@@ -210,11 +213,20 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
   }
 
   async function readChannel(id) {
-    const c = await client.readContract(ch('getChannel', [id]));
+    const [c, [grace, payout]] = await client.multicall({ allowFailure: false, contracts: [ch('getChannel', [id]), ch('getTerms', [id])] });
     if (c.payer === zeroAddress) return null;
     const asked = Number(c.closeRequestedAt);
     return { id, payer: c.payer, payee: c.payee, token: c.token, signer: c.signer, deposit: c.deposit, settled: c.settled,
-      closeRequestedAt: asked || null, closed: c.closed, graceEndsAt: asked ? asked + CLOSE_GRACE_S : null };
+      closeRequestedAt: asked || null, closed: c.closed, grace: Number(grace), payout,
+      graceEndsAt: asked ? asked + Number(grace) : null };
+  }
+
+  /** The channel, open: an unknown or closed one throws its plain words. */
+  async function liveChannel(id) {
+    const c = await readChannel(id);
+    if (!c) throw new ChannelError(PLAIN.UnknownChannel, { reason: 'UnknownChannel' });
+    if (c.closed) throw new ChannelError(PLAIN.ChannelClosed, { reason: 'ChannelClosed' });
+    return c;
   }
 
   return {
@@ -247,9 +259,7 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
     topUp: run(async (wallet, id, amount, opts = {}) => {
       amountOf(amount, 'The amount', { positive: true });
       const account = unlocked(wallet);
-      const c = await readChannel(id);
-      if (!c) throw new ChannelError(PLAIN.UnknownChannel, { reason: 'UnknownChannel' });
-      if (c.closed) throw new ChannelError(PLAIN.ChannelClosed, { reason: 'ChannelClosed' });
+      const c = await liveChannel(id);
       await checkLock(account.address, c.token);
       const approve = await approveFor(account, c.token, amount, opts);
       return { ...await write(account, ch('topUp', [id, amount]), opts), ...(approve && { approve }) };
@@ -259,8 +269,37 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
     requestClose: run((alias, id, opts) => write(alias, ch('requestClose', [id]), opts)),
     /** The wallet takes its close request back (only the payer may; it moves no tokens, so a staked wallet can). */
     cancelClose: run((wallet, id, opts) => write(unlocked(wallet), ch('cancelClose', [id]), opts)),
-    /** After the grace period, the alias (or the wallet) sends what was not settled back to the wallet. */
+    /** After the grace period, the alias (or the wallet) sends what was not settled back to the wallet, and the channel ends. */
     withdraw: run((alias, id, opts) => write(alias, ch('withdraw', [id]), opts)),
+    /**
+     * After the grace period, the wallet takes `amount` of what was not settled to `to` (the wallet by default); the
+     * channel stays, for reuse (cancelClose, then new vouchers). It moves no SATORI out of the wallet, so a staked one can.
+     */
+    withdrawTo: run(async (wallet, id, amount, to, opts) => {
+      amountOf(amount, 'The amount', { positive: true });
+      const account = unlocked(wallet);
+      if (!isAddress(to ?? account.address, { strict: false })) throw new ChannelError('That is not a Base address.', { reason: 'BadAddress' });
+      return write(account, ch('withdrawTo', [id, amount, to ?? account.address]), opts);
+    }),
+    /**
+     * The buyer's or the seller's wallet sets the channel's grace period (seconds): the buyer making it longer, or the
+     * seller shorter, applies at once; otherwise it is proposed, and applies when the other side asks for the same.
+     * → { hash, receipt, applied }
+     */
+    setGrace: run(async (wallet, id, seconds, opts) => {
+      if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_GRACE_S) {
+        throw new ChannelError('The waiting period must be a whole number of seconds, up to 136 years.', { reason: 'BadInput' });
+      }
+      const r = await write(unlocked(wallet), ch('setGrace', [id, seconds]), opts);
+      const applied = parseEventLogs({ abi: channelsAbi, logs: r.receipt?.logs ?? [], eventName: 'GraceChanged' })
+        .some((l) => same(l.address, at));
+      return { ...r, applied };
+    }),
+    /** The seller's wallet names the address its settlements on this channel are paid into. */
+    setPayout: run(async (wallet, id, payout, opts) => {
+      if (!isAddress(String(payout), { strict: false })) throw new ChannelError('That is not a Base address.', { reason: 'BadAddress' });
+      return write(unlocked(wallet), ch('setPayout', [id, payout]), opts);
+    }),
 
     /** The seller's alias settles one voucher into the payee. → { hash, receipt, settled } */
     settle: run(async (alias, id, cumulative, signature, opts) => {

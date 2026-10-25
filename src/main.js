@@ -1116,6 +1116,13 @@ const actions = {
   },
   buyNow: shownAt('networkError', (pubkey, stream, deposit) => marketAction(`buy:${pubkey}:${stream}`, () => nostr.buy(pubkey, stream, deposit))),
   stop: shownAt('marketError', (pubkey, stream) => marketAction(`stop:${pubkey}:${stream}`, () => nostr.stopBuying(pubkey, stream))),
+  /** A channel's grace period, what is left taken back, a buyer's payout address: the wallet (Unlock in place). */
+  setGrace(channel, f) { state.marketError = ''; return withWallet('market', () => actions.setGraceNow(channel, f.days)); },
+  setGraceNow: shownAt('marketError', (channel, days) => marketAction(`grace:${channel}`, () => nostr.setGrace(channel, days))),
+  takeBack(channel, f) { state.marketError = ''; return withWallet('market', () => actions.takeBackNow(channel, f.amount, f.to)); },
+  takeBackNow: shownAt('marketError', (channel, amount, to) => marketAction(`take:${channel}`, () => nostr.takeBack(channel, amount, to))),
+  setPayout(channel, f) { state.marketError = ''; return withWallet('market', () => actions.setPayoutNow(channel, f.payout)); },
+  setPayoutNow: shownAt('marketError', (channel, address) => marketAction(`payout:${channel}`, () => nostr.setPayout(channel, address))),
   fillRelays(el) {
     el.elements.relays.value = state.nostr.userRelays.join('\n');
     el.elements.centralWrite.checked = state.nostr.centralWrite;
@@ -1625,6 +1632,18 @@ window.satori = {
   async buy(pubkey, stream, deposit) { ready(); return marketAction('buy', () => nostr.buy(String(pubkey ?? '').trim().toLowerCase(), stream, deposit)); },
   /** Stop buying: the alias asks to close the channel (gas, no Unlock); the rest comes back to the wallet after 7 days. → the same */
   async stop(pubkey, stream) { ready(); return marketAction('stop', () => nostr.stopBuying(String(pubkey ?? '').trim().toLowerCase(), stream)); },
+  /**
+   * After a stopped channel's grace period, take back `amount` SATORI (all that is left by default) to `to` (the wallet by
+   * default); the channel stays, and buy() of that stream uses it again (needs Unlock; gas). → nostr().market.bought's entry
+   */
+  async takeBack(channel, amount, to) { ready(); return marketAction('takeBack', () => nostr.takeBack(channel, amount, to)); },
+  /**
+   * A bought or sold channel's grace period in `days` (needs Unlock; gas): longer by the buyer or shorter by the seller
+   * applies at once, otherwise it is asked of the other side. → { applied, grace } (seconds)
+   */
+  async setGrace(channel, days) { ready(); return marketAction('setGrace', () => nostr.setGrace(channel, days)); },
+  /** Where a buyer's channel of ours pays its settlements (needs Unlock; gas). → that buyer's entry in nostr().market.selling */
+  async setPayout(channel, address) { ready(); return marketAction('setPayout', () => nostr.setPayout(channel, address)); },
   /** Settings: { relays: ['wss://…'], centralWrite: boolean }, either or both. → nostr() */
   async setRelays(settings) { ready(); const s = await nostr.setRelays(settings); await refreshNostr(); return s; },
   /** Base: a fresh read of the chain (one multicall) and the last batch. */

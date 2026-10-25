@@ -9,7 +9,7 @@ import { state } from './state.js';
 import { fact, form, sparkPath, unlockPrompt } from './parts.js';
 import {
   fmtNum, fmtWhen, networkLine, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
-  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText, saleText, boughtText,
+  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText, saleText, boughtText, buyerText, graceText,
 } from './format.js';
 import { listingOf, DEPOSIT_OBS } from '../neuron/market.js';
 import { watchText, recordGroups, firstRows, recordDetail, SHOWN } from './record.js';
@@ -81,21 +81,39 @@ function subRow(s, a) {
 // ── paid streams (docs/design/market.md) ──
 
 /** One of our `_pred` streams: Free with a price to set (Sell), or its price and buyers with Make free. */
+/**
+ * A channel's grace period, and a form in place to change it (days; the wallet, Unlock in place): longer by the buyer
+ * or shorter by the seller applies at once, otherwise the other side is asked for it.
+ */
+function graceChange(channel, grace, a) {
+  return html`<details class="mchange" data-test="grace"><summary>Grace period ${graceText(grace)}</summary><form @submit="${(e) => a.setGrace(channel, form(e))}"><input name="days" inputmode="decimal" autocomplete="off" required value="${String(Math.round((grace / 86_400) * 100) / 100)}" aria-label="Grace period, in days" data-test="grace-days"><button class="small-btn" type="submit" data-test="grace-set" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `grace:${channel}` ? '…' : 'Set days')}</button></form><p class="muted small">Longer by the buyer, or shorter by the seller, applies at once. Otherwise the other side is asked, and it applies when they set it too.</p></details>`;
+}
+
+/** A buyer of one of our streams: what it paid, where its payments go (changed in place), its grace period. */
+function buyerRow(x, a) {
+  return html`<div class="small buyer" data-test="buyer" data-channel="${x.channel}"><span class="nowrap" title="${x.pubkey}">${shortKey(x.pubkey)}</span> · <span data-test="buyer-text">${buyerText(x)}</span><details class="mchange" data-test="payout"><summary>Paid into</summary><form @submit="${(e) => a.setPayout(x.channel, form(e))}"><input name="payout" autocomplete="off" required placeholder="0x…" aria-label="Address its payments go to" data-test="payout-address"><button class="small-btn" type="submit" data-test="payout-set" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `payout:${x.channel}` ? '…' : 'Set')}</button></form></details>${graceChange(x.channel, x.grace, a)}</div>`;
+}
+
 export function sellRow(sub, a) {
   // One root node, no whitespace around it (see streamRow).
   const stream = `${sub.stream}_pred`;
   const sale = () => state.nostr.market?.selling.find((x) => x.stream === stream);
   const busy = () => state.marketBusy === `sell:${stream}`;
-  return html`<div class="crow" data-test="sell-row" data-stream="${stream}"><div class="cmain"><span class="sname">${stream}</span> <span class="muted small" data-test="sell-state">${() => saleText(sale())}</span></div>${() => (sale()
+  return html`<div class="crow" data-test="sell-row" data-stream="${stream}"><div class="cmain"><span class="sname">${stream}</span> <span class="muted small" data-test="sell-state">${() => saleText(sale())}</span>${() => (sale()?.buyers ?? []).filter((x) => !x.closing).map((x) => buyerRow(x, a).key(`${x.channel}:${x.paid}:${x.payout}:${x.grace}`))}</div>${() => (sale()
     ? html`<button class="small-btn" data-test="unsell" disabled="${() => !!state.marketBusy}" @click="${() => a.unsell(stream)}">${() => (busy() ? '…' : 'Make free')}</button>`
     : html`<form class="sell" @submit="${(e) => a.sell(stream, form(e))}"><input name="price" inputmode="decimal" autocomplete="off" required aria-label="${`Price per observation of ${stream}, in SATORI`}" placeholder="SATORI each" data-test="sell-price"><button class="small-btn primary" type="submit" data-test="sell" disabled="${() => !!state.marketBusy}">${() => (busy() ? '…' : 'Sell')}</button></form>`)}</div>`;
 }
 
-/** A stream we buy: the deposit left and Stop; stopped, when the rest comes back to the wallet. */
+/**
+ * A stream we buy: the deposit left, its grace period and Stop; stopping, when what is left can be taken back;
+ * stopped, Take back (an amount, to an address: the wallet by default). Buy again uses the channel again.
+ */
 export function boughtRow(b, a) {
   // One root node, no whitespace around it (see streamRow).
   const key = `${b.pubkey}:${b.stream}`;
-  return html`<div class="crow" data-test="bought-row" data-key="${key}"><div class="cmain"><span class="sname">${b.name || b.stream}</span> <span class="muted small"><span class="nowrap" title="${b.pubkey}">${shortKey(b.pubkey)}</span> · ${b.price} SATORI each</span><div class="small" data-test="bought-left">${boughtText(b)}</div></div>${b.status === 'open' ? html`<button class="small-btn" data-test="stop" disabled="${() => !!state.marketBusy}" @click="${() => a.stop(b.pubkey, b.stream)}">${() => (state.marketBusy === `stop:${key}` ? '…' : 'Stop')}</button>` : ''}</div>`;
+  const take = b.status === 'stopped' && Number(b.refundable) > 0
+    ? html`<form class="takeback" @submit="${(e) => a.takeBack(b.channel, form(e))}"><input name="amount" inputmode="decimal" autocomplete="off" required value="${b.refundable}" aria-label="${`SATORI to take back from ${b.stream}`}" data-test="takeback-amount"><input name="to" autocomplete="off" placeholder="To: the wallet" aria-label="Address to send it to (the wallet if empty)" data-test="takeback-to"><button class="small-btn" type="submit" data-test="takeback" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `take:${b.channel}` ? '…' : 'Take back')}</button></form>` : '';
+  return html`<div class="crow" data-test="bought-row" data-key="${key}"><div class="cmain"><span class="sname">${b.name || b.stream}</span> <span class="muted small"><span class="nowrap" title="${b.pubkey}">${shortKey(b.pubkey)}</span> · ${b.price} SATORI each</span><div class="small" data-test="bought-left">${boughtText(b)}</div>${graceChange(b.channel, b.grace, a)}${take}</div>${b.status === 'open' ? html`<button class="small-btn" data-test="stop" disabled="${() => !!state.marketBusy}" @click="${() => a.stop(b.pubkey, b.stream)}">${() => (state.marketBusy === `stop:${key}` ? '…' : 'Stop')}</button>` : ''}</div>`;
 }
 
 function nostrCard(a) {
@@ -154,9 +172,10 @@ function recordsCard(a) {
 export function buyPart(s, l, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
   const mine = () => state.nostr.market?.bought.find((b) => b.pubkey === s.pubkey && b.stream === s.stream_name && b.status === 'open');
+  const stopped = () => state.nostr.market?.bought.some((b) => b.pubkey === s.pubkey && b.stream === s.stream_name);
   return html`${() => (mine()
     ? html`<span class="muted small" data-test="catalog-bought">${`Bought · ${mine().left} SATORI left`}</span>`
-    : html`<form class="buy" @submit="${(e) => a.buy(s.pubkey, s.stream_name, form(e))}"><input name="deposit" inputmode="decimal" autocomplete="off" required value="${formatEther(l.price * BigInt(DEPOSIT_OBS))}" aria-label="${`Deposit for ${s.stream_name}, in SATORI`}" data-test="buy-deposit"><button class="small-btn primary" type="submit" data-test="buy" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `buy:${key}` ? '…' : 'Buy')}</button></form>`)}`;
+    : html`<form class="buy" @submit="${(e) => a.buy(s.pubkey, s.stream_name, form(e))}"><input name="deposit" inputmode="decimal" autocomplete="off" required value="${formatEther(l.price * BigInt(DEPOSIT_OBS))}" aria-label="${`Deposit for ${s.stream_name}, in SATORI`}" data-test="buy-deposit"><button class="small-btn primary" type="submit" data-test="buy" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `buy:${key}` ? '…' : stopped() ? 'Buy again' : 'Buy')}</button></form>`)}`;
 }
 
 function catRow(s, a) {

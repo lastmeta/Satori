@@ -123,7 +123,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
 
     // Stop: the alias asks to close (no Unlock); the seller stops delivering, and settles into its wallet in its next pass
     await b.locator(`[data-test=bought-row][data-key="${seller.nostr}:${pred}"] [data-test=stop]`).click();
-    await expect(left).toHaveText(/^Stopped: 0\.00\d+ SATORI back to the wallet after .+$/, { timeout: 60_000 });
+    await expect(left).toHaveText(/^Stopping: 0\.00\d+ SATORI can be taken back after .+$/, { timeout: 60_000 });
     const paid = parseEther((await market(b)).bought[0].paid);
     const read = () => chain.readContract({ address: DEFAULTS.channels, abi: channelsAbi, functionName: 'getChannel', args: [bought.channel] });
     expect((await read()).closeRequestedAt).toBeGreaterThan(0n);

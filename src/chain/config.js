@@ -14,7 +14,7 @@ const CHAIN_ID = 84532; // Base Sepolia
  * PaymentChannels (contract/satori/contracts/channels/PaymentChannels.sol; docs/design/market.md), deployed by CREATE2:
  * the same address on every chain (contract/satori/deployments/payment-channels.json). Not central's to say.
  */
-export const PAYMENT_CHANNELS = '0xAB9408f9ec330351A21497c87E3d24218413b0C8';
+export const PAYMENT_CHANNELS = '0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c';
 
 export const DEFAULTS = Object.freeze({
   chainId: CHAIN_ID,

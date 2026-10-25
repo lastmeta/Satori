@@ -4,11 +4,13 @@
 //   buyer in good standing
 //   buy: the wallet opens a channel (Unlock), the 34602 names it; each delivery received → the alias's next voucher (34603)
 //   the seller checks the channel on chain and each voucher; it settles (settleMany) at most once a week, and at once for a
-//   channel closing (its grace period is 7 days); refunds withdrawn
+//   channel closing (its grace period: 7 days unless one side changed it)
+//   stop: the alias asks to close; after the grace period what is left stays in the channel, taken back by the wallet
+//   (any amount, any address) or used again by the next Buy of that stream (cancelClose, a top-up if short)
 // Kept in meta `market`: { prices (wei), sales, buys, settledAt }, amounts as decimal strings.
 import { formatEther, hashMessage, hexToBytes, parseEther, recoverMessageAddress, serializeSignature, isAddress } from 'viem';
 import { DEFAULTS } from '../chain/config.js';
-import { MAX_AMOUNT, channelErrorText, signVoucher, verifyVoucher } from '../chain/channels.js';
+import { CLOSE_GRACE_S, MAX_AMOUNT, channelErrorText, signVoucher, verifyVoucher } from '../chain/channels.js';
 import { same } from '../chain/index.js';
 import { signEvent, verifyEvent } from '../nostr/event.js';
 import { nip04Decrypt, nip04Encrypt } from '../nostr/nip04.js';
@@ -132,15 +134,21 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
     const price = m.prices[sub.stream_name];
     const c = sub.channel;
     if (!price || !c || !HEX32.test(String(c.id)) || Number(c.chain) !== config.chainId || !same(c.contract, config.channels)) return;
-    if (m.sales[c.id]) return; // seen (a relay sends it again on each connect)
+    const known = m.sales[c.id];
+    if (known && !known.closing) return; // seen (a relay sends it again on each connect)
     const { channels } = await chain();
     const ch = await channels.readChannel(c.id);
     const signer = await bindingSigner(c.id, e.pubkey, c.binding);
     if (!ch || !same(ch.payee, walletAddress) || !same(ch.token, config.token) || !same(ch.signer, signer) || ch.closed || ch.closeRequestedAt
       || ch.deposit - ch.settled < B(price)) return;
     close();
-    m.sales[c.id] = { stream: sub.stream_name, buyer: e.pubkey, channel: c.id, signer: ch.signer, price, base: String(ch.settled),
-      deposit: String(ch.deposit), settled: String(ch.settled), cumulative: String(ch.settled), signature: null, delivered: 0, closing: false };
+    if (known && known.stream === sub.stream_name && known.buyer === e.pubkey) { // a stopped channel used again: served again
+      Object.assign(known, { deposit: String(ch.deposit), settled: String(ch.settled), grace: ch.grace, payout: ch.payout, closing: false });
+    } else {
+      m.sales[c.id] = { stream: sub.stream_name, buyer: e.pubkey, channel: c.id, signer: ch.signer, price, base: String(ch.settled),
+        deposit: String(ch.deposit), settled: String(ch.settled), cumulative: String(ch.settled), signature: null, delivered: 0, closing: false,
+        grace: ch.grace, payout: ch.payout };
+    }
     await save();
   }
 
@@ -218,19 +226,35 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
       const v = wallet();
       if (!v) throw new Error('Unlock the wallet first');
       const { channels } = await chain();
-      let r;
+      const old = Object.values(m.buys).find((b) => b.pubkey === entry.pubkey && b.stream === entry.stream_name);
+      let id;
       try {
-        r = await channels.openChannel({ wallet: v, alias: needAlias(), payee: l.payee, deposit: amount });
+        const ch = old && await channels.readChannel(old.channel);
+        if (ch && !ch.closed && same(ch.payee, l.payee) && same(ch.token, config.token) && same(ch.signer, needAlias().evmAddress)) {
+          // its stopped channel used again: the close taken back, topped up to `amount` past what is spent (the vouchers
+          // signed, or what is settled, which counts what was taken back)
+          if (ch.closeRequestedAt) await channels.cancelClose(v, old.channel);
+          const spent = B(old.cumulative) > ch.settled ? B(old.cumulative) : ch.settled;
+          const short = spent + amount - ch.deposit;
+          if (short > 0n) await channels.topUp(v, old.channel, short);
+          id = old.channel;
+          Object.assign(old, { name: entry.name ?? old.name, price: String(l.price), deposit: String(short > 0n ? ch.deposit + short : ch.deposit),
+            settled: String(ch.settled), cumulative: String(spent), grace: ch.grace, status: 'open', closeAt: null, at: t() });
+        } else {
+          if (old) delete m.buys[old.channel]; // ended, or no longer this seller's or our alias's: a new channel
+          const r = await channels.openChannel({ wallet: v, alias: needAlias(), payee: l.payee, deposit: amount });
+          id = r.id;
+          m.buys[id] = { pubkey: entry.pubkey, stream: entry.stream_name, name: entry.name ?? '', channel: id, hash: r.hash, price: String(l.price),
+            deposit: String(amount), settled: '0', cumulative: '0', seq: null, status: 'open', closeAt: null, grace: CLOSE_GRACE_S, at: t() };
+        }
       } catch (err) {
         throw new Error(channelErrorText(err), { cause: err });
       }
-      m.buys[r.id] = { pubkey: entry.pubkey, stream: entry.stream_name, name: entry.name ?? '', channel: r.id, hash: r.hash, price: String(l.price),
-        deposit: String(amount), cumulative: '0', seq: null, status: 'open', closeAt: null, at: t() };
       await save();
-      const binding = signBinding(alias, r.id, key.pubkey);
+      const binding = signBinding(alias, id, key.pubkey);
       await sendKept([sign(subscriptionEvent({ stream: entry.stream_name, provider: entry.pubkey, subscriber: key.pubkey, now: t(),
-        paymentChannel: { chain: config.chainId, contract: config.channels, id: r.id, binding } }))]); // kept until a relay takes it
-      return this.view(r.id);
+        paymentChannel: { chain: config.chainId, contract: config.channels, id, binding } }))]); // kept until a relay takes it
+      return this.view(id);
     },
     /**
      * A 34601 that may be a delivery to us of a stream we bought: verified, decrypted → the observation (parseObservation's
@@ -257,7 +281,10 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
       }
       return { stream_name: d.stream_name, provider: d.provider, timestamp: d.timestamp, value, seq: d.seq, id: e.id };
     },
-    /** Stop: the alias asks to close the channel (no Unlock), then Lite's unsubscribe; the refund comes after the 7-day grace period. → its view */
+    /**
+     * Stop: the alias asks to close the channel (no Unlock), then Lite's unsubscribe. After the grace period what is
+     * left can be taken back (takeBack), or the next Buy of the stream uses the channel again. → its view
+     */
     async stop(pubkey, stream) {
       const b = openBuy(pubkey, stream);
       if (!b) throw new Error(`Not buying ${stream} from ${pubkey.slice(0, 8)}….`);
@@ -273,6 +300,75 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
       await sendKept([sign(subscriptionEvent({ stream, provider: pubkey, subscriber: key.pubkey, now: t(), unsubscribe: true }))]);
       return this.view(b.channel);
     },
+    /**
+     * After the grace period of a stopped (or closing) bought channel, the wallet takes `amount` wei (all that is not
+     * settled by default) to `to` (the wallet by default); the channel stays for the next Buy. → its view
+     */
+    async takeBack(channel, amount, to) {
+      const b = m.buys[channel];
+      if (!b || b.status === 'open') throw new Error('Stop buying it first: what is left can be taken back after its grace period.');
+      const v = wallet();
+      if (!v) throw new Error('Unlock the wallet first');
+      if (to != null && !isAddress(String(to), { strict: false })) throw new Error('That is not a Base address.');
+      const { channels } = await chain();
+      try {
+        const ch = await channels.readChannel(channel);
+        if (!ch || ch.closed) throw new Error('The channel is closed.');
+        const left = ch.deposit - ch.settled;
+        const take = amount ?? left;
+        if (take <= 0n) throw new Error('Nothing is left in the channel.');
+        if (take > left) throw new Error(`Only ${sat(left)} SATORI is left in the channel.`);
+        await channels.withdrawTo(v, channel, take, to ?? undefined);
+        Object.assign(b, { deposit: String(ch.deposit), settled: String(ch.settled + take) }); // taken back counts as settled
+      } catch (err) {
+        throw new Error(channelErrorText(err), { cause: err });
+      }
+      await save();
+      return this.view(channel);
+    },
+    /**
+     * A channel's grace period, set by our wallet (one we buy, or a buyer's of ours): longer by the buyer or shorter by
+     * the seller applies at once, otherwise it is asked of the other side. → { applied, grace }
+     */
+    async setGrace(channel, seconds) {
+      const rec = m.buys[channel] ?? m.sales[channel];
+      if (!rec) throw new Error('No such channel bought or sold here.');
+      const v = wallet();
+      if (!v) throw new Error('Unlock the wallet first');
+      const { channels } = await chain();
+      let applied;
+      try {
+        // a shorter grace period also applies to a close already asked: what a buyer owes us is settled first
+        const s = m.sales[channel];
+        if (s && seconds < (s.grace ?? CLOSE_GRACE_S) && s.signature && B(s.cumulative) > B(s.settled)) {
+          const r = await channels.settleMany(needAlias(), [{ id: channel, cumulative: B(s.cumulative), signature: s.signature }]);
+          for (const x of r.settled) if (x.id === channel) s.settled = String(x.settled);
+        }
+        ({ applied } = await channels.setGrace(v, channel, seconds));
+        rec.grace = (await channels.readChannel(channel))?.grace ?? rec.grace;
+      } catch (err) {
+        throw new Error(channelErrorText(err), { cause: err });
+      }
+      await save();
+      return { applied, grace: rec.grace };
+    },
+    /** Where a buyer's channel of ours pays our settlements (the wallet by default); set by the wallet. → the buyer's entry */
+    async setPayout(channel, address) {
+      const s = m.sales[channel];
+      if (!s) throw new Error('No buyer of ours has that channel.');
+      const v = wallet();
+      if (!v) throw new Error('Unlock the wallet first');
+      const { channels } = await chain();
+      try {
+        await channels.setPayout(v, channel, address);
+        s.payout = (await channels.readChannel(channel))?.payout ?? address;
+      } catch (err) {
+        throw new Error(channelErrorText(err), { cause: err });
+      }
+      await save();
+      return this.status().selling.flatMap((x) => x.buyers).find((x) => x.channel === channel);
+    },
+
     /** The follow REQ's pairs for what we buy: the seller and `<stream>:<our key>` (each buyer's own d). */
     pairs: () => Object.values(m.buys).filter((b) => b.status === 'open').map((b) => [b.pubkey, `${b.stream}:${key.pubkey}`]),
     /** `pubkey:stream` of the streams we buy: watched ahead of all but ours (records.js). */
@@ -288,13 +384,14 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
     /**
      * The hourly pass (and the catch-up's): each sale's channel read again (its deposit, what is settled, a close asked:
      * no more deliveries, closed: gone), then, once a week at most (at once for a closing channel), one settleMany for every voucher above what is settled;
-     * each bought channel whose grace period has ended is withdrawn (the refund to the wallet).
+     * each bought channel read again too (its deposit, what is settled, its grace period): a closing one whose grace
+     * period has ended is stopped (what is left can be taken back), an ended one gone.
      */
     async pass() {
       try {
         const sales = Object.values(m.sales);
-        const closing = Object.values(m.buys).filter((b) => b.status === 'closing');
-        if (!sales.length && !closing.length) return;
+        const buys = Object.values(m.buys);
+        if (!sales.length && !buys.length) return;
         const { channels, chainTime } = await chain();
         for (const s of sales) {
           const ch = await channels.readChannel(s.channel);
@@ -302,16 +399,21 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
             delete m.sales[s.channel];
             continue;
           }
-          Object.assign(s, { deposit: String(ch.deposit), settled: String(ch.settled), closing: s.closing || !!ch.closeRequestedAt || !m.prices[s.stream] });
+          Object.assign(s, { deposit: String(ch.deposit), settled: String(ch.settled), grace: ch.grace, payout: ch.payout,
+            closing: s.closing || !!ch.closeRequestedAt || !m.prices[s.stream] });
         }
         await collect();
-        const at = closing.length ? await chainTime() : 0;
-        for (const b of closing) {
+        const at = buys.some((b) => b.status === 'closing') ? await chainTime() : 0;
+        for (const b of buys) {
           const ch = await channels.readChannel(b.channel);
-          if (ch?.graceEndsAt != null) b.closeAt = ch.graceEndsAt;
-          if (ch && !ch.closed && !(ch.graceEndsAt != null && ch.graceEndsAt <= at)) continue; // its grace period runs
-          if (ch && !ch.closed) await channels.withdraw(needAlias(), b.channel);
-          delete m.buys[b.channel]; // refunded to the wallet
+          if (!ch || ch.closed) {
+            delete m.buys[b.channel];
+            continue;
+          }
+          Object.assign(b, { deposit: String(ch.deposit), settled: String(ch.settled), grace: ch.grace });
+          if (b.status === 'open') continue;
+          b.closeAt = ch.graceEndsAt;
+          if (b.status === 'closing' && ch.graceEndsAt != null && ch.graceEndsAt <= at) b.status = 'stopped';
         }
         await save();
         lastError = null;
@@ -325,14 +427,16 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
     view(channel) {
       const b = m.buys[channel];
       return b && { pubkey: b.pubkey, stream: b.stream, name: b.name, channel: b.channel, price: sat(b.price), deposit: sat(b.deposit),
-        paid: sat(b.cumulative), left: sat(B(b.deposit) - B(b.cumulative)), received: b.seq, status: b.status, closeAt: b.closeAt };
+        paid: sat(b.cumulative), left: sat(B(b.deposit) > B(b.cumulative) ? B(b.deposit) - B(b.cumulative) : 0n),
+        refundable: sat(B(b.deposit) - B(b.settled ?? 0)), received: b.seq, status: b.status, closeAt: b.closeAt, grace: b.grace ?? CLOSE_GRACE_S };
     },
     /** nostr().market: what we sell (each buyer's channel, delivered, paid, settled) and what we buy. */
     status() {
       return {
         selling: Object.entries(m.prices).map(([stream, price]) => ({ stream, price: sat(price),
           buyers: salesOf(stream).map((s) => ({ pubkey: s.buyer, channel: s.channel, delivered: s.delivered, paid: sat(B(s.cumulative) - B(s.base)),
-            settled: sat(s.settled), deposit: sat(s.deposit), closing: s.closing })) })),
+            settled: sat(s.settled), deposit: sat(s.deposit), closing: s.closing, grace: s.grace ?? CLOSE_GRACE_S,
+            payout: s.payout ?? walletAddress, toWallet: same(s.payout ?? walletAddress, walletAddress) })) })),
         bought: Object.keys(m.buys).map((k) => this.view(k)),
         error: lastError,
       };

@@ -508,7 +508,7 @@ describe('createBase', () => {
 
   test("channels(): the market's channel client on the same chain (its queue, pads and max fee), the bundled config, the chain's clock", async () => {
     const c = await base.channels();
-    expect(c.config.channels).toBe('0xAB9408f9ec330351A21497c87E3d24218413b0C8');
+    expect(c.config.channels).toBe('0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c');
     expect(typeof c.channels.settleMany).toBe('function');
     expect((await base.channels()).channels).toBe(c.channels); // one per chain
     expect(Number.isSafeInteger(await c.chainTime())).toBe(true); // the latest block's timestamp

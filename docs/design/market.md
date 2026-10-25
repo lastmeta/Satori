@@ -8,7 +8,7 @@ amount of SATORI per observation and buys others' streams, paid through
 **payment channels** on Base, with no gas per payment. The contract is
 `PaymentChannels` (`contract/satori/contracts/channels/PaymentChannels.sol`,
 its design note `contract/docs/design/payment-channels.md`), deployed by
-CREATE2 at **`0xAB9408f9ec330351A21497c87E3d24218413b0C8`** (v2), the same
+CREATE2 at **`0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c`** (v3), the same
 address on every chain (Base Sepolia, the local fork, Base mainnet later).
 
 It has two parts: selling and buying over the relays (`src/neuron/market.js`,
@@ -32,7 +32,7 @@ not part of it.
 | Pay | `send_payment` (34603, `d = stream`, encrypted) for `seq + 1` on each observation received | The same event and fields: `amount_sats` is the price, and `voucher: { channel, cumulative, signature }` takes the place of `tx_id`: the alias's cumulative EIP-712 voucher (`cumulative` in wei). It never signs past the deposit |
 | Check | `record_payment` believes the content | The seller reads the channel on chain when it accepts it: its payee is our wallet, its token SATORI, its signer the binding's, it is open, and the deposit covers a price. It then checks each voucher: the signer's, more than the last, at most the deposit. It delivers while the newest voucher covers every observation delivered before (the first is free) and the deposit covers one more |
 | Collect | the seller broadcasts the latest commitment | At most once a week (each settle costs gas; owner, 2026-10-25: the close signal is watched, so a daily one buys nothing), the hourly pass sends one `settleMany` for every channel whose voucher is above what is settled. When a buyer unsubscribes or the pass reads a close request, the seller stops delivering to it and settles at the next hourly pass, well inside the 7-day grace period |
-| Stop | `unsubscribe_datastream` | The alias sends `requestClose` (no Unlock), then Lite's unsubscribe 34602. After the 7-day grace period, the hourly or catch-up pass sends `withdraw`, and the rest goes back to the wallet |
+| Stop | `unsubscribe_datastream` | The alias sends `requestClose` (no Unlock), then Lite's unsubscribe 34602. After the channel's grace period the hourly pass marks it stopped; what is left stays in the channel until the wallet takes it back (`withdrawTo`, any amount, any address) or a Buy of the same stream uses it again |
 
 - **Encryption is NIP-04**, as satorilib's `encryption.py` does it (Lite
   has no NIP-44). It is built on WebCrypto's AES-CBC and noble's ECDH, with
@@ -46,6 +46,20 @@ not part of it.
   decimal strings ([storage.md](storage.md#meta-keys)).
 - **Words:** Sell, Make free, Buy, Stop; a wallet staked with this app
   can't fund a channel, and `channelErrorText` says why.
+
+## Channels reused, grace periods, payout addresses (PaymentChannels v3)
+
+- **Buy again** (a stream bought before, its channel not ended, the same seller's wallet and our alias): the wallet
+  sends `cancelClose` if a close was asked, and tops up when what the channel holds past what is spent (the vouchers
+  signed, or `settled`, which counts what was taken back) is under the deposit asked; then the 34602 names the same
+  channel. The seller serves a closing sale again when the chain shows it open.
+- **Take back** (a stopped channel): the wallet's `withdrawTo`, all that is left by default, to the wallet unless an
+  address is typed. The amount counts as settled, so the vouchers go on from there.
+- **Grace period** (each bought channel and each buyer of ours): days, set by the wallet. Longer by the buyer or
+  shorter by the seller applies at once; otherwise it is asked of the other side. Before a seller shortens one, what
+  that buyer owes is settled.
+- **Paid into** (each buyer of ours): the wallet's `setPayout`; the row says "into the wallet" or the address.
+- Each has its `window.satori` call: `takeBack`, `setGrace`, `setPayout` (public/llms.txt).
 
 ## The Market tab
 
@@ -221,10 +235,11 @@ error the same way.
 | `NotPayee` | Only the seller (the channel's payee) can do that. |
 | `NotPayer` | Only the wallet that funded the channel can do that. |
 | `NotPayerOrSigner` | Only the channel's wallet or alias can do that. |
+| `NotPayerOrPayee` | Only the buyer's or the seller's wallet can do that. |
 | `BadSignature` | The voucher's signature isn't the channel's signer's. |
 | `NothingToSettle` | Nothing new to settle: the voucher pays no more than is already paid. |
 | `CloseNotRequested` | No close was asked for this channel. |
-| `CloseNotReady` | The 7-day grace period after the close request hasn't ended yet. |
+| `CloseNotReady` | The waiting period after the close request hasn't ended yet. |
 | `UnsupportedToken` | The token takes a fee on transfer, which channels can't hold. |
 | `Locked` (the token) | The wallet's SATORI can't be sent now: it is staked, or it predicted by hand this round or the last. |
 | `ERC20InsufficientBalance` | Not enough SATORI in the wallet. |

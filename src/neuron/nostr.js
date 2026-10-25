@@ -701,13 +701,35 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       onChange();
       return v;
     },
-    /** Stop buying (window.satori.stop): the alias asks to close the channel, the unsubscribe is sent; the refund after the 7-day grace period. → its view */
+    /** Stop buying (window.satori.stop): the alias asks to close the channel, the unsubscribe is sent; after its grace period what is left can be taken back. → its view */
     async stopBuying(pubkey, stream) {
       const [p, s] = checkStream(pubkey, stream);
       const v = await market.stop(p, s);
       await refollow();
       onChange();
       return v;
+    },
+
+    /** What is left in a stopped bought channel (`amount` SATORI as typed, all by default) to `to` (the wallet by default). → its view */
+    async takeBack(channel, amount, to) {
+      const wei = amount == null || amount === '' ? undefined : amountOf(amount, 'The amount');
+      const v = await market.takeBack(String(channel ?? '').trim().toLowerCase(), wei, to == null || to === '' ? undefined : String(to).trim());
+      onChange();
+      return v;
+    },
+    /** A bought or sold channel's grace period, in days (whole or decimal, as typed). → { applied, grace } (seconds) */
+    async setGrace(channel, days) {
+      const d = Number(String(days ?? '').trim());
+      if (!Number.isFinite(d) || d < 0) throw new Error('The grace period is a number of days.');
+      const r = await market.setGrace(String(channel ?? '').trim().toLowerCase(), Math.round(d * 86_400));
+      onChange();
+      return r;
+    },
+    /** Where a buyer's channel of ours pays our settlements. → the buyer's entry */
+    async setPayout(channel, address) {
+      const r = await market.setPayout(String(channel ?? '').trim().toLowerCase(), String(address ?? '').trim());
+      onChange();
+      return r;
     },
 
     /**

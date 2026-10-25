@@ -170,7 +170,7 @@ function fakeMarket({ eth = {} } = {}) {
   const pay = (c, cum, ctx) => {
     const target = cum < c.deposit ? cum : c.deposit;
     const paid = target - c.settled;
-    if (ctx.write) { c.settled = target; move(CH, c.payee, paid); }
+    if (ctx.write) { c.settled = target; move(CH, c.payout ?? c.payee, paid); }
   };
   const target = (c, cum) => (cum < c.deposit ? cum : c.deposit);
   function open([payer, payee, token, signer, deposit, salt], ctx, permitted) {
@@ -255,8 +255,33 @@ function fakeMarket({ eth = {} } = {}) {
         const c = live(id);
         if (ctx.from !== c.payer && ctx.from !== c.signer) revert('NotPayerOrSigner');
         if (c.closeRequestedAt === 0n) revert('CloseNotRequested');
-        if (BigInt(ctx.now) < c.closeRequestedAt + BigInt(CLOSE_GRACE_S)) revert('CloseNotReady');
+        if (BigInt(ctx.now) < c.closeRequestedAt + BigInt(c.grace ?? CLOSE_GRACE_S)) revert('CloseNotReady');
         finalize(c, ctx);
+      },
+      withdrawTo: ([id, amount, to], ctx) => {
+        const c = live(id);
+        if (ctx.from !== c.payer) revert('NotPayer');
+        if (c.closeRequestedAt === 0n) revert('CloseNotRequested');
+        if (BigInt(ctx.now) < c.closeRequestedAt + BigInt(c.grace ?? CLOSE_GRACE_S)) revert('CloseNotReady');
+        if (amount === 0n || amount > c.deposit - c.settled || to === zeroAddress) revert('BadInput');
+        if (ctx.write) { c.settled += amount; move(CH, lc(to), amount); }
+      },
+      setGrace: ([id, grace], ctx) => {
+        const c = live(id);
+        const cur = c.grace ?? CLOSE_GRACE_S;
+        if (ctx.from !== c.payer && ctx.from !== c.payee) revert('NotPayerOrPayee');
+        if ((ctx.from === c.payer && grace >= cur) || (ctx.from === c.payee && grace <= cur)) {
+          if (ctx.write) c.grace = grace;
+        }
+      },
+      setPayout: ([id, payout], ctx) => {
+        const c = live(id);
+        if (ctx.from !== c.payee) revert('NotPayee');
+        if (ctx.write) c.payout = lc(payout);
+      },
+      getTerms: ([id]) => {
+        const c = s.channels[id];
+        return [BigInt(c?.grace ?? (c ? CLOSE_GRACE_S : 0)), c ? c.payout ?? c.payee : zeroAddress];
       },
       getChannel: ([id]) => {
         const c = s.channels[id];
@@ -306,7 +331,7 @@ describe('openChannel: the wallet funds it (Unlock), the alias signs for it', ()
     expect(s.nonces[BV]).toBe(1n); // the permit was used
     expect(s.balance[BV]).toBe(3n * E18);
     expect(await channels.readChannel(id)).toEqual({ id, payer: buyerV.evmAddress, payee: sellerV.evmAddress, token: TOKEN,
-      signer: buyerI.evmAddress, deposit: 2n * E18, settled: 0n, closeRequestedAt: null, closed: false, graceEndsAt: null });
+      signer: buyerI.evmAddress, deposit: 2n * E18, settled: 0n, closeRequestedAt: null, closed: false, grace: CLOSE_GRACE_S, payout: sellerV.evmAddress, graceEndsAt: null });
   });
   test('the permit\'s domain from eip712Domain(), checked against DOMAIN_SEPARATOR: one that does not match falls back to approve + open', async () => {
     s.domainVersion = '2'; // a token that says one domain and signs under another
@@ -396,7 +421,7 @@ describe('topUp and cancelClose (the wallet), requestClose and withdraw (the ali
     await channels.requestClose(buyerI, id);
     expect(await channels.readChannel(id)).toMatchObject({ closeRequestedAt: t0, graceEndsAt: t0 + 7 * 86400 });
     const early = await channels.withdraw(buyerI, id).catch((e) => e);
-    expect([early.message, early.reason]).toEqual(["The 7-day grace period after the close request hasn't ended yet.", 'CloseNotReady']);
+    expect([early.message, early.reason]).toEqual(["The waiting period after the close request hasn't ended yet.", 'CloseNotReady']);
     rpc.advance(7 * 86400);
     await channels.withdraw(buyerI, id);
     expect(sentBy()).toEqual([['buyer alias', 'requestClose'], ['buyer alias', 'withdraw']]);
@@ -496,10 +521,11 @@ describe('errors in plain words (channelErrorText)', () => {
     ['NotPayee', "Only the seller (the channel's payee) can do that."],
     ['NotPayer', 'Only the wallet that funded the channel can do that.'],
     ['NotPayerOrSigner', "Only the channel's wallet or alias can do that."],
+    ['NotPayerOrPayee', "Only the buyer's or the seller's wallet can do that."],
     ['BadSignature', "The voucher's signature isn't the channel's signer's."],
     ['NothingToSettle', 'Nothing new to settle: the voucher pays no more than is already paid.'],
     ['CloseNotRequested', 'No close was asked for this channel.'],
-    ['CloseNotReady', "The 7-day grace period after the close request hasn't ended yet."],
+    ['CloseNotReady', "The waiting period after the close request hasn't ended yet."],
     ['UnsupportedToken', "The token takes a fee on transfer, which channels can't hold."],
     ['SafeERC20FailedOperation', 'The token refused the transfer.', [TOKEN]],
     ['Locked', "The wallet's SATORI can't be sent now: it is staked, or it predicted by hand this round or the last."],

@@ -358,7 +358,7 @@ Every method is below; `await satori.status()` shows everything at once.
   two cadences ahead and is scored one ahead here, like every stream.
 - Paid streams (docs/design/market.md): satorilib's data-stream market (the
   same kinds and fields), paid in SATORI through the Satori contract's
-  payment channels (PaymentChannels, `0xAB94…b0C8`) instead of Evrmore.
+  payment channels (PaymentChannels, `0xa6DC…C16c`) instead of Evrmore.
   **Sell**: a price per observation on one of this app's `<stream>_pred`;
   its 34600 says `encrypted: true`, `price_per_obs` (the one price, in
   satoshis: 10⁻⁸ SATORI) and `metadata.market = { chain, contract, token,
@@ -885,7 +885,21 @@ the page's JS context:
   `deposit` SATORI (100 observations by default) → `nostr().market.bought`'s
   entry. Throws in plain words: not for sale, locked, a staked wallet, not
   enough SATORI. `await satori.stop(pubkey, stream)` (only on the person's
-  request; gas from the alias) → the same entry, `status: 'closing'`.
+  request; gas from the alias) → the same entry, `status: 'closing'`; once
+  its grace period ends, `status: 'stopped'` with `refundable` SATORI left in
+  the channel. A `buy()` of a stream bought before uses its channel again (the
+  close taken back, topped up if short; the button says Buy again).
+- `await satori.takeBack(channel, amount?, to?)` (only on the person's
+  request; needs Unlock; gas): from a stopped bought channel, `amount` SATORI
+  (all that is left by default) to `to` (the wallet by default); the channel
+  stays → the bought entry. `await satori.setGrace(channel, days)` (the
+  same): a bought or sold channel's grace period; longer by the buyer or
+  shorter by the seller applies at once, otherwise it is asked of the other
+  side → `{ applied, grace }` (seconds). `await satori.setPayout(channel,
+  address)` (the same): where a buyer's channel of ours pays → that buyer's
+  entry. Entries carry `grace` (seconds); sold ones `payout` and `toWallet`.
+  Ids: `grace` (`grace-days`, `grace-set`), `takeback` (`takeback-amount`,
+  `takeback-to`), `buyer` (`buyer-text`, `payout`, `payout-address`, `payout-set`).
 - `await satori.records()` → the track record of every watched prediction
   stream, best first (a record before "not scored yet", by ratio): `[{
   pubkey, stream, name, mine, sameAuthor, source: { pubkey, stream, name,

@@ -150,9 +150,20 @@ export function saleText(sale) {
   return `${sale.price} SATORI each${n ? ` · ${n} buying` : ''}`;
 }
 
-/** A stream we buy (nostr().market.bought's entry): the deposit left, or, stopped, when the rest comes back to the wallet. */
+/** A channel's grace period (seconds) in days, or hours under a day. */
+export function graceText(s) {
+  if (s < 86_400) return `${Math.round(s / 3600)} hour${Math.round(s / 3600) === 1 ? '' : 's'}`;
+  const d = Math.round((s / 86_400) * 10) / 10;
+  return `${d} day${d === 1 ? '' : 's'}`;
+}
+
+/** A stream we buy (nostr().market.bought's entry): the deposit left; stopping, when what is left can be taken back; stopped, what is left. */
 export const boughtText = (b) => (b.status === 'open' ? `${b.left} of ${b.deposit} SATORI left`
-  : `Stopped: ${b.left} SATORI back to the wallet after ${b.closeAt ? fmtWhen(b.closeAt) : '7 days'}`);
+  : b.status === 'closing' ? `Stopping: ${b.refundable} SATORI can be taken back after ${b.closeAt ? fmtWhen(b.closeAt) : graceText(b.grace)}`
+    : `Stopped: ${b.refundable} SATORI left in the channel. Buy it again to use it, or take it back.`);
+
+/** A buyer of ours (nostr().market.selling's buyers): what it paid, and where its payments go. */
+export const buyerText = (x) => `${x.paid} SATORI paid · into ${x.toWallet ? 'the wallet' : shortHash(x.payout)}`;
 
 /** A Nostr pubkey, shortened: the first 8 and last 4 hex. */
 export const shortKey = (k) => (k ? `${k.slice(0, 8)}…${k.slice(-4)}` : '');

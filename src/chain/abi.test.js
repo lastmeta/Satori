@@ -86,9 +86,10 @@ describe(`channelsAbi matches PaymentChannels as deployed (${channels.deploy})`,
   });
   test('what the market calls and watches is all there', () => {
     const names = (type) => of(abi.channelsAbi, type).map((i) => i.name).sort();
-    expect(names('function')).toEqual(['CLOSE_GRACE_PERIOD', 'cancelClose', 'close', 'computeChannelId', 'getChannel', 'open',
-      'openWithPermit', 'requestClose', 'settle', 'settleMany', 'topUp', 'voucherDigest', 'withdraw']);
-    expect(names('event')).toEqual(['CloseCancelled', 'CloseRequested', 'Closed', 'Opened', 'Settled', 'ToppedUp']);
+    expect(names('function')).toEqual(['CLOSE_GRACE_PERIOD', 'cancelClose', 'close', 'computeChannelId', 'getChannel', 'getTerms', 'open',
+      'openWithPermit', 'requestClose', 'setGrace', 'setPayout', 'settle', 'settleMany', 'topUp', 'voucherDigest', 'withdraw', 'withdrawTo']);
+    expect(names('event')).toEqual(['CloseCancelled', 'CloseRequested', 'Closed', 'GraceChanged', 'GraceProposed', 'Opened', 'PayoutSet',
+      'Settled', 'ToppedUp', 'Withdrawn']);
   });
 });
 

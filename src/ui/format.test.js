@@ -4,7 +4,7 @@ import {
   fmtCadence, shortKey, relayText, relaysText, BLOCKED_NOTE, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText, referralText, referralNote,
   storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText, openingText,
-  saleText, boughtText,
+  saleText, boughtText, graceText, buyerText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -308,8 +308,12 @@ test('paid streams (docs/design/market.md): a sale and a buy in words', () => {
   expect(saleText({ price: '0.001', buyers: [{ closing: false }, { closing: true }, { closing: false }] })).toBe('0.001 SATORI each · 2 buying');
   expect(boughtText({ status: 'open', left: '0.004', deposit: '0.005' })).toBe('0.004 of 0.005 SATORI left');
   const at = Date.UTC(2026, 9, 28, 12, 0) / 1000;
-  expect(boughtText({ status: 'closing', left: '0.004', closeAt: at })).toBe(`Stopped: 0.004 SATORI back to the wallet after ${fmtWhen(at)}`);
-  expect(boughtText({ status: 'closing', left: '0.004', closeAt: null })).toBe('Stopped: 0.004 SATORI back to the wallet after 7 days');
+  expect(boughtText({ status: 'closing', refundable: '0.004', closeAt: at })).toBe(`Stopping: 0.004 SATORI can be taken back after ${fmtWhen(at)}`);
+  expect(boughtText({ status: 'closing', refundable: '0.004', closeAt: null, grace: 7 * 86_400 })).toBe('Stopping: 0.004 SATORI can be taken back after 7 days');
+  expect(boughtText({ status: 'stopped', refundable: '0.004' })).toBe('Stopped: 0.004 SATORI left in the channel. Buy it again to use it, or take it back.');
+  expect([graceText(7 * 86_400), graceText(86_400), graceText(1.5 * 86_400), graceText(3600), graceText(7200)]).toEqual(['7 days', '1 day', '1.5 days', '1 hour', '2 hours']);
+  expect(buyerText({ paid: '0.002', toWallet: true })).toBe('0.002 SATORI paid · into the wallet');
+  expect(buyerText({ paid: '0', toWallet: false, payout: '0x' + '6'.repeat(40) })).toBe('0 SATORI paid · into 0x6666…6666');
 });
 
 test('Referral: registered, held until Stake, or none; the note says what Stake does with it', () => {
