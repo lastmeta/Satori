@@ -5,7 +5,7 @@ and what is left. What is built is in [../design/](../design/OVERVIEW.md); this
 folder keeps what is left of each part, researched against Satori Lite
 (`../neuron`), satorilib, central and the contracts, with file:line evidence:
 [runtime](runtime.md), [Nostr transport](transport.md), [chain](chain.md),
-[engine](engine.md), [market](market.md) (a proposal). Blockers outside this repo: [../issues/](../issues/README.md).
+[engine](engine.md), [market](market.md) (a proposal), [bounties](bounties.md) (a proposal). Blockers outside this repo: [../issues/](../issues/README.md).
 Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
 
 ## Steps
