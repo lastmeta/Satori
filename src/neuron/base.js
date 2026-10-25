@@ -471,7 +471,8 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
 
   /** The last batch mined, and one sent and not mined yet (its stuck state: Home's base-stuck). */
   async function withLast(v) {
-    return { ...v, lastBatch: (await db.get('base_last_batch')) ?? null, pendingBatch: (await db.get('base_pending_batch')) ?? null };
+    return { ...v, lastBatch: (await db.get('base_last_batch')) ?? null, pendingBatch: (await db.get('base_pending_batch')) ?? null,
+      lastPlay: (await db.get('game_last_play')) ?? null }; // the game's last Submit (the contract card: played today)
   }
 
   // ── the batch's schedule: a check runs the batch if due; one at a time; then the next check is armed ──

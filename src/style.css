@@ -343,6 +343,35 @@ button.cell:disabled { cursor: default; }
 .cell[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* a day opened: the card grows as the day fades in. Closing: the day fades out first, then the card shrinks (its
    content stays until it is gone). The transition is the one of the state it goes to. */
+/* Home's Satori contract card (src/ui/contract.js): under the chips, opened by the Contract chip; fades out, then folds */
+.contract-panel { grid-column: 1 / -1; display: grid; grid-template-rows: 0fr; opacity: 0; margin-top: -8px;
+  transition: opacity 0.2s ease, grid-template-rows 0.3s ease 0.2s, margin-top 0.3s ease 0.2s; }
+.contract-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; margin-top: 0; transition: grid-template-rows 0.3s ease, margin-top 0.3s ease, opacity 0.25s ease 0.1s; }
+.contract-inner { overflow: hidden; min-height: 0; }
+.contract-card { display: grid; gap: 12px; }
+.contract-card p { margin: 0; }
+.cflow { display: flex; align-items: flex-start; justify-content: center; gap: 8px; padding: 4px 0; }
+.cnode { display: grid; justify-items: center; gap: 4px; width: 92px; text-align: center; }
+.cnode svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.cnode small, .carrow small { font-size: 0.75rem; color: var(--muted); }
+.carrow { flex: 1; max-width: 160px; display: grid; justify-items: center; gap: 6px; padding-top: 16px; }
+.carrow i { position: relative; display: block; width: 100%; height: 4px; border-radius: 2px; background: var(--cell-off); }
+.carrow i::after { content: ""; position: absolute; right: -2px; top: -5px; border: 7px solid transparent; border-right: 0; border-left: 10px solid var(--cell-off); }
+.carrow[data-on="true"] i { background: var(--ok); }
+.carrow[data-on="true"] i::after { border-left-color: var(--ok); }
+.carrow[data-on="true"] small { color: var(--ok); font-weight: 600; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.check { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; }
+.check .cmark svg { width: 24px; height: 24px; }
+.check[data-state="ok"] .cmark svg { fill: var(--ok); stroke: var(--card); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.check[data-state="bad"] .cmark svg { fill: var(--bad); stroke: var(--card); stroke-width: 2.4; stroke-linecap: round; }
+.check[data-state="wait"] .cmark svg { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
+.check .cmark svg circle { stroke: none; }
+.check[data-state="wait"] .cmark svg circle { stroke: var(--muted); }
+.check > div { display: grid; gap: 8px; padding-top: 2px; }
+.fund { display: grid; gap: 6px; }
+.fund .qr { width: 180px; height: 180px; background: #fff; border-radius: 8px; image-rendering: pixelated; }
+@media (prefers-reduced-motion: reduce) { .contract-panel { transition: none; } }
 .day-panel { display: grid; grid-template-rows: 0fr; opacity: 0; transition: opacity 0.2s ease, grid-template-rows 0.3s ease 0.2s; }
 .day-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 0.3s ease, opacity 0.25s ease; }
 .day-inner { overflow: hidden; min-height: 0; }

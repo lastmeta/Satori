@@ -37,6 +37,7 @@ import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
+import { contractChecks, predictedToday } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -1173,6 +1174,8 @@ const actions = {
     if (to) state.game = { ...g, ...to, move: dir > 0 ? 'next' : 'back', sendError: '' };
   },
   gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
+  toggleContract() { state.contractOpen = !state.contractOpen; },
+  toggleContractQr(address) { state.contractQr = state.contractQr === address ? '' : address; },
   /** The game's CLAIM: Home's Claim (Unlock in place); the amount kept to show beside CLAIMED. */
   gameClaim() {
     state.game = { ...state.game, claimAmount: Number(state.base.claimable?.total ?? 0) };
@@ -1487,6 +1490,16 @@ window.satori = {
     writeFavorites(walletPublic?.evmAddress, favorites);
     state.game = { ...state.game, favorites, loaded: 0 };
     return favorites;
+  },
+  /**
+   * Home's Satori contract card: the mode, whether a prediction went to the contract this round, and what has to be in
+   * place, each { id, state: 'ok' | 'bad' | 'wait', text, fix?: 'stake' | 'fund' (with address) | 'game' }.
+   */
+  async contract() {
+    ready();
+    await base.refresh();
+    const v = await base.status();
+    return { play: v.play, predictedToday: predictedToday(v), checks: contractChecks(v) };
   },
   /** One day of Home's strip ('2026-10-24', local): when the app predicted, on the Satori Network and the contract, and how those did. */
   async day(date) { ready(); return dayDetail(String(date)); },

@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (the contract card)
+
+- The Contract chip opens `contract-card` under the chips (not the Wallet tab): what the contract is for, the mode,
+  and its checks with their fixes. New `contract()`. By hand the chip says "Played today" (green) or "Not played
+  today" (grey).
+
 ## Changed 2026-10-25 (agents: backups, the game, Docker import)
 
 - New: "The person's keys: back them up yourself (required)": right after setup, `exportBackup(passphrase)`

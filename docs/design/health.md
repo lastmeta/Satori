@@ -439,6 +439,26 @@ health.js map them).
   "Relays down" in amber (no reason, no card), and Home's answer stays what
   the predicting says. With subscriptions the chip is as above.
 
+### The contract card
+
+The Contract chip opens a card under the chips (owner, 2026-10-25; the other
+chips still open their tab), and closes it again. It explains and checks:
+
+- A phone, an arrow and the contract (a block): "This app" or "You, by
+  hand", then "Predicted today" in green once a prediction went to the
+  contract this round (the batch, or the game's Submit: `lastPlay`), else
+  "Not yet today" in grey; under it, what the contract is for.
+- The mode: Automatic, By hand (Settings' switch).
+- The checks (`src/ui/contractflow.js`), each a green tick, a red cross, or
+  a grey clock for "not yet": automatic: staked with this app (else **Stake
+  with this app**), the alias's Base ETH (else its address with Copy and a
+  QR code), predicted today. By hand: who plays (the alias for a staked
+  wallet, else the wallet; staked elsewhere: can't), the player's Base ETH
+  (the same fix), played today (else **Play today's game**).
+
+By hand, the chip is green ("Played today") once played this round, grey
+("Not played today") until then. Agents: `contract()`.
+
 ### The contract unused
 
 Not staked with this app and no batch ever sent: nothing is predicted or

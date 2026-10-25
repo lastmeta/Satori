@@ -999,6 +999,9 @@ the page's JS context:
   already predicted are not sent; none left: `hash` null. The wallet's first one from an invite link registers
   the referral.
 - `satori.setGameFavorites([streamId, …])` → them: shown first, in this order (this device, this wallet).
+- `await satori.contract()` → `{ play, predictedToday, checks }`: Home's Satori contract card. Each check
+  `{ id, state: 'ok' | 'bad' | 'wait', text, fix? }`; `fix`: `'stake'` (stake()), `'fund'` (with `address` and
+  `who`: send it a little Base ETH), `'game'` (play by hand).
 - `await satori.day('2026-10-24')` → one day of Home's strip: `{ date, network: { sent, first, last, marks },
   contract: { batches, skipped }, open }`.
 - `satori.dismiss('install' | 'notice')`: put away Home's Install card, or the recovered-database notice.
@@ -1193,7 +1196,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `day-network`, `day-contract`,
   `days-summary`, `channels` with `chip` (`data-channel`: network, contract,
   relays; `data-state`, `data-tone`, `data-live` while its channel talks) and
-  `chip-text`, `home-wallet-card` with `home-satori`, `home-wallet` and
+  `chip-text` (the Contract chip opens `contract-card`, `data-open`: `contract-arrow` (`data-on`),
+  `contract-play-auto`/`contract-play-manual`, `contract-check` (`data-id`, `data-state`) with `contract-stake`,
+  `contract-fund-address`, `contract-qr-toggle` and `contract-qr`, `contract-play`), `home-wallet-card` with `home-satori`, `home-wallet` and
   `home-gas`, `claimable` (its own card) with `claimable-amount`,
   `claimable-parts`, `claim` and `claim-result`, `home-stream`,
   `activity`, `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`,
