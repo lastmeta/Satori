@@ -153,7 +153,7 @@ const claimShown = () => claimable() > 0 || (claimed() && g().claimAmount > 0);
 function wallet(a) {
   return html`
   <div class="gwallet">
-    <p class="gbalance" data-test="game-balance">${() => figure(state.base.wallet.satori)} <small>SATORI</small></p>
+    <p class="gbalance" data-test="game-balance">${() => figure(state.base.wallet.satori)}</p>
     <div class="gclaim" data-test="game-claim-row" hidden="${() => !claimShown()}">
       <b class="gclaimable" data-test="game-claimable">${() => figure(claimed() ? g().claimAmount : claimable())}</b>
       <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="engraved">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>

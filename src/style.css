@@ -152,7 +152,6 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
   text-shadow: 0 1.5px 0 rgb(255 255 255 / 0.4), 0 -1px 0 rgb(0 0 0 / 0.35); }
 .gwallet { flex: none; display: grid; gap: 10px; margin-bottom: 6px; }
 .gbalance { margin: 0; text-align: center; font-size: 2.1rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.gbalance small { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
 .gclaim { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; max-width: 560px; width: 100%; margin: 0 auto; }
 .gclaimable { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
 .gbtn.claim { background: linear-gradient(#34b267, #1f8a4c); }

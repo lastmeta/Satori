@@ -70,7 +70,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await shot(page, 'game-play.png');
 
   // the wallet on top: its balance always; something to claim: the amount and CLAIM, which claims (Unlock in place)
-  await expect(t(page, 'game-balance')).toHaveText('0 SATORI');
+  await expect(t(page, 'game-balance')).toHaveText('0');
   await expect(t(page, 'game-claim-row')).toBeHidden();
   s.airdrop[V] = E18;
   await page.evaluate(() => window.satori.base()); // read again
@@ -83,7 +83,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await claimPrompt.getByRole('button', { name: 'Unlock' }).click();
   await expect(t(page, 'game-claim')).toHaveText('CLAIMED', { timeout: 30_000 });
   await expect(t(page, 'game-claimable')).toHaveText('1');
-  await expect(t(page, 'game-balance')).toHaveText('1 SATORI');
+  await expect(t(page, 'game-balance')).toHaveText('1');
 
   await t(page, 'game-up').click(); // bitcoin up
   await expect(name(page)).toHaveText('ether');
