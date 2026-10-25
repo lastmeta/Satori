@@ -2,7 +2,7 @@
 // at a time, filling the screen: its name (with a star) and its latest value, its line, and two big buttons, down
 // (red) and up (green). A swipe left skips, a swipe right goes back. After the last stream, the submit screen; after
 // more than one favorite, Submit shows under the buttons. While the app plays on its own (automatic) the game is
-// greyed out under the switch to play by hand; by hand, a line and the way back. Its flow: src/ui/gameflow.js.
+// greyed out under the switch to play by hand (and back: Settings › Satori contract predictions). Its flow: src/ui/gameflow.js.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { unlockPrompt } from './parts.js';
@@ -22,8 +22,10 @@ const showing = (what) => () => {
 };
 
 // the arrows point right, up at 45° and down at -45°; the star; each drawn as a raised (bevelled) mark
-const ARROW_UP = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18L18 6M9 6h9v9"></path></svg>`;
-const ARROW_DOWN = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 9v9H9"></path></svg>`;
+// engraved: the arrow a darker shade of the button, lit along its lower edge and shaded along its upper one
+const engraved = (d) => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path class="lit" d="${d}"></path><path class="shade" d="${d}"></path><path class="cut" d="${d}"></path></svg>`;
+const ARROW_UP = () => engraved('M6 18L18 6M9 6h9v9');
+const ARROW_DOWN = () => engraved('M6 6l12 12M18 9v9H9');
 const STAR = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path></svg>`;
 
 /** A swipe on the stream: left skips it, right goes back (a mostly sideways move of 50 px or more). */
@@ -95,10 +97,6 @@ function submit(a) {
 export function gameTab(a) {
   return html`
   <section class="tab-page game" data-test="game-tab" data-play="${() => state.base.play ?? false}" hidden="${() => state.tab !== 'game'}">
-    <div class="play-bar" data-test="play-bar" hidden="${() => !manual()}">
-      <span>Playing by hand: the app doesn't send its own.</span>
-      <button class="link-btn" data-test="play-auto" @click="${() => a.setPlay('auto')}">Switch to automatic</button>
-    </div>
     <div class="game-stage">
       <div class="game-board" data-test="game-board" inert="${() => !manual()}">
         <p class="muted center gmsg" hidden="${showing('loading')}">Reading the games…</p>

@@ -112,15 +112,12 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .tabbar a[aria-current="page"] { color: var(--accent); font-weight: 600; }
 /* the Game tab (src/ui/game.js): the stream, its line and the two buttons fill the screen between the header and the
    tab bar; greyed out under the switch while the app plays on its own */
-.game { display: flex; flex-direction: column; height: calc(100dvh - 60px - 32px - var(--bar) - env(safe-area-inset-bottom, 0px)); min-height: 420px; }
+.game { display: flex; flex-direction: column; height: calc(100dvh - 60px - 32px - var(--bar) - env(safe-area-inset-bottom, 0px)); min-height: 380px; }
 .game-stage { position: relative; display: grid; flex: 1; min-height: 0; }
 .game-board { min-height: 0; display: grid; transition: opacity 0.3s ease, filter 0.3s ease; }
 .game[data-play="auto"] .game-board, .game:not([data-play]) .game-board { opacity: 0.4; filter: grayscale(1); }
 .play-switch { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); box-shadow: 0 8px 24px rgb(0 0 0 / 0.15); }
 .play-switch h2 { margin-top: 0; }
-.play-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 0.8rem; margin-top: -6px; }
-.play-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-btn { border: 0; background: none; padding: 0 2px; min-height: 44px; color: var(--accent); font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .gmsg { align-self: center; justify-self: center; text-align: center; max-width: 420px; }
 .gplay, .gsubmit-screen { display: flex; flex-direction: column; min-height: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .gstream { flex: 1; min-height: 0; display: grid; overflow: hidden; }
@@ -138,16 +135,19 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .gstar[aria-pressed="true"] { color: #c99a06; }
 .gstar[aria-pressed="true"] svg { fill: #f5c518; }
 .gchart { width: 100%; height: 100%; min-height: 0; padding: 12px 0; overflow: visible; }
-.gchart polyline { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.gbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: clamp(110px, 24%, 180px); flex: none; }
-.gbtn { border: 0; border-radius: 22px; display: grid; place-items: center; color: #fff; min-height: 44px; transition: transform 0.1s ease, box-shadow 0.1s ease;
+.gchart polyline { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.gbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: none; max-width: 560px; width: 100%; margin: 0 auto; }
+.gbtn { border: 0; border-radius: 12px; aspect-ratio: 85.6 / 54; padding: 0; display: grid; place-items: center; min-height: 44px; /* a card's shape */ transition: transform 0.1s ease, box-shadow 0.1s ease;
   box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.3), inset 0 -5px 0 rgb(0 0 0 / 0.22), 0 3px 8px rgb(0 0 0 / 0.18); }
 .gbtn.down { background: linear-gradient(#e5534b, #c0362e); }
 .gbtn.up { background: linear-gradient(#34b267, #1f8a4c); }
 .gbtn:active { transform: translateY(2px); box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.3); }
 .gbtn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 3px; }
-.gbtn svg { width: 64px; height: 64px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round;
-  filter: drop-shadow(0 -1.5px 0 rgb(0 0 0 / 0.35)) drop-shadow(0 1.5px 0 rgb(255 255 255 / 0.35)); }
+.gbtn svg { width: 46%; height: auto; max-height: 72%; fill: none; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.gbtn svg .lit { stroke: rgb(255 255 255 / 0.45); transform: translateY(0.55px); }
+.gbtn svg .shade { stroke: rgb(0 0 0 / 0.4); transform: translateY(-0.45px); }
+.gbtn.down svg .cut { stroke: #a5291f; }
+.gbtn.up svg .cut { stroke: #17703c; }
 .gsubmit { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.3s ease; flex: none; }
 .gsubmit[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
 .gsubmit > div { overflow: hidden; min-height: 0; }

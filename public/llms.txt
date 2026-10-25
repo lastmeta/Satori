@@ -993,10 +993,10 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   on a computer (1024 px and wider). The URL's `#game`, `#home`, `#models`
   (and `#models/<id>`), `#streams`, `#wallet`, `#settings` open them (a link
   or a reload keeps the tab). **Game** (`game-tab`, `data-play`: auto or manual):
-  while the app plays automatically the game (`game-board`) is greyed out
-  under `play-switch` with **Play by hand** (`play-manual`); by hand,
-  `play-bar` says the app doesn't send its daily predictions, with
-  **Switch to automatic** (`play-auto`). The game (`game-board`): one stream at a
+  while the app plays automatically the game is greyed out under
+  `play-switch` with **Play by hand** (`play-manual`); back to automatic in
+  Settings › Satori contract predictions (`play-setting`, with
+  `play-setting-auto` and `play-setting-manual`). The game (`game-board`): one stream at a
   time, `game-name` with `game-star` (`aria-pressed`), `game-latest`,
   `game-chart`, `game-down` and `game-up` (a press picks and moves on; a
   swipe left skips, right goes back), `game-submit-early` (`data-open`) with
@@ -1091,7 +1091,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   "Remove 0x…? Its keys and data are deleted from this browser, and its 24
   words are the only way back…", Remove it or Cancel), and Add a wallet.
 - **Settings**, top to bottom: This device, Appearance, Backup, Keys,
-  Reward address, Advanced. **Keys** (each key with Copy: the wallet's Base address with
+  Reward address, Satori contract predictions (Automatic or By hand: the
+  Game tab), Advanced. **Keys** (each key with Copy: the wallet's Base address with
   its Locked/Unlocked badge, "Wallet passphrase" and Unlock, or "Lock the
   wallet"; the Nostr pubkey), **Backup** (Wallet words, with its private key
   in 0x hex; Nostr key, nsec and hex; each asks for the passphrase in place,

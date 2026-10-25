@@ -1,6 +1,6 @@
 // Settings: the technical detail, behind Home (docs/intent/ui.md): this device (storage, install, update), the appearance (System, Light, Dark:
 // src/ui/theme.js), the backup, the keys and their addresses with Unlock and Lock, the reward address (where the
-// Satori Network sends the rewards), and folded under Advanced the Satori Network's server
+// Satori Network sends the rewards), who sends the Satori contract predictions (automatic or by hand), and folded under Advanced the Satori Network's server
 // (central's URL), the Satori relays, the Base RPC and the batch's max fee. Each section has an id (#settings-<name>)
 // Home's action card scrolls to, opening Advanced when the section is in it.
 import { html } from '@arrow-js/core';
@@ -185,6 +185,17 @@ function device(a) {
 }
 
 /** The settings few people change, folded at the bottom; Home's action card opens it when it points inside (go()). */
+/** Who sends the Satori contract predictions (docs/design/base.md#played-by-hand): this app, or the person in the Game tab. */
+function predictions(a) {
+  return html`
+  <section class="card settings-section" id="settings-predictions" data-test="play-setting">
+    <h2>Satori contract predictions</h2>
+    <div class="segmented" role="group" aria-label="Who predicts">${[['auto', 'Automatic'], ['manual', 'By hand']].map(([mode, word]) => html`<button class="small-btn" data-test="${`play-setting-${mode}`}" aria-pressed="${() => String(state.base.play === mode)}" disabled="${() => !state.base.play}" @click="${() => a.setPlay(mode)}">${word}</button>`)}</div>
+    <p class="muted small">${() => (state.base.play === 'manual' ? "By hand: you play in the Game tab, and the app doesn't send its own daily predictions. Everything else carries on."
+      : 'Automatic: the app sends its predictions each day. To play the Game tab yourself, choose By hand.')}</p>
+  </section>`;
+}
+
 function advanced(a) {
   return html`
   <details class="card settings-section advanced" id="settings-advanced" data-test="settings-advanced">
@@ -203,6 +214,7 @@ export function settingsTab(a) {
     ${backup(a)}
     ${keys(a)}
     ${rewardCard(a)}
+    ${predictions(a)}
     ${advanced(a)}
   </section>`;
 }

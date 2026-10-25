@@ -54,6 +54,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   // by hand: the most rewarding stream first; its line and latest value; the board fills the screen above the bar
   await t(page, 'play-manual').click();
   await expect(t(page, 'play-switch')).toBeHidden();
+  await expect(t(page, 'play-setting-manual')).toHaveAttribute('aria-pressed', 'true'); // Settings › Satori contract predictions
   await expect(t(page, 'game-latest')).toHaveText(/^\d{2},\d{3}\.\d{2}$/);
   const [buttons, bar] = [await t(page, 'game-up').boundingBox(), await page.locator('nav.tabbar').boundingBox()];
   expect(bar.y - (buttons.y + buttons.height)).toBeLessThan(40);

@@ -6,6 +6,10 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- `play-bar` and `play-auto` are gone from the Game tab: Settings has
+  "Satori contract predictions" (`play-setting`: `play-setting-auto`,
+  `play-setting-manual`). The buttons are card-shaped, their arrows engraved.
+
 - Played with the game this round: the tab opens on its Sent screen
   (`game-sent`, `game-tomorrow`; no `game-done`).
 - A stream already predicted (this round or in the last 24 hours) plays as
