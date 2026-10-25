@@ -109,13 +109,20 @@ function moves(a) {
 }
 
 /**
- * A swipe: the stream (or the submit screen) follows the finger sideways; let go past 60 px and it goes on (left: the
- * next, skipping this one) or back (right); else it springs back. Nothing to go back to: it gives a little and returns.
+ * A swipe: the stream (or the whole screen, toward the submit screen) follows the finger sideways; let go past 60 px,
+ * or flicked fast past 25 px, and it goes on (left: the next, skipping this one) or back (right); else it springs
+ * back. The distance is where the finger lifts, not its last move (a fast flick moves in few, long steps). Nothing to
+ * go back to: it gives a little and returns.
  */
+const SWIPE_PX = 60;
+const FLICK_PX = 25;
+const FLICK_PX_PER_MS = 0.3;
+const FLICK_MS = 100;
 function swipe(m) {
   let start = null;
   let dx = 0;
   let dragging = false;
+  let trail = []; // the finger's recent { x, t }: its speed over the last FLICK_MS when it lifts
   let held = null; // what the finger moves now
   const target = () => held ?? movingEl(false);
   const canBack = () => m.can(-1);
@@ -125,25 +132,33 @@ function swipe(m) {
     el.animate([{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }], { duration: 200, easing: 'ease-out' });
     el.style.transform = '';
   };
+  /** The finger at x, y (from where it went down): drag what it moves, once the move is sideways. */
+  const follow = (e, x, y) => {
+    if (!dragging && Math.abs(x) > 8 && Math.abs(x) > Math.abs(y) * 1.2) {
+      dragging = true;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* gone */ } // the finger may leave the area
+    }
+    if (!dragging) return;
+    const now = performance.now();
+    trail = [...trail.filter((p) => now - p.t <= FLICK_MS), { x, t: now }];
+    dx = (x < 0 ? canNext() : canBack()) ? x : x * 0.25;
+    const el = m.dragged(x < 0 ? 1 : -1);
+    if (held && held !== el) held.style.transform = ''; // turned back the other way: the other thing moves
+    held = el;
+    if (el) el.style.transform = `translateX(${dx}px)`;
+  };
   return {
-    down: (e) => { if (!sliding) { start = { x: e.clientX, y: e.clientY }; dx = 0; dragging = false; } },
-    move: (e) => {
-      if (!start) return;
-      const x = e.clientX - start.x;
-      const y = e.clientY - start.y;
-      if (!dragging && Math.abs(x) > 8 && Math.abs(x) > Math.abs(y) * 1.5) {
-        dragging = true;
-        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* gone */ } // the finger may leave the area
-      }
-      if (!dragging) return;
-      dx = (x < 0 ? canNext() : canBack()) ? x : x * 0.25;
-      const el = m.dragged(x < 0 ? 1 : -1);
-      if (held && held !== el) held.style.transform = ''; // turned back the other way: the other thing moves
-      held = el;
-      if (el) el.style.transform = `translateX(${dx}px)`;
+    down: (e) => {
+      if (sliding) return;
+      start = { x: e.clientX, y: e.clientY };
+      dx = 0;
+      trail = [{ x: 0, t: performance.now() }];
+      dragging = false;
     },
-    up: () => {
+    move: (e) => { if (start) follow(e, e.clientX - start.x, e.clientY - start.y); },
+    up: (e) => {
       if (!start) return;
+      if (e.clientX || e.clientY) follow(e, e.clientX - start.x, e.clientY - start.y); // where it lifted (an emulated lift says 0, 0)
       start = null;
       if (!dragging) return;
       dragging = false;
@@ -151,7 +166,11 @@ function swipe(m) {
       setTimeout(() => { justDragged = false; }); // the click that ends this drag comes first
       const el = target();
       held = null;
-      const dir = dx <= -60 && canNext() ? 1 : dx >= 60 && canBack() ? -1 : 0;
+      const [a, b] = [trail[0], trail.at(-1)];
+      const speed = a && b && b.t > a.t ? (b.x - a.x) / (b.t - a.t) : 0; // px/ms over the last moments
+      const flick = Math.abs(dx) >= FLICK_PX && Math.abs(speed) >= FLICK_PX_PER_MS && Math.sign(speed) === Math.sign(dx);
+      const far = Math.abs(dx) >= SWIPE_PX || flick;
+      const dir = far && dx < 0 && canNext() ? 1 : far && dx > 0 && canBack() ? -1 : 0;
       if (!dir) return void settle(el);
       if (el) el.style.transform = ''; // the slide carries on from dx, with a copy
       if (dir > 0) m.next(dx);

@@ -123,8 +123,11 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .play-switch h2 { margin-top: 0; }
 .gmsg { align-self: center; justify-self: center; text-align: center; max-width: 420px; }
 .gplay, .gsubmit-screen { display: flex; flex-direction: column; min-height: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-/* every part, the scrolling list too: a sideways move is the game's swipe, never the browser's (it would cancel it) */
-.gplay *, .gsubmit-screen * { touch-action: pan-y; }
+/* a sideways move is the game's swipe, never the browser's (it would cancel it): the stream's screen scrolls nowhere,
+   so the browser takes no move there at all (a fast flick it might read as a scroll); the submit screen's list still
+   scrolls up and down */
+.gplay, .gplay * { touch-action: none; }
+.gsubmit-screen * { touch-action: pan-y; }
 .gstream { flex: 1; min-height: 0; display: grid; }
 .gview { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 .ghead { display: flex; align-items: center; gap: 4px; }

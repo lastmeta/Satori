@@ -32,7 +32,7 @@ async function shot(page, file) {
 }
 
 test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
-test('a finger swipes back from the submit screen (touch: the browser never takes the sideways move)', async ({ context, page }) => {
+test('a finger swipes, flicks fast or slow (touch: the browser never takes the sideways move), and back from the submit screen', async ({ context, page }) => {
   test.setTimeout(120_000);
   const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
   await stubCentral(context, { rpc });
@@ -44,13 +44,31 @@ test('a finger swipes back from the submit screen (touch: the browser never take
   await page.evaluate(() => window.satori.go('game'));
   await t(page, 'play-manual').tap();
   await expect(name(page)).toHaveText('bitcoin', { timeout: 30_000 });
+  const cdp = await context.newCDPSession(page);
+  const touch = async (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  /** A fast flick: a few long steps, no pause. */
+  const flick = async (from, to, y) => {
+    const frame = () => page.waitForTimeout(16); // a phone's touch events, a frame apart
+    await touch('touchStart', from, y);
+    await frame();
+    await touch('touchMove', from + (to - from) / 3, y + 6);
+    await frame();
+    await touch('touchMove', to, y + 10);
+    await frame();
+    await touch('touchEnd', to, y);
+  };
+  await page.waitForTimeout(400);
+  await flick(330, 60, 400); // a long fast flick left: on to the next
+  await expect(name(page)).toHaveText('satori');
+  await page.waitForTimeout(500);
+  await flick(150, 200, 400); // a short fast one right (50 px): back
+  await expect(name(page)).toHaveText('bitcoin');
+  await page.waitForTimeout(1200); // Chrome takes a tap right on a flick's heels as the flick's end, not a tap
   await t(page, 'game-up').tap();
   await expect(name(page)).toHaveText('satori');
   await t(page, 'game-up').tap();
   await expect(t(page, 'game-submit-screen')).toBeVisible();
   await page.waitForTimeout(500);
-  const cdp = await context.newCDPSession(page);
-  const touch = async (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
   const y = 500;
   await touch('touchStart', 60, y);
   for (let x = 80; x <= 320; x += 30) await touch('touchMove', x, y + 3);
