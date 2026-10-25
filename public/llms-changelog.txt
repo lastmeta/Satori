@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (the Market tab)
+
+- New tab `#market`: For sale (every priced stream, its price and track record, Buy), Your sales (Sell, Make free),
+  Bought (Stop), and the totals. `market()`. The Streams tab's sell and bought lists moved there; its catalog's priced
+  streams have `catalog-market` instead of Buy.
+
 ## Changed 2026-10-25 (market: PaymentChannels v2)
 
 - The market's channels are on PaymentChannels v2, `0xAB9408f9ec330351A21497c87E3d24218413b0C8` (Base Sepolia).

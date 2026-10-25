@@ -47,6 +47,25 @@ not part of it.
 - **Words:** Sell, Make free, Buy, Stop; a wallet staked with this app
   can't fund a channel, and `channelErrorText` says why.
 
+## The Market tab
+
+The market's own page (owner, 2026-10-25), Menu › Market on a phone, the top
+nav on a computer (`src/ui/market.js`):
+
+- **What it is**, and the totals: SATORI earned (what buyers paid), how much
+  of it is collected (settled), how many streams it sells, how many it buys.
+- **For sale**: every stream the relays announce with a price (discover()'s,
+  asked for when the tab opens and nothing is known), its price per value,
+  provider, cadence and track record when it is watched ("Track record: 50%
+  better"), with a deposit (100 values) and Buy (Unlock in place).
+- **Your sales**: each stream this app predicts, Sell at a price or Make
+  free, and how many buy it. None predicted: where to start (the Streams
+  tab's Predict).
+- **Bought**: the deposit left, and Stop.
+
+The Streams tab's catalog sends a priced stream here (**On the Market**).
+Agents: `market()` → `{ forSale, selling, bought }`.
+
 ## The chain client
 
 `src/chain/channels.js` is everything the market does on Base: the channel

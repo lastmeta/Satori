@@ -1,4 +1,4 @@
-// The shell: the header, the tabs (Game · Home · Models · Streams · Wallet · Settings: on a phone a bar of Game, Home
+// The shell: the header, the tabs (Game · Home · Models · Streams · Market · Wallet · Settings: on a phone a bar of Game, Home
 // and Menu holding the rest; on a computer a top nav; hash routes #game … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
 // "open in another tab", "could not start", "the database can't be opened". ArrowJS. Every screen and tab is built once and shown or hidden, so
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
@@ -12,14 +12,15 @@ import { gameTab } from './game.js';
 import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
 import { walletTab } from './wallet.js';
+import { marketTab } from './market.js';
 import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['game', 'home', 'models', 'streams', 'wallet', 'settings'];
+export const TABS = ['game', 'home', 'models', 'streams', 'market', 'wallet', 'settings'];
 const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
-const LABEL = { game: 'Game', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
+const LABEL = { game: 'Game', market: 'Market', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
   // a game controller's outline
   game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path></svg>`,
@@ -27,6 +28,8 @@ const ICON = {
   // three streams in, one model, a forecast out
   models: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8h6M2 12h6M2 16h6"></path><rect x="8" y="5" width="8" height="14" rx="1.5"></rect><path d="M16 12h6"></path></svg>`,
   streams: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"></path></svg>`,
+  // a shop: its awning over a counter
+  market: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9h16M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0M5.5 11.5V20h13v-8.5M10 20v-5h4v5"></path></svg>`,
   wallet: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M16 12h2"></path></svg>`,
   // a gear (three lines is the menu's)
   settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path><circle cx="12" cy="12" r="6.5"></circle></svg>`,
@@ -52,7 +55,7 @@ const goTo = (a, t) => (e) => {
 const navLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`nav-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${LABEL[t]}</a>`;
 const barLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
 const menuLink = (a, t) => html`<a href="${`#${t}`}" role="menuitem" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${(e) => { state.menuOpen = false; goTo(a, t)(e); }}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
-/** The phone's menu (☰ Menu, the bar's third button): Models, Streams, Wallet, Settings, listed above it. */
+/** The phone's menu (☰ Menu, the bar's third button): Models, Streams, Market, Wallet, Settings, listed above it. */
 const tabMenu = (a) => html`<div class="tabmenu">
     <button class="menu-btn" data-test="tab-menu" aria-haspopup="menu" aria-expanded="${() => String(!!state.menuOpen)}" data-current="${() => MENU.includes(state.tab)}" @click="${() => { state.menuOpen = !state.menuOpen; }}">${MENU_ICON()}<span>Menu</span></button>
     <div class="menu-list" role="menu" data-test="tab-menu-list" hidden="${() => !state.menuOpen}">${MENU.map((t) => menuLink(a, t))}</div>
@@ -246,6 +249,7 @@ export function render(root, a) {
       ${home(a)}
       ${modelsTab(a)}
       ${streamsTab(a)}
+      ${marketTab(a)}
       ${walletTab(a)}
       ${settingsTab(a)}
     </div>

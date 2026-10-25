@@ -1,7 +1,7 @@
 // Streams: the Satori Network's (central: one line, its facts under Details, and Poll now; each stream with its latest
 // value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori relays (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
-// Paid streams (docs/design/market.md): a price on our own `_pred`s, the streams we buy (the deposit left, Stop), Buy in the catalog.
+// Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there.
 // The words people see (docs/intent/ui.md); the addresses are Settings'.
 import { html } from '@arrow-js/core';
 import { formatEther } from 'viem';
@@ -81,7 +81,7 @@ function subRow(s, a) {
 // ── paid streams (docs/design/market.md) ──
 
 /** One of our `_pred` streams: Free with a price to set (Sell), or its price and buyers with Make free. */
-function sellRow(sub, a) {
+export function sellRow(sub, a) {
   // One root node, no whitespace around it (see streamRow).
   const stream = `${sub.stream}_pred`;
   const sale = () => state.nostr.market?.selling.find((x) => x.stream === stream);
@@ -92,26 +92,10 @@ function sellRow(sub, a) {
 }
 
 /** A stream we buy: the deposit left and Stop; stopped, when the rest comes back to the wallet. */
-function boughtRow(b, a) {
+export function boughtRow(b, a) {
   // One root node, no whitespace around it (see streamRow).
   const key = `${b.pubkey}:${b.stream}`;
   return html`<div class="crow" data-test="bought-row" data-key="${key}"><div class="cmain"><span class="sname">${b.name || b.stream}</span> <span class="muted small"><span class="nowrap" title="${b.pubkey}">${shortKey(b.pubkey)}</span> · ${b.price} SATORI each</span><div class="small" data-test="bought-left">${boughtText(b)}</div></div>${b.status === 'open' ? html`<button class="small-btn" data-test="stop" disabled="${() => !!state.marketBusy}" @click="${() => a.stop(b.pubkey, b.stream)}">${() => (state.marketBusy === `stop:${key}` ? '…' : 'Stop')}</button>` : ''}</div>`;
-}
-
-function marketPart(a) {
-  const m = () => state.nostr.market ?? { selling: [], bought: [], error: null };
-  return html`
-    <div class="market" data-test="market" hidden="${() => !state.nostr.subscriptions.length && !m().bought.length}">
-      <div hidden="${() => !state.nostr.subscriptions.length}">
-        <h3>Sell <small class="muted">per observation, in SATORI, through the Satori contract</small></h3>
-        <div class="crows">${() => state.nostr.subscriptions.filter((sub) => sub.predict).map((sub) => sellRow(sub, a).key(sub.uuid))}</div>
-      </div>
-      <div hidden="${() => !m().bought.length}">
-        <h3>Bought</h3>
-        <div class="crows">${() => m().bought.map((b) => boughtRow(b, a).key(`${b.channel}:${b.status}:${b.left}:${b.closeAt}`))}</div>
-      </div>
-      <p class="error small" role="alert" data-test="market-error" hidden="${() => !(state.marketError || m().error)}">${() => state.marketError || m().error}</p>
-    </div>`;
 }
 
 function nostrCard(a) {
@@ -127,7 +111,6 @@ function nostrCard(a) {
       <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
       <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq} ${s.predict}`))}</div>
     </div>
-    ${marketPart(a)}
   </section>`;
 }
 
@@ -168,7 +151,7 @@ function recordsCard(a) {
 }
 
 /** A stream sold on the Satori contract: its price, a deposit (100 observations) and Buy; bought, the deposit left. */
-function buyPart(s, l, a) {
+export function buyPart(s, l, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
   const mine = () => state.nostr.market?.bought.find((b) => b.pubkey === s.pubkey && b.stream === s.stream_name && b.status === 'open');
   return html`${() => (mine()
@@ -180,7 +163,7 @@ function catRow(s, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
   const l = listingOf(s);
   const paid = !l && (s.price_per_obs > 0 || s.encrypted || s.approval_required);
-  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}${l ? html` · <b data-test="catalog-price">${`${formatEther(l.price)} SATORI each`}</b>` : ''}</span><div class="muted small desc">${s.description}</div></div>${l ? buyPart(s, l, a) : html`<button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button>`}</div>`;
+  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}${l ? html` · <b data-test="catalog-price">${`${formatEther(l.price)} SATORI each`}</b>` : ''}</span><div class="muted small desc">${s.description}</div></div>${l ? html`<button class="small-btn" data-test="catalog-market" @click="${() => a.go('market')}">On the Market</button>` : html`<button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button>`}</div>`;
 }
 
 /** Shown: the streams to subscribe to, and the ones sold on the Satori contract (prediction streams too); the rest of the prediction streams hidden. */
@@ -205,7 +188,6 @@ function network(a) {
     </form>
     <p class="muted small" data-test="catalog-summary">${() => state.networkLine || summary()}</p>
     <p class="error small" role="alert" data-test="network-error" hidden="${() => !state.networkError}">${() => state.networkError}</p>
-    ${unlockPrompt(a, 'buy', 'buy')}
     <div class="crows">${() => shownCatalog().slice(0, CATALOG_SHOWN).map((s) => catRow(s, a).key(`${s.pubkey}:${s.stream_name}:${s.subscribed}`))}</div>
   </details>`;
 }

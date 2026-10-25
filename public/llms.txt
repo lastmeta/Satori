@@ -868,6 +868,12 @@ the page's JS context:
 - `await satori.setPredict(pubkey, stream_name, on)` (ask the person first) → the subscription: predict a followed
   stream (its latest observation at once) or stop (its `_pred` tombstoned; still followed).
 - `await satori.unsubscribe(pubkey, stream_name)` → `nostr()` (as `setRelays`).
+- `await satori.market()` → `{ forSale, selling, bought }`: the Market tab. `forSale`: each stream the relays announce
+  with a price, `{ pubkey, stream, name, description, cadence_seconds, price (SATORI per value), record (its track
+  record's words, or null) }`; `selling` and `bought` as `nostr().market`'s. The tab's ids: `market-tab`,
+  `market-totals` (`market-earned`, `market-selling`, `market-buying`), `market-for-sale` with `market-item`
+  (`market-price`, `market-record`, `buy-deposit`, `buy`), `market-refresh`, `market-sales` (`sell-row`),
+  `market-bought` (`bought-row`). The Streams catalog's priced streams: `catalog-market`.
 - `await satori.sell(stream, price)` (only on the person's request): one of
   this app's `<stream>_pred` at `price` SATORI per observation (a decimal
   string, `'0.001'`, at most 8 decimals), announced at once → `nostr()`.
@@ -1054,7 +1060,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   again", Reload); "Satori could not start" (`fatal`: the error, Reload).
 - **Six tabs** once set up: on a phone a bar at the bottom with Game, Home
   (in the middle) and Menu (`tab-menu`, three lines) that lists Models,
-  Streams, Wallet and Settings above it
+  Streams, Market, Wallet and Settings above it
   (`tab-menu-list`; closes on a choice, a tap outside or Escape); a top nav
   on a computer (1024 px and wider). The URL's `#game`, `#home`, `#models`
   (and `#models/<id>`), `#streams`, `#wallet`, `#settings` open them (a link

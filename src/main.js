@@ -37,6 +37,8 @@ import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
+import { listingOf } from './neuron/market.js';
+import { formatEther } from 'viem';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
@@ -1567,6 +1569,21 @@ window.satori = {
   /** The relays' stream catalog (newest per provider and stream, no tombstones); `pred` and `subscribed` marked. */
   async discover() { ready(); const list = await nostr.discover(); state.catalog = list; return list; },
   /**
+   * The Market tab (docs/design/market.md#the-market-tab): `forSale`, every stream the relays announce with a price
+   * (discover()'s entries, with its listing's `price` in SATORI and the track record's `record` when watched); and
+   * nostr().market's `selling` and `bought`.
+   */
+  async market() {
+    ready();
+    const list = state.catalog.length ? state.catalog : await window.satori.discover();
+    const records = await nostr.records();
+    const forSale = list.filter((s) => listingOf(s)).map((s) => ({ pubkey: s.pubkey, stream: s.stream_name, name: s.name,
+      description: s.description, cadence_seconds: s.cadence_seconds, price: formatEther(listingOf(s).price),
+      record: records.find((r) => r.pubkey === s.pubkey && r.stream === s.stream_name)?.markText ?? null }));
+    const { market: mk } = await nostrStatus();
+    return { forSale, selling: mk?.selling ?? [], bought: mk?.bought ?? [] };
+  },
+  /**
    * Follow a free stream: its data kept (Streams, the engine's inputs). { predict: true } predicts it too: its
    * `<stream>_pred` is published to the relays on each new observation (or setPredict later).
    */
@@ -1681,7 +1698,11 @@ watch(lineOf(['watch'], createHold({ show: (v) => { state.watchLine = v.line; } 
 /** Streams › Prediction streams: read when the tab shows, and when the watched set changes (nostr's status). */
 watch(() => {
   void state.nostr.watching;
-  if (state.tab === 'streams' && state.screen === 'home') refreshRecords();
+  if ((state.tab === 'streams' || state.tab === 'market') && state.screen === 'home') refreshRecords();
+});
+/** The Market tab: what the relays offer, asked for when it opens and nothing is known yet. */
+watch(() => state.tab === 'market' && state.screen === 'home', (open) => {
+  if (open && !state.catalog.length && !state.discovering) void actions.discover();
 });
 watch(lineOf(['reward'], createHold({ show: (v) => { state.rewardLine = v.line; } }))); // Settings › Reward address
 /** The Models tab's status: the poll's, the Base batch's, the training pass's or a Retrain's step, in Home's hero's words at its pace (no ring). */

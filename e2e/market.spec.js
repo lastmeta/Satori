@@ -1,10 +1,10 @@
 // Paid streams in Chrome (docs/design/market.md#selling-and-buying-over-the-relays): two neurons, a seller and a buyer,
 // each in its own browser context, on the test relay 7781 (scripts/test-relay.mjs) and the local fork of Base Sepolia on
 // :8545 (node scripts/fork.mjs start) with the real PaymentChannels and SATORI, fresh throwaway keys funded there. A
-// provider publishes a stream every 6 s; the seller predicts it and sells its `_pred` (Streams › Sell); the buyer finds it
-// in Streams on the relays and Buys (Unlock in place): the wallet opens a channel, each observation comes encrypted to it
+// provider publishes a stream every 6 s; the seller predicts it and sells its `_pred` (Market › Your sales); the buyer finds it
+// on the Market tab and Buys (Unlock in place): the wallet opens a channel, each observation comes encrypted to it
 // alone (in public a heartbeat), lands in its track record, and is paid with a voucher; Stop asks the contract to close, the
-// seller stops delivering and settles in its next pass (at most once a day; here a reload runs it), into its wallet. SHOTS=1 writes docs/screenshots/streams-sell-* and streams-buy-*.
+// seller stops delivering and settles in its next pass (at most once a day; here a reload runs it), into its wallet. SHOTS=1 writes docs/screenshots/market-sell-* and market-buy-*.
 import { expect, test } from '@playwright/test';
 import WebSocket from 'ws';
 import { createPublicClient, http, parseEther } from 'viem';
@@ -66,21 +66,20 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     await seller.page.evaluate(([p, s]) => window.satori.subscribe(p, s, { predict: true }), [provider.pubkey, stream]);
     const s = seller.page;
     await s.setViewportSize({ width: 390, height: 844 });
-    await s.evaluate(() => window.satori.go('streams'));
-    const row = s.locator(`[data-test=sell-row][data-stream="${pred}"]`);
+    await s.evaluate(() => window.satori.go('market'));
+    const row = s.locator(`[data-test=market-sales] [data-test=sell-row][data-stream="${pred}"]`);
     await expect(row.locator('[data-test=sell-state]')).toHaveText('Free');
     await row.locator('[data-test=sell-price]').fill('0.001');
     await row.locator('[data-test=sell]').click();
     await expect(row.locator('[data-test=sell-state]')).toHaveText('0.001 SATORI each');
     await expect(row.locator('[data-test=unsell]')).toHaveText('Make free');
 
-    // the buyer finds it in Streams on the relays: its price, a deposit of 100 observations, Buy; Unlock in place
+    // the buyer finds it on the Market tab: its price, a deposit of 100 observations, Buy; Unlock in place
     const b = buyer.page;
     await b.setViewportSize({ width: 390, height: 844 });
-    await b.evaluate(() => window.satori.go('streams'));
-    await b.locator('[data-test=network] summary').click();
-    const item = b.locator('[data-test=catalog-row]', { hasText: pred });
-    await expect(item.locator('[data-test=catalog-price]')).toHaveText('0.001 SATORI each', { timeout: 30_000 });
+    await b.evaluate(() => window.satori.go('market'));
+    const item = b.locator('[data-test=market-item]', { hasText: pred });
+    await expect(item.locator('[data-test=market-price]')).toHaveText('0.001 SATORI each', { timeout: 30_000 });
     await expect(item.locator('[data-test=buy-deposit]')).toHaveValue('0.1');
     await item.locator('[data-test=buy-deposit]').fill('0.01');
     await item.locator('[data-test=buy]').click();
@@ -113,14 +112,14 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     await expect.poll(async () => (await b.evaluate(([p, st]) => window.satori.record(p, st), [seller.nostr, pred]))?.received ?? 0)
       .toBeGreaterThanOrEqual(2);
 
-    // the screens: the seller's Sell with its buyer; the buyer's Bought, and the row in Streams on the relays
+    // the screens: the seller's sales with its buyer; the buyer's Bought, on the Market tab
     await expect(row.locator('[data-test=sell-state]')).toHaveText('0.001 SATORI each · 1 buying');
     await s.setViewportSize({ width: 390, height: 2400 }); // tall, so the phone's tab bar is not over the card
-    await shot(s.locator('section.card.nostr'), 'streams-sell-phone-light');
+    await shot(s.locator('[data-test=market-tab]'), 'market-sell-phone-light');
     const left = b.locator(`[data-test=bought-row][data-key="${seller.nostr}:${pred}"] [data-test=bought-left]`);
     await expect(left).toHaveText(/^0\.00\d+ of 0\.01 SATORI left$/);
     await b.setViewportSize({ width: 390, height: 2400 });
-    await shot(b.locator('section.card.nostr'), 'streams-buy-phone-light');
+    await shot(b.locator('[data-test=market-tab]'), 'market-buy-phone-light');
 
     // Stop: the alias asks to close (no Unlock); the seller stops delivering, and settles into its wallet in its next pass
     await b.locator(`[data-test=bought-row][data-key="${seller.nostr}:${pred}"] [data-test=stop]`).click();
