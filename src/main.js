@@ -34,7 +34,7 @@ import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
 import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
-import { referrerOf, shareLink } from './neuron/referral.js';
+import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -43,7 +43,7 @@ import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
-import { writePref, SORT_KEY, INSTALL_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
+import { readPref, writePref, SORT_KEY, INSTALL_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
 import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView } from './wallets.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
@@ -1012,7 +1012,7 @@ const actions = {
   },
   /** Share: the invite link (docs/design/base.md#referral-invite-links) to the device's share sheet, else copied. */
   async share() {
-    if (await shareLink(state.base.inviteLink) !== 'copied') return;
+    if (await shareLink(sharedLink(state.base.inviteLink, state.tab)) !== 'copied') return;
     state.copied = 'share';
     setTimeout(() => (state.copied = ''), 1500);
   },
@@ -1534,7 +1534,9 @@ async function boot() {
   root.replaceChildren(); // index.html's "Opening…", painted before any module loads
   const { tab, model } = routeOf(location.hash);
   if (tab) Object.assign(state, { tab, modelOpen: model });
+  else if (readPref(GAME_KEY, ['in', 'out'], 'out') === 'in') state.tab = 'game'; // no route: where they were playing
   render(root, actions);
+  watch(() => writePref(GAME_KEY, state.tab === 'game' ? 'in' : 'out'));
   applyTheme(state.theme); // public/theme.js set data-theme before the first paint; this, the browser bar's color too
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => { state.systemDark = e.matches; });
   glowChips();

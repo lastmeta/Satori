@@ -12,7 +12,10 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   step. After in-flight work finishes, propose a whole-setup review, not features.
 - **Deploy without asking.** Finished, reviewed, tested work is deployed to
   app.satorinet.io and smoke-tested live (BRIEF: "Deploying app.satorinet.io"),
-  then reported as done.
+  then reported as done. **Deploy first, then test** (2026-10-25): once a
+  change works in the dev app, deploy it right away and run the long test
+  suites afterwards; fix and redeploy if they fail. The owner doesn't wait on
+  suites.
 - **Autonomous only.** The app plays off-chain (predictions to the Satori
   Network) and on-chain (the alias sends a daily batch once the wallet stakes its
   prediction power) automatically. No manual game UI: hand play is a separate

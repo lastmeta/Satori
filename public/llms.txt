@@ -981,13 +981,18 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (`elsewhere`: this tab takes over when that one closes); "Satori's
   database can't be opened" (`damaged`: DuckDB's words, "Set aside and start
   again", Reload); "Satori could not start" (`fatal`: the error, Reload).
-- **Five tabs** once set up: a tab bar at the bottom on a phone, a top nav on
-  a computer (1024 px and wider); the URL's `#home`, `#models` (and
-  `#models/<id>`), `#streams`, `#wallet`, `#settings` open them (a link or a
-  reload keeps the tab). The header has Lock and "Locks in 4 min" while
+- **Six tabs** once set up: on a phone a bar at the bottom with Game, Home,
+  Models and, at its right edge, a menu icon (three lines, no word;
+  `tab-menu`) that lists Streams, Wallet and Settings above it
+  (`tab-menu-list`; closes on a choice, a tap outside or Escape); a top nav
+  on a computer (1024 px and wider). The URL's `#game`, `#home`, `#models`
+  (and `#models/<id>`), `#streams`, `#wallet`, `#settings` open them (a link
+  or a reload keeps the tab). **Game** (`game-tab`) is blank for now. With
+  no route the app opens to the game if it was entered last and not left
+  since (kept on this device, `satori-game`: `in`/`out`), else Home. The header has Lock and "Locks in 4 min" while
   unlocked, and "Update ready, reload" when a new version waits; on Home a
   share icon (`share`: the invite link, "Link copied" without a share
-  sheet); everywhere a sun or moon (`theme-toggle`: to Light in dark, to Dark
+  sheet; shared from the Game tab it ends in `#game`, so it opens the game); everywhere a sun or moon (`theme-toggle`: to Light in dark, to Dark
   in light, as Settings → Appearance).
 - **Home** answers "is my neuron predicting every day on its own, and is
   anything broken?" at a glance (`health()`'s object, drawn): the hero (an
@@ -1117,7 +1122,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `home-gas`, `claimable` (its own card) with `claimable-amount`,
   `claimable-parts`, `claim` and `claim-result`, `home-stream`,
   `activity`, `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`,
-  `tab-<tab>`, `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`.
+  `tab-<tab>` (Streams, Wallet, Settings: in `tab-menu-list`), `tab-menu`,
+  `game-tab`, `models-tab`, `streams-tab`, `wallet-tab`, `settings-tab`.
   Models: `engine` (`data-tone`), `engine-title`, `engine-line`,
   `engine-kinds`, `engine-quality` (the bar's legend), `engine-median`,
   `engine-note`, `models-filter-<network|contract|relays>` (toggles,

@@ -10,6 +10,9 @@ export function referrerOf(search) {
 /** The link that makes whoever opens it this wallet's referral. */
 export const inviteLink = (origin, wallet) => (origin && wallet ? `${origin}/?ref=${wallet}` : '');
 
+/** The invite link as shared from `tab`: from the game it opens the game (#game), else Home as usual. */
+export const sharedLink = (link, tab) => (link && tab === 'game' ? `${link}#game` : link);
+
 /**
  * Share a link: the device's share sheet when it has one, else copied. → 'shared' | 'cancelled' (the sheet closed with
  * no choice) | 'copied' | null (nothing to share, or no way to copy)

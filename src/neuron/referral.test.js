@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { inviteLink, referrerOf, shareLink } from './referral.js';
+import { inviteLink, referrerOf, shareLink, sharedLink } from './referral.js';
 
 const A = '0x' + 'ab'.repeat(20);
 
@@ -56,4 +56,12 @@ describe('shareLink: the device\'s share sheet, else copied', () => {
     expect(await shareLink(A, {})).toBeNull();
     expect(await shareLink(A, { clipboard: { writeText: async () => { throw new Error('denied'); } } })).toBeNull();
   });
+});
+
+test('sharedLink: from the game it opens the game; from any other tab, Home as usual', () => {
+  const link = `https://app.satorinet.io/?ref=${A}`;
+  expect(sharedLink(link, 'game')).toBe(`${link}#game`);
+  expect(sharedLink(link, 'home')).toBe(link);
+  expect(sharedLink(link, 'wallet')).toBe(link);
+  expect(sharedLink('', 'game')).toBe('');
 });

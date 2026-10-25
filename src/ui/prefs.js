@@ -3,6 +3,7 @@
 // with its menu's keys; the last visit's Home is another (a snapshot painted at once on the next visit).
 
 export const SORT_KEY = 'satori-models-sort';
+export const GAME_KEY = 'satori-game'; // 'in': the game was entered last (the app opens to it), 'out': it was left
 export const INSTALL_KEY = 'satori-install-advice'; // 'dismissed': Home's Install card was put away (docs/design/pwa.md#install)
 
 const local = () => {

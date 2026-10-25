@@ -1,5 +1,5 @@
-// The shell: the header, the tabs (Home · Models · Streams · Wallet · Settings: a tab bar on a phone, a top nav on a
-// computer; hash routes #home … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
+// The shell: the header, the tabs (Game · Home · Models · Streams · Wallet · Settings: on a phone a bar of Game, Home,
+// Models and a menu holding the rest; on a computer a top nav; hash routes #game … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
 // "open in another tab", "could not start", "the database can't be opened". ArrowJS. Every screen and tab is built once and shown or hidden, so
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, watch } from '@arrow-js/core';
@@ -15,16 +15,22 @@ import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['home', 'models', 'streams', 'wallet', 'settings'];
-const LABEL = { home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
+export const TABS = ['game', 'home', 'models', 'streams', 'wallet', 'settings'];
+const BAR = ['game', 'home', 'models']; // the phone's bar; the rest are in its menu (☰)
+const MENU = TABS.filter((t) => !BAR.includes(t));
+const LABEL = { game: 'Game', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
+  // a game controller
+  game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path><path d="M7 10v4M5 12h4"></path><circle cx="16" cy="11" r="0.6"></circle><circle cx="18" cy="13" r="0.6"></circle></svg>`,
   home: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>`,
   // three streams in, one model, a forecast out
   models: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8h6M2 12h6M2 16h6"></path><rect x="8" y="5" width="8" height="14" rx="1.5"></rect><path d="M16 12h6"></path></svg>`,
   streams: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"></path></svg>`,
   wallet: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M16 12h2"></path></svg>`,
-  settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>`,
+  // a gear (three lines is the menu's)
+  settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path><circle cx="12" cy="12" r="6.5"></circle></svg>`,
 };
+const MENU_ICON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
 // the header's icons: share (one dot joined to two), and the theme: the sun in dark mode (to light), the moon in light
 const SHARE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.6"></circle><circle cx="18" cy="5.5" r="2.6"></circle><circle cx="18" cy="18.5" r="2.6"></circle><path d="M8.3 10.8l7.4-4.1M8.3 13.2l7.4 4.1"></path></svg>`;
 const SUN = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>`;
@@ -43,6 +49,12 @@ const goTo = (a, t) => (e) => {
 };
 const navLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`nav-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${LABEL[t]}</a>`;
 const barLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
+const menuLink = (a, t) => html`<a href="${`#${t}`}" role="menuitem" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${(e) => { state.menuOpen = false; goTo(a, t)(e); }}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
+/** The phone's menu (☰, at the bar's right edge, no word): Streams, Wallet, Settings, listed above it. */
+const tabMenu = (a) => html`<div class="tabmenu">
+    <button class="menu-btn" data-test="tab-menu" aria-label="More" aria-haspopup="menu" aria-expanded="${() => String(!!state.menuOpen)}" data-current="${() => MENU.includes(state.tab)}" @click="${() => { state.menuOpen = !state.menuOpen; }}">${MENU_ICON()}</button>
+    <div class="menu-list" role="menu" data-test="tab-menu-list" hidden="${() => !state.menuOpen}">${MENU.map((t) => menuLink(a, t))}</div>
+  </div>`;
 
 /** Setup's way back (docs/design/wallets.md#several-wallets): the app's other wallets that were set up. */
 const otherWallets = () => state.wallets.wallets.filter((w) => !w.active && w.address);
@@ -228,6 +240,7 @@ export function render(root, a) {
     </section>
     ${setup(a)}
     <div hidden="${() => state.screen !== 'home' && !(state.screen === 'loading' && state.cached)}">
+      <section class="tab-page" data-test="game-tab" hidden="${() => state.tab !== 'game'}"></section>
       ${home(a)}
       ${modelsTab(a)}
       ${streamsTab(a)}
@@ -235,7 +248,10 @@ export function render(root, a) {
       ${settingsTab(a)}
     </div>
   </main>
-  <nav class="tabbar" aria-label="Sections" hidden="${running}">${TABS.map((t) => barLink(a, t))}</nav>`(root);
+  <nav class="tabbar" aria-label="Sections" hidden="${running}">${BAR.map((t) => barLink(a, t))}${tabMenu(a)}</nav>`(root);
+  // the menu closes on a tap outside it, or Escape
+  addEventListener('click', (e) => { if (state.menuOpen && !e.target.closest?.('.tabmenu')) state.menuOpen = false; });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') state.menuOpen = false; });
   watchModelWidth(root);
   // The activity feed is open on a computer, a tap away on a phone.
   const wide = matchMedia('(min-width: 1024px)');

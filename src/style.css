@@ -101,13 +101,20 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .topnav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(3, 1fr) auto; /* Game, Home, Models; the menu narrow at the edge */
   background: var(--card); border-top: 1px solid var(--line);
-  padding: 4px max(4px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(4px, env(safe-area-inset-left, 0px));
+  padding: 4px env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) max(4px, env(safe-area-inset-left, 0px)); /* the menu at the right edge */
 }
 .tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 56px; font-size: 0.72rem; }
 .tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .tabbar a[aria-current="page"] { color: var(--accent); font-weight: 600; }
+.tabmenu { position: relative; display: grid; }
+.menu-btn { min-width: 44px; min-height: 56px; padding: 0 6px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; }
+.menu-btn[data-current="true"], .menu-btn[aria-expanded="true"] { color: var(--accent); }
+.menu-list { position: absolute; right: 0; bottom: calc(100% + 8px); min-width: 180px; display: grid; padding: 6px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); }
+.tabbar .menu-list a { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; border-radius: 10px; font-size: 0.95rem; color: var(--text); justify-items: start; }
+.tabbar .menu-list a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
 
 /* ── controls: every tap target at least 44 px ── */
 button, .btn {

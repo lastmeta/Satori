@@ -10,7 +10,8 @@ export const state = reactive({
   engine: null,
   setupWaiting: false, // Setup's keys wait for the database: "Finishing setup… downloading the engine, 3.2 of 7.6 MB"
   cached: null, // while loading on a revisit: the last visit's Home (src/ui/prefs.js snapshotOf), painted until live
-  tab: 'home', // home | models | streams | wallet | settings (the URL's #home … #settings; #models/<id> opens a model)
+  tab: 'home', // game | home | models | streams | wallet | settings (the URL's #game … #settings; #models/<id> opens a model)
+  menuOpen: false, // the phone bar's menu (Streams, Wallet, Settings)
   now: Date.now() / 1000, // ticks every 30 s: relative times and the health's thresholds
   fatal: '',
   busy: '', // what is running: '' | 'setup' | 'unlock'
