@@ -96,6 +96,11 @@ function moves(a) {
   };
   return {
     can: (dir) => !!to(dir),
+    /** What a drag that way moves: the whole screen when it leads to the other screen, else the stream. */
+    dragged: (dir) => {
+      const t = to(dir);
+      return movingEl(!!t && t.screen !== g().screen);
+    },
     next: (from) => go(1, a.gameNext, from),
     back: (from) => go(-1, a.gameBack, from),
     pick: (d) => go(1, () => a.gamePick(d)),
@@ -111,7 +116,8 @@ function swipe(m) {
   let start = null;
   let dx = 0;
   let dragging = false;
-  const target = () => movingEl(false);
+  let held = null; // what the finger moves now
+  const target = () => held ?? movingEl(false);
   const canBack = () => m.can(-1);
   const canNext = () => m.can(1);
   const settle = (el) => {
@@ -131,7 +137,9 @@ function swipe(m) {
       }
       if (!dragging) return;
       dx = (x < 0 ? canNext() : canBack()) ? x : x * 0.25;
-      const el = target();
+      const el = m.dragged(x < 0 ? 1 : -1);
+      if (held && held !== el) held.style.transform = ''; // turned back the other way: the other thing moves
+      held = el;
       if (el) el.style.transform = `translateX(${dx}px)`;
     },
     up: () => {
@@ -142,11 +150,14 @@ function swipe(m) {
       justDragged = true;
       setTimeout(() => { justDragged = false; }); // the click that ends this drag comes first
       const el = target();
-      if (dx <= -60 && canNext()) return void m.next(dx);
-      if (dx >= 60 && canBack()) return void m.back(dx);
-      settle(el);
+      held = null;
+      const dir = dx <= -60 && canNext() ? 1 : dx >= 60 && canBack() ? -1 : 0;
+      if (!dir) return void settle(el);
+      if (el) el.style.transform = ''; // the slide carries on from dx, with a copy
+      if (dir > 0) m.next(dx);
+      else m.back(dx);
     },
-    cancel: () => { start = null; dragging = false; settle(target()); },
+    cancel: () => { start = null; dragging = false; settle(target()); held = null; },
   };
 }
 let justDragged = false;
