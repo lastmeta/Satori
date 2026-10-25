@@ -11,6 +11,7 @@ import { UP, DOWN, ROUND_S, INDEFINITE, HOOK_GAS } from '../chain/index.js';
 import { createWork } from './work.js';
 import { FALLBACK_RPC } from '../chain/config.js';
 import {
+  PLAYED_BY_HAND,
   createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, proofState, dropClaimable,
   checkSend, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS, STUCK_S,
 } from './base.js';
@@ -165,6 +166,14 @@ describe('the daily batch', () => {
     expect(db.checkpoint).toHaveBeenCalled();
     expect(await runBatch({ chain: chainOf(), alias, db })).toMatchObject({ skipped: 'already predicted this round' });
     expect(rpc.sent).toHaveLength(1);
+  });
+
+  test('played by hand (the Game tab): the calls are worked out as always, nothing is sent', async () => {
+    await staked();
+    const r = await runBatch({ chain: chainOf(), alias, db, manual: true });
+    expect(r).toMatchObject({ round: ROUND, skipped: PLAYED_BY_HAND, games: [{ gameId: 1, direction: UP, model: 'naive' }], dropped: [] });
+    expect(rpc.sent).toHaveLength(0);
+    expect(db.m.get('base_last_batch')).toBeUndefined();
   });
 
   test('a stream with no values yet (a Sentiment stream on a new deployment): predicted anyway, DOWN; the contract records its first value', async () => {
@@ -586,6 +595,21 @@ describe('createBase', () => {
     expect(r.error).toEqual(expect.any(String));
     expect(r).not.toHaveProperty('unused'); // staked: a failure
     rpc.state.down = false;
+  });
+
+  test('played by hand (setPlay, kept): a due batch is worked out and not sent; automatic again, it is sent', async () => {
+    await staked();
+    expect((await base.status()).play).toBe(null); // not read yet
+    await base.refresh();
+    expect((await base.status()).play).toBe('auto'); // the default
+    expect((await base.setPlay('manual')).play).toBe('manual');
+    expect(db.m.get('base_play')).toBe('manual');
+    await expect(base.setPlay('sometimes')).rejects.toThrow(/one of auto, manual/);
+    expect(await base.predict()).toMatchObject({ skipped: PLAYED_BY_HAND, games: [{ gameId: 1 }] });
+    expect(batchesSent()).toHaveLength(0);
+    await base.setPlay('auto');
+    expect(await base.predict()).toMatchObject({ sent: { round: ROUND } });
+    expect(batchesSent()).toHaveLength(1);
   });
 
   test('status: a batch sent and not mined, with its stuck state (Home says it)', async () => {

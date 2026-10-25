@@ -378,6 +378,27 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    Lite writes its time before sending (START:1228-1232), so a revert loses
    the day; here a failed send is shown, and the next check tries again.
 
+### Played by hand
+
+The Game tab (owner, 2026-10-25) is where the person plays the Satori contract
+themselves. The game clashes with the daily batch, so there is one switch,
+`base_play` (`'auto'`, the default, or `'manual'`), kept in the database and
+in `base().play`:
+
+- **auto**: as above.
+- **manual**: the check runs as always (the chain is read, the models make
+  the day's calls, each is simulated) and stops before sending:
+  `{ skipped: 'played by hand: the batch is not sent', games, dropped }`.
+  The activity log keeps quiet about it, and Home's Contract chip says
+  "Played by hand", grey. Nothing else changes: the stake, claims, the Satori
+  Network and the models.
+
+The Game tab while automatic: the game greyed out under "The app plays for
+you" and **Play by hand**. By hand: the game, and a line saying the app
+doesn't send its daily predictions, with **Switch to automatic**. The switch
+shows at once and is stored meanwhile (`setPlay`, `src/main.js`). Agents:
+`satori.setPlay('auto' | 'manual')`.
+
 ### A batch that never mines
 
 The reliability review (2026-10-19) found a batch that is never mined was

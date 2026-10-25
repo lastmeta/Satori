@@ -110,6 +110,13 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 56px; font-size: 0.72rem; }
 .tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .tabbar a[aria-current="page"] { color: var(--accent); font-weight: 600; }
+/* the Game tab: greyed out under the switch while the app plays on its own (src/ui/game.js) */
+.game-stage { position: relative; display: grid; }
+.game-board { min-height: 60vh; transition: opacity 0.3s ease, filter 0.3s ease; }
+.game[data-play="auto"] .game-board, .game:not([data-play]) .game-board { opacity: 0.4; filter: grayscale(1); }
+.play-switch { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); box-shadow: 0 8px 24px rgb(0 0 0 / 0.15); }
+.play-switch h2 { margin-top: 0; }
+.play-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); font-size: 0.88rem; }
 .tabmenu { position: relative; display: grid; }
 .menu-btn { min-width: 44px; min-height: 56px; padding: 0 6px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; }
 .menu-btn[data-current="true"], .menu-btn[aria-expanded="true"] { color: var(--accent); }

@@ -16,11 +16,16 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   change works in the dev app, deploy it right away and run the long test
   suites afterwards; fix and redeploy if they fail. The owner doesn't wait on
   suites.
-- **Autonomous only.** The app plays off-chain (predictions to the Satori
-  Network) and on-chain (the alias sends a daily batch once the wallet stakes its
-  prediction power) automatically. No manual game UI: hand play is a separate
-  slim app, "Satori Daily". A staked wallet can't play by hand
-  (`SatoriEngine.sol` reverts `Delegated`); the Base card says so and links there.
+- **Autonomous by default; the Game tab plays by hand** (2026-10-25,
+  replacing "Autonomous only"). The app plays off-chain (the Satori Network)
+  and on-chain (the alias's daily batch once the wallet stakes) automatically.
+  The Game tab is a much simplified dapp; playing there means switching the
+  app to "by hand": one flag (`base_play`), and the only thing it changes is
+  that the daily batch is worked out but not sent. Data, models, the Satori
+  Network and the stake are all left alone. While automatic, the Game tab is
+  greyed out with the switch. The game itself is still to be designed with
+  the owner. Note `SatoriEngine.sol` reverts `Delegated` for a staked wallet
+  playing itself.
 - **Migrate in, never back.** Import and translate Dockerized Neuron (Lite) data;
   never keep legacy formats or limits so things can go back.
 - **Waits aren't problems** (2026-10-25). When something the user can't fix

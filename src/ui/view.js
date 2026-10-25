@@ -8,6 +8,7 @@ import { state } from './state.js';
 import { form, wordList } from './parts.js';
 import { lockInText, engineText, openingText, shortHash } from './format.js';
 import { home } from './home.js';
+import { gameTab } from './game.js';
 import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
 import { walletTab } from './wallet.js';
@@ -240,7 +241,7 @@ export function render(root, a) {
     </section>
     ${setup(a)}
     <div hidden="${() => state.screen !== 'home' && !(state.screen === 'loading' && state.cached)}">
-      <section class="tab-page" data-test="game-tab" hidden="${() => state.tab !== 'game'}"></section>
+      ${gameTab(a)}
       ${home(a)}
       ${modelsTab(a)}
       ${streamsTab(a)}

@@ -111,6 +111,7 @@ export const state = reactive({
     alias: { address: '', eth: null, power: null, batchesLeft: null, lowEth: false, noGas: false },
     wallet: { address: '', eth: null, satori: null, stakedWith: null, referral: null, staked: null, inSync: null, shortfall: null, lock: null, lowEth: false },
     claimable: { rewards: null, drop: null, airdrop: null, total: null }, pendingReferrer: null, inviteLink: '', lastBatch: null, lastCheck: null, nextCheck: null, checking: false,
+    play: null, // 'auto' | 'manual' (the Game tab); null until read
   },
   baseBusy: '', // '' | 'refresh' | 'stake' | 'unstake' | 'claim' | 'send'
   baseDid: '', // the last wallet action ('stake' | 'unstake' | 'claim' | 'send'): where its result shows

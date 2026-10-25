@@ -359,6 +359,7 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   else if (base.wallet?.staked === 'other') baseChip = { state: 'idle', text: 'Staked elsewhere', off: true };
   else if (base.wallet?.staked !== 'alias') baseChip = { state: 'idle', text: 'Not staked', off: true };
   else if (!(Number(base.alias?.power) > 0)) baseChip = { state: 'idle', text: 'No SATORI staked', off: true };
+  else if (base.play === 'manual') baseChip = { state: 'idle', text: 'Played by hand', off: true }; // the Game tab sends
   else if (base.lastBatch?.round === base.round) baseChip = { state: 'ok', text: `Round ${base.round} sent` };
   else baseChip = { state: 'ok', text: base.checking ? 'Sending…' : `Round ${base.round} due` };
 

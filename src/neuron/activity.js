@@ -9,7 +9,7 @@ import { UP } from '../chain/index.js';
 import { DAYS, FIXABLE_SKIPS, HEARTBEAT_S, KEEP_S, SLEEP_S, isGood, missedBy } from './health.js';
 
 const LOAD_S = (DAYS + 1) * 86400; // what health reads: the day strip's 30 days and the feed
-const QUIET_SKIPS = /^(already predicted|waiting for the batch)/; // a round already done, or in flight: not news
+const QUIET_SKIPS = /^(already predicted|waiting for the batch|played by hand)/; // done, in flight, or by hand: not news
 
 /**
  * @param {{db: object, now?: () => number, onChange?: () => void}} o

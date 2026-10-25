@@ -614,6 +614,7 @@ describe('the tone: green while all is well (sky at rest, regular while working,
     expect(ch({ work: WORK.working }).network).toMatchObject({ state: 'ok', tone: 'working' });
     expect(ch({ work: { claim: e('claim', 'confirm', true) } }).contract).toMatchObject({ tone: 'working' }); // a wallet action is Base's
     expect(ch({ base: staked() }).contract).toMatchObject({ state: 'ok', tone: 'idle', text: 'Round 20742 due' });
+    expect(ch({ base: staked({ play: 'manual' }) }).contract).toMatchObject({ tone: 'off', text: 'Played by hand' }); // the Game tab sends
     expect(ch({ base: staked(), work: { base: e('base', 'send', true) } }).contract).toMatchObject({ tone: 'working' });
     expect(ch({ base: base({ config: null }) }).contract).toMatchObject({ text: 'Connecting…', tone: 'working' });
     expect(ch({ base: staked({ wallet: { satori: '100', staked: 'other' } }) }).contract).toMatchObject({ tone: 'off', text: 'Staked elsewhere' });

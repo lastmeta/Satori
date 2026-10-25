@@ -17,6 +17,12 @@ import { inviteLink, referrerOf } from './referral.js';
 import { emit, traced } from '../traffic.js';
 
 export const FIRST_CHECK_S = 10;
+/**
+ * Who sends the Satori contract predictions (docs/design/base.md#played-by-hand): 'auto', the alias's daily batch (the
+ * default), or 'manual', the person in the Game tab. Manual changes only that: the batch is worked out, never sent.
+ */
+export const PLAYS = ['auto', 'manual'];
+export const PLAYED_BY_HAND = 'played by hand: the batch is not sent';
 export const CHECK_EVERY_S = 3600;
 const AFTER_ROUND_S = 60; // the check after a round starts: 00:01 UTC, chain time
 const BATCH_GAS = 1_500_000n; // a one-game batch's limit (estimate + HOOK_GAS); measured 410k–790k used on the fork
@@ -218,7 +224,7 @@ async function unstick({ chain, alias, db, pending, maxFeeWei, now, at, round, r
  * @returns {Promise<object>} { at, round, sent: {round, at, hash, games, dropped} } | { at, round?, skipped, dropped?,
  *   pendingAt?, stuck? } | { at, error }
  */
-export async function runBatch({ chain, alias, db, forecast = engineForecast, maxFeeWei = parseGwei(String(MAX_FEE_GWEI)),
+export async function runBatch({ chain, alias, db, forecast = engineForecast, maxFeeWei = parseGwei(String(MAX_FEE_GWEI)), manual = false,
   pendingWaitMs = PENDING_WAIT_MS, sendWaitMs, stuckS = STUCK_S, now = () => Date.now() / 1000, report = () => {} }) {
   let at = null;
   try {
@@ -281,6 +287,8 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
       else games.push(game);
     }
     if (!games.length) return { at, round, skipped: dropped.length ? 'no game passes its simulation' : 'no streams with a game', dropped };
+    // played by hand (the Game tab): the day's calls are made, as always, and not sent
+    if (manual) return { at, round, skipped: PLAYED_BY_HAND, games, dropped };
 
     const fees = await chain.fees();
     if (fees.maxFeePerGas > maxFeeWei) {
@@ -347,6 +355,8 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
   let statusError = '';
   let proof = null; // the wallet's merkle proof from central: proofState, with { at, url } (asked at most hourly)
   let lastCheck = null;
+  let play = null; // PLAYS: read from base_play once, then kept here (setPlay writes both)
+  const readPlay = async () => (play ??= (await db.get('base_play')) === 'manual' ? 'manual' : 'auto');
   const changed = () => onChange();
   const hasReferral = (a) => !!a && !same(a, zeroAddress);
 
@@ -406,6 +416,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
   }
 
   async function refresh() {
+    await readPlay();
     try {
       const { chain } = await chainNow();
       [status] = await Promise.all([chain.status({ alias: alias.evmAddress, wallet: walletAddress }), proofNow()]);
@@ -454,7 +465,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       // the drop: the Satori Network's reward drop not claimed yet (null: this central does not say)
       claimable: { rewards: plainAmount(c?.rewards), drop: plainAmount(drop), airdrop: plainAmount(c?.airdrop),
         total: parts.length ? formatEther(parts.reduce((a, b) => a + b, 0n)) : null },
-      lastCheck, nextCheck: schedule.next, checking: schedule.running,
+      lastCheck, nextCheck: schedule.next, checking: schedule.running, play,
     };
   }
 
@@ -468,7 +479,8 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     let result;
     try {
       const { chain } = await chainNow();
-      result = await work.run('base', async (report) => runBatch({ chain, alias, db, forecast, maxFeeWei: await maxFeeWei(), now, report }));
+      const manual = (await readPlay()) === 'manual';
+      result = await work.run('base', async (report) => runBatch({ chain, alias, db, forecast, maxFeeWei: await maxFeeWei(), manual, now, report }));
     } catch (err) {
       result = { at: null, error: errorText(err) };
     }
@@ -560,6 +572,16 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
      * both; each is checked before either is saved. A new RPC is read at once.
      * → status()
      */
+    /** Who sends the Satori contract predictions: 'auto' (the daily batch) or 'manual' (the Game tab). → status() */
+    async setPlay(mode) {
+      if (!PLAYS.includes(mode)) throw new Error(`play: one of ${PLAYS.join(', ')}, not ${mode}.`);
+      play = mode;
+      await db.set('base_play', mode);
+      await db.checkpoint();
+      changed();
+      return this.status();
+    },
+
     async setSettings({ rpc, maxFee } = {}) {
       const url = rpc === undefined ? undefined : checkRpcSetting(rpc);
       const gwei = maxFee === undefined ? undefined : checkMaxFee(maxFee);

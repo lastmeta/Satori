@@ -1118,6 +1118,12 @@ const actions = {
     el.elements.rpc.value = state.base.rpcSetting;
     el.elements.maxFee.value = state.base.maxFeeSetting ?? '';
   },
+  /** The Game tab's switch: 'manual' (play by hand: the daily batch is not sent) or 'auto' (docs/design/base.md#played-by-hand). */
+  async setPlay(mode) {
+    const was = state.base.play;
+    state.base = { ...state.base, play: mode }; // at once; stored meanwhile
+    try { await base.setPlay(mode); } catch (err) { state.base = { ...state.base, play: was }; console.warn('[satori] play', err); }
+  },
   saveBase: shownAt('baseRpcError', async (f, el) => {
     state.base = await setBaseSettings({ rpc: f.rpc, maxFee: f.maxFee });
     actions.fillBase(el);
@@ -1379,6 +1385,8 @@ window.satori = {
   async setBaseRpc(url) { ready(); return setBaseSettings({ rpc: url }); },
   /** The unattended batch's ceiling on the max fee per gas, in gwei (null or '' = the default, 2). → base() */
   async setBaseMaxFee(gwei) { ready(); return base.setSettings({ maxFee: gwei }); },
+  /** Who sends the Satori contract predictions: 'auto' (the daily batch) or 'manual' (the Game tab: not sent). → base() */
+  async setPlay(mode) { ready(); const v = await base.setPlay(mode); state.base = v; return v; },
 };
 
 /** When this neuron began: the log's first session, or the keys' creation when earlier (records before it have none). */

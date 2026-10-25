@@ -948,6 +948,11 @@ the page's JS context:
   an https URL, a path on this site (such as `/rpc`), or `''` for the
   default. A saved URL replaces the default; a change is noted on Home for
   24 h.
+- `await satori.setPlay(mode)` → `base()` (only on the person's request):
+  `'manual'` plays the Satori contract by hand in the Game tab: the daily
+  batch is still worked out but never sent (`lastCheck.skipped`: "played by
+  hand: the batch is not sent", with its `games`); `'auto'` (the default)
+  sends it again. Nothing else changes. `base().play` says which.
 - `await satori.setBaseMaxFee(gwei)` → `base()` (only on the person's
   request): the most any transaction pays per gas, the batch's and the
   wallet's (a positive number; `''` or null = 2 gwei). Settings saves both at
@@ -987,7 +992,11 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (`tab-menu-list`; closes on a choice, a tap outside or Escape); a top nav
   on a computer (1024 px and wider). The URL's `#game`, `#home`, `#models`
   (and `#models/<id>`), `#streams`, `#wallet`, `#settings` open them (a link
-  or a reload keeps the tab). **Game** (`game-tab`) is blank for now. With
+  or a reload keeps the tab). **Game** (`game-tab`, `data-play`: auto or manual):
+  while the app plays automatically the game (`game-board`) is greyed out
+  under `play-switch` with **Play by hand** (`play-manual`); by hand,
+  `play-bar` says the app doesn't send its daily predictions, with
+  **Switch to automatic** (`play-auto`). The game itself is blank for now. With
   no route the app opens to the game if it was entered last and not left
   since (kept on this device, `satori-game`: `in`/`out`), else Home. The header has Lock and "Locks in 4 min" while
   unlocked, and "Update ready, reload" when a new version waits; on Home a

@@ -4,6 +4,15 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (played by hand)
+
+- New `satori.setPlay('auto' | 'manual')` and `base().play`. Manual: the daily
+  batch is worked out and not sent (`lastCheck.skipped` "played by hand: the
+  batch is not sent"); everything else is unchanged. Contract chip: "Played
+  by hand".
+- The Game tab: greyed out under `play-switch` (`play-manual`) while
+  automatic; by hand, `play-bar` with `play-auto`.
+
 ## Changed 2026-10-25 (a Game tab; the phone's bar and its menu)
 
 - New tab **Game** (`#game`, `game-tab`), blank for now; first in the top nav.
