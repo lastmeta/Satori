@@ -317,6 +317,19 @@ time." ([/llms.txt](../../public/llms.txt)).
 
 ![Backup asks for the passphrase each time](../screenshots/backup-passphrase.png)
 
+### An encrypted backup
+
+For agents (owner, 2026-10-25): a browser's storage can be wiped at any time
+and the person can't be counted on to back up, so an agent backs up for them.
+`exportBackup(passphrase)` (`sealBackup`, `src/keys/index.js`) seals the three
+keys (the wallet's words, the alias's, the Nostr key's nsec) as one JSON text
+with the passphrase, the way the wallet is stored here (PBKDF2-SHA-256 600 000,
+AES-GCM): `{ kind: 'satori-backup', v: 1, address, at, sealed }`. A connected
+wallet's own words stay in its wallet app (`wallet` null). `setup({ passphrase,
+backup })` opens it (`openBackup`) and sets up from the three. public/llms.txt
+tells agents to make it right after setup, keep it where the person keeps
+secrets, and say where.
+
 ## Secrets in memory
 
 JavaScript can't wipe a string, nor the curve library's numbers, so a

@@ -298,3 +298,36 @@ export function connectedBackup(record, which) {
     alias.lock();
   }
 }
+
+// ── an encrypted backup file (docs/design/keys.md#an-encrypted-backup): for an agent to keep where the person keeps
+// their secrets, since a browser's storage can be wiped at any time ──
+
+export const BACKUP_FILE = 'satori-backup';
+
+/**
+ * The keys (backupKeys' or connectedBackup's: { wallet?, alias, nostr }) sealed with a passphrase, as the wallet is
+ * stored here (PBKDF2, AES-GCM): one JSON object, safe to store and useless without the passphrase. A connected
+ * wallet's own words are in its wallet app: `wallet` null. → { kind: 'satori-backup', v: 1, address, at, sealed }
+ */
+export async function sealBackup({ address, keys, passphrase, at = new Date().toISOString() }) {
+  checkNewPassphrase(passphrase);
+  const plain = new TextEncoder().encode(JSON.stringify({ wallet: keys.wallet?.words ?? null, alias: keys.alias.words, nostr: keys.nostr.nsec }));
+  try {
+    return { kind: BACKUP_FILE, v: 1, address, at, sealed: await sealSecret(plain, passphrase) };
+  } finally {
+    plain.fill(0);
+  }
+}
+
+/** A backup file opened with its passphrase: { walletWords (null: a connected wallet's), aliasWords, nostrKey, address }. */
+export async function openBackup(backup, passphrase) {
+  const b = typeof backup === 'string' ? JSON.parse(backup) : backup;
+  if (b?.kind !== BACKUP_FILE || b.v !== 1) throw new Error('Not a Satori backup file.');
+  const plain = await openSecret(b.sealed, passphrase);
+  try {
+    const k = JSON.parse(new TextDecoder().decode(plain));
+    return { walletWords: k.wallet, aliasWords: k.alias, nostrKey: k.nostr, address: b.address };
+  } finally {
+    plain.fill(0);
+  }
+}

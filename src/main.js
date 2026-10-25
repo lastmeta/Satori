@@ -14,13 +14,13 @@ import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
-  generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
+  generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
   withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
-import { errorText } from './chain/index.js';
+import { errorText, UP, DOWN } from './chain/index.js';
 import { createAutoLock } from './keys/autolock.js';
 import { nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
@@ -36,7 +36,7 @@ import { relayUuid } from './nostr/satori.js';
 import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
-import { queueOf, stepOf, favoritesIn, played } from './ui/gameflow.js';
+import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -598,6 +598,23 @@ const marketAction = (what, fn) => exclusive(what, fn, 'marketBusy').finally(() 
   autoLock.touch();
   void refreshNostr();
 });
+
+/**
+ * The game's calls sent ([{ stream, direction }], docs/design/base.md#the-game), from the alias when the wallet is staked
+ * with it, else the wallet (unlocked, or its wallet app): those already predicted are done without sending; none
+ * left, nothing is sent. Noted (the Game tab opens on its Sent screen this round). → { count, hash, by, at, round }
+ */
+async function playCalls(calls, { by, round }) {
+  const real = calls.filter((c) => !played(c.stream));
+  let sent = { hash: null, by, count: calls.length, at: Math.floor(nowS()), round };
+  if (real.length) {
+    const r = await baseAction('play', () => base.playHand(real.map((c) => ({ gameId: c.stream.gameId, direction: c.direction }))));
+    activity.wallet('play', `Sent ${real.length} prediction${real.length === 1 ? '' : 's'} to the Satori contract by hand`);
+    sent = { ...r, count: calls.length };
+  }
+  await base.notePlay(sent).catch((err) => console.warn('[satori] game', err));
+  return sent;
+}
 
 /** A Base action, one at a time; then the card is read again. It counts as an interaction (the wallet's 5 minutes). */
 const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => {
@@ -1176,28 +1193,18 @@ const actions = {
    */
   gameSend() {
     const g = state.game;
-    const chosen = g.queue.filter((s) => g.picks[s.streamId]);
-    const picks = chosen.filter((s) => !played(s)).map((s) => ({ gameId: s.gameId, streamId: s.streamId, direction: g.picks[s.streamId] }));
-    if (!chosen.length || g.sending) return undefined;
-    const note = (sent) => base.notePlay(sent).catch((err) => console.warn('[satori] game', err));
-    if (!picks.length) {
-      const sent = { hash: null, by: g.by, count: chosen.length, at: Math.floor(Date.now() / 1000), round: g.round };
-      state.game = { ...g, sent };
-      return void note(sent);
-    }
+    const calls = g.queue.filter((s) => g.picks[s.streamId]).map((s) => ({ stream: s, direction: g.picks[s.streamId] }));
+    if (!calls.length || g.sending) return undefined;
     const run = async () => {
       state.game = { ...state.game, sending: true, sendError: '' };
       try {
-        const r = await baseAction('play', () => base.playHand(picks));
-        activity.wallet('play', `Sent ${picks.length} prediction${picks.length === 1 ? '' : 's'} to the Satori contract by hand`);
-        const sent = { ...r, count: chosen.length };
-        state.game = { ...state.game, sending: false, sent };
-        void note(sent);
+        state.game = { ...state.game, sending: false, sent: await playCalls(calls, g) };
       } catch (err) {
         state.game = { ...state.game, sending: false, sendError: errorText(err) };
       }
     };
-    return g.by === 'alias' ? run() : withWallet('game', run);
+    // nothing to send (all already predicted), or the alias sends: no Unlock
+    return g.by === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
   },
   /** The Game tab's switch: 'manual' (play by hand: the daily batch is not sent) or 'auto' (docs/design/base.md#played-by-hand). */
   async setPlay(mode) {
@@ -1299,7 +1306,12 @@ window.satori = {
    */
   async setAside() { await setAsideDb(); return window.satori.status(); },
   /** Create a wallet (random keys unless words or private keys, or the Nostr key's nsec or hex, are given). Stays locked. */
-  async setup({ passphrase, walletWords, aliasWords, nostrKey } = {}) {
+  async setup({ passphrase, walletWords, aliasWords, nostrKey, backup } = {}) {
+    if (backup) { // exportBackup()'s file, opened with its passphrase
+      const b = await openBackup(backup, passphrase);
+      if (!b.walletWords) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()), then restore the alias with aliasWords.");
+      ({ walletWords, aliasWords, nostrKey } = b);
+    }
     await setup(async () => {
       const keys = {};
       try {
@@ -1411,6 +1423,79 @@ window.satori = {
    * secret }; null or undefined → { alias, wallet, nostr }.
    */
   async backup(which, passphrase) { ready(); return backupOf(which, passphrase); },
+  /**
+   * Every key, sealed with `passphrase` (the wallet's; a connected wallet's own words are in its wallet app) in one
+   * JSON file to keep where the person keeps secrets: setup({ passphrase, backup }) restores it on a fresh browser.
+   * → { kind: 'satori-backup', v: 1, address, at, sealed }
+   */
+  async exportBackup(passphrase) {
+    ready();
+    const keys = await backupOf(undefined, passphrase);
+    return sealBackup({ address: walletPublic.evmAddress, keys, passphrase });
+  },
+  /** Import a Docker (Lite) install: { alias, wallet, nostr? } files' text, their `password`, and `passphrase` for this app (default: the password). */
+  async importDocker({ alias, wallet: walletText, nostr: nostrText, password = '', passphrase = password } = {}) {
+    await setup(async () => {
+      const secrets = await readDockerFiles({ aliasText: alias, walletText, password, nostrText });
+      try {
+        return await newKeys(secrets, passphrase);
+      } finally {
+        secrets.alias.fill(0);
+        secrets.wallet.fill(0);
+      }
+    }, { backedUp: true });
+    return window.satori.status();
+  },
+  /**
+   * The Game tab (docs/design/base.md#the-game): who plays (`by`: the alias when staked with it, else the wallet), the
+   * mode (`play`: by hand is 'manual'), whether it was played this round, the favorites, and the streams in the game's
+   * order (eligible: reward eligible; alreadyPredicted: played as usual, not sent), with their history.
+   */
+  async game() {
+    ready();
+    const { by, streams, round, played: last } = await base.gameStreams();
+    const favorites = readFavorites(walletPublic?.evmAddress);
+    const { queue, split } = queueOf(streams, favorites);
+    return { play: state.base.play, by, round, playedToday: last && last.round === round ? last : null, favorites,
+      streams: queue.map((s, i) => ({ streamId: s.streamId, gameId: s.gameId, name: s.name, named: s.named, eligible: i < split,
+        alreadyPredicted: played(s), latest: latestText(s), history: s.history })),
+      unavailable: streams.filter((s) => !queue.includes(s)).map((s) => ({ streamId: s.streamId, name: s.name, why: s.blocked })) };
+  },
+  /**
+   * Play the game by hand: [{ streamId, direction: 'up' | 'down' }], one transaction (needs setPlay('manual'); the wallet
+   * unlocked when it plays). → { count, hash (null: nothing needed sending), by, at, round }
+   */
+  async playGame(picks = []) {
+    ready();
+    if (state.base.play !== 'manual') throw new Error("The app plays automatically: setPlay('manual') first, if the person asked to play by hand.");
+    const g = await base.gameStreams();
+    const { queue } = queueOf(g.streams);
+    const calls = picks.map(({ streamId, direction }) => {
+      const stream = queue.find((s) => s.streamId === Number(streamId));
+      if (!stream) throw new Error(`Stream ${streamId} can't be played now.`);
+      if (direction !== 'up' && direction !== 'down') throw new Error("direction: 'up' or 'down'.");
+      return { stream, direction: direction === 'up' ? UP : DOWN };
+    });
+    if (!calls.length) throw new Error('No predictions to send.');
+    const sent = await playCalls(calls, g);
+    state.game = { ...state.game, loaded: 0 }; // the Game tab reads again when it opens
+    return sent;
+  },
+  /** The game's favorites (stream ids, shown first, in this order), kept on this device for this wallet. → them */
+  setGameFavorites(ids = []) {
+    const favorites = [...new Set(ids.map(Number).filter(Number.isInteger))];
+    writeFavorites(walletPublic?.evmAddress, favorites);
+    state.game = { ...state.game, favorites, loaded: 0 };
+    return favorites;
+  },
+  /** One day of Home's strip ('2026-10-24', local): when the app predicted, on the Satori Network and the contract, and how those did. */
+  async day(date) { ready(); return dayDetail(String(date)); },
+  /** Put away Home's advice card ('install': Install, kept on this device) or the recovered-database notice ('notice'). */
+  dismiss(what) {
+    if (what === 'notice') return void actions.dismissNotice();
+    if (what !== 'install') throw new Error("dismiss: 'install' or 'notice'.");
+    actions.dismissAdvice('install');
+  },
   /** Nostr: the key, the relays and their state, the subscribed streams with the latest observation and our `_pred`. */
   async nostr() { ready(); return nostrStatus(); },
   /** The relays' stream catalog (newest per provider and stream, no tombstones); `pred` and `subscribed` marked. */

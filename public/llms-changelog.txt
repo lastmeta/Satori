@@ -4,6 +4,14 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (agents: backups, the game, Docker import)
+
+- New: "The person's keys: back them up yourself (required)": right after setup, `exportBackup(passphrase)`
+  (every key, encrypted with the passphrase), saved where the person keeps secrets, and tell them where.
+  `setup({ passphrase, backup })` restores it.
+- New calls: `exportBackup`, `importDocker`, `game`, `playGame`, `setGameFavorites`, `day`, `dismiss`. Every
+  screen's action now has a call.
+
 ## Changed 2026-10-25 (updates)
 
 - A new version found by the load itself takes over silently (`status().app.update` stays false); one found
