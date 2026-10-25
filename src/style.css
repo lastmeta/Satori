@@ -88,6 +88,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .top-actions { display: flex; gap: 6px; align-items: center; }
 .top-actions .small-btn { padding: 6px 10px; }
 .top-actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; padding: 6px 8px; }
+.icon-btn.bare { background: none; border-color: transparent; color: var(--muted); }
+.icon-btn.bare:hover { color: var(--text); }
 .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .lock-in { white-space: nowrap; }
 .topnav { display: none; gap: 4px; margin-left: auto; }

@@ -176,7 +176,7 @@ export function render(root, a) {
       <span class="muted small lock-in" data-test="lock-in" hidden="${() => state.screen !== 'home' || !state.unlocked}">${() => lockInText(state.lockAt, state.lockNow)}</span>
       <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
       <button class="small-btn icon-btn" data-test="share" aria-label="Share" title="Share your invite link" hidden="${() => state.screen !== 'home' || !state.base.inviteLink}" @click="${a.share}">${() => (state.copied === 'share' ? 'Link copied' : SHARE())}</button>
-      <button class="small-btn icon-btn" data-test="theme-toggle" aria-label="${() => (isDark() ? 'Light mode' : 'Dark mode')}" title="${() => (isDark() ? 'Light mode' : 'Dark mode')}" @click="${() => a.setTheme(isDark() ? 'light' : 'dark')}">${() => (isDark() ? SUN() : MOON())}</button>
+      <button class="small-btn icon-btn bare" data-test="theme-toggle" aria-label="${() => (isDark() ? 'Light mode' : 'Dark mode')}" title="${() => (isDark() ? 'Light mode' : 'Dark mode')}" @click="${() => a.setTheme(isDark() ? 'light' : 'dark')}">${() => (isDark() ? SUN() : MOON())}</button>
     </div>
   </header>
   <main>
