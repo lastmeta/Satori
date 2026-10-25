@@ -432,6 +432,13 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return hours.map((hour, i) => ({ hour, value: values[i] }));
     },
 
+    /** Streams' names (the registry's metadata; '' where the read fails): one multicall. → [name] in the order of `ids` */
+    async streamNames(ids) {
+      if (!ids.length) return [];
+      const res = await client.multicall({ allowFailure: true, contracts: ids.map((id) => registry('getDataStreamInfo', [id])) });
+      return res.map((r) => (r.status === 'success' ? r.result[0] : ''));
+    },
+
     /** One game alone, from the alias, without sending: null when it would pass, else the revert's name. RPC errors throw. */
     async simulateGame(alias, { gameId, direction }) {
       try {

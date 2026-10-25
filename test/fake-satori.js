@@ -133,6 +133,10 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         const page = h.slice(total - Number(offset) - take, total - Number(offset));
         return [page.map((e) => e.value), page.map((e) => e.hour), total];
       },
+      getDataStreamInfo: ([id]) => {
+        const st = s.streams[id] ?? revert('InvalidStreamId');
+        return [st.name ?? (id === 1 ? 'satori' : `stream ${id}`), zeroAddress, 1, BigInt(st.history.at(-1)?.value ?? 0), BigInt(st.history.at(-1)?.hour ?? 0), true];
+      },
       isNamedStream: ([id]) => (s.streams[id] && !s.streams[id].namedReverts ? s.streams[id].named : revert()), // reverts for an unknown id (D6 and D7)
     }),
     [DEFAULTS.hub]: fns(abi.hubAbi, {

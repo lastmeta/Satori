@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (the game)
+
+- The Game tab's game: one stream at a time (name, star, latest value, its
+  line), down and up, swipes to skip and go back, a submit screen; sent from
+  the alias when staked with it, else the wallet. Ids in /llms.txt (Tabs).
+
 ## Changed 2026-10-25 (played by hand)
 
 - New `satori.setPlay('auto' | 'manual')` and `base().play`. Manual: the daily

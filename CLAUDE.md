@@ -23,8 +23,8 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   app to "by hand": one flag (`base_play`), and the only thing it changes is
   that the daily batch is worked out but not sent. Data, models, the Satori
   Network and the stake are all left alone. While automatic, the Game tab is
-  greyed out with the switch. The game itself is still to be designed with
-  the owner. Note `SatoriEngine.sol` reverts `Delegated` for a staked wallet
+  greyed out with the switch. The game: base.md "The game" (alias if staked
+  with it, else the wallet). Note `SatoriEngine.sol` reverts `Delegated` for a staked wallet
   playing itself.
 - **Migrate in, never back.** Import and translate Dockerized Neuron (Lite) data;
   never keep legacy formats or limits so things can go back.

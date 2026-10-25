@@ -77,6 +77,9 @@ export const state = reactive({
   streamPreds: [], // its latest predictions
   dayOpen: '', // the strip day opened on Home ('2026-10-24'), '' for none
   day: null, // that day (src/neuron/day.js dayOf), its contract calls with their results; kept while it fades out
+  // the Game tab (src/ui/game.js, src/ui/gameflow.js): the streams to play in order, where the player is, their calls
+  game: { loading: false, loaded: 0, error: '', by: null, streams: [], queue: [], favorites: [], favs: 0, index: 0, picks: {},
+    screen: 'play', move: '', sending: false, sendError: '', sent: null },
   settingsError: '',
   // the reward address (src/neuron/reward.js; Settings): { address, at, error, reading } as last read, what runs ('' | 'save' |
   // 'clear'), its step at Home's pace, the last result's words and error

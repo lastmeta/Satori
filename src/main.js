@@ -20,6 +20,7 @@ import {
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
+import { errorText } from './chain/index.js';
 import { createAutoLock } from './keys/autolock.js';
 import { nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
@@ -35,6 +36,7 @@ import { relayUuid } from './nostr/satori.js';
 import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
+import { queueOf, favoritesIn } from './ui/gameflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -43,7 +45,7 @@ import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
-import { readPref, writePref, SORT_KEY, INSTALL_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
+import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
 import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView } from './wallets.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
@@ -1118,6 +1120,67 @@ const actions = {
     el.elements.rpc.value = state.base.rpcSetting;
     el.elements.maxFee.value = state.base.maxFeeSetting ?? '';
   },
+  // ── the Game tab (docs/design/base.md#the-game) ──
+  /** Its streams read again: which can be played now, in order (favorites first). */
+  async loadGame() {
+    const g = state.game;
+    if (g.loading || !base) return;
+    state.game = { ...g, loading: true, error: '' };
+    try {
+      const { by, streams } = await base.gameStreams();
+      const favorites = readFavorites(walletPublic?.evmAddress);
+      const queue = queueOf(streams, favorites);
+      state.game = { ...state.game, loading: false, loaded: Date.now(), by, streams, queue, favorites,
+        favs: favoritesIn(queue, favorites), index: 0, picks: {}, screen: 'play', move: '', sendError: '', sent: null };
+    } catch (err) {
+      state.game = { ...state.game, loading: false, error: errorText(err) };
+    }
+  },
+  /** Up (UP) or down (DOWN) on the stream shown; the next one. */
+  gamePick(direction) {
+    const s = state.game.queue[state.game.index];
+    if (!s) return;
+    state.game = { ...state.game, picks: { ...state.game.picks, [s.streamId]: direction } };
+    actions.gameNext();
+  },
+  /** The next stream (a swipe left skips); past the last, the submit screen. */
+  gameNext() {
+    const g = state.game;
+    if (g.screen !== 'play') return;
+    const index = g.index + 1;
+    state.game = index >= g.queue.length ? { ...g, index, screen: 'submit', move: 'next' } : { ...g, index, move: 'next' };
+  },
+  /** Back one stream (a swipe right); from the submit screen, the last stream. */
+  gameBack() {
+    const g = state.game;
+    if (g.screen === 'submit') state.game = { ...g, screen: 'play', index: Math.max(0, g.queue.length - 1), move: 'back', sendError: '' };
+    else if (g.index > 0) state.game = { ...g, index: g.index - 1, move: 'back' };
+  },
+  gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
+  /** Star a stream, or unstar it: kept on this device for this wallet; the next game shows favorites first. */
+  gameStar(streamId) {
+    const f = state.game.favorites;
+    const favorites = f.includes(streamId) ? f.filter((id) => id !== streamId) : [...f, streamId];
+    writeFavorites(walletPublic?.evmAddress, favorites);
+    state.game = { ...state.game, favorites };
+  },
+  /** Send the calls: from the alias when staked with it; else from the wallet (Unlock in place, or its wallet app). */
+  gameSend() {
+    const g = state.game;
+    const picks = g.queue.filter((s) => g.picks[s.streamId]).map((s) => ({ gameId: s.gameId, streamId: s.streamId, direction: g.picks[s.streamId] }));
+    if (!picks.length || g.sending) return undefined;
+    const run = async () => {
+      state.game = { ...state.game, sending: true, sendError: '' };
+      try {
+        const r = await baseAction('play', () => base.playHand(picks));
+        activity.wallet('play', `Sent ${picks.length} prediction${picks.length === 1 ? '' : 's'} to the Satori contract by hand`);
+        state.game = { ...state.game, sending: false, sent: { ...r, count: picks.length } };
+      } catch (err) {
+        state.game = { ...state.game, sending: false, sendError: errorText(err) };
+      }
+    };
+    return g.by === 'alias' ? run() : withWallet('game', run);
+  },
   /** The Game tab's switch: 'manual' (play by hand: the daily batch is not sent) or 'auto' (docs/design/base.md#played-by-hand). */
   async setPlay(mode) {
     const was = state.base.play;
@@ -1545,6 +1608,11 @@ async function boot() {
   else if (readPref(GAME_KEY, ['in', 'out'], 'out') === 'in') state.tab = 'game'; // no route: where they were playing
   render(root, actions);
   watch(() => writePref(GAME_KEY, state.tab === 'game' ? 'in' : 'out'));
+  // the Game tab reads its streams when it opens (again after 5 min or a send), once the app runs; not while it is open
+  watch(() => state.tab === 'game' && state.screen === 'home', (open) => {
+    const g = state.game;
+    if (open && !g.loading && (!g.loaded || g.sent || Date.now() - g.loaded > 5 * 60_000)) void actions.loadGame();
+  });
   applyTheme(state.theme); // public/theme.js set data-theme before the first paint; this, the browser bar's color too
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => { state.systemDark = e.matches; });
   glowChips();

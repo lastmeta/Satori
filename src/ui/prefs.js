@@ -4,6 +4,17 @@
 
 export const SORT_KEY = 'satori-models-sort';
 export const GAME_KEY = 'satori-game'; // 'in': the game was entered last (the app opens to it), 'out': it was left
+/** The Game tab's starred streams, for a wallet address: their ids, in the order starred. */
+export const favoritesKey = (address) => `satori-favorites-${String(address ?? '').toLowerCase()}`;
+export function readFavorites(address, storage = local()) {
+  try {
+    const v = JSON.parse(storage?.getItem(favoritesKey(address)) ?? '[]');
+    return Array.isArray(v) ? v.filter(Number.isInteger) : [];
+  } catch {
+    return [];
+  }
+}
+export const writeFavorites = (address, ids, storage = local()) => writePref(favoritesKey(address), JSON.stringify(ids), storage);
 export const INSTALL_KEY = 'satori-install-advice'; // 'dismissed': Home's Install card was put away (docs/design/pwa.md#install)
 
 const local = () => {

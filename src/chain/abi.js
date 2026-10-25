@@ -33,6 +33,7 @@ export const registryAbi = abi(
   'function getLatestUpdateInfo(uint32 streamId) view returns (uint16 count, uint64 latestHour, uint64 lastUpdateTimestamp, uint24 minCadenceMinutes, bool named, int232 latestValue)',
   'function getHistoryPage(uint32 streamId, uint256 offset, uint256 limit) view returns (int232[] values, uint24[] entryHours, uint16 total)',
   'function isNamedStream(uint32) view returns (bool)',
+  'function getDataStreamInfo(uint32 streamId) view returns (string name, address provider, uint8 streamType, int256 value, uint256 valueHour, bool exists)',
 );
 
 export const hubAbi = abi(

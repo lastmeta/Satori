@@ -399,6 +399,36 @@ doesn't send its daily predictions, with **Switch to automatic**. The switch
 shows at once and is stored meanwhile (`setPlay`, `src/main.js`). Agents:
 `satori.setPlay('auto' | 'manual')`.
 
+### The game
+
+The Game tab's game (owner, 2026-10-25): a much simplified dapp
+(`contract/satori-ui`), one stream at a time, filling the phone's screen
+between the header and the tab bar.
+
+- **Who plays**: the alias when the wallet is staked with it (no Unlock),
+  else the wallet (Unlock in place, or its wallet app), as the dapp would.
+- **The streams**: the engine's paid ones (`chain.streams()`, weight > 0)
+  that the player can predict now: each is simulated from the player
+  (`blocked`: the revert's name). Their names: `getDataStreamInfo`. Order:
+  favorites first, as starred, then by voting weight. Favorites are kept on
+  this device per wallet (`satori-favorites-<address>`, as the dapp's key).
+- **A stream**: its name with a star on the left, its latest value on the
+  right (a Sentiment stream's lean, the dapp's `leanLabel`, never the
+  counter), its line alone (no axes, grid, bars or numbers), then two big
+  buttons: down, red, an arrow at -45° (pointing right and down), and up,
+  green, at 45°. A press picks and moves on; a swipe left skips, a swipe
+  right goes back.
+- **Submit**: after the last stream, the submit screen (each call, then
+  Submit predictions, one `predictMultipleWithPayloads`). With more than one
+  favorite, once all of them were shown and something was picked, Submit
+  slides in under the buttons (pushing them up) and opens it at once.
+- Nothing to play: why, calmly ("Unable to predict right now: your wallet
+  already predicted in the last 24 hours. Come back later."), and Check
+  again.
+- Not ported from the dapp: the soft limit of 5 and Continue Predicting, a
+  Uniswap stream's price orientation (only the Sentiment stream "satori" is
+  live), payouts, streaks, the countdown.
+
 ### A batch that never mines
 
 The reliability review (2026-10-19) found a batch that is never mined was

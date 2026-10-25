@@ -572,6 +572,42 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
      * both; each is checked before either is saved. A new RPC is read at once.
      * → status()
      */
+    /**
+     * The Game tab's streams (docs/design/base.md#the-game): the engine's paid streams, each with its name, its history
+     * (decimal strings) and whether the player can predict it now (`blocked`: the simulate's revert name, else null).
+     * The player: the alias when the wallet is staked with it, else the wallet. → { by: 'alias' | 'wallet', streams }
+     */
+    async gameStreams() {
+      if (!status) await refresh();
+      const { chain } = await chainNow();
+      const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
+      const player = by === 'alias' ? alias.evmAddress : walletAddress;
+      const list = await chain.streams();
+      const names = await chain.streamNames(list.map((g) => g.streamId));
+      const streams = await Promise.all(list.map(async (g, i) => {
+        const [history, blocked] = await Promise.all([chain.history(g.streamId), chain.simulateGame(player, { gameId: g.gameId, direction: UP })]);
+        return { streamId: g.streamId, gameId: g.gameId, name: names[i] || `Stream ${g.streamId}`, named: g.named,
+          cadenceMinutes: g.cadenceMinutes, weight: String(g.weight), blocked,
+          history: history.map((h) => ({ hour: h.hour, value: String(h.value) })) };
+      }));
+      return { by, streams };
+    },
+
+    /**
+     * The Game tab's predictions, one transaction: from the alias when the wallet is staked with it, else from the
+     * wallet (Unlock, or its wallet app). picks: [{ gameId, direction }]. → { hash, at, by }
+     */
+    async playHand(picks) {
+      if (!picks?.length) throw new Error('No predictions to send.');
+      const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
+      const player = by === 'alias' ? alias : needWallet();
+      return act('base', async (chain, step) => {
+        step('send');
+        const r = await chain.sendBatch(player, picks.map(({ gameId, direction }) => ({ gameId, direction })), { onSent: () => step('confirm') });
+        return { hash: r.hash, at: r.at, by };
+      });
+    },
+
     /** Who sends the Satori contract predictions: 'auto' (the daily batch) or 'manual' (the Game tab). → status() */
     async setPlay(mode) {
       if (!PLAYS.includes(mode)) throw new Error(`play: one of ${PLAYS.join(', ')}, not ${mode}.`);

@@ -10,6 +10,7 @@
     ],
     "SatoriRegistry": [
       "function getAllDataStreams() -> (uint32[]) view",
+      "function getDataStreamInfo(uint32) -> (string,address,uint8,int256,uint256,bool) view",
       "function getHistoryPage(uint32,uint256,uint256) -> (int232[],uint24[],uint16) view",
       "function getLatestUpdateInfo(uint32) -> (uint16,uint64,uint64,uint24,bool,int232) view",
       "function isNamedStream(uint32) -> (bool) view"

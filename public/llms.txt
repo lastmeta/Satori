@@ -996,7 +996,14 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   while the app plays automatically the game (`game-board`) is greyed out
   under `play-switch` with **Play by hand** (`play-manual`); by hand,
   `play-bar` says the app doesn't send its daily predictions, with
-  **Switch to automatic** (`play-auto`). The game itself is blank for now. With
+  **Switch to automatic** (`play-auto`). The game (`game-board`): one stream at a
+  time, `game-name` with `game-star` (`aria-pressed`), `game-latest`,
+  `game-chart`, `game-down` and `game-up` (a press picks and moves on; a
+  swipe left skips, right goes back), `game-submit-early` (`data-open`) with
+  `game-submit`; then `game-submit-screen` with `game-calls`, `game-send`,
+  `game-back`, `game-send-error`; `game-sent` with `game-done`;
+  `game-nothing` with `game-again`. The alias plays when the wallet is
+  staked with it, else the wallet (Unlock in place). With
   no route the app opens to the game if it was entered last and not left
   since (kept on this device, `satori-game`: `in`/`out`), else Home. The header has Lock and "Locks in 4 min" while
   unlocked, and "Update ready, reload" when a new version waits; on Home a
