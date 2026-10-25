@@ -16,9 +16,8 @@ export function gameTab(a) {
       <div class="card game-board" data-test="game-board" inert="${() => !manual()}"></div>
       <div class="card play-switch" data-test="play-switch" hidden="${manual}">
         <h2>The app plays for you</h2>
-        <p class="muted">Each day it sends its predictions to the Satori contract on its own. To play the game yourself,
-          switch to playing by hand and the app stops sending them. Everything else carries on: the data, the models,
-          the Satori Network, your stake.</p>
+        <p class="muted">Each day it sends predictions to the Satori contract. Would you like to turn off automatic predictions
+          and play the game yourself?</p>
         <button class="primary" data-test="play-manual" disabled="${() => !state.base.play}" @click="${() => a.setPlay('manual')}">Play by hand</button>
       </div>
     </div>
