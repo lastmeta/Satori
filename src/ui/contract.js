@@ -17,6 +17,8 @@ const PHONE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7"
 // the Satori Network: a server; the relays: a tower sending out
 const SERVER = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="1.5"></rect><rect x="4" y="13.5" width="16" height="7" rx="1.5"></rect><path d="M8 7h.01M8 17h.01"></path></svg>`;
 const TOWER = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 10.5v10M8.5 20.5h7"></path><circle cx="12" cy="9" r="1.5"></circle><path d="M8.5 5.5a5 5 0 0 0 0 7M15.5 5.5a5 5 0 0 1 0 7M6 3a8.5 8.5 0 0 0 0 12M18 3a8.5 8.5 0 0 1 0 12"></path></svg>`;
+// the Streams tab's own icon (src/ui/view.js)
+const STREAMS_ICON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"></path></svg>`;
 const BLOCK = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"></path><path d="M3.5 7.25L12 12l8.5-4.75M12 12v9.5"></path></svg>`;
 const MARK = { ok: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M7.5 12.5l3 3 6-6.5"></path></svg>`,
   bad: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"></path></svg>`,
@@ -43,7 +45,7 @@ const fundRow = (a, c) => html`<div class="fund" data-test="contract-fund">
 
 const fixOf = (a, c) => (c.fix === 'poll' ? html`<button class="small-btn" data-test="network-poll" disabled="${() => !!state.central.polling}" @click="${a.pollNow}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>`
   : c.fix === 'relink' ? html`<button class="small-btn" data-test="network-relink" @click="${a.baseRelink}">Link this wallet</button>`
-    : c.fix === 'streams' ? html`<button class="small-btn" data-test="relays-streams" @click="${() => a.go('streams')}">Streams</button>`
+    : c.fix === 'streams' ? html`<button class="small-btn with-icon" data-test="relays-streams" @click="${() => a.go('streams')}">${STREAMS_ICON()}Streams</button>`
       : c.fix === 'stake' ? html`<button class="primary small-btn" data-test="contract-stake" disabled="${() => !!state.baseBusy}" @click="${() => a.walletAction('contract', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? 'Staking…' : 'Stake with this app')}</button>`
   : c.fix === 'game' ? html`<button class="small-btn" data-test="contract-play" @click="${() => a.go('game')}">Play today's game</button>`
     : c.fix === 'fund' ? fundRow(a, c) : '');

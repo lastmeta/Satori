@@ -86,6 +86,6 @@ export function relayChecks(n) {
     watching ? { id: 'watching', state: 'ok', text: `Watching ${watching} prediction stream${watching === 1 ? '' : 's'}, keeping their track records.` }
       : { id: 'watching', state: 'wait', text: 'Looking for prediction streams…' },
     subs ? { id: 'publishing', state: 'ok', text: `Publishing your predictions for ${subs} stream${subs === 1 ? '' : 's'} you subscribe to.` }
-      : { id: 'publishing', state: 'wait', text: 'Not publishing yet: subscribe to a stream to publish your predictions for it.', fix: 'streams' },
+      : { id: 'publishing', state: 'wait', text: 'You can choose streams to predict; their predictions are relayed to the Nostr network.', fix: 'streams' },
   ];
 }

@@ -45,6 +45,13 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   llms-changelog.txt). Add the call in the same change as the screen feature,
   never later; test it in e2e (e2e/agent.spec.js). Screen-only exceptions:
   pure display (copy, scroll, open/close a panel).
+- **Every stream we produce goes to the relays** (2026-10-25). Any data stream
+  this app produces, a prediction stream or a raw one, is announced and
+  published to the Nostr relays, unless it is private: the predictions sent
+  to the Satori Network and the Satori contract too. And **subscribing is not
+  predicting**: a person can follow a stream without predicting it, and
+  chooses which streams to predict (a Predict action on the Streams tab).
+  Not built yet: plan it with the owner before building.
 - Before engine work read `docs/intent/engine.md`; before relay, Nostr or market
   work read `docs/intent/network.md` and `docs/plans/market.md`. Market
   contracts are built from this session in the contract repo. Hold the relay

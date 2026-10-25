@@ -6,6 +6,7 @@
   --text: #1c2430;
   --muted: #677282; /* 4.5:1 on --bg (src/style.test.js) */
   --line: #e3e7ed;
+  --btn-line: #9ea8b6; /* an outline button's edge: seen at a glance, on a card or the page */
   --accent: #3a5bd9;
   --accent-soft: #e9eefc;
   --on-accent: #ffffff;
@@ -38,7 +39,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b;
+    --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b; --btn-line: #6f7a8c;
     --accent: #9cb1ff; --accent-soft: #2d3e78; --on-accent: #10131a;
     --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
     --sky: #b9edcb; --sky-soft: #2a3a30; --sky-ink: #b9edcb; --sky-on: #232a35; --vivid: #1ed964; --vivid-soft: #10351a;
@@ -48,7 +49,7 @@
   }
 }
 :root[data-theme="dark"] {
-  --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b;
+  --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b; --btn-line: #6f7a8c;
   --accent: #9cb1ff; --accent-soft: #2d3e78; --on-accent: #10131a;
   --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
   /* dark (--ok oklch(0.775 0.140 155.8)): sky takes the same step toward white, 0.25/0.45 of the way, oklch(0.900 0.070
@@ -200,7 +201,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 /* ── controls: every tap target at least 44 px ── */
 button, .btn {
   font: inherit; min-height: 44px; padding: 8px 16px; border-radius: 10px;
-  border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer;
+  border: 1px solid var(--btn-line); background: var(--card); color: var(--text); cursor: pointer;
 }
 button:hover { border-color: var(--muted); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
@@ -377,6 +378,8 @@ button.cell:disabled { cursor: default; }
 .check[data-state="wait"] .cmark svg circle { stroke: var(--muted); }
 .check > div { display: grid; gap: 8px; padding-top: 2px; }
 .check > div > button { justify-self: start; }
+.with-icon { display: inline-flex; align-items: center; gap: 6px; }
+.with-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .fund { display: grid; gap: 6px; }
 .fund .qr { width: 180px; height: 180px; background: #fff; border-radius: 8px; image-rendering: pixelated; }
 @media (prefers-reduced-motion: reduce) { .contract-panel { transition: none; } }

@@ -46,6 +46,9 @@ describe.each([['light', LIGHT], ['dark', { ...LIGHT, ...FORCED_DARK }]])('%s: r
       expect(contrast(t[fg], t[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
     }
   });
+  test("an outline button's edge, seen at a glance on a card and on the page (2:1; its words say it's a button)", () => {
+    for (const bg of ['card', 'bg']) expect(contrast(t['btn-line'], t[bg]), `btn-line on ${bg}`).toBeGreaterThanOrEqual(2);
+  });
   test("the status colours (3:1): the hero's large title on its soft fill, the icons on a card", () => {
     for (const s of ['ok', 'warn', 'bad', 'idle']) {
       expect(contrast(t[s], t[`${s}-soft`]), `${s} on ${s}-soft`).toBeGreaterThanOrEqual(3);

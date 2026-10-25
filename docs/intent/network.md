@@ -24,6 +24,10 @@ from the relays.
   in SATORI on Base, without gas on every payment, as the Spilman payment
   channels did on Evrmore. The best predictor of something can sell its
   predictions.
+- **Everything a neuron produces is published** (owner, 2026-10-25): every
+  stream it makes, predictions included (those it sends to the Satori
+  Network and the Satori contract), goes to the relays unless it is private.
+  Following a stream and predicting it are separate choices.
 - Research the Base equivalent of payment channels first, and whether it
   belongs in the Satori contract, in a new contract, or off the shelf.
 - Hold the fixes to today's relay code (found 2026-10-20) until the design
