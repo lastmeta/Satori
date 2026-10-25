@@ -282,6 +282,7 @@ async function startNeuron() {
   base = createBase({ db, alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase, onCheck: (r) => activity.base(r), onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
   if (invitedBy) await base.holdReferrer(invitedBy); // the invite link's ?ref=, kept until Stake registers it
+  state.base = { ...state.base, play: await base.play() }; // at once (the database): the Game tab never shows the wrong switch
   await refreshBase();
   // when a poll is due (a new neuron, or one reopened late) it runs at once, after register: signing in is its first
   // step on Home, set before Home shows

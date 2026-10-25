@@ -593,6 +593,9 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       return { by, streams, round: view().round, played: (await db.get('game_last_play')) ?? null };
     },
 
+    /** Who sends the Satori contract predictions, from the database alone (no chain): what the Game tab needs first. */
+    play: readPlay,
+
     /** Note a game's Submit (sent, or done without sending: the Game tab's played streams): { round, at, count, hash }. */
     async notePlay(play) {
       await db.set('game_last_play', play);

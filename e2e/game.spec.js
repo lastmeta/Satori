@@ -59,6 +59,12 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await t(page, 'play-manual').click();
   await expect(t(page, 'play-switch')).toBeHidden();
   await expect(t(page, 'play-setting-manual')).toHaveAttribute('aria-pressed', 'true'); // Settings › Satori contract predictions
+  // opened again by hand: the switch's card never shows, not even for a moment (the mode is read before the app shows)
+  await page.goto('/#game');
+  await page.waitForFunction(() => document.body.dataset.screen === 'home');
+  expect(await page.evaluate(() => [document.querySelector('[data-test=game-tab]').dataset.play, document.querySelector('[data-test=play-switch]').hidden]))
+    .toEqual(['manual', true]);
+  await expect(name(page)).toHaveText('bitcoin', { timeout: 30_000 });
   await expect(t(page, 'game-latest')).toHaveText(/^\d{2},\d{3}\.\d{2}$/);
   const [star, mark] = [await t(page, 'game-star').boundingBox(), await page.locator('.brand-mark').boundingBox()];
   expect(Math.abs((star.x + star.width / 2) - (mark.x + mark.width / 2))).toBeLessThan(1.5); // the star centred under the Satori mark

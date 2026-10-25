@@ -252,7 +252,7 @@ export function gameTab(a) {
         ${play(a)}
         ${submit(a)}
       </div>
-      <div class="card play-switch" data-test="play-switch" hidden="${manual}">
+      <div class="card play-switch" data-test="play-switch" hidden="${() => state.base.play !== 'auto'}">
         <h2>The app plays for you</h2>
         <p class="muted">Each day it sends predictions to the Satori contract. Would you like to turn off automatic predictions
           and play the game yourself?</p>
