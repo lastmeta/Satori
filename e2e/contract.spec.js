@@ -40,7 +40,9 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
     checks: [{ id: 'satori', state: 'bad' }, { id: 'stake', state: 'bad', fix: 'stake' }, { id: 'gas', state: 'bad', fix: 'fund', address: alias.address }, { id: 'today', state: 'wait' }] });
 
   // by hand, from the card: the wallet plays; its gas; Play
+  await expect(t(page, 'contract-game')).toBeHidden(); // the Game button only by hand
   await t(page, 'contract-play-manual').click();
+  await expect(t(page, 'contract-game')).toBeVisible();
   await expect.poll(() => checks(page)).toEqual(['satori:bad', 'gas:bad', 'today:wait']);
   await expect(t(page, 'contract-fund-address')).toHaveText(wallet.address);
   rpc.eth[wallet.address.toLowerCase()] = 10n ** 17n;

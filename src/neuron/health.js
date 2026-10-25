@@ -348,7 +348,8 @@ const sentText = (lg, now, next) => (lg.data.accepted > 0 ? `${lg.data.accepted}
 
 function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }) {
   const top = (channel) => reasons.find((r) => r.channel === channel && r.chip);
-  const sent = lastGood ? sentText(lastGood, now, next) : '–';
+  // the chip: no next time, just up to date (the hero's line says when)
+  const sent = !lastGood ? '–' : lastGood.data.accepted > 0 ? sentText(lastGood, now, next) : 'Up to date';
   const c = top('network');
   const central = c ? { state: c.status, text: c.chip } : { state: lastGood ? 'ok' : 'idle', text: sent };
 

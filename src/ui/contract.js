@@ -17,6 +17,8 @@ const PHONE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7"
 // the Satori Network: a server; the relays: a tower sending out
 const SERVER = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="1.5"></rect><rect x="4" y="13.5" width="16" height="7" rx="1.5"></rect><path d="M8 7h.01M8 17h.01"></path></svg>`;
 const TOWER = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 10.5v10M8.5 20.5h7"></path><circle cx="12" cy="9" r="1.5"></circle><path d="M8.5 5.5a5 5 0 0 0 0 7M15.5 5.5a5 5 0 0 1 0 7M6 3a8.5 8.5 0 0 0 0 12M18 3a8.5 8.5 0 0 1 0 12"></path></svg>`;
+// the Game tab's own icon (src/ui/view.js)
+const GAME_ICON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path></svg>`;
 // the Streams tab's own icon (src/ui/view.js)
 const STREAMS_ICON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"></path></svg>`;
 const BLOCK = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"></path><path d="M3.5 7.25L12 12l8.5-4.75M12 12v9.5"></path></svg>`;
@@ -63,7 +65,7 @@ const nowS = () => Date.now() / 1000;
 
 const network = (a) => html`<div class="card contract-card" data-test="network-card">
   ${flow('network', () => networkSent(state.central, nowS()), 'This app', () => (networkSent(state.central, nowS()) ? 'Sent today' : 'Nothing sent lately'), SERVER, 'Satori Network')}
-  <p class="muted small">The app reads each data stream's latest values from the network, predicts the next ones with its own models, and sends the predictions back. Doing so costs no gas, those predictions are scored off chain and rewards are provided on chain.</p>
+  <p class="muted small">The app reads each data stream's latest values from the network, predicts the next ones with its own models, and sends the predictions back. Doing so costs no gas, those predictions are scored off-chain and rewards are provided on-chain.</p>
   ${checkList(a, () => networkChecks(state.central, nowS()))}
 </div>`;
 
@@ -89,7 +91,8 @@ function contractCard(a) {
   <div class="card contract-card" data-test="contract-card">
     ${flow('contract', today, () => (b().play === 'manual' ? 'You, by hand' : 'This app'), () => (today() ? 'Predicted today' : 'Not yet today'), BLOCK, 'Satori contract')}
     <p class="muted small">Each day, predictions are sent directly to the Satori smart contract on Base. They are automatically scored on-chain and earn SATORI.</p>
-    <div class="segmented" role="group" aria-label="Who predicts">${[['auto', 'Automatic'], ['manual', 'By hand']].map(([mode, word]) => html`<button class="small-btn" data-test="${`contract-play-${mode}`}" aria-pressed="${() => String(b().play === mode)}" disabled="${() => !b().play}" @click="${() => a.setPlay(mode)}">${word}</button>`)}</div>
+    <div class="cmode"><div class="segmented" role="group" aria-label="Who predicts">${[['auto', 'Automatic'], ['manual', 'By hand']].map(([mode, word]) => html`<button class="small-btn" data-test="${`contract-play-${mode}`}" aria-pressed="${() => String(b().play === mode)}" disabled="${() => !b().play}" @click="${() => a.setPlay(mode)}">${word}</button>`)}</div>
+      <button class="small-btn with-icon" data-test="contract-game" hidden="${() => b().play !== 'manual'}" @click="${() => a.go('game')}">${GAME_ICON()}Game</button></div>
     ${checkList(a, () => contractChecks(b()))}
     ${unlockPrompt(a, 'contract', 'stake from the contract card')}
     <p class="error small" role="alert" hidden="${() => !(state.baseDid === 'stake' && state.baseError)}">${() => state.baseError}</p>

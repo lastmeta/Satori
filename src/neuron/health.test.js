@@ -56,15 +56,15 @@ describe('ok: predicting', () => {
     expect(isGood(row('central', NOW, 'bad', { sent: 3, accepted: 0 }))).toBe(false); // central took none
     const h = health({ rows: [open(NOW - 3 * H), good(NOW - 2 * H), good(NOW - H, 0)] });
     expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 9 h' });
-    expect(h.channels.network).toEqual({ state: 'ok', tone: 'idle', text: 'Up to date · next in 9 h' });
+    expect(h.channels.network).toEqual({ state: 'ok', tone: 'idle', text: 'Up to date' });
     expect(h.feed.map((f) => f.text)).toEqual(['Checked the Satori Network: up to date', 'Sent 83 predictions to the Satori Network']);
     const polling = health({ rows: [open(NOW - 3 * H), good(NOW - H, 0)], central: central({ polling: true }) });
-    expect([polling.line, polling.channels.network.text]).toEqual(['Up to date · next now…', 'Up to date · next now…']);
+    expect([polling.line, polling.channels.network.text]).toEqual(['Up to date · next now…', 'Up to date']);
     // caught up after being asleep, with nothing to send
     const slept = [open(NOW - 3 * D, NOW - 3 * D + 2 * H), good(NOW - 3 * D + H), open(NOW - 10 * M, NOW, { gap: 3 * D, missed: true })];
     const caught = health({ rows: [...slept, good(NOW - 5 * M, 0, { caughtUp: 3 * D })] });
     expect(caught.feed[0].text).toBe('Caught up: up to date');
-    expect(caught.channels.network.text).toBe('Up to date · next in 9 h');
+    expect(caught.channels.network.text).toBe('Up to date');
     for (const x of [h, polling, caught]) expect(JSON.stringify(x)).not.toMatch(/\b0 (sent|predictions)|sent 0|nothing new/);
   });
 });

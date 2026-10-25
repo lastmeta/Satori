@@ -158,7 +158,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await phoneChecks(page, 360, 740);
   // Poll now with nothing new: nothing to predict or send, so up to date, never "0 sent"
   expect(await page.evaluate(() => window.satori.poll())).toMatchObject({ poll: { new: 0, predicted: 0 }, submit: null });
-  await expect(chip('network').locator('[data-test=chip-text]')).toHaveText('Up to date · next in 11 h');
+  await expect(chip('network').locator('[data-test=chip-text]')).toHaveText('Up to date');
   await expect(page.locator('[data-test=health-line]')).toHaveText('Up to date · next in 11 h');
   await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Checked the Satori Network: up to date' })).toHaveCount(1);
   await page.setViewportSize({ width: 1280, height: 900 });
