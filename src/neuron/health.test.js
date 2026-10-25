@@ -656,6 +656,10 @@ describe('the day strip: local days', () => {
       ['2026-10-15', 'closed', false], ['2026-10-16', 'full', true]]);
     expect(days.filter((d) => d.today)).toHaveLength(1);
     expect(days[0]).toMatchObject({ date: '2026-09-17', code: 'before', ran: false }); // before the first session
+    // each day's two halves: the Satori Network (off-chain) and the Satori contract (on-chain)
+    expect(days.slice(-6).map((d) => `${d.network}/${d.contract}`)).toEqual(['ok/ok', 'ok/error', 'error/none', 'none/none', 'none/none', 'part/none']);
+    const play = daysOf([open(day(0, 8), NOW), row('wallet', day(0, 10), 'ok', { action: 'play', text: 'Sent 2…' })], NOW).at(-1);
+    expect(play.contract).toBe('ok'); // the game played by hand
   });
   test('before: the days before the neuron began (its first session, or `since` when earlier) are not closed days', () => {
     const fresh = [open(day(0, 8), NOW), good(day(0, 9))];

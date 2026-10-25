@@ -332,17 +332,23 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .action > button { flex: none; }
 .action > .inline-unlock, .action > .error { flex-basis: 100%; }
 
-.strip { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; }
-.cell { aspect-ratio: 1 / 1.6; border-radius: 4px; background: var(--cell-off); min-width: 0; }
-.cell[data-code="full"] { background: var(--ok); }
-.cell[data-code="part"] { background: linear-gradient(to top, var(--ok) 50%, var(--cell-off) 50%); }
-.cell[data-code="error"] { background: var(--bad); }
-.cell[data-code="before"] { background: none; border: 1px dashed var(--muted); opacity: 0.5; } /* before this app: an empty slot */
+.strip { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 8px; } /* room for the outlines: today's and the opened day's never touch */
+/* a day: two halves, the Satori Network on top (off-chain), the Satori contract below (on-chain), each its own colour */
+.cell { aspect-ratio: 1 / 2.4; min-width: 0; min-height: 0; display: grid; grid-template-rows: 1fr 1fr; gap: 2px; border-radius: 4px; }
+.cell .half { display: block; border-radius: 3px; background: var(--cell-off); }
+.cell .half:first-child { border-radius: 4px 4px 2px 2px; }
+.cell .half:last-child { border-radius: 2px 2px 4px 4px; }
+[data-half="ok"] { background: var(--ok) !important; }
+[data-half="part"] { background: color-mix(in srgb, var(--ok) 55%, var(--cell-off)) !important; }
+[data-half="error"] { background: var(--bad) !important; }
+.cell[data-code="before"] { border: 1px dashed var(--muted); opacity: 0.5; } /* before this app: an empty slot */
+.cell[data-code="before"] .half { background: none; }
 .cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
 .strip .cell:nth-child(-n+16) { display: none; } /* the phone shows the last 14 of 30 */
-button.cell { padding: 0; border: 0; cursor: pointer; }
+button.cell { padding: 0; border: 0; background: none; cursor: pointer; }
 button.cell:disabled { cursor: default; }
-.cell[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cell[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.strip-key { margin: 8px 0 0; }
 /* a day opened: the card grows as the day fades in. Closing: the day fades out first, then the card shrinks (its
    content stays until it is gone). The transition is the one of the state it goes to. */
 /* Home's Satori contract card (src/ui/contract.js): under the chips, opened by the Contract chip; fades out, then folds */
@@ -791,7 +797,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .dash > .feed-tile { order: 7; }
   .engine { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.5fr); align-items: start; }
   .strip { grid-template-columns: repeat(30, minmax(0, 1fr)); }
-  .strip .cell:nth-child(-n+16) { display: block; }
+  .strip .cell:nth-child(-n+16) { display: grid; }
 }
 a.chan { color: var(--text); text-decoration: none; }
 a.chan:hover { border-color: var(--muted); }

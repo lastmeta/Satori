@@ -41,16 +41,18 @@ const CHANNEL_TAB = { network: 'streams', contract: 'wallet', relays: 'streams' 
 
 const fullDays = (n) => daysText(h().days.slice(-n));
 
+const HALF_WORDS = { ok: 'predicted', part: 'predicted, with errors', error: 'errors only', none: 'nothing' };
 function dayTitle(d) {
   const when = new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const word = d.code === 'closed' && d.ran ? 'Nothing due' : DAY_WORDS[d.code];
-  return `${when}${d.today ? ' (today)' : ''}: ${word}`;
+  const halves = d.code === 'before' || !d.network ? '' : `. Satori Network: ${HALF_WORDS[d.network]}; Satori contract: ${HALF_WORDS[d.contract]}`;
+  return `${when}${d.today ? ' (today)' : ''}: ${word}${halves}`;
 }
 
 // Plain values only, no live ones: the strip is drawn again when they change (its key). A live value in a cell can be
 // queued just as the strip redraws (the last visit's Home giving way to the live one) and run for a cell gone, which
 // throws inside ArrowJS 1.0.6 and stops every update queued with it: Home froze.
-const cell = (a, d) => html`<button class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}" aria-label="${dayTitle(d)}" aria-pressed="${String(state.dayOpen === d.date)}" disabled="${d.code === 'before' || cachedNow()}" @click="${() => a.openDay(d.date)}"></button>`;
+const cell = (a, d) => html`<button class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}" aria-label="${dayTitle(d)}" aria-pressed="${String(state.dayOpen === d.date)}" disabled="${d.code === 'before' || cachedNow()}" @click="${() => a.openDay(d.date)}"><i class="half" data-half="${d.network ?? 'none'}"></i><i class="half" data-half="${d.contract ?? 'none'}"></i></button>`;
 
 // ── a day opened (src/neuron/day.js) ──
 const clock = (s) => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -148,9 +150,10 @@ export function home(a) {
 
     <section class="tile days-tile">
       <div class="tile-h"><b class="phone-only">Last 14 days</b><b class="desk-only">Last 30 days</b><span class="phone-only" data-test="days-summary">${() => fullDays(14)}</span><span class="desk-only">${() => fullDays(30)}</span></div>
-      <div class="strip" data-test="days">${() => h().days.map((d) => cell(a, d).key(`${d.date}:${d.code}:${d.ran}:${d.today}:${state.dayOpen === d.date}:${cachedNow()}`))}</div>
+      <div class="strip" data-test="days">${() => h().days.map((d) => cell(a, d).key(`${d.date}:${d.code}:${d.network}:${d.contract}:${d.ran}:${d.today}:${state.dayOpen === d.date}:${cachedNow()}`))}</div>
       <div class="day-panel" data-test="day-detail" data-open="${() => String(!!state.dayOpen && !!state.day)}"><div class="day-inner">${() => (state.day ? dayBody(state.day).key(`${state.day.date}:${JSON.stringify(state.day).length}`) : '')}</div></div>
-      <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
+      <p class="strip-key small muted" data-test="strip-key">Top: the Satori Network · Bottom: the Satori contract</p>
+      <div class="legend desk-only"><span><i data-half="ok"></i>Predicted</span><span><i data-half="part"></i>With errors</span><span><i data-half="error"></i>Errors only</span><span><i data-half="none"></i>Nothing</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 
     <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}${chipCard(a)}</section>

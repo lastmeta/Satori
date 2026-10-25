@@ -1193,7 +1193,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   rest), `health-title`, `health-line`, `health-stale` (the last visit's
   Home), `notices` with `notice-line` (`data-what`), `action` (`data-action`
   = the reason, `data-tone`), `action-text`, `action-button`,
-  `action-dismiss`, `days` with `day` (`data-date`, `data-code`; a button:
+  `action-dismiss`, `days` with `day` (`data-date`, `data-code`; two halves, `.half` `data-half`: the Satori Network on top, the
+  Satori contract below: ok, part, error, none; a button:
   `aria-pressed` while opened), `day-detail` (`data-open`) with `day-body`,
   `day-network`, `day-contract`,
   `days-summary`, `channels` with `chip` (`data-channel`: network, contract,

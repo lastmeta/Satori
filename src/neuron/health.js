@@ -402,10 +402,14 @@ function outcome(r) {
   return null;
 }
 
+/** A half of a day: ok (it worked), part (it worked, and failed too), error (it only failed), none. */
+const halfOf = (ok, fail) => (ok ? (fail ? 'part' : 'ok') : fail ? 'error' : 'none');
+
 /**
- * The last `n` local days, oldest first: { date, code: full | part | error | closed | before, ran, today }. `before`:
- * the day ended before the neuron began, its first session or `since` (the keys' creation, the log's first session)
- * when earlier.
+ * The last `n` local days, oldest first: { date, code: full | part | error | closed | before, ran, today, network,
+ * contract }. `before`: the day ended before the neuron began, its first session or `since` (the keys' creation, the
+ * log's first session) when earlier. network and contract: each a half of the day's cell (halfOf): the Satori
+ * Network's scoring off-chain, the Satori contract's on-chain (a batch sent, or the game played by hand).
  */
 export function daysOf(rows, now, since = null, n = DAYS) {
   const sessions = sessionsOf(rows, now);
@@ -427,7 +431,9 @@ export function daysOf(rows, now, since = null, n = DAYS) {
       if (o && r.at < b && end(r) >= a) (o[1] === 'ok' ? ok : fail).add(o[0]);
     }
     const code = ok.size ? ([...fail].every((c) => ok.has(c)) ? 'full' : 'part') : fail.size ? 'error' : b <= born ? 'before' : 'closed';
-    out.push({ date: isoDay(start), code, ran: sessions.some((s) => s.at < b && s.until >= a), today: k === 0 });
+    const played = rows.some((r) => r.kind === 'wallet' && r.data?.action === 'play' && r.at >= a && r.at < b);
+    out.push({ date: isoDay(start), code, ran: sessions.some((s) => s.at < b && s.until >= a), today: k === 0,
+      network: halfOf(ok.has('network'), fail.has('network')), contract: halfOf(ok.has('contract') || played, fail.has('contract')) });
   }
   return out;
 }
