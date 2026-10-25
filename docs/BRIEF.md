@@ -151,7 +151,7 @@ What the owner asked for: a data-stream marketplace on the Satori relays and the
 - The owner's rulings (2026-10-21):
   - **One price:** Lite's `price_per_obs`, in satoshis (10⁻⁸ SATORI). `metadata.market` only says where to pay (chain, contract, token, payee). There are no Evrmore buyers.
   - **The seller settles at most once a day.** Hourly wastes gas.
-  - **Not now:** the prediction marketplace (bounties: a buyer pays the top N predictors). It is mixed in with the same Lite code; don't port it.
+  - **The prediction marketplace (bounties: a host pays the predictors it judges best) is being designed (owner, 2026-10-25):** relays and app only, paid through PaymentChannels, no contract of its own. **The host's scoring rules are never published** (owner ruling). Port Lite's design first (`neuron/docs/plans/prediction-market.md`, satorilib 34607/34608).
 - The track record of prediction streams (`records.js`, Streams › Prediction streams) was never asked for. Leave it as it is; don't extend it.
 - Next: Satori Lite (`neuron` + `satorilib`, `base-upgrade`) adopts the same events, buying and selling on Base.
 - The owner holds the other relay fixes (central's uptime pay, discovery) until the design settles.
