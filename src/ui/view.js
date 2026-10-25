@@ -21,8 +21,8 @@ const BAR = ['game', 'home', 'models']; // the phone's bar; the rest are in its 
 const MENU = TABS.filter((t) => !BAR.includes(t));
 const LABEL = { game: 'Game', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
-  // a game controller
-  game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path><path d="M7 10v4M5 12h4"></path><circle cx="16" cy="11" r="0.6"></circle><circle cx="18" cy="13" r="0.6"></circle></svg>`,
+  // a game controller's outline
+  game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path></svg>`,
   home: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>`,
   // three streams in, one model, a forecast out
   models: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8h6M2 12h6M2 16h6"></path><rect x="8" y="5" width="8" height="14" rx="1.5"></rect><path d="M16 12h6"></path></svg>`,
