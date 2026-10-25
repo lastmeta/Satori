@@ -215,11 +215,10 @@ can charge" doesn't work.
 
 - **Resale (inherent).** A buyer can republish what it bought. What a
   prediction stream sells is freshness, and that fades quickly.
-- **Copying rewarded predictions (inherent when published in the clear).**
-  Predictions for streams that pay rewards (the Satori Network's, the
-  contract's games), published free before they are scored, can be
-  submitted by a copier as its own. *Proposed:* sell them, or reveal them
-  only after the outcome.
+- **Copying free predictions (inherent, accepted).** Predictions published
+  free can be copied before they are scored. Publishing free is the
+  publisher's choice and stays allowed; nothing is done about it (owner,
+  2026-10-25). A priced stream is never in the clear.
 - **A seller offline through the whole grace period (fixable by choice of
   grace).** It loses what it hadn't settled. Daily settling plus 7 days'
   grace bounds this.
@@ -277,8 +276,8 @@ can charge" doesn't work.
    built in this session, not by that repo's session.
 3. **The token:** SATORI, in a contract that takes any ERC-20.
 4. **The grace period:** 7 days.
-5. **Rewarded predictions:** sold or revealed after the outcome, not free
-   in the clear. Still open.
+5. **Free predictions:** allowed, as the publisher chooses; closed, not a
+   question (owner, 2026-10-25).
 6. **Step 0 now**, while the other relay fixes wait. Done.
 
 ## Direct links between neurons (later)
