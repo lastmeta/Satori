@@ -35,7 +35,8 @@ const MENU_ICON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d
 // the header's icons: share (one dot joined to two), and the theme: the sun in dark mode (to light), the moon in light
 const SHARE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.6"></circle><circle cx="18" cy="5.5" r="2.6"></circle><circle cx="18" cy="18.5" r="2.6"></circle><path d="M8.3 10.8l7.4-4.1M8.3 13.2l7.4 4.1"></path></svg>`;
 const SUN = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>`;
-const MOON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>`;
+// the moon drawn to its box's right side, as the sun's rays reach: its edge lines up with the page's
+const MOON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 14.5A8 8 0 1 1 11.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>`;
 const isDark = () => state.theme === 'dark' || (state.theme === 'system' && state.systemDark);
 
 export const RECOVERED_NOTICE = 'Recovered the database: unsaved changes from the last session were set aside.';
