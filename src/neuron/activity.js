@@ -5,6 +5,7 @@
 // history runs, wallet actions, address changes, central's contract addresses that differ, errors. Kept 90 days. A write that fails is
 // logged, never thrown: the neuron goes on.
 import { serial } from '../util.js';
+import { UP } from '../chain/index.js';
 import { DAYS, FIXABLE_SKIPS, HEARTBEAT_S, KEEP_S, SLEEP_S, isGood, missedBy } from './health.js';
 
 const LOAD_S = (DAYS + 1) * 86400; // what health reads: the day strip's 30 days and the feed
@@ -117,8 +118,11 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
     /** A Base batch check's result (base.js check()): sent, a stuck batch (amber), a skip, an error (calm when unused). */
     base: safely(async (r) => {
       if (r?.sent) {
-        const { round, hash, games, dropped = [] } = r.sent;
-        return void (await add('base', 'ok', { round, hash, games: games.map((g) => g.gameId), dropped: dropped.map((g) => g.gameId) }));
+        const { round, hash, games, dropped = [], at } = r.sent;
+        // calls: each game's call, for a day opened on Home to score against the stream's history (src/neuron/day.js)
+        const calls = games.map((g) => ({ streamId: g.streamId, named: !!g.named, direction: g.direction === UP ? 'up' : 'down',
+          cadenceMinutes: g.cadenceMinutes ?? null, hour: Math.floor((at ?? now()) / 3600) }));
+        return void (await add('base', 'ok', { round, hash, games: games.map((g) => g.gameId), dropped: dropped.map((g) => g.gameId), calls }));
       }
       if (r?.stuck) {
         return void (await merge('base', 'warn', { round: r.round ?? null, skipped: r.skipped, stuck: r.stuck }, `stuck:${r.stuck.ceiling ? 'ceiling' : 'retry'}`));

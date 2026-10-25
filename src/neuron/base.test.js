@@ -157,7 +157,7 @@ describe('the daily batch', () => {
     expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]); // DOWN under Lite's rule
     const batch = { round: ROUND, at: ROUND * ROUND_S + 9 * 3600, hash: rpc.sent[0].hash, dropped: [],
       // latest: the registry's int232, exact; forecast: the engine's at the horizon, as an integer (both decimal strings, as JSON keeps them)
-      games: [{ streamId: 1, gameId: 1, named: false, direction: UP, rule: 'last-move', model: 'naive', latest: '59058240589371161',
+      games: [{ streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440, direction: UP, rule: 'last-move', model: 'naive', latest: '59058240589371161',
         forecast: '59058240589371160', horizon: 86_400, step: 86_400, score: null, persist: null, tests: 0 }] };
     expect(r).toEqual({ at: batch.at, round: ROUND, sent: batch });
     expect(db.m.get('base_last_batch')).toEqual(batch);

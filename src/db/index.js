@@ -390,6 +390,19 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
       await run('DELETE FROM model_specs');
       await run("DELETE FROM meta WHERE key IN ('central_last_poll', 'central_last_submit', 'central_history')");
     }),
+    /** The predictions sent that were made in [from, to), oldest first (a day opened on Home). */
+    sentBetween: inOrder((from, to) => rows(`SELECT id, stream_uuid, made_at, t2 FROM predictions
+      WHERE status = 'sent' AND made_at >= ? AND made_at < ? ORDER BY made_at`, from, to)),
+    /** Each stream's observations in [from, to], oldest first: Map uuid → [{ ts, value }]. */
+    observationsBetween: inOrder(async (uuids, from, to) => {
+      const out = new Map(uuids.map((u) => [u, []]));
+      if (!uuids.length) return out;
+      for (const r of await rows(`SELECT stream_uuid, ts, value FROM observations WHERE ts >= ? AND ts <= ?
+        AND stream_uuid IN (${uuids.map(() => '?').join(', ')}) ORDER BY stream_uuid, ts`, Math.floor(from), Math.ceil(to), ...uuids)) {
+        out.get(r.stream_uuid).push({ ts: Number(r.ts), value: r.value });
+      }
+      return out;
+    }),
     /** A stream's predictions (by uuid or name), newest first. */
     predictions: inOrder((stream, limit = 20) => rows(`SELECT p.*, s.name FROM predictions p
       JOIN streams s ON s.uuid = p.stream_uuid WHERE p.stream_uuid = ? OR s.name = ? ORDER BY p.id DESC LIMIT ?`,

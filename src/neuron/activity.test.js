@@ -97,7 +97,7 @@ describe('Base checks', () => {
   test('a batch sent; "already predicted" and "waiting" not logged; the same skip or error again merges (count, until)', async () => {
     const a = make();
     await a.start();
-    await a.base({ at: T, round: 7, sent: { round: 7, at: T, hash: '0xab', games: [{ gameId: 1 }], dropped: [{ gameId: 70, error: 'x' }] } });
+    await a.base({ at: T, round: 7, sent: { round: 7, at: T, hash: '0xab', games: [{ gameId: 1, streamId: 1, named: true, direction: 1, cadenceMinutes: 60 }], dropped: [{ gameId: 70, error: 'x' }] } });
     await a.base({ at: T + 1, round: 7, skipped: 'already predicted this round' });
     await a.base({ at: T + 2, round: 7, skipped: 'waiting for the batch already sent (0xab)' });
     clock = T + 86400;
@@ -110,7 +110,8 @@ describe('Base checks', () => {
     await a.base({ at: clock, round: 8, skipped: 'nothing staked with this app' });
     const base = a.rows().filter((r) => r.kind === 'base');
     expect(base.map((r) => [r.level, r.count, r.data])).toEqual([
-      ['ok', 1, { round: 7, hash: '0xab', games: [1], dropped: [70] }],
+      ['ok', 1, { round: 7, hash: '0xab', games: [1], dropped: [70],
+        calls: [{ streamId: 1, named: true, direction: 'up', cadenceMinutes: 60, hour: Math.floor(T / 3600) }] }],
       ['warn', 2, { round: 8, skipped: 'gas above the ceiling: a max fee of 4 gwei > 2 gwei; the next check tries again' }],
       ['bad', 2, { round: null, error: 'HTTP request failed' }],
       ['idle', 1, { round: 8, skipped: 'nothing staked with this app' }],

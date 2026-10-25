@@ -32,6 +32,7 @@ import { box as modelBox, modelHref } from './ui/models.js';
 import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { relayUuid } from './nostr/satori.js';
+import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink } from './neuron/referral.js';
 import { createReward } from './neuron/reward.js';
@@ -943,6 +944,17 @@ const actions = {
       if (state.recordOpen === key) state.recordError = `Its record could not be read: ${err?.message ?? err}`;
     }
   },
+  /** Home's strip: a day opened (docs/design/health.md#a-day-opened), or the same day again: closed. */
+  async openDay(date) {
+    state.dayOpen = state.dayOpen === date ? '' : date;
+    if (!state.dayOpen) return;
+    try {
+      const day = await dayDetail(date);
+      if (state.dayOpen === date) state.day = day;
+    } catch (err) {
+      if (state.dayOpen === date) state.day = { date, error: `This day could not be read: ${err?.message ?? err}` };
+    }
+  },
   async openStream(uuid) {
     state.streamOpen = uuid;
     state.streamPreds = uuid ? await db.predictions(uuid, 10) : [];
@@ -1442,6 +1454,31 @@ watch(() => {
   }
   centralWas = now;
 });
+
+/**
+ * A day on Home's strip: its network predictions marked against no change (each stream's values from the day before
+ * to two days after), its contract calls with their results (each stream's history on the chain, once per stream).
+ */
+async function dayDetail(date) {
+  const [a, b] = dayRange(date);
+  const sent = await db.sentBetween(a, b);
+  const obs = await db.observationsBetween([...new Set(sent.map((p) => p.stream_uuid))], a - 86400, b + 2 * 86400);
+  const predictions = sent.map((p) => ({ ...p, mark: networkMark(p, obs.get(p.stream_uuid)) }));
+  const day = dayOf({ date, rows: activity.rows(), predictions });
+  const histories = new Map();
+  const historyOf = (id) => {
+    if (!histories.has(id)) histories.set(id, base.chainHistory(id).then((h) => h.map((v) => ({ hour: Number(v.hour), value: v.value }))).catch(() => null));
+    return histories.get(id);
+  };
+  for (const batch of day.contract.batches) {
+    if (!batch.calls) continue;
+    batch.calls = await Promise.all(batch.calls.map(async (c) => {
+      const h = await historyOf(c.streamId);
+      return { ...c, result: h ? callResult(c, h) : null };
+    }));
+  }
+  return day;
+}
 
 /** Home's chips glow while their channel has real traffic (src/traffic.js, src/ui/glow.js): data-live on the chip. */
 function glowChips() {

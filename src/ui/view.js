@@ -25,8 +25,8 @@ const ICON = {
   wallet: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M16 12h2"></path></svg>`,
   settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>`,
 };
-// the header's buttons: share (a box, an arrow up out of it), and the theme: the sun in dark mode (to light), the moon in light
-const SHARE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5M8 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-2"></path></svg>`;
+// the header's icons: share (one dot joined to two), and the theme: the sun in dark mode (to light), the moon in light
+const SHARE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.6"></circle><circle cx="18" cy="5.5" r="2.6"></circle><circle cx="18" cy="18.5" r="2.6"></circle><path d="M8.3 10.8l7.4-4.1M8.3 13.2l7.4 4.1"></path></svg>`;
 const SUN = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>`;
 const MOON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>`;
 const isDark = () => state.theme === 'dark' || (state.theme === 'system' && state.systemDark);
@@ -175,7 +175,7 @@ export function render(root, a) {
       <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
       <span class="muted small lock-in" data-test="lock-in" hidden="${() => state.screen !== 'home' || !state.unlocked}">${() => lockInText(state.lockAt, state.lockNow)}</span>
       <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
-      <button class="small-btn icon-btn" data-test="share" aria-label="Share" title="Share your invite link" hidden="${() => state.screen !== 'home' || !state.base.inviteLink}" @click="${a.share}">${() => (state.copied === 'share' ? 'Link copied' : SHARE())}</button>
+      <button class="small-btn icon-btn bare" data-test="share" aria-label="Share" title="Share your invite link" hidden="${() => state.screen !== 'home' || !state.base.inviteLink}" @click="${a.share}">${() => (state.copied === 'share' ? 'Link copied' : SHARE())}</button>
       <button class="small-btn icon-btn bare" data-test="theme-toggle" aria-label="${() => (isDark() ? 'Light mode' : 'Dark mode')}" title="${() => (isDark() ? 'Light mode' : 'Dark mode')}" @click="${() => a.setTheme(isDark() ? 'light' : 'dark')}">${() => (isDark() ? SUN() : MOON())}</button>
     </div>
   </header>

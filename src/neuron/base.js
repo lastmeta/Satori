@@ -258,7 +258,7 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
       const history = await chain.history(g.streamId);
       const step = stepFor(g.cadenceMinutes);
       const f = history.length ? forecast(toPoints(history), { step, horizon: horizonFor(g.cadenceMinutes) }) : null;
-      const base = { streamId: g.streamId, gameId: g.gameId, named: g.named };
+      const base = { streamId: g.streamId, gameId: g.gameId, named: g.named, cadenceMinutes: g.cadenceMinutes };
       if (!f) {
         // no values yet: nothing to forecast, so the no-opinion rule (DOWN, as 'flat'). A Sentiment stream records its
         // first value when it is first predicted (updateValuesStrict), so skipping it would leave it empty for good
@@ -540,6 +540,11 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     async history(streamId) {
       const { chain } = await chainNow();
       return toPoints(await chain.history(streamId));
+    },
+    /** The same, as the chain keeps it: [{ hour, value: bigint }] (a call's result, src/neuron/day.js: exact, not as numbers). */
+    async chainHistory(streamId) {
+      const { chain } = await chainNow();
+      return chain.history(streamId);
     },
     /** The status, with the settings as stored ('' and null: the defaults) and the max fee in force. */
     async status() {

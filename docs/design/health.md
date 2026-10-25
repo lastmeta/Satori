@@ -571,6 +571,26 @@ The summary counts the neuron's own days: "12 of 14 full days"; a neuron
 younger than the strip, "1 full day" on its first day, then "2 of 3 full
 days". The legend shows "Before this app" only while such a day is shown.
 
+### A day opened
+
+Tapping a day (not a `before` one) opens it under the strip; tapping it
+again closes it. Opening, the card grows as the day fades in; closing, the
+day fades out first, then the card shrinks (`src/neuron/day.js`, read by
+`main.js` `dayDetail`):
+
+- **Satori Network:** how many predictions were sent that day, and when
+  (the first to the last). Each is marked [against no change](models.md#quality-against-no-change):
+  its 24 h forecast and no change (the stream's last value when it was
+  made) against the stream's first value 24 h on, up to a day late. Better,
+  the same (within 5 %), worse; until then, "scored 24 h after".
+- **Satori contract:** each batch sent (its time, its games) and each call
+  as the engine scores it: a stream updated at most daily, its first two
+  values after the call's hour; else the value at that hour against the
+  first 24 h on; right only when it moved the called way (no move is wrong
+  either way). The stream's history is read from the chain when the day
+  opens. Batches from before 2026-10-25 kept only their game ids: their
+  calls are not shown. No batch: why ("not staked with this app", the skip).
+
 ## Address changes
 
 The security review (2026-10-19): whoever changes the Satori Network's

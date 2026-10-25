@@ -42,7 +42,35 @@ function dayTitle(d) {
   return `${when}${d.today ? ' (today)' : ''}: ${word}`;
 }
 
-const cell = (d) => html`<div class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}"></div>`;
+const cell = (a, d) => html`<button class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}" aria-label="${dayTitle(d)}" aria-pressed="${() => String(state.dayOpen === d.date)}" disabled="${() => d.code === 'before' || cachedNow()}" @click="${() => a.openDay(d.date)}"></button>`;
+
+// ── a day opened (src/neuron/day.js) ──
+const clock = (s) => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+function networkDay(n) {
+  if (!n.sent) return 'No predictions sent.';
+  const m = n.marks;
+  const scored = m.better + m.tie + m.worse;
+  const when = clock(n.first) === clock(n.last) ? `at ${clock(n.first)}` : `${clock(n.first)} to ${clock(n.last)}`;
+  const parts = [`Sent ${plural(n.sent, 'prediction')}, ${when}.`];
+  if (scored) parts.push(`Against no change: ${m.better} better, ${m.tie} the same, ${m.worse} worse.`);
+  if (m.waiting) parts.push(`${scored ? `${m.waiting} more are` : 'They are'} scored 24 h after they were made.`);
+  return parts.join(' ');
+}
+const RESULT = { right: 'right', wrong: 'wrong' };
+const callText = (c) => `${c.named ? 'Sentiment stream' : 'Stream'} ${c.streamId}: ${c.direction}, ${RESULT[c.result] ?? 'not scored yet'}`;
+function contractDay(c) {
+  if (!c.batches.length) return [c.skipped ? `Not sent: ${c.skipped.split(':')[0].replace(/\.$/, '')}.` : 'Not sent.'];
+  return c.batches.flatMap((b) => [`Sent at ${clock(b.at)}: ${plural(b.games, 'game')}.`, ...(b.calls ?? []).map(callText)]);
+}
+function dayBody(d) {
+  if (d.error) return html`<p class="error small">${d.error}</p>`;
+  const title = new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  return html`<div class="day-body" data-test="day-body" data-date="${d.date}"><b>${title}</b><dl class="facts">
+    <div class="fact"><dt>Satori Network</dt><dd data-test="day-network">${networkDay(d.network)}</dd></div>
+    <div class="fact"><dt>Satori contract</dt><dd data-test="day-contract">${contractDay(d.contract).map((t) => html`<span class="line">${t}</span>`)}</dd></div>
+  </dl>${!d.open && !d.network.sent ? html`<p class="muted small">The app wasn't open this day.</p>` : ''}</div>`;
+}
 
 function chip(a, key, name, cost = '') {
   const c = () => h().channels[key];
@@ -111,7 +139,8 @@ export function home(a) {
 
     <section class="tile days-tile">
       <div class="tile-h"><b class="phone-only">Last 14 days</b><b class="desk-only">Last 30 days</b><span class="phone-only" data-test="days-summary">${() => fullDays(14)}</span><span class="desk-only">${() => fullDays(30)}</span></div>
-      <div class="strip" data-test="days">${() => h().days.map((d) => cell(d).key(`${d.date}:${d.code}:${d.ran}:${d.today}`))}</div>
+      <div class="strip" data-test="days">${() => h().days.map((d) => cell(a, d).key(`${d.date}:${d.code}:${d.ran}:${d.today}`))}</div>
+      <div class="day-panel" data-test="day-detail" data-open="${() => String(!!state.dayOpen && !!state.day)}"><div class="day-inner">${() => (state.day ? dayBody(state.day).key(`${state.day.date}:${JSON.stringify(state.day).length}`) : '')}</div></div>
       <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 

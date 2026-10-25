@@ -106,7 +106,8 @@ async function phoneChecks(page, width, height) {
       const box = (el) => el.getBoundingClientRect();
       const shown = (el) => box(el).width > 0 && box(el).height > 0;
       const small = [...document.querySelectorAll('button, input:not([type=checkbox]), select, textarea, summary, nav a, a.chan, a.mrow')]
-        .filter(shown).filter((el) => box(el).height < 44 || box(el).width < 44).map((el) => el.outerHTML.slice(0, 90));
+        .filter(shown).filter((el) => !el.matches('[data-test=day]')) // the strip's days: 14 across a phone, a grid not a list of targets
+        .filter((el) => box(el).height < 44 || box(el).width < 44).map((el) => el.outerHTML.slice(0, 90));
       return { sideways: document.documentElement.scrollWidth - innerWidth, small };
     });
     expect(r, `${tab} at ${width} px`).toEqual({ sideways: 0, small: [] });
@@ -378,6 +379,19 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=days-summary]')).toHaveText('1 full day');
   await shots(page, 'new');
+
+  // Today, tapped: the card shows its predictions and the contract's day; tapped again, it closes. Days before: not tappable.
+  await expect(before.first()).toBeDisabled();
+  const today = page.locator('[data-test=day].today');
+  const panel = page.locator('[data-test=day-detail]');
+  await today.click();
+  await expect(today).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel).toHaveAttribute('data-open', 'true');
+  await expect(panel.locator('[data-test=day-network]')).toHaveText(/^Sent 8 predictions, at \d+:\d\d [AP]M\. They are scored 24 h after they were made\.$/);
+  await expect(panel.locator('[data-test=day-contract]')).toHaveText(/^Not sent/);
+  await today.click();
+  await expect(panel).toHaveAttribute('data-open', 'false');
+  await expect(today).toHaveAttribute('aria-pressed', 'false');
   expect(central.prod).toEqual([]);
 });
 

@@ -90,7 +90,7 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .brand-mark { width: 26px; height: 26px; background: currentColor; -webkit-mask: url(./ui/satori-mark.svg) center / contain no-repeat; mask: url(./ui/satori-mark.svg) center / contain no-repeat; }
 .top-actions { display: flex; gap: 6px; align-items: center; }
 .top-actions .small-btn { padding: 6px 10px; }
-.top-actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; padding: 6px 8px; }
+.top-actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 6px 8px; }
 .icon-btn.bare { background: none; border-color: transparent; color: var(--muted); }
 .icon-btn.bare:hover { color: var(--text); }
 .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -247,6 +247,19 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .cell[data-code="before"] { background: none; border: 1px dashed var(--muted); opacity: 0.5; } /* before this app: an empty slot */
 .cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
 .strip .cell:nth-child(-n+16) { display: none; } /* the phone shows the last 14 of 30 */
+button.cell { padding: 0; border: 0; cursor: pointer; }
+button.cell:disabled { cursor: default; }
+.cell[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* a day opened: the card grows as the day fades in. Closing: the day fades out first, then the card shrinks (its
+   content stays until it is gone). The transition is the one of the state it goes to. */
+.day-panel { display: grid; grid-template-rows: 0fr; opacity: 0; transition: opacity 0.2s ease, grid-template-rows 0.3s ease 0.2s; }
+.day-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 0.3s ease, opacity 0.25s ease; }
+.day-inner { overflow: hidden; min-height: 0; }
+.day-body { padding-top: 12px; animation: day-in 0.25s ease; }
+.day-body .facts { margin: 6px 0 0; font-size: 0.9rem; }
+.day-body .line { display: block; }
+@keyframes day-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .day-panel, .day-body { transition: none; animation: none; } }
 @media (max-width: 1023px) { .desk-only { display: none !important; } }
 .legend { display: flex; gap: 12px; margin-top: 10px; color: var(--muted); font-size: 0.75rem; flex-wrap: wrap; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; background: var(--cell-off); }
@@ -352,7 +365,7 @@ details.tile[open] > summary { margin-bottom: 0; }
 .nrow { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) max-content minmax(0, 1fr) 36px 52px max-content; }
 .row.head { border-top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .row .sname { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-button.sname { border: 0; background: none; padding: 0; min-height: 44px; color: var(--accent); font: inherit; font-weight: 550; cursor: pointer; }
+button.sname { border: 0; background: none; padding: 0; min-height: 44px; min-width: 44px; color: var(--accent); font: inherit; font-weight: 550; cursor: pointer; }
 .srow { align-items: center; }
 .row .num { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .row .badge { justify-self: end; margin: 0; }
@@ -617,7 +630,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .row [data-label]::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.75rem; }
   .row .num { text-align: left; }
   /* a stream on one line: name, latest, in 24 h, sent; the column heads once above (not per cell) */
-  .srow, .srow.head { grid-template-columns: minmax(0, 1fr) 5.6rem 5.6rem 3.2rem; gap: 2px 8px; }
+  .srow, .srow.head { grid-template-columns: minmax(44px, 1fr) 5.6rem 5.6rem 3.2rem; gap: 2px 8px; }
   .srow.head { display: grid; padding: 0 0 4px; font-size: 0.7rem; }
   .srow.head > :nth-child(3) { display: none; }
   .srow .sname, .srow > :last-child { grid-column: auto; grid-row: auto; }

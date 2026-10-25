@@ -829,3 +829,15 @@ describe('the track record (migration 14; docs/design/track-record.md)', () => {
     expect(await db.watchCounts(['w-p', 'w-s', 'none'])).toEqual(new Map([['w-p', 10], ['w-s', 1], ['none', 0]]));
   });
 });
+
+test('a day opened on Home: the predictions sent in it, and the observations around them', async () => {
+  await db.addObservations([obs({ ts: 900 }), obs({ ts: 1100, value: 7 }), obs({ ts: 5000 }), obs({ stream_uuid: 'u-eth', name: 'eth', ts: 1000 })]);
+  const [a, b, c] = await db.addPredictions([pred({ made_at: 1000 }), pred({ made_at: 1500, t2: 4 }), pred({ made_at: 3000 })]);
+  await db.markSent([a, b, c].map((p) => p.id ?? p), 3100);
+  await addPrediction(db, pred({ made_at: 1200 })); // pending: not sent
+  expect((await db.sentBetween(1000, 3000)).map((p) => [p.made_at, p.t2])).toEqual([[1000, pred().t2], [1500, 4]]);
+  const o = await db.observationsBetween(['u-btc', 'u-none'], 1000, 5000);
+  expect(o.get('u-btc')).toEqual([{ ts: 1100, value: 7 }, { ts: 5000, value: obs().value }]);
+  expect(o.get('u-none')).toEqual([]);
+  expect(await db.observationsBetween([], 0, 1)).toEqual(new Map());
+});

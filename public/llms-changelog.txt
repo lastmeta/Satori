@@ -4,6 +4,19 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (Settings: the order)
+
+- Settings, top to bottom: This device, Appearance, Backup, Keys, Reward
+  address, Advanced.
+
+## Changed 2026-10-25 (Home: a day opened)
+
+- Each `day` on the strip is a button: `day-detail` opens under it with the
+  day's network predictions (when, and how many beat no change) and its
+  contract batch (each call, right or wrong); the same day again closes it.
+  New activity `base` rows keep `calls` (streamId, named, direction,
+  cadenceMinutes, hour).
+
 ## Changed 2026-10-25 (the header: share and theme icons)
 
 - The header's title has the Satori enso before it; both are one link to

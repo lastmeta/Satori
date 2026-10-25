@@ -1,6 +1,6 @@
-// Settings: the technical detail, behind Home (docs/intent/ui.md): the keys and their addresses with Unlock and Lock,
-// the backup, the reward address (where the Satori Network sends the rewards), the appearance (System, Light, Dark:
-// src/ui/theme.js), this device (storage, install, update), and folded under Advanced the Satori Network's server
+// Settings: the technical detail, behind Home (docs/intent/ui.md): this device (storage, install, update), the appearance (System, Light, Dark:
+// src/ui/theme.js), the backup, the keys and their addresses with Unlock and Lock, the reward address (where the
+// Satori Network sends the rewards), and folded under Advanced the Satori Network's server
 // (central's URL), the Satori relays, the Base RPC and the batch's max fee. Each section has an id (#settings-<name>)
 // Home's action card scrolls to, opening Advanced when the section is in it.
 import { html } from '@arrow-js/core';
@@ -198,11 +198,11 @@ function advanced(a) {
 export function settingsTab(a) {
   return html`
   <section class="tab-page" data-test="settings-tab" hidden="${() => state.tab !== 'settings'}">
-    ${keys(a)}
-    ${backup(a)}
-    ${rewardCard(a)}
-    ${appearance(a)}
     ${device(a)}
+    ${appearance(a)}
+    ${backup(a)}
+    ${keys(a)}
+    ${rewardCard(a)}
     ${advanced(a)}
   </section>`;
 }
