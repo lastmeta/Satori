@@ -448,9 +448,8 @@ goes) and in words, then what has to be in place, each a check with its fix
 (`src/ui/contractflow.js`):
 
 - **Network**: green once predictions went out in the last day. Registered
-  (else **Poll now**), rewards paid to the wallet (else **Link this
-  wallet**), predictions sent ("Sent 82 predictions 7 h ago"; a failed send:
-  **Poll now**).
+  (else **Poll now**), predictions sent ("Sent 82 predictions 7 h ago"; a
+  failed send: **Poll now**). (A wallet it won't pay: Home's action card.)
 - **Relays**: green while a relay is connected. Connected (n of m), watching
   prediction streams (their track records), publishing for the streams
   subscribed to (none: **Streams**).
@@ -600,7 +599,9 @@ sent, or the game played by hand), each coloured on its own (`daysOf`'s
 failure), none), so a day shows one working and the other not; the game's
 Submit counts on the day it was made, with nothing to send too. "Top: the
 Satori Network · Bottom: the Satori contract" under the strip. The days are
-thin bars 8 px apart; only the opened day is outlined.
+thin bars 8 px apart; only the opened day is outlined. A half that worked is
+sky green (done, all good: the regular green means working), as the cards'
+ticks and arrows are.
 
 Local days, newest last: 14 on the phone, 30 on a computer (`health().days`
 has 30). For each day, the log's outcomes per channel (a merged row counts

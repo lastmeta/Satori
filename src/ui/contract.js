@@ -44,8 +44,7 @@ const fundRow = (a, c) => html`<div class="fund" data-test="contract-fund">
 </div>`;
 
 const fixOf = (a, c) => (c.fix === 'poll' ? html`<button class="small-btn" data-test="network-poll" disabled="${() => !!state.central.polling}" @click="${a.pollNow}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>`
-  : c.fix === 'relink' ? html`<button class="small-btn" data-test="network-relink" @click="${a.baseRelink}">Link this wallet</button>`
-    : c.fix === 'streams' ? html`<button class="small-btn with-icon" data-test="relays-streams" @click="${() => a.go('streams')}">${STREAMS_ICON()}Streams</button>`
+  : c.fix === 'streams' ? html`<button class="small-btn with-icon" data-test="relays-streams" @click="${() => a.go('streams')}">${STREAMS_ICON()}Streams</button>`
       : c.fix === 'stake' ? html`<button class="primary small-btn" data-test="contract-stake" disabled="${() => !!state.baseBusy}" @click="${() => a.walletAction('contract', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? 'Staking…' : 'Stake with this app')}</button>`
   : c.fix === 'game' ? html`<button class="small-btn" data-test="contract-play" @click="${() => a.go('game')}">Play today's game</button>`
     : c.fix === 'fund' ? fundRow(a, c) : '');
@@ -64,7 +63,7 @@ const nowS = () => Date.now() / 1000;
 
 const network = (a) => html`<div class="card contract-card" data-test="network-card">
   ${flow('network', () => networkSent(state.central, nowS()), 'This app', () => (networkSent(state.central, nowS()) ? 'Sent today' : 'Nothing sent lately'), SERVER, 'Satori Network')}
-  <p class="muted small">The Satori Network is Satori's server. The app reads each data stream's latest values from it, predicts the next ones with its own models, and sends the predictions back. It's free, and it rewards good predictions.</p>
+  <p class="muted small">The app reads each data stream's latest values from the network, predicts the next ones with its own models, and sends the predictions back. Doing so costs no gas, those predictions are scored off chain and rewards are provided on chain.</p>
   ${checkList(a, () => networkChecks(state.central, nowS()))}
 </div>`;
 

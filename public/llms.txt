@@ -1000,7 +1000,7 @@ the page's JS context:
   the referral.
 - `satori.setGameFavorites([streamId, …])` → them: shown first, in this order (this device, this wallet).
 - `await satori.channel('network' | 'contract' | 'relays')` → `{ working, checks }`: a chip's card (`working`:
-  its arrow is green); checks as `contract()`'s, fixes `'poll'`, `'relink'`, `'streams'` too.
+  its arrow is green); checks as `contract()`'s, fixes `'poll'`, `'streams'` too.
 - `await satori.contract()` → `{ play, predictedToday, checks }`: Home's Satori contract card. Each check
   `{ id, state: 'ok' | 'bad' | 'wait', text, fix? }`; `fix`: `'stake'` (stake()), `'fund'` (with `address` and
   `who`: send it a little Base ETH), `'game'` (play by hand).
@@ -1201,7 +1201,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   relays; `data-state`, `data-tone`, `data-live` while its channel talks) and
   `chip-text` (a chip opens `chip-card`, `data-open`, `data-channel`, with `network-card`, `relays-card`
   (each a `<key>-arrow`, `data-on`, and `chip-check` items, `data-id`, `data-state`, fixes `network-poll`,
-  `network-relink`, `relays-streams`) or `contract-card`: `contract-arrow` (`data-on`),
+  `relays-streams`) or `contract-card`: `contract-arrow` (`data-on`),
   `contract-play-auto`/`contract-play-manual`, `contract-check` (`data-id`, `data-state`) with `contract-stake`,
   `contract-fund-address`, `contract-qr-toggle` and `contract-qr`, `contract-play`), `home-wallet-card` with `home-satori`, `home-wallet` and
   `home-gas`, `claimable` (its own card) with `claimable-amount`,

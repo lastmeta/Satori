@@ -339,7 +339,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .cell .half { display: block; border-radius: 3px; background: var(--cell-off); }
 .cell .half:first-child { border-radius: 4px 4px 2px 2px; }
 .cell .half:last-child { border-radius: 2px 2px 4px 4px; }
-[data-half="ok"] { background: var(--ok) !important; }
+[data-half="ok"] { background: var(--sky) !important; } /* done, all good: sky (the regular green is "working")*/
 [data-half="error"] { background: var(--bad) !important; }
 .cell[data-code="before"] { border: 1px dashed var(--muted); opacity: 0.5; } /* before this app: an empty slot */
 .cell[data-code="before"] .half { background: none; }
@@ -365,13 +365,13 @@ button.cell:disabled { cursor: default; }
 .carrow { flex: 1; max-width: 160px; display: grid; justify-items: center; gap: 6px; padding-top: 16px; }
 .carrow i { position: relative; display: block; width: 100%; height: 4px; border-radius: 2px; background: var(--cell-off); }
 .carrow i::after { content: ""; position: absolute; right: -2px; top: -5px; border: 7px solid transparent; border-right: 0; border-left: 10px solid var(--cell-off); }
-.carrow[data-on="true"] i { background: var(--ok); }
-.carrow[data-on="true"] i::after { border-left-color: var(--ok); }
-.carrow[data-on="true"] small { color: var(--ok); font-weight: 600; }
+.carrow[data-on="true"] i { background: var(--sky); }
+.carrow[data-on="true"] i::after { border-left-color: var(--sky); }
+.carrow[data-on="true"] small { color: var(--sky-ink); font-weight: 600; }
 .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .check { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; }
 .check .cmark svg { width: 24px; height: 24px; }
-.check[data-state="ok"] .cmark svg { fill: var(--ok); stroke: var(--card); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.check[data-state="ok"] .cmark svg { fill: var(--sky); stroke: var(--sky-on); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .check[data-state="bad"] .cmark svg { fill: var(--bad); stroke: var(--card); stroke-width: 2.4; stroke-linecap: round; }
 .check[data-state="wait"] .cmark svg { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
 .check .cmark svg circle { stroke: none; }

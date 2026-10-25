@@ -51,7 +51,7 @@ export function networkSent(c, now) {
   return !!s && !s.error && s.successful > 0 && now - s.at < DAY_S;
 }
 
-/** The Network card's checks: registered, rewards to the wallet, predictions sent (fix: 'poll', 'relink'). */
+/** The Network card's checks: registered, predictions sent (fix: 'poll'). (A wallet the Satori Network won't pay: Home's card.) */
 export function networkChecks(c, now) {
   if (!c) return [];
   const reg = c.registration;
@@ -60,9 +60,6 @@ export function networkChecks(c, now) {
     !reg ? { id: 'register', state: 'wait', text: 'Registering with the Satori Network…' }
       : reg.ok ? { id: 'register', state: 'ok', text: 'Registered with the Satori Network.' }
         : { id: 'register', state: 'bad', text: `Not registered: ${reg.error}.`, fix: 'poll' },
-    reg?.ok && reg.walletMismatch
-      ? { id: 'wallet', state: 'bad', text: reg.walletMismatch === 'other' ? 'The Satori Network pays your rewards to another address.' : 'The Satori Network has no wallet linked to pay your rewards to.', fix: 'relink' }
-      : { id: 'wallet', state: reg?.ok ? 'ok' : 'wait', text: 'Rewards are paid to your wallet.' },
     networkSent(c, now) ? { id: 'sent', state: 'ok', text: `Sent ${s.successful} predictions ${ago(now - s.at)}.` }
       : s?.error ? { id: 'sent', state: 'bad', text: `The last send failed: ${s.error}.`, fix: 'poll' }
         : { id: 'sent', state: 'wait', text: s ? 'Nothing sent in the last day.' : 'The first predictions go out soon.', fix: s ? 'poll' : undefined },

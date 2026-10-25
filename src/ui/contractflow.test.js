@@ -38,11 +38,11 @@ test('the Network card: registered, rewards to the wallet, sent in the last day'
   const sent = { at: NOW - 7200, successful: 82 };
   const c = { registration: { ok: true }, lastSubmit: sent };
   expect(networkSent(c, NOW)).toBe(true);
-  expect(ids(networkChecks(c, NOW))).toEqual(['register:ok', 'wallet:ok', 'sent:ok']);
-  expect(networkChecks(c, NOW)[2].text).toBe('Sent 82 predictions 2 h ago.');
-  expect(ids(networkChecks({ registration: { ok: false, error: 'HTTP 500' }, lastSubmit: null }, NOW))).toEqual(['register:bad:poll', 'wallet:wait', 'sent:wait']);
+  expect(ids(networkChecks(c, NOW))).toEqual(['register:ok', 'sent:ok']);
+  expect(networkChecks(c, NOW)[1].text).toBe('Sent 82 predictions 2 h ago.');
+  expect(ids(networkChecks({ registration: { ok: false, error: 'HTTP 500' }, lastSubmit: null }, NOW))).toEqual(['register:bad:poll', 'sent:wait']);
   expect(ids(networkChecks({ registration: { ok: true, walletMismatch: 'none' }, lastSubmit: { at: NOW, error: 'timeout' } }, NOW)))
-    .toEqual(['register:ok', 'wallet:bad:relink', 'sent:bad:poll']);
+    .toEqual(['register:ok', 'sent:bad:poll']);
   expect(networkSent({ lastSubmit: { at: NOW - 2 * 86400, successful: 5 } }, NOW)).toBe(false);
 });
 
