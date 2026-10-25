@@ -390,7 +390,7 @@ test('starting: a new neuron polls at once, calm while it gets its first predict
   await today.click();
   await expect(today).toHaveAttribute('aria-pressed', 'true');
   await expect(panel).toHaveAttribute('data-open', 'true');
-  await expect(panel.locator('[data-test=day-network]')).toHaveText(/^Sent 8 predictions, at \d+:\d\d [AP]M\. They are scored 24 h after they were made\.$/);
+  await expect(panel.locator('[data-test=day-network]')).toHaveText(/^Sent 8 predictions, at \d+:\d\d [AP]M\.$/);
   await expect(panel.locator('[data-test=day-contract]')).toHaveText(/^Not sent/);
   await today.click();
   await expect(panel).toHaveAttribute('data-open', 'false');

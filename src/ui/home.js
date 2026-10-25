@@ -41,7 +41,7 @@ const CHANNEL_TAB = { network: 'streams', contract: 'wallet', relays: 'streams' 
 
 const fullDays = (n) => daysText(h().days.slice(-n));
 
-const HALF_WORDS = { ok: 'predicted', part: 'predicted, with errors', error: 'errors only', none: 'nothing' };
+const HALF_WORDS = { ok: 'predicted', error: 'errors only', none: 'nothing' };
 function dayTitle(d) {
   const when = new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const word = d.code === 'closed' && d.ran ? 'Nothing due' : DAY_WORDS[d.code];
@@ -64,7 +64,6 @@ function networkDay(n) {
   const when = clock(n.first) === clock(n.last) ? `at ${clock(n.first)}` : `${clock(n.first)} to ${clock(n.last)}`;
   const parts = [`Sent ${plural(n.sent, 'prediction')}, ${when}.`];
   if (scored) parts.push(`Against no change: ${m.better} better, ${m.tie} the same, ${m.worse} worse.`);
-  if (m.waiting) parts.push(`${scored ? `${m.waiting} more are` : 'They are'} scored 24 h after they were made.`);
   return parts.join(' ');
 }
 const RESULT = { right: 'right', wrong: 'wrong' };
@@ -153,7 +152,7 @@ export function home(a) {
       <div class="strip" data-test="days">${() => h().days.map((d) => cell(a, d).key(`${d.date}:${d.code}:${d.network}:${d.contract}:${d.ran}:${d.today}:${state.dayOpen === d.date}:${cachedNow()}`))}</div>
       <div class="day-panel" data-test="day-detail" data-open="${() => String(!!state.dayOpen && !!state.day)}"><div class="day-inner">${() => (state.day ? dayBody(state.day).key(`${state.day.date}:${JSON.stringify(state.day).length}`) : '')}</div></div>
       <p class="strip-key small muted" data-test="strip-key">Top: the Satori Network · Bottom: the Satori contract</p>
-      <div class="legend desk-only"><span><i data-half="ok"></i>Predicted</span><span><i data-half="part"></i>With errors</span><span><i data-half="error"></i>Errors only</span><span><i data-half="none"></i>Nothing</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
+      <div class="legend desk-only"><span><i data-half="ok"></i>Predicted</span><span><i data-half="error"></i>Errors only</span><span><i data-half="none"></i>Nothing</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 
     <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}${chipCard(a)}</section>

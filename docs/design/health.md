@@ -596,10 +596,11 @@ health changes, and when the page is hidden or left.
 Each day is two halves (owner, 2026-10-25): **top, the Satori Network**
 (off-chain scoring), **bottom, the Satori contract** (on-chain: a batch
 sent, or the game played by hand), each coloured on its own (`daysOf`'s
-`network` and `contract`: ok, part (with errors), error, none), so a day
-shows one working and the other not. "Top: the Satori Network · Bottom: the
-Satori contract" under the strip. The days are thin bars 8 px apart, so
-today's outline and the opened day's never touch.
+`network` and `contract`: ok, error (it only failed: a skipped check is no
+failure), none), so a day shows one working and the other not; the game's
+Submit counts on the day it was made, with nothing to send too. "Top: the
+Satori Network · Bottom: the Satori contract" under the strip. The days are
+thin bars 8 px apart; only the opened day is outlined.
 
 Local days, newest last: 14 on the phone, 30 on a computer (`health().days`
 has 30). For each day, the log's outcomes per channel (a merged row counts

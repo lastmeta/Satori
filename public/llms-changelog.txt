@@ -7,7 +7,7 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 ## Changed 2026-10-25 (the day strip's halves)
 
 - Each day of Home's strip is two halves: the Satori Network (top) and the Satori contract (bottom); `health().days`
-  items gain `network` and `contract` (ok, part, error, none).
+  items gain `network` and `contract` (ok, error, none).
 
 ## Changed 2026-10-25 (chip cards)
 

@@ -402,16 +402,17 @@ function outcome(r) {
   return null;
 }
 
-/** A half of a day: ok (it worked), part (it worked, and failed too), error (it only failed), none. */
-const halfOf = (ok, fail) => (ok ? (fail ? 'part' : 'ok') : fail ? 'error' : 'none');
+/** A half of a day: ok (it worked at least once that day), error (it only failed), none. */
+const halfOf = (ok, fail) => (ok ? 'ok' : fail ? 'error' : 'none');
 
 /**
  * The last `n` local days, oldest first: { date, code: full | part | error | closed | before, ran, today, network,
  * contract }. `before`: the day ended before the neuron began, its first session or `since` (the keys' creation, the
  * log's first session) when earlier. network and contract: each a half of the day's cell (halfOf): the Satori
- * Network's scoring off-chain, the Satori contract's on-chain (a batch sent, or the game played by hand).
+ * Network's scoring off-chain, the Satori contract's on-chain (a batch sent, or the game played by hand, `played`:
+ * its last Submit's time, with nothing to send too). A skipped check is no failure: only an error is.
  */
-export function daysOf(rows, now, since = null, n = DAYS) {
+export function daysOf(rows, now, since = null, n = DAYS, played = null) {
   const sessions = sessionsOf(rows, now);
   const known = [since, sessions[0]?.at].filter(Number.isFinite);
   const born = known.length ? Math.min(...known) : -Infinity; // nothing known: no day is before
@@ -431,9 +432,10 @@ export function daysOf(rows, now, since = null, n = DAYS) {
       if (o && r.at < b && end(r) >= a) (o[1] === 'ok' ? ok : fail).add(o[0]);
     }
     const code = ok.size ? ([...fail].every((c) => ok.has(c)) ? 'full' : 'part') : fail.size ? 'error' : b <= born ? 'before' : 'closed';
-    const played = rows.some((r) => r.kind === 'wallet' && r.data?.action === 'play' && r.at >= a && r.at < b);
+    const byHand = (played != null && played >= a && played < b) || rows.some((r) => r.kind === 'wallet' && r.data?.action === 'play' && r.at >= a && r.at < b);
+    const baseFailed = rows.some((r) => r.kind === 'base' && r.level === 'bad' && !r.data?.unused && r.at < b && end(r) >= a);
     out.push({ date: isoDay(start), code, ran: sessions.some((s) => s.at < b && s.until >= a), today: k === 0,
-      network: halfOf(ok.has('network'), fail.has('network')), contract: halfOf(ok.has('contract') || played, fail.has('contract')) });
+      network: halfOf(ok.has('network'), fail.has('network')), contract: halfOf(ok.has('contract') || byHand, baseFailed) });
   }
   return out;
 }
@@ -551,7 +553,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const doing = leading(work);
   return {
     status, tone: toneOf(status, leading(work, HERO)), title, line, action,
-    days: daysOf(rows, now, since),
+    days: daysOf(rows, now, since, DAYS, base?.lastPlay?.at ?? null),
     channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic, work }),
     feed: feedOf(rows),
     reasons: reasons.map((r) => ({ id: r.id, status: r.status, channel: r.channel, text: r.text ?? r.line })),

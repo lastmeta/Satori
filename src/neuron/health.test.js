@@ -657,7 +657,11 @@ describe('the day strip: local days', () => {
     expect(days.filter((d) => d.today)).toHaveLength(1);
     expect(days[0]).toMatchObject({ date: '2026-09-17', code: 'before', ran: false }); // before the first session
     // each day's two halves: the Satori Network (off-chain) and the Satori contract (on-chain)
-    expect(days.slice(-6).map((d) => `${d.network}/${d.contract}`)).toEqual(['ok/ok', 'ok/error', 'error/none', 'none/none', 'none/none', 'part/none']);
+    expect(days.slice(-6).map((d) => `${d.network}/${d.contract}`)).toEqual(['ok/ok', 'ok/error', 'error/none', 'none/none', 'none/none', 'ok/none']);
+    // a skipped check is no failure; the game's Submit with nothing to send (its time) is a play
+    const skip = daysOf([open(day(0, 8), NOW), row('base', day(0, 9), 'warn', { skipped: 'gas above the ceiling' }), row('base', day(0, 10), 'ok', { games: [{}] })], NOW).at(-1);
+    expect(skip.contract).toBe('ok');
+    expect(daysOf([open(day(0, 8), NOW)], NOW, null, DAYS, day(0, 11)).at(-1).contract).toBe('ok');
     const play = daysOf([open(day(0, 8), NOW), row('wallet', day(0, 10), 'ok', { action: 'play', text: 'Sent 2…' })], NOW).at(-1);
     expect(play.contract).toBe('ok'); // the game played by hand
   });
