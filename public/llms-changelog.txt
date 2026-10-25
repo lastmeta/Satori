@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (chip cards)
+
+- Every chip opens its card under the chips (`chip-card`): Network and Relays too, no longer their tab. New
+  `channel(key)`. `contract-check` is now `chip-check`.
+
 ## Changed 2026-10-25 (the phone's bar; the contract card's first check)
 
 - The phone's bar: Game, Home, Menu (Models first in it, then Streams, Wallet, Settings).

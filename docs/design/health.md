@@ -439,10 +439,28 @@ health.js map them).
   "Relays down" in amber (no reason, no card), and Home's answer stays what
   the predicting says. With subscriptions the chip is as above.
 
+### The chip cards
+
+A chip opens its card under the chips (owner, 2026-10-25); another chip
+switches to its card, the same chip closes it. Each says what its channel is
+for, in a picture (this app, an arrow green while it works, where the data
+goes) and in words, then what has to be in place, each a check with its fix
+(`src/ui/contractflow.js`):
+
+- **Network**: green once predictions went out in the last day. Registered
+  (else **Poll now**), rewards paid to the wallet (else **Link this
+  wallet**), predictions sent ("Sent 82 predictions 7 h ago"; a failed send:
+  **Poll now**).
+- **Relays**: green while a relay is connected. Connected (n of m), watching
+  prediction streams (their track records), publishing for the streams
+  subscribed to (none: **Streams**).
+- **Contract**, below.
+
+Agents: `channel('network' | 'contract' | 'relays')`.
+
 ### The contract card
 
-The Contract chip opens a card under the chips (owner, 2026-10-25; the other
-chips still open their tab), and closes it again. It explains and checks:
+The Contract chip's card explains and checks:
 
 - First: "Must have at least 1 SATORI in your wallet to participate" (the
   wallet's SATORI ≥ 1).

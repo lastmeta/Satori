@@ -226,10 +226,11 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await page.unroute('**/rpc');
   await page.evaluate(() => window.satori.base());
 
-  // The Contract chip opens its card under the chips; another chip goes to its tab; tabs are hash routes, kept over a reload.
+  // A chip opens its card under the chips; tabs are hash routes, kept over a reload.
   await chip('contract').click();
-  await expect(page.locator('[data-test=contract-card]')).toHaveAttribute('data-open', 'true');
-  await chip('network').click();
+  await expect(page.locator('[data-test=chip-card]')).toHaveAttribute('data-open', 'true');
+  await expect(page.locator('[data-test=contract-card]')).toBeVisible();
+  await page.evaluate(() => window.satori.go('streams'));
   await expect(page).toHaveURL(/#streams$/);
   await expect(page.locator('[data-test=streams-tab]')).toBeVisible();
   await expect(page.locator('[data-test=tab-streams]')).toHaveAttribute('aria-current', 'page');

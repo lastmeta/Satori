@@ -37,7 +37,7 @@ import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
-import { contractChecks, predictedToday } from './ui/contractflow.js';
+import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -1174,7 +1174,7 @@ const actions = {
     if (to) state.game = { ...g, ...to, move: dir > 0 ? 'next' : 'back', sendError: '' };
   },
   gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
-  toggleContract() { state.contractOpen = !state.contractOpen; },
+  toggleChip(key) { state.chipOpen = state.chipOpen === key ? '' : key; },
   toggleContractQr(address) { state.contractQr = state.contractQr === address ? '' : address; },
   /** The game's CLAIM: Home's Claim (Unlock in place); the amount kept to show beside CLAIMED. */
   gameClaim() {
@@ -1500,6 +1500,18 @@ window.satori = {
     await base.refresh();
     const v = await base.status();
     return { play: v.play, predictedToday: predictedToday(v), checks: contractChecks(v) };
+  },
+  /**
+   * Home's chip cards (docs/design/health.md#the-chip-cards): 'network' | 'contract' | 'relays' → { working, checks }
+   * (working: the arrow is green: sent in the last day, predicted this round, a relay connected); the contract's also
+   * has `play` (as contract()).
+   */
+  async channel(key) {
+    ready();
+    if (key === 'contract') { const c = await window.satori.contract(); return { ...c, working: c.predictedToday }; }
+    if (key === 'network') { const c = await centralStatus(); return { working: networkSent(c, nowS()), checks: networkChecks(c, nowS()) }; }
+    if (key === 'relays') { const n = await nostrStatus(); return { working: relaysOn(n), checks: relayChecks(n) }; }
+    throw new Error("channel: 'network', 'contract' or 'relays'.");
   },
   /** One day of Home's strip ('2026-10-24', local): when the app predicted, on the Satori Network and the contract, and how those did. */
   async day(date) { ready(); return dayDetail(String(date)); },

@@ -7,7 +7,7 @@ import { state } from './state.js';
 import { mark, sparkPath, unlockPrompt } from './parts.js';
 import { fmtNum, figure, modelText, amountText, daysText, claimParts, claimableText, openingText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
-import { contractCard } from './contract.js';
+import { chipCard } from './contract.js';
 
 const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [], notices: [],
   channels: { network: { state: 'idle', tone: 'idle', text: '–' }, contract: { state: 'idle', tone: 'idle', text: '–' },
@@ -82,9 +82,8 @@ function dayBody(d) {
 
 function chip(a, key, name, cost = '') {
   const c = () => h().channels[key];
-  // the Contract chip opens its card under the chips (src/ui/contract.js); the others go to their tab
-  const open = key === 'contract' ? () => a.toggleContract() : () => a.go(CHANNEL_TAB[key]);
-  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" aria-expanded="${key === 'contract' ? () => String(!!state.contractOpen) : false}" @click="${(e) => { e.preventDefault(); if (!cachedNow()) open(); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
+  // a chip opens its card under the chips (src/ui/contract.js)
+  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" aria-expanded="${() => String(state.chipOpen === key)}" @click="${(e) => { e.preventDefault(); if (!cachedNow()) a.toggleChip(key); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
 }
 
 /** The claimable rewards: the total of the parts known (staking rewards, the Satori Network's drop, the airdrop). */
@@ -154,7 +153,7 @@ export function home(a) {
       <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 
-    <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}${contractCard(a)}</section>
+    <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}${chipCard(a)}</section>
 
     <section class="tile streams-tile desk-only" hidden="${cachedNow}">
       <div class="tile-h"><b>Streams</b><span>${streamsSummary}</span></div>

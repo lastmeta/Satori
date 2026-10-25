@@ -1,4 +1,4 @@
-// Home's Satori contract card (docs/design/health.md#the-contract-card) against the fake Satori contract behind /rpc
+// Home's chip cards (docs/design/health.md#the-chip-cards), the Satori contract's most against the fake Satori contract behind /rpc
 // (test/fake-satori.js): the Contract chip opens it; what is missing says its fix (Stake; Base ETH to an address, with a
 // QR code); by hand, Play; green once predicted this round; the agent's contract().
 import { expect, test } from '@playwright/test';
@@ -8,7 +8,7 @@ import { stubCentral } from './stub.js';
 
 const PASS = 'correct horse battery';
 const t = (page, id) => page.locator(`[data-test=${id}]`);
-const checks = (page) => t(page, 'contract-check').evaluateAll((li) => li.map((x) => `${x.dataset.id}:${x.dataset.state}`));
+const checks = (page) => page.locator('.chip-card:not([hidden]) [data-test=chip-check]').evaluateAll((li) => li.map((x) => `${x.dataset.id}:${x.dataset.state}`));
 const chip = (page) => page.locator('[data-test=chip][data-channel=contract]');
 
 test('the Contract chip opens its card: the checks and their fixes, the mode, green once predicted', async ({ context, page }) => {
@@ -22,9 +22,10 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   const { alias, wallet } = await page.evaluate(() => window.satori.base());
 
   // automatic, not staked, no gas: the card opens under the chips, not another tab
-  await expect(t(page, 'contract-card')).toHaveAttribute('data-open', 'false');
+  await expect(t(page, 'chip-card')).toHaveAttribute('data-open', 'false');
   await chip(page).click();
-  await expect(t(page, 'contract-card')).toHaveAttribute('data-open', 'true');
+  await expect(t(page, 'chip-card')).toHaveAttribute('data-open', 'true');
+  await expect(t(page, 'contract-card')).toBeVisible();
   expect(await page.evaluate(() => document.body.dataset.tab)).toBe('home');
   await expect.poll(() => checks(page)).toEqual(['satori:bad', 'stake:bad', 'gas:bad', 'today:wait']);
   await expect(t(page, 'contract-stake')).toBeVisible();
@@ -57,7 +58,20 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   await expect(chip(page)).toHaveAttribute('data-tone', 'idle');
   await expect(chip(page).locator('[data-test=chip-text]')).toHaveText('Played today');
 
-  // a second tap folds it away
-  await chip(page).click();
-  await expect(t(page, 'contract-card')).toHaveAttribute('data-open', 'false');
+  // the other chips' cards: what each is for, its picture, its checks; the agent's channel()
+  await page.locator('[data-test=chip][data-channel=network]').click();
+  await expect(t(page, 'network-card')).toBeVisible();
+  await expect(t(page, 'contract-card')).toBeHidden();
+  await expect.poll(() => checks(page)).toEqual(['register:ok', 'wallet:ok', expect.stringMatching(/^sent:/)]);
+  await expect(t(page, 'network-arrow')).toHaveAttribute('data-on', /true|false/);
+  await page.locator('[data-test=chip][data-channel=relays]').click();
+  await expect(t(page, 'relays-card')).toBeVisible();
+  await expect.poll(() => checks(page)).toEqual([expect.stringMatching(/^connected:/), expect.stringMatching(/^watching:/), 'publishing:wait']);
+  await expect(t(page, 'relays-streams')).toBeVisible();
+  expect(await page.evaluate(() => window.satori.channel('relays'))).toMatchObject({ working: expect.any(Boolean), checks: [{ id: 'connected' }, { id: 'watching' }, { id: 'publishing' }] });
+  expect(await page.evaluate(() => window.satori.channel('network'))).toMatchObject({ checks: [{ id: 'register', state: 'ok' }, { id: 'wallet' }, { id: 'sent' }] });
+
+  // the same chip again folds it away
+  await page.locator('[data-test=chip][data-channel=relays]').click();
+  await expect(t(page, 'chip-card')).toHaveAttribute('data-open', 'false');
 });

@@ -75,7 +75,7 @@ export const state = reactive({
   sparks: {}, // uuid → its last observations (trend lines)
   streamOpen: '', // the stream whose detail is open (Streams)
   streamPreds: [], // its latest predictions
-  contractOpen: false, // Home's Satori contract card, opened by its chip
+  chipOpen: '', // Home's chip card open under the chips: '' | 'network' | 'contract' | 'relays'
   contractQr: '', // the address whose QR code it shows
   dayOpen: '', // the strip day opened on Home ('2026-10-24'), '' for none
   day: null, // that day (src/neuron/day.js dayOf), its contract calls with their results; kept while it fades out

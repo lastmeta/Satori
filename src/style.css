@@ -351,6 +351,7 @@ button.cell:disabled { cursor: default; }
 .contract-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; margin-top: 0; transition: grid-template-rows 0.3s ease, margin-top 0.3s ease, opacity 0.25s ease 0.1s; }
 .contract-inner { overflow: hidden; min-height: 0; }
 .contract-card { display: grid; gap: 12px; }
+.chip-card { animation: day-in 0.25s ease; } /* another chip's card fades in */
 .contract-card p { margin: 0; }
 .cflow { display: flex; align-items: flex-start; justify-content: center; gap: 8px; padding: 4px 0; }
 .cnode { display: grid; justify-items: center; gap: 4px; width: 92px; text-align: center; }
@@ -371,6 +372,7 @@ button.cell:disabled { cursor: default; }
 .check .cmark svg circle { stroke: none; }
 .check[data-state="wait"] .cmark svg circle { stroke: var(--muted); }
 .check > div { display: grid; gap: 8px; padding-top: 2px; }
+.check > div > button { justify-self: start; }
 .fund { display: grid; gap: 6px; }
 .fund .qr { width: 180px; height: 180px; background: #fff; border-radius: 8px; image-rendering: pixelated; }
 @media (prefers-reduced-motion: reduce) { .contract-panel { transition: none; } }

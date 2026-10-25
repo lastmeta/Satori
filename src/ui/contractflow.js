@@ -39,3 +39,53 @@ export function contractChecks(b) {
     : { id: 'today', state: 'wait', text: staked === 'alias' ? "Today's predictions go out at the next check." : 'Nothing predicted today.' });
   return out;
 }
+
+// ── the Network and Relays cards: the same idea for the other two chips ──
+
+const DAY_S = 86400;
+const ago = (s) => (s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min ago` : s < DAY_S ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / DAY_S)} d ago`);
+
+/** The Satori Network: predictions went out in the last day (central took some). */
+export function networkSent(c, now) {
+  const s = c?.lastSubmit;
+  return !!s && !s.error && s.successful > 0 && now - s.at < DAY_S;
+}
+
+/** The Network card's checks: registered, rewards to the wallet, predictions sent (fix: 'poll', 'relink'). */
+export function networkChecks(c, now) {
+  if (!c) return [];
+  const reg = c.registration;
+  const s = c.lastSubmit;
+  return [
+    !reg ? { id: 'register', state: 'wait', text: 'Registering with the Satori Network…' }
+      : reg.ok ? { id: 'register', state: 'ok', text: 'Registered with the Satori Network.' }
+        : { id: 'register', state: 'bad', text: `Not registered: ${reg.error}.`, fix: 'poll' },
+    reg?.ok && reg.walletMismatch
+      ? { id: 'wallet', state: 'bad', text: reg.walletMismatch === 'other' ? 'The Satori Network pays your rewards to another address.' : 'The Satori Network has no wallet linked to pay your rewards to.', fix: 'relink' }
+      : { id: 'wallet', state: reg?.ok ? 'ok' : 'wait', text: 'Rewards are paid to your wallet.' },
+    networkSent(c, now) ? { id: 'sent', state: 'ok', text: `Sent ${s.successful} predictions ${ago(now - s.at)}.` }
+      : s?.error ? { id: 'sent', state: 'bad', text: `The last send failed: ${s.error}.`, fix: 'poll' }
+        : { id: 'sent', state: 'wait', text: s ? 'Nothing sent in the last day.' : 'The first predictions go out soon.', fix: s ? 'poll' : undefined },
+  ];
+}
+
+const usable = (n) => (n?.relays ?? []).filter((r) => r.state !== 'blocked');
+/** The Satori relays: at least one connected. */
+export const relaysOn = (n) => usable(n).some((r) => r.state === 'open');
+
+/** The Relays card's checks: connected, watching prediction streams, publishing (fix: 'streams'). */
+export function relayChecks(n) {
+  if (!n) return [];
+  const all = usable(n);
+  const up = all.filter((r) => r.state === 'open').length;
+  const watching = n.watching?.streams ?? 0;
+  const subs = n.subscriptions?.length ?? 0;
+  return [
+    up ? { id: 'connected', state: 'ok', text: `Connected to ${up} of ${all.length} relay${all.length === 1 ? '' : 's'}.` }
+      : { id: 'connected', state: all.length ? 'bad' : 'wait', text: all.length ? 'No relay connected right now; it keeps trying.' : 'No relays yet.' },
+    watching ? { id: 'watching', state: 'ok', text: `Watching ${watching} prediction stream${watching === 1 ? '' : 's'}, keeping their track records.` }
+      : { id: 'watching', state: 'wait', text: 'Looking for prediction streams…' },
+    subs ? { id: 'publishing', state: 'ok', text: `Publishing your predictions for ${subs} stream${subs === 1 ? '' : 's'} you subscribe to.` }
+      : { id: 'publishing', state: 'wait', text: 'Not publishing yet: subscribe to a stream to publish your predictions for it.', fix: 'streams' },
+  ];
+}
