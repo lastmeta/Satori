@@ -12,7 +12,7 @@ import { recordFromRows } from '../keys/index.js';
  * in step at every write (5's obs_*, 9's predicted_ts), the keys' move (7), rows rewritten (10). 15 rewrites words an older
  * build only displays, and writes again in its own: it lives with either.
  */
-export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13, 14, 15, 17]);
+export const ADDITIVE = new Set([3, 4, 6, 8, 11, 12, 13, 14, 15, 17, 18]);
 
 export const MIGRATIONS = [
   // 1 (step 1): streams fetched from a URL; times in ms.
@@ -161,4 +161,9 @@ export const MIGRATIONS = [
   // 17 (2026-10-23): the activity log's rows in the same words.
   `UPDATE activity SET data = replace(replace(data, 'vault', 'wallet'), 'identity', 'alias')
    WHERE data LIKE '%vault%' OR data LIKE '%identity%';`,
+  // 18 (2026-10-25, additive): following a stream is not predicting it (docs/design/nostr.md#follow-and-predict).
+  // relay_streams.predict: its `<stream>_pred` is forecast and published; the streams followed before were all
+  // predicted, so they stay so.
+  `ALTER TABLE relay_streams ADD COLUMN predict BOOLEAN DEFAULT true;
+   UPDATE relay_streams SET predict = true WHERE predict IS NULL;`,
 ];

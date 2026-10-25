@@ -573,8 +573,8 @@ const setAsideDb = () => exclusive('setAside', async () => {
 });
 
 /** Subscribe or unsubscribe, then the catalog's mark follows. */
-async function setSubscribed(pubkey, stream, on) {
-  const r = on ? await nostr.subscribe(pubkey, stream) : await nostr.unsubscribe(pubkey, stream);
+async function setSubscribed(pubkey, stream, on, { predict = false } = {}) {
+  const r = on ? await nostr.subscribe(pubkey, stream, { predict }) : await nostr.unsubscribe(pubkey, stream);
   state.catalog = state.catalog.map((s) => (s.pubkey === pubkey && s.stream_name === stream ? { ...s, subscribed: on } : s));
   await refreshNostr();
   return r;
@@ -1065,6 +1065,16 @@ const actions = {
       state.subscribing = '';
     }
   }),
+  /** Predict a followed stream (its `_pred` published to the relays), or stop. */
+  setPredict: shownAt('networkError', async (pubkey, stream, on) => {
+    state.subscribing = `${pubkey}:${stream}`;
+    try {
+      await nostr.setPredict(pubkey, stream, on);
+      await refreshNostr();
+    } finally {
+      state.subscribing = '';
+    }
+  }),
   /** Paid streams (docs/design/market.md): a price on one of our `_pred`s, free again, Buy (the wallet: Unlock in place), Stop. */
   sell: shownAt('marketError', (stream, f) => marketAction(`sell:${stream}`, () => nostr.sell(stream, f.price))),
   unsell: shownAt('marketError', (stream) => marketAction(`sell:${stream}`, () => nostr.unsell(stream))),
@@ -1526,8 +1536,21 @@ window.satori = {
   async nostr() { ready(); return nostrStatus(); },
   /** The relays' stream catalog (newest per provider and stream, no tombstones); `pred` and `subscribed` marked. */
   async discover() { ready(); const list = await nostr.discover(); state.catalog = list; return list; },
-  /** Subscribe to a free stream and predict it: `<stream>_pred` is published on each new observation. */
-  async subscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, true); },
+  /**
+   * Follow a free stream: its data kept (Streams, the engine's inputs). { predict: true } predicts it too: its
+   * `<stream>_pred` is published to the relays on each new observation (or setPredict later).
+   */
+  async subscribe(pubkey, stream, { predict = false } = {}) {
+    ready();
+    return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, true, { predict });
+  },
+  /** Predict a followed stream, or stop (its `_pred` tombstoned; still followed). → its view */
+  async setPredict(pubkey, stream, on) {
+    ready();
+    const r = await nostr.setPredict(String(pubkey ?? '').trim().toLowerCase(), stream, on);
+    await refreshNostr();
+    return r;
+  },
   /** → nostr(), as setRelays. */
   async unsubscribe(pubkey, stream) { ready(); return setSubscribed(String(pubkey ?? '').trim().toLowerCase(), stream, false); },
   /** Our `<stream>_pred` history for a relay stream, newest first: { seq, value, model, obs_seq, made_at, event_id, relays }. */

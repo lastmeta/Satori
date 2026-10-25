@@ -73,9 +73,13 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await row.getByRole('button', { name: 'Subscribe' }).click();
   await expect(row.getByRole('button', { name: 'Unsubscribe' })).toBeVisible();
 
-  // The stored observation arrives with the follow REQ: stored, forecast, `_pred` seq 1 published to 7781.
+  // Followed: the stored observation arrives with the follow REQ and is kept; nothing is predicted or published yet.
   const sub = page.locator('[data-test=sub]').filter({ hasText: 'E2E walk' });
   await expect(sub.locator('[data-test=sub-obs]')).toHaveText('100');
+  await expect(sub.locator('[data-test=sub-pred]')).toHaveText('–');
+  // Predict: the latest observation at once, `_pred` seq 1 published to 7781.
+  await sub.locator('[data-test=sub-predict]').click();
+  await expect(sub.locator('[data-test=sub-predict]')).toHaveText('Stop predicting');
   await expect(sub.locator('[data-test=sub-pred]')).toHaveText('100');
   await expect(sub.locator('[data-test=sub-pred]')).toHaveAttribute('title', `${stream}_pred · naive · sent as "100"`);
   await expect(sub.locator('[data-test=sub-seq]')).toHaveText('1');
@@ -220,7 +224,7 @@ test("an https page: a ws:// relay is blocked, said once, and neither down nor c
   await expect.poll(async () => (await nostr(page)).relays.map((r) => [r.url, r.from, r.state, r.error, r.for]), { timeout: 20_000 })
     .toEqual([[RELAY, ['central'], 'open', '', null], [BLOCKED, ['central'], 'blocked', 'ws:// cannot be opened from an https page', null],
       [STAND_IN, ['central'], 'open', '', SATORIAN]]);
-  await page.evaluate(([p, s]) => window.satori.subscribe(p, s), [provider.pubkey, stream]);
+  await page.evaluate(([p, s]) => window.satori.subscribe(p, s, { predict: true }), [provider.pubkey, stream]);
 
   // the blocked relay is not down: the chip counts the two that can open, nothing amber, no card for it
   let h = await page.evaluate(() => window.satori.health());

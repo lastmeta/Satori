@@ -63,7 +63,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     const buyer = await neuron(browser);
     await fund(FORK, [seller.alias, buyer.alias]); // gas: the seller's settle, the buyer's close
     await fund(FORK, [buyer.wallet], { satori: '1' }); // gas and SATORI for the channel
-    await seller.page.evaluate(([p, s]) => window.satori.subscribe(p, s), [provider.pubkey, stream]);
+    await seller.page.evaluate(([p, s]) => window.satori.subscribe(p, s, { predict: true }), [provider.pubkey, stream]);
     const s = seller.page;
     await s.setViewportSize({ width: 390, height: 844 });
     await s.evaluate(() => window.satori.go('streams'));

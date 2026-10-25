@@ -49,6 +49,19 @@ Short names: `START` = `neuron/neuron-lite/start.py`; `ROUTES` =
 | Unsubscribe | Soft delete (NDB:496-503), 34602 with `action=unsubscribe`, `satori=unsubscription` (CLIENT:1600-1644), and a tombstone 34600 for `_pred` (`[d, satori=datastream, status=deleted]`, content = empty metadata with `created_at 0`; START:3683-3720). | The same three steps. The row stays (inactive), so a later subscribe keeps counting `_pred` seq from where it was. The two events wait in an outbox (`meta.nostr_outbox`, kept over a reload) for every relay we write to that is not open or does not answer, and go when it opens. |
 | Cadence | Hourly reconcile loop (START:200-292); NIP-65 10002 of the connected relays daily (START:288-291, 370-389, CLIENT:405-428). | Hourly reconcile; NIP-65 of the relays open at the time, when the last one is a day old (`meta.nostr_relay_list_at`), checked hourly and whenever any relay opens, sent only when a relay we write to is open. |
 
+## Follow and predict
+
+Following a stream is not predicting it (owner, 2026-10-25). Subscribe
+follows: the 34602 is sent, the stream followed, its observations kept
+(Streams, the engine's inputs, the track record), nothing announced or
+published. **Predict** (the Streams tab's button per subscription,
+`setPredict`, or `subscribe(…, { predict: true })`) announces its
+`<stream>_pred`, predicts its latest observation at once, and forecasts and
+publishes each new one; stopping tombstones the `_pred` (as Unsubscribe
+does) and keeps following. `relay_streams.predict` (migration 18); the
+subscriptions made before were all predicted, so they stay so. One
+`<name>_pred` per name holds among the predicted ones only.
+
 ## Event shapes (verified)
 
 `test/fixtures/nostr-parity.json` is made by `scripts/nostr_vectors.py`:

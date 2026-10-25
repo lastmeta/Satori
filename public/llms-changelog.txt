@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (following is not predicting)
+
+- `subscribe(pubkey, stream)` now follows only (the data kept, nothing published); `subscribe(…, { predict: true })`
+  or the new `setPredict(pubkey, stream, on)` predicts it. Subscriptions made before keep predicting. Each
+  subscription has `predict`; the Streams tab: `sub-predict` (Predict, Stop predicting).
+
 ## Changed 2026-10-25 (the day strip's halves)
 
 - Each day of Home's strip is two halves: the Satori Network (top) and the Satori contract (bottom); `health().days`

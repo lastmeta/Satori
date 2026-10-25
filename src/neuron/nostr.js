@@ -157,7 +157,8 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
   /** A `_pred`'s announcement: priced, with its listing (market.listing: price_per_obs and the channel's market). */
   const announcementOf = (sub, at) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, aliasPubkey,
     listing: market.listing(sub.stream_name + PRED) }), at));
-  const announcements = async (at) => (await db.relayStreams({ active: true })).map((sub) => announcementOf(sub, at));
+  const predicted = async () => (await db.relayStreams({ active: true })).filter((r) => r.predict !== false);
+  const announcements = async (at) => (await predicted()).map((sub) => announcementOf(sub, at));
 
   /** NIP-65 of the open relays, when the last one is a day old (start.py:370-389); one at a time. */
   let listing = null;
@@ -311,8 +312,9 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
   const applyLine = serial();
   const applyWatch = ({ list, gone = new Set(), reached: got = [] }) => applyLine(async () => {
     const all = await db.relayStreams();
-    const live = new Set(all.filter((r) => r.active).map((r) => r.stream_name)); // one `<name>_pred` per name: another provider's may be live
-    const retired = all.filter((r) => !r.active && !live.has(r.stream_name)).map((r) => `${key.pubkey}:${r.stream_name}${PRED}`);
+    const isPred = (r) => r.active && r.predict !== false;
+    const live = new Set(all.filter(isPred).map((r) => r.stream_name)); // one `<name>_pred` per name: another provider's may be live
+    const retired = all.filter((r) => !isPred(r) && !live.has(r.stream_name)).map((r) => `${key.pubkey}:${r.stream_name}${PRED}`);
     const r = await watch.apply(list, { gone: new Set([...gone, ...retired]), bought: market.bought() });
     watchedAt = now();
     reached = new Set(got);
@@ -373,8 +375,8 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
   }
 
   /**
-   * A subscription's verified 34601 that arrived `at`: stored once; a new one is forecast and published as
-   * `<stream>_pred` (start.py:1276-1327, 3549-3617). One stamped more than max(its cadence, AHEAD_S) ahead of its
+   * A subscription's verified 34601 that arrived `at`: stored once; a new one, of a stream predicted (not only
+   * followed: docs/design/nostr.md#follow-and-predict), is forecast and published as `<stream>_pred` (start.py:1276-1327, 3549-3617). One stamped more than max(its cadence, AHEAD_S) ahead of its
    * arrival is neither kept nor forecast (it would move the engine's window and the prune's past the whole history).
    */
   async function predict(e, o, uuid, sub, at = now()) {
@@ -388,6 +390,21 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     const fresh = await db.addRelayObservation({ stream_uuid: uuid, seq: o.seq, ts, value,
       raw: JSON.stringify(o.value) ?? 'null', event_id: e.id, received_at: t() });
     if (!fresh) return;
+    if (sub.predict === false) { // followed, not predicted: its data is kept, nothing is forecast or published
+      onChange();
+      return;
+    }
+    await forecastAndPublish(uuid, sub, { seq: o.seq, value, raw: o.value });
+  }
+
+  /**
+   * A predicted stream's observation forecast one cadence ahead and published as `<stream>_pred` (the intake's, and
+   * the latest one when Predict is turned on). `value`: its number (null: none, echoed as Lite does), `raw`: as sent.
+   */
+  async function forecastAndPublish(uuid, sub, { seq: obsSeq, value, raw }) {
+    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
+    const windowS = cadence * RELAY_WINDOW;
+    const o = { seq: obsSeq, value: raw };
     // one cadence ahead (docs/intent/engine.md): steps of the cadence, one of them; from the engine's window
     const f = value === null ? null : forecast(await db.relayHistory(uuid, windowS), { step: cadence, horizon: cadence });
     const pub = predValue(f, o.value);
@@ -500,7 +517,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
 
   const view = (r) => ({
     uuid: r.uuid, stream: r.stream_name, provider: r.provider_pubkey, name: r.name, cadence_seconds: r.cadence_seconds,
-    subscribed_at: r.subscribed_at, observations: r.observations,
+    subscribed_at: r.subscribed_at, observations: r.observations, predict: r.predict !== false,
     observation: r.obs_seq == null ? null
       : { seq: r.obs_seq, ts: r.obs_ts, value: r.obs_value, raw: parseRaw(r.obs_raw), received_at: r.obs_received_at },
     prediction: r.p_seq == null ? null
@@ -519,7 +536,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
 
   /** One of our `_pred` streams (an active subscription's), by its name. */
   async function ownPred(stream) {
-    const sub = (await db.relayStreams({ active: true })).find((r) => r.stream_name + PRED === String(stream ?? ''));
+    const sub = (await predicted()).find((r) => r.stream_name + PRED === String(stream ?? ''));
     if (!sub) throw new Error(`${stream} is not a stream this app publishes (one of its <stream>${PRED}).`);
     return sub;
   }
@@ -607,10 +624,11 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     scanWatch,
 
     /**
-     * Subscribe and predict: the announcement is looked up and verified, the
-     * 34602 and the `_pred` 34600 published, and the stream followed.
+     * Follow a stream (and predict it, with `predict`): the announcement is looked up and verified, the 34602 published,
+     * and the stream followed: its data kept. Predicted, its `_pred` 34600 is published too, and each new observation
+     * forecast and published (docs/design/nostr.md#follow-and-predict).
      */
-    subscribe: (pubkey, stream) => progress.run('subscribe', async (step) => {
+    subscribe: (pubkey, stream, { predict = false } = {}) => progress.run('subscribe', async (step) => {
       const [p, s] = checkStream(pubkey, stream);
       if (s.endsWith(PRED)) throw new Error('That is a prediction stream (…_pred); subscribe to its source.');
       const uuid = relayUuid(p, s);
@@ -618,7 +636,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       if ((await db.countActiveRelay()) >= maxStreams) {
         throw new Error(`The limit of ${maxStreams} streams is reached (central's max_streams). Unsubscribe from one first.`);
       }
-      const clash = (await db.relayStreams({ active: true })).find((r) => r.stream_name === s);
+      const clash = predict && (await predicted()).find((r) => r.stream_name === s);
       if (clash) {
         throw new Error(`You already predict ${s} from ${clash.provider_pubkey.slice(0, 8)}…: there is one ${s}${PRED} per name `
           + '(Lite keeps its publications unique by name). Unsubscribe from that one first.');
@@ -636,11 +654,11 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       }
       const at = t();
       const sub = await db.subscribeRelay({ uuid, stream_name: s, provider_pubkey: p, name: found.name,
-        cadence_seconds: found.cadence_seconds, now: at });
+        cadence_seconds: found.cadence_seconds, now: at, predict });
       await refollow();
       await db.checkpoint();
       background(publish(sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at }))));
-      background(publish(announcementOf(sub, at)));
+      if (predict) background(publish(announcementOf(sub, at)));
       onChange();
       return viewOf(uuid);
     }),
@@ -686,6 +704,40 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       await refollow();
       onChange();
       return v;
+    },
+
+    /**
+     * Predict a followed stream, or stop: on, its `<stream>_pred` is announced and each new observation forecast and
+     * published; off, the `_pred` is tombstoned (as Unsubscribe does) and the stream stays followed. → its view
+     */
+    async setPredict(pubkey, stream, on) {
+      const [p, s] = checkStream(pubkey, stream);
+      const uuid = relayUuid(p, s);
+      const sub = await db.relayStream(uuid);
+      if (!sub?.active) throw new Error(`Follow ${s} from ${p.slice(0, 8)}… first.`);
+      if (!!on === (sub.predict !== false)) return viewOf(uuid);
+      const at = t();
+      if (on) {
+        const clash = (await predicted()).find((r) => r.stream_name === s && r.uuid !== uuid);
+        if (clash) {
+          throw new Error(`You already predict ${s} from ${clash.provider_pubkey.slice(0, 8)}…: there is one ${s}${PRED} per name. `
+            + 'Stop predicting that one first.');
+        }
+        await db.setRelayPredict(uuid, true);
+        await db.checkpoint();
+        background(publish(announcementOf({ ...sub, predict: true }, at)));
+        // its latest observation: predicted at once, not at the next one
+        if (sub.obs_seq != null) {
+          await forecastAndPublish(uuid, { ...sub, predict: true }, { seq: sub.obs_seq, value: sub.obs_value, raw: parseRaw(sub.obs_raw) });
+        }
+      } else {
+        await db.setRelayPredict(uuid, false);
+        await watch.drop([[key.pubkey, s + PRED]]); // our `_pred` leaves the track record with its tombstone
+        await db.checkpoint();
+        await sendKept([sign(tombstoneEvent(s + PRED, key.pubkey, at))]);
+      }
+      onChange();
+      return viewOf(uuid);
     },
 
     /** Unsubscribe (routes.py:2673-2688): the 34602 unsubscribe, the `_pred` tombstone, unfollow. → status() */

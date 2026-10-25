@@ -113,6 +113,8 @@ const settle = () => nostr.idle();
 
 beforeEach(() => { clock = 1_792_073_160; });
 
+const PREDICT = { predict: true }; // these subscriptions predict (a follow alone: its own test)
+
 describe('relays', () => {
   test("central's relays (read only on the dev server) and the user's (written to); max_streams from central", async () => {
     await boot();
@@ -227,7 +229,7 @@ describe("a relay's wss stand-in (docs/design/nostr.md#relays-and-the-read-only-
     const r = relays.get(STAND_IN);
     expect(r.published).toEqual([]); // read only: no announcements, no NIP-65
     r.stored.push(announce('btc'));
-    await nostr.subscribe(PROV_PUB, 'btc');
+    await nostr.subscribe(PROV_PUB, 'btc', PREDICT);
     await r.deliver(observe('btc', '100', 1));
     await settle();
     expect(r.published).toEqual([]); // no 34602, no `_pred` 34600, no `_pred`
@@ -343,7 +345,7 @@ describe('discover', () => {
     await nostr.discover();
     expect(seen).toEqual(['discover ask 0 2', 'discover ask 1 2', 'discover ask 2 2', 'discover verify 0 1', 'discover verify 1 1']);
     seen.length = 0;
-    await nostr.subscribe(PROV_PUB, 'btc');
+    await nostr.subscribe(PROV_PUB, 'btc', PREDICT);
     expect(seen).toEqual(['subscribe find']);
     expect(work.current()).toBeNull();
   });
@@ -369,7 +371,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await settle(); // the open's own work (announcements, NIP-65) first
     for (const r of relays.all.values()) r.published = [];
     relays.get(CENTRAL_RELAY).stored.push(announce(stream));
-    return nostr.subscribe(PROV_PUB, stream);
+    return nostr.subscribe(PROV_PUB, stream, PREDICT);
   }
 
   test('subscribe stores the stream, publishes the 34602 and the `_pred` 34600 only where we write, and follows it', async () => {
@@ -387,7 +389,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     for (const r of relays.all.values()) {
       expect(r.subs.get(FOLLOW_ID)).toEqual([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc'] }]);
     }
-    expect(await nostr.subscribe(PROV_PUB, 'btc')).toMatchObject({ uuid }); // again: no-op
+    expect(await nostr.subscribe(PROV_PUB, 'btc', PREDICT)).toMatchObject({ uuid }); // again: no-op
     expect(kinds(u)).toHaveLength(2);
   });
 
@@ -395,19 +397,19 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await boot();
     openAll();
     const c = relays.get(CENTRAL_RELAY);
-    await expect(nostr.subscribe(PROV_PUB, 'x_pred')).rejects.toThrow(/prediction stream/);
-    await expect(nostr.subscribe('zz', 'x')).rejects.toThrow(/64 hex/);
-    await expect(nostr.subscribe(PROV_PUB, 'nope')).rejects.toThrow(/not announced/);
+    await expect(nostr.subscribe(PROV_PUB, 'x_pred', PREDICT)).rejects.toThrow(/prediction stream/);
+    await expect(nostr.subscribe('zz', 'x', PREDICT)).rejects.toThrow(/64 hex/);
+    await expect(nostr.subscribe(PROV_PUB, 'nope', PREDICT)).rejects.toThrow(/not announced/);
     c.stored.push(announce('paid', { price: 5 }), announce('enc', { encrypted: true }), announce('gate', { approval: true }));
-    for (const s of ['paid', 'enc', 'gate']) await expect(nostr.subscribe(PROV_PUB, s)).rejects.toThrow(/later/);
+    for (const s of ['paid', 'enc', 'gate']) await expect(nostr.subscribe(PROV_PUB, s, PREDICT)).rejects.toThrow(/later/);
     c.stored.push({ ...announce('forged'), content: announce('x').content });
-    await expect(nostr.subscribe(PROV_PUB, 'forged')).rejects.toThrow(/not announced/); // a bad signature is not taken
+    await expect(nostr.subscribe(PROV_PUB, 'forged', PREDICT)).rejects.toThrow(/not announced/); // a bad signature is not taken
     central.config = { max_streams: 2 };
     await nostr.start(); // the cap is read at start, as Lite
     c.stored.push(announce('a'), announce('b'), announce('c'));
-    await nostr.subscribe(PROV_PUB, 'a');
-    await nostr.subscribe(PROV_PUB, 'b');
-    await expect(nostr.subscribe(PROV_PUB, 'c')).rejects.toThrow(/limit of 2/);
+    await nostr.subscribe(PROV_PUB, 'a', PREDICT);
+    await nostr.subscribe(PROV_PUB, 'b', PREDICT);
+    await expect(nostr.subscribe(PROV_PUB, 'c', PREDICT)).rejects.toThrow(/limit of 2/);
   });
 
   test('a new observation is stored, forecast one cadence ahead (the owner\'s rule) and published as `_pred` (seq + 1) where we write', async () => {
@@ -448,7 +450,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const c = relays.get(CENTRAL_RELAY);
     const u = relays.get(USER_RELAY);
     c.stored.push(announce('slow', { cadence: 0 }));
-    await nostr.subscribe(PROV_PUB, 'slow');
+    await nostr.subscribe(PROV_PUB, 'slow', PREDICT);
     u.published = [];
     const values = [50, 51, 50, 52, 51, 53, 52, 54, 53, 55, 54];
     const t0 = Math.floor(clock / 86_400) * 86_400 - values.length * 86_400;
@@ -468,7 +470,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const c = relays.get(CENTRAL_RELAY);
     const u = relays.get(USER_RELAY);
     c.stored.push(announce('fast', { cadence: 60 }));
-    await nostr.subscribe(PROV_PUB, 'fast');
+    await nostr.subscribe(PROV_PUB, 'fast', PREDICT);
     u.published = [];
     const values = [50, 51, 50, 52, 51, 53, 52, 54, 53, 55, 54];
     const t0 = Math.floor(clock / 60) * 60 - values.length * 60;
@@ -490,7 +492,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const c = relays.get(CENTRAL_RELAY);
     const u = relays.get(USER_RELAY);
     c.stored.push(announce('fast', { cadence: 60 }));
-    await nostr.subscribe(PROV_PUB, 'fast');
+    await nostr.subscribe(PROV_PUB, 'fast', PREDICT);
     const uuid = relayUuid(PROV_PUB, 'fast');
     const t0 = clock - 1000 * 60;
     await conn.query(`INSERT INTO relay_observations SELECT '${uuid}', k + 1, ${t0} + k * 60, 100 + sin(k / 7) + k / 500, '1', 'x' || k,
@@ -518,7 +520,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     openAll();
     await settle();
     relays.get(CENTRAL_RELAY).stored.push(announce('fast', { cadence: 60 }));
-    await nostr.subscribe(PROV_PUB, 'fast');
+    await nostr.subscribe(PROV_PUB, 'fast', PREDICT);
     const uuid = relayUuid(PROV_PUB, 'fast');
     await conn.query(`INSERT INTO relay_observations SELECT '${uuid}', k + 1, ${clock} + k * 60, 1, '1', 'x' || k, ${clock} FROM range(500) t(k)`);
     await nostr.reconcile(); // within a day of the start's pass: not again
@@ -652,7 +654,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect((await nostr.status()).subscriptions).toEqual([]);
     expect((await nostr.discover()).find((s) => s.stream_name === 'btc').subscribed).toBe(false);
     await expect(nostr.unsubscribe(PROV_PUB, 'eth')).rejects.toThrow(/Not subscribed/);
-    await nostr.subscribe(PROV_PUB, 'btc');
+    await nostr.subscribe(PROV_PUB, 'btc', PREDICT);
     await c.deliver(observe('btc', '102', 3));
     await settle();
     expect((await db.relayPredictions(relayUuid(PROV_PUB, 'btc'), 1))[0].seq).toBe(2);
@@ -663,8 +665,8 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const OTHER = nostrPubkey('4'.repeat(64));
     relays.get(CENTRAL_RELAY).stored.push(announce('eth'), signEvent(announceEvent({ stream_name: 'x', nostr_pubkey: OTHER,
       created_at: 1, cadence_seconds: 60, tags: [] }, clock - 5), '4'.repeat(64)));
-    await nostr.subscribe(PROV_PUB, 'eth');
-    await nostr.subscribe(OTHER, 'x');
+    await nostr.subscribe(PROV_PUB, 'eth', PREDICT);
+    await nostr.subscribe(OTHER, 'x', PREDICT);
     const filters = relays.get(USER_RELAY).subs.get(FOLLOW_ID);
     expect(filters).toEqual(expect.arrayContaining([
       { kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] }, { kinds: [34601], authors: [OTHER], '#d': ['x'] }]));
@@ -681,9 +683,36 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const forged = { ...announce('btc', { cadence: 1 }, clock), sig: '00'.repeat(64) };
     const c = relays.get(CENTRAL_RELAY);
     c.fetch = async () => [real, other, forged, { ...announce('eth', {}, clock + 5) }];
-    await expect(nostr.subscribe(PROV_PUB, 'btc')).rejects.toThrow(/later/);
+    await expect(nostr.subscribe(PROV_PUB, 'btc', PREDICT)).rejects.toThrow(/later/);
     c.fetch = async () => [other, forged];
-    await expect(nostr.subscribe(PROV_PUB, 'btc')).rejects.toThrow(/not announced/);
+    await expect(nostr.subscribe(PROV_PUB, 'btc', PREDICT)).rejects.toThrow(/not announced/);
+  });
+
+  test('following is not predicting: a followed stream is kept, never forecast or published; setPredict starts and stops its `_pred`', async () => {
+    await boot();
+    openAll();
+    await settle();
+    relays.get(CENTRAL_RELAY).stored.push(announce('btc'));
+    for (const r of relays.all.values()) r.published = [];
+    expect(await nostr.subscribe(PROV_PUB, 'btc')).toMatchObject({ predict: false });
+    await settle();
+    expect(kinds(relays.get(USER_RELAY))).toEqual([[34602, 'btc']]); // the subscription, no `_pred` announced
+    await relays.get(CENTRAL_RELAY).deliver(observe('btc', '100', 1, clock - 10));
+    await settle();
+    expect((await nostr.status()).subscriptions[0]).toMatchObject({ predict: false, observations: 1, prediction: null }); // kept, not forecast
+    expect(kinds(relays.get(USER_RELAY))).toEqual([[34602, 'btc']]);
+    expect(await nostr.setPredict(PROV_PUB, 'btc', true)).toMatchObject({ predict: true, prediction: { seq: 1 } }); // its latest, at once
+    await settle();
+    expect(kinds(relays.get(USER_RELAY)).slice(-2)).toEqual(expect.arrayContaining([[34600, 'btc_pred'], [34601, 'btc_pred']])); // announced, published
+    clock += 60;
+    await relays.get(CENTRAL_RELAY).deliver(observe('btc', '101', 2, clock - 5));
+    await settle();
+    expect(kinds(relays.get(USER_RELAY)).at(-1)).toEqual([34601, 'btc_pred']); // forecast and published
+    expect(await nostr.setPredict(PROV_PUB, 'btc', false)).toMatchObject({ predict: false });
+    await settle();
+    const last = relays.get(USER_RELAY).published.at(-1);
+    expect([last.kind, last.tags.find((x) => x[0] === 'status')?.[1]]).toEqual([34600, 'deleted']); // its tombstone
+    await expect(nostr.setPredict(PROV_PUB, 'nope', true)).rejects.toThrow(/Follow nope/);
   });
 
   test("one `<name>_pred` per name: a second provider's stream of the same name is refused", async () => {
@@ -691,9 +720,11 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const OTHER = '5'.repeat(64);
     relays.get(CENTRAL_RELAY).stored.push(signEvent(announceEvent({ stream_name: 'btc', nostr_pubkey: nostrPubkey(OTHER),
       created_at: 1, cadence_seconds: 60 }, clock), OTHER));
-    await expect(nostr.subscribe(nostrPubkey(OTHER), 'btc')).rejects.toThrow(/already predict btc from/);
+    await expect(nostr.subscribe(nostrPubkey(OTHER), 'btc', PREDICT)).rejects.toThrow(/already predict btc from/);
+    expect(await nostr.subscribe(nostrPubkey(OTHER), 'btc')).toMatchObject({ provider: nostrPubkey(OTHER), predict: false }); // following is fine
+    await expect(nostr.setPredict(nostrPubkey(OTHER), 'btc', true)).rejects.toThrow(/already predict btc from/);
     await nostr.unsubscribe(PROV_PUB, 'btc');
-    expect(await nostr.subscribe(nostrPubkey(OTHER), 'btc')).toMatchObject({ provider: nostrPubkey(OTHER) });
+    expect(await nostr.setPredict(nostrPubkey(OTHER), 'btc', true)).toMatchObject({ provider: nostrPubkey(OTHER), predict: true });
   });
 
   test('a relay that never answers OK holds up neither subscribing nor intake; the count follows its OK', async () => {
@@ -704,8 +735,8 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const c = relays.get(CENTRAL_RELAY);
     u.mute = true;
     c.stored.push(announce('a'), announce('b'));
-    await nostr.subscribe(PROV_PUB, 'a');
-    await nostr.subscribe(PROV_PUB, 'b');
+    await nostr.subscribe(PROV_PUB, 'a', PREDICT);
+    await nostr.subscribe(PROV_PUB, 'b', PREDICT);
     void nostr.reconcile(); // its re-announcements wait on the mute relay too
     await c.deliver(observe('a', '1', 1));
     await c.deliver(observe('b', '2', 1));
@@ -793,7 +824,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     }
     for (const r of relays.all.values()) expect(r.published.filter((e) => e.kind !== 10002)).toEqual([]); // no 34602, nothing of its own
     c.stored.push(announce('eth'));
-    await nostr.subscribe(PROV_PUB, 'eth');
+    await nostr.subscribe(PROV_PUB, 'eth', PREDICT);
     expect(c.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] },
       { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred'] }])); // merged per author
   });
@@ -900,7 +931,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
 
   test("intake: a watched stream's event is kept, never forecast or published; a subscription's goes the existing way; both: both; neither or forged: nothing", async () => {
     const c = await watching(['btc', 'eth']);
-    await nostr.subscribe(PROV_PUB, 'eth'); // eth is also a watched source
+    await nostr.subscribe(PROV_PUB, 'eth', PREDICT); // eth is also a watched source
     for (const r of relays.all.values()) r.published = [];
     const t = clock;
     clock += 0.4;
@@ -932,7 +963,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     const c = await watching(['btc'], { centralWrite: false });
     const u = relays.get(USER_RELAY);
     c.stored.push(announce('btc'));
-    await nostr.subscribe(PROV_PUB, 'btc'); // we predict btc too
+    await nostr.subscribe(PROV_PUB, 'btc', PREDICT); // we predict btc too
     u.stored.push(...u.published.filter((e) => e.kind === 34600)); // our `btc_pred` announcement, as a relay keeps it
     await nostr.scanWatch();
     expect((await nostr.status()).watching).toMatchObject({ streams: 2, sources: 1 });
@@ -1003,7 +1034,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     const c = await watching(['btc'], { centralWrite: false });
     const u = relays.get(USER_RELAY);
     c.stored.push(announce('btc'));
-    await nostr.subscribe(PROV_PUB, 'btc');
+    await nostr.subscribe(PROV_PUB, 'btc', PREDICT);
     u.stored.push(...u.published.filter((e) => e.kind === 34600)); // our `btc_pred` announcement, as a relay keeps it
     await nostr.scanWatch();
     expect((await nostr.records()).map((r) => r.mine).sort()).toEqual([false, true]);
@@ -1017,7 +1048,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
 
   test("a far-future observation is not kept: a watched stream's, and a subscription's (neither stored nor forecast)", async () => {
     const c = await watching(['btc', 'eth']);
-    await nostr.subscribe(PROV_PUB, 'eth'); // cadence 900
+    await nostr.subscribe(PROV_PUB, 'eth', PREDICT); // cadence 900
     for (const r of relays.all.values()) r.published = [];
     await c.deliver(observe('eth', '5', 1, clock + 901)); // more than max(900, 300) s ahead of its arrival
     await c.deliver(observe('btc', '5', 1, 4_000_000_000)); // 2096
@@ -1037,7 +1068,7 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     openAll();
     await settle();
     relays.get(CENTRAL_RELAY).stored.push(announce('fast', { cadence: 60 }));
-    await nostr.subscribe(PROV_PUB, 'fast');
+    await nostr.subscribe(PROV_PUB, 'fast', PREDICT);
     const uuid = relayUuid(PROV_PUB, 'fast');
     await conn.query(`INSERT INTO relay_observations SELECT '${uuid}', k + 1, ${clock} - (499 - k) * 60, 1, '1', 'x' || k, ${clock} FROM range(500) t(k)`);
     await conn.query(`INSERT INTO relay_observations VALUES ('${uuid}', 999, 4000000000, 1, '1', 'future', ${clock})`); // stored before the guard
@@ -1106,7 +1137,7 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     const u = relays.get(USER_RELAY);
     expect(u.subs.get(MARKET_ID)).toEqual([{ kinds: [34602, 34603], '#p': [ME_PUB] }]); // to us, on every relay
     relays.get(CENTRAL_RELAY).stored.push(announce('btc'));
-    await nostr.subscribe(PROV_PUB, 'btc');
+    await nostr.subscribe(PROV_PUB, 'btc', PREDICT);
     await expect(nostr.sell('eth_pred', '1')).rejects.toThrow('eth_pred is not a stream this app publishes');
     await expect(nostr.sell('btc_pred', '0')).rejects.toThrow('positive amount of SATORI');
     await expect(nostr.sell('btc_pred', '0.000000001')).rejects.toThrow('at most 8 decimal places'); // under a satoshi

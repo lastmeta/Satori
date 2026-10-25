@@ -75,7 +75,7 @@ function streamsCard(a) {
 function subRow(s, a) {
   // One root node, no whitespace around it (see streamRow).
   const p = s.prediction;
-  return html`<div class="row nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs" title="${s.observation ? `sent as ${rawText(s.observation)}` : ''}">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><button class="link" data-test="unsubscribe" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></div>`;
+  return html`<div class="row nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs" title="${s.observation ? `sent as ${rawText(s.observation)}` : ''}">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><span class="subacts"><button class="small-btn" data-test="sub-predict" aria-pressed="${String(!!s.predict)}" title="${s.predict ? 'Stop predicting it: its _pred is withdrawn from the relays; still followed' : 'Predict it: each new value is forecast and the prediction published to the relays'}" @click="${() => a.setPredict(s.provider, s.stream, !s.predict)}" disabled="${() => !!state.subscribing}">${s.predict ? 'Stop predicting' : 'Predict'}</button><button class="link" data-test="unsubscribe" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></span></div>`;
 }
 
 // ── paid streams (docs/design/market.md) ──
@@ -104,7 +104,7 @@ function marketPart(a) {
     <div class="market" data-test="market" hidden="${() => !state.nostr.subscriptions.length && !m().bought.length}">
       <div hidden="${() => !state.nostr.subscriptions.length}">
         <h3>Sell <small class="muted">per observation, in SATORI, through the Satori contract</small></h3>
-        <div class="crows">${() => state.nostr.subscriptions.map((sub) => sellRow(sub, a).key(sub.uuid))}</div>
+        <div class="crows">${() => state.nostr.subscriptions.filter((sub) => sub.predict).map((sub) => sellRow(sub, a).key(sub.uuid))}</div>
       </div>
       <div hidden="${() => !m().bought.length}">
         <h3>Bought</h3>
@@ -122,10 +122,10 @@ function nostrCard(a) {
       <h2>Satori relays</h2>
       <span class="muted small">${() => `${n().subscriptions.length} of ${n().maxStreams} streams · ${relaysText(n().relays)}`}</span>
     </header>
-    <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Streams on the relays. Each new observation is forecast and published as <code>&lt;stream&gt;_pred</code>.</p>
+    <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Streams on the relays to follow one. Predict it to forecast each new value and publish the prediction as <code>&lt;stream&gt;_pred</code>.</p>
     <div class="srows" hidden="${() => !n().subscriptions.length}">
       <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
-      <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq}`))}</div>
+      <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq} ${s.predict}`))}</div>
     </div>
     ${marketPart(a)}
   </section>`;

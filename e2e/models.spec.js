@@ -167,7 +167,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect.poll(async () => (await page.evaluate(() => window.satori.nostr())).relays.every((r) => r.state === 'open')).toBe(true);
   const t0 = nowS() - 20 * H;
   await provider.observe({ stream, value: '10', seq: 1, timestamp: t0 });
-  await page.evaluate(([p, x]) => window.satori.subscribe(p, x), [provider.pubkey, stream]);
+  await page.evaluate(([p, x]) => window.satori.subscribe(p, x, { predict: true }), [provider.pubkey, stream]);
   // the stored one first (the follow is on), then the live ones
   await expect.poll(async () => (await page.evaluate(() => window.satori.nostr())).subscriptions[0]?.prediction?.seq).toBe(1);
   for (let k = 2; k <= 16; k++) {

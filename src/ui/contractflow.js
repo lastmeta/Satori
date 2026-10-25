@@ -76,7 +76,7 @@ export function relayChecks(n) {
   const all = usable(n);
   const up = all.filter((r) => r.state === 'open').length;
   const watching = n.watching?.streams ?? 0;
-  const subs = n.subscriptions?.length ?? 0;
+  const subs = (n.subscriptions ?? []).filter((x) => x.predict !== false).length;
   return [
     up ? { id: 'connected', state: 'ok', text: `Connected to ${up} of ${all.length} relay${all.length === 1 ? '' : 's'}.` }
       : { id: 'connected', state: all.length ? 'bad' : 'wait', text: all.length ? 'No relay connected right now; it keeps trying.' : 'No relays yet.' },
