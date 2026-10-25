@@ -241,7 +241,7 @@ describe('selling and buying', () => {
     expect(sale().cumulative).toBe(String(PRICE));
   });
 
-  test('the pass settles every voucher above what is settled at most once a day; a close request stops deliveries, settled in the next daily settle', async () => {
+  test('the pass settles every voucher above what is settled at most once a week; a close request stops deliveries and is settled at once', async () => {
     const settles = () => chainApi.calls.filter((c) => c[0] === 'settleMany').length;
     const v = await bought();
     await observe(1);
@@ -250,15 +250,13 @@ describe('selling and buying', () => {
     expect(chainApi.map.get(v.channel).settled).toBe(2n * PRICE);
     expect(seller.status().selling[0].buyers[0].settled).toBe('0.00002');
     await observe(3);
-    clock += 3600; // an hour later: something due, but no transaction until a day has passed
+    clock += 2 * 86_400; // two days later: something due, but no transaction until a week has passed
     await seller.pass();
     expect([settles(), chainApi.map.get(v.channel).settled]).toEqual([1, 2n * PRICE]);
+    expect(SETTLE_EVERY_S).toBe(7 * 86_400);
     chainApi.map.get(v.channel).closeRequestedAt = clock; // asked on chain (by its wallet, say): no more deliveries, still owed
-    await seller.pass();
+    await seller.pass(); // the close signal: settled at once, well inside its 7-day grace period
     expect((await observe(4)).out).toEqual([]);
-    expect(seller.status().selling[0].buyers).toHaveLength(1);
-    clock += SETTLE_EVERY_S;
-    await seller.pass();
     expect([settles(), chainApi.map.get(v.channel).settled]).toEqual([2, 3n * PRICE]);
     expect(seller.status().selling[0].buyers).toEqual([]); // nothing more due: it goes
     clock += SETTLE_EVERY_S;

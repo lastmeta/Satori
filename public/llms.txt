@@ -366,9 +366,9 @@ Every method is below; `await satori.status()` shows everything at once.
   observation then goes, encrypted (NIP-04, as Lite), to each buyer whose
   channel checks on chain and whose vouchers cover what it was sent (the
   first free), one 34601 each (`d` = `<stream>:<buyer>`); in public only a
-  heartbeat (no value). At most once a day the hourly pass settles every
+  heartbeat (no value). At most once a week the hourly pass settles every
   voucher (one `settleMany` from the alias, into the wallet); a buyer who
-  stops gets no more, and its last voucher waits for that daily settle.
+  stops gets no more, and its last voucher is settled at the next hourly pass.
   **Buy**: the wallet (Unlock, gas) opens a channel
   with a deposit (100 observations by default), then the 34602 names it;
   each observation received is kept as a watched stream's (its track record

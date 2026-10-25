@@ -3,7 +3,8 @@
 //   sell: our `<stream>_pred` announced with Lite's price_per_obs (satoshis); each observation encrypted (NIP-04) to each
 //   buyer in good standing
 //   buy: the wallet opens a channel (Unlock), the 34602 names it; each delivery received → the alias's next voucher (34603)
-//   the seller checks the channel on chain and each voucher; it settles (settleMany) at most once a day; refunds withdrawn
+//   the seller checks the channel on chain and each voucher; it settles (settleMany) at most once a week, and at once for a
+//   channel closing (its grace period is 7 days); refunds withdrawn
 // Kept in meta `market`: { prices (wei), sales, buys, settledAt }, amounts as decimal strings.
 import { formatEther, hashMessage, hexToBytes, parseEther, recoverMessageAddress, serializeSignature, isAddress } from 'viem';
 import { DEFAULTS } from '../chain/config.js';
@@ -15,7 +16,7 @@ import { KIND, deliveryEvent, deliveryOf, parseSubscription, paymentEvent, payme
 
 export const DEPOSIT_OBS = 100; // a Buy's deposit unless one is given: 100 observations
 export const SAT = 10n ** 10n; // wei per satoshi: price_per_obs is Lite's, in satoshis (10⁻⁸ SATORI)
-export const SETTLE_EVERY_S = 86_400; // the seller settles at most once a day: each settle costs gas
+export const SETTLE_EVERY_S = 7 * 86_400; // the seller settles at most once a week (owner, 2026-10-25): each settle costs gas; a closing channel at once
 const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 const B = (x) => BigInt(x ?? 0);
 const sat = (wei) => formatEther(B(wei));
@@ -97,13 +98,14 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
   };
 
   /**
-   * Once a day at most: every sale's newest voucher above what is settled, in one transaction (the seller's alias,
-   * into the wallet). A closing sale goes once nothing is due.
+   * Once a week at most, or at once when a channel with something due is closing (the close signal: its grace period
+   * is 7 days): every sale's newest voucher above what is settled, in one transaction (the seller's alias, into the
+   * wallet). A closing sale goes once nothing is due.
    */
   async function collect() {
     const list = Object.values(m.sales);
     const due = list.filter((s) => s.signature && B(s.cumulative) > B(s.settled));
-    if (due.length && t() - (m.settledAt ?? 0) >= SETTLE_EVERY_S) {
+    if (due.length && (t() - (m.settledAt ?? 0) >= SETTLE_EVERY_S || due.some((s) => s.closing))) {
       const { channels } = await chain();
       const r = await channels.settleMany(needAlias(), due.map((s) => ({ id: s.channel, cumulative: B(s.cumulative), signature: s.signature })));
       for (const x of r.settled) for (const s of due) if (s.channel === x.id) s.settled = String(x.settled);
@@ -285,7 +287,7 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
 
     /**
      * The hourly pass (and the catch-up's): each sale's channel read again (its deposit, what is settled, a close asked:
-     * no more deliveries, closed: gone), then, once a day at most, one settleMany for every voucher above what is settled;
+     * no more deliveries, closed: gone), then, once a week at most (at once for a closing channel), one settleMany for every voucher above what is settled;
      * each bought channel whose grace period has ended is withdrawn (the refund to the wallet).
      */
     async pass() {
