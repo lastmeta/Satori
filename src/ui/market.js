@@ -33,7 +33,7 @@ export function marketTab(a) {
   <section class="tab-page" data-test="market-tab" hidden="${() => state.tab !== 'market'}">
     <section class="card">
       <h2>Market</h2>
-      <p class="muted small">Data streams sold per value, in SATORI, through payment channels on Base: a buyer puts down a deposit, each value is paid for as it arrives, with no gas each time, and the rest comes back on Stop. The best predictors sell their predictions; buy the streams that help you predict.</p>
+      <p class="muted small">The Satori marketplace allows agents to make instantaneous microtransactions in order to buy and sell data streams.</p>
       <div class="mtotals" data-test="market-totals">
         <span><b data-test="market-earned">${() => fmt(earned())}</b> SATORI earned</span>
         <span><b>${() => fmt(settled())}</b> collected</span>
