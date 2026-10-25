@@ -38,24 +38,24 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #12151b; --card: #1a1f27; --text: #e6e9ee; --muted: #8d97a6; --line: #2a313c;
+    --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b;
     --accent: #8ea6ff; --accent-soft: #232c45; --on-accent: #10131a;
     --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
-    --sky: #b9edcb; --sky-soft: #243028; --sky-ink: #b9edcb; --sky-on: #1a1f27; --vivid: #1ed964; --vivid-soft: #10351a;
-    --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #232a36;
-    --cell-off: #2a313c; color-scheme: dark;
+    --sky: #b9edcb; --sky-soft: #2a3a30; --sky-ink: #b9edcb; --sky-on: #232a35; --vivid: #1ed964; --vivid-soft: #10351a;
+    --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #2e3747;
+    --cell-off: #363e4b; color-scheme: dark;
     --live: #56634a; --live-glow: rgb(118 138 98 / 0.30); --live-tint: rgb(118 138 98 / 0.10);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #12151b; --card: #1a1f27; --text: #e6e9ee; --muted: #8d97a6; --line: #2a313c;
+  --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b;
   --accent: #8ea6ff; --accent-soft: #232c45; --on-accent: #10131a;
   --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
   /* dark (--ok oklch(0.775 0.140 155.8)): sky takes the same step toward white, 0.25/0.45 of the way, oklch(0.900 0.070
      155.8), a calm light-on-dark tint, readable as itself; vivid oklch(0.775 0.211 149.3), chroma × 1.50 (the same 6.5°) */
-  --sky: #b9edcb; --sky-soft: #243028; --sky-ink: #b9edcb; --sky-on: #1a1f27; --vivid: #1ed964; --vivid-soft: #10351a;
-  --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #232a36;
-  --cell-off: #2a313c; color-scheme: dark;
+  --sky: #b9edcb; --sky-soft: #2a3a30; --sky-ink: #b9edcb; --sky-on: #232a35; --vivid: #1ed964; --vivid-soft: #10351a;
+  --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #2e3747;
+  --cell-off: #363e4b; color-scheme: dark;
   --live: #56634a; --live-glow: rgb(118 138 98 / 0.30); --live-tint: rgb(118 138 98 / 0.10);
 }
 
