@@ -230,7 +230,36 @@ async function runCycle(report) {
   console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
   await refresh();
   await activity.central(r, state.central.pending); // Home still shows the last step, then the answer (src/ui/hold.js)
+  if (r.poll?.predicted > 0) void publishNetwork(r.poll.at);
   return r;
+}
+
+/**
+ * Every stream this app produces goes to the relays (CLAUDE.md, docs/design/nostr.md#our-other-streams): a poll's
+ * Satori Network predictions, each as `<stream>_pred` (its forecast, 24 h ahead).
+ */
+async function publishNetwork(since) {
+  try {
+    const list = (await db.streams()).filter((s) => s.made_at != null && s.made_at >= since - 1 && Number.isFinite(s.t2))
+      .map((s) => ({ stream: `${s.name}_pred`, name: `Predictions for ${s.name}`, value: s.t2, at: s.made_at, source: s.name,
+        description: `This app's forecast of the Satori Network stream ${s.name}, 24 hours ahead, as sent to the Satori Network.`,
+        tags: ['satori-network'] }));
+    await nostr?.publishOwn(list);
+  } catch (err) {
+    console.warn('[satori] publishing the Satori Network predictions to the relays', err);
+  }
+}
+
+/**
+ * The Satori contract's predictions to the relays too: each game's call (1 up, -1 down) as
+ * `satori-contract-<stream id>_pred`, whether the app's batch or the game played by hand.
+ */
+function publishContract(games, at) {
+  const list = (games ?? []).filter((g) => g.direction === UP || g.direction === DOWN).map((g) => ({
+    stream: `satori-contract-${g.streamId}_pred`, name: `Satori contract calls for stream ${g.streamId}`, value: g.direction === UP ? 1 : -1,
+    at, source: `satori-contract-${g.streamId}`, cadence: 86_400, tags: ['satori-contract'],
+    description: `This app's daily call on the Satori contract's stream ${g.streamId}: 1 up, -1 down.` }));
+  if (list.length) nostr?.publishOwn(list).catch((err) => console.warn('[satori] publishing the contract calls to the relays', err));
 }
 
 async function startNeuron() {
@@ -281,7 +310,7 @@ async function startNeuron() {
     alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, chain: () => base.channels() });
   await refreshNostr();
   base = createBase({ db, alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
-    onChange: refreshBase, onCheck: (r) => activity.base(r), onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
+    onChange: refreshBase, onCheck: (r) => { activity.base(r); if (r.sent) publishContract(r.sent.games, r.sent.at); }, onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
   if (invitedBy) await base.holdReferrer(invitedBy); // the invite link's ?ref=, kept until Stake registers it
   state.base = { ...state.base, play: await base.play() }; // at once (the database): the Game tab never shows the wrong switch
   await refreshBase();
@@ -611,6 +640,7 @@ async function playCalls(calls, { by, round }) {
   if (!real.length) activity.wallet('play', `Played the game by hand: ${calls.length} prediction${calls.length === 1 ? '' : 's'}`); // the round's were sent already
   if (real.length) {
     const r = await baseAction('play', () => base.playHand(real.map((c) => ({ gameId: c.stream.gameId, direction: c.direction }))));
+    publishContract(real.map((c) => ({ streamId: c.stream.streamId, direction: c.direction })), r.at);
     activity.wallet('play', `Sent ${real.length} prediction${real.length === 1 ? '' : 's'} to the Satori contract by hand`);
     sent = { ...r, count: calls.length };
   }

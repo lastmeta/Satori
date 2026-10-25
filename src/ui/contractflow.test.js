@@ -47,11 +47,11 @@ test('the Network card: registered, rewards to the wallet, sent in the last day'
 });
 
 test('the Relays card: connected, watching, publishing', () => {
-  const n = { relays: [{ state: 'open' }, { state: 'closed' }, { state: 'blocked' }], watching: { streams: 112 }, subscriptions: [{}, {}] };
+  const n = { relays: [{ state: 'open' }, { state: 'closed' }, { state: 'blocked' }], watching: { streams: 112 }, subscriptions: [{}, {}], own: { streams: 83 } };
   expect(relaysOn(n)).toBe(true);
-  expect(ids(relayChecks(n))).toEqual(['connected:ok', 'watching:ok', 'publishing:ok']);
+  expect(ids(relayChecks(n))).toEqual(['connected:ok', 'watching:ok', 'own:ok', 'publishing:ok']);
   expect(relayChecks(n)[0].text).toBe('Connected to 1 of 2 relays.');
   expect(ids(relayChecks({ relays: [{ state: 'closed' }], watching: { streams: 0 }, subscriptions: [] })))
-    .toEqual(['connected:bad', 'watching:wait', 'publishing:wait:streams']);
+    .toEqual(['connected:bad', 'watching:wait', 'own:wait', 'publishing:wait:streams']);
   expect(relaysOn({ relays: [] })).toBe(false);
 });

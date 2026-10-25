@@ -68,9 +68,9 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   await expect(t(page, 'network-arrow')).toHaveAttribute('data-on', /true|false/);
   await page.locator('[data-test=chip][data-channel=relays]').click();
   await expect(t(page, 'relays-card')).toBeVisible();
-  await expect.poll(() => checks(page)).toEqual([expect.stringMatching(/^connected:/), expect.stringMatching(/^watching:/), 'publishing:wait']);
+  await expect.poll(() => checks(page)).toEqual([expect.stringMatching(/^connected:/), expect.stringMatching(/^watching:/), expect.stringMatching(/^own:/), 'publishing:wait']);
   await expect(t(page, 'relays-streams')).toBeVisible();
-  expect(await page.evaluate(() => window.satori.channel('relays'))).toMatchObject({ working: expect.any(Boolean), checks: [{ id: 'connected' }, { id: 'watching' }, { id: 'publishing' }] });
+  expect(await page.evaluate(() => window.satori.channel('relays'))).toMatchObject({ working: expect.any(Boolean), checks: [{ id: 'connected' }, { id: 'watching' }, { id: 'own' }, { id: 'publishing' }] });
   expect(await page.evaluate(() => window.satori.channel('network'))).toMatchObject({ checks: [{ id: 'register', state: 'ok' }, { id: 'sent' }] });
 
   // the same chip again folds it away

@@ -862,6 +862,9 @@ the page's JS context:
   `<stream>_pred` announced, each new observation forecast and published). Throws for a `_pred` stream, one no
   connected relay announces, a paid/encrypted/gated one, over `maxStreams`, or (predicting) a name another
   provider's predicted stream has. Again on a subscribed stream: returns it.
+- Every stream this app produces is published to the relays it writes to: the Satori Network predictions after
+  each poll (`<stream>_pred`) and the Satori contract's calls (`satori-contract-<stream id>_pred`, 1 up, -1 down);
+  `nostr().own` says how many and when.
 - `await satori.setPredict(pubkey, stream_name, on)` (ask the person first) → the subscription: predict a followed
   stream (its latest observation at once) or stop (its `_pred` tombstoned; still followed).
 - `await satori.unsubscribe(pubkey, stream_name)` → `nostr()` (as `setRelays`).

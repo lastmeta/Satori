@@ -162,6 +162,8 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
 
   /** NIP-65 of the open relays, when the last one is a day old (start.py:370-389); one at a time. */
   let listing = null;
+  const ownLine = serial(); // publishOwn: one at a time
+  let ownInfo = { published: 0, at: null, streams: 0 }; // the last publishOwn, and how many streams of ours: Home's Relays card
   const relayList = () => (listing ??= (async () => {
     const at = t();
     if (at - ((await db.get('nostr_relay_list_at')) ?? 0) < RELAY_LIST_S) return;
@@ -545,6 +547,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     /** Central's max_streams once (start.py:236-246), the relay settings, then a reconcile and the hourly timer. */
     async start() {
       await watch.load(); // the watched streams are followed from the first REQ
+      ownInfo.streams = Object.keys((await db.get('nostr_own_seq')) ?? {}).length; // our other streams so far
       await market.load(); // and the streams we buy
       const cfg = await Promise.resolve().then(() => central().relayConfig()).catch(() => null);
       maxStreams = Number(cfg?.max_streams) > 0 ? Number(cfg.max_streams) : MAX_STREAMS;
@@ -596,6 +599,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
           notice: e.blocked ? null : e.relay.notice ?? null, // its last NOTICE
         })),
         subscriptions: (await db.relayStreams({ active: true })).map(view),
+        own: { ...ownInfo }, // our other streams (publishOwn): the last run's count and time, how many there are
         // the track record: the watched prediction streams and sources, the last scan's finds (left: past the cap), when it worked
         watching: { ...watch.count(), found: watchInfo.found, left: watchInfo.left, at: Number.isFinite(watchedAt) ? Math.floor(watchedAt) : null,
           error: watchInfo.error },
@@ -739,6 +743,40 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       onChange();
       return viewOf(uuid);
     },
+
+    /**
+     * Our other streams, to the relays (owner, 2026-10-25: every stream this app produces is published unless private;
+     * docs/design/nostr.md#our-other-streams): each `{ stream, name, description, value, at, cadence, source, tags }`
+     * announced (34600) and observed (34601, its own seq) where we write. `source`: what it predicts (its
+     * source_stream_name). A name one of our predicted relay streams has is that stream's: skipped. One run at a time.
+     * → how many were published
+     */
+    publishOwn: (list) => ownLine(async () => {
+      if (!list?.length || !writable().length) return 0;
+      const taken = new Set((await predicted()).map((r) => r.stream_name + PRED));
+      const seqs = (await db.get('nostr_own_seq')) ?? {};
+      const at = t();
+      let n = 0;
+      for (const x of list) {
+        if (taken.has(x.stream)) continue;
+        const seq = (seqs[x.stream] ?? 0) + 1;
+        seqs[x.stream] = seq;
+        const meta = { stream_name: x.stream, nostr_pubkey: key.pubkey, name: x.name, description: x.description ?? '',
+          created_at: (await db.get('nostr_own_created'))?.[x.stream] ?? at, cadence_seconds: x.cadence ?? null, tags: x.tags ?? [],
+          metadata: { source_stream_name: x.source ?? null, alias_pubkey: aliasPubkey } };
+        background(publish(sign(announceEvent(meta, at))));
+        background(publish(sign(observationEvent({ stream: x.stream, value: String(x.value), seq, timestamp: Math.floor(x.at ?? at) }))));
+        n++;
+      }
+      await db.set('nostr_own_seq', seqs);
+      const created = (await db.get('nostr_own_created')) ?? {};
+      for (const x of list) created[x.stream] ??= at;
+      await db.set('nostr_own_created', created);
+      await db.checkpoint();
+      ownInfo = { published: n, at, streams: Object.keys(seqs).length };
+      onChange();
+      return n;
+    }),
 
     /** Unsubscribe (routes.py:2673-2688): the 34602 unsubscribe, the `_pred` tombstone, unfollow. → status() */
     async unsubscribe(pubkey, stream) {

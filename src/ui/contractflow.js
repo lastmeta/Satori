@@ -82,6 +82,8 @@ export function relayChecks(n) {
       : { id: 'connected', state: all.length ? 'bad' : 'wait', text: all.length ? 'No relay connected right now; it keeps trying.' : 'No relays yet.' },
     watching ? { id: 'watching', state: 'ok', text: `Watching ${watching} prediction stream${watching === 1 ? '' : 's'}, keeping their track records.` }
       : { id: 'watching', state: 'wait', text: 'Looking for prediction streams…' },
+    (n.own?.streams ?? 0) ? { id: 'own', state: 'ok', text: `Publishing this app's ${n.own.streams} other stream${n.own.streams === 1 ? '' : 's'}: its Satori Network and Satori contract predictions.` }
+      : { id: 'own', state: 'wait', text: "This app's Satori Network and Satori contract predictions are published after its next poll." },
     subs ? { id: 'publishing', state: 'ok', text: `Publishing your predictions for ${subs} stream${subs === 1 ? '' : 's'} you subscribe to.` }
       : { id: 'publishing', state: 'wait', text: 'You can choose streams to predict; their predictions are relayed to the Nostr network.', fix: 'streams' },
   ];

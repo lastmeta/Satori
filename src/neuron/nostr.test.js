@@ -688,6 +688,33 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await expect(nostr.subscribe(PROV_PUB, 'btc', PREDICT)).rejects.toThrow(/not announced/);
   });
 
+  test("our other streams (every stream we produce goes out): announced and observed where we write, each its own seq; a predicted relay stream's name is skipped", async () => {
+    await boot();
+    openAll();
+    await settle();
+    for (const r of relays.all.values()) r.published = [];
+    const net = (v) => ({ stream: 'aave_pred', name: 'Predictions for aave', value: v, at: clock, source: 'aave', tags: ['satori-network'] });
+    expect(await nostr.publishOwn([net(136.5), { stream: 'satori-contract-1_pred', name: 'calls', value: 1, at: clock, source: 'satori-contract-1' }])).toBe(2);
+    await settle();
+    expect(kinds(relays.get(USER_RELAY))).toEqual(expect.arrayContaining([[34600, 'aave_pred'], [34601, 'aave_pred'], [34600, 'satori-contract-1_pred'], [34601, 'satori-contract-1_pred']]));
+    expect(relays.get(CENTRAL_RELAY).published).toEqual([]); // read only: nothing written there
+    const obs = relays.get(USER_RELAY).published.find((e) => e.kind === 34601 && e.tags[0][1] === 'aave_pred');
+    expect(JSON.parse(obs.content)).toMatchObject({ stream_name: 'aave_pred', value: '136.5', seq_num: 1 });
+    const ann = relays.get(USER_RELAY).published.find((e) => e.kind === 34600 && e.tags[0][1] === 'aave_pred');
+    expect(ann.tags).toEqual(expect.arrayContaining([['source_stream', 'aave'], ['t', 'satori-network']]));
+    clock += 60;
+    await nostr.publishOwn([net(137)]);
+    await settle();
+    const again = relays.get(USER_RELAY).published.filter((e) => e.kind === 34601 && e.tags[0][1] === 'aave_pred').at(-1);
+    expect(JSON.parse(again.content).seq_num).toBe(2);
+    expect((await nostr.status()).own).toMatchObject({ published: 1, streams: 2 });
+    // a relay stream we predict, named aave: its aave_pred is that stream's, ours skipped
+    relays.get(CENTRAL_RELAY).stored.push(announce('aave'));
+    await nostr.subscribe(PROV_PUB, 'aave', PREDICT);
+    expect(await nostr.publishOwn([net(138)])).toBe(0);
+    await settle();
+  });
+
   test('following is not predicting: a followed stream is kept, never forecast or published; setPredict starts and stops its `_pred`', async () => {
     await boot();
     openAll();

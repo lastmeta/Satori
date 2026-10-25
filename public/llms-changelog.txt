@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (every stream we produce goes to the relays)
+
+- After each poll, the Satori Network predictions are published as `<stream>_pred`; the Satori contract's calls as
+  `satori-contract-<stream id>_pred` (1 up, -1 down). `nostr().own`: `{ published, at, streams }`. The Relays card has
+  an `own` check.
+
 ## Changed 2026-10-25 (market: weekly settle)
 
 - A seller settles its buyers' vouchers at most once a week (was a day); a closing channel at once.

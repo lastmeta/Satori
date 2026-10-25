@@ -62,6 +62,26 @@ does) and keeps following. `relay_streams.predict` (migration 18); the
 subscriptions made before were all predicted, so they stay so. One
 `<name>_pred` per name holds among the predicted ones only.
 
+## Our other streams
+
+Every stream this app produces goes to the relays unless it is private
+(owner, 2026-10-25), not only the `_pred` of the relay streams it predicts:
+
+- **The Satori Network's predictions**: after each poll that predicted,
+  each stream's forecast (24 h ahead, as sent to the Satori Network) as
+  `<stream>_pred`, tagged `satori-network`, its source `<stream>`.
+- **The Satori contract's calls**: each game's call when the batch is sent,
+  or the game played by hand sends, as `satori-contract-<stream id>_pred`
+  (1 up, -1 down; a day's cadence), tagged `satori-contract`.
+
+`publishOwn` announces (34600) and observes (34601, each stream its own seq,
+kept in `meta.nostr_own_seq`) where we write. A relay stream we predict
+keeps its `<name>_pred`: ours of the same name is skipped. Announced with
+each publication, not in the hourly pass (83 streams: the volume stays
+low). Not built: re-announcing them hourly; private streams (none yet).
+Relays that only take a stranger's `_pred` whose source they hold (Lite's
+write policy) may refuse these.
+
 ## Event shapes (verified)
 
 `test/fixtures/nostr-parity.json` is made by `scripts/nostr_vectors.py`:
