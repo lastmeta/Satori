@@ -182,9 +182,14 @@ registers it, as part of Stake.
   `setReferral(referrer)` from the wallet when `referral(wallet)` is zero, then
   forgets the held referrer; when the wallet already has a referral (set once,
   never changed), or the held one is the wallet itself (the contract refuses a
-  self-referral), it is dropped with no transaction. A neuron that is
-  already staked has no Stake to press, so a link opened later does nothing
-  (the dapp's referral is likewise for a new user's first prediction).
+  self-referral), it is dropped with no transaction. Or, as the dapp does,
+  on the wallet's first prediction by hand (the Game tab, not staked):
+  `predictMultipleWithReferral(referrer, requests)` sets it on the way
+  (`setReferralFor`: a no-op when one is set), then the held one is
+  forgotten. The alias's predictions can't carry it (they would register the
+  alias). A neuron already staked has no Stake to press, so a link opened
+  later does nothing until the wallet plays by hand. Any link counts: the
+  app's (`/?ref=`) and the Game tab's (`/?ref=…#game`).
 - **Invite.** `<this origin>/?ref=<the wallet's Base address>`: the referrer is
   paid into `unclaimedRewards[wallet]`, which Claim already collects. The
   Wallet tab shows the link with a Copy button, and the header's **Share**
@@ -432,6 +437,9 @@ between the header and the tab bar.
   of them were shown and something was picked, Submit slides in under the
   buttons (pushing them up; the chart gives way) and opens it at once; it
   shows likewise on the streams past the submit screen.
+- **Dismiss** (on that Sent screen, for the session): the streams again to
+  look at and swipe through, and where the buttons were "Come back tomorrow
+  to see how your predictions were scored."
 - **Played with the game this round**: each Submit is noted
   (`game_last_play`: round, time, count, hash or none), and while it is the
   same round the tab opens on its Sent screen ("Played today. The next game

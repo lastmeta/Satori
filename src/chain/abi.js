@@ -23,6 +23,8 @@ const abi = (...items) => parseAbi([...items, ...ERRORS]);
 export const engineAbi = abi(
   'struct Request { uint32 gameId; bytes payload; }',
   'function predictMultipleWithPayloads(Request[] requests)',
+  // the same, setting the sender's referral first when it has none (SatoriRewards.setReferralFor: never reverts)
+  'function predictMultipleWithReferral(address referrer, Request[] requests)',
   'function predictedStreamsCount(address, uint256) view returns (uint256)',
 );
 

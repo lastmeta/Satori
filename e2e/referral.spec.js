@@ -30,7 +30,7 @@ test('an invite link: held on the visit, registered by the wallet at Stake; the 
 
   await go(page, 'wallet');
   await expect(fact(page, 'referral')).toHaveText(/^Invited by 0xabab…abab, registered when you stake$/);
-  await expect(fact(page, 'referral-note')).toContainText('Staking registers them as your referral');
+  await expect(fact(page, 'referral-note')).toContainText('Staking, or your first prediction in the Game tab, registers them as your referral');
   await expect(fact(page, 'invite')).toHaveText(base.inviteLink);
 
   // Share, top right: the invite link to the device's share sheet (a stub here), else copied

@@ -182,7 +182,10 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
   // One write at a time, for both keys: the batch and a setup step never race for the alias's nonce.
   const queued = serial();
-  const batchCall = (list) => engine('predictMultipleWithPayloads', [list.map((g) => ({ gameId: g.gameId, payload: payload(g.direction) }))]);
+  const requestsOf = (list) => list.map((g) => ({ gameId: g.gameId, payload: payload(g.direction) }));
+  // with a referrer: the sender's referral is set first if it has none (the dapp's first prediction from an invite)
+  const batchCall = (list, referrer = null) => (referrer ? engine('predictMultipleWithReferral', [referrer, requestsOf(list)])
+    : engine('predictMultipleWithPayloads', [requestsOf(list)]));
 
   /**
    * EIP-1559 fees: the tip the node suggests (eth_maxPriorityFeePerGas) and a
@@ -453,12 +456,13 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     },
 
     /**
-     * The day's batch from the alias; onSent(hash, { nonce, gas, fees }) as soon as it is sent, `fees` as given
+     * The day's batch from the alias (or the wallet's, played by hand: `referrer` sets its referral on the way, as the dapp's
+     * first prediction from an invite); onSent(hash, { nonce, gas, fees }) as soon as it is sent, `fees` as given
      * (the batch checks them against its ceiling), `timeout` for its receipt.
      * → { hash, at (the block's time), blockNumber }
      */
     async sendBatch(alias, list, opts = {}) {
-      const { hash, receipt } = await write(alias, batchCall(list), opts);
+      const { hash, receipt } = await write(alias, batchCall(list, opts.referrer), opts);
       const block = await client.getBlock({ blockNumber: receipt.blockNumber });
       return { hash, at: Number(block.timestamp), blockNumber: Number(receipt.blockNumber) };
     },

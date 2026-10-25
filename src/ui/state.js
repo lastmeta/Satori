@@ -78,7 +78,7 @@ export const state = reactive({
   dayOpen: '', // the strip day opened on Home ('2026-10-24'), '' for none
   day: null, // that day (src/neuron/day.js dayOf), its contract calls with their results; kept while it fades out
   // the Game tab (src/ui/game.js, src/ui/gameflow.js): the streams to play in order, where the player is, their calls
-  game: { loading: false, loaded: 0, error: '', by: null, round: null, streams: [], queue: [], split: 0, favorites: [], favs: 0, index: 0, picks: {},
+  game: { loading: false, loaded: 0, error: '', rest: false, by: null, round: null, streams: [], queue: [], split: 0, favorites: [], favs: 0, index: 0, picks: {},
     screen: 'play', move: '', sending: false, sendError: '', sent: null },
   settingsError: '',
   // the reward address (src/neuron/reward.js; Settings): { address, at, error, reading } as last read, what runs ('' | 'save' |

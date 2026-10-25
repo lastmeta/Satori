@@ -115,6 +115,11 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
   const contracts = {
     [DEFAULTS.engine]: fns(abi.engineAbi, {
       predictMultipleWithPayloads: predict,
+      predictMultipleWithReferral: ([ref, requests], ctx) => {
+        predict([requests], ctx);
+        const r = lc(ref);
+        if (ctx.write && r !== zeroAddress && r !== ctx.from && !s.referral[ctx.from]) s.referral[ctx.from] = r; // setReferralFor
+      },
       predictedStreamsCount: ([a, r]) => BigInt(s.predicted[`${lc(a)}:${r}`] ?? 0),
     }),
     [DEFAULTS.games]: fns(abi.gamesAbi, { binaryGameByStream: ([id]) => s.streams[id]?.game ?? 0 }),

@@ -7,6 +7,7 @@ import { openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
 const PASS = 'correct horse battery';
+const REFERRER = `0x${'ab'.repeat(20)}`;
 const ROUND = 20741;
 const hourly = (n, f) => Array.from({ length: n }, (_, i) => ({ hour: ROUND * 24 - n + i, value: BigInt(Math.round(f(i))) }));
 const t = (page, id) => page.locator(`[data-test=${id}]`);
@@ -40,7 +41,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   s.weights[3] = 2n * E18;
   s.streams[4] = { game: 4, named: false, cadence: 60, name: 'dogecoin', history: hourly(72, (i) => 100 + i) }; // no weight: not reward eligible
   await page.setViewportSize({ width: 390, height: 844 });
-  await openApp(page);
+  await openApp(page, `/?ref=${REFERRER}`); // an invite link: it holds who invited
   await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
   const V = (await page.evaluate(() => window.satori.base())).wallet.address.toLowerCase();
@@ -110,6 +111,12 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await t(page, 'game-done').click();
   await expect(t(page, 'game-tomorrow')).toBeVisible();
   await expect(t(page, 'game-sent')).toContainText('Sent 4 predictions');
+  // Dismiss (this session): the streams again, to look at; where the buttons were, come back tomorrow
+  await t(page, 'game-dismiss').click();
+  await expect(t(page, 'game-play')).toBeVisible();
+  await expect(name(page)).toHaveText('ether'); // read again: the favorites first now
+  await expect(t(page, 'game-rest')).toHaveText('Come back tomorrow to see how your predictions were scored.');
+  await expect(t(page, 'game-up')).toBeHidden();
 
   // a round later: the favorites first, as starred; after them Submit shows under the buttons; the wallet sends
   rpc.advance(86400);
@@ -137,4 +144,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'game-sent')).toContainText('Transaction');
   expect(s.batches).toHaveLength(1);
   expect(s.batches[0]).toMatchObject({ from: V, requests: [{ gameId: 3, payload: '0x01' }, { gameId: 1, payload: '0x02' }] });
+  // the wallet's first prediction registered who invited it, as the dapp's does
+  expect(rpc.sent.find((x) => x.functionName.startsWith('predictMultiple'))).toMatchObject({ functionName: 'predictMultipleWithReferral' });
+  expect(s.referral[V]).toBe(REFERRER);
+  expect((await page.evaluate(() => window.satori.base())).pendingReferrer).toBe(null);
 });

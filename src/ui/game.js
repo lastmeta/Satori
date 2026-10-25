@@ -15,9 +15,11 @@ const manual = () => state.base.play === 'manual';
 const g = () => state.game;
 const current = () => g().queue[g().index] ?? null;
 const pickCount = () => Object.keys(g().picks).length;
+/** Played today, its Sent screen dismissed: the streams to look at, no buttons. */
+const resting = () => !!(g().rest && g().sent?.again);
 const showing = (what) => () => {
   const x = g();
-  const view = x.error ? 'error' : !x.loaded ? 'loading' : x.sent ? 'sent' : !x.queue.length ? 'nothing'
+  const view = x.error ? 'error' : !x.loaded ? 'loading' : x.sent && !(x.sent.again && x.rest) ? 'sent' : !x.queue.length ? 'nothing'
     : x.screen === 'submit' ? 'submit' : 'play';
   return view !== what;
 };
@@ -77,7 +79,10 @@ async function slide(dir, whole, change, from = 0) {
 
 /** The game's moves, each with its slide (the whole screen when it changes: gameflow.js stepOf). */
 function moves(a) {
-  const to = (dir) => stepOf({ screen: g().screen, index: g().index, length: g().queue.length, split: g().split }, dir);
+  const to = (dir) => {
+    const t = stepOf({ screen: g().screen, index: g().index, length: g().queue.length, split: g().split }, dir);
+    return resting() && t?.screen === 'submit' ? null : t; // played today: the streams to look at, no submit screen
+  };
   const go = (dir, fn, from) => {
     const t = to(dir);
     return t ? slide(dir, t.screen !== g().screen, fn, from) : undefined;
@@ -159,11 +164,12 @@ function play(a) {
         <svg class="gchart" data-test="game-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${linePoints(s.history)}"></polyline></svg>
       </div>`.key(`${s.streamId}:${g().index}:${starred()}`) : ''; // plain values inside: drawn again when one changes (home.js cell)
     }}</div>
-    <div class="gbtns">
+    <p class="grest" data-test="game-rest" hidden="${() => !resting()}">Come back tomorrow to see how your predictions were scored.</p>
+    <div class="gbtns" hidden="${resting}">
       <button class="gbtn down" data-test="game-down" aria-label="Down" aria-pressed="${picked(DOWN)}" @click="${tap(() => m.pick(DOWN))}">${ARROW_DOWN()}</button>
       <button class="gbtn up" data-test="game-up" aria-label="Up" aria-pressed="${picked(UP)}" @click="${tap(() => m.pick(UP))}">${ARROW_UP()}</button>
     </div>
-    <div class="gsubmit" data-test="game-submit-early" data-open="${() => String(early())}" inert="${() => !early()}"><div>
+    <div class="gsubmit" data-test="game-submit-early" hidden="${resting}" data-open="${() => String(early())}" inert="${() => !early()}"><div>
       <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${tap(m.submitNow)}"><span class="engraved">SUBMIT</span></button>
     </div></div>
   </div>`;
@@ -210,6 +216,7 @@ export function gameTab(a) {
           <p class="muted small">${() => (g().sent ? `Scored about 24 hours after each was made.${g().sent.hash ? ` Transaction ${shortHash(g().sent.hash)}.` : ''}` : '')}</p>
           <p class="muted small" data-test="game-tomorrow" hidden="${() => !g().sent?.again}">Played today. The next game opens tomorrow.</p>
           <button data-test="game-done" hidden="${() => !!g().sent?.again}" @click="${a.loadGame}">Done</button>
+          <button data-test="game-dismiss" hidden="${() => !g().sent?.again}" @click="${a.gameRest}">Dismiss</button>
         </div>
         ${play(a)}
         ${submit(a)}

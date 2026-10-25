@@ -318,6 +318,6 @@ test('Referral: registered, held until Stake, or none; the note says what Stake 
   expect(referralText({ wallet: { referral: R }, pendingReferrer: '0x' + 'cd'.repeat(20) })).toBe(shortHash(R)); // set once: the held one is moot
   expect(referralText({ wallet: { referral: null }, pendingReferrer: R })).toBe(`Invited by ${shortHash(R)}, registered when you stake`);
   expect(referralText({ wallet: { referral: null }, pendingReferrer: null })).toBe('None');
-  expect(referralNote('0xabab…abab')).toBe('Invited by 0xabab…abab. Staking registers them as your referral, once and for good: 5% of the rewards your wallet earns goes to them instead of to the project, and you earn the same either way.');
+  expect(referralNote('0xabab…abab')).toBe('Invited by 0xabab…abab. Staking, or your first prediction in the Game tab, registers them as your referral, once and for good: 5% of the rewards your wallet earns goes to them instead of to the project, and you earn the same either way.');
   expect(stepText('setReferral(referrer)')).toBe('Wallet: registers who invited you');
 });

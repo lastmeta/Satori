@@ -3,6 +3,7 @@
   "functions": {
     "SatoriEngine": [
       "function predictMultipleWithPayloads((uint32,bytes)[]) -> () nonpayable",
+      "function predictMultipleWithReferral(address,(uint32,bytes)[]) -> () nonpayable",
       "function predictedStreamsCount(address,uint256) -> (uint256) view"
     ],
     "SatoriGames": [

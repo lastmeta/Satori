@@ -150,6 +150,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gbtn.submit { background: linear-gradient(#5a7cf0, #3a5bd9); aspect-ratio: auto; width: 100%; height: 56px; }
 .gbtn .engraved { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #2a43a6;
   text-shadow: 0 1.5px 0 rgb(255 255 255 / 0.4), 0 -1px 0 rgb(0 0 0 / 0.35); }
+.grest { flex: none; margin: 8px 0 12px; text-align: center; color: var(--muted); font-size: 0.9rem; }
 .gsubmit { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.3s ease; flex: none; }
 .gsubmit[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
 .gsubmit > div { overflow: hidden; min-height: 0; }

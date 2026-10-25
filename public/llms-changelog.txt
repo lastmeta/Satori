@@ -6,6 +6,10 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- Played today: `game-dismiss` puts the Sent screen away for the session (`game-rest` where the buttons were).
+- The wallet's first prediction by hand from an invite link registers the referral
+  (`predictMultipleWithReferral`), as the dapp's does; `pendingReferrer` is then null.
+
 - The submit screen: `game-daily` (Satori Daily) on top, the calls with arrows, SUBMIT at the bottom; no
   `game-back` (swipes). Past it, the streams that aren't reward eligible. The theme icon lines up with the
   page's right edge.

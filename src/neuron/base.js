@@ -600,17 +600,23 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
 
     /**
      * The Game tab's predictions, one transaction: from the alias when the wallet is staked with it, else from the
-     * wallet (Unlock, or its wallet app). picks: [{ gameId, direction }]. → { hash, at, by } (noted: notePlay, with `count`)
+     * wallet (Unlock, or its wallet app); a wallet invited by a link (held: holdReferrer) and not referred yet registers
+     * its referral with it. picks: [{ gameId, direction }]. → { hash, at, by, round, referrer? } (noted: notePlay, with `count`)
      */
     async playHand(picks) {
       if (!picks?.length) throw new Error('No predictions to send.');
       const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
       const player = by === 'alias' ? alias : needWallet();
-      return act('base', async (chain, step) => {
+      // the wallet's first prediction from an invite link registers who invited it, as the dapp does (the alias's
+      // can't: the referral would be the alias's; a staked wallet's was registered by Stake)
+      const held = by === 'wallet' && !hasReferral(status?.wallet.referral) ? (await db.get('referrer')) ?? null : null;
+      const referrer = held && !same(held, walletAddress) ? held : null;
+      const r = await act('base', async (chain, step) => {
         step('send');
-        const r = await chain.sendBatch(player, picks.map(({ gameId, direction }) => ({ gameId, direction })), { onSent: () => step('confirm') });
-        return { hash: r.hash, at: r.at, by, round: Math.floor(r.at / ROUND_S) };
+        return chain.sendBatch(player, picks.map(({ gameId, direction }) => ({ gameId, direction })), { referrer, onSent: () => step('confirm') });
       });
+      if (referrer) await db.set('referrer', null); // registered (or one already was: the contract keeps the first)
+      return { hash: r.hash, at: r.at, by, round: Math.floor(r.at / ROUND_S), ...(referrer ? { referrer } : {}) };
     },
 
     /** Who sends the Satori contract predictions: 'auto' (the daily batch) or 'manual' (the Game tab). → status() */

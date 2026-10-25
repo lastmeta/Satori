@@ -258,7 +258,7 @@ export function referralText(b) {
 }
 
 /** What Stake also does when an invite is held, said before it does it. */
-export const referralNote = (ref) => `Invited by ${ref}. Staking registers them as your referral, once and for good: ${REFERRAL_PCT}% of the rewards your wallet earns goes to them instead of to the project, and you earn the same either way.`;
+export const referralNote = (ref) => `Invited by ${ref}. Staking, or your first prediction in the Game tab, registers them as your referral, once and for good: ${REFERRAL_PCT}% of the rewards your wallet earns goes to them instead of to the project, and you earn the same either way.`;
 
 /** The alias's gas: its ETH and about how many daily batches it pays for. */
 export function gasText(id) {

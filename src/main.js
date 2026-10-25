@@ -1155,6 +1155,8 @@ const actions = {
     if (to) state.game = { ...g, ...to, move: dir > 0 ? 'next' : 'back', sendError: '' };
   },
   gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
+  /** Played today: the Sent screen put away (for this session), the streams shown again to look at. */
+  gameRest() { state.game = { ...state.game, rest: true, screen: 'play', index: 0 }; },
   /** Star a stream, or unstar it: kept on this device for this wallet; the next game shows favorites first. */
   gameStar(streamId) {
     const f = state.game.favorites;
