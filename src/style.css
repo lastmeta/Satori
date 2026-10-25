@@ -134,8 +134,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
   filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.5)) drop-shadow(0 -1px 0 rgb(0 0 0 / 0.2)); transition: fill 0.2s ease, color 0.2s ease; }
 .gstar[aria-pressed="true"] { color: #c99a06; }
 .gstar[aria-pressed="true"] svg { fill: #f5c518; }
-.gchart { width: 100%; height: 100%; min-height: 0; padding: 12px 0; overflow: visible; }
-.gchart polyline { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.gchart { width: 100%; height: 100%; min-height: 0; padding: 16px 14px; overflow: visible; } /* inset by more than half the line: its round ends show */
+.gchart polyline { fill: none; stroke: var(--accent); stroke-width: 15; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .gbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: none; max-width: 560px; width: 100%; margin: 0 auto; }
 .gbtn { border: 0; border-radius: 12px; aspect-ratio: 85.6 / 54; padding: 0; display: grid; place-items: center; min-height: 44px; /* a card's shape */ transition: transform 0.1s ease, box-shadow 0.1s ease;
   box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.3), inset 0 -5px 0 rgb(0 0 0 / 0.22), 0 3px 8px rgb(0 0 0 / 0.18); }
@@ -148,10 +148,13 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .gbtn svg .shade { stroke: rgb(0 0 0 / 0.4); transform: translateY(-0.45px); }
 .gbtn.down svg .cut { stroke: #a5291f; }
 .gbtn.up svg .cut { stroke: #17703c; }
+.gbtn.submit { background: linear-gradient(#5a7cf0, #3a5bd9); aspect-ratio: auto; width: 100%; height: 56px; }
+.gbtn .engraved { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #2a43a6;
+  text-shadow: 0 1.5px 0 rgb(255 255 255 / 0.4), 0 -1px 0 rgb(0 0 0 / 0.35); }
 .gsubmit { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.3s ease; flex: none; }
 .gsubmit[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
 .gsubmit > div { overflow: hidden; min-height: 0; }
-.gsubmit .primary { width: 100%; min-height: 52px; margin-top: 12px; font-size: 1.05rem; }
+.gsubmit .gbtn { margin: 12px 0 8px; } /* the bottom margin: room for its shadow inside the fold */
 .gsubmit-screen { overflow-y: auto; }
 .gcalls { list-style: none; padding: 0; margin: 8px 0 12px; display: grid; gap: 6px; }
 .gcalls li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }

@@ -71,7 +71,7 @@ function play(a) {
       <button class="gbtn up" data-test="game-up" aria-label="Up" aria-pressed="${picked(UP)}" @click="${() => a.gamePick(UP)}">${ARROW_UP()}</button>
     </div>
     <div class="gsubmit" data-test="game-submit-early" data-open="${() => String(early())}" inert="${() => !early()}"><div>
-      <button class="primary" data-test="game-submit" @click="${a.gameSubmitNow}">Submit</button>
+      <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${a.gameSubmitNow}"><span class="engraved">SUBMIT</span></button>
     </div></div>
   </div>`;
 }

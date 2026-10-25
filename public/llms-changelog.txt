@@ -6,6 +6,9 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- `game-submit` is a full-width blue card button with SUBMIT engraved; the line is
+  thicker, inset so its round ends show.
+
 - `play-bar` and `play-auto` are gone from the Game tab: Settings has
   "Satori contract predictions" (`play-setting`: `play-setting-auto`,
   `play-setting-manual`). The buttons are card-shaped, their arrows engraved.
