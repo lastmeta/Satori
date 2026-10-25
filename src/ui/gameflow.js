@@ -10,23 +10,46 @@ const WAIT = { DuplicatePrediction: 'already predicted in the last 24 hours', Al
  */
 export const played = (s) => s.blocked in WAIT;
 
+const byWeight = (a, b) => (BigInt(b.weight) > BigInt(a.weight) ? 1 : BigInt(b.weight) < BigInt(a.weight) ? -1 : a.streamId - b.streamId);
+const favFirst = (list, favorites) => [...favorites.map((id) => list.find((s) => s.streamId === id)).filter(Boolean),
+  ...list.filter((s) => !favorites.includes(s.streamId)).sort(byWeight)];
+
 /**
- * The streams to play, in order: the playable ones (not `blocked`, or only already played), favorites first in the
- * order they were starred, then the rest by the game's voting weight, the most rewarding first.
+ * The streams to play, in order: the playable ones (not `blocked`, or only already played). The reward-eligible ones
+ * (voting weight > 0) first: favorites as starred, then by weight, the most rewarding first; then the ineligible ones,
+ * favorites first. → { queue, split } (split: how many are eligible; the submit screen comes between the two)
  */
 export function queueOf(streams, favorites = []) {
   const playable = streams.filter((s) => !s.blocked || played(s));
-  const fav = favorites.map((id) => playable.find((s) => s.streamId === id)).filter(Boolean);
-  const rest = playable.filter((s) => !favorites.includes(s.streamId))
-    .sort((a, b) => (BigInt(b.weight) > BigInt(a.weight) ? 1 : BigInt(b.weight) < BigInt(a.weight) ? -1 : a.streamId - b.streamId));
-  return [...fav, ...rest];
+  const eligible = favFirst(playable.filter((s) => BigInt(s.weight) > 0n), favorites);
+  return { queue: [...eligible, ...favFirst(playable.filter((s) => BigInt(s.weight) === 0n), favorites)], split: eligible.length };
+}
+
+/**
+ * One move (dir 1: on, -1: back) from where the player is: { screen: 'play' | 'submit', index } (index: the stream
+ * shown, or on the submit screen the one that comes next), or null (nothing there). The submit screen sits after the
+ * eligible streams and again after the last; from it the player goes on to the rest.
+ */
+export function stepOf({ screen, index, length, split }, dir) {
+  const gate = split > 0 && split < length; // the eligible streams, then a submit screen, then the ineligible ones
+  if (dir > 0) {
+    if (screen === 'submit') return index < length ? { screen: 'play', index } : null;
+    const i = index + 1;
+    return i >= length || (gate && i === split) ? { screen: 'submit', index: i } : { screen: 'play', index: i };
+  }
+  if (screen === 'submit') return index > 0 ? { screen: 'play', index: index - 1 } : null;
+  if (gate && index === split) return { screen: 'submit', index };
+  return index > 0 ? { screen: 'play', index: index - 1 } : null;
 }
 
 /** How many of the queue's first streams are favorites. */
 export const favoritesIn = (queue, favorites = []) => queue.filter((s) => favorites.includes(s.streamId)).length;
 
-/** Submit shows under the buttons once every favorite (more than one) has been shown and something was predicted. */
-export const submitEarly = ({ index, favorites, picks }) => favorites > 1 && index >= favorites && picks > 0;
+/**
+ * Submit shows under the buttons once something was predicted and either every favorite (more than one) has been
+ * shown, or the player went on past the submit screen (the ineligible streams).
+ */
+export const submitEarly = ({ index, favorites, picks, split = 0 }) => picks > 0 && ((favorites > 1 && index >= favorites) || (split > 0 && index >= split));
 
 /**
  * A Sentiment stream's reading: its direction and change against the reading before, never the counter itself

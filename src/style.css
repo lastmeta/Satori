@@ -93,6 +93,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .top-actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 6px 8px; }
 .icon-btn.bare { background: none; border-color: transparent; color: var(--muted); }
 .icon-btn.bare:hover { color: var(--text); }
+/* the last icon (the theme's) lines up with the page's right edge: its 44 px tap area reaches into the gutter */
+.top-actions > .icon-btn.bare:last-child { margin-right: -12px; }
 .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .lock-in { white-space: nowrap; }
 /* a phone, unlocked: "Locks in 4 min" on two short lines, so Lock, Share and the theme fit beside the name */
@@ -126,7 +128,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .ghead { display: flex; align-items: center; gap: 4px; }
 .gname { font-size: 1.2rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .glatest { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.gstar { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; display: grid; place-items: center; color: var(--muted); }
+.gstar { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; display: grid; place-items: center; color: var(--muted); margin-left: -9px; } /* centred under the Satori mark */
 .gstar svg { width: 26px; height: 26px; fill: var(--card); stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round;
   filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.5)) drop-shadow(0 -1px 0 rgb(0 0 0 / 0.2)); transition: fill 0.2s ease, color 0.2s ease; }
 .gstar[aria-pressed="true"] { color: #c99a06; }
@@ -152,11 +154,21 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gsubmit[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
 .gsubmit > div { overflow: hidden; min-height: 0; }
 .gsubmit .gbtn { margin: 12px 0 8px; } /* the bottom margin: room for its shadow inside the fold */
-.gsubmit-screen { overflow-y: auto; }
-.gcalls { list-style: none; padding: 0; margin: 8px 0 12px; display: grid; gap: 6px; }
-.gcalls li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-.gcalls b[data-dir="up"] { color: var(--ok); }
-.gcalls b[data-dir="down"] { color: var(--bad); }
+.gsubmit-screen { gap: 12px; padding-bottom: 8px; }
+.gdaily { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
+.gdaily p { margin: 0; flex: 1; font-size: 0.85rem; color: var(--muted); }
+.gbtn.daily { aspect-ratio: auto; flex: none; display: inline-flex; gap: 6px; padding: 0 14px; min-height: 48px; border-radius: 12px; font-weight: 700;
+  text-decoration: none; color: #fff; background: linear-gradient(#7b6cf0, #5a49d6); }
+.gbtn.daily svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.gcalls-wrap { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.gcalls { list-style: none; padding: 0; margin: auto 0; display: grid; gap: 8px; } /* centred when short; scrolls when long */
+.gcalls li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--card); font-size: 1.05rem; font-weight: 600; }
+.garrow { width: 30px; height: 30px; flex: none; fill: none; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.garrow.up { stroke: #1f8a4c; }
+.garrow.down { stroke: #c0362e; }
+.gcalls-wrap > p { margin: auto 0; }
+.gsubmit-screen > .gbtn.submit { flex: none; }
 @media (prefers-reduced-motion: reduce) { .gsubmit { transition: none; } }
 @media (min-width: 1024px) { .game { height: calc(100dvh - 68px - 32px); } body[data-tab="game"] #app { padding-bottom: 32px; } }
 .tabmenu { position: relative; display: grid; }

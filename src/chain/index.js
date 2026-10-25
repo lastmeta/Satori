@@ -403,11 +403,11 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * gameId, named, cadenceMinutes, latestHour, count, weight }]. Anyone can
      * add a stream (and its game) for a small burn, so only games with voting
      * weight > 0 are kept, the engine's own eligibility test
-     * (SatoriEngine.sol:828: an unweighted game earns no SATORI). isNamedStream
+     * (SatoriEngine.sol:828: an unweighted game earns no SATORI); `all`: those too (the Game tab's ineligible ones). isNamedStream
      * reverts for an unknown id: a failure reads as not named
      * (base_predict.py:223-230). Two multicalls: the games, then their weights.
      */
-    async streams() {
+    async streams({ all = false } = {}) {
       const ids = await read(registry('getAllDataStreams'));
       if (!ids.length) return [];
       const res = await client.multicall({ allowFailure: true, contracts: ids.flatMap((id) => [
@@ -423,7 +423,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       }).filter((g) => g.gameId !== 0);
       if (!list.length) return [];
       const weights = await many(list.map((g) => voting('weightOf', [g.gameId])));
-      return list.map((g, i) => ({ ...g, weight: weights[i] })).filter((g) => g.weight > 0n);
+      return list.map((g, i) => ({ ...g, weight: weights[i] })).filter((g) => all || g.weight > 0n);
     },
 
     /** A stream's history, oldest first: [{ hour, value: bigint }] (the whole ring, SatoriRegistry.sol:1375-1393). */

@@ -7,8 +7,9 @@ import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { unlockPrompt } from './parts.js';
 import { shortHash } from './format.js';
-import { latestText, linePoints, nothingText, submitEarly } from './gameflow.js';
+import { latestText, linePoints, nothingText, submitEarly, stepOf } from './gameflow.js';
 import { UP, DOWN } from '../chain/index.js';
+import { SATORI_DAILY_URL } from '../chain/config.js';
 
 const manual = () => state.base.play === 'manual';
 const g = () => state.game;
@@ -74,16 +75,18 @@ async function slide(dir, whole, change, from = 0) {
   sliding = false;
 }
 
-/** The game's moves, each with its slide. */
+/** The game's moves, each with its slide (the whole screen when it changes: gameflow.js stepOf). */
 function moves(a) {
-  const atLast = () => g().screen === 'play' && g().index >= g().queue.length - 1;
+  const to = (dir) => stepOf({ screen: g().screen, index: g().index, length: g().queue.length, split: g().split }, dir);
+  const go = (dir, fn, from) => {
+    const t = to(dir);
+    return t ? slide(dir, t.screen !== g().screen, fn, from) : undefined;
+  };
   return {
-    next: (from) => (g().screen === 'play' ? slide(1, atLast(), a.gameNext, from) : undefined),
-    back: (from) => {
-      if (g().screen === 'submit') return slide(-1, true, a.gameBack, from);
-      return g().index > 0 ? slide(-1, false, a.gameBack, from) : undefined;
-    },
-    pick: (d) => slide(1, atLast(), () => a.gamePick(d)),
+    can: (dir) => !!to(dir),
+    next: (from) => go(1, a.gameNext, from),
+    back: (from) => go(-1, a.gameBack, from),
+    pick: (d) => go(1, () => a.gamePick(d)),
     submitNow: () => slide(1, true, a.gameSubmitNow),
   };
 }
@@ -97,8 +100,8 @@ function swipe(m) {
   let dx = 0;
   let dragging = false;
   const target = () => movingEl(false);
-  const canBack = () => g().screen === 'submit' || g().index > 0;
-  const canNext = () => g().screen === 'play';
+  const canBack = () => m.can(-1);
+  const canNext = () => m.can(1);
   const settle = (el) => {
     if (!el || !dx) return;
     el.animate([{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }], { duration: 200, easing: 'ease-out' });
@@ -121,7 +124,8 @@ function swipe(m) {
       start = null;
       if (!dragging) return;
       dragging = false;
-      draggedAt = Date.now();
+      justDragged = true;
+      setTimeout(() => { justDragged = false; }); // the click that ends this drag comes first
       const el = target();
       if (dx <= -60 && canNext()) return void m.next(dx);
       if (dx >= 60 && canBack()) return void m.back(dx);
@@ -130,9 +134,9 @@ function swipe(m) {
     cancel: () => { start = null; dragging = false; settle(target()); },
   };
 }
-let draggedAt = 0;
-/** A tap right after a drag is the drag's end, not a press. */
-const tap = (fn) => () => { if (Date.now() - draggedAt > 250) fn(); };
+let justDragged = false;
+/** The click that ends a drag is not a press. */
+const tap = (fn) => () => { if (!justDragged) fn(); };
 
 const callWord = (d) => (d === UP ? 'up' : 'down');
 
@@ -141,7 +145,7 @@ function play(a) {
   const sw = swipe(m);
   const starred = () => !!current() && g().favorites.includes(current().streamId);
   const picked = (d) => () => String(!!current() && g().picks[current().streamId] === d);
-  const early = () => submitEarly({ index: g().index, favorites: g().favs, picks: pickCount() });
+  const early = () => submitEarly({ index: g().index, favorites: g().favs, picks: pickCount(), split: g().split });
   return html`
   <div class="gplay" data-test="game-play" hidden="${showing('play')}" @pointerdown="${sw.down}" @pointermove="${sw.move}" @pointerup="${sw.up}" @pointercancel="${sw.cancel}">
     <div class="gstream" data-move="${() => g().move || false}">${() => {
@@ -165,22 +169,31 @@ function play(a) {
   </div>`;
 }
 
+// a call in the list: its arrow, as on the buttons (up at 45°, down at -45°), green or red; opening a new tab
+const callArrow = (d) => html`<svg class="${d === UP ? 'garrow up' : 'garrow down'}" viewBox="0 0 24 24" role="img" aria-label="${d === UP ? 'up' : 'down'}"><path d="${d === UP ? 'M6 18L18 6M9 6h9v9' : 'M6 6l12 12M18 9v9H9'}"></path></svg>`;
+const NEW_TAB = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>`;
+
+/**
+ * The submit screen: Satori Daily on top, the calls about to be sent (centred, scrolling when long), SUBMIT at the
+ * bottom. A swipe right goes back; left goes on to more streams when there are any.
+ */
 function submit(a) {
   const m = moves(a);
   const sw = swipe(m);
   const calls = () => g().queue.filter((s) => g().picks[s.streamId]);
   return html`
   <div class="gsubmit-screen" data-test="game-submit-screen" hidden="${showing('submit')}" @pointerdown="${sw.down}" @pointermove="${sw.move}" @pointerup="${sw.up}" @pointercancel="${sw.cancel}">
-    <h2>${() => (pickCount() ? `Submit ${pickCount()} prediction${pickCount() === 1 ? '' : 's'}?` : 'No predictions yet')}</h2>
-    <ul class="gcalls" data-test="game-calls">${() => calls().map((s) => html`<li><span>${s.name}</span><b data-dir="${callWord(g().picks[s.streamId])}">${callWord(g().picks[s.streamId])}</b></li>`.key(`${s.streamId}:${g().picks[s.streamId]}`))}</ul>
-    <p class="muted small">${() => (g().by === 'alias' ? 'Sent from this app, for your staked wallet; it uses a little Base ETH for gas.'
-      : 'Sent from your wallet; it uses a little Base ETH for gas.')}</p>
-    <div class="actions">
-      <button class="primary" data-test="game-send" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}">${() => (g().sending ? 'Sending…' : 'Submit predictions')}</button>
-      <button data-test="game-back" @click="${tap(() => m.back())}">Back</button>
+    <div class="gdaily">
+      <p>For a more detailed experience of the Satori daily prediction game, use the full-featured game:</p>
+      <a class="gbtn daily" data-test="game-daily" href="${SATORI_DAILY_URL}" target="_blank" rel="noopener">Satori Daily ${NEW_TAB()}</a>
+    </div>
+    <div class="gcalls-wrap">
+      <ul class="gcalls" data-test="game-calls">${() => calls().map((s) => html`<li><span>${s.name}</span>${callArrow(g().picks[s.streamId])}</li>`.key(`${s.streamId}:${g().picks[s.streamId]}`))}</ul>
+      <p class="muted center" hidden="${() => !!pickCount()}">No predictions yet. Swipe back to make some.</p>
     </div>
     ${unlockPrompt(a, 'game', 'send your predictions')}
     <p class="error small" role="alert" data-test="game-send-error" hidden="${() => !g().sendError}">${() => g().sendError}</p>
+    <button class="gbtn submit" data-test="game-send" aria-label="Submit" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}"><span class="engraved">${() => (g().sending ? 'SENDING…' : 'SUBMIT')}</span></button>
   </div>`;
 }
 

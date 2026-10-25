@@ -573,7 +573,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
      * → status()
      */
     /**
-     * The Game tab's streams (docs/design/base.md#the-game): the engine's paid streams, each with its name, its history
+     * The Game tab's streams (docs/design/base.md#the-game): every stream with a game (weight 0: not reward eligible), each with its name, its history
      * (decimal strings) and whether the player can predict it now (`blocked`: the simulate's revert name, else null).
      * The player: the alias when the wallet is staked with it, else the wallet. → { by: 'alias' | 'wallet', streams }
      */
@@ -582,7 +582,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       const { chain } = await chainNow();
       const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
       const player = by === 'alias' ? alias.evmAddress : walletAddress;
-      const list = await chain.streams();
+      const list = await chain.streams({ all: true });
       const names = await chain.streamNames(list.map((g) => g.streamId));
       const streams = await Promise.all(list.map(async (g, i) => {
         const [history, blocked] = await Promise.all([chain.history(g.streamId), chain.simulateGame(player, { gameId: g.gameId, direction: UP })]);

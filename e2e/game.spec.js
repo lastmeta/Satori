@@ -11,6 +11,8 @@ const ROUND = 20741;
 const hourly = (n, f) => Array.from({ length: n }, (_, i) => ({ hour: ROUND * 24 - n + i, value: BigInt(Math.round(f(i))) }));
 const t = (page, id) => page.locator(`[data-test=${id}]`);
 const name = (page) => t(page, 'game-name');
+/** The submit screen's list: each call as name + arrow. */
+const calls = (page) => t(page, 'game-calls').locator('li').evaluateAll((li) => li.map((x) => `${x.textContent} ${x.querySelector('svg').getAttribute('aria-label')}`));
 
 /** A swipe across the stream: left (skip) or right (back). */
 async function swipe(page, way) {
@@ -36,6 +38,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   s.streams[3] = { game: 3, named: false, cadence: 60, name: 'ether', history: hourly(72, (i) => 3000 - 40 * Math.cos(i / 5)) };
   s.weights[2] = 3n * E18;
   s.weights[3] = 2n * E18;
+  s.streams[4] = { game: 4, named: false, cadence: 60, name: 'dogecoin', history: hourly(72, (i) => 100 + i) }; // no weight: not reward eligible
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);
   await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
@@ -56,6 +59,10 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'play-switch')).toBeHidden();
   await expect(t(page, 'play-setting-manual')).toHaveAttribute('aria-pressed', 'true'); // Settings › Satori contract predictions
   await expect(t(page, 'game-latest')).toHaveText(/^\d{2},\d{3}\.\d{2}$/);
+  const [star, mark] = [await t(page, 'game-star').boundingBox(), await page.locator('.brand-mark').boundingBox()];
+  expect(Math.abs((star.x + star.width / 2) - (mark.x + mark.width / 2))).toBeLessThan(1.5); // the star centred under the Satori mark
+  const [theme, latest] = [await page.locator('[data-test=theme-toggle] svg').boundingBox(), await t(page, 'game-latest').boundingBox()];
+  expect(Math.abs((theme.x + theme.width) - (latest.x + latest.width))).toBeLessThan(3); // the theme icon's right edge over the value's
   const [buttons, bar] = [await t(page, 'game-up').boundingBox(), await page.locator('nav.tabbar').boundingBox()];
   expect(bar.y - (buttons.y + buttons.height)).toBeLessThan(40);
   expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(1);
@@ -72,22 +79,37 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(name(page)).toHaveText('ether');
   await t(page, 'game-down').click(); // ether down
   await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'false'); // no favorites when read: Submit at the end
-  await t(page, 'game-up').click(); // satori up: the last, so the submit screen
+  await t(page, 'game-up').click(); // satori up: the last eligible, so the submit screen
   await expect(t(page, 'game-submit-screen')).toBeVisible();
-  await expect(t(page, 'game-calls').locator('li')).toHaveText(['bitcoinup', 'etherdown', 'satoriup']);
+  await expect.poll(() => calls(page)).toEqual(['bitcoin up', 'ether down', 'satori up']);
+  await expect(t(page, 'game-daily')).toHaveAttribute('href', 'https://games.satorinet.io');
+  await expect(t(page, 'game-daily')).toHaveAttribute('target', '_blank');
   await shot(page, 'game-submit.png');
+  // a swipe left goes on to the streams that aren't reward eligible, then the submit screen again
+  await page.waitForTimeout(400);
+  const list = await t(page, 'game-calls').boundingBox();
+  await page.mouse.move(list.x + list.width * 0.8, list.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(list.x + list.width * 0.1, list.y + 12, { steps: 5 });
+  await page.mouse.up();
+  await expect(name(page)).toHaveText('dogecoin');
+  await expect(t(page, 'game-play')).toBeVisible();
+  await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'true'); // past the submit screen: Submit shows
+  await t(page, 'game-down').click();
+  await expect(t(page, 'game-submit-screen')).toBeVisible();
+  await expect.poll(() => calls(page)).toEqual(['bitcoin up', 'ether down', 'satori up', 'dogecoin down']);
   expect(await page.evaluate((v) => localStorage.getItem(`satori-favorites-${v}`), V)).toBe('[3,1]');
 
   // already predicted this round, not by the game: played as usual, and Submit is done without sending or Unlock
   await t(page, 'game-send').click();
-  await expect(t(page, 'game-sent')).toContainText('Sent 3 predictions');
+  await expect(t(page, 'game-sent')).toContainText('Sent 4 predictions');
   await expect(t(page, 'game-sent')).not.toContainText('Transaction');
   await expect(page.locator('[data-unlock-for=game]')).toBeHidden();
   expect(s.batches).toHaveLength(0);
   // played with the game this round: its Sent screen, again
   await t(page, 'game-done').click();
   await expect(t(page, 'game-tomorrow')).toBeVisible();
-  await expect(t(page, 'game-sent')).toContainText('Sent 3 predictions');
+  await expect(t(page, 'game-sent')).toContainText('Sent 4 predictions');
 
   // a round later: the favorites first, as starred; after them Submit shows under the buttons; the wallet sends
   rpc.advance(86400);
@@ -103,7 +125,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'true');
   await shot(page, 'game-submit-early.png');
   await t(page, 'game-submit').click();
-  await expect(t(page, 'game-calls').locator('li')).toHaveText(['etherup', 'satoridown']);
+  await expect.poll(() => calls(page)).toEqual(['ether up', 'satori down']);
   await t(page, 'game-send').click();
   const prompt = page.locator('[data-unlock-for=game]');
   await expect.poll(async () => (await prompt.isVisible()) || (await t(page, 'game-sent').isVisible()), { timeout: 30_000 }).toBe(true);

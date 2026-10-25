@@ -1,14 +1,32 @@
 import { expect, test } from 'vitest';
-import { queueOf, played, favoritesIn, submitEarly, leanLabel, latestText, linePoints, nothingText } from './gameflow.js';
+import { queueOf, stepOf, played, favoritesIn, submitEarly, leanLabel, latestText, linePoints, nothingText } from './gameflow.js';
 
 const s = (streamId, weight, o = {}) => ({ streamId, weight: String(weight), blocked: null, named: false, history: [], ...o });
 
-test('queueOf: the playable streams, favorites first as starred, then by weight', () => {
-  const list = [s(1, 5), s(2, 9), s(3, 1), s(4, 7, { blocked: 'StaleValue' }), s(5, 9), s(6, 2, { blocked: 'AlreadyPredicted' })];
-  expect(queueOf(list).map((x) => x.streamId)).toEqual([2, 5, 1, 6, 3]); // already predicted: played as usual
-  expect(queueOf(list, [3, 4, 1]).map((x) => x.streamId)).toEqual([3, 1, 2, 5, 6]); // 4 can't be played
-  expect(favoritesIn(queueOf(list, [3, 4, 1]), [3, 4, 1])).toBe(2);
-  expect([played(list[5]), played(s(7, 1, { blocked: 'DuplicatePrediction' })), played(list[3]), played(list[0])]).toEqual([true, true, false, false]);
+test('queueOf: the playable streams, eligible first (favorites as starred, then by weight), then the ineligible', () => {
+  const list = [s(1, 5), s(2, 9), s(3, 1), s(4, 7, { blocked: 'StaleValue' }), s(5, 9), s(6, 2, { blocked: 'AlreadyPredicted' }), s(7, 0), s(8, 0)];
+  const ids = (q) => q.queue.map((x) => x.streamId);
+  expect(ids(queueOf(list))).toEqual([2, 5, 1, 6, 3, 7, 8]); // already predicted: played as usual
+  expect(queueOf(list).split).toBe(5);
+  expect(ids(queueOf(list, [3, 4, 8, 1]))).toEqual([3, 1, 2, 5, 6, 8, 7]); // 4 can't be played; 8 leads the ineligible
+  expect(favoritesIn(queueOf(list, [3, 4, 1]).queue, [3, 4, 1])).toBe(2);
+  expect([played(list[5]), played(s(9, 1, { blocked: 'DuplicatePrediction' })), played(list[3]), played(list[0])]).toEqual([true, true, false, false]);
+});
+
+test('stepOf: the eligible, the submit screen, on to the ineligible, the submit screen again; and back', () => {
+  const at = (screen, index) => ({ screen, index, length: 4, split: 2 });
+  expect(stepOf(at('play', 0), 1)).toEqual({ screen: 'play', index: 1 });
+  expect(stepOf(at('play', 1), 1)).toEqual({ screen: 'submit', index: 2 }); // after the eligible
+  expect(stepOf(at('submit', 2), 1)).toEqual({ screen: 'play', index: 2 }); // on to the ineligible
+  expect(stepOf(at('play', 3), 1)).toEqual({ screen: 'submit', index: 4 }); // after the last
+  expect(stepOf(at('submit', 4), 1)).toBe(null); // nothing more
+  expect(stepOf(at('submit', 4), -1)).toEqual({ screen: 'play', index: 3 });
+  expect(stepOf(at('play', 2), -1)).toEqual({ screen: 'submit', index: 2 }); // back over the submit screen
+  expect(stepOf(at('submit', 2), -1)).toEqual({ screen: 'play', index: 1 });
+  expect(stepOf(at('play', 0), -1)).toBe(null);
+  expect(stepOf({ screen: 'submit', index: 1, length: 4, split: 2 }, 1)).toEqual({ screen: 'play', index: 1 }); // Submit early, then on
+  expect(stepOf({ screen: 'play', index: 1, length: 2, split: 2 }, 1)).toEqual({ screen: 'submit', index: 2 }); // all eligible
+  expect(stepOf({ screen: 'play', index: 0, length: 2, split: 0 }, 1)).toEqual({ screen: 'play', index: 1 }); // none eligible: no gate
 });
 
 test('submitEarly: after more than one favorite, with something predicted', () => {
@@ -16,6 +34,8 @@ test('submitEarly: after more than one favorite, with something predicted', () =
   expect(submitEarly({ index: 1, favorites: 2, picks: 1 })).toBe(false); // still in the favorites
   expect(submitEarly({ index: 1, favorites: 1, picks: 1 })).toBe(false); // one favorite only
   expect(submitEarly({ index: 3, favorites: 2, picks: 0 })).toBe(false); // nothing predicted
+  expect(submitEarly({ index: 3, favorites: 0, picks: 1, split: 3 })).toBe(true); // past the submit screen
+  expect(submitEarly({ index: 2, favorites: 0, picks: 1, split: 3 })).toBe(false);
 });
 
 test('leanLabel and latestText: a Sentiment stream leans, others show the number', () => {

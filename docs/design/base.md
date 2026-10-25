@@ -407,11 +407,12 @@ between the header and the tab bar.
 
 - **Who plays**: the alias when the wallet is staked with it (no Unlock),
   else the wallet (Unlock in place, or its wallet app), as the dapp would.
-- **The streams**: the engine's paid ones (`chain.streams()`, weight > 0)
+- **The streams**: every stream with a game (`chain.streams({ all: true })`)
   that the player can predict now: each is simulated from the player
   (`blocked`: the revert's name). Their names: `getDataStreamInfo`. Order:
-  favorites first, as starred, then by voting weight. Favorites are kept on
-  this device per wallet (`satori-favorites-<address>`, as the dapp's key).
+  the reward-eligible ones (voting weight > 0) first, favorites as starred
+  then by weight; then the ineligible ones, favorites first. Favorites are
+  kept on this device per wallet (`satori-favorites-<address>`, the dapp's key).
 - **A stream**: its name with a star on the left, its latest value on the
   right (a Sentiment stream's lean, the dapp's `leanLabel`, never the
   counter), its line alone (no axes, grid, bars or numbers), then two big
@@ -421,10 +422,16 @@ between the header and the tab bar.
   line) follows the finger, then slides off as the next slides on; the
   buttons stay, except at the last stream, when they slide off with it and
   the submit screen slides on (back: the same, reversed).
-- **Submit**: after the last stream, the submit screen (each call, then
-  Submit predictions, one `predictMultipleWithPayloads`). With more than one
-  favorite, once all of them were shown and something was picked, Submit
-  slides in under the buttons (pushing them up) and opens it at once.
+- **Submit**: the submit screen comes after the eligible streams and again
+  after the last (`stepOf`, `src/ui/gameflow.js`). On it: "For a more
+  detailed experience…" and **Satori Daily** (games.satorinet.io, a new
+  tab); the calls (name and a green or red arrow, centred, scrolling when
+  long); SUBMIT at the bottom (one `predictMultipleWithPayloads`). No Back:
+  a swipe right goes back, a swipe left goes on to more streams (the
+  ineligible ones) when there are any. With more than one favorite, once all
+  of them were shown and something was picked, Submit slides in under the
+  buttons (pushing them up; the chart gives way) and opens it at once; it
+  shows likewise on the streams past the submit screen.
 - **Played with the game this round**: each Submit is noted
   (`game_last_play`: round, time, count, hash or none), and while it is the
   same round the tab opens on its Sent screen ("Played today. The next game

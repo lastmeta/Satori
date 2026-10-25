@@ -6,6 +6,10 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- The submit screen: `game-daily` (Satori Daily) on top, the calls with arrows, SUBMIT at the bottom; no
+  `game-back` (swipes). Past it, the streams that aren't reward eligible. The theme icon lines up with the
+  page's right edge.
+
 - Every move in the game slides: the stream follows a swipe, then slides off as the next slides on; the
   buttons stay, but for the last stream, when they leave with it and the submit screen slides on.
 

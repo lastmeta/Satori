@@ -36,7 +36,7 @@ import { relayUuid } from './nostr/satori.js';
 import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
-import { queueOf, favoritesIn, played } from './ui/gameflow.js';
+import { queueOf, stepOf, favoritesIn, played } from './ui/gameflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -1129,10 +1129,10 @@ const actions = {
     try {
       const { by, streams, round, played: last } = await base.gameStreams();
       const favorites = readFavorites(walletPublic?.evmAddress);
-      const queue = queueOf(streams, favorites);
+      const { queue, split } = queueOf(streams, favorites);
       // played with the game this round: its Sent screen again (predictions made elsewhere are played as usual)
       const sent = last && round != null && last.round === round ? { ...last, again: true } : null;
-      state.game = { ...state.game, loading: false, loaded: Date.now(), by, streams, queue, favorites, round,
+      state.game = { ...state.game, loading: false, loaded: Date.now(), by, streams, queue, split, favorites, round,
         favs: favoritesIn(queue, favorites), index: 0, picks: {}, screen: 'play', move: '', sendError: '', sent };
     } catch (err) {
       state.game = { ...state.game, loading: false, error: errorText(err) };
@@ -1141,22 +1141,18 @@ const actions = {
   /** Up (UP) or down (DOWN) on the stream shown; the next one. */
   gamePick(direction) {
     const s = state.game.queue[state.game.index];
-    if (!s) return;
+    if (!s || state.game.screen !== 'play') return;
     state.game = { ...state.game, picks: { ...state.game.picks, [s.streamId]: direction } };
     actions.gameNext();
   },
-  /** The next stream (a swipe left skips); past the last, the submit screen. */
-  gameNext() {
+  /** On (a swipe left: skips the stream; from the submit screen, on to more streams), as gameflow.js stepOf. */
+  gameNext() { actions.gameStep(1); },
+  /** Back (a swipe right). */
+  gameBack() { actions.gameStep(-1); },
+  gameStep(dir) {
     const g = state.game;
-    if (g.screen !== 'play') return;
-    const index = g.index + 1;
-    state.game = index >= g.queue.length ? { ...g, index, screen: 'submit', move: 'next' } : { ...g, index, move: 'next' };
-  },
-  /** Back one stream (a swipe right); from the submit screen, the last stream. */
-  gameBack() {
-    const g = state.game;
-    if (g.screen === 'submit') state.game = { ...g, screen: 'play', index: Math.max(0, g.queue.length - 1), move: 'back', sendError: '' };
-    else if (g.index > 0) state.game = { ...g, index: g.index - 1, move: 'back' };
+    const to = stepOf({ screen: g.screen, index: g.index, length: g.queue.length, split: g.split }, dir);
+    if (to) state.game = { ...g, ...to, move: dir > 0 ? 'next' : 'back', sendError: '' };
   },
   gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
   /** Star a stream, or unstar it: kept on this device for this wallet; the next game shows favorites first. */
