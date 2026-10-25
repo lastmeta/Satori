@@ -15,8 +15,12 @@ const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', actio
 const cachedNow = () => !!state.cached && state.screen !== 'home';
 const h = () => state.health ?? (cachedNow() ? { ...EMPTY, ...state.cached.health } : EMPTY);
 /** What the wallet tile reads: the chain's status, or the last visit's. */
-const B = () => (cachedNow() ? { ...state.base, ...state.cached.base, alias: { ...state.base.alias, ...state.cached.base?.alias },
-  wallet: { ...state.base.wallet, ...state.cached.base?.wallet } } : state.base);
+function B() {
+  const live = state.base; // read first, whichever shows: the expression keeps following it once the last visit's goes
+  if (!cachedNow()) return live;
+  const c = state.cached.base;
+  return { ...live, ...c, alias: { ...live.alias, ...c?.alias }, wallet: { ...live.wallet, ...c?.wallet } };
+}
 /**
  * The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). The last
  * visit's: its title and colour, the ring turning while the neuron opens, the line saying what it waits for.
@@ -42,7 +46,10 @@ function dayTitle(d) {
   return `${when}${d.today ? ' (today)' : ''}: ${word}`;
 }
 
-const cell = (a, d) => html`<button class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}" aria-label="${dayTitle(d)}" aria-pressed="${() => String(state.dayOpen === d.date)}" disabled="${() => d.code === 'before' || cachedNow()}" @click="${() => a.openDay(d.date)}"></button>`;
+// Plain values only, no live ones: the strip is drawn again when they change (its key). A live value in a cell can be
+// queued just as the strip redraws (the last visit's Home giving way to the live one) and run for a cell gone, which
+// throws inside ArrowJS 1.0.6 and stops every update queued with it: Home froze.
+const cell = (a, d) => html`<button class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}" aria-label="${dayTitle(d)}" aria-pressed="${String(state.dayOpen === d.date)}" disabled="${d.code === 'before' || cachedNow()}" @click="${() => a.openDay(d.date)}"></button>`;
 
 // ── a day opened (src/neuron/day.js) ──
 const clock = (s) => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -139,7 +146,7 @@ export function home(a) {
 
     <section class="tile days-tile">
       <div class="tile-h"><b class="phone-only">Last 14 days</b><b class="desk-only">Last 30 days</b><span class="phone-only" data-test="days-summary">${() => fullDays(14)}</span><span class="desk-only">${() => fullDays(30)}</span></div>
-      <div class="strip" data-test="days">${() => h().days.map((d) => cell(a, d).key(`${d.date}:${d.code}:${d.ran}:${d.today}`))}</div>
+      <div class="strip" data-test="days">${() => h().days.map((d) => cell(a, d).key(`${d.date}:${d.code}:${d.ran}:${d.today}:${state.dayOpen === d.date}:${cachedNow()}`))}</div>
       <div class="day-panel" data-test="day-detail" data-open="${() => String(!!state.dayOpen && !!state.day)}"><div class="day-inner">${() => (state.day ? dayBody(state.day).key(`${state.day.date}:${JSON.stringify(state.day).length}`) : '')}</div></div>
       <div class="legend desk-only"><span><i data-code="full"></i>Predicted</span><span><i data-code="part"></i>Part of the day</span><span><i data-code="closed"></i>App closed</span><span><i data-code="error"></i>Error</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>

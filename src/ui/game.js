@@ -59,12 +59,12 @@ function play(a) {
       const s = current();
       return s ? html`<div class="gview">
         <div class="ghead">
-          <button class="gstar" data-test="game-star" aria-pressed="${() => String(starred())}" aria-label="${() => (starred() ? 'Unstar' : 'Star')}" title="Favorite: shown first" @click="${() => a.gameStar(s.streamId)}">${STAR()}</button>
+          <button class="gstar" data-test="game-star" aria-pressed="${String(starred())}" aria-label="${starred() ? 'Unstar' : 'Star'}" title="Favorite: shown first" @click="${() => a.gameStar(s.streamId)}">${STAR()}</button>
           <b class="gname" data-test="game-name">${s.name}</b>
           <span class="glatest" data-test="game-latest">${latestText(s)}</span>
         </div>
         <svg class="gchart" data-test="game-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${linePoints(s.history)}"></polyline></svg>
-      </div>`.key(`${s.streamId}:${g().index}`) : '';
+      </div>`.key(`${s.streamId}:${g().index}:${starred()}`) : ''; // plain values inside: drawn again when one changes (home.js cell)
     }}</div>
     <div class="gbtns">
       <button class="gbtn down" data-test="game-down" aria-label="Down" aria-pressed="${picked(DOWN)}" @click="${() => a.gamePick(DOWN)}">${ARROW_DOWN()}</button>
