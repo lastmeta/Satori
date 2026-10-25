@@ -19,8 +19,8 @@ export const TABS = ['home', 'models', 'streams', 'wallet', 'settings'];
 const LABEL = { home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
   home: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>`,
-  // streams in, one model, a forecast out: the pipeline
-  models: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h4.5l4 4.5M2 18h4.5l4-4.5M2 12h7.5"></path><rect x="10.5" y="8" width="6" height="8" rx="1.5"></rect><path d="M16.5 12H22M19.5 9l2.5 3-2.5 3"></path></svg>`,
+  // three streams in, one model, a forecast out
+  models: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8h6M2 12h6M2 16h6"></path><rect x="8" y="5" width="8" height="14" rx="1.5"></rect><path d="M16 12h6"></path></svg>`,
   streams: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9"></path></svg>`,
   wallet: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M16 12h2"></path></svg>`,
   settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>`,
