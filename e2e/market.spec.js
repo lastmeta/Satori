@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test';
 import WebSocket from 'ws';
 import { createPublicClient, http, parseEther } from 'viem';
 import { connectProvider } from '../scripts/provider.mjs';
-import { fund } from '../scripts/fork.mjs';
+import { advance, fund } from '../scripts/fork.mjs';
 import { createRelay } from '../src/nostr/relay.js';
 import { DEFAULTS } from '../src/chain/config.js';
 import { channelsAbi, tokenAbi } from '../src/chain/abi.js';
@@ -61,7 +61,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     // the seller predicts the stream and sells its `_pred` (Streams › Sell)
     const seller = await neuron(browser);
     const buyer = await neuron(browser);
-    await fund(FORK, [seller.alias, buyer.alias]); // gas: the seller's settle, the buyer's close
+    await fund(FORK, [seller.alias, buyer.alias, seller.wallet]); // gas: the seller's settle and payout address, the buyer's close
     await fund(FORK, [buyer.wallet], { satori: '1' }); // gas and SATORI for the channel
     await seller.page.evaluate(([p, s]) => window.satori.subscribe(p, s, { predict: true }), [provider.pubkey, stream]);
     const s = seller.page;
@@ -123,7 +123,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
 
     // Stop: the alias asks to close (no Unlock); the seller stops delivering, and settles into its wallet in its next pass
     await b.locator(`[data-test=bought-row][data-key="${seller.nostr}:${pred}"] [data-test=stop]`).click();
-    await expect(left).toHaveText(/^Stopping: 0\.00\d+ SATORI can be taken back after .+$/, { timeout: 60_000 });
+    await expect(left).toHaveText(/^Stopping: [\d.]+ SATORI can be taken back after .+$/, { timeout: 60_000 });
     const paid = parseEther((await market(b)).bought[0].paid);
     const read = () => chain.readContract({ address: DEFAULTS.channels, abi: channelsAbi, functionName: 'getChannel', args: [bought.channel] });
     expect((await read()).closeRequestedAt).toBeGreaterThan(0n);
@@ -134,6 +134,55 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     await expect.poll(async () => (await read()).settled, { timeout: 60_000 }).toBe(paid);
     expect(await chain.readContract({ address: DEFAULTS.token, abi: tokenAbi, functionName: 'balanceOf', args: [seller.wallet] })).toBe(paid);
     await expect.poll(async () => (await market(s)).selling[0].buyers, { timeout: 30_000 }).toEqual([]);
+
+    // after the grace period: stopped, the rest in the channel; Take back part of it to another address (Unlock in place)
+    await advance(FORK, 8);
+    await b.reload(); // a start runs the pass
+    await expect(b.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+    await b.evaluate(() => window.satori.go('market'));
+    await expect(left).toHaveText(/^Stopped: [\d.]+ SATORI left in the channel\. Buy it again to use it, or take it back\.$/, { timeout: 60_000 });
+    const brow = b.locator(`[data-test=bought-row][data-key="${seller.nostr}:${pred}"]`);
+    const elsewhere = '0x' + '7'.repeat(40);
+    const before = Number((await market(b)).bought[0].refundable);
+    await brow.locator('[data-test=takeback-amount]').fill('0.001');
+    await brow.locator('[data-test=takeback-to]').fill(elsewhere);
+    await brow.locator('[data-test=takeback]').click();
+    await b.getByLabel('Wallet passphrase to change the channel').fill(PASS);
+    await b.locator('[data-unlock-for=market]').getByRole('button', { name: 'Unlock' }).click();
+    await expect.poll(() => chain.readContract({ address: DEFAULTS.token, abi: tokenAbi, functionName: 'balanceOf', args: [elsewhere] }),
+      { timeout: 60_000 }).toBe(parseEther('0.001'));
+    expect((await read()).settled).toBe(paid + parseEther('0.001')); // taken back counts as settled
+    await expect.poll(async () => Number((await market(b)).bought[0].refundable), { timeout: 30_000 }).toBeCloseTo(before - 0.001, 8);
+    // the agent call: the rest, to the wallet; the channel stays
+    const unlock = (page) => page.evaluate((p) => window.satori.unlock(p), PASS); // the wallet locks again after each use
+    await unlock(b);
+    const rest = await b.evaluate((c) => window.satori.takeBack(c), bought.channel);
+    expect(rest.refundable).toBe('0');
+    expect((await read()).closed).toBe(false);
+
+    // Buy again: the same channel, its close taken back and topped up; the seller serves it again
+    await expect(item.locator('[data-test=buy]')).toHaveText('Buy again');
+    await item.locator('[data-test=buy-deposit]').fill('0.005');
+    await unlock(b);
+    await item.locator('[data-test=buy]').click();
+    await expect(item.locator('[data-test=catalog-bought]')).toHaveText(/^Bought · 0\.005 SATORI left$/, { timeout: 60_000 });
+    expect((await market(b)).bought.map((x) => x.channel)).toEqual([bought.channel]);
+    expect((await read()).closeRequestedAt).toBe(0n);
+    await expect.poll(async () => (await market(s)).selling[0].buyers[0]?.channel, { timeout: 60_000 }).toBe(bought.channel);
+
+    // a grace period (the buyer lengthens it at once) and a payout address (the seller's wallet), by agent calls
+    const terms = () => chain.readContract({ address: DEFAULTS.channels, abi: channelsAbi, functionName: 'getTerms', args: [bought.channel] });
+    await unlock(b);
+    expect(await b.evaluate((c) => window.satori.setGrace(c, 10), bought.channel)).toEqual({ applied: true, grace: 864_000 });
+    expect((await terms())[0]).toBe(864_000n);
+    await unlock(b);
+    expect(await b.evaluate((c) => window.satori.setGrace(c, 2), bought.channel)).toEqual({ applied: false, grace: 864_000 }); // asked of the seller
+    await unlock(s);
+    const payout = '0x' + '8'.repeat(40);
+    expect(await s.evaluate(([c, a]) => window.satori.setPayout(c, a), [bought.channel, payout])).toMatchObject({ payout: expect.stringMatching(/^0x8{40}$/i), toWallet: false });
+    expect((await terms())[1].toLowerCase()).toBe(payout);
+    await s.evaluate(() => window.satori.go('market'));
+    await expect(row.locator('[data-test=buyer-text]')).toHaveText(/into 0x8888…8888$/);
     await seller.context.close();
     await buyer.context.close();
   } finally {
