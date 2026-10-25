@@ -6,6 +6,9 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the header: share and theme icons)
 
+- The header's title has the Satori enso before it; both are one link to
+  Home (`brand`).
+
 - The header's Share button is a share icon (`share`, aria-label "Share";
   still "Link copied" when copied). Beside it, `theme-toggle`: a sun in
   dark mode (to Light), a moon in light (to Dark), the same as

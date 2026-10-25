@@ -667,4 +667,9 @@ test('Settings → Appearance: System, Light, Dark; kept on this device over a r
   await toggle.click();
   await expect.poll(bg).toBe(DARK);
   await expect(button('Dark')).toHaveAttribute('aria-pressed', 'true');
+
+  // The header's enso and "Satori app": Home
+  await page.locator('[data-test=brand]').click();
+  await expect(page).toHaveURL(/#home$/);
+  await expect(page.locator('[data-test=tab-home]')).toHaveAttribute('aria-current', 'page');
 });

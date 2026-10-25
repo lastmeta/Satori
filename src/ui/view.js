@@ -169,7 +169,7 @@ export function render(root, a) {
   const running = () => state.screen !== 'home';
   html`
   <header class="top">
-    <h1>Satori <span class="muted">app</span></h1>
+    <h1><a class="brand" href="#home" data-test="brand" @click="${(e) => { e.preventDefault(); if (state.screen === 'home') a.go('home'); }}"><span class="brand-mark" aria-hidden="true"></span>Satori <span class="muted">app</span></a></h1>
     <nav class="topnav" aria-label="Sections" hidden="${running}">${TABS.map((t) => navLink(a, t))}</nav>
     <div class="top-actions">
       <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>

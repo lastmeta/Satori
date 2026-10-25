@@ -1178,7 +1178,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `runs-while-open`, `version`, `update-settings`. Setup: `setup-wait`,
   `runs-while-open`, `install-hint`, `set-aside-notice` (after a set-aside).
   Loading: `opening`. The inline prompt: `unlock-prompt` (`data-unlock-for`:
-  `card`, `claim`, `wallet`). Elsewhere: `lock`, `lock-in`, `update`, `share`, `theme-toggle`,
+  `card`, `claim`, `wallet`). Elsewhere: `brand` (the enso and "Satori app": Home), `lock`, `lock-in`, `update`, `share`, `theme-toggle`,
   `finish`, `pass-note`, `notice` (a recovered WAL's, with Dismiss),
   `damaged-error`, `set-aside`, `fatal`.
 
