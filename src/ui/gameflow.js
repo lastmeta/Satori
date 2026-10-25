@@ -2,12 +2,20 @@
 // shows early, the chart's line and the latest value's words. src/ui/game.js draws it; main.js keeps its state.
 import { fmtNum } from './format.js';
 
+const WAIT = { DuplicatePrediction: 'already predicted in the last 24 hours', AlreadyPredicted: 'already predicted this round' };
+
 /**
- * The streams to play, in order: the playable ones (not `blocked`), favorites first in the order they were starred,
- * then the rest by the game's voting weight, the most rewarding first.
+ * Already predicted (this round, or in the last 24 hours: the app's own batch, say): played as if nothing were wrong,
+ * and on Submit not sent, just done (owner, 2026-10-25: it doesn't matter, and must not confuse).
+ */
+export const played = (s) => s.blocked in WAIT;
+
+/**
+ * The streams to play, in order: the playable ones (not `blocked`, or only already played), favorites first in the
+ * order they were starred, then the rest by the game's voting weight, the most rewarding first.
  */
 export function queueOf(streams, favorites = []) {
-  const playable = streams.filter((s) => !s.blocked);
+  const playable = streams.filter((s) => !s.blocked || played(s));
   const fav = favorites.map((id) => playable.find((s) => s.streamId === id)).filter(Boolean);
   const rest = playable.filter((s) => !favorites.includes(s.streamId))
     .sort((a, b) => (BigInt(b.weight) > BigInt(a.weight) ? 1 : BigInt(b.weight) < BigInt(a.weight) ? -1 : a.streamId - b.streamId));
@@ -51,13 +59,10 @@ export function linePoints(history, w = 100, h = 100) {
   return v.map((x, i) => `${+(i * w / (v.length - 1)).toFixed(2)},${+(span ? pad + (h - 2 * pad) * (1 - (x - lo) / span) : h / 2).toFixed(2)}`).join(' ');
 }
 
-const WAIT = { DuplicatePrediction: 'already predicted in the last 24 hours', AlreadyPredicted: 'already predicted this round' };
-
 /** Nothing to play: why, calmly, with what to do (CLAUDE.md, waits aren't problems). */
-export function nothingText(streams, by) {
+export function nothingText(streams) {
   if (!streams.length) return 'No games on the Satori contract yet.';
   const why = streams.map((s) => s.blocked);
   if (why.every((w) => w === 'Delegated')) return "Your wallet is staked with another address, so it can't play here. Unstake on the Wallet tab to play.";
-  if (why.every((w) => w in WAIT)) return `Unable to predict right now: ${by === 'alias' ? 'this app' : 'your wallet'} ${WAIT[why[0]]}. Come back later.`;
   return 'Unable to predict right now. Come back later.';
 }

@@ -422,9 +422,12 @@ between the header and the tab bar.
   Submit predictions, one `predictMultipleWithPayloads`). With more than one
   favorite, once all of them were shown and something was picked, Submit
   slides in under the buttons (pushing them up) and opens it at once.
-- Nothing to play: why, calmly ("Unable to predict right now: your wallet
-  already predicted in the last 24 hours. Come back later."), and Check
-  again.
+- **Already predicted** (this round, or in the last 24 hours, e.g. the
+  app's own batch): the game plays as usual, and Submit says it was sent
+  without sending those (owner, 2026-10-25: it doesn't matter, and must not
+  confuse). Only the others go in the transaction; none left: nothing sent.
+- Nothing to play otherwise (no games, staked elsewhere, a stream's value
+  too old): why, calmly, and Check again.
 - Not ported from the dapp: the soft limit of 5 and Continue Predicting, a
   Uniswap stream's price orientation (only the Sentiment stream "satori" is
   live), payouts, streaks, the countdown.

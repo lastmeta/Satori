@@ -1,13 +1,14 @@
 import { expect, test } from 'vitest';
-import { queueOf, favoritesIn, submitEarly, leanLabel, latestText, linePoints, nothingText } from './gameflow.js';
+import { queueOf, played, favoritesIn, submitEarly, leanLabel, latestText, linePoints, nothingText } from './gameflow.js';
 
 const s = (streamId, weight, o = {}) => ({ streamId, weight: String(weight), blocked: null, named: false, history: [], ...o });
 
 test('queueOf: the playable streams, favorites first as starred, then by weight', () => {
-  const list = [s(1, 5), s(2, 9), s(3, 1), s(4, 7, { blocked: 'DuplicatePrediction' }), s(5, 9)];
-  expect(queueOf(list).map((x) => x.streamId)).toEqual([2, 5, 1, 3]);
-  expect(queueOf(list, [3, 4, 1]).map((x) => x.streamId)).toEqual([3, 1, 2, 5]); // 4 is blocked
+  const list = [s(1, 5), s(2, 9), s(3, 1), s(4, 7, { blocked: 'StaleValue' }), s(5, 9), s(6, 2, { blocked: 'AlreadyPredicted' })];
+  expect(queueOf(list).map((x) => x.streamId)).toEqual([2, 5, 1, 6, 3]); // already predicted: played as usual
+  expect(queueOf(list, [3, 4, 1]).map((x) => x.streamId)).toEqual([3, 1, 2, 5, 6]); // 4 can't be played
   expect(favoritesIn(queueOf(list, [3, 4, 1]), [3, 4, 1])).toBe(2);
+  expect([played(list[5]), played(s(7, 1, { blocked: 'DuplicatePrediction' })), played(list[3]), played(list[0])]).toEqual([true, true, false, false]);
 });
 
 test('submitEarly: after more than one favorite, with something predicted', () => {
@@ -34,9 +35,7 @@ test('linePoints: oldest left, highest at the top, flat when level', () => {
 });
 
 test('nothingText: calm, with what to do', () => {
-  expect(nothingText([], 'alias')).toBe('No games on the Satori contract yet.');
-  expect(nothingText([s(1, 1, { blocked: 'DuplicatePrediction' })], 'alias'))
-    .toBe('Unable to predict right now: this app already predicted in the last 24 hours. Come back later.');
-  expect(nothingText([s(1, 1, { blocked: 'Delegated' })], 'wallet')).toMatch(/staked with another address/);
-  expect(nothingText([s(1, 1, { blocked: 'StaleValue' })], 'wallet')).toBe('Unable to predict right now. Come back later.');
+  expect(nothingText([])).toBe('No games on the Satori contract yet.');
+  expect(nothingText([s(1, 1, { blocked: 'Delegated' })])).toMatch(/staked with another address/);
+  expect(nothingText([s(1, 1, { blocked: 'StaleValue' })])).toBe('Unable to predict right now. Come back later.');
 });

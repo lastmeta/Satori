@@ -88,14 +88,22 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   expect(s.batches).toHaveLength(1);
   expect(s.batches[0]).toMatchObject({ from: V, requests: [{ gameId: 2, payload: '0x01' }, { gameId: 3, payload: '0x02' }, { gameId: 1, payload: '0x01' }] });
 
-  // predicted this round: nothing to play, said calmly
+  // already predicted this round: the game plays as usual (favorites first now), and Submit is done without sending
   await t(page, 'game-done').click();
-  await expect(t(page, 'game-nothing')).toContainText(/^Unable to predict right now: your wallet already predicted/);
+  await expect(name(page)).toHaveText('ether', { timeout: 30_000 });
+  await t(page, 'game-up').click();
+  await swipe(page, 'left');
+  await swipe(page, 'left');
+  await expect(t(page, 'game-submit-screen')).toBeVisible();
+  await t(page, 'game-send').click();
+  await expect(t(page, 'game-sent')).toContainText('Sent 1 prediction');
+  await expect(t(page, 'game-sent')).not.toContainText('Transaction');
+  expect(s.batches).toHaveLength(1); // nothing sent
 
   // a round later: the favorites first, as starred; after them Submit shows under the buttons
   rpc.advance(86400);
   for (const id of [2, 3]) s.streams[id].history.push({ hour: (ROUND + 1) * 24 + 1, value: s.streams[id].history.at(-1).value + 5n });
-  await t(page, 'game-again').click();
+  await t(page, 'game-done').click();
   await expect(name(page)).toHaveText('ether', { timeout: 30_000 });
   await t(page, 'game-up').click();
   await expect(name(page)).toHaveText('satori');

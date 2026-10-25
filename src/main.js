@@ -36,7 +36,7 @@ import { relayUuid } from './nostr/satori.js';
 import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
-import { queueOf, favoritesIn } from './ui/gameflow.js';
+import { queueOf, favoritesIn, played } from './ui/gameflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
@@ -1164,17 +1164,22 @@ const actions = {
     writeFavorites(walletPublic?.evmAddress, favorites);
     state.game = { ...state.game, favorites };
   },
-  /** Send the calls: from the alias when staked with it; else from the wallet (Unlock in place, or its wallet app). */
+  /**
+   * Send the calls: from the alias when staked with it; else from the wallet (Unlock in place, or its wallet app).
+   * Streams already predicted (gameflow.js played) are not sent: done, as if they were. All of them: done, nothing sent.
+   */
   gameSend() {
     const g = state.game;
-    const picks = g.queue.filter((s) => g.picks[s.streamId]).map((s) => ({ gameId: s.gameId, streamId: s.streamId, direction: g.picks[s.streamId] }));
-    if (!picks.length || g.sending) return undefined;
+    const chosen = g.queue.filter((s) => g.picks[s.streamId]);
+    const picks = chosen.filter((s) => !played(s)).map((s) => ({ gameId: s.gameId, streamId: s.streamId, direction: g.picks[s.streamId] }));
+    if (!chosen.length || g.sending) return undefined;
+    if (!picks.length) return void (state.game = { ...g, sent: { hash: null, by: g.by, count: chosen.length } });
     const run = async () => {
       state.game = { ...state.game, sending: true, sendError: '' };
       try {
         const r = await baseAction('play', () => base.playHand(picks));
         activity.wallet('play', `Sent ${picks.length} prediction${picks.length === 1 ? '' : 's'} to the Satori contract by hand`);
-        state.game = { ...state.game, sending: false, sent: { ...r, count: picks.length } };
+        state.game = { ...state.game, sending: false, sent: { ...r, count: chosen.length } };
       } catch (err) {
         state.game = { ...state.game, sending: false, sendError: errorText(err) };
       }

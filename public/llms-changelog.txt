@@ -6,6 +6,10 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- A stream already predicted (this round or in the last 24 hours) plays as
+  usual; Submit reports it sent without sending it (`game-sent`, no
+  transaction when none was needed).
+
 - The Game tab's game: one stream at a time (name, star, latest value, its
   line), down and up, swipes to skip and go back, a submit screen; sent from
   the alias when staked with it, else the wallet. Ids in /llms.txt (Tabs).

@@ -103,10 +103,10 @@ export function gameTab(a) {
       <div class="game-board" data-test="game-board" inert="${() => !manual()}">
         <p class="muted center gmsg" hidden="${showing('loading')}">Reading the games…</p>
         <div class="gmsg" hidden="${showing('error')}"><p class="error">${() => `The chain did not answer: ${g().error}`}</p><button @click="${a.loadGame}">Try again</button></div>
-        <div class="gmsg" data-test="game-nothing" hidden="${showing('nothing')}"><p>${() => nothingText(g().streams, g().by)}</p><button data-test="game-again" @click="${a.loadGame}">Check again</button></div>
+        <div class="gmsg" data-test="game-nothing" hidden="${showing('nothing')}"><p>${() => nothingText(g().streams)}</p><button data-test="game-again" @click="${a.loadGame}">Check again</button></div>
         <div class="gmsg" data-test="game-sent" hidden="${showing('sent')}">
           <h2>${() => `Sent ${g().sent?.count ?? 0} prediction${g().sent?.count === 1 ? '' : 's'}`}</h2>
-          <p class="muted small">${() => (g().sent ? `Scored about 24 hours after each was made. Transaction ${shortHash(g().sent.hash)}.` : '')}</p>
+          <p class="muted small">${() => (g().sent ? `Scored about 24 hours after each was made.${g().sent.hash ? ` Transaction ${shortHash(g().sent.hash)}.` : ''}` : '')}</p>
           <button data-test="game-done" @click="${a.loadGame}">Done</button>
         </div>
         ${play(a)}
