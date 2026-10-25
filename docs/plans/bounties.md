@@ -23,6 +23,8 @@ paid, however complicated it is.
 
 ## The rules
 
+- **The host is the bounty provider, the payer and the scorer.** It funds every channel from its wallet
+  and alone decides whom to pay, by whatever measure it likes.
 - **No contract of its own.** A host pays through `PaymentChannels` (v3, the stream market's), with the
   roles turned around: the host's wallet is the payer, the predictor's wallet the payee, the host's alias
   signs the vouchers. A contract can't enforce "pay the best" without the rule on chain, and the rule is
@@ -54,15 +56,13 @@ buyer's. Collecting is the stream market's: the weekly `settleMany`, at once on 
   how many predictors it pays (1 by default), the horizon (1). Close it.
 - **Receives** 34608s for its bounties and keeps them per predictor and observation, received before
   the outcome only (the track record's rule: by arrival, since a `created_at` can be backdated).
-- **Scores** them privately, on each new observation of the stream, with a scorer chosen in the app and
-  never announced. It starts with the track record's measure (median error against no change, the last
-  28) and Lite's built-in scorers. The ranking shows only to the host.
-- **Pays** the current best on each observation: the alias signs the voucher (no Unlock), publishes it
+- **Chooses whom to pay**, by its own measure, never announced: the host (or its agent) sees each
+  predictor's predictions next to the outcomes and picks.
+- **Opens a channel** to the one it picks, from its wallet (Unlock, gas), with a deposit of 100
+  observations by default. Picking someone else later: a channel to them; the old one's vouchers stop and
+  its channel is asked to close (v3's reuse picks it up again if the host picks it again).
+- **Pays** the ones it picked on each observation: the alias signs the voucher (no Unlock), publishes it
   (34604) and sends it to the predictor. The amounts add up to `pay_per_obs_sats`.
-- **A new best** with no channel: opening one moves the host's SATORI, so it needs the wallet. The app
-  says "X is now best: open a channel" (Unlock, gas), with a deposit of 100 observations by default.
-  The old best's vouchers stop; its channel is asked to close, and v3's reuse picks it up again if it
-  becomes best again.
 
 ## The predictor (the Satori app)
 
@@ -72,7 +72,7 @@ buyer's. Collecting is the stream market's: the weekly `settleMany`, at once on 
   host (34608) instead of publishing it.
 - **Earnings:** each channel a host opened to us, what its vouchers owe, what is settled.
 
-Every action has its `window.satori` call (post, close, predict for, the host's open-a-channel).
+Every action has its `window.satori` call (post, close, predict for, the host's pick).
 
 ## Risks: inherent and fixable
 
@@ -90,17 +90,9 @@ Every action has its `window.satori` call (post, close, predict for, the host's 
 Lite's stretch goals (approval-gated private streams, 34609), the main contract's Bounties, a contract
 of its own.
 
-## Open decisions (each with the recommendation)
-
-1. **Who opens a channel to a new best:** the host's wallet, when the person agrees (recommended: the
-   two-key rule, and the owner's words "opens a payment channel with whoever he thinks is best"), or the
-   alias from a bounty budget it holds, automatically.
-2. **The host's scorer:** the track record's measure by default, Lite's built-ins to choose from, all
-   kept private (recommended); later an agent may rank with its own.
-
 ## Steps (smallest first)
 
 1. The events: 34607 and 34608 ported, 34604 for Base vouchers; tests against Lite's fields.
 2. The predictor: Bounties on the Market tab, Predict for it, earnings collected.
-3. The host: post, close, receive, score, pay, open a channel to a new best.
-4. Proven by two browser apps on the fork: a host, two predictors, the best switching.
+3. The host: post, close, receive, pick, open a channel, pay.
+4. Proven by two browser apps on the fork: a host, two predictors, the host switching to the other.
