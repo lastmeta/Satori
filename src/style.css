@@ -157,7 +157,9 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gbtn.claim { background: linear-gradient(#34b267, #1f8a4c); }
 .gbtn.claim .engraved { color: #17703c; }
 .gbtn.claim:disabled { opacity: 1; filter: saturate(0.7); }
-.grest { flex: none; margin: 8px 0 12px; text-align: center; color: var(--muted); font-size: 0.9rem; }
+.gbtns-area { position: relative; flex: none; }
+.gbtns[data-rest="true"] { visibility: hidden; } /* played today: the buttons' room kept, the note in it */
+.grest { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 0 24px; text-align: center; color: var(--muted); font-size: 0.95rem; }
 .gsubmit { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.3s ease; flex: none; }
 .gsubmit[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
 .gsubmit > div { overflow: hidden; min-height: 0; }

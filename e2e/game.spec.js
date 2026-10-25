@@ -133,6 +133,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(name(page)).toHaveText('ether'); // read again: the favorites first now
   await expect(t(page, 'game-rest')).toHaveText('Come back tomorrow to see how your predictions were scored.');
   await expect(t(page, 'game-up')).toBeHidden();
+  const [rest, room] = [await t(page, 'game-rest').boundingBox(), await page.locator('.gbtns').boundingBox()];
+  expect(Math.abs(rest.height - room.height)).toBeLessThan(1); // the buttons' room, the note centred in it
 
   // a round later: the favorites first, as starred; after them Submit shows under the buttons; the wallet sends
   rpc.advance(86400);

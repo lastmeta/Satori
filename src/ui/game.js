@@ -183,10 +183,12 @@ function play(a) {
         <svg class="gchart" data-test="game-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${linePoints(s.history)}"></polyline></svg>
       </div>`.key(`${s.streamId}:${g().index}:${starred()}`) : ''; // plain values inside: drawn again when one changes (home.js cell)
     }}</div>
-    <p class="grest" data-test="game-rest" hidden="${() => !resting()}">Come back tomorrow to see how your predictions were scored.</p>
-    <div class="gbtns" hidden="${resting}">
-      <button class="gbtn down" data-test="game-down" aria-label="Down" aria-pressed="${picked(DOWN)}" @click="${tap(() => m.pick(DOWN))}">${ARROW_DOWN()}</button>
-      <button class="gbtn up" data-test="game-up" aria-label="Up" aria-pressed="${picked(UP)}" @click="${tap(() => m.pick(UP))}">${ARROW_UP()}</button>
+    <div class="gbtns-area">
+      <div class="gbtns" data-rest="${() => String(resting())}" inert="${resting}">
+        <button class="gbtn down" data-test="game-down" aria-label="Down" aria-pressed="${picked(DOWN)}" @click="${tap(() => m.pick(DOWN))}">${ARROW_DOWN()}</button>
+        <button class="gbtn up" data-test="game-up" aria-label="Up" aria-pressed="${picked(UP)}" @click="${tap(() => m.pick(UP))}">${ARROW_UP()}</button>
+      </div>
+      <p class="grest" data-test="game-rest" hidden="${() => !resting()}">Come back tomorrow to see how your predictions were scored.</p>
     </div>
     <div class="gsubmit" data-test="game-submit-early" hidden="${resting}" data-open="${() => String(early())}" inert="${() => !early()}"><div>
       <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${tap(m.submitNow)}"><span class="engraved">SUBMIT</span></button>
