@@ -656,4 +656,15 @@ test('Settings → Appearance: System, Light, Dark; kept on this device over a r
   expect(await page.evaluate(() => window.themeAtBody)).toBe(null);
   expect(await bg()).toBe(DARK);
   await expect(page.evaluate(() => window.satori.setTheme('blue'))).rejects.toThrow(/'system', 'light' or 'dark'/);
+
+  // The header's sun (dark: to Light) and moon (light: to Dark), the same choice
+  const toggle = page.locator('[data-test=theme-toggle]');
+  await expect(toggle).toHaveAttribute('aria-label', 'Light mode');
+  await toggle.click();
+  await expect.poll(bg).toBe(LIGHT);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(toggle).toHaveAttribute('aria-label', 'Dark mode');
+  await toggle.click();
+  await expect.poll(bg).toBe(DARK);
+  await expect(button('Dark')).toHaveAttribute('aria-pressed', 'true');
 });

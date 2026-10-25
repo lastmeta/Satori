@@ -39,7 +39,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b;
-    --accent: #8ea6ff; --accent-soft: #232c45; --on-accent: #10131a;
+    --accent: #9cb1ff; --accent-soft: #2d3e78; --on-accent: #10131a;
     --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
     --sky: #b9edcb; --sky-soft: #2a3a30; --sky-ink: #b9edcb; --sky-on: #232a35; --vivid: #1ed964; --vivid-soft: #10351a;
     --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #2e3747;
@@ -49,7 +49,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b;
-  --accent: #8ea6ff; --accent-soft: #232c45; --on-accent: #10131a;
+  --accent: #9cb1ff; --accent-soft: #2d3e78; --on-accent: #10131a;
   --ok: #5fd08f; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
   /* dark (--ok oklch(0.775 0.140 155.8)): sky takes the same step toward white, 0.25/0.45 of the way, oklch(0.900 0.070
      155.8), a calm light-on-dark tint, readable as itself; vivid oklch(0.775 0.211 149.3), chroma × 1.50 (the same 6.5°) */
@@ -87,6 +87,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .top h1 { white-space: nowrap; }
 .top-actions { display: flex; gap: 6px; align-items: center; }
 .top-actions .small-btn { padding: 6px 10px; }
+.top-actions .icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; padding: 6px 8px; }
+.icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .lock-in { white-space: nowrap; }
 .topnav { display: none; gap: 4px; margin-left: auto; }
 .topnav a, .tabbar a { text-decoration: none; color: var(--muted); }

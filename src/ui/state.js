@@ -125,6 +125,7 @@ export const state = reactive({
   storage: null, // { persisted, usage, quota }
   version: '', // browser-<package version>+<git short sha> (main.js; Settings › This device)
   theme: themeOf(), // Settings → Appearance: 'system' | 'light' | 'dark', this device's (src/ui/theme.js)
+  systemDark: globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false, // what 'system' shows (main.js keeps it)
   // the database (docs/design/storage.md#recovery): the name a WAL DuckDB could not replay was set aside under
   recovered: null,
   setAside: null, // the name a database file that would not open was set aside under ("Set aside and start again"), this page load

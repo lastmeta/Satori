@@ -1480,6 +1480,7 @@ async function boot() {
   if (tab) Object.assign(state, { tab, modelOpen: model });
   render(root, actions);
   applyTheme(state.theme); // public/theme.js set data-theme before the first paint; this, the browser bar's color too
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => { state.systemDark = e.matches; });
   glowChips();
   startPwa();
   // one tab runs the neuron; another waits, says so, and takes over when that one closes (no reload)
