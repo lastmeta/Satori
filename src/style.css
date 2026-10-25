@@ -95,6 +95,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .icon-btn.bare:hover { color: var(--text); }
 .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .lock-in { white-space: nowrap; }
+/* a phone, unlocked: "Locks in 4 min" on two short lines, so Lock, Share and the theme fit beside the name */
+@media (max-width: 520px) { .lock-in { white-space: normal; max-width: 4.5em; text-align: right; line-height: 1.2; } .top { gap: 8px; } .top-actions { gap: 2px; } }
 .topnav { display: none; gap: 4px; margin-left: auto; }
 .topnav a, .tabbar a { text-decoration: none; color: var(--muted); }
 .topnav a { font-size: 0.9rem; padding: 10px 14px; border-radius: 10px; min-height: 44px; display: inline-flex; align-items: center; }
