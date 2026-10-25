@@ -156,6 +156,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gbalance { margin: 0; text-align: center; font-size: 2.1rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .gclaim { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; max-width: 560px; width: 100%; margin: 0 auto; }
 .gclaimable { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.gbtn .plain { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #fff; } /* the submit screen's SUBMIT: white, as Satori Daily */
 .gbtn.claim { background: linear-gradient(#34b267, #1f8a4c); }
 .gbtn.claim .engraved { color: #17703c; }
 .gbtn.claim:disabled { opacity: 1; filter: saturate(0.7); }

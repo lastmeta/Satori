@@ -230,7 +230,7 @@ function submit(a) {
     </div>
     ${unlockPrompt(a, 'game', 'send your predictions')}
     <p class="error small" role="alert" data-test="game-send-error" hidden="${() => !g().sendError}">${() => g().sendError}</p>
-    <button class="gbtn submit" data-test="game-send" aria-label="Submit" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}"><span class="engraved">${() => (g().sending ? 'SENDING…' : 'SUBMIT')}</span></button>
+    <button class="gbtn submit" data-test="game-send" aria-label="Submit" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}"><span class="plain">${() => (g().sending ? 'SENDING…' : 'SUBMIT')}</span></button>
   </div>`;
 }
 
