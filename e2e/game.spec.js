@@ -42,6 +42,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
   const V = (await page.evaluate(() => window.satori.base())).wallet.address.toLowerCase();
   rpc.eth[V] = 10n ** 17n;
+  s.predicted[`${V}:${ROUND}`] = 1; // predicted this round already, not with the game (Satori Daily, say)
 
   // automatic: the game greyed out under the switch
   await page.evaluate(() => window.satori.go('game'));
@@ -69,41 +70,29 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await swipe(page, 'right'); // back to ether
   await expect(name(page)).toHaveText('ether');
   await t(page, 'game-down').click(); // ether down
-  await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'false'); // no favorites when this game was read: Submit only at the end
+  await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'false'); // no favorites when read: Submit at the end
   await t(page, 'game-up').click(); // satori up: the last, so the submit screen
   await expect(t(page, 'game-submit-screen')).toBeVisible();
   await expect(t(page, 'game-calls').locator('li')).toHaveText(['bitcoinup', 'etherdown', 'satoriup']);
   await shot(page, 'game-submit.png');
   expect(await page.evaluate((v) => localStorage.getItem(`satori-favorites-${v}`), V)).toBe('[3,1]');
 
-  // the wallet plays (not staked): Unlock in place, then one transaction with the three calls
+  // already predicted this round, not by the game: played as usual, and Submit is done without sending or Unlock
   await t(page, 'game-send').click();
-  const prompt = page.locator('[data-unlock-for=game]');
-  await expect.poll(async () => (await prompt.isVisible()) || (await t(page, 'game-sent').isVisible()), { timeout: 30_000 }).toBe(true);
-  if (await prompt.isVisible()) {
-    await prompt.locator('input').fill(PASS);
-    await prompt.getByRole('button', { name: 'Unlock' }).click();
-  }
-  await expect(t(page, 'game-sent')).toContainText('Sent 3 predictions', { timeout: 30_000 });
-  expect(s.batches).toHaveLength(1);
-  expect(s.batches[0]).toMatchObject({ from: V, requests: [{ gameId: 2, payload: '0x01' }, { gameId: 3, payload: '0x02' }, { gameId: 1, payload: '0x01' }] });
-
-  // already predicted this round: the game plays as usual (favorites first now), and Submit is done without sending
-  await t(page, 'game-done').click();
-  await expect(name(page)).toHaveText('ether', { timeout: 30_000 });
-  await t(page, 'game-up').click();
-  await swipe(page, 'left');
-  await swipe(page, 'left');
-  await expect(t(page, 'game-submit-screen')).toBeVisible();
-  await t(page, 'game-send').click();
-  await expect(t(page, 'game-sent')).toContainText('Sent 1 prediction');
+  await expect(t(page, 'game-sent')).toContainText('Sent 3 predictions');
   await expect(t(page, 'game-sent')).not.toContainText('Transaction');
-  expect(s.batches).toHaveLength(1); // nothing sent
+  await expect(page.locator('[data-unlock-for=game]')).toBeHidden();
+  expect(s.batches).toHaveLength(0);
+  // played with the game this round: its Sent screen, again
+  await t(page, 'game-done').click();
+  await expect(t(page, 'game-tomorrow')).toBeVisible();
+  await expect(t(page, 'game-sent')).toContainText('Sent 3 predictions');
 
-  // a round later: the favorites first, as starred; after them Submit shows under the buttons
+  // a round later: the favorites first, as starred; after them Submit shows under the buttons; the wallet sends
   rpc.advance(86400);
   for (const id of [2, 3]) s.streams[id].history.push({ hour: (ROUND + 1) * 24 + 1, value: s.streams[id].history.at(-1).value + 5n });
-  await t(page, 'game-done').click();
+  await page.evaluate(() => window.satori.go('home'));
+  await page.evaluate(() => window.satori.go('game')); // read again on the way in, after a Submit
   await expect(name(page)).toHaveText('ether', { timeout: 30_000 });
   await t(page, 'game-up').click();
   await expect(name(page)).toHaveText('satori');
@@ -114,4 +103,15 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await shot(page, 'game-submit-early.png');
   await t(page, 'game-submit').click();
   await expect(t(page, 'game-calls').locator('li')).toHaveText(['etherup', 'satoridown']);
+  await t(page, 'game-send').click();
+  const prompt = page.locator('[data-unlock-for=game]');
+  await expect.poll(async () => (await prompt.isVisible()) || (await t(page, 'game-sent').isVisible()), { timeout: 30_000 }).toBe(true);
+  if (await prompt.isVisible()) {
+    await prompt.locator('input').fill(PASS);
+    await prompt.getByRole('button', { name: 'Unlock' }).click();
+  }
+  await expect(t(page, 'game-sent')).toContainText('Sent 2 predictions', { timeout: 30_000 });
+  await expect(t(page, 'game-sent')).toContainText('Transaction');
+  expect(s.batches).toHaveLength(1);
+  expect(s.batches[0]).toMatchObject({ from: V, requests: [{ gameId: 3, payload: '0x01' }, { gameId: 1, payload: '0x02' }] });
 });

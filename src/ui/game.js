@@ -107,7 +107,8 @@ export function gameTab(a) {
         <div class="gmsg" data-test="game-sent" hidden="${showing('sent')}">
           <h2>${() => `Sent ${g().sent?.count ?? 0} prediction${g().sent?.count === 1 ? '' : 's'}`}</h2>
           <p class="muted small">${() => (g().sent ? `Scored about 24 hours after each was made.${g().sent.hash ? ` Transaction ${shortHash(g().sent.hash)}.` : ''}` : '')}</p>
-          <button data-test="game-done" @click="${a.loadGame}">Done</button>
+          <p class="muted small" data-test="game-tomorrow" hidden="${() => !g().sent?.again}">Played today. The next game opens tomorrow.</p>
+          <button data-test="game-done" hidden="${() => !!g().sent?.again}" @click="${a.loadGame}">Done</button>
         </div>
         ${play(a)}
         ${submit(a)}

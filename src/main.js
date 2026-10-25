@@ -1127,11 +1127,13 @@ const actions = {
     if (g.loading || !base) return;
     state.game = { ...g, loading: true, error: '' };
     try {
-      const { by, streams } = await base.gameStreams();
+      const { by, streams, round, played: last } = await base.gameStreams();
       const favorites = readFavorites(walletPublic?.evmAddress);
       const queue = queueOf(streams, favorites);
-      state.game = { ...state.game, loading: false, loaded: Date.now(), by, streams, queue, favorites,
-        favs: favoritesIn(queue, favorites), index: 0, picks: {}, screen: 'play', move: '', sendError: '', sent: null };
+      // played with the game this round: its Sent screen again (predictions made elsewhere are played as usual)
+      const sent = last && round != null && last.round === round ? { ...last, again: true } : null;
+      state.game = { ...state.game, loading: false, loaded: Date.now(), by, streams, queue, favorites, round,
+        favs: favoritesIn(queue, favorites), index: 0, picks: {}, screen: 'play', move: '', sendError: '', sent };
     } catch (err) {
       state.game = { ...state.game, loading: false, error: errorText(err) };
     }
@@ -1173,13 +1175,20 @@ const actions = {
     const chosen = g.queue.filter((s) => g.picks[s.streamId]);
     const picks = chosen.filter((s) => !played(s)).map((s) => ({ gameId: s.gameId, streamId: s.streamId, direction: g.picks[s.streamId] }));
     if (!chosen.length || g.sending) return undefined;
-    if (!picks.length) return void (state.game = { ...g, sent: { hash: null, by: g.by, count: chosen.length } });
+    const note = (sent) => base.notePlay(sent).catch((err) => console.warn('[satori] game', err));
+    if (!picks.length) {
+      const sent = { hash: null, by: g.by, count: chosen.length, at: Math.floor(Date.now() / 1000), round: g.round };
+      state.game = { ...g, sent };
+      return void note(sent);
+    }
     const run = async () => {
       state.game = { ...state.game, sending: true, sendError: '' };
       try {
         const r = await baseAction('play', () => base.playHand(picks));
         activity.wallet('play', `Sent ${picks.length} prediction${picks.length === 1 ? '' : 's'} to the Satori contract by hand`);
-        state.game = { ...state.game, sending: false, sent: { ...r, count: chosen.length } };
+        const sent = { ...r, count: chosen.length };
+        state.game = { ...state.game, sending: false, sent };
+        void note(sent);
       } catch (err) {
         state.game = { ...state.game, sending: false, sendError: errorText(err) };
       }

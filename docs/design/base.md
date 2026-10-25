@@ -422,8 +422,12 @@ between the header and the tab bar.
   Submit predictions, one `predictMultipleWithPayloads`). With more than one
   favorite, once all of them were shown and something was picked, Submit
   slides in under the buttons (pushing them up) and opens it at once.
-- **Already predicted** (this round, or in the last 24 hours, e.g. the
-  app's own batch): the game plays as usual, and Submit says it was sent
+- **Played with the game this round**: each Submit is noted
+  (`game_last_play`: round, time, count, hash or none), and while it is the
+  same round the tab opens on its Sent screen ("Played today. The next game
+  opens tomorrow.").
+- **Already predicted, not with the game** (this round, or in the last 24
+  hours, e.g. the app's own batch): the game plays as usual, and Submit says it was sent
   without sending those (owner, 2026-10-25: it doesn't matter, and must not
   confuse). Only the others go in the transaction; none left: nothing sent.
 - Nothing to play otherwise (no games, staked elsewhere, a stream's value

@@ -578,7 +578,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
      * The player: the alias when the wallet is staked with it, else the wallet. → { by: 'alias' | 'wallet', streams }
      */
     async gameStreams() {
-      if (!status) await refresh();
+      await refresh(); // the round now (a game played this round shows its Sent screen) and whom the wallet stakes with
       const { chain } = await chainNow();
       const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
       const player = by === 'alias' ? alias.evmAddress : walletAddress;
@@ -590,12 +590,17 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
           cadenceMinutes: g.cadenceMinutes, weight: String(g.weight), blocked,
           history: history.map((h) => ({ hour: h.hour, value: String(h.value) })) };
       }));
-      return { by, streams };
+      return { by, streams, round: view().round, played: (await db.get('game_last_play')) ?? null };
+    },
+
+    /** Note a game's Submit (sent, or done without sending: the Game tab's played streams): { round, at, count, hash }. */
+    async notePlay(play) {
+      await db.set('game_last_play', play);
     },
 
     /**
      * The Game tab's predictions, one transaction: from the alias when the wallet is staked with it, else from the
-     * wallet (Unlock, or its wallet app). picks: [{ gameId, direction }]. → { hash, at, by }
+     * wallet (Unlock, or its wallet app). picks: [{ gameId, direction }]. → { hash, at, by } (noted: notePlay, with `count`)
      */
     async playHand(picks) {
       if (!picks?.length) throw new Error('No predictions to send.');
@@ -604,7 +609,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       return act('base', async (chain, step) => {
         step('send');
         const r = await chain.sendBatch(player, picks.map(({ gameId, direction }) => ({ gameId, direction })), { onSent: () => step('confirm') });
-        return { hash: r.hash, at: r.at, by };
+        return { hash: r.hash, at: r.at, by, round: Math.floor(r.at / ROUND_S) };
       });
     },
 

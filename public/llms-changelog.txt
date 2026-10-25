@@ -6,6 +6,8 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- Played with the game this round: the tab opens on its Sent screen
+  (`game-sent`, `game-tomorrow`; no `game-done`).
 - A stream already predicted (this round or in the last 24 hours) plays as
   usual; Submit reports it sent without sending it (`game-sent`, no
   transaction when none was needed).
