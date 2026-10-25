@@ -97,14 +97,14 @@ A version this **load** found (waiting from an earlier visit, or installed
 by the load's own check) is already the code the page runs (the page is
 network-first), so it just takes over: no message, no second reload (owner,
 2026-10-25: a refresh must not end on "Update ready"). One found later, by
-the hourly check or the check each time the page **becomes visible again**
+the twice-daily check or the check each time the page **becomes visible again**
 (the person back in the browser), makes the page show a quiet **Update ready,
 reload** in the header (`status().app.update`). Clicking it (or `satori.update()`) tells the waiting
 worker to take over and reloads the page once it has. Nothing reloads on its
 own: a Base batch or a central submission may be in flight, and the old
 version keeps its files until then. Without a click the new version takes
 over when every Satori window and tab is closed. The page asks the browser to
-look for a new version every hour, so a window left open for days still
+look for a new version every 12 hours, so a window left open for days still
 finds one; the network-first page means a plain reload also loads the new
 code.
 

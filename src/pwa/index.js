@@ -54,7 +54,7 @@ export function registerWorker() {
     };
     waiting();
     reg.addEventListener('updatefound', () => reg.installing?.addEventListener('statechange', waiting));
-    setInterval(look, 3600_000); // a window left open still finds a new version
+    setInterval(look, 12 * 3600_000); // a window left open still finds a new version (twice a day)
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') look(); }); // back to the page
   }).catch((err) => console.warn('[satori] service worker', err));
 }

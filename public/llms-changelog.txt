@@ -7,7 +7,7 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 ## Changed 2026-10-25 (updates)
 
 - A new version found by the load itself takes over silently (`status().app.update` stays false); one found
-  later (hourly, or when the page becomes visible again) sets it, as before.
+  later (every 12 hours, or when the page becomes visible again) sets it, as before.
 
 ## Changed 2026-10-25 (the game)
 
