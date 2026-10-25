@@ -164,7 +164,7 @@ export function baseModels(batch, baseFits = new Map()) {
   // a game with no model (no values yet: sent by the no-opinion rule) has no forecast to show
   const all = [...batch.games.filter((g) => g.model).map((g) => [g, true]), ...(batch.dropped ?? []).filter((g) => g.model).map((g) => [g, false])];
   return all.map(([g, sent]) => {
-    const name = `${g.named ? 'Named stream' : 'Stream'} ${g.streamId}`;
+    const name = `${g.named ? 'Sentiment stream' : 'Stream'} ${g.streamId}`;
     const stream = String(g.streamId);
     const dir = g.direction === UP ? 'up' : 'down'; // as sent (a tie follows the stream's last move: g.rule)
     const fit = 'tests' in g || 'score' in g ? g : baseFits.get(`${batch.hash ?? batch.round}:${g.streamId}`) ?? {};

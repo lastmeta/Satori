@@ -560,7 +560,7 @@ gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 | The dev server's default RPC is a local fork (`/rpc`). | By default a dev checkout does not send to a public chain. |
 | Every contract write's gas limit is the estimate + 500,000. | The token's try/catch hook ([issue](../issues/token-hook-gas-estimate.md)). |
 | Stake is offered as advice with the risk said, and a stake out of sync is detected and shown (Lite and the dapp do neither). | The token-hook bug was live on D6 (fixed in D7): staking could freeze the wallet, through anyone else's transaction. |
-| A named stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
+| A Sentiment stream (a signed counter) is forecast on changes (`bar1d`). | Lite's engine falls back to the last value, which votes DOWN forever. |
 | A tie (the forecast equals the latest value) follows the stream's last move; only a flat history is DOWN. Lite answers DOWN on every tie (`direction_from`, BP:141-143). | The owner's choice (2026-10-19): a no-opinion model should not cast the same DOWN on every stream and every neuron. |
 
 ## UI and agents

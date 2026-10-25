@@ -380,7 +380,7 @@ Every method is below; `await satori.status()` shows everything at once.
   24 h a round scores (horizon = max(24 h, the cadence), in n = max(1,
   floor(horizon / max(12 h, cadence))) equal steps: an hourly stream in two
   12 h steps, a 13–24 h cadence and the daily default stream in one 24 h
-  step; a named stream, a signed counter, as `bar1d`); direction UP
+  step; a Sentiment stream, a signed counter, as `bar1d`); direction UP
   (payload `0x01`) if that forecast > the latest value, DOWN (`0x02`) if
   below, as the Docker neuron; a tie follows the stream's last move (its
   most recent change, up or down), and only a flat history is DOWN (the

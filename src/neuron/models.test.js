@@ -148,7 +148,7 @@ describe('the list: every model, named for the stream it predicts', () => {
         error: 'DuplicatePrediction' }] };
     const list = baseModels(batch);
     expect(list.map((m) => [m.id, m.name, m.kind, m.quality.mark])).toEqual([
-      ['base:1', 'Stream 1', 'naive', 'tie'], ['base:3', 'Named stream 3', 'bar1d', 'better'], ['base:5', 'Named stream 5', 'bar1', null]]);
+      ['base:1', 'Stream 1', 'naive', 'tie'], ['base:3', 'Sentiment stream 3', 'bar1d', 'better'], ['base:5', 'Sentiment stream 5', 'bar1', null]]);
     expect(list[1].outputs[0]).toMatchObject({ latest: { value: -2, ts: null }, forecast: { value: 4, step: 43_200, horizon: 86_400, at: 9000 },
       direction: 'up', destinations: [{ to: 'contract', status: 'sent', when: 9000, ref: { round: 20743, game: 13, direction: 'up', tx: '0xabc' } }] });
     expect(list[0].outputs[0].direction).toBe('down'); // as sent (a batch before the tie rule: no rule kept)
