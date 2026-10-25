@@ -6,6 +6,9 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-25 (the game)
 
+- Every move in the game slides: the stream follows a swipe, then slides off as the next slides on; the
+  buttons stay, but for the last stream, when they leave with it and the submit screen slides on.
+
 - `game-submit` is a full-width blue card button with SUBMIT engraved; the line is
   thicker, inset so its round ends show.
 

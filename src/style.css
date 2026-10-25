@@ -112,20 +112,17 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .tabbar a[aria-current="page"] { color: var(--accent); font-weight: 600; }
 /* the Game tab (src/ui/game.js): the stream, its line and the two buttons fill the screen between the header and the
    tab bar; greyed out under the switch while the app plays on its own */
-.game { display: flex; flex-direction: column; height: calc(100dvh - 60px - 32px - var(--bar) - env(safe-area-inset-bottom, 0px)); min-height: 380px; }
+.game { display: flex; flex-direction: column; height: calc(100dvh - 60px - 4px - var(--bar) - env(safe-area-inset-bottom, 0px)); min-height: 380px; }
+body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-area-inset-bottom, 0px)); } /* the game reaches down to the bar */
 .game-stage { position: relative; display: grid; flex: 1; min-height: 0; }
-.game-board { min-height: 0; display: grid; transition: opacity 0.3s ease, filter 0.3s ease; }
+.game-board { min-height: 0; display: grid; position: relative; overflow: hidden; margin: 0 -16px; padding: 0 16px 8px; /* edge to edge: a stream slides off the screen */ transition: opacity 0.3s ease, filter 0.3s ease; }
 .game[data-play="auto"] .game-board, .game:not([data-play]) .game-board { opacity: 0.4; filter: grayscale(1); }
 .play-switch { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); box-shadow: 0 8px 24px rgb(0 0 0 / 0.15); }
 .play-switch h2 { margin-top: 0; }
 .gmsg { align-self: center; justify-self: center; text-align: center; max-width: 420px; }
 .gplay, .gsubmit-screen { display: flex; flex-direction: column; min-height: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.gstream { flex: 1; min-height: 0; display: grid; overflow: hidden; }
+.gstream { flex: 1; min-height: 0; display: grid; }
 .gview { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
-.gstream[data-move="next"] .gview { animation: g-next 0.25s ease; }
-.gstream[data-move="back"] .gview { animation: g-back 0.25s ease; }
-@keyframes g-next { from { opacity: 0; transform: translateX(28px); } }
-@keyframes g-back { from { opacity: 0; transform: translateX(-28px); } }
 .ghead { display: flex; align-items: center; gap: 4px; }
 .gname { font-size: 1.2rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .glatest { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -160,8 +157,8 @@ code.block { display: block; margin-top: 8px; padding: 8px 10px; background: var
 .gcalls li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 .gcalls b[data-dir="up"] { color: var(--ok); }
 .gcalls b[data-dir="down"] { color: var(--bad); }
-@media (prefers-reduced-motion: reduce) { .gstream .gview { animation: none; } .gsubmit { transition: none; } }
-@media (min-width: 1024px) { .game { height: calc(100dvh - 68px - 32px); } }
+@media (prefers-reduced-motion: reduce) { .gsubmit { transition: none; } }
+@media (min-width: 1024px) { .game { height: calc(100dvh - 68px - 32px); } body[data-tab="game"] #app { padding-bottom: 32px; } }
 .tabmenu { position: relative; display: grid; }
 .menu-btn { min-width: 44px; min-height: 56px; padding: 0 6px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; }
 .menu-btn[data-current="true"], .menu-btn[aria-expanded="true"] { color: var(--accent); }

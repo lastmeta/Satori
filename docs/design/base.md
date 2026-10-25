@@ -417,7 +417,10 @@ between the header and the tab bar.
   counter), its line alone (no axes, grid, bars or numbers), then two big
   buttons: down, red, an arrow at -45° (pointing right and down), and up,
   green, at 45°. A press picks and moves on; a swipe left skips, a swipe
-  right goes back.
+  right goes back. Every move slides: the stream (name, star, value and
+  line) follows the finger, then slides off as the next slides on; the
+  buttons stay, except at the last stream, when they slide off with it and
+  the submit screen slides on (back: the same, reversed).
 - **Submit**: after the last stream, the submit screen (each call, then
   Submit predictions, one `predictMultipleWithPayloads`). With more than one
   favorite, once all of them were shown and something was picked, Submit

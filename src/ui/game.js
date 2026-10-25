@@ -1,6 +1,6 @@
 // The Game tab (docs/design/base.md#the-game): the Satori contract played by hand, a much simplified dapp. One stream
 // at a time, filling the screen: its name (with a star) and its latest value, its line, and two big buttons, down
-// (red) and up (green). A swipe left skips, a swipe right goes back. After the last stream, the submit screen; after
+// (red) and up (green). A swipe left skips, a swipe right goes back; every move slides (the screen follows the finger). After the last stream, the submit screen; after
 // more than one favorite, Submit shows under the buttons. While the app plays on its own (automatic) the game is
 // greyed out under the switch to play by hand (and back: Settings › Satori contract predictions). Its flow: src/ui/gameflow.js.
 import { html } from '@arrow-js/core';
@@ -28,33 +28,122 @@ const ARROW_UP = () => engraved('M6 18L18 6M9 6h9v9');
 const ARROW_DOWN = () => engraved('M6 6l12 12M18 9v9H9');
 const STAR = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path></svg>`;
 
-/** A swipe on the stream: left skips it, right goes back (a mostly sideways move of 50 px or more). */
-function swipe(a) {
-  let start = null;
+// ── moving between screens: the stream on screen slides off and the next slides on (the buttons stay, but for the
+// last stream, when they go with it and the submit screen comes on); a swipe drags it first. The one leaving is a copy
+// (ArrowJS has already drawn the next), laid over the board while it slides off.
+const SLIDE_MS = 300;
+const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const boardEl = () => document.querySelector('[data-test=game-board]');
+/** What moves: the whole screen when it changes (play ↔ submit), else the stream alone. */
+const movingEl = (whole) => {
+  const b = boardEl();
+  if (!b) return null;
+  if (g().screen === 'submit') return b.querySelector('.gsubmit-screen');
+  return b.querySelector(whole ? '.gplay' : '.gview');
+};
+let sliding = false;
+
+/**
+ * Change what is shown (`change`, the state's step) with a slide: dir 1 forward (off to the left, the next in from
+ * the right), -1 back; `whole`: the screen changes; `from`: where a drag left it (px).
+ */
+async function slide(dir, whole, change, from = 0) {
+  const out = movingEl(whole);
+  const b = boardEl();
+  if (sliding || !out || !b || reduced()) return void change();
+  sliding = true;
+  const [br, r] = [b.getBoundingClientRect(), out.getBoundingClientRect()];
+  const copy = out.cloneNode(true);
+  for (const el of [copy, ...copy.querySelectorAll('[data-test]')]) el.removeAttribute('data-test');
+  copy.setAttribute('aria-hidden', 'true');
+  copy.inert = true;
+  Object.assign(copy.style, { position: 'absolute', left: `${r.left - br.left}px`, top: `${r.top - br.top}px`, width: `${r.width}px`,
+    height: `${r.height}px`, margin: '0', pointerEvents: 'none', transform: `translateX(${from}px)` });
+  out.style.transform = '';
+  b.append(copy);
+  change();
+  await Promise.resolve(); // ArrowJS draws the next in a microtask
+  await Promise.resolve();
+  const w = b.clientWidth;
+  const inc = movingEl(whole);
+  const opts = { duration: SLIDE_MS, easing: 'cubic-bezier(0.3, 0, 0.2, 1)' };
+  const gone = copy.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${-dir * w}px)` }], opts).finished;
+  inc?.animate([{ transform: `translateX(${dir * w + from}px)` }, { transform: 'translateX(0)' }], opts);
+  await gone.catch(() => {});
+  copy.remove();
+  sliding = false;
+}
+
+/** The game's moves, each with its slide. */
+function moves(a) {
+  const atLast = () => g().screen === 'play' && g().index >= g().queue.length - 1;
   return {
-    down: (e) => { start = { x: e.clientX, y: e.clientY }; },
-    up: (e) => {
-      if (!start) return;
-      const dx = e.clientX - start.x;
-      const dy = e.clientY - start.y;
-      start = null;
-      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-      if (dx < 0) a.gameNext();
-      else a.gameBack();
+    next: (from) => (g().screen === 'play' ? slide(1, atLast(), a.gameNext, from) : undefined),
+    back: (from) => {
+      if (g().screen === 'submit') return slide(-1, true, a.gameBack, from);
+      return g().index > 0 ? slide(-1, false, a.gameBack, from) : undefined;
     },
-    cancel: () => { start = null; },
+    pick: (d) => slide(1, atLast(), () => a.gamePick(d)),
+    submitNow: () => slide(1, true, a.gameSubmitNow),
   };
 }
+
+/**
+ * A swipe: the stream (or the submit screen) follows the finger sideways; let go past 60 px and it goes on (left: the
+ * next, skipping this one) or back (right); else it springs back. Nothing to go back to: it gives a little and returns.
+ */
+function swipe(m) {
+  let start = null;
+  let dx = 0;
+  let dragging = false;
+  const target = () => movingEl(false);
+  const canBack = () => g().screen === 'submit' || g().index > 0;
+  const canNext = () => g().screen === 'play';
+  const settle = (el) => {
+    if (!el || !dx) return;
+    el.animate([{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }], { duration: 200, easing: 'ease-out' });
+    el.style.transform = '';
+  };
+  return {
+    down: (e) => { if (!sliding) { start = { x: e.clientX, y: e.clientY }; dx = 0; dragging = false; } },
+    move: (e) => {
+      if (!start) return;
+      const x = e.clientX - start.x;
+      const y = e.clientY - start.y;
+      if (!dragging && Math.abs(x) > 8 && Math.abs(x) > Math.abs(y) * 1.5) dragging = true;
+      if (!dragging) return;
+      dx = (x < 0 ? canNext() : canBack()) ? x : x * 0.25;
+      const el = target();
+      if (el) el.style.transform = `translateX(${dx}px)`;
+    },
+    up: () => {
+      if (!start) return;
+      start = null;
+      if (!dragging) return;
+      dragging = false;
+      draggedAt = Date.now();
+      const el = target();
+      if (dx <= -60 && canNext()) return void m.next(dx);
+      if (dx >= 60 && canBack()) return void m.back(dx);
+      settle(el);
+    },
+    cancel: () => { start = null; dragging = false; settle(target()); },
+  };
+}
+let draggedAt = 0;
+/** A tap right after a drag is the drag's end, not a press. */
+const tap = (fn) => () => { if (Date.now() - draggedAt > 250) fn(); };
 
 const callWord = (d) => (d === UP ? 'up' : 'down');
 
 function play(a) {
-  const sw = swipe(a);
+  const m = moves(a);
+  const sw = swipe(m);
   const starred = () => !!current() && g().favorites.includes(current().streamId);
   const picked = (d) => () => String(!!current() && g().picks[current().streamId] === d);
   const early = () => submitEarly({ index: g().index, favorites: g().favs, picks: pickCount() });
   return html`
-  <div class="gplay" data-test="game-play" hidden="${showing('play')}" @pointerdown="${sw.down}" @pointerup="${sw.up}" @pointercancel="${sw.cancel}">
+  <div class="gplay" data-test="game-play" hidden="${showing('play')}" @pointerdown="${sw.down}" @pointermove="${sw.move}" @pointerup="${sw.up}" @pointercancel="${sw.cancel}">
     <div class="gstream" data-move="${() => g().move || false}">${() => {
       const s = current();
       return s ? html`<div class="gview">
@@ -67,27 +156,28 @@ function play(a) {
       </div>`.key(`${s.streamId}:${g().index}:${starred()}`) : ''; // plain values inside: drawn again when one changes (home.js cell)
     }}</div>
     <div class="gbtns">
-      <button class="gbtn down" data-test="game-down" aria-label="Down" aria-pressed="${picked(DOWN)}" @click="${() => a.gamePick(DOWN)}">${ARROW_DOWN()}</button>
-      <button class="gbtn up" data-test="game-up" aria-label="Up" aria-pressed="${picked(UP)}" @click="${() => a.gamePick(UP)}">${ARROW_UP()}</button>
+      <button class="gbtn down" data-test="game-down" aria-label="Down" aria-pressed="${picked(DOWN)}" @click="${tap(() => m.pick(DOWN))}">${ARROW_DOWN()}</button>
+      <button class="gbtn up" data-test="game-up" aria-label="Up" aria-pressed="${picked(UP)}" @click="${tap(() => m.pick(UP))}">${ARROW_UP()}</button>
     </div>
     <div class="gsubmit" data-test="game-submit-early" data-open="${() => String(early())}" inert="${() => !early()}"><div>
-      <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${a.gameSubmitNow}"><span class="engraved">SUBMIT</span></button>
+      <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${tap(m.submitNow)}"><span class="engraved">SUBMIT</span></button>
     </div></div>
   </div>`;
 }
 
 function submit(a) {
-  const sw = swipe(a);
+  const m = moves(a);
+  const sw = swipe(m);
   const calls = () => g().queue.filter((s) => g().picks[s.streamId]);
   return html`
-  <div class="gsubmit-screen" data-test="game-submit-screen" hidden="${showing('submit')}" @pointerdown="${sw.down}" @pointerup="${sw.up}" @pointercancel="${sw.cancel}">
+  <div class="gsubmit-screen" data-test="game-submit-screen" hidden="${showing('submit')}" @pointerdown="${sw.down}" @pointermove="${sw.move}" @pointerup="${sw.up}" @pointercancel="${sw.cancel}">
     <h2>${() => (pickCount() ? `Submit ${pickCount()} prediction${pickCount() === 1 ? '' : 's'}?` : 'No predictions yet')}</h2>
     <ul class="gcalls" data-test="game-calls">${() => calls().map((s) => html`<li><span>${s.name}</span><b data-dir="${callWord(g().picks[s.streamId])}">${callWord(g().picks[s.streamId])}</b></li>`.key(`${s.streamId}:${g().picks[s.streamId]}`))}</ul>
     <p class="muted small">${() => (g().by === 'alias' ? 'Sent from this app, for your staked wallet; it uses a little Base ETH for gas.'
       : 'Sent from your wallet; it uses a little Base ETH for gas.')}</p>
     <div class="actions">
       <button class="primary" data-test="game-send" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}">${() => (g().sending ? 'Sending…' : 'Submit predictions')}</button>
-      <button data-test="game-back" @click="${a.gameBack}">Back</button>
+      <button data-test="game-back" @click="${tap(() => m.back())}">Back</button>
     </div>
     ${unlockPrompt(a, 'game', 'send your predictions')}
     <p class="error small" role="alert" data-test="game-send-error" hidden="${() => !g().sendError}">${() => g().sendError}</p>
