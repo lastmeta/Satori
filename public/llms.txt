@@ -874,8 +874,8 @@ the page's JS context:
   `market-totals` (`market-earned`, `market-selling`, `market-buying`), `market-for-sale` with `market-item`
   (`market-price`, `market-record`, `buy-deposit`, `buy`), `market-refresh`, `market-sales` (`sell-row`),
   `market-bought` (`bought-row`). The Streams catalog's priced streams: `catalog-market`.
-- `await satori.sell(stream, price)` (only on the person's request): one of
-  this app's `<stream>_pred` at `price` SATORI per observation (a decimal
+- `await satori.sell(stream, price?)` (only on the person's request): one of
+  this app's `<stream>_pred` at `price` SATORI per observation (default `'0.00001'`) (a decimal
   string, `'0.001'`, at most 8 decimals), announced at once → `nostr()`.
   `await satori.unsell(stream)` → `nostr()`: free again (what buyers owe is
   still settled).

@@ -38,6 +38,7 @@ import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from 
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
 import { listingOf } from './neuron/market.js';
+import { DEFAULT_PRICE } from './ui/streams.js';
 import { formatEther } from 'viem';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
@@ -1108,7 +1109,7 @@ const actions = {
     }
   }),
   /** Paid streams (docs/design/market.md): a price on one of our `_pred`s, free again, Buy (the wallet: Unlock in place), Stop. */
-  sell: shownAt('marketError', (stream, f) => marketAction(`sell:${stream}`, () => nostr.sell(stream, f.price))),
+  sell: shownAt('marketError', (stream, f) => marketAction(`sell:${stream}`, () => nostr.sell(stream, String(f.price ?? '').trim() || DEFAULT_PRICE))),
   unsell: shownAt('marketError', (stream) => marketAction(`sell:${stream}`, () => nostr.unsell(stream))),
   buy(pubkey, stream, f) {
     state.networkError = '';
@@ -1622,7 +1623,7 @@ window.satori = {
   /** One watched prediction stream's record, with `pairs`: the last 28 scored { ts, predicted, actual, baseline }; null when not watched. */
   async record(pubkey, stream) { ready(); return nostr.record(pubkey, stream); },
   /** Sell one of this neuron's `<stream>_pred` streams at `price` SATORI per observation (only on the person's request). → nostr() */
-  async sell(stream, price) { ready(); return marketAction('sell', () => nostr.sell(stream, price)); },
+  async sell(stream, price = DEFAULT_PRICE) { ready(); return marketAction('sell', () => nostr.sell(stream, price ?? DEFAULT_PRICE)); },
   /** That stream free again. → nostr() */
   async unsell(stream) { ready(); return marketAction('unsell', () => nostr.unsell(stream)); },
   /**

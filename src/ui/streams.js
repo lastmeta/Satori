@@ -94,6 +94,9 @@ function buyerRow(x, a) {
   return html`<div class="small buyer" data-test="buyer" data-channel="${x.channel}"><span class="nowrap" title="${x.pubkey}">${shortKey(x.pubkey)}</span> · <span data-test="buyer-text">${buyerText(x)}</span><details class="mchange" data-test="payout"><summary>Paid into</summary><form @submit="${(e) => a.setPayout(x.channel, form(e))}"><input name="payout" autocomplete="off" required placeholder="0x…" aria-label="Address its payments go to" data-test="payout-address"><button class="small-btn" type="submit" data-test="payout-set" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `payout:${x.channel}` ? '…' : 'Set')}</button></form></details>${graceChange(x.channel, x.grace, a)}</div>`;
 }
 
+/** A stream's price per value when none is typed (owner, 2026-10-25), in SATORI. */
+export const DEFAULT_PRICE = '0.00001';
+
 export function sellRow(sub, a) {
   // One root node, no whitespace around it (see streamRow).
   const stream = `${sub.stream}_pred`;
@@ -101,7 +104,7 @@ export function sellRow(sub, a) {
   const busy = () => state.marketBusy === `sell:${stream}`;
   return html`<div class="crow" data-test="sell-row" data-stream="${stream}"><div class="cmain"><span class="sname">${stream}</span> <span class="muted small" data-test="sell-state">${() => saleText(sale())}</span>${() => (sale()?.buyers ?? []).filter((x) => !x.closing).map((x) => buyerRow(x, a).key(`${x.channel}:${x.paid}:${x.payout}:${x.grace}`))}</div>${() => (sale()
     ? html`<button class="small-btn" data-test="unsell" disabled="${() => !!state.marketBusy}" @click="${() => a.unsell(stream)}">${() => (busy() ? '…' : 'Make free')}</button>`
-    : html`<form class="sell" @submit="${(e) => a.sell(stream, form(e))}"><input name="price" inputmode="decimal" autocomplete="off" required aria-label="${`Price per observation of ${stream}, in SATORI`}" placeholder="SATORI each" data-test="sell-price"><button class="small-btn primary" type="submit" data-test="sell" disabled="${() => !!state.marketBusy}">${() => (busy() ? '…' : 'Sell')}</button></form>`)}</div>`;
+    : html`<form class="sell" @submit="${(e) => a.sell(stream, form(e))}"><input name="price" inputmode="decimal" autocomplete="off" aria-label="${`Price per observation of ${stream}, in SATORI (empty: ${DEFAULT_PRICE})`}" placeholder="${DEFAULT_PRICE}" data-test="sell-price"><button class="small-btn primary" type="submit" data-test="sell" disabled="${() => !!state.marketBusy}">${() => (busy() ? '…' : 'Sell')}</button></form>`)}</div>`;
 }
 
 /**
