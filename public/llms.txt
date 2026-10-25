@@ -1054,7 +1054,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   other paid or gated ones can't be subscribed yet).
 - **Wallet**: the **Base** card: the round, the RPC in plain words, the
   wallet's SATORI and ETH, Claimable (rewards, from the Satori Network,
-  airdrop), Staking ("Staked: 100 SATORI with this app"), Transfers
+  airdrop, a line each; Claim beside them when any is above 0), Staking ("Staked: 100 SATORI with this app"), Transfers
   ("Staked SATORI can't be sent until you unstake", "SATORI can be sent
   from <date> (round N)", "Free to send"), "Daily batch gas" (the alias's ETH as daily
   batches of gas), Last contract batch, Contract batch check, the alias

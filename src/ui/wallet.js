@@ -6,13 +6,16 @@ import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { backupPanel, fact, form, idRow, unlockPrompt } from './parts.js';
 import {
-  amountText, figure, claimableText, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
+  amountText, figure, claimParts, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
   referralText, referralNote, REFERRAL_PCT,
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
 import { workText } from '../neuron/work.js';
 import { OUT_OF_SYNC } from '../neuron/base.js';
 
+// Claimable, one line each (rewards, from the Satori Network, airdrop); Claim beside them when any is above 0
+const CLAIM_LINES = [0, 1, 2];
+const claimLine = (c, i) => { const [what, x] = claimParts(c)[i]; return `${amountText(x, 'SATORI')} ${what}`; };
 const BUSY = { stake: 'Staking…', unstake: 'Unstaking…', claim: 'Claiming…', send: 'Sending…' };
 
 /**
@@ -50,7 +53,8 @@ export function walletTab(a) {
       <div><div class="sub">ETH</div><div class="big" data-test="base-wallet-eth">${() => figure(b().wallet.eth)}</div></div>
     </div>
     <dl class="facts">
-      ${fact('Claimable', 'base-claimable', () => claimableText(b().claimable))}
+      <div class="fact"><dt>Claimable</dt><dd class="claim-dd"><span data-test="base-claimable">${CLAIM_LINES.map((i) => html`<span class="line">${() => claimLine(b().claimable, i)}</span>`)}</span>
+        <button data-test="base-claim" hidden="${() => !(Number(b().claimable?.total) > 0)}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button></dd></div>
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this app, below' : delegationText(b())))}
     </dl>
     <p class="error small" role="alert" data-test="base-low-gas" hidden="${() => !lowEth()}">The alias is low on Base ETH for the daily batch: ${() => gasText(b().alias)}. Send it a little (Details › Alias).</p>
@@ -58,7 +62,6 @@ export function walletTab(a) {
     <div class="actions">
       <button class="primary" data-test="base-stake" hidden="${staked}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? BUSY.stake : 'Stake with this app')}</button>
       <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
-      <button data-test="base-claim" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button>
     </div>
     <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().wallet.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
     <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your wallet's SATORI every round. The SATORI stays in the wallet and earns; it can't be sent while staked, or through the round after you unstake.</p>

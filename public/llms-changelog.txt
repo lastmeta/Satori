@@ -10,6 +10,9 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   its ETH and stake, the gas) and `claimable` (the claimable rewards and
   Claim). The ids inside are unchanged.
 - The hero keeps one height whatever it says; taller text grows it smoothly.
+- Wallet tab: Claimable is a line each (rewards, from the Satori Network,
+  airdrop) in `base-claimable` (`.line`), with `base-claim` beside them, shown
+  only when something is claimable (it left the actions row).
 
 ## Changed 2026-10-25 (Settings: the order)
 

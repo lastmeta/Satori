@@ -487,8 +487,9 @@ did not answer keeps the last answer and is asked again at the next read.
 Nothing is shown as an error. `base().claimable` = `{ rewards, drop, airdrop,
 total }` (`total`: the parts known). Home shows the total, the parts above 0
 under it ("2 from the Satori Network · 1 airdrop"; all three on hover), the
-Wallet card all three ("0 SATORI rewards · 3.6185 SATORI from the Satori
-Network · 0 SATORI airdrop"). Claim stays one button and runs the three.
+Wallet card all three, a line each ("0 SATORI rewards", "3.6185 SATORI
+from the Satori Network", "0 SATORI airdrop"), with Claim on their right only
+when the total is above 0. Claim stays one button and runs the three.
 Read-only, the owner's wallet `0xda47…8c91`: central2's proof 3.61850955
 SATORI, `alreadyMintedTo` 0, so 3.61850955 claimable.
 

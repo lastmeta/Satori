@@ -152,6 +152,8 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .fact { display: contents; }
 .facts dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 2px; }
 .facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.claim-dd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.claim-dd .line { display: block; }
 
 /* ── health icons: one element, its state picks the shape (CSS masks; the color is currentColor) ── */
 .ico { display: inline-block; width: 1em; height: 1em; background: currentColor; flex: none;

@@ -114,7 +114,8 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   central.root = '0xroot';
   central.proofs[V] = { root: '0xroot', address: V, amountWei: (5n * E18).toString(), amount: 5, proof };
   s.merkle.drop[V] = { amount: 5n * E18, proof };
-  await page.getByRole('button', { name: 'Claim' }).click();
+  await fact(page, 'refresh').click(); // Claim shows once a read finds something to claim
+  await fact(page, 'claim').click();
   await expect(fact(page, 'result')).toContainText('Rewards: claimed 3 SATORI', { timeout: 30_000 });
   await expect(fact(page, 'result')).toContainText('Merkle: claimed 5 SATORI');
   await expect(fact(page, 'result')).toContainText('Airdrop: claimed 7 SATORI');
@@ -199,14 +200,17 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(page.getByText(ASKS)).toBeVisible();
   await expect(page.evaluate(() => window.satori.claim())).rejects.toThrow('Unlock the wallet first');
   // Claim while locked asks for the passphrase in place, then claims, then the wallet locks again: it was unlocked for that
-  await page.getByRole('button', { name: 'Claim' }).click();
+  s.airdrop[V] = E18; // something to claim, so Claim shows
+  await fact(page, 'refresh').click();
+  await fact(page, 'claim').click();
   await page.getByLabel('Wallet passphrase to use the wallet').fill(PASS);
   await page.locator('[data-unlock-for=wallet]').getByRole('button', { name: 'Unlock' }).click();
   await expect(fact(page, 'result')).toContainText('Rewards: nothing to claim on-chain', { timeout: 30_000 });
+  await expect(fact(page, 'result')).toContainText('Airdrop: claimed 1 SATORI');
   await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
   expect(await page.evaluate(async () => (await window.satori.status()).unlocked)).toBe(false);
   base = (await page.evaluate(() => window.satori.status())).base;
-  expect(base).toMatchObject({ wallet: { staked: 'none', satori: '114' }, lastBatch: { round: ROUND + 1 } });
+  expect(base).toMatchObject({ wallet: { staked: 'none', satori: '115' }, lastBatch: { round: ROUND + 1 } });
   expect(sent(rpc).filter((f) => f === 'predictMultipleWithPayloads')).toHaveLength(2);
 
   // The agent API: stake() and unstake() (delegate() and undelegate() until 2026-10-18; no aliases).
@@ -247,7 +251,8 @@ test("the Satori Network's reward drop before it is claimed: Home's claimable re
   base = await page.evaluate(() => window.satori.base());
   expect(base.claimable).toEqual({ rewards: '0', drop: '2', airdrop: '1', total: '3' });
   await go(page, 'wallet');
-  await expect(fact(page, 'claimable')).toHaveText('0 SATORI rewards · 2 SATORI from the Satori Network · 1 SATORI airdrop');
+  await expect(fact(page, 'claimable').locator('.line')).toHaveText(['0 SATORI rewards', '2 SATORI from the Satori Network', '1 SATORI airdrop']);
+  await expect(fact(page, 'claim')).toBeVisible(); // something to claim: Claim beside the lines
 
   // no ETH on the wallet: Claim says so before it tries (and before asking for the passphrase)
   await go(page, 'home');
@@ -264,6 +269,8 @@ test("the Satori Network's reward drop before it is claimed: Home's claimable re
   expect(r).toMatchObject({ merkle: { amount: '2' }, airdrop: { amount: '1' }, rewards: { skipped: 'nothing to claim on-chain' } });
   await expect(page.locator('[data-test=claimable-amount]')).toHaveText('0');
   expect((await page.evaluate(() => window.satori.base())).claimable).toMatchObject({ drop: '0', total: '0' });
+  await go(page, 'wallet');
+  await expect(fact(page, 'claim')).toBeHidden(); // nothing left: no Claim
 });
 
 test('staking out of sync (the token-hook bug): Home red on the Contract chip, the Wallet card says it, Unstake explains', async ({ context, page }) => {
