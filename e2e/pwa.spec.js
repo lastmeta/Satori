@@ -144,14 +144,31 @@ test.describe.serial('a build, in a browser profile', () => {
     }
   });
 
-  test('a new version waits for "Update ready, reload", and the page never reloads on its own', async () => {
+  test('a reload that finds a new version runs it: the new worker takes over, with no "Update ready" and no second reload', async () => {
+    const file = new URL('../dist/sw.js', import.meta.url);
+    const built = readFileSync(file, 'utf8');
+    writeFileSync(file, `${built}// a newer version\n`);
+    try {
+      await reloadApp(page);
+      await page.evaluate(() => { window.sameDocument = true; });
+      await expect.poll(() => page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => !r.waiting && !r.installing && !!r.active
+        && r.active.scriptURL.endsWith('/sw.js'))), { timeout: LOAD_TIMEOUT }).toBe(true);
+      await page.waitForTimeout(1500);
+      await expect(page.locator('[data-test=update]')).toBeHidden();
+      expect(await page.evaluate(() => window.sameDocument)).toBe(true); // no reload
+    } finally {
+      writeFileSync(file, built);
+    }
+  });
+
+  test('a new version found later (back to the page) waits for "Update ready, reload", and the page never reloads on its own', async () => {
     await reloadApp(page);
     const file = new URL('../dist/sw.js', import.meta.url);
     const built = readFileSync(file, 'utf8');
     writeFileSync(file, `${built}// a new version\n`);
     try {
       await page.evaluate(() => { window.sameDocument = true; });
-      await page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r.update()));
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // back to the page: it looks for a new version
       await expect(page.locator('[data-test=update]')).toBeVisible({ timeout: LOAD_TIMEOUT });
       expect((await status(page)).app.update).toBe(true);
       await page.waitForTimeout(2000);

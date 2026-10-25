@@ -39,10 +39,23 @@ export function registerWorker() {
   if (!sw || !import.meta.env.PROD || registration) return;
   sw.register('/sw.js').then((reg) => {
     registration = reg;
-    const waiting = () => setApp({ update: !!(reg.waiting && reg.active) });
+    // A new version found by this load (waiting from before, or installed by the load's own check) is the code this
+    // page already runs (the page is network-first): it just takes over, no reload and nothing said. One found later
+    // (the hourly check, or on coming back to the page) waits for "Update ready, reload".
+    let byLoad = true;
+    const waiting = () => {
+      const has = !!(reg.waiting && reg.active);
+      if (has && byLoad) return void reg.waiting.postMessage('update');
+      setApp({ update: has });
+    };
+    const look = () => {
+      byLoad = false;
+      reg.update().catch(() => {});
+    };
     waiting();
     reg.addEventListener('updatefound', () => reg.installing?.addEventListener('statechange', waiting));
-    setInterval(() => reg.update().catch(() => {}), 3600_000); // a window left open still finds a new version
+    setInterval(look, 3600_000); // a window left open still finds a new version
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') look(); }); // back to the page
   }).catch((err) => console.warn('[satori] service worker', err));
 }
 
