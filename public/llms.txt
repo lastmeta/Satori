@@ -358,7 +358,7 @@ Every method is below; `await satori.status()` shows everything at once.
   two cadences ahead and is scored one ahead here, like every stream.
 - Paid streams (docs/design/market.md): satorilib's data-stream market (the
   same kinds and fields), paid in SATORI through the Satori contract's
-  payment channels (PaymentChannels, `0xeF3f…976c`) instead of Evrmore.
+  payment channels (PaymentChannels, `0xAB94…b0C8`) instead of Evrmore.
   **Sell**: a price per observation on one of this app's `<stream>_pred`;
   its 34600 says `encrypted: true`, `price_per_obs` (the one price, in
   satoshis: 10⁻⁸ SATORI) and `metadata.market = { chain, contract, token,

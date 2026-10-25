@@ -92,7 +92,7 @@ check(await inSync(seller), 'the seller\'s stake is still in sync: the hook ran 
 
 console.log('\n5. the buyer\'s wallet stakes with its alias: it can\'t fund a channel now, the channel keeps paying');
 await chain.delegate({ alias: buyer.alias, wallet: buyer.wallet });
-const staked = "Your wallet is staked with this neuron, so it can't send SATORI: a channel needs SATORI the wallet can send.";
+const staked = "Your wallet is staked with this app, so it can't send SATORI: a channel needs SATORI the wallet can send.";
 await refused(() => channels.openChannel({ wallet: buyer.wallet, alias: buyer.alias, payee: seller.wallet.evmAddress, deposit: E18 }),
   staked, buyer.wallet.evmAddress);
 await refused(() => channels.topUp(buyer.wallet, id, E18), staked, buyer.wallet.evmAddress);

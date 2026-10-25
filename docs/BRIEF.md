@@ -146,7 +146,7 @@ curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" ht
 What the owner asked for: a data-stream marketplace on the Satori relays and the Base contract. A seller sets a price per observation; a buyer pays tiny SATORI amounts per observation through a payment channel, with no gas per payment. Lite's Evrmore flow, ported, nothing more.
 - Done and live:
   - a relay everyone can reach: `wss://relay.satorinet.io`;
-  - the channel contract: `PaymentChannels` at `0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c` (Base Sepolia, the same address everywhere; contract repo `humble` `523af9a6`), `contract/docs/design/payment-channels.md`;
+  - the channel contract: `PaymentChannels` v2 at `0xAB9408f9ec330351A21497c87E3d24218413b0C8` (Base Sepolia, the same address everywhere; contract repo `humble` `ffdbe07b`: reusable channels, a per-channel grace period, the payee's payout address), `contract/docs/design/payment-channels.md`;
   - sell and buy in the browser neuron (`src/neuron/market.js`): satorilib's events and fields; the Evrmore channel swapped for the Base contract.
 - The owner's rulings (2026-10-21):
   - **One price:** Lite's `price_per_obs`, in satoshis (10⁻⁸ SATORI). `metadata.market` only says where to pay (chain, contract, token, payee). There are no Evrmore buyers.

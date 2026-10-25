@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-25 (market: PaymentChannels v2)
+
+- The market's channels are on PaymentChannels v2, `0xAB9408f9ec330351A21497c87E3d24218413b0C8` (Base Sepolia).
+  Channels opened on the old contract (`0xeF3f…976c`) are not followed.
+
 ## Changed 2026-10-25 (every stream we produce goes to the relays)
 
 - After each poll, the Satori Network predictions are published as `<stream>_pred`; the Satori contract's calls as

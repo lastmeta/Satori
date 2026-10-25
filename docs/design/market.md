@@ -8,7 +8,7 @@ amount of SATORI per observation and buys others' streams, paid through
 **payment channels** on Base, with no gas per payment. The contract is
 `PaymentChannels` (`contract/satori/contracts/channels/PaymentChannels.sol`,
 its design note `contract/docs/design/payment-channels.md`), deployed by
-CREATE2 at **`0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c`**, the same
+CREATE2 at **`0xAB9408f9ec330351A21497c87E3d24218413b0C8`** (v2), the same
 address on every chain (Base Sepolia, the local fork, Base mainnet later).
 
 It has two parts: selling and buying over the relays (`src/neuron/market.js`,

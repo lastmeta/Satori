@@ -121,7 +121,7 @@ forge or change one: the signature is checked against the chain.
 Built 2026-10-20: `PaymentChannels`, in the contract repo
 (`contract/satori/contracts/channels/PaymentChannels.sol`, branch
 `humble`; design and tests in `contract/docs/design/payment-channels.md`).
-It is deployed at **`0xeF3f87042cd9619729E5D69Da2fF90F89EA6976c`** on Base
+It is deployed (v2, 2026-10-25) at **`0xAB9408f9ec330351A21497c87E3d24218413b0C8`** on Base
 Sepolia, by CREATE2, so the same address on every chain.
 
 ```

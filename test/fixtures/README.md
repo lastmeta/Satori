@@ -44,7 +44,7 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   `src/chain/abi.test.js`).
 - `abi-channels.json`: PaymentChannels' whole ABI (functions, events with
   their indexed inputs, errors), from the Hardhat artifact of the build
-  deployed at `0xeF3f…976c` (`ABI_SNAPSHOT=channels`, `src/chain/abi.test.js`).
+  deployed at `0xAB94…b0C8` (v2) (`ABI_SNAPSHOT=channels`, `src/chain/abi.test.js`).
 - `channels-vectors.json`: channel ids and voucher digests computed once by
   the deployed PaymentChannels on a fork (`cast call`; the commands are in
   the file), for `src/chain/channels.test.js`.
