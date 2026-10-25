@@ -26,7 +26,7 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   await chip(page).click();
   await expect(t(page, 'contract-card')).toHaveAttribute('data-open', 'true');
   expect(await page.evaluate(() => document.body.dataset.tab)).toBe('home');
-  await expect.poll(() => checks(page)).toEqual(['stake:bad', 'gas:bad', 'today:wait']);
+  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'stake:bad', 'gas:bad', 'today:wait']);
   await expect(t(page, 'contract-stake')).toBeVisible();
   await expect(t(page, 'contract-fund-address')).toHaveText(alias.address);
   await t(page, 'contract-qr-toggle').click();
@@ -36,15 +36,15 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   await page.waitForTimeout(400);
   await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/contract-card.png' : test.info().outputPath('contract-card.png'), fullPage: true });
   expect(await page.evaluate(() => window.satori.contract())).toMatchObject({ play: 'auto', predictedToday: false,
-    checks: [{ id: 'stake', state: 'bad', fix: 'stake' }, { id: 'gas', state: 'bad', fix: 'fund', address: alias.address }, { id: 'today', state: 'wait' }] });
+    checks: [{ id: 'satori', state: 'bad' }, { id: 'stake', state: 'bad', fix: 'stake' }, { id: 'gas', state: 'bad', fix: 'fund', address: alias.address }, { id: 'today', state: 'wait' }] });
 
   // by hand, from the card: the wallet plays; its gas; Play
   await t(page, 'contract-play-manual').click();
-  await expect.poll(() => checks(page)).toEqual(['free:ok', 'gas:bad', 'today:wait']);
+  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'gas:bad', 'today:wait']);
   await expect(t(page, 'contract-fund-address')).toHaveText(wallet.address);
   rpc.eth[wallet.address.toLowerCase()] = 10n ** 17n;
   await page.evaluate(() => window.satori.base());
-  await expect.poll(() => checks(page)).toEqual(['free:ok', 'gas:ok', 'today:wait']);
+  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'gas:ok', 'today:wait']);
   await expect(chip(page)).toHaveAttribute('data-tone', 'off');
   await expect(t(page, 'contract-play')).toBeVisible();
 
@@ -52,7 +52,7 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   await page.evaluate((p) => window.satori.unlock(p), PASS);
   await page.evaluate(() => window.satori.playGame([{ streamId: 1, direction: 'up' }]));
   await page.evaluate(() => window.satori.base());
-  await expect.poll(() => checks(page)).toEqual(['free:ok', 'gas:ok', 'today:ok']);
+  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'gas:ok', 'today:ok']);
   await expect(t(page, 'contract-arrow')).toHaveAttribute('data-on', 'true');
   await expect(chip(page)).toHaveAttribute('data-tone', 'idle');
   await expect(chip(page).locator('[data-test=chip-text]')).toHaveText('Played today');

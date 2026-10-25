@@ -13,11 +13,12 @@ export function contractChecks(b) {
   const staked = b.wallet?.staked;
   const today = predictedToday(b);
   const fund = (who, address) => ({ fix: 'fund', address, who });
+  // first, in both modes: SATORI to take part with (the owner's words)
+  const satori = { id: 'satori', state: Number(b.wallet?.satori ?? 0) >= 1 ? 'ok' : 'bad', text: 'Must have at least 1 SATORI in your wallet to participate' };
   if (b.play === 'manual') {
     const byAlias = staked === 'alias';
-    const out = [];
+    const out = [satori];
     if (staked === 'other') out.push({ id: 'free', state: 'bad', text: "Your wallet is staked with another address, so it can't play here. Unstake it on the Wallet tab." });
-    else out.push({ id: 'free', state: 'ok', text: byAlias ? 'Plays with your stake: this app sends your calls.' : 'Plays from your wallet.' });
     const noGas = byAlias ? b.alias?.noGas : b.wallet?.lowEth;
     out.push(noGas
       ? { id: 'gas', state: 'bad', text: `${byAlias ? "This app's address" : 'Your wallet'} needs a little Base ETH to send predictions.`,
@@ -26,7 +27,7 @@ export function contractChecks(b) {
     out.push(today ? { id: 'today', state: 'ok', text: 'Played today.' } : { id: 'today', state: 'wait', text: "Today's game isn't played yet.", fix: 'game' });
     return out;
   }
-  const out = [];
+  const out = [satori];
   if (staked === 'alias') out.push({ id: 'stake', state: 'ok', text: 'Staked with this app: it predicts with your SATORI.' });
   else if (staked === 'other') out.push({ id: 'stake', state: 'bad', text: 'Your wallet is staked with another address. Unstake it on the Wallet tab, then stake with this app.' });
   else out.push({ id: 'stake', state: 'bad', text: 'Not staked: stake with this app so it can predict for you.', fix: 'stake' });

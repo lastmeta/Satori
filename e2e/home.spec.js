@@ -181,7 +181,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
 
   // Stake: the wallet is locked, so the passphrase is asked for in the card; then it stakes.
   await page.locator('[data-test=action-button]').click();
-  const prompt = page.getByLabel('Wallet passphrase to stake');
+  const prompt = page.getByLabel('Wallet passphrase to stake', { exact: true });
   await expect(prompt).toBeVisible();
   await prompt.fill('not it');
   await page.locator('[data-unlock-for=card]').getByRole('button', { name: 'Unlock' }).click();
@@ -226,11 +226,13 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await page.unroute('**/rpc');
   await page.evaluate(() => window.satori.base());
 
-  // A chip goes to its tab; tabs are hash routes, kept over a reload.
+  // The Contract chip opens its card under the chips; another chip goes to its tab; tabs are hash routes, kept over a reload.
   await chip('contract').click();
-  await expect(page).toHaveURL(/#wallet$/);
-  await expect(page.locator('[data-test=wallet-tab]')).toBeVisible();
-  await expect(page.locator('[data-test=tab-wallet]')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('[data-test=contract-card]')).toHaveAttribute('data-open', 'true');
+  await chip('network').click();
+  await expect(page).toHaveURL(/#streams$/);
+  await expect(page.locator('[data-test=streams-tab]')).toBeVisible();
+  await expect(page.locator('[data-test=tab-streams]')).toHaveAttribute('aria-current', 'page');
   expect(await page.evaluate(() => window.satori.go('#settings'))).toBe('settings');
   await expect(page.locator('#settings-keys')).toBeVisible();
   await expect(page.evaluate(() => window.satori.go('nope'))).rejects.toThrow(/No such tab/);

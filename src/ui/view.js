@@ -1,5 +1,5 @@
-// The shell: the header, the tabs (Game · Home · Models · Streams · Wallet · Settings: on a phone a bar of Game, Home,
-// Models and a menu holding the rest; on a computer a top nav; hash routes #game … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
+// The shell: the header, the tabs (Game · Home · Models · Streams · Wallet · Settings: on a phone a bar of Game, Home
+// and Menu holding the rest; on a computer a top nav; hash routes #game … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
 // "open in another tab", "could not start", "the database can't be opened". ArrowJS. Every screen and tab is built once and shown or hidden, so
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
 import { html, watch } from '@arrow-js/core';
@@ -17,7 +17,7 @@ import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
 export const TABS = ['game', 'home', 'models', 'streams', 'wallet', 'settings'];
-const BAR = ['game', 'home', 'models']; // the phone's bar; the rest are in its menu (☰)
+const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
 const LABEL = { game: 'Game', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
@@ -52,9 +52,9 @@ const goTo = (a, t) => (e) => {
 const navLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`nav-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${LABEL[t]}</a>`;
 const barLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
 const menuLink = (a, t) => html`<a href="${`#${t}`}" role="menuitem" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${(e) => { state.menuOpen = false; goTo(a, t)(e); }}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
-/** The phone's menu (☰, at the bar's right edge, no word): Streams, Wallet, Settings, listed above it. */
+/** The phone's menu (☰ Menu, the bar's third button): Models, Streams, Wallet, Settings, listed above it. */
 const tabMenu = (a) => html`<div class="tabmenu">
-    <button class="menu-btn" data-test="tab-menu" aria-label="More" aria-haspopup="menu" aria-expanded="${() => String(!!state.menuOpen)}" data-current="${() => MENU.includes(state.tab)}" @click="${() => { state.menuOpen = !state.menuOpen; }}">${MENU_ICON()}</button>
+    <button class="menu-btn" data-test="tab-menu" aria-haspopup="menu" aria-expanded="${() => String(!!state.menuOpen)}" data-current="${() => MENU.includes(state.tab)}" @click="${() => { state.menuOpen = !state.menuOpen; }}">${MENU_ICON()}<span>Menu</span></button>
     <div class="menu-list" role="menu" data-test="tab-menu-list" hidden="${() => !state.menuOpen}">${MENU.map((t) => menuLink(a, t))}</div>
   </div>`;
 

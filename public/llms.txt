@@ -1043,9 +1043,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (`elsewhere`: this tab takes over when that one closes); "Satori's
   database can't be opened" (`damaged`: DuckDB's words, "Set aside and start
   again", Reload); "Satori could not start" (`fatal`: the error, Reload).
-- **Six tabs** once set up: on a phone a bar at the bottom with Game, Home,
-  Models and, at its right edge, a menu icon (three lines, no word;
-  `tab-menu`) that lists Streams, Wallet and Settings above it
+- **Six tabs** once set up: on a phone a bar at the bottom with Game, Home
+  (in the middle) and Menu (`tab-menu`, three lines) that lists Models,
+  Streams, Wallet and Settings above it
   (`tab-menu-list`; closes on a choice, a tap outside or Escape); a top nav
   on a computer (1024 px and wider). The URL's `#game`, `#home`, `#models`
   (and `#models/<id>`), `#streams`, `#wallet`, `#settings` open them (a link

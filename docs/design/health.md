@@ -444,6 +444,8 @@ health.js map them).
 The Contract chip opens a card under the chips (owner, 2026-10-25; the other
 chips still open their tab), and closes it again. It explains and checks:
 
+- First: "Must have at least 1 SATORI in your wallet to participate" (the
+  wallet's SATORI ≥ 1).
 - A phone, an arrow and the contract (a block): "This app" or "You, by
   hand", then "Predicted today" in green once a prediction went to the
   contract this round (the batch, or the game's Submit: `lastPlay`), else

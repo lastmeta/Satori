@@ -52,10 +52,10 @@ export function contractCard(a) {
       <span class="carrow" data-test="contract-arrow" data-on="${() => String(today())}"><i></i><small>${() => (today() ? 'Predicted today' : 'Not yet today')}</small></span>
       <span class="cnode">${BLOCK()}<small>Satori contract</small></span>
     </div>
-    <p class="muted small">Each day, up or down predictions go to the Satori contract on Base. It scores them on-chain, and the right ones earn SATORI. This is separate from the Satori Network, which is free.</p>
+    <p class="muted small">Each day, predictions are sent directly to the Satori smart contract on Base. They are automatically scored on-chain and earn SATORI.</p>
     <div class="segmented" role="group" aria-label="Who predicts">${[['auto', 'Automatic'], ['manual', 'By hand']].map(([mode, word]) => html`<button class="small-btn" data-test="${`contract-play-${mode}`}" aria-pressed="${() => String(b().play === mode)}" disabled="${() => !b().play}" @click="${() => a.setPlay(mode)}">${word}</button>`)}</div>
     <ul class="checks" data-test="contract-checks">${() => contractChecks(b()).map((c) => check(a, c).key(`${c.id}:${c.state}:${c.text}:${c.address ?? ''}`))}</ul>
-    ${unlockPrompt(a, 'contract', 'stake')}
+    ${unlockPrompt(a, 'contract', 'stake from the contract card')}
     <p class="error small" role="alert" hidden="${() => !(state.baseDid === 'stake' && state.baseError)}">${() => state.baseError}</p>
   </div></div></section>`;
 }
