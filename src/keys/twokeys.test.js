@@ -11,6 +11,8 @@ import {
 } from './index.js';
 import { verifyMessage } from 'viem';
 import { nostrPubkey } from '../nostr/event.js';
+import { keysFromWallet } from './derive.js';
+import { bytesToHex } from '@noble/hashes/utils';
 
 vi.setConfig({ testTimeout: 180_000 });
 
@@ -20,30 +22,32 @@ const { profiles } = JSON.parse(readFileSync(new URL('../../test/fixtures/profil
 const hex = (h) => Uint8Array.from(h.match(/../g), (b) => parseInt(b, 16));
 const [a, b] = fx.vectors;
 const PASS = 'correct horse battery';
+// the alias and the Nostr key derived from wallet b (docs/design/wallets.md#derived-keys)
+const d = keysFromWallet(hex(b.entropyHex));
+const dAlias = { hex: bytesToHex(d.alias), pubkey: publicKey(d.alias), address: evmAddress(publicKey(d.alias)), words: wordsOf(d.alias) };
 
 describe('newKeys: the record', () => {
-  test('alias and Nostr key in plain text (hex), the wallet sealed with its public key in clear; nothing of Docker\'s', async () => {
-    const r = await newKeys({ alias: hex(a.entropyHex), wallet: hex(b.entropyHex), nostr: fx.nostr.secretHex }, PASS);
+  test('the alias and the Nostr key derived from the wallet, in hex; the wallet sealed with its public key in clear', async () => {
+    const r = await newKeys({ wallet: hex(b.entropyHex) }, PASS);
     expect(r).toEqual({
-      v: 1, created: expect.any(Number), alias: a.entropyHex, nostr: fx.nostr.secretHex,
+      v: 1, created: expect.any(Number), alias: dAlias.hex, nostr: d.nostr, from: 'wallet',
       wallet: { pubkey: b.pubkey, kdf: expect.objectContaining({ name: 'PBKDF2', hash: 'SHA-256' }),
         cipher: expect.objectContaining({ name: 'AES-GCM' }), data: expect.any(String) },
       link: { message: expect.any(String), signature: expect.stringMatching(/^0x[0-9a-f]{130}$/) },
     });
     // the wallet's link to the alias (docs/design/wallets.md): its fixed text, signed by the wallet (EIP-191)
     const [title, alias, wallet, issued] = r.link.message.split('\n');
-    expect([title, alias, wallet]).toEqual(['Satori: link this alias to my wallet', `alias: ${a.ethAddress}`, `wallet: ${b.ethAddress}`]);
+    expect([title, alias, wallet]).toEqual(['Satori: link this alias to my wallet', `alias: ${dAlias.address}`, `wallet: ${b.ethAddress}`]);
     expect(Number(issued.slice('issued: '.length))).toBe(r.created);
     expect(await recoverMessageAddress({ message: r.link.message, signature: r.link.signature })).toBe(b.ethAddress);
     expect(Math.abs(r.created - Date.now() / 1000)).toBeLessThan(60); // when these keys were made: Home's first day
     expect(JSON.stringify(r)).not.toMatch(/yaml|address|wif|scripthash|words/i);
     expect(JSON.stringify(r)).not.toContain(b.entropyHex);
   });
-  test('a new random alias and Nostr key when not given', async () => {
-    const one = await newKeys({ wallet: hex(b.entropyHex) }, PASS);
-    const two = await newKeys({ wallet: hex(b.entropyHex) }, PASS);
-    expect(one.alias).not.toBe(two.alias);
-    expect(one.nostr).not.toBe(two.nostr);
+  test('the same wallet, the same alias and Nostr key: on any device, from its words or its key', async () => {
+    const [one, two] = [await newKeys({ wallet: hex(b.entropyHex) }, PASS), await newKeys({ wallet: hex(a.entropyHex) }, PASS)];
+    expect([one.alias, one.nostr]).toEqual([dAlias.hex, d.nostr]);
+    expect(two.alias).not.toBe(one.alias);
     expect(one.alias).not.toBe(b.entropyHex);
     expect(nostrPubkey(one.nostr)).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -55,20 +59,16 @@ describe('newKeys: the record', () => {
       expect((await unlockWallet(r, p)).wallet.pubkey, p).toBe(b.pubkey);
     }
   });
-  test('the alias and the wallet must differ; a bad Nostr key is refused', async () => {
-    await expect(newKeys({ alias: hex(a.entropyHex), wallet: hex(a.entropyHex) }, PASS)).rejects.toThrow(/same key/i);
-    await expect(newKeys({ wallet: hex(b.entropyHex), nostr: '00' }, PASS)).rejects.toThrow(/Nostr/);
-  });
 });
 
 describe('loadKeys and Unlock', () => {
   test('the alias signs on its own; the wallet\'s Base address shows while locked; Unlock, backup, Lock', async () => {
-    const r = await newKeys({ alias: hex(a.entropyHex), wallet: hex(b.entropyHex), nostr: fx.nostr.secretHex }, PASS);
+    const r = await newKeys({ wallet: hex(b.entropyHex) }, PASS);
     const k = loadKeys(r);
-    expect(k.alias).toMatchObject({ pubkey: a.pubkey, evmAddress: a.ethAddress });
-    expect(await verifyMessage({ address: a.ethAddress, message: 'c-0', signature: k.alias.signCentralLogin('c-0') })).toBe(true); // EIP-191
-    expect(k.alias.backup()).toEqual({ words: a.words, privateKey: `0x${a.entropyHex}` });
-    expect(k.nostr).toEqual({ secret: fx.nostr.secretHex, pubkey: fx.nostr.pubkeyHex });
+    expect(k.alias).toMatchObject({ pubkey: dAlias.pubkey, evmAddress: dAlias.address });
+    expect(await verifyMessage({ address: dAlias.address, message: 'c-0', signature: k.alias.signCentralLogin('c-0') })).toBe(true); // EIP-191
+    expect(k.alias.backup()).toEqual({ words: dAlias.words, privateKey: `0x${dAlias.hex}` });
+    expect(k.nostr).toEqual({ secret: d.nostr, pubkey: nostrPubkey(d.nostr) });
     expect(k.wallet).toEqual({ pubkey: b.pubkey, evmAddress: b.ethAddress, connected: null });
 
     await expect(unlockWallet(r, 'not it at all')).rejects.toThrow(/^Wrong passphrase$/);
@@ -111,64 +111,50 @@ describe('the passphrase each time: Backup and Send (docs/design/keys.md#backup)
     expect(used.locked).toBe(true);
   });
   test('backupKeys: each key or all three, from the passphrase every time; never without it', async () => {
-    const r = await newKeys({ alias: hex(a.entropyHex), wallet: hex(b.entropyHex), nostr: fx.nostr.secretHex }, PASS);
+    const r = await newKeys({ wallet: hex(b.entropyHex) }, PASS);
     await expect(backupKeys(r, 'wallet')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'alias', '')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'nostr', 'not it at all')).rejects.toThrow(/^Wrong passphrase$/);
-    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet' or 'nostr'/); // the name first, before 0.3 s
+    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet', 'nostr' or 'retired'/); // the name first, before 0.3 s
     expect(await backupKeys(r, 'wallet', PASS)).toEqual({ words: b.words, privateKey: `0x${b.entropyHex}` });
-    expect(await backupKeys(r, 'alias', PASS)).toEqual({ words: a.words, privateKey: `0x${a.entropyHex}` });
+    expect(await backupKeys(r, 'alias', PASS)).toEqual({ words: dAlias.words, privateKey: `0x${dAlias.hex}` });
+    expect(await backupKeys(r, 'retired', PASS)).toBe(null); // derived from the start: no earlier alias
     const nostr = await backupKeys(r, 'nostr', PASS);
-    expect(nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: fx.nostr.secretHex });
-    expect(await backupKeys(r, null, PASS)).toEqual({ alias: { words: a.words, privateKey: `0x${a.entropyHex}` },
+    expect(nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: d.nostr });
+    expect(await backupKeys(r, null, PASS)).toEqual({ alias: { words: dAlias.words, privateKey: `0x${dAlias.hex}` },
       wallet: { words: b.words, privateKey: `0x${b.entropyHex}` }, nostr });
     expect(await backupKeys(r, undefined, PASS)).toHaveProperty('wallet');
   });
 });
 
-describe('readDockerFiles: a Dockerized Neuron\'s files, translated', () => {
+describe('readDockerFiles: a Dockerized Neuron\'s wallet file, translated (its alias and Nostr files are not kept)', () => {
   const { password, wrongPassword } = fx.wallets;
   const current = fx.vectors[fx.wallets.current.vector];
-  test('current files and nostr.yaml → the three secrets; the record has the same keys', async () => {
-    const s = await readDockerFiles({ aliasText: a.walletYaml, walletText: fx.wallets.current.yaml, password, nostrText: fx.nostr.yaml });
-    expect(s).toEqual({ alias: hex(a.entropyHex), wallet: hex(current.entropyHex), nostr: fx.nostr.secretHex });
+  test('the current wallet file → its secret; the record derives the alias and the Nostr key from it', async () => {
+    const s = await readDockerFiles({ walletText: fx.wallets.current.yaml, password });
+    expect(s).toEqual({ wallet: hex(current.entropyHex) });
     const k = loadKeys(await newKeys(s, PASS));
-    expect([k.alias.pubkey, k.wallet.pubkey, k.nostr.pubkey]).toEqual([a.pubkey, current.pubkey, fx.nostr.pubkeyHex]);
+    const dc = keysFromWallet(hex(current.entropyHex));
+    expect([k.alias.pubkey, k.wallet.pubkey, k.nostr.secret]).toEqual([publicKey(dc.alias), current.pubkey, dc.nostr]);
     expect(k.wallet.evmAddress).toBe(current.ethAddress); // the same Base address as the Docker neuron's
   });
-  test('no nostr.yaml: no Nostr key, so newKeys makes one', async () => {
-    const s = await readDockerFiles({ aliasText: a.walletYaml, walletText: fx.wallets.current.yaml, password });
-    expect(s.nostr).toBeUndefined();
-    expect(nostrPubkey((await newKeys(s, PASS)).nostr)).toMatch(/^[0-9a-f]{64}$/);
-  });
   test('an old wallet (fields encrypted by length) and one with no plain publicKey', async () => {
-    const old = await readDockerFiles({ aliasText: a.walletYaml, walletText: fx.wallets.old.yaml, password });
+    const old = await readDockerFiles({ walletText: fx.wallets.old.yaml, password });
     expect(old.wallet).toEqual(hex(fx.vectors[fx.wallets.old.vector].entropyHex));
     const noKey = fx.wallets.current.yaml.split('\n').filter((l) => !l.startsWith('publicKey:')).join('\n');
-    expect((await readDockerFiles({ aliasText: a.walletYaml, walletText: noKey, password })).wallet).toEqual(hex(current.entropyHex));
+    expect((await readDockerFiles({ walletText: noKey, password })).wallet).toEqual(hex(current.entropyHex));
   });
   test('a Latin-1 password, as satorilib takes it', async () => {
-    const s = await readDockerFiles({ aliasText: a.walletYaml, walletText: edges.latin1Wallet.yaml, password: edges.latin1Wallet.password });
+    const s = await readDockerFiles({ walletText: edges.latin1Wallet.yaml, password: edges.latin1Wallet.password });
     expect(publicKey(s.wallet)).toMatch(/^0[23]/);
   });
-  test('wrong password, a mismatched file, a watch-only file are refused', async () => {
-    await expect(readDockerFiles({ aliasText: a.walletYaml, walletText: fx.wallets.current.yaml, password: wrongPassword }))
+  test('a wrong password is refused; the alias file (not encrypted) is named as such', async () => {
+    await expect(readDockerFiles({ walletText: fx.wallets.current.yaml, password: wrongPassword }))
       .rejects.toThrow(/The wallet file: wrong passphrase/i);
-    await expect(readDockerFiles({ aliasText: fx.mismatch.yaml, walletText: fx.wallets.current.yaml, password }))
-      .rejects.toThrow(/The alias file: .*publicKey/);
-    await expect(readDockerFiles({ aliasText: `publicKey: ${a.pubkey}\n`, walletText: fx.wallets.current.yaml, password }))
-      .rejects.toThrow(/The alias file: no entropy/i);
-  });
-  test('files in the wrong slots are refused, and the message says which', async () => {
-    const cur = fx.wallets.current.yaml;
-    await expect(readDockerFiles({ aliasText: cur, walletText: a.walletYaml, password })).rejects.toThrow(/swapped/i);
-    await expect(readDockerFiles({ aliasText: cur, walletText: fx.wallets.old.yaml, password }))
-      .rejects.toThrow(/The alias file: .*encrypted.*wallet file/i);
-    await expect(readDockerFiles({ aliasText: a.walletYaml, walletText: b.walletYaml, password }))
-      .rejects.toThrow(/The wallet file: .*not encrypted/i);
+    await expect(readDockerFiles({ walletText: a.walletYaml, password })).rejects.toThrow(/The wallet file: .*not encrypted, so it is the alias file/i);
   });
   test('a wallet Docker saved unencrypted (password outside Latin-1) is refused', async () => {
-    await expect(readDockerFiles({ aliasText: a.walletYaml, walletText: edges.nonLatin1Password.savedYaml, password: 'p€ss' }))
+    await expect(readDockerFiles({ walletText: edges.nonLatin1Password.savedYaml, password: 'p€ss' }))
       .rejects.toThrow(/The wallet file: .*not encrypted/i);
   });
   test('a file that is not valid YAML: "not valid YAML (line N)", its text never in the error (the security review, 2026-10-19)', async () => {
@@ -178,27 +164,13 @@ privateKey: KxSECRETWIFSECRETWIFSECRETWIFSECRETWIFSECRETWIF12
 publicKey: 02aa
   bad: : indentation
 `;
-    for (const [files, name] of [[{ aliasText: leaky, walletText: fx.wallets.current.yaml }, 'The alias file'],
-      [{ aliasText: a.walletYaml, walletText: leaky }, 'The wallet file'],
-      [{ aliasText: a.walletYaml, walletText: fx.wallets.current.yaml, nostrText: `secret_hex: ${'ab'.repeat(32)}
-  x: : y
-` }, 'The Nostr file']]) {
-      const err = await readDockerFiles({ ...files, password }).catch((e) => e);
-      expect(err.message).toMatch(new RegExp(`^${name}: not valid YAML \\(line \\d+\\)$`));
-      expect(err.message).not.toMatch(/SECRET|abandon|ab{4}|c2Vj/);
-    }
+    const err = await readDockerFiles({ walletText: leaky, password }).catch((e) => e);
+    expect(err.message).toMatch(/^The wallet file: not valid YAML \(line \d+\)$/);
+    expect(err.message).not.toMatch(/SECRET|abandon|c2Vj/);
   });
   test('a file over 64 KB is refused before it is read: no Dockerized Neuron file is that big', async () => {
-    const big = `entropy: ${'A'.repeat(70_000)}\n`;
-    await expect(readDockerFiles({ aliasText: big, walletText: fx.wallets.current.yaml, password })).rejects.toThrow('The alias file: over 64 KB, so not a Docker file.');
-    await expect(readDockerFiles({ aliasText: a.walletYaml, walletText: fx.wallets.current.yaml, password, nostrText: big }))
-      .rejects.toThrow('The Nostr file: over 64 KB, so not a Docker file.');
+    await expect(readDockerFiles({ walletText: `entropy: ${'A'.repeat(70_000)}\n`, password })).rejects.toThrow('The wallet file: over 64 KB, so not a Docker file.');
     expect(IMPORT_MAX).toBe(65_536);
-  });
-  test('the same key twice, and a bad nostr.yaml, are refused', async () => {
-    const files = { aliasText: current.walletYaml, walletText: fx.wallets.current.yaml, password };
-    await expect(readDockerFiles(files)).rejects.toThrow(/same key/i);
-    await expect(readDockerFiles({ ...files, aliasText: a.walletYaml, nostrText: 'secret_hex: 00\n' })).rejects.toThrow(/The Nostr file/);
   });
 });
 
@@ -218,10 +190,14 @@ describe('every earlier version\'s keys (test/fixtures/profiles.json) carried fo
 
       // The next Unlock: the wallet re-encrypted in this app's format, with the same passphrase.
       await expect(unlockWallet(record, 'not the passphrase')).rejects.toThrow(/^Wrong passphrase$/);
+      // Its alias and Nostr key derived from the wallet now, the earlier ones retired (docs/design/wallets.md#derived-keys).
       const first = await unlockWallet(record, p.passphrase);
       expect(first.wallet.backup().words).toBe(wordsOf(hex(p.expect.wallet)));
-      expect(first.record).toEqual({ ...record, wallet: { pubkey: walletPub, kdf: expect.any(Object), cipher: expect.any(Object), data: expect.any(String) },
-        link: { message: expect.stringContaining(`wallet: ${evmAddress(walletPub)}`), signature: expect.any(String) } }); // its link made at this Unlock
+      const dw = keysFromWallet(hex(p.expect.wallet));
+      expect(first.record).toEqual({ ...record, alias: bytesToHex(dw.alias), nostr: dw.nostr, from: 'wallet',
+        retired: [{ alias: record.alias, nostr: record.nostr, at: expect.any(Number) }],
+        wallet: { pubkey: walletPub, kdf: expect.any(Object), cipher: expect.any(Object), data: expect.any(String) },
+        link: { message: expect.stringContaining(`alias: ${evmAddress(publicKey(dw.alias))}\nwallet: ${evmAddress(walletPub)}`), signature: expect.any(String) } }); // its link made at this Unlock
       const again = await unlockWallet(first.record, p.passphrase);
       expect(again.record).toBe(null);
       expect(again.wallet.pubkey).toBe(walletPub);

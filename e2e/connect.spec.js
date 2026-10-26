@@ -98,7 +98,7 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await page.getByLabel('Amount').fill('0.001');
   await page.getByLabel('To (0x address)').fill('0x4444444444444444444444444444444444444444');
   await page.getByRole('button', { name: 'Send from the wallet' }).click();
-  await expect(page.getByLabel('Wallet passphrase to send')).toBeHidden();
+  await expect(page.getByLabel('Wallet passphrase to send', { exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Send in TestWallet' }).click();
   await expect(fact(page, 'result')).toHaveText('Sent 0.001 ETH.', { timeout: 60_000 });
   expect(rpc.sent.at(-1)).toMatchObject({ from: W, to: '0x4444444444444444444444444444444444444444', value: 10n ** 15n });
@@ -111,14 +111,17 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   expect(rpc.sent.length).toBe(before);
   app.state.reject = false;
 
-  // Backup › Nostr key: confirmed by a signature in the wallet app; the alias's key on the Wallet tab the same way
+  // The app's keys came from the wallet's signature (the same each time, docs/design/wallets.md#derived-keys): not in
+  // Backup; on the Wallet tab (Details), each confirmed by a signature in the wallet app
+  expect((await page.evaluate(() => window.satori.status())).keysFrom).toBe('signature');
   await go(page, 'settings');
-  await page.getByRole('button', { name: 'Nostr key' }).click();
-  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
-  await expect(page.locator('[data-test=backup-key]')).toHaveText(/^nsec1/);
-  expect(app.calls.filter((m) => m === 'personal_sign')).toHaveLength(2); // the link, then this
+  await expect(page.getByRole('button', { name: 'Nostr key' })).toBeHidden();
   await go(page, 'wallet');
   await page.locator('[data-test=base-details] summary').click();
+  await page.locator('[data-test=nostr-key]').click();
+  await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
+  await expect(page.locator('[data-test=alias-backup-key]')).toHaveText(/^nsec1/);
+  expect(app.calls.filter((m) => m === 'personal_sign')).toHaveLength(4); // the keys' text twice, the link, then this
   await page.locator('[data-test=alias-key]').click();
   await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
   await expect(page.locator('[data-test=alias-backup-key]')).toHaveText(/^0x[0-9a-f]{64}$/);

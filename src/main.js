@@ -15,14 +15,13 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
+  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage, retiredAlias,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
 import { errorText, UP, DOWN } from './chain/index.js';
 import { createAutoLock } from './keys/autolock.js';
-import { nostrSecretOf } from './nostr/event.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
 import { catchUpAll } from './neuron/schedule.js';
@@ -269,6 +268,8 @@ async function startNeuron() {
   ({ alias, nostr: nostrKey, wallet: walletPublic } = loadKeys(record));
   state.alias = alias.evmAddress;
   state.wallet = walletPublic.evmAddress;
+  state.keysFrom = record.from ?? 'random'; // docs/design/wallets.md#derived-keys: derived keys need no backup of their own
+  state.retiredAlias = retiredAlias(record);
   if (walletPublic.connected) await findConnected();
   if (wallets && activeOf(wallets).address !== state.wallet) await keepWallets(withAddress(wallets, state.wallet)).catch(() => {});
   state.wallets = walletsView(wallets, state.wallet);
@@ -527,7 +528,12 @@ async function unlock(passphrase) {
   const count = lockCount;
   const { wallet: v, record: upgraded } = await unlockWallet(record, passphrase);
   const linked = !record.link && upgraded?.link;
+  const rekeyed = alias && upgraded && upgraded.alias !== record.alias; // an earlier record's keys, derived from the wallet now
   if (upgraded) await storeKeys(upgraded); // its link made now, or an earlier version's wallet in this app's format
+  if (rekeyed) { // the running app is the old alias's: start again with the new one (docs/design/wallets.md#derived-keys)
+    v.lock();
+    return void location.reload();
+  }
   if (linked && central) registerWith(central).catch(() => {}); // the Satori Network learns the link at once
   if (count !== lockCount) return void v.lock();
   wallet?.lock();
@@ -569,7 +575,8 @@ async function finishUpdate(passphrase) {
  * One key's backup ({ words, privateKey }, or the Nostr key's { nsec, secret }), or all three (which null or undefined),
  * from the passphrase each time, unlocked or not (keys' backupKeys: ~0.3 s; docs/design/keys.md#backup).
  */
-async function backupOf(which, passphrase) {
+async function backupOf(asked, passphrase) {
+  const which = { 'alias-here': 'alias', 'nostr-here': 'nostr' }[asked] ?? asked; // the Wallet tab's Keys ask the same keys
   const b = walletPublic.connected ? await connectedBackupOf(which) : await backupKeys(record, which, passphrase);
   markBackup().catch((err) => console.warn('[satori] backup_at', err)); // shown: the backup is confirmed
   return b;
@@ -698,7 +705,8 @@ const connectTo = (rdns) => setup(async () => {
     const { provider, name } = relay ? await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect, connect: true }) : w;
     state.connecting = name;
     const address = await requestAddress(provider);
-    return await connectedRecord({ address, rdns, name, signLink: (m) => signText(provider, address, m) });
+    const sign = (m) => signText(provider, address, m);
+    return await connectedRecord({ address, rdns, name, signLink: sign, signKeys: sign });
   } finally {
     state.connecting = '';
   }
@@ -792,7 +800,6 @@ function withWallet(slot, fn) {
 
 function wipePending() {
   pending?.wallet?.fill(0);
-  pending?.alias?.fill(0);
   pending = null;
   state.words = [];
   state.passNote = '';
@@ -869,9 +876,7 @@ const actions = {
       try { return secretFromText(text); } catch { throw new Error(`The ${which}: not 24 backup words or a private key.`); }
     };
     try {
-      pending = { wallet: secret(f.wallet, 'wallet') };
-      if (f.alias.trim()) pending.alias = secret(f.alias, 'alias');
-      if (f.nostr.trim()) pending.nostr = nostrSecretOf(f.nostr);
+      pending = { wallet: secret(f.wallet, 'wallet') }; // the alias and the Nostr key are derived from it
     } catch (err) {
       wipePending();
       return void (state.error = err.message);
@@ -906,22 +911,15 @@ const actions = {
   importDocker: shownAt('error', async (el) => {
     const f = new FormData(el);
     await setup(async () => {
-      for (const [field, name] of [['alias', 'The alias file'], ['wallet', 'The wallet file'], ['nostr', 'The Nostr file']]) {
-        if (f.get(field)?.size > IMPORT_MAX) throw new Error(`${name}: over 64 KB, so not a Docker file.`); // not read at all
-      }
-      const n = f.get('nostr');
+      if (f.get('wallet')?.size > IMPORT_MAX) throw new Error('The wallet file: over 64 KB, so not a Docker file.'); // not read at all
       const password = String(f.get('pass') ?? '');
       const reuse = f.get('reuse') === 'on';
-      const secrets = await readDockerFiles({
-        aliasText: await f.get('alias').text(), walletText: await f.get('wallet').text(), password,
-        nostrText: n?.size ? await n.text() : undefined,
-      });
+      const secrets = await readDockerFiles({ walletText: await f.get('wallet').text(), password });
       el.reset();
       if (reuse && passphraseOk(password)) {
         try {
           return await newKeys(secrets, password);
         } finally {
-          secrets.alias.fill(0);
           secrets.wallet.fill(0);
         }
       }
@@ -1313,6 +1311,7 @@ window.satori = {
       alias: state.alias || null,
       wallet: state.wallet || null,
       walletKind: !state.wallet ? null : state.connected ? 'connected' : 'sealed',
+      keysFrom: state.keysFrom || null, // where the alias and the Nostr key came from (docs/design/wallets.md#derived-keys)
       connected: state.connected, // a connected wallet: { name, found } (found: its wallet app is in this browser), else null
       unlocked: state.unlocked,
       lockAt: state.lockAt, // when the wallet locks on its own (ms), or null
@@ -1359,23 +1358,20 @@ window.satori = {
    * Setup, to import again. Only on the person's request: their keys are in that file. → status()
    */
   async setAside() { await setAsideDb(); return window.satori.status(); },
-  /** Create a wallet (random keys unless words or private keys, or the Nostr key's nsec or hex, are given). Stays locked. */
-  async setup({ passphrase, walletWords, aliasWords, nostrKey, backup } = {}) {
+  /** Create a wallet (a new one unless its words or private key are given; its alias and Nostr key derived). Stays locked. */
+  async setup({ passphrase, walletWords, backup } = {}) {
     if (backup) { // exportBackup()'s file, opened with its passphrase
       const b = await openBackup(backup, passphrase);
-      if (!b.walletWords) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()), then restore the alias with aliasWords.");
-      ({ walletWords, aliasWords, nostrKey } = b);
+      if (!b.walletWords) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()).");
+      ({ walletWords } = b);
     }
     await setup(async () => {
       const keys = {};
       try {
         keys.wallet = walletWords ? secretFromText(walletWords) : generateSecret();
-        if (aliasWords) keys.alias = secretFromText(aliasWords);
-        if (nostrKey) keys.nostr = nostrSecretOf(nostrKey);
         return await newKeys(keys, passphrase);
       } finally {
         keys.wallet?.fill(0);
-        keys.alias?.fill(0);
       }
     }, { backedUp: !!walletWords }); // given words are a backup; random ones are not until backup() shows them
     return window.satori.status();
@@ -1487,14 +1483,13 @@ window.satori = {
     const keys = await backupOf(undefined, passphrase);
     return sealBackup({ address: walletPublic.evmAddress, keys, passphrase });
   },
-  /** Import a Docker (Lite) install: { alias, wallet, nostr? } files' text, their `password`, and `passphrase` for this app (default: the password). */
-  async importDocker({ alias, wallet: walletText, nostr: nostrText, password = '', passphrase = password } = {}) {
+  /** Import a Docker (Lite) install: its { wallet } file's text, its `password`, and `passphrase` for this app (default: the password). */
+  async importDocker({ wallet: walletText, password = '', passphrase = password } = {}) {
     await setup(async () => {
-      const secrets = await readDockerFiles({ aliasText: alias, walletText, password, nostrText });
+      const secrets = await readDockerFiles({ walletText, password });
       try {
         return await newKeys(secrets, passphrase);
       } finally {
-        secrets.alias.fill(0);
         secrets.wallet.fill(0);
       }
     }, { backedUp: true });
@@ -1790,11 +1785,13 @@ function smoothHero() {
   if (!hero || typeof ResizeObserver === 'undefined') return;
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   let last = 0;
+  let easing = null; // its own height animation: only that is cancelled (the fade to sky is a CSS transition on the hero)
   new ResizeObserver(() => {
-    hero.getAnimations().forEach((x) => x.cancel());
+    easing?.cancel();
+    easing = null;
     const now = hero.getBoundingClientRect().height;
     if (last && now && now !== last && !motion.matches) {
-      hero.animate([{ height: `${last}px` }, { height: `${now}px` }], { duration: 250, easing: 'ease' });
+      easing = hero.animate([{ height: `${last}px` }, { height: `${now}px` }], { duration: 250, easing: 'ease' });
     }
     if (now) last = now;
   }).observe(hero.lastElementChild);

@@ -4,6 +4,16 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-26 (derived keys: setup, importDocker, backup, status)
+
+- The alias and the Nostr key are derived from the wallet (docs/design/wallets.md#derived-keys). `setup()` takes no
+  `aliasWords` or `nostrKey`; `importDocker()` takes the wallet file only (no `alias`, no `nostr`); Import asks for the
+  wallet alone. `status().keysFrom`: 'wallet' | 'signature' | 'random'. `backup('retired', p)`: an earlier alias.
+- An earlier record's alias and Nostr key are replaced by derived ones at the wallet's next Unlock (the page reloads);
+  the wallet then shows as staked elsewhere until Stake.
+- Settings › Backup shows the alias's and the Nostr key's only when random; else on the Wallet tab's Details
+  (`nostr-key`, `alias-key`, `retired-key`).
+
 ## Changed 2026-10-26 (the Streams and Market pages; no call changed)
 
 - Streams: every card folded until tapped, in this order: Network Streams (the Satori Network's line, Details and

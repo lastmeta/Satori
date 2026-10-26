@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
+import { keysFromWallet } from '../src/keys/derive.js';
+import { publicKey, evmAddress } from '../src/keys/keys.js';
 
 const PASS = 'correct horse battery';
 const ROUND = 20741;
@@ -73,9 +75,10 @@ test('an encrypted backup, restored in a fresh browser; the game by call; a day 
 test('a Docker (Lite) install imported by call', async ({ context, page }) => {
   test.setTimeout(120_000);
   await stubCentral(context);
-  const alias = fx.vectors[0];
+  const current = fx.vectors[fx.wallets.current.vector];
+  const derived = keysFromWallet(Uint8Array.from(current.entropyHex.match(/../g), (x) => parseInt(x, 16))).alias; // the alias, from the wallet
   await openApp(page);
-  await call(page, 'importDocker', { alias: alias.walletYaml, wallet: fx.wallets.current.yaml, password: fx.wallets.password, passphrase: PASS });
-  await expect(page.locator('[data-test=alias]')).toHaveText(alias.ethAddress, { timeout: 30_000 });
+  await call(page, 'importDocker', { wallet: fx.wallets.current.yaml, password: fx.wallets.password, passphrase: PASS });
+  await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(publicKey(derived)), { timeout: 30_000 });
   expect((await call(page, 'base')).wallet.address).toBe(fx.vectors[fx.wallets.current.vector].ethAddress);
 });

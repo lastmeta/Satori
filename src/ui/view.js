@@ -117,12 +117,6 @@ function setup(a) {
       <label>Wallet: its 24 words or its private key
         <textarea name="wallet" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
       </label>
-      <label>Alias: its 24 words or private key (optional: a new alias is made if empty)
-        <textarea name="alias" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
-      </label>
-      <label>Nostr key (nsec or hex, optional: a new one is made if empty)
-        <input name="nostr" autocomplete="off" autocapitalize="off" spellcheck="false">
-      </label>
       ${errorLine()}
       <div class="actions">
         <button class="primary" type="submit">Continue</button>
@@ -143,18 +137,16 @@ function setup(a) {
         </div>
       </div>
       <div class="actions">${() => (state.connectFound ?? []).map((w) => html`<button class="primary" data-test="connect-to" data-rdns="${w.rdns}" disabled="${() => !!state.connecting}" @click="${() => a.connect(w.rdns)}">${`Connect ${w.name}`}</button>`.key(w.rdns))}</div>
-      <p class="muted small" hidden="${() => !state.connecting}">${() => `Waiting for ${state.connecting}: approve the account, then the link to this app.`}</p>
+      <p class="muted small" hidden="${() => !state.connecting}">${() => `Waiting for ${state.connecting}: approve the account, then three signatures (twice for this app's keys, once for the link).`}</p>
       ${errorLine()}
       <div class="actions"><button type="button" @click="${() => a.goStep('choose')}">Back</button></div>
     </div>
 
     <form hidden="${showStep('docker')}" @submit="${(e) => { e.preventDefault(); a.importDocker(e.target); }}">
       <h2>Import Docker files</h2>
-      <p class="muted">The files from a Docker install’s wallet folder (unzip “Download Wallet” first). Their keys
-        are read here and stored in this app’s own way; the files themselves are not kept.</p>
+      <p class="muted">The wallet file from a Docker install’s wallet folder (unzip “Download Wallet” first). Its key
+        is read here and stored in this app’s own way; the file itself is not kept.</p>
       <label>Wallet file: wallet.yaml (vault.yaml in an older install) <input name="wallet" type="file" accept=".yaml,.yml" required></label>
-      <label>Alias file: alias.yaml (wallet.yaml in an older install) <input name="alias" type="file" accept=".yaml,.yml" required></label>
-      <label>Nostr file: nostr.yaml (optional: a new Nostr key is made if empty) <input name="nostr" type="file" accept=".yaml,.yml"></label>
       <label>Wallet password (the Docker install’s) <input name="pass" type="password" autocomplete="current-password" required></label>
       <label class="check"><input name="reuse" type="checkbox" checked> Use it as this app’s passphrase too (if it has at least ${MIN_PASSPHRASE} characters)</label>
       ${errorLine()}

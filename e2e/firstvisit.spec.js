@@ -76,7 +76,7 @@ test('a revisit: the last visit\'s Home at once, marked, with the engine\'s step
   await page.goto('/');
   await expect.poll(() => screen(page), { timeout: LOAD_TIMEOUT }).toBe('setup');
   await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   const live = await page.evaluate(() => window.satori.health());
 
   // the next visit, the engine held: Home at once from the last visit, the hero saying it is opening
@@ -84,7 +84,7 @@ test('a revisit: the last visit\'s Home at once, marked, with the engine\'s step
   await page.reload();
   await expect(page.locator('[data-test=health-stale]')).toHaveText(/^From your last visit, (just now|\d+ min ago)$/, { timeout: LOAD_TIMEOUT });
   expect(await screen(page)).toBe('loading'); // agents still wait: window.satori is not ready
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/);
   await expect(page.locator('[data-test=health-line]')).toHaveText(/^Opening… (downloading the engine|starting the engine…)/);
   await expect(page.locator('[data-test=health]')).toHaveAttribute('data-work', 'open'); // the ring turns
   await expect(page.locator('[data-test=chip][data-channel=network] [data-test=chip-text]')).toHaveText(live.channels.network.text);
@@ -95,7 +95,7 @@ test('a revisit: the last visit\'s Home at once, marked, with the engine\'s step
   engine.release();
   await expect.poll(() => screen(page), { timeout: LOAD_TIMEOUT }).toBe('home');
   await expect(page.locator('[data-test=health-stale]')).toBeHidden();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/);
 
   // another tab's route (not Home): "Opening…" with the engine's step instead
   await page.evaluate(() => window.satori.go('settings'));

@@ -11,8 +11,8 @@ and sealed.
 | Word | What it is |
 |---|---|
 | **wallet** | The person's key: their identity, and it holds the funds. Either **in the app**, sealed with their passphrase, or **connected**: kept in an outside wallet (MetaMask or another) that the app asks. |
-| **alias** | The wallet's automated signing key. The app makes it (random), keeps it unencrypted and uses it freely, so the app works with nobody present. It acts for the wallet with the Satori Network, on the relays and in the daily Base batch. App-level: people meet it only on the Wallet tab (its gas, and its private key for the rare case funds were sent to it). |
-| **Nostr key** | The third key: random, unencrypted, signs the app's Nostr events ([nostr.md](nostr.md)). |
+| **alias** | The wallet's automated signing key. Derived from the wallet ([derived keys](#derived-keys)), kept on this device and used freely, so the app works with nobody present. It acts for the wallet with the Satori Network, on the relays and in the daily Base batch. App-level: people meet it only on the Wallet tab (its gas, and its private key for the rare case funds were sent to it). |
+| **Nostr key** | The third key: derived from the wallet like the alias, signs the app's Nostr events ([nostr.md](nostr.md)). |
 
 These are the only names, in the UI, the code, the stored record,
 `window.satori`, the Satori Network's protocol and the docs. A wallet in the
@@ -22,7 +22,7 @@ app's list comes with its alias, its Nostr key and its own data.
 
 ```
 app ── 1…n wallets ── exactly 1 active at a time
-wallet ──── 1 alias (made by the app, replaceable)
+wallet ──── 1 alias (derived from the wallet)
        + Nostr key
        + its own database
 wallet = sealed in the app (passphrase; Unlock / Lock)
@@ -37,13 +37,11 @@ wallet = sealed in the app (passphrase; Unlock / Lock)
   alias's fee to 0, has it accept only this wallet, and stakes the wallet
   with it (`hub.delegatePredictionPower(alias)`, [base.md](base.md)); with
   the Satori Network, the wallet signs a **link** to its alias (below).
-- **The alias is random**, made with the wallet's entry in the app, never
-  derived. A wallet brought back from its words alone, or connected in
-  another app, gets a new alias and signs a new link, and the Satori Network
-  follows at once. On chain it stays staked with the other address until the
-  person Stakes with this app, which moves it in one transaction
-  (`delegatePredictionPower` closes the old period); Home suggests it
-  (`staked-elsewhere`, [health.md](health.md)).
+- **The alias and the Nostr key are derived from the wallet** ([derived
+  keys](#derived-keys)): the wallet brought back from its words, on any
+  device, gives the same alias (still staked with) and the same Nostr key
+  (the same streams). They are kept for good; they are replaced only when the
+  device is compromised (owner, 2026-10-26).
 - **One at a time.** The app runs one wallet: the Satori Network, the relays
   and the Base batch are one alias's. Another wallet is another peer with its
   own streams, so wallets share nothing but the app's code.
@@ -79,6 +77,49 @@ wallet asks the person for each action that needs the wallet:
 | The link to its alias (below) | at setup, else at the next Unlock | once, at connect |
 | Showing the alias's and the Nostr key's backups | the passphrase each time | a signature of a fixed text |
 | The Satori Network's login, predictions, the Base batch, Nostr events, channel vouchers | the alias and the Nostr key, unattended | the same |
+
+## Derived keys
+
+(Owner, 2026-10-26.) One backup, the wallet's: the alias and the Nostr key
+come from it, by the standard derivations, so moving to another device or
+importing the wallet brings them back with nothing else to keep.
+
+- **From a wallet in the app** (Create, Import by its 24 words or by its
+  private key, Import Docker files, an encrypted backup): this app's 24 words
+  are the private key's own bytes ([keys.md](keys.md#one-key-one-secret)), so
+  words and private key are one source. Its BIP-39 seed (no extra
+  passphrase) is the BIP-32 master:
+  - the alias: `m/44'/60'/1'/0'/i'`, fully hardened (a leaked alias gives
+    nothing above it; no wallet app uses this path for its own accounts);
+  - the Nostr key: `m/44'/1237'/i'/0/0` (NIP-06: a Nostr app given these
+    words finds the same key).
+  `i` is 0; another index is another alias or Nostr key, when one is wanted.
+- **From a connected wallet**: it never shows its words, so it signs a fixed
+  text (`personal_sign`, no time in it) twice:
+
+  ```
+  Satori: make this app's keys
+  wallet: 0x<the wallet's address, EIP-55>
+  ```
+
+  Both signatures the same 65 bytes (RFC 6979: MetaMask and most wallet
+  apps) → HKDF-SHA256 of the signature (salt `satori`, info `satori keys v1`,
+  64 bytes) is the BIP-32 master, the same paths. Different, or not 65 bytes
+  (a smart-contract wallet) → random keys, as before. Anyone who gets this
+  signature has the alias and the Nostr key (they predict, they can't move
+  the wallet's funds).
+- **The record says where they came from**: `from: 'wallet' | 'signature' |
+  'random'`. Derived: Settings › Backup shows only the wallet; the alias's and
+  the Nostr key's private keys are under the Wallet tab's Details › Keys,
+  "Derived from your wallet: no need to back them up". Random: Settings ›
+  Backup shows them too, as their only backup.
+- **Earlier records** (random keys): an in-app wallet's next Unlock derives
+  its keys and replaces them, with a new link; the old ones are kept in the
+  record (`retired`) and shown under Details › Keys, so nothing they hold is
+  lost. The wallet then shows as staked elsewhere until Stake (one
+  transaction). A connected wallet's stay random until it is connected again.
+- **Import takes the wallet only**: the alias, Nostr and Docker alias files
+  are no longer asked for (the owner: no keeping old keys).
 
 ## The Satori Network: register, login and the link
 
@@ -189,9 +230,10 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
 - **Connect** (Setup's fourth way, `src/keys/connect.js`, `src/keys/relay.js`):
   one button per wallet found in the browser ("Connect MetaMask"); with none
   found, as the dapp: "MetaMask" (opens the app to approve) and "Other
-  wallet" (WalletConnect). Connecting makes the alias and the Nostr key, and the
-  wallet signs the link to the alias once (`personal_sign`, checked: it must
-  recover to the wallet's address). Nothing is encrypted and there is no
+  wallet" (WalletConnect). Connecting makes the alias and the Nostr key (from the
+  wallet's signature of the keys' text, asked twice: [derived
+  keys](#derived-keys)), and the wallet signs the link to the alias once
+  (`personal_sign`, checked: it must recover to the wallet's address). Nothing is encrypted and there is no
   passphrase.
 - **The record**: `wallet: { kind: 'connected', address, rdns, name }` (the
   wallet's EIP-6963 id and name, to find it again; `injected` for a plain
@@ -210,8 +252,9 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
   (`eth_sendTransaction`) with the app's gas limit and fee fields; the app
   then waits for the receipt as for its own.
 - **No Unlock, no Lock** for it: Settings › Keys shows "Connected: <name>";
-  the inline Unlock prompts never open. Backup offers the alias's and the
-  Nostr key's (the wallet's own words stay in the wallet app), each shown
+  the inline Unlock prompts never open. The alias's and the Nostr key's
+  (the wallet's own words stay in the wallet app; in Backup only when
+  random, else on the Wallet tab's Details) are each shown
   after the wallet signs a fixed text ("Satori: show this app's keys",
   the wallet's address, the time), checked like the link.
 - **For agents**: `connectWallets()` → the wallets found (`[{ rdns, name }]`),
@@ -231,6 +274,7 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
   several), the link at connect, the outside wallet asked for each action
   (2026-10-23); on a phone, MetaMask Connect and WalletConnect, as the dapp
   (2026-10-24).
-- **Later**: replacing the alias on purpose (a new alias, a new link, Unstake
-  and Stake again; the network then sees a new peer with new streams);
-  shared preferences.
+- **D. Derived keys** (2026-10-26): the alias and the Nostr key from the
+  wallet; the keys at rest sealed with this device's key where the browser
+  keeps one ([keys.md](keys.md#at-rest)).
+- **Later**: shared preferences.

@@ -53,14 +53,17 @@ function backup(a) {
   return html`
   <section class="card settings-section" id="settings-backup">
     <h2>Backup</h2>
-    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Import brings it back. The
-      Nostr key is random, not from the words, so it is backed up on its own. Showing them asks for the wallet's passphrase each time.</p>
-    <p class="muted small" hidden="${() => !state.connected}">${() => (state.connected ? `Your wallet is backed up in ${state.connected.name}. The Nostr key is the app's own: showing it asks ${state.connected.name} to confirm.` : '')}</p>
+    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Import brings it back, with this
+      app's own keys, which come from it. Showing the words asks for the wallet's passphrase each time.</p>
+    <p class="muted small" hidden="${() => !state.connected}">${() => (!state.connected ? ''
+      : state.keysFrom === 'random' ? `Your wallet is backed up in ${state.connected.name}. ${state.connected.name} couldn't make this app's keys, so they are random: back them up here (showing them asks ${state.connected.name} to confirm).`
+        : `Your wallet is backed up in ${state.connected.name}. This app's keys come from it: connecting it again brings them back.`)}</p>
     <div class="backup-row">
       <button class="small-btn" hidden="${() => !!state.connected}" @click="${() => a.askBackup('wallet')}">Wallet words</button>
-      <button class="small-btn" @click="${() => a.askBackup('nostr')}">Nostr key</button>
+      <button class="small-btn" hidden="${() => state.keysFrom !== 'random'}" @click="${() => a.askBackup('alias')}">Alias key</button>
+      <button class="small-btn" hidden="${() => state.keysFrom !== 'random'}" @click="${() => a.askBackup('nostr')}">Nostr key</button>
     </div>
-    ${backupPanel(a, ['wallet', 'nostr'])}
+    ${backupPanel(a, ['wallet', 'alias', 'nostr'])}
   </section>`;
 }
 

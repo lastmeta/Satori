@@ -9,7 +9,9 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { secretFromWords, publicKey, evmAddress, wordsOf } from '../src/keys/keys.js';
 import { verifyMessage } from 'viem';
-import { nostrPubkey, nsec } from '../src/nostr/event.js';
+import { nostrPubkey } from '../src/nostr/event.js';
+import { keysFromWallet } from '../src/keys/derive.js';
+import { bytesToHex } from '@noble/hashes/utils';
 import { forecast, STEP_S } from '../src/engine/index.js';
 import { runModels } from '../src/engine/evolve.js';
 import { openApp, reloadApp, polled, LOAD_TIMEOUT } from './load.js';
@@ -183,11 +185,14 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   const key = page.locator('[data-test=backup-key]');
   await expect(key).toHaveText(/^0x[0-9a-f]{64}$/);
   expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(walletAddress);
-  // the alias's private key is on the Wallet tab only, for the rare case funds were sent to it
+  // the alias's and the Nostr key's are on the Wallet tab (Details): derived from the wallet, so not in Backup
+  // (docs/design/wallets.md#derived-keys)
+  await expect(page.getByRole('button', { name: 'Nostr key' })).toBeHidden();
   await go(page, 'wallet');
   await page.locator('[data-test=base-details] summary').click();
+  await expect(page.locator('[data-test=keys-note]')).toHaveText(/derived from your wallet: no need to back them up/);
   await page.locator('[data-test=alias-key]').click();
-  await page.getByLabel("Wallet passphrase to show the alias's private key").fill(PASS);
+  await page.getByLabel('Wallet passphrase to show the key').fill(PASS);
   await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Show' }).click();
   const aliasKey = page.locator('[data-test=alias-backup-key]');
   await expect(aliasKey).toHaveText(/^0x[0-9a-f]{64}$/);
@@ -197,13 +202,14 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   const idSecret = hex((await aliasKey.textContent()).slice(2));
   expect(wordsOf(idSecret)).toBe(idWords.join(' '));
   expect(publicKey(idSecret)).toBe(reg['alias-pubkey']);
-  await go(page, 'settings');
-  await expect(page.getByRole('button', { name: 'Alias words' })).toHaveCount(0); // not in Settings
-  await showBackup('Nostr key');
-  await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
-  await expect(key).toHaveText(/^nsec1[02-9ac-hj-np-z]{58}$/);
-  const nostrHex = await page.locator('[data-test=backup-hex]').textContent();
+  expect(bytesToHex(idSecret)).toBe(bytesToHex(keysFromWallet(secretFromWords(words.join(' '))).alias)); // the wallet's own
+  await page.locator('[data-test=nostr-key]').click();
+  await page.getByLabel('Wallet passphrase to show the key').fill(PASS);
+  await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Show' }).click();
+  await expect(aliasKey).toHaveText(/^nsec1[02-9ac-hj-np-z]{58}$/);
+  const nostrHex = await page.locator('[data-test=alias-backup-hex]').textContent();
   expect(nostrPubkey(nostrHex)).toBe(reg['nostr-pubkey']);
+  await go(page, 'settings');
 
   // Lock: the wallet and the backup are gone (showing it again asks for the passphrase, in place, as it always does); the
   // neuron still polls and submits.
@@ -239,7 +245,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(btc.locator('[data-test=model]')).toHaveText('naive · spec +eth'); // its bvar spec waits for aligned history
   expect(stub.batches).toHaveLength(2);
   await go(page, 'home');
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/);
 
   expect(stub.prod).toEqual([]);
   expect(await page.evaluate(() => window.violations)).toEqual([]);
@@ -401,7 +407,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(nostrPubkey(all.nostr.secret)).toBe((await status(page)).nostr.pubkey);
   expect(await page.evaluate(() => typeof window.satori.file)).toBe('undefined');
   for (const which of ['Wallet', 'wallets', '', 'wallet.yaml']) {
-    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'alias', 'wallet' or 'nostr'/);
+    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'alias', 'wallet', 'nostr' or 'retired'/);
   }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked');
@@ -456,30 +462,30 @@ test('central with history: the first poll backfills each stream and forecasts i
 test("import Docker files; central pays this wallet's rewards to another Base address: a mismatch shows both; Settings", async ({ context, page }) => {
   const stub = await stubCentral(context);
   stub.otherWallet = fx.vectors[3].ethAddress; // central pays this wallet's rewards to another Base address
-  const alias = fx.vectors[0];
   const wallet = fx.vectors[fx.wallets.current.vector];
+  const derived = keysFromWallet(hex(wallet.entropyHex)).alias; // its alias, from the wallet (docs/design/wallets.md#derived-keys)
+  const alias = { pubkey: publicKey(derived), ethAddress: evmAddress(publicKey(derived)) };
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
 
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
-  // In the wrong slots: refused, and the message says so.
-  await page.getByLabel('Alias file').setInputFiles(file('vault.yaml', fx.wallets.current.yaml));
-  await page.getByLabel('Wallet file').setInputFiles(file('wallet.yaml', alias.walletYaml));
+  // Only the wallet file is asked for; the alias file there is refused, and the message says so.
+  await expect(page.getByLabel('Alias file')).toHaveCount(0);
+  await page.getByLabel('Wallet file').setInputFiles(file('wallet.yaml', fx.vectors[0].walletYaml));
   await page.getByLabel('Wallet password').fill(fx.wallets.password);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'The files are swapped' })).toBeVisible();
-  await page.getByLabel('Alias file').setInputFiles(file('wallet.yaml', alias.walletYaml));
+  await expect(page.getByRole('alert').filter({ hasText: 'not encrypted, so it is the alias file' })).toBeVisible();
   await page.getByLabel('Wallet file').setInputFiles(file('vault.yaml', fx.wallets.current.yaml));
   await page.getByLabel('Wallet password').fill(fx.wallets.wrongPassword);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'The wallet file: Wrong passphrase' })).toBeVisible({ timeout: 30_000 });
   await page.getByLabel('Wallet password').fill(fx.wallets.password);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
-  // the same Base addresses as the Docker neuron's (satorilib's ethAddress)
+  // the wallet's Base address as the Docker neuron's (satorilib's ethAddress); the alias derived from it
   await expect(page.locator('[data-test=alias]')).toHaveText(alias.ethAddress, { timeout: 30_000 });
   await expect(page.locator('[data-test=wallet]')).toHaveText(wallet.ethAddress);
 
-  // Registered with Docker's keys; central pays this wallet's rewards to another Base address.
+  // Registered with the keys; central pays this wallet's rewards to another Base address.
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered[0]).toMatchObject({ 'alias-pubkey': alias.pubkey, 'wallet-signature': expect.stringMatching(/^0x[0-9a-f]{130}$/) });
   await expect(page.locator('[data-test=mismatch]')).toHaveText(
@@ -524,7 +530,6 @@ test('import: a Docker wallet password under 8 characters asks for a new passphr
   const file = (name, text) => ({ name, mimeType: 'application/x-yaml', buffer: Buffer.from(text) });
   await openApp(page);
   await page.getByRole('button', { name: 'Import Docker files' }).click();
-  await page.getByLabel('Alias file').setInputFiles(file('wallet.yaml', p.meta.wallet_yaml));
   await page.getByLabel('Wallet file').setInputFiles(file('vault.yaml', p.meta.vault_yaml));
   await page.getByLabel('Wallet password').fill(p.passphrase);
   await expect(page.getByLabel(/Use it as this app’s passphrase too/)).toBeChecked();
@@ -536,36 +541,31 @@ test('import: a Docker wallet password under 8 characters asks for a new passphr
   await page.getByRole('button', { name: 'Create', exact: true }).click();
   const walletAddress = evmAddress(publicKey(hex(p.expect.wallet)));
   await expect(page.locator('[data-test=wallet]')).toHaveText(walletAddress, { timeout: LOAD_TIMEOUT });
-  await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(publicKey(hex(p.expect.alias))));
+  await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(publicKey(keysFromWallet(hex(p.expect.wallet)).alias))); // derived
   await expect.poll(() => page.evaluate(() => document.body.dataset.screen)).toBe('home');
   await expect(page.evaluate((x) => window.satori.unlock(x), p.passphrase)).rejects.toThrow(/Wrong passphrase/);
   expect(await page.evaluate((x) => window.satori.unlock(x), NEW)).toBe(true);
   expect((await page.evaluate((x) => window.satori.backup('wallet', x), NEW)).words).toBe(wordsOf(hex(p.expect.wallet)));
 });
 
-test('import: the wallet by its private key, the alias by its words', async ({ context, page }) => {
+test('import: the wallet by its private key; its alias and Nostr key derived from it', async ({ context, page }) => {
   await stubCentral(context);
-  const [v, id] = [fx.vectors[0], fx.vectors[3]];
+  const v = fx.vectors[0];
+  const d = keysFromWallet(hex(v.entropyHex));
   await openApp(page);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await page.getByLabel(/^Wallet: its 24 words or its private key/).fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'The wallet: not 24 backup words or a private key.' })).toBeVisible();
+  await expect(page.getByLabel(/^Alias/)).toHaveCount(0); // only the wallet is asked for
   await page.getByLabel(/^Wallet: its 24 words or its private key/).fill(`0x${v.entropyHex}`); // the private key, as a Base wallet exports it
-  await page.getByLabel(/^Alias: its 24 words or private key/).fill(id.words);
-  await page.getByLabel(/^Nostr key \(nsec or hex/).fill('nsec1nope');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Not a Nostr key' })).toBeVisible();
-  await page.getByLabel(/^Wallet: its 24 words or its private key/).fill(`0x${v.entropyHex}`); // the private key, as a Base wallet exports it
-  await page.getByLabel(/^Alias: its 24 words or private key/).fill(id.words);
-  await page.getByLabel(/^Nostr key \(nsec or hex/).fill(nsec(fx.nostr.secretHex)); // as Backup shows it
   await page.getByRole('button', { name: 'Continue' }).click();
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
   await page.getByLabel('Repeat passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page.locator('[data-test=wallet]')).toHaveText(v.ethAddress, { timeout: LOAD_TIMEOUT });
-  await expect(page.locator('[data-test=alias]')).toHaveText(id.ethAddress);
-  await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(fx.nostr.pubkeyHex);
+  await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(publicKey(d.alias)));
+  await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(nostrPubkey(d.nostr));
 });
 
 test('setup: one at a time, and it leaves rows it does not own', async ({ context, page }) => {

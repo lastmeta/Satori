@@ -86,8 +86,11 @@ nothing):
   Import): Home's day strip starts there or at the first session in the
   activity log, whichever is earlier ([health.md](health.md#the-day-strip)).
   A record made before 2026-10-17 has none.
-- The alias and the Nostr key are their secrets in plain hex; everything
-  else about them (public keys, addresses) is derived at load.
+- The alias and the Nostr key are their secrets, in hex or sealed with this
+  device's key ([at rest](#at-rest)); everything else about them (public
+  keys, addresses) is worked out at load. `from` is where they came from
+  (`wallet`, `signature`, `random`: [wallets.md](wallets.md#derived-keys));
+  `retired` keeps the ones they replaced (`[{ alias, nostr, at }]`).
 - The wallet's public key is in clear: its Base address shows while locked.
   At Unlock the decrypted secret must give the same public key.
 - A **connected** wallet (its wallet app holds it,
@@ -102,6 +105,29 @@ nothing):
   count still opens an older wallet.
 - An earlier version's wallet, until its next Unlock: `"wallet": { "pubkey":
   "02…" | null, "yaml": "<that version's vault.yaml text>" }` ([migration](#migration)).
+
+## At rest
+
+(Owner, 2026-10-26.) The alias and the Nostr key are used with nobody
+present, so they can't wait for the passphrase; they are sealed with a key
+that never leaves this browser instead: an AES-GCM key made with WebCrypto
+as non-extractable (no script can read its bytes, only use it), kept in
+IndexedDB (database `satori`, store `app`, key `device-key`). The record
+then holds `"sealed": { "iv", "data" }` (the alias's and the Nostr key's
+secrets, 64 bytes) in place of `alias` and `nostr`.
+
+- **Only where it works.** At load the app makes or reads the key and
+  checks it: stored, read back as a CryptoKey that can't be exported, and a
+  seal opened again. Any failure (a browser that can't keep a CryptoKey in
+  IndexedDB, a private window) → plain hex, as before, and the next load
+  checks again.
+- **What it protects**: a copy of the database file or of a device backup
+  without the browser's own storage. Not code running in the page.
+- **The key is gone, the keys are gone**: storage cleared with IndexedDB but
+  not OPFS can't happen (one site storage), but if the key is missing the
+  alias and the Nostr key are derived again at the next Unlock (or
+  re-signed, connected); random ones then can't be opened, and the app says
+  so (their backup is in Settings › Backup).
 
 ## The wallet encryption
 
@@ -153,14 +179,13 @@ migration re-encrypts the wallet with it as it is.
 
 ## In the browser
 
-- **Setup → Create**: a new alias and a new wallet (both random), the
-  wallet's 24 words shown and three of them checked (it holds the funds), one
-  passphrase. A new random Nostr key. One record is stored.
+- **Setup → Create**: a new wallet (random), its alias and Nostr key derived
+  from it ([wallets.md](wallets.md#derived-keys)), the wallet's 24 words
+  shown and three of them checked (they bring back all three keys), one
+  passphrase. One record is stored.
 - **Setup → Import**: the wallet's 24 words or its private key (`0x` and 64
-  hex, as a Base wallet exports it; required), the alias's the same way
-  (optional; a new alias if left empty) and the Nostr key as
-  Backup shows it, `nsec` or hex (optional; a new one if left empty: it is
-  not in the words), then the passphrase.
+  hex, as a Base wallet exports it), then the passphrase; the alias and the
+  Nostr key are derived from it.
 - **Setup → Import Docker files**: [below](#import-translate).
 - One setup runs at a time, from the UI or an agent; a second one is refused.
 - **Settings › Keys** shows each key's Base address (the alias's, and the
@@ -179,8 +204,9 @@ migration re-encrypts the wallet with it as it is.
 
 ![Import Docker files, with "Use it as this app's passphrase too"](../screenshots/import.png)
 
-**Import Docker files** takes `wallet.yaml`, `vault.yaml`, the
-Docker wallet password and, optionally, `nostr.yaml`. `src/keys/docker.js`
+**Import Docker files** takes the wallet file (`wallet.yaml`, or `vault.yaml`
+in an older install) and the Docker wallet password; the alias and the Nostr
+key are derived from the wallet (2026-10-26: the install's own are not kept). `src/keys/docker.js`
 reads them, read only, as satorilib wrote them; the keys are then sealed in
 this app's record. The files themselves are not kept.
 

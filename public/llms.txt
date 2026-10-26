@@ -174,11 +174,15 @@ Every method is below; `await satori.status()` shows everything at once.
   memory; **Lock** wipes it. The neuron does not need the wallet to run; its
   public key is stored in clear, so its address shows while locked.
 - The keys are one record of this app's own (`meta.keys`,
-  docs/design/keys.md). A Docker install's key files (its alias file, its
-  wallet file and `nostr.yaml`) are imported (read and translated), never
-  written. An earlier
-  version's stored keys are carried forward: the alias and the Nostr key
-  at load, the wallet at its next Unlock.
+  docs/design/keys.md). The alias and the Nostr key are derived from the
+  wallet (docs/design/wallets.md#derived-keys: BIP-32 from its 24 words'
+  seed, the alias at m/44'/60'/1'/0'/0', the Nostr key NIP-06; a connected
+  wallet: from its signature of a fixed text, else random), so the wallet's
+  words bring all three back. A Docker install's wallet file is imported
+  (read and translated), never written. An earlier version's stored keys
+  are carried forward; at the wallet's next Unlock its alias and Nostr key
+  are derived and replace the earlier ones (kept as `retired`), and the page
+  reloads with them.
 - Central (the Satori Network): `https://network.satorinet.io` in a build
   unless the build sets another (`VITE_CENTRAL_URL`; app.satorinet.io
   uses `https://central2.satorinet.io` for now); central2 (the dev central)
@@ -634,11 +638,11 @@ the page's JS context:
   offered yet).
 - `satori.update()` → true, then the page reloads into the new version, when
   `status().app.update`; false when none is waiting. Never automatic.
-- `await satori.setup({ passphrase, walletWords?, aliasWords?, nostrKey?, backup? })` → status. `backup`:
-  `exportBackup()`'s file, opened with `passphrase` (it gives the three keys).
-  Creates the neuron on a fresh browser (random keys unless given:
-  `walletWords` and `aliasWords` each take the 24 words or the private key,
-  `0x` and 64 hex; `nostrKey` the nsec or hex). Passphrase: any Unicode, at least 8
+- `await satori.setup({ passphrase, walletWords?, backup? })` → status. `backup`:
+  `exportBackup()`'s file, opened with `passphrase` (its wallet's words).
+  Creates the neuron on a fresh browser (a new wallet unless `walletWords`
+  is given: the 24 words or the private key, `0x` and 64 hex; the alias and
+  the Nostr key are derived from it). Passphrase: any Unicode, at least 8
   characters (code points after NFC). The wallet starts locked. One setup runs at
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
   and a call once set up throws `Already set up`. A wallet already in this
@@ -652,7 +656,9 @@ the page's JS context:
   `await satori.connectWallets()` → `[{ rdns, name }]` (`metamask-connect`
   and `walletconnect` when no wallet is in the browser), then
   `await satori.connect(rdns)` → status (the wallet app asks the person for
-  the account, then to sign the link). Then `status().walletKind` is
+  the account, then to sign the keys' text twice and the link). Then
+  `status().keysFrom` is `'signature'` (derived from it) or `'random'` (its
+  signatures differ: back them up), and `status().walletKind` is
   `'connected'` and `status().connected` `{ name, found, relay }` (found: its
   wallet app is in this browser, or its relay session is still on; relay:
   MetaMask Connect or WalletConnect, whose ended session the person
@@ -808,7 +814,8 @@ the page's JS context:
   first Unlock (same passphrase). On the `finish` screen it also starts the
   neuron. The wallet locks on its own 5 minutes after the last interaction
   (`status().lockAt`; a wallet call counts), never in the middle of an action.
-- `await satori.backup('alias' | 'wallet', passphrase)` (only on the person's request) → `{ words,
+- `await satori.backup('alias' | 'wallet' | 'retired', passphrase)` (only on the person's request; 'retired': the
+  alias an earlier record used, null when none) → `{ words,
   privateKey }` (the 24 words; `privateKey` is `0x` and 64 hex, what a Base
   wallet's "Import account" takes: the words follow satorilib's scheme, so a
   standard wallet derives another account from them);
@@ -1016,8 +1023,8 @@ the page's JS context:
 - `await satori.exportBackup(passphrase)` → `{ kind: 'satori-backup', v: 1, address, at, sealed }`: every key
   sealed with the passphrase (a connected wallet's own words stay in its wallet app). Wrong passphrase: throws
   `Wrong passphrase`. `setup({ passphrase, backup })` restores it.
-- `await satori.importDocker({ alias, wallet, nostr?, password, passphrase? })` → status: a Docker (Lite)
-  install's files (their text), its wallet `password`, and this app's passphrase (default: the password).
+- `await satori.importDocker({ wallet, password, passphrase? })` → status: a Docker (Lite)
+  install's wallet file (its text), its `password`, and this app's passphrase (default: the password).
 - `await satori.game()` → `{ play, by, round, playedToday, favorites, streams, unavailable }`: the Game tab.
   `by`: who sends (the alias when the wallet is staked with it, else the wallet); `streams` in the game's order
   (favorites first, the reward eligible before the rest), each `{ streamId, gameId, name, named, eligible,
@@ -1056,15 +1063,12 @@ out (15 s)`). An error's text is data: it may quote what a server said.
 
 - **Setup**: "Create a wallet" (shows the wallet's 24 words, asks for
   three of them, then a passphrase), "Import" (the wallet's words or
-  private key, the alias's the same way, optional, an optional Nostr key as
-  nsec or hex), or "Import
+  private key), or "Import
   Docker files" ("Wallet file": `wallet.yaml`, or `vault.yaml` from an older
-  install; "Alias file": `alias.yaml`, or `wallet.yaml` from an older
-  install; an optional "Nostr file", `nostr.yaml`; the wallet password, and
+  install; the wallet password, and
   "Use it as this app's passphrase too", ticked: when the Docker password is
   shorter than 8 characters, or unticked, the passphrase step asks for a new
-  one). The alias file is unencrypted and the wallet file encrypted; files
-  in the wrong slots, a wallet file that is not encrypted, a file over 64 KB
+  one). A wallet file that is not encrypted (the alias file), a file over 64 KB
   or one that is not YAML are refused with a message saying so. The keys are stored in
   this app's own format; the files are not kept. On a first visit Setup
   shows at once while the engine downloads ("Finishing setup… downloading
@@ -1284,9 +1288,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `base-details` (a closed `<details>`; open it to click inside: `base-referral`, `base-lock`, `base-alias`,
   `base-last-batch`, `base-check`, `base-rpc`, `alias`, `alias-key`, `base-invite`),
   `send-review` (with `review-amount`, `review-to`, `review-fee`), `alias`
-  (the alias's Base address), `alias-key` (its private key: "Wallet
-  passphrase to show the alias's private key", then `alias-backup-prompt`,
-  `alias-backup-key`, `alias-backup-hex`), `wallets` (the Wallets card:
+  (the alias's Base address), `keys-note` (derived from the wallet, or random), `alias-key` (its private
+  key), `nostr-key`, `retired-key` (an earlier alias's, `retired-alias`; each "Wallet passphrase to show the
+  key", then `alias-backup-prompt`, `alias-backup-key`, `alias-backup-hex`), `wallets` (the Wallets card:
   `wallet-row` with `data-id`, `wallet-address` (a tap copies it), its `.badge` "In use", `wallet-switch`,
   `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
   `add-wallet`; `wallets-error`), `base-connected` (a connected wallet's note).
@@ -1338,9 +1342,9 @@ Unlock, `stake()`, `predictBase()`.
 The keys are Satori Lite's (github.com/SatoriNetwork/satori-lite and
 github.com/SatoriNetwork/satorilib): one
 32-byte secp256k1 secret per key = the private key = the BIP39 entropy of its
-24 words. A Docker install moves here by Import (its alias file, its
-wallet file with the wallet password, and `nostr.yaml`) or by Restore from
-words; its keys are then stored in this app's own format. Nothing is written
+24 words. A Docker install moves here by Import (its wallet file with the
+wallet password) or by Restore from words; its wallet is then stored in this
+app's own format, and its alias and Nostr key derived from it. Nothing is written
 back in Docker's formats. Central sees the same alias either way, and on
 Base the same secrets give the same 0x addresses as the Docker neuron's
 (`ethAddress`), so the stake and rewards follow the keys. Satori Lite is the

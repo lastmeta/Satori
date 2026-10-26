@@ -122,7 +122,7 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
 
   // done: Predicting, sky green (fading in over 2.5 min), nothing moving
   send();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   await expect(line(page)).toHaveText('Sent 8 predictions just now · next in 11 h');
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
   await expect(hero(page)).toHaveAttribute('data-from', 'critical');
@@ -143,7 +143,7 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
   for (let i = 0; i + 1 < steps.length; i++) expect(steps[i + 1].t - steps[i].t, steps[i].work).toBeGreaterThanOrEqual(230);
   expect(new Set(seen.filter((r) => r.work === 'central:history').map((r) => r.line)).size).toBeGreaterThan(2); // the count ticked
   expect(seen.filter((r) => r.work && r.work !== 'central:send').every((r) => r.tone === 'working')).toBe(true);
-  const firstDone = seen.findIndex((r) => r.title === 'Predicting');
+  const firstDone = seen.findIndex((r) => /^Predict(ed|ing)$/.test(r.title));
   expect(seen.slice(0, firstDone).some((r) => r.work === 'central:send' && r.tone === 'critical')).toBe(true);
 
   // run to its end: the hero is sky green
@@ -173,7 +173,7 @@ test('a theme change during the fade to sky shows at once: the hero stays readab
   await page.emulateMedia({ colorScheme: 'light' });
   await openApp(page);
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
 
   // half way through the 2.5 min fade, the system goes dark: the fill is dark at once, under the light text
@@ -215,7 +215,7 @@ test('reduced motion: nothing turns; a still working mark, and the words change'
   expect(await page.locator('.ring').evaluate((el) => getComputedStyle(el, '::after').content)).toBe('none');
   expect(await page.locator('.ring .ico').evaluate((el) => getComputedStyle(el).maskImage)).toMatch(/circle/); // the dots
   release();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   expect(await animations(page)).toEqual([]);
   expect(central.prod).toEqual([]);
 });
@@ -234,7 +234,7 @@ test('the backup reminder is advice: a new neuron with random keys and storage n
   await expect(hero(page)).toHaveAttribute('data-tone', 'critical', { timeout: LOAD_TIMEOUT });
   expect(await page.evaluate(() => window.satori.health())).toMatchObject({ status: 'idle', tone: 'critical', title: 'Starting', action: { id: 'backup' } });
   send();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   await expect(line(page)).toHaveText('Sent 8 predictions just now · next in 11 h');
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');

@@ -23,6 +23,8 @@ export const state = reactive({
   passNote: '', // the passphrase step's note (an import whose password can't be reused)
   // the keys
   alias: '', // the alias's Base address
+  keysFrom: '', // where the alias and the Nostr key came from: 'wallet' | 'signature' (derived) | 'random' (docs/design/wallets.md#derived-keys)
+  retiredAlias: null, // the alias an earlier record used, before its keys were derived (its Base ETH may be there)
   wallet: '', // the wallet's Base address (shown while locked)
   connected: null, // a connected wallet (docs/design/wallets.md#a-connected-wallet): { name, found }, else null
   connectFound: null, // Setup's Connect: [{ rdns, name }] found in this browser; null while looking

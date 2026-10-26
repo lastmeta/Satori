@@ -9,6 +9,7 @@ import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { createChain } from '../src/chain/index.js';
 import { DEFAULTS } from '../src/chain/config.js';
 import { publicKey, evmAddress, signDigest } from '../src/keys/keys.js';
+import { keysFromWallet } from '../src/keys/derive.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 
@@ -384,9 +385,11 @@ test('a batch that never mines: past the max fee it says so (Settings); within i
   test.setTimeout(240_000);
   const { s, rpc, central } = await setup(context);
   central.noWalletAddress = true;
-  const [id, vk] = [fx.vectors[0], fx.vectors[1]];
+  const vk = fx.vectors[1];
+  const derived = keysFromWallet(Uint8Array.from(vk.entropyHex.match(/../g), (x) => parseInt(x, 16))).alias; // its alias, from the wallet
+  const id = { entropyHex: [...derived].map((x) => x.toString(16).padStart(2, '0')).join(''), ethAddress: evmAddress(publicKey(derived)) };
   await openApp(page);
-  await page.evaluate(([p, i, v]) => window.satori.setup({ passphrase: p, aliasWords: i, walletWords: v }), [PASS, id.words, vk.words]);
+  await page.evaluate(([p, v]) => window.satori.setup({ passphrase: p, walletWords: v }), [PASS, vk.words]);
   await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   const I = id.ethAddress.toLowerCase();
   const V = vk.ethAddress.toLowerCase();

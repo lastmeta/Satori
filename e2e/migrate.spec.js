@@ -8,6 +8,8 @@ import { readFileSync } from 'node:fs';
 import { verifyMessage } from 'viem';
 import { MIGRATIONS } from '../src/db/schema.js';
 import { publicKey, evmAddress, wordsOf } from '../src/keys/keys.js';
+import { keysFromWallet } from '../src/keys/derive.js';
+import { bytesToHex } from '@noble/hashes/utils';
 import { nostrPubkey } from '../src/nostr/event.js';
 import { openApp, reloadApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
@@ -62,29 +64,36 @@ for (const p of SHAPES) {
     await pass.fill('not the passphrase');
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'Wrong passphrase' })).toBeVisible({ timeout: 30_000 });
+    // The right one: the wallet stored in this app's format, its alias and Nostr key derived from it now (the earlier
+    // ones retired, docs/design/wallets.md#derived-keys), and the app starts again with them (the page reloads, locked).
+    const d = keysFromWallet(hex(p.expect.wallet));
+    const newPub = publicKey(d.alias);
     await pass.fill(p.passphrase);
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-    await expect(page.locator('[data-test=wallet-state]')).toHaveText('Unlocked', { timeout: 30_000 });
-    expect((await page.evaluate((x) => window.satori.backup('wallet', x), p.passphrase)).words).toBe(wordsOf(hex(p.expect.wallet)));
-    // that Unlock made the wallet's link and registered with it at once
-    await expect.poll(() => stub.registered.at(-1)['wallet-link'] ?? null).not.toBeNull();
-    const link = Buffer.from(stub.registered.at(-1)['wallet-link'], 'base64').toString('utf8');
-    expect(link).toContain(`alias: ${evmAddress(idPub)}\nwallet: ${evmAddress(walletPub)}\n`);
-    expect(await verifyMessage({ address: evmAddress(walletPub), message: link, signature: stub.registered.at(-1)['wallet-signature'] })).toBe(true);
+    await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(newPub), { timeout: 60_000 });
+    // registered with the new alias and the wallet's link to it
+    await expect.poll(() => stub.registered.findLast((r) => r['alias-pubkey'] === newPub)?.['wallet-link'] ?? null, { timeout: 30_000 }).not.toBeNull();
+    const reg = stub.registered.findLast((r) => r['alias-pubkey'] === newPub);
+    const link = Buffer.from(reg['wallet-link'], 'base64').toString('utf8');
+    expect(link).toContain(`alias: ${evmAddress(newPub)}\nwallet: ${evmAddress(walletPub)}\n`);
+    expect(await verifyMessage({ address: evmAddress(walletPub), message: link, signature: reg['wallet-signature'] })).toBe(true);
 
     await page.goto('/e2e/store/');
     const after = await appMeta(page, 'keys');
-    expect(after).toEqual({ ...before, wallet: { pubkey: walletPub, kdf: expect.objectContaining({ iterations: 600_000 }),
-      cipher: expect.objectContaining({ name: 'AES-GCM' }), data: expect.any(String) },
+    expect(after).toEqual({ ...before, alias: bytesToHex(d.alias), nostr: d.nostr, from: 'wallet',
+      retired: [{ alias: p.expect.alias, nostr: before.nostr, at: expect.any(Number) }],
+      wallet: { pubkey: walletPub, kdf: expect.objectContaining({ iterations: 600_000 }),
+        cipher: expect.objectContaining({ name: 'AES-GCM' }), data: expect.any(String) },
       link: { message: link, signature: expect.stringMatching(/^0x[0-9a-f]{130}$/) } });
 
-    // From now on it opens in the new format, with the same passphrase; the same keys.
+    // From now on it opens in the new format, with the same passphrase; the derived keys, the earlier alias kept.
     expect(await openApp(page)).toBe('home');
-    await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(idPub));
+    await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(newPub));
     expect(await page.evaluate((x) => window.satori.unlock(x), p.passphrase)).toBe(true);
     const b = await page.evaluate((x) => window.satori.backup(undefined, x), p.passphrase);
-    expect([b.alias.words, b.wallet.words]).toEqual([wordsOf(hex(p.expect.alias)), wordsOf(hex(p.expect.wallet))]);
-    expect(nostrPubkey(b.nostr.secret)).toBe(nostrPub);
+    expect([b.alias.words, b.wallet.words]).toEqual([wordsOf(d.alias), wordsOf(hex(p.expect.wallet))]);
+    expect(b.nostr.secret).toBe(d.nostr);
+    expect((await page.evaluate((x) => window.satori.backup('retired', x), p.passphrase)).words).toBe(wordsOf(hex(p.expect.alias)));
   });
 }
 
