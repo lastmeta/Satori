@@ -178,7 +178,9 @@ Every method is below; `await satori.status()` shows everything at once.
   wallet (docs/design/wallets.md#derived-keys: BIP-32 from its 24 words'
   seed, the alias at m/44'/60'/1'/0'/0', the Nostr key NIP-06; a connected
   wallet: from its signature of a fixed text, else random), so the wallet's
-  words bring all three back. A Docker install's wallet file is imported
+  words bring all three back. Stored, the alias and the Nostr key are sealed
+  with this browser's own non-extractable key (IndexedDB) where the browser
+  keeps one, else in hex (docs/design/keys.md#at-rest). A Docker install's wallet file is imported
   (read and translated), never written. An earlier version's stored keys
   are carried forward; at the wallet's next Unlock its alias and Nostr key
   are derived and replace the earlier ones (kept as `retired`), and the page

@@ -55,7 +55,9 @@ for (const p of SHAPES) {
     // The record before Unlock: the wallet still in the old version's text; the old rows are gone.
     await page.goto('/e2e/store/');
     const before = await appMeta(page, 'keys');
-    expect(before).toMatchObject({ v: 1, alias: p.expect.alias, wallet: { pubkey: walletPub, yaml: p.meta.vault_yaml } });
+    // the alias and the Nostr key sealed with this browser's key at that load (docs/design/keys.md#at-rest)
+    expect(before).toMatchObject({ v: 1, sealed: expect.any(Object), wallet: { pubkey: walletPub, yaml: p.meta.vault_yaml } });
+    expect(before).not.toHaveProperty('alias');
     for (const k of ['wallet_yaml', 'vault_yaml', 'nostr_yaml']) expect(await appMeta(page, k), k).toBeUndefined();
 
     // Unlock (Settings): a wrong passphrase changes nothing; the right one opens it and stores it in this app's format.
@@ -80,8 +82,7 @@ for (const p of SHAPES) {
 
     await page.goto('/e2e/store/');
     const after = await appMeta(page, 'keys');
-    expect(after).toEqual({ ...before, alias: bytesToHex(d.alias), nostr: d.nostr, from: 'wallet',
-      retired: [{ alias: p.expect.alias, nostr: before.nostr, at: expect.any(Number) }],
+    expect(after).toEqual({ ...before, sealed: { iv: expect.any(String), data: expect.any(String) }, from: 'wallet',
       wallet: { pubkey: walletPub, kdf: expect.objectContaining({ iterations: 600_000 }),
         cipher: expect.objectContaining({ name: 'AES-GCM' }), data: expect.any(String) },
       link: { message: link, signature: expect.stringMatching(/^0x[0-9a-f]{130}$/) } });
@@ -92,7 +93,7 @@ for (const p of SHAPES) {
     expect(await page.evaluate((x) => window.satori.unlock(x), p.passphrase)).toBe(true);
     const b = await page.evaluate((x) => window.satori.backup(undefined, x), p.passphrase);
     expect([b.alias.words, b.wallet.words]).toEqual([wordsOf(d.alias), wordsOf(hex(p.expect.wallet))]);
-    expect(b.nostr.secret).toBe(d.nostr);
+    expect([b.alias.privateKey, b.nostr.secret]).toEqual([`0x${bytesToHex(d.alias)}`, d.nostr]);
     expect((await page.evaluate((x) => window.satori.backup('retired', x), p.passphrase)).words).toBe(wordsOf(hex(p.expect.alias)));
   });
 }

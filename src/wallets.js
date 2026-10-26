@@ -86,6 +86,10 @@ async function run(mode, fn) {
   }
 }
 
+/** Another of the app's entries in the same store (this browser's key for the keys at rest: src/keys/atrest.js). */
+export const appGet = (key) => run('readonly', (s) => s.get(key));
+export const appPut = (key, value) => run('readwrite', (s) => s.put(value, key));
+
 /** The list, or null (none written: one wallet in the first file). */
 export const readWallets = async () => (await run('readonly', (s) => s.get(KEY))) ?? null;
 export const writeWallets = (list) => run('readwrite', (s) => s.put(list, KEY));

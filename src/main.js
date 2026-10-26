@@ -49,7 +49,8 @@ import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
 import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
-import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView } from './wallets.js';
+import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
+import { deviceKey, toRest, fromRest } from './keys/atrest.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
@@ -424,10 +425,14 @@ async function setBaseSettings(o) {
   return s;
 }
 
+/** This browser's key for the alias and the Nostr key at rest (docs/design/keys.md#at-rest), or null: checked once a page. */
+let restKeyOf;
+const restKey = () => (restKeyOf ??= deviceKey({ get: appGet, put: appPut }));
+
 /** The keys record, stored in one commit (each commit is checkpointed: docs/design/storage.md); critical work. */
 const storeKeys = (r) => work.run('keys', async (step) => {
   step('save');
-  await db.set('keys', r);
+  await db.set('keys', await toRest(r, await restKey())); // the alias and the Nostr key sealed where this browser keeps a key
   await db.checkpoint();
   record = r;
 });
@@ -1855,8 +1860,10 @@ async function boot() {
     registerWorker();
     state.recovered = db.recovered; // a WAL DuckDB could not replay, set aside (docs/design/storage.md#recovery)
     if (fresh) return; // Setup is on screen: it writes the keys (saveKeys)
-    record = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
+    const stored = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
+    record = await fromRest(stored, await restKey());
     if (!record) return void Object.assign(state, { screen: 'setup', cached: null });
+    if (!stored.sealed && await restKey()) await storeKeys(record); // in hex until now: sealed from now on
     // an earlier version's wallet whose public key was not in clear: the neuron needs it (register, the Base address)
     const w = loadKeys(record).wallet;
     if (!w.pubkey && !w.connected) return void Object.assign(state, { screen: 'finish', cached: null });

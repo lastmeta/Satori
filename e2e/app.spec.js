@@ -250,11 +250,15 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(stub.prod).toEqual([]);
   expect(await page.evaluate(() => window.violations)).toEqual([]);
 
-  // What is stored: this app's record, the wallet sealed (PBKDF2-SHA256 600,000, AES-256-GCM), nothing of Docker's.
+  // What is stored: this app's record, the wallet sealed (PBKDF2-SHA256 600,000, AES-256-GCM), the alias and the Nostr key
+  // sealed with this browser's own key (docs/design/keys.md#at-rest), nothing of Docker's.
   await page.goto('/e2e/store/'); // the app's tab is gone: its database can be read
   const { value: keys } = await page.evaluate(() => window.probe({ cmd: 'app-meta', key: 'keys' }));
-  expect(keys).toMatchObject({ v: 1, alias: Buffer.from(idSecret).toString('hex'), nostr: nostrHex,
+  expect(keys).toMatchObject({ v: 1, from: 'wallet', sealed: { iv: expect.any(String), data: expect.any(String) },
     wallet: { pubkey: walletPub, kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000 }, cipher: { name: 'AES-GCM' } } });
+  expect(keys).not.toHaveProperty('alias');
+  expect(JSON.stringify(keys)).not.toContain(Buffer.from(idSecret).toString('hex'));
+  expect(JSON.stringify(keys)).not.toContain(nostrHex);
   expect(Object.keys(keys.wallet).sort()).toEqual(['cipher', 'data', 'kdf', 'pubkey']);
 });
 
