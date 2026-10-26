@@ -17,7 +17,7 @@ import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['game', 'home', 'models', 'streams', 'market', 'wallet', 'settings'];
+export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'settings'];
 const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
 const LABEL = { game: 'Game', market: 'Market', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
