@@ -125,14 +125,14 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
 
   // already predicted this round, not by the game: played as usual, and Submit is done without sending or Unlock
   await t(page, 'game-send').click();
-  await expect(t(page, 'game-sent')).toContainText('Sent 4 predictions');
+  await expect(t(page, 'game-sent')).toContainText('4 Predictions submitted');
   await expect(t(page, 'game-sent')).not.toContainText('Transaction');
   await expect(page.locator('[data-unlock-for=game]')).toBeHidden();
   expect(s.batches).toHaveLength(0);
   // played with the game this round: its Sent screen, again
   await t(page, 'game-done').click();
   await expect(t(page, 'game-tomorrow')).toBeVisible();
-  await expect(t(page, 'game-sent')).toContainText('Sent 4 predictions');
+  await expect(t(page, 'game-sent')).toContainText('4 Predictions submitted');
   // Dismiss (this session): the streams again, to look at; where the buttons were, come back tomorrow
   await t(page, 'game-dismiss').click();
   await expect(t(page, 'game-play')).toBeVisible();
@@ -164,8 +164,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
     await prompt.locator('input').fill(PASS);
     await prompt.getByRole('button', { name: 'Unlock' }).click();
   }
-  await expect(t(page, 'game-sent')).toContainText('Sent 2 predictions', { timeout: 30_000 });
-  await expect(t(page, 'game-sent')).toContainText('Transaction');
+  await expect(t(page, 'game-sent')).toContainText('2 Predictions submitted', { timeout: 30_000 });
+  await expect(t(page, 'game-sent')).toContainText('They will be scored in 24 hours.');
   expect(s.batches).toHaveLength(1);
   expect(s.batches[0]).toMatchObject({ from: V, requests: [{ gameId: 3, payload: '0x01' }, { gameId: 1, payload: '0x02' }] });
   // the wallet's first prediction registered who invited it, as the dapp's does

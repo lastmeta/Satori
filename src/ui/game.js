@@ -6,7 +6,7 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { unlockPrompt } from './parts.js';
-import { shortHash, figure } from './format.js';
+import { figure } from './format.js';
 import { latestText, linePoints, nothingText, submitEarly, stepOf } from './gameflow.js';
 import { UP, DOWN } from '../chain/index.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
@@ -273,8 +273,8 @@ export function gameTab(a) {
         <div class="gmsg" hidden="${showing('error')}"><p class="error">${() => `The chain did not answer: ${g().error}`}</p><button @click="${a.loadGame}">Try again</button></div>
         <div class="gmsg" data-test="game-nothing" hidden="${showing('nothing')}"><p>${() => nothingText(g().streams)}</p><button data-test="game-again" @click="${a.loadGame}">Check again</button></div>
         <div class="gmsg" data-test="game-sent" hidden="${showing('sent')}">
-          <h2>${() => `Sent ${g().sent?.count ?? 0} prediction${g().sent?.count === 1 ? '' : 's'}`}</h2>
-          <p class="muted small">${() => (g().sent ? `Scored about 24 hours after each was made.${g().sent.hash ? ` Transaction ${shortHash(g().sent.hash)}.` : ''}` : '')}</p>
+          <h2>${() => `${g().sent?.count ?? 0} Prediction${g().sent?.count === 1 ? '' : 's'} submitted`}</h2>
+          <p class="muted small">${() => (g().sent?.count === 1 ? 'It will be scored in 24 hours.' : 'They will be scored in 24 hours.')}</p>
           <p class="muted small" data-test="game-tomorrow" hidden="${() => !g().sent?.again}">Played today. The next game opens tomorrow.</p>
           <button data-test="game-done" hidden="${() => !!g().sent?.again}" @click="${a.loadGame}">Done</button>
           <button data-test="game-dismiss" hidden="${() => !g().sent?.again}" @click="${a.gameRest}">Dismiss</button>
