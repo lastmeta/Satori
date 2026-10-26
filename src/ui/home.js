@@ -150,7 +150,6 @@ export function home(a) {
       <div class="tile-h"><b class="phone-only">Last 14 days</b><b class="desk-only">Last 30 days</b><span class="phone-only" data-test="days-summary">${() => fullDays(14)}</span><span class="desk-only">${() => fullDays(30)}</span></div>
       <div class="strip" data-test="days">${() => h().days.map((d) => cell(a, d).key(`${d.date}:${d.code}:${d.network}:${d.contract}:${d.ran}:${d.today}:${state.dayOpen === d.date}:${cachedNow()}`))}</div>
       <div class="day-panel" data-test="day-detail" data-open="${() => String(!!state.dayOpen && !!state.day)}"><div class="day-inner">${() => (state.day ? dayBody(state.day).key(`${state.day.date}:${JSON.stringify(state.day).length}`) : '')}</div></div>
-      <p class="strip-key small muted" data-test="strip-key">Top: the Satori Network · Bottom: the Satori contract</p>
       <div class="legend desk-only"><span><i data-half="ok"></i>Predicted</span><span><i data-half="error"></i>Errors only</span><span><i data-half="none"></i>Nothing</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 

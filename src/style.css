@@ -347,7 +347,6 @@ details.card > summary { color: var(--text); font-weight: 600; }
 button.cell { padding: 0; border: 0; background: none; cursor: pointer; }
 button.cell:disabled { cursor: default; }
 .cell[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
-.strip-key { margin: 8px 0 0; }
 /* a day opened: the card grows as the day fades in. Closing: the day fades out first, then the card shrinks (its
    content stays until it is gone). The transition is the one of the state it goes to. */
 /* Home's Satori contract card (src/ui/contract.js): under the chips, opened by the Contract chip; fades out, then folds */

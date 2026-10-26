@@ -19,6 +19,7 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   streams too (it was their up/down/flat).
 - Models: the median model line and the backtest note are gone (`engine-median`, `engine-note`); the Network,
   Contract and Relays toggles show no counts.
+- Home: the day strip's key line ("Top: the Satori Network · Bottom: the Satori contract") is gone.
 - Models: a model's Out shows How it did, its forecasts beside what came; `model(id)`'s outputs carry `outcomes`.
 - Market: Selling (each predicted stream: Sell, its buyers, Make free), Buying (Stop, Take back) and Find streams
   for sale under Buying, which opens the priced streams with Buy; a channel's settings under Channel details.
