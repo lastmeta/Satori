@@ -11,8 +11,8 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   wallet alone. `status().keysFrom`: 'wallet' | 'signature' | 'random'. `backup('retired', p)`: an earlier alias.
 - An earlier record's alias and Nostr key are replaced by derived ones at the wallet's next Unlock (the page reloads);
   the wallet then shows as staked elsewhere until Stake.
-- Settings › Backup shows the alias's and the Nostr key's only when random; else on the Wallet tab's Details
-  (`nostr-key`, `alias-key`, `retired-key`).
+- Settings › Backup: Wallet words, Alias key (`alias-key`), Nostr key (`nostr-key`), and an earlier alias's
+  (`retired-key`, `retired-alias`); `keys-note` says whether they are derived or random.
 - Stored, the alias and the Nostr key are sealed with this browser's own key where it keeps one (no call changed).
 
 ## Changed 2026-10-26 (the Streams and Market pages; no call changed)

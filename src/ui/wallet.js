@@ -4,7 +4,7 @@
 // shows) and the invite link. The wallet's actions ask for the passphrase in place (the inline Unlock) when it is locked.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
-import { backupPanel, fact, form, idRow, unlockPrompt } from './parts.js';
+import { fact, form, idRow, unlockPrompt } from './parts.js';
 import {
   amountText, figure, claimParts, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
   referralText, referralNote, REFERRAL_PCT,
@@ -102,12 +102,7 @@ export function walletTab(a) {
       <div class="alias">
         ${idRow('Alias', 'alias', () => state.alias, a)}
         <p class="muted small">The app's own signing address; the daily batch's gas is paid from it.</p>
-        <p class="muted small" data-test="keys-note">${() => (state.keysFrom === 'random' ? "The alias and the Nostr key are random: they're backed up in Settings › Backup."
-          : "The alias and the Nostr key are derived from your wallet: no need to back them up, but you can see them here.")}</p>
-        <div class="actions"><button class="small-btn" data-test="alias-key" @click="${() => a.askBackup('alias-here')}">Alias private key</button><button class="small-btn" data-test="nostr-key" @click="${() => a.askBackup('nostr-here')}">Nostr key</button></div>
-        <p class="muted small" data-test="retired-alias" hidden="${() => !state.retiredAlias}">${() => (state.retiredAlias ? `Your earlier alias, ${shortHash(state.retiredAlias)}: any Base ETH left there is yours.` : '')}
-          <button class="small-btn" data-test="retired-key" @click="${() => a.askBackup('retired')}">Its private key</button></p>
-        ${backupPanel(a, ['alias-here', 'nostr-here', 'retired'], 'alias-backup', 'Wallet passphrase to show the key')}
+        <p class="muted small">Its private key: Settings › Backup.</p>
       </div>
       <div hidden="${() => !b().inviteLink}">
         ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}

@@ -185,16 +185,12 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   const key = page.locator('[data-test=backup-key]');
   await expect(key).toHaveText(/^0x[0-9a-f]{64}$/);
   expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(walletAddress);
-  // the alias's and the Nostr key's are on the Wallet tab (Details): derived from the wallet, so not in Backup
-  // (docs/design/wallets.md#derived-keys)
-  await expect(page.getByRole('button', { name: 'Nostr key' })).toBeHidden();
-  await go(page, 'wallet');
-  await page.locator('[data-test=base-details] summary').click();
+  // the alias's and the Nostr key's too, derived from the wallet (docs/design/wallets.md#derived-keys)
   await expect(page.locator('[data-test=keys-note]')).toHaveText(/derived from your wallet: no need to back them up/);
-  await page.locator('[data-test=alias-key]').click();
-  await page.getByLabel('Wallet passphrase to show the key').fill(PASS);
-  await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Show' }).click();
-  const aliasKey = page.locator('[data-test=alias-backup-key]');
+  const walletKey = await key.textContent();
+  await showBackup('Alias key');
+  const aliasKey = key;
+  await expect(aliasKey).not.toHaveText(walletKey);
   await expect(aliasKey).toHaveText(/^0x[0-9a-f]{64}$/);
   const idWords = await visible(page.locator('ol.words li')).allTextContents();
   expect(idWords).toHaveLength(24);
@@ -203,13 +199,11 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(wordsOf(idSecret)).toBe(idWords.join(' '));
   expect(publicKey(idSecret)).toBe(reg['alias-pubkey']);
   expect(bytesToHex(idSecret)).toBe(bytesToHex(keysFromWallet(secretFromWords(words.join(' '))).alias)); // the wallet's own
-  await page.locator('[data-test=nostr-key]').click();
-  await page.getByLabel('Wallet passphrase to show the key').fill(PASS);
-  await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Show' }).click();
-  await expect(aliasKey).toHaveText(/^nsec1[02-9ac-hj-np-z]{58}$/);
-  const nostrHex = await page.locator('[data-test=alias-backup-hex]').textContent();
+  await showBackup('Nostr key');
+  await expect(visible(page.locator('ol.words li'))).toHaveCount(0);
+  await expect(key).toHaveText(/^nsec1[02-9ac-hj-np-z]{58}$/);
+  const nostrHex = await page.locator('[data-test=backup-hex]').textContent();
   expect(nostrPubkey(nostrHex)).toBe(reg['nostr-pubkey']);
-  await go(page, 'settings');
 
   // Lock: the wallet and the backup are gone (showing it again asks for the passphrase, in place, as it always does); the
   // neuron still polls and submits.

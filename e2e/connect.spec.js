@@ -112,19 +112,16 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   app.state.reject = false;
 
   // The app's keys came from the wallet's signature (the same each time, docs/design/wallets.md#derived-keys): not in
-  // Backup; on the Wallet tab (Details), each confirmed by a signature in the wallet app
+  // Backup, each confirmed by a signature in the wallet app
   expect((await page.evaluate(() => window.satori.status())).keysFrom).toBe('signature');
   await go(page, 'settings');
-  await expect(page.getByRole('button', { name: 'Nostr key' })).toBeHidden();
-  await go(page, 'wallet');
-  await page.locator('[data-test=base-details] summary').click();
-  await page.locator('[data-test=nostr-key]').click();
-  await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
-  await expect(page.locator('[data-test=alias-backup-key]')).toHaveText(/^nsec1/);
+  await page.getByRole('button', { name: 'Nostr key' }).click();
+  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
+  await expect(page.locator('[data-test=backup-key]')).toHaveText(/^nsec1/);
   expect(app.calls.filter((m) => m === 'personal_sign')).toHaveLength(4); // the keys' text twice, the link, then this
-  await page.locator('[data-test=alias-key]').click();
-  await page.locator('[data-test=alias-backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
-  await expect(page.locator('[data-test=alias-backup-key]')).toHaveText(/^0x[0-9a-f]{64}$/);
+  await page.getByRole('button', { name: 'Alias key' }).click();
+  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
+  await expect(page.locator('[data-test=backup-key]')).toHaveText(/^0x[0-9a-f]{64}$/);
 
   // The wallet app not in this browser: the app still runs; a wallet action says where to go
   await page.evaluate(() => localStorage.setItem('noWallet', '1'));

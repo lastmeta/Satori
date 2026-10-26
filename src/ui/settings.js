@@ -53,17 +53,19 @@ function backup(a) {
   return html`
   <section class="card settings-section" id="settings-backup">
     <h2>Backup</h2>
-    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Import brings it back, with this
-      app's own keys, which come from it. Showing the words asks for the wallet's passphrase each time.</p>
-    <p class="muted small" hidden="${() => !state.connected}">${() => (!state.connected ? ''
-      : state.keysFrom === 'random' ? `Your wallet is backed up in ${state.connected.name}. ${state.connected.name} couldn't make this app's keys, so they are random: back them up here (showing them asks ${state.connected.name} to confirm).`
-        : `Your wallet is backed up in ${state.connected.name}. This app's keys come from it: connecting it again brings them back.`)}</p>
+    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Import brings it back. Showing a key
+      asks for the wallet's passphrase each time.</p>
+    <p class="muted small" hidden="${() => !state.connected}">${() => (state.connected ? `Your wallet is backed up in ${state.connected.name}. Showing a key asks ${state.connected.name} to confirm.` : '')}</p>
+    <p class="muted small" data-test="keys-note">${() => (state.keysFrom === 'random' ? "The alias and the Nostr key are random: back them up too."
+      : "The alias and the Nostr key are derived from your wallet: no need to back them up, but you can see them here.")}</p>
     <div class="backup-row">
       <button class="small-btn" hidden="${() => !!state.connected}" @click="${() => a.askBackup('wallet')}">Wallet words</button>
-      <button class="small-btn" hidden="${() => state.keysFrom !== 'random'}" @click="${() => a.askBackup('alias')}">Alias key</button>
-      <button class="small-btn" hidden="${() => state.keysFrom !== 'random'}" @click="${() => a.askBackup('nostr')}">Nostr key</button>
+      <button class="small-btn" data-test="alias-key" @click="${() => a.askBackup('alias')}">Alias key</button>
+      <button class="small-btn" data-test="nostr-key" @click="${() => a.askBackup('nostr')}">Nostr key</button>
+      <button class="small-btn" data-test="retired-key" hidden="${() => !state.retiredAlias}" @click="${() => a.askBackup('retired')}">Earlier alias key</button>
     </div>
-    ${backupPanel(a, ['wallet', 'alias', 'nostr'])}
+    <p class="muted small" data-test="retired-alias" hidden="${() => !state.retiredAlias}">${() => (state.retiredAlias ? `Your earlier alias, ${shortHash(state.retiredAlias)}, was replaced by the one derived from your wallet: any Base ETH left there is yours.` : '')}</p>
+    ${backupPanel(a, ['wallet', 'alias', 'nostr', 'retired'])}
   </section>`;
 }
 

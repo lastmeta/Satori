@@ -109,13 +109,12 @@ importing the wallet brings them back with nothing else to keep.
   signature has the alias and the Nostr key (they predict, they can't move
   the wallet's funds).
 - **The record says where they came from**: `from: 'wallet' | 'signature' |
-  'random'`. Derived: Settings › Backup shows only the wallet; the alias's and
-  the Nostr key's private keys are under the Wallet tab's Details › Keys,
-  "Derived from your wallet: no need to back them up". Random: Settings ›
-  Backup shows them too, as their only backup.
+  'random'`. Settings › Backup shows every key: the wallet's
+  words, the alias's and the Nostr key's private keys (derived: "no need to
+  back them up, but you can see them here"; random: "back them up too").
 - **Earlier records** (random keys): an in-app wallet's next Unlock derives
   its keys and replaces them, with a new link; the old ones are kept in the
-  record (`retired`) and shown under Details › Keys, so nothing they hold is
+  record (`retired`) and shown under Settings › Backup, so nothing they hold is
   lost. The wallet then shows as staked elsewhere until Stake (one
   transaction). A connected wallet's stay random until it is connected again.
 - **Import takes the wallet only**: the alias, Nostr and Docker alias files
@@ -253,8 +252,7 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
   then waits for the receipt as for its own.
 - **No Unlock, no Lock** for it: Settings › Keys shows "Connected: <name>";
   the inline Unlock prompts never open. The alias's and the Nostr key's
-  (the wallet's own words stay in the wallet app; in Backup only when
-  random, else on the Wallet tab's Details) are each shown
+  (the wallet's own words stay in the wallet app; in Backup) are each shown
   after the wallet signs a fixed text ("Satori: show this app's keys",
   the wallet's address, the time), checked like the link.
 - **For agents**: `connectWallets()` → the wallets found (`[{ rdns, name }]`),

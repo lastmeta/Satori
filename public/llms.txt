@@ -1288,11 +1288,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `base-last-batch`, `base-check`, `base-stake`, `base-unstake`,
   `base-claim`, `base-result`, `base-txs`, `base-action-error`, `base-low-gas`,
   `base-details` (a closed `<details>`; open it to click inside: `base-referral`, `base-lock`, `base-alias`,
-  `base-last-batch`, `base-check`, `base-rpc`, `alias`, `alias-key`, `base-invite`),
+  `base-last-batch`, `base-check`, `base-rpc`, `alias`, `base-invite`),
   `send-review` (with `review-amount`, `review-to`, `review-fee`), `alias`
-  (the alias's Base address), `keys-note` (derived from the wallet, or random), `alias-key` (its private
-  key), `nostr-key`, `retired-key` (an earlier alias's, `retired-alias`; each "Wallet passphrase to show the
-  key", then `alias-backup-prompt`, `alias-backup-key`, `alias-backup-hex`), `wallets` (the Wallets card:
+  (the alias's Base address), `wallets` (the Wallets card:
   `wallet-row` with `data-id`, `wallet-address` (a tap copies it), its `.badge` "In use", `wallet-switch`,
   `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
   `add-wallet`; `wallets-error`), `base-connected` (a connected wallet's note).
@@ -1300,7 +1298,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   set up); `connect-wallet` (Connect a wallet), then `connect-step` with
   `connect-to` (one per wallet found, `data-rdns`) or `no-wallet`. Settings:
   `wallet-connected` (a connected wallet's note).
-  Settings: `wallet` (the Base address), `wallet-state`,
+  Settings: `wallet` (the Base address), `wallet-state`, Backup's `alias-key`, `nostr-key`, `retired-key`
+  (an earlier alias's, `retired-alias`), `keys-note` (derived, or random),
   `nostr-pubkey`, `unlock`, `lock-wallet`, `backup-prompt`, `backup-key` (a
   private key, or the nsec), `backup-hex`, `reward-address` (the address
   shortened; `title` the whole one), `reward-whose` ("your wallet", "your

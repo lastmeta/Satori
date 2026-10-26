@@ -580,8 +580,7 @@ async function finishUpdate(passphrase) {
  * One key's backup ({ words, privateKey }, or the Nostr key's { nsec, secret }), or all three (which null or undefined),
  * from the passphrase each time, unlocked or not (keys' backupKeys: ~0.3 s; docs/design/keys.md#backup).
  */
-async function backupOf(asked, passphrase) {
-  const which = { 'alias-here': 'alias', 'nostr-here': 'nostr' }[asked] ?? asked; // the Wallet tab's Keys ask the same keys
+async function backupOf(which, passphrase) {
   const b = walletPublic.connected ? await connectedBackupOf(which) : await backupKeys(record, which, passphrase);
   markBackup().catch((err) => console.warn('[satori] backup_at', err)); // shown: the backup is confirmed
   return b;
