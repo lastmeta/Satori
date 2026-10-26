@@ -40,7 +40,11 @@ async function stubCentral(context, url) {
 const visible = (loc) => loc.filter({ visible: true });
 const status = (page) => page.evaluate(() => window.satori.status());
 /** Show a tab (Home · Streams · Wallet · Settings), as the nav does. */
-const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
+/** Show a tab; on Streams, its Streams card opened (folded by default). */
+const go = async (page, tab) => {
+  await page.evaluate((t) => window.satori.go(t), tab);
+  if (tab === 'streams') await page.evaluate(() => { document.querySelector('[data-test=streams]').open = true; });
+};
 /** A stream's row by its name (another row's Model column may name it as a companion). */
 const row = (page, name) => page.locator('[data-test=stream]').filter({ has: page.locator('.sname', { hasText: new RegExp(`^${name}$`) }) });
 

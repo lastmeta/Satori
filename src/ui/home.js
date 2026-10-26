@@ -166,7 +166,7 @@ export function home(a) {
           return state.streams.slice(0, HOME_ROWS).map((r) => homeRow(r, names).key(`${r.uuid}:${r.obs_ts}:${r.made_at}:${state.sparks[r.uuid]?.length}`));
         }}</div>
       </div>
-      <p class="small" hidden="${() => state.streams.length <= HOME_ROWS}"><a href="#streams" @click="${(e) => { e.preventDefault(); a.go('streams'); }}">${() => `All ${state.streams.length} streams`}</a></p>
+      <p class="small" hidden="${() => state.streams.length <= HOME_ROWS}"><a href="#streams" @click="${(e) => { e.preventDefault(); a.go('streams'); document.querySelector('[data-test=streams]').open = true; }}">${() => `All ${state.streams.length} streams`}</a></p>
     </section>
 
     <div class="money">

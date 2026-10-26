@@ -1,4 +1,4 @@
-// Streams: the Satori Network's (central: one line, its facts under Details, and Poll now; each stream with its latest
+// Streams: the Satori Network's (central: one line, its facts under Details, and Poll now; folded by default, each stream with its latest
 // value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori relays (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
 // Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there (its streams for sale open).
@@ -58,8 +58,8 @@ function detail(r, names, a) {
 
 function streamsCard(a) {
   return html`
-  <section class="card" data-test="streams">
-    <header class="card-head"><h2>Streams</h2><span class="muted small" data-test="streams-count">${() => (state.streams.length ? `${state.streams.length} from the Satori Network, with our forecasts` : '')}</span></header>
+  <details class="card records" data-test="streams">
+    <summary>Streams <span class="muted small" data-test="streams-count">${() => (state.streams.length ? `${state.streams.length} from the Satori Network, with our forecasts` : '')}</span></summary>
     <p class="muted small" hidden="${() => state.streams.length > 0}">Streams: none yet. They arrive with the first poll.</p>
     <div class="srows" hidden="${() => !state.streams.length}">
       <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">In 24 h</span><span></span></div>
@@ -68,7 +68,7 @@ function streamsCard(a) {
         return state.streams.map((r) => streamRow(r, names, a).key(r.uuid));
       }}</div>
     </div>
-  </section>`;
+  </details>`;
 }
 
 
