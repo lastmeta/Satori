@@ -1,7 +1,7 @@
 // The Models tab's views (src/ui/drill.js): what each row, the status and the drill-in show, from models() and
 // model(id) data. A fabricated model with two outputs proves the drill-in draws every output and its destinations.
 import { describe, expect, test } from 'vitest';
-import { drillView, rowView, statusView, chartOf, pctText, qualityText, destinationView, numText, retrainView, ratioWords } from './drill.js';
+import { drillView, rowView, outcomesView, statusView, chartOf, pctText, qualityText, destinationView, numText, retrainView, ratioWords } from './drill.js';
 import { summaryOf, qualityOf } from '../neuron/models.js';
 
 const H = 3600;
@@ -264,5 +264,20 @@ describe('Retrain in the drill-in\'s header (docs/design/models.md#retrain)', ()
     const d = { ...TWO, model: { ...TWO.model, retrain: { at: AT, outcome: 'found', kept: 'new', tried: 340, ms: 2140, ratio: 0.86 } } };
     const facts = Object.fromEntries(drillView(d, { now: AT + H }).model.details);
     expect(facts['Last retrain']).toMatch(/^.+ · found one, 14% better · 340 tried in 2.1 s$/);
+  });
+});
+
+describe('How it did: the forecasts beside what came (the Prediction Streams chart)', () => {
+  test('two lines on one scale, its caption; below two outcomes, when it will show', () => {
+    const o = { forecast: { horizon: 86_400 }, outcomes: [{ ts: 1, predicted: 10, actual: 11 }, { ts: 2, predicted: 12, actual: 14 }] };
+    const v = outcomesView(o);
+    expect(v).toMatchObject({ n: 2, top: '14', bottom: '10' });
+    expect(v.actual).toMatch(/^M/);
+    expect(v.predicted).toMatch(/^M/);
+    expect(v.caption).toBe('the last 2 outcomes, from 10 to 14; each forecast made 24 h before');
+    expect(outcomesView({ ...o, outcomes: o.outcomes.slice(1) })).toEqual({ n: 1,
+      note: 'It shows once two of its forecasts have come due (1 so far): each is for 24 h after it was made.' });
+    expect(outcomesView({ forecast: { horizon: 86_400 }, outcomes: [] }).n).toBe(0);
+    expect(outcomesView({ forecast: { horizon: 86_400 }, outcomes: null })).toBeNull();
   });
 });

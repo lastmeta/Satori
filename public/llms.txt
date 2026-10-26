@@ -733,7 +733,9 @@ the page's JS context:
   generation, accepted, trained, quality }` (`coef`: the target's equation,
   in `inputs` order; `rows`: the rows it learned from; `tests`: backtest
   origins), each output's `history` (the chart's points, [{ ts, value }],
-  the last 7 horizons) and its `influence` from that refit, `ms` (31 ms on
+  the last 7 horizons), its `outcomes` (How it did: [{ ts, predicted,
+  actual }], oldest first, the last 50 of this app's forecasts beside the
+  value that came at the time each was for; null for a Contract model) and its `influence` from that refit, `ms` (31 ms on
   the dev server for one of central2's 84 streams, 2026-10-19; about 0.4 s
   on a busy box) and `readMs` (the history read, most of it). A Base model reads its stream's history from the chain. `retrain`:
   whether Retrain is offered and its status, `{ available, why (null |
@@ -1132,7 +1134,10 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   λ2, mutations, coefficients, the fade weight, the errors; Retrain for a
   Network model), **Out** (each output: the forecast, the latest value, a
   chart of recent history with the forecast to scale, "12 h" and "24 h"
-  marks, and where it went); "← Models" goes back.
+  marks, How it did (the last outcomes as a line and what it forecast for
+  each, dashed, as the Prediction Streams chart; until two have come due,
+  "It shows once two of its forecasts have come due (1 so far) …"), and
+  where it went); "← Models" goes back.
 - **Streams**, every card folded until tapped: **Network Streams** (one
   line, "Sent 82 predictions Oct 24, 20:18, all accepted · next Oct 25,
   07:18", red when it fails, and Refresh (a poll now); a wallet mismatch if
@@ -1246,7 +1251,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `model-error`, `model-in` with `model-input` (`data-own`), `model-model`
   with `model-line` and `model-details`, `model-out` with `model-output`
   (`data-stream`), `model-output-name`, `model-output-forecast`,
-  `model-chart`, `model-endpoint`, `model-readout`, `model-destination`
+  `model-chart`, `model-endpoint`, `model-readout`, `model-outcomes` (with
+  `model-outcomes-note` until it draws), `model-destination`
   (`data-to`), `model-retrain` (`data-action`), `model-retrain-line`
   (`data-r`), `model-retrain-note`. Streams: `network-line`, `mismatch`,
   `poll-now`, `network-details` (a closed `<details>` with `registered`,

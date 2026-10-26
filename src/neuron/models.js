@@ -16,6 +16,7 @@ import { explainForecast, STEP_S, HORIZON_STEPS, median } from '../engine/index.
 import { UP } from '../chain/index.js';
 import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
 import { fmtAgo, fmtIn } from './health.js';
+import { outcomePairs } from './outcomes.js';
 
 export { TIE, markWords, qualityOf };
 /** The chart's history: this many horizons back from when the forecast was made, at most HISTORY_POINTS. */
@@ -274,7 +275,10 @@ export async function modelDetail({ db, id, streams = [], subscriptions = [], la
     const t = clock();
     try { return await fn(...args); } finally { read += clock() - t; }
   };
-  const reads = { histories: timed((u) => db.histories(u)), relayHistory: timed((u, windowS) => db.relayHistory(u, windowS)) };
+  const reads = { histories: timed((u) => db.histories(u)), relayHistory: timed((u, windowS) => db.relayHistory(u, windowS)),
+    // what this app forecast before, for How it did (a db without them: none)
+    predictions: timed(async (u, n) => (db.predictions ? db.predictions(u, n) : [])),
+    relayPredictions: timed(async (u, n) => (db.relayPredictions ? db.relayPredictions(u, n) : [])) };
   const [source, key] = parseId(id, streams);
   let d = null;
   if (source === 'central') d = await centralDetail(reads, key, streams);
@@ -286,9 +290,10 @@ export async function modelDetail({ db, id, streams = [], subscriptions = [], la
 
 /** Retrain is offered on Satori Network models only, with the history to split (docs/design/models.md#retrain). */
 const NO_RETRAIN = { available: false, why: 'source', last: null };
+const PAST_N = 1000; // the forecasts read for How it did, newest first (an hourly stream: about 6 weeks)
 
 /** The detail's shape: the list's model, its Model facts, each output with its history; In from the fit when it has one. */
-function detailOf(m, x, model, histories, retrain = NO_RETRAIN) {
+function detailOf(m, x, model, histories, retrain = NO_RETRAIN, outcomes = new Map()) {
   const fit = x && x.model === m.kind; // the same model now as made the forecast (else In and the rows are the list's)
   const names = new Map(m.inputs.map((i) => [i.stream, i.name]));
   const outputs = m.outputs.map((o) => ({
@@ -296,6 +301,7 @@ function detailOf(m, x, model, histories, retrain = NO_RETRAIN) {
     influence: fit ? ranked(x.inputs.map((u, i) => ({ stream: u, name: names.get(u) ?? null, share: x.influence[i] }))) : o.influence,
     quality: fit ? qualityOf({ kind: m.kind, score: x.score, persist: x.persist }) : o.quality,
     history: recent(histories.get(o.stream) ?? [], o.forecast.at, o.forecast.horizon),
+    outcomes: outcomes.get(o.stream) ?? null, // null: not read (Base's)
   }));
   const quality = qualityOfAll(outputs.map((o) => o.quality));
   return {
@@ -317,7 +323,9 @@ async function centralDetail(db, key, streams) {
   const model = { step: STEP_S, horizon: CENTRAL_HORIZON, weight: row.weight ?? null, phi: row.phi ?? null,
     ...(spec ? { lambda1: spec.lambda1, lambda2: spec.lambda2, generation: row.generation, accepted: row.accepted } : {}), retrain: last };
   const ok = !!spec && canRetrain({ target: key, histories }).ok;
-  return detailOf(m, x, model, histories, { available: ok, why: ok ? null : 'history', last });
+  const made = (await db.predictions(key, PAST_N)).map((p) => ({ at: p.made_at, value: p.t2 }));
+  const outcomes = new Map([[key, outcomePairs(made, histories.get(key) ?? [], CENTRAL_HORIZON)]]);
+  return detailOf(m, x, model, histories, { available: ok, why: ok ? null : 'history', last }, outcomes);
 }
 
 async function nostrDetail(db, key, subscriptions) {
@@ -328,8 +336,9 @@ async function nostrDetail(db, key, subscriptions) {
   const points = await db.relayHistory(key, cadence * RELAY_WINDOW); // the engine's window, as the intake reads it
   const x = explainForecast(points, { step: cadence, horizon: cadence });
   const scored = nostrModels([{ ...s, prediction: { ...s.prediction, score: x?.score, persist: x?.persist } }])[0];
+  const made = (await db.relayPredictions(key, PAST_N)).map((p) => ({ at: Number(p.made_at), value: Number(p.value) }));
   return detailOf(scored, x && { ...x, inputs: [key], influence: [1] }, { step: cadence, horizon: cadence, weight: x?.weight ?? null,
-    phi: x?.phi ?? null }, new Map([[key, points]]));
+    phi: x?.phi ?? null }, new Map([[key, points]]), NO_RETRAIN, new Map([[key, outcomePairs(made, points, cadence)]]));
 }
 
 async function baseDetail(key, lastBatch, baseHistory) {

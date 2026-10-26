@@ -3,6 +3,7 @@
 // templates) only places them. A model's outputs are a list: the drill-in draws each one with its own chart and
 // destinations, and In shows the inputs of the output chosen (the only one, today).
 import { fmtNum, fmtWhen, shortHash } from './format.js';
+import { recordChart } from './record.js';
 import { fmtAgo } from '../neuron/health.js';
 import { spanText, markWords, kindLabelOf, descriptionOf, DESTS } from '../neuron/models.js';
 
@@ -145,8 +146,20 @@ export function outputView(o, { explorer = null } = {}) {
   return {
     key: o.stream, name: o.name, as: o.as ?? null, arrow: ARROW[o.direction] ?? '', direction: o.direction,
     forecast: forecastText(o.forecast), latest: numText(o.latest?.value), latestWhen: o.latest?.ts ? fmtWhen(o.latest.ts) : '',
-    chart: chartOf(o), destinations: o.destinations.map((d) => destinationView(d, { explorer })),
+    chart: chartOf(o), outcomes: outcomesView(o), destinations: o.destinations.map((d) => destinationView(d, { explorer })),
   };
+}
+
+/**
+ * How it did: what it forecast for each of the last outcomes (dashed) and what came (solid), the Prediction Streams
+ * card's chart (src/ui/record.js); below two outcomes, only when it will show; null when not read (Base's).
+ */
+export function outcomesView(o) {
+  if (!o.outcomes) return null; // not read (Base's)
+  const n = o.outcomes.length;
+  const c = recordChart(o.outcomes ?? []);
+  if (!c) return { n, note: `It shows once two of its forecasts have come due (${n} so far): each is for ${spanText(o.forecast.horizon)} after it was made.` };
+  return { ...c, caption: `the last ${c.n} outcomes, from ${c.bottom} to ${c.top}; each forecast made ${spanText(o.forecast.horizon)} before` };
 }
 
 /** The Model, in plain lines (how it works first); the jargon (λ, mutations, coefficients, the weight, the errors) in details. */

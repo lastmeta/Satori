@@ -61,6 +61,7 @@ model).
       direction: 'up' | 'down' | 'flat' | null,
       influence: [{ stream, name, share }],             // largest first; sums to 1 (null shares: not kept yet)
       quality,
+      outcomes: [{ ts, predicted, actual }] | null,     // How it did (below); null: not read (Base's)
       destinations: [{ to: 'network' | 'contract' | 'relays', status, when, ref }] }],
   // central's, as models() gave them before: uuid, model, spec { companions: [{ uuid, name }], lambda1, lambda2 }, score, generation, accepted
 }
@@ -71,6 +72,19 @@ destinations: network  { status: 'accepted' | 'pending', ref: null }            
               relays   { status: 'published' | 'waiting', ref: { stream, seq, relays } }         // the Satori relays (Nostr)
 // (until 2026-10-18 the destinations were 'central' | 'base' | 'network': renamed to the words people see)
 ```
+
+## How its forecasts did
+
+Under each output's chart in the drill-in, **How it did**: the last 50
+outcomes as a line, and what this app forecast for each, dashed: the
+Prediction Streams card's chart (`recordChart`), on this app's own
+forecasts (owner, 2026-10-26). `src/neuron/outcomes.js` pairs them: each
+forecast (central: `predictions`' `t2`, made at `made_at` for 24 h later;
+Relays: `relay_predictions`, one cadence ahead) with the first observation
+at or after its time, within half a horizon; an outcome forecast twice keeps
+the latest forecast. Until two have come due it says so ("It shows once two
+of its forecasts have come due (1 so far)"). A Contract model has none (its
+forecasts are not kept here): `outcomes: null`, nothing shown.
 
 ## Quality: against no change
 
