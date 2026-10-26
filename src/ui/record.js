@@ -1,4 +1,4 @@
-// The Streams tab's Prediction streams card (docs/design/track-record.md#ui-streams): the status line, the groups by
+// The Streams tab's Prediction Streams card (docs/design/track-record.md#ui-streams): the status line, the groups by
 // source, a row and a stream's detail, from records() / record() data (src/neuron/records.js). Pure, so they are tested without a page;
 // streams.js places them. The pill is the Models tab's (its colours and words).
 import { fmtNum, fmtWhen, fmtCadence, shortKey, sparkPath } from './format.js';

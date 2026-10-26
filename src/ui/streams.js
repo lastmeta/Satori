@@ -110,7 +110,7 @@ function recordsCard(a) {
   const shown = () => (state.recordsAll ? groups() : firstRows(groups(), SHOWN));
   return html`
   <details class="card records" data-test="records">
-    <summary>Prediction streams</summary>
+    <summary>Prediction Streams</summary>
     <p class="muted small rstatus" data-test="records-status"><i class="spin" aria-hidden="true" hidden="${() => !state.watchLine}"></i><span>${() => state.watchLine || watchText(state.nostr.watching, state.records)}</span></p>
     <div class="rrows" hidden="${() => !state.records.length}">
       <div class="rrow head" aria-hidden="true"><span>Source, then its predictors</span><span>Against no change</span><span class="rfrom">Scored</span><span>Cadence</span></div>

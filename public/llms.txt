@@ -38,7 +38,7 @@ The words the page shows, and the code's names (docs/intent/ui.md):
   set: the wallet. It has nothing to do with staking.
 - a **track record** = how a prediction stream's predictions did against
   no change, counting only the predictions this app received before the
-  outcome (Streams › Prediction streams, `records()`).
+  outcome (Streams › Prediction Streams, `records()`).
 
 Method names keep the code's names (`status().central`, `setCentral`,
 `setRelays`, `setBaseRpc`); the channel and destination keys use the words
@@ -1150,7 +1150,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   time, our `_pred` value, its seq, how many relays took it, Predict or Stop
   predicting, Unsubscribe; none: "Not yet publishing any streams to the
   relays."; selling and buying are the Market tab's);
-  **Prediction streams** (every prediction stream on the relays, watched on
+  **Prediction Streams** (every prediction stream on the relays, watched on
   its own: "Watching 112 prediction streams · 23 with a record", or the
   scan's step with a small turning ring, "Finding prediction streams ·
   checking signatures 400 of 1,061"; each row "Predictions for <source>",
