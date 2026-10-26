@@ -1235,7 +1235,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (each a `<key>-arrow`, `data-on`, and `chip-check` items, `data-id`, `data-state`, fixes `network-poll`,
   `relays-streams`) or `contract-card`: `contract-arrow` (`data-on`),
   `contract-play-auto`/`contract-play-manual`, `contract-check` (`data-id`, `data-state`) with `contract-stake`,
-  `contract-fund-address`, `contract-qr-toggle` and `contract-qr`, `contract-play`), `home-wallet-card` with `home-satori`, `home-wallet` and
+  `contract-fund-address`, `contract-qr-toggle` and `contract-qr`, `contract-play`), `home-wallet-card` with `home-satori`, `home-wallet` (its ETH), `home-staked` ("Staked", when
+  staked with this app) or `home-stake` (Stake, when not but the wallet holds SATORI) and `home-stake-result`, and
   `home-gas`, `claimable` (its own card) with `claimable-amount`,
   `claimable-parts`, `claim` and `claim-result`, `home-stream`,
   `activity`, `feed` with `feed-item` (`data-level`). Tabs: `nav-<tab>`,

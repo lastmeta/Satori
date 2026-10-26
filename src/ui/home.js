@@ -94,13 +94,11 @@ const claimable = () => (B().claimable?.total == null ? '–' : fmtNum(Number(B(
 const claimBreakdown = () => claimParts(B().claimable).filter(([, x]) => Number(x) > 0).map(([what, x]) => `${fmtNum(Number(x))} ${what}`).join(' · ');
 const claimTitle = () => claimableText(B().claimable);
 
-/** Under the wallet's SATORI: its ETH and whether it is staked here ('0.002 ETH · staked'). */
-function walletLine() {
-  const v = B().wallet;
-  if (v.eth == null) return '–';
-  const d = { alias: 'staked', none: 'not staked', other: 'staked elsewhere' }[v.staked] ?? '';
-  return `${amountText(v.eth, 'ETH')}${d ? ` · ${d}` : ''}`;
-}
+/** Under the wallet's SATORI: its ETH. */
+const walletLine = () => (B().wallet.eth == null ? '–' : amountText(B().wallet.eth, 'ETH'));
+/** On the card's right (owner, 2026-10-26): "Staked" when staked here; a Stake button when it isn't but holds SATORI; else nothing. */
+const stakedHere = () => B().wallet.staked === 'alias';
+const canStake = () => ['none', 'other'].includes(B().wallet.staked) && Number(B().wallet.satori) > 0;
 
 /** The alias's gas as days of daily batches (one a day). */
 const gasLine = () => {
@@ -173,7 +171,12 @@ export function home(a) {
     <div class="money">
       <section class="tile wallet-tile" data-test="home-wallet-card">
         <div class="tile-h desk-only"><b>Wallet</b><span>Base</span></div>
-        <div><div class="sub">Wallet</div><div class="big"><span data-test="home-satori">${() => figure(B().wallet.satori)}</span><small>SATORI</small></div><div class="sub" data-test="home-wallet">${walletLine}</div></div>
+        <div class="earn"><div><div class="sub">Wallet</div><div class="big"><span data-test="home-satori">${() => figure(B().wallet.satori)}</span><small>SATORI</small></div><div class="sub" data-test="home-wallet">${walletLine}</div></div>
+          <b class="staked" data-test="home-staked" hidden="${() => !stakedHere()}">Staked</b>
+          <button class="primary" data-test="home-stake" hidden="${() => !canStake()}" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.walletAction('home-stake', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? 'Staking…' : 'Stake')}</button>
+        </div>
+        ${unlockPrompt(a, 'home-stake', 'stake')}
+        <p class="small" role="status" data-test="home-stake-result" hidden="${() => !(state.baseDid === 'stake' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
         <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
       </section>
       <section class="tile wallet-tile" data-test="claimable">

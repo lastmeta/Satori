@@ -416,6 +416,7 @@ button.cell:disabled { cursor: default; }
 .chan .cost { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 0.72rem; white-space: nowrap; } /* free, or uses gas */
 .chan .sub { color: var(--muted); font-size: 0.76rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
+.wallet-tile .staked { color: var(--sky-ink); font-size: 1.35rem; font-weight: 800; }
 .earn { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .big { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .big small { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-left: 4px; }
