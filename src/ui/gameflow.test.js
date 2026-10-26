@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { queueOf, stepOf, played, favoritesIn, submitEarly, leanLabel, latestText, linePoints, nothingText } from './gameflow.js';
+import { queueOf, stepOf, played, favoritesIn, submitEarly, latestText, linePoints, nothingText } from './gameflow.js';
 
 const s = (streamId, weight, o = {}) => ({ streamId, weight: String(weight), blocked: null, named: false, history: [], ...o });
 
@@ -38,11 +38,8 @@ test('submitEarly: after more than one favorite, with something predicted', () =
   expect(submitEarly({ index: 2, favorites: 0, picks: 1, split: 3 })).toBe(false);
 });
 
-test('leanLabel and latestText: a Sentiment stream leans, others show the number', () => {
-  expect(leanLabel(110, 100)).toBe('▲ +10.0%');
-  expect(leanLabel(-110, -100)).toBe('▼ −10.0%'); // signed: divided by |prev|
-  expect(leanLabel(5, undefined)).toBe('▲ up');
-  expect(latestText(s(1, 1, { named: true, history: [{ value: '100' }, { value: '90' }] }))).toBe('▼ −10.0%');
+test('latestText: the latest value, a Sentiment stream too', () => {
+  expect(latestText(s(1, 1, { named: true, history: [{ value: '100' }, { value: '90' }] }))).toBe('90');
   expect(latestText(s(1, 1, { history: [{ value: '1234.5' }] }))).toBe('1,234.50');
   expect(latestText(s(1, 1))).toBe('');
 });

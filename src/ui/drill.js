@@ -291,25 +291,17 @@ export function rowView(m) {
 
 const MARKS = ['better', 'tie', 'worse', 'unscored'];
 const MARK_WORDS = { better: 'better', tie: 'same as no change', worse: 'worse', unscored: 'not scored yet' };
-/** What the quality is (docs/design/models.md#quality-against-no-change): the owner asked whose score it is. */
-export const QUALITY_NOTE = "The app's own backtest, made as it trains: how each model would have done on past data against no change."
-  + " Not the Satori Network's score of the predictions it sent.";
-
-/** The engine's quality at a glance (summaryOf's): by kind, by mark (a bar of the four), the median model. */
+/** The engine's quality at a glance (summaryOf's): by kind, by mark (a bar of the four). */
 export function statusView(s) {
-  if (!s.total) return { kinds: 'No models yet', marks: '', median: '', bar: [], legend: [], note: '' };
+  if (!s.total) return { kinds: 'No models yet', marks: '', bar: [], legend: [] };
   const kinds = Object.keys(s.kinds).sort((a, b) => (KINDS.indexOf(a) + 1 || 99) - (KINDS.indexOf(b) + 1 || 99));
   const m = s.marks;
-  const median = s.median == null ? '' : `Median model: ${Math.abs(s.median - 1) < 0.005 ? 'the same error as no change'
-    : s.median < 1 ? `${Math.round((1 - s.median) * 100)}% less error than no change` : `${Math.round((s.median - 1) * 100)}% more error than no change`}`;
   // the bar's legend in the rows' words, each in its colour; not scored only when there are some
   const legend = MARKS.filter((k) => k !== 'unscored' || m[k] > 0).map((k) => ({ mark: k, n: m[k], text: `${m[k]} ${MARK_WORDS[k]}` }));
   return {
     kinds: `${s.total} model${s.total === 1 ? '' : 's'} · ${kinds.map((k) => `${s.kinds[k]} ${k}`).join(' · ')}`,
     marks: legend.map((x) => x.text).join(' · '),
     legend,
-    median,
     bar: MARKS.filter((k) => m[k] > 0).map((k) => ({ mark: k, n: m[k], pct: (m[k] / s.total) * 100 })),
-    note: QUALITY_NOTE,
   };
 }

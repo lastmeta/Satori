@@ -177,7 +177,7 @@ describe('the list and the status', () => {
     expect(rowView({ ...TWO, name: 'btc', outputs: [{ ...TWO.outputs[1], as: 'btc_pred' }] }).as).toBe('btc_pred');
   });
 
-  test('the status: by kind, by mark, the median against no change', () => {
+  test('the status: by kind, by mark', () => {
     const models = [TWO, { ...TWO, kind: 'naive', quality: q(null, null, 'naive') }, { ...TWO, kind: 'bar1', quality: q(0.02) }, { ...TWO, kind: 'bar1', quality: q(null) }];
     const v = statusView(summaryOf(models));
     expect(v.kinds).toBe('4 models · 1 bvar · 2 bar1 · 1 naive');
@@ -186,17 +186,10 @@ describe('the list and the status', () => {
     expect(v.legend).toEqual([{ mark: 'better', n: 1, text: '1 better' }, { mark: 'tie', n: 1, text: '1 same as no change' },
       { mark: 'worse', n: 1, text: '1 worse' }, { mark: 'unscored', n: 1, text: '1 not scored yet' }]);
     expect(statusView(summaryOf([TWO])).marks).toBe('1 better · 0 same as no change · 0 worse');
-    expect(v.median).toBe('Median model: 45% more error than no change');
     expect(v.bar.map((s) => [s.mark, s.pct])).toEqual([['better', 25], ['tie', 25], ['worse', 25], ['unscored', 25]]);
     expect(statusView(summaryOf([])).kinds).toBe('No models yet');
   });
 
-  test('what the quality is, in one plain line: the neuron\'s own backtest, made as it trains; not the network\'s score of what it sent', () => {
-    const v = statusView(summaryOf([TWO]));
-    expect(v.note).toBe("The app's own backtest, made as it trains: how each model would have done on past data against no change."
-      + " Not the Satori Network's score of the predictions it sent.");
-    expect(statusView(summaryOf([])).note).toBe('');
-  });
 });
 
 describe('Retrain in the drill-in\'s header (docs/design/models.md#retrain)', () => {

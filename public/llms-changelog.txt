@@ -15,7 +15,10 @@ newest first. The current reference is /llms.txt; read that first. An entry's
   is gone.
 - Home's title: Predicted at rest (sky), Predicting while it works; `health().title` likewise.
 - Wallet tab, Wallets: tapping a wallet's address copies it (`wallet-address`).
-- Game tab, after playing: "N Predictions submitted", "They will be scored in 24 hours." (no transaction line).
+- Game tab, after playing: "N Predictions submitted", "They will be scored in 24 hours." (no transaction line). Its value above the chart is the latest value, Sentiment
+  streams too (it was their up/down/flat).
+- Models: the median model line and the backtest note are gone (`engine-median`, `engine-note`); the Network,
+  Contract and Relays toggles show no counts.
 - Models: a model's Out shows How it did, its forecasts beside what came; `model(id)`'s outputs carry `outcomes`.
 - Market: Selling (each predicted stream: Sell, its buyers, Make free), Buying (Stop, Take back) and Find streams
   for sale under Buying, which opens the priced streams with Buy; a channel's settings under Channel details.

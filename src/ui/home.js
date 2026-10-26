@@ -175,7 +175,7 @@ export function home(a) {
           <b class="staked" data-test="home-staked" hidden="${() => !stakedHere()}">Staked</b>
           <button class="primary" data-test="home-stake" hidden="${() => !canStake()}" disabled="${() => !!state.baseBusy || cachedNow()}" @click="${() => a.walletAction('home-stake', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? 'Staking…' : 'Stake')}</button>
         </div>
-        ${unlockPrompt(a, 'home-stake', 'stake')}
+        ${unlockPrompt(a, 'home-stake', 'stake from the Wallet card')}
         <p class="small" role="status" data-test="home-stake-result" hidden="${() => !(state.baseDid === 'stake' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
         <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
       </section>

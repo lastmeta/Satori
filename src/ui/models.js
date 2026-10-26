@@ -42,10 +42,6 @@ const summary = () => {
   void state.modelsRev;
   return summaryOf(box.list);
 };
-const count = (to) => {
-  void state.modelsRev;
-  return filterModels(box.list, [to]).length;
-};
 
 function status() {
   const st = () => engineStatus({ summary: summary(), central: state.central, work: state.engineWork, now: state.now });
@@ -74,8 +70,6 @@ function status() {
       <span class="label">Against no change</span>
       <svg class="qbar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><rect class="seg" data-q="better" x="${x('better')}" y="0" width="${w('better')}" height="8"></rect><rect class="seg" data-q="tie" x="${x('tie')}" y="0" width="${w('tie')}" height="8"></rect><rect class="seg" data-q="worse" x="${x('worse')}" y="0" width="${w('worse')}" height="8"></rect><rect class="seg" data-q="unscored" x="${x('unscored')}" y="0" width="${w('unscored')}" height="8"></rect></svg>
       <span class="qlegend" data-test="engine-quality" aria-label="${() => sv().marks}">${['better', 'tie', 'worse', 'unscored'].map((k) => html`<span class="qleg" data-q="${k}" hidden="${() => !legendOf(k)}"><i aria-hidden="true"></i>${() => legendOf(k)?.text ?? ''}</span> `)}</span>
-      <span class="muted small" data-test="engine-median">${() => sv().median}</span>
-      <span class="muted small" data-test="engine-note">${() => sv().note}</span>
     </div>
   </section>`;
 }
@@ -122,7 +116,7 @@ function sortMenu(a) {
 function controls(a) {
   return html`
   <div class="mcontrols">
-    <div class="segmented" role="group" aria-label="Show the models whose predictions go to">${FILTERS.map(([k, word]) => html`<button class="small-btn" data-test="${`models-filter-${k}`}" aria-pressed="${() => String(state.modelTo.includes(k))}" @click="${() => a.setModelView({ to: k })}">${word} <span class="n">${() => count(k)}</span></button>`)}</div>
+    <div class="segmented" role="group" aria-label="Show the models whose predictions go to">${FILTERS.map(([k, word]) => html`<button class="small-btn" data-test="${`models-filter-${k}`}" aria-pressed="${() => String(state.modelTo.includes(k))}" @click="${() => a.setModelView({ to: k })}">${word}</button>`)}</div>
     ${sortMenu(a)}
   </div>`;
 }

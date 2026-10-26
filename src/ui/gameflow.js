@@ -51,24 +51,10 @@ export const favoritesIn = (queue, favorites = []) => queue.filter((s) => favori
  */
 export const submitEarly = ({ index, favorites, picks, split = 0 }) => picks > 0 && ((favorites > 1 && index >= favorites) || (split > 0 && index >= split));
 
-/**
- * A Sentiment stream's reading: its direction and change against the reading before, never the counter itself
- * (the dapp's leanLabel, satori-ui/src/lib/leanFormat.ts: the series is signed, so it divides by |prev|).
- */
-export function leanLabel(value, prev) {
-  const base = prev ?? 0;
-  if (base === 0) return value > 0 ? '▲ up' : value < 0 ? '▼ down' : '— flat';
-  const pct = ((value - base) / Math.abs(base)) * 100;
-  if (pct === 0) return '— unchanged';
-  return pct > 0 ? `▲ +${pct.toFixed(1)}%` : `▼ −${Math.abs(pct).toFixed(1)}%`;
-}
-
-/** The latest value as the game shows it, above the chart: a Sentiment stream's lean, else the number. */
+/** The latest value as the game shows it, above the chart: the number, Sentiment streams too (the owner, 2026-10-26). */
 export function latestText(stream) {
   const h = stream?.history ?? [];
-  if (!h.length) return '';
-  const last = Number(h.at(-1).value);
-  return stream.named ? leanLabel(last, h.length > 1 ? Number(h.at(-2).value) : undefined) : fmtNum(last);
+  return h.length ? fmtNum(Number(h.at(-1).value)) : '';
 }
 
 /** The chart's line: SVG points in a w × h box, oldest on the left; flat when every value is the same. */

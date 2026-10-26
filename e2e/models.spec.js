@@ -134,7 +134,6 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(page.locator('[data-test=engine-quality]'))
     .toHaveAttribute('aria-label', `${marks.better} better · ${marks.tie} same as no change · ${marks.worse} worse`);
   await expect(page.locator('[data-test=engine-kinds]')).toHaveText(new RegExp(`^8 models · ${kinds.filter((k) => k === 'bvar').length} bvar`));
-  await expect(page.locator('[data-test=engine-median]')).toHaveText(/^Median model: /);
 
   // Working: a poll held at its first step says it in Home's hero's words; nothing on this tab moves (the hero's ring
   // is Home's one moving indicator).
@@ -219,7 +218,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   expect(await names(page)).toEqual(['Rain gauge']);
   await toggle('contract').click();
   expect((await names(page)).sort()).toEqual(['Rain gauge', 'Stream 1', 'Stream 3']);
-  await expect(toggle('contract').locator('.n')).toHaveText('2'); // the counts are each destination's, whatever is on
+  await expect(toggle('contract')).toHaveText('Contract'); // no counts (the owner, 2026-10-26)
   await toggle('network').click();
   await expect(rows(page)).toHaveCount(list.length);
   // not kept: another visit to the tab starts with all three on
