@@ -231,7 +231,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(await page.evaluate(() => window.shown.map((li) => li.textContent).join(''))).toBe('');
   stub.batch = [entry('u-btc', 'bitcoin', T0 + 3600, '67100.5'), BATCH[1]];
   await go(page, 'streams');
-  await page.getByRole('button', { name: 'Poll now' }).click();
+  await page.locator('[data-test=poll-now]').click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('2 streams, 1 new, 1 predicted');
   if (await btc.locator('[data-test=stream-detail]').count() === 0) await btc.locator('.sname').click();
   await expect(btc.locator('[data-test=t1]')).toHaveText('67,100.50'); // two observations: naive, the last value
@@ -500,7 +500,7 @@ test("import Docker files; central pays this wallet's rewards to another Base ad
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://down.test');
   await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable: /);
   await go(page, 'streams');
-  await page.getByRole('button', { name: 'Poll now' }).click();
+  await page.locator('[data-test=poll-now]').click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('failed: Satori Network unreachable');
   await go(page, 'settings');
   await url.fill('');

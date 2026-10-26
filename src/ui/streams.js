@@ -1,4 +1,4 @@
-// Streams: the Satori Network's (central: one line, its facts under Details, and Poll now; folded by default, each stream with its latest
+// Streams: the Satori Network's (folded by default: central's line, its facts under Details, and Refresh, then each stream with its latest
 // value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori relays (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
 // Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there (its streams for sale open).
@@ -16,31 +16,6 @@ import { watchText, recordGroups, firstRows, recordDetail, SHOWN } from './recor
 
 export const CATALOG_SHOWN = 50;
 
-function centralCard(a) {
-  const c = () => state.central;
-  const failing = () => (c().registration && !c().registration.ok) || !!c().lastSubmit?.error || c().lastSubmit?.successful === 0;
-  return html`
-  <section class="card central">
-    <header class="card-head">
-      <h2>Satori Network <small class="muted">free</small></h2>
-      <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>
-    </header>
-    <p data-test="network-line" class="${() => (failing() ? 'error' : '')}">${() => networkLine(c())}</p>
-    <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration)}">${() => mismatchText(c().registration)}</p>
-    <details class="mdetails" data-test="network-details">
-      <summary>Details</summary>
-      <dl class="facts">
-        ${fact('Registered', 'registered', () => registrationText(c().registration))}
-        ${fact('Last poll', 'last-poll', () => pollText(c().lastPoll))}
-        ${fact('Next poll', 'next-poll', () => fmtWhen(c().nextPoll))}
-        ${fact('Last submission', 'last-submit', () => submitText(c().lastSubmit))}
-        ${fact('Pending', 'pending', () => String(c().pending))}
-        ${fact('History', 'history', () => historyText(c().history))}
-      </dl>
-    </details>
-  </section>`;
-}
-
 function streamRow(r, names, a) {
   // One root node, no whitespace around it: ArrowJS 1.0.6 breaks a keyed list
   // of multi-node items once it goes empty and back. The detail opens in place under the row.
@@ -57,9 +32,27 @@ function detail(r, names, a) {
 }
 
 function streamsCard(a) {
+  const c = () => state.central;
+  const failing = () => (c().registration && !c().registration.ok) || !!c().lastSubmit?.error || c().lastSubmit?.successful === 0;
   return html`
-  <details class="card records" data-test="streams">
+  <details class="card records central" data-test="streams">
     <summary>Network Streams</summary>
+    <div class="nhead">
+      <p data-test="network-line" class="${() => (failing() ? 'error' : '')}">${() => networkLine(c())}</p>
+      <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Refreshing…' : 'Refresh')}</button>
+    </div>
+    <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration)}">${() => mismatchText(c().registration)}</p>
+    <details class="mdetails" data-test="network-details">
+      <summary>Details</summary>
+      <dl class="facts">
+        ${fact('Registered', 'registered', () => registrationText(c().registration))}
+        ${fact('Last poll', 'last-poll', () => pollText(c().lastPoll))}
+        ${fact('Next poll', 'next-poll', () => fmtWhen(c().nextPoll))}
+        ${fact('Last submission', 'last-submit', () => submitText(c().lastSubmit))}
+        ${fact('Pending', 'pending', () => String(c().pending))}
+        ${fact('History', 'history', () => historyText(c().history))}
+      </dl>
+    </details>
     <p class="muted small" hidden="${() => state.streams.length > 0}">Streams: none yet. They arrive with the first poll.</p>
     <div class="srows" hidden="${() => !state.streams.length}">
       <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">In 24 h</span><span></span></div>
@@ -163,7 +156,6 @@ function network(a) {
 export function streamsTab(a) {
   return html`
   <section class="tab-page" data-test="streams-tab" hidden="${() => state.tab !== 'streams'}">
-    ${centralCard(a)}
     ${streamsCard(a)}
     ${nostrCard(a)}
     ${recordsCard(a)}

@@ -492,6 +492,8 @@ details.tile[open] > summary { margin-bottom: 0; }
 
 /* ── Streams ── */
 .central .error { margin: 10px 0 0; }
+.central .nhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.central .nhead p { margin: 0; min-width: 0; }
 .srows { margin-top: 8px; }
 .row { display: grid; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.92rem; }
 .srow { grid-template-columns: minmax(0, 1.5fr) 1fr max-content 1fr 64px; }

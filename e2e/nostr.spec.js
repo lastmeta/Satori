@@ -129,6 +129,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   // A reload: the subscription, the key and the `_pred` seq are kept; the next observation is seq 3.
   await reloadApp(page);
   await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(me);
+  await page.locator('[data-test=relay-streams] > summary').click(); // folded again after the reload
   await expect(sub.locator('[data-test=sub-seq]')).toHaveText('2');
   await expect.poll(async () => (await nostr(page)).relays.map((r) => r.state)).toEqual(['open', 'open']);
   await provider.observe({ stream, value: '102', seq: 3, timestamp: t0 + 120 });
