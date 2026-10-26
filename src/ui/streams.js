@@ -76,7 +76,7 @@ function nostrCard(a) {
   return html`
   <details class="card nostr" data-test="relay-streams">
     <summary>Published Relay Streams</summary>
-    <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Streams on the relays to follow one. Predict it to forecast each new value and publish the prediction as <code>&lt;stream&gt;_pred</code>.</p>
+    <p class="muted" hidden="${() => n().subscriptions.length > 0}">Not yet publishing any streams to the relays.</p>
     <div class="srows" hidden="${() => !n().subscriptions.length}">
       <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
       <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq} ${s.predict}`))}</div>
@@ -110,7 +110,7 @@ function recordsCard(a) {
   const shown = () => (state.recordsAll ? groups() : firstRows(groups(), SHOWN));
   return html`
   <details class="card records" data-test="records">
-    <summary>Prediction streams <span class="muted small" data-test="records-count">${() => (state.records.length ? `${state.records.length} on the relays` : '')}</span></summary>
+    <summary>Prediction streams</summary>
     <p class="muted small rstatus" data-test="records-status"><i class="spin" aria-hidden="true" hidden="${() => !state.watchLine}"></i><span>${() => state.watchLine || watchText(state.nostr.watching, state.records)}</span></p>
     <div class="rrows" hidden="${() => !state.records.length}">
       <div class="rrow head" aria-hidden="true"><span>Source, then its predictors</span><span>Against no change</span><span class="rfrom">Scored</span><span>Cadence</span></div>
@@ -141,7 +141,7 @@ function network(a) {
   };
   return html`
   <details class="card" data-test="network" @toggle="${(e) => e.target.open && !state.catalog.length && !state.discovering && a.discover()}">
-    <summary>Streams on the relays</summary>
+    <summary>Relay Streams</summary>
     <form class="search" @submit="${(e) => { e.preventDefault(); a.discover(); }}">
       <input name="q" type="search" aria-label="Search streams" placeholder="Search: bitcoin, weather, …" autocomplete="off"
         @input="${(e) => (state.catalogQuery = e.target.value)}">
@@ -157,8 +157,8 @@ export function streamsTab(a) {
   return html`
   <section class="tab-page" data-test="streams-tab" hidden="${() => state.tab !== 'streams'}">
     ${streamsCard(a)}
+    ${network(a)}
     ${nostrCard(a)}
     ${recordsCard(a)}
-    ${network(a)}
   </section>`;
 }

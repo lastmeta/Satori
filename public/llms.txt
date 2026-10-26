@@ -1133,22 +1133,24 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   Network model), **Out** (each output: the forecast, the latest value, a
   chart of recent history with the forecast to scale, "12 h" and "24 h"
   marks, and where it went); "← Models" goes back.
-- **Streams**: the **Satori Network** card ("free"; one line, "Sent 82
-  predictions Oct 24, 20:18, all accepted · next Oct 25, 07:18", red when it
-  fails; a wallet mismatch if any; "Poll now"; under its closed Details:
-  Registered, Last poll, Next poll, Last submission, Pending, History; no
-  URL: that is Settings'); **Streams** ("84 from the Satori Network, with our
-  forecasts": each stream on one line, its latest value (and time, on a
-  computer), its forecast "In 24 h", Sent or Pending; a tap on the name opens
-  it in place under the row: its trend, "In 12 h", the model with its
-  companions, "bvar · +eth +gold", in words, and its latest predictions); **Satori relays** (each subscribed stream: latest value and
-  time, our `_pred` value, its seq, how many relays took it, Unsubscribe;
-  then **Sell**: each `<stream>_pred`, "Free" with a price box and Sell, or
-  "0.001 SATORI each · 2 buying" with Make free; **Bought**: each stream
-  bought, "0.004 of 0.005 SATORI left" and Stop, or "Stopped: … back to the
-  wallet after <date>");
-  **Prediction streams** (folded until tapped, "112 on the relays" beside
-  its name; every prediction stream on the relays, watched on
+- **Streams**, every card folded until tapped: **Network Streams** (one
+  line, "Sent 82 predictions Oct 24, 20:18, all accepted · next Oct 25,
+  07:18", red when it fails, and Refresh (a poll now); a wallet mismatch if
+  any; under its closed Details: Registered, Last poll, Next poll, Last
+  submission, Pending, History; then each stream on one line, its latest
+  value (and time, on a computer), its forecast "In 24 h", Sent or Pending;
+  a tap on the name opens it in place under the row: its trend, "In 12 h",
+  the model with its companions, "bvar · +eth +gold", in words, and its
+  latest predictions; no URL: that is Settings');
+  **Relay Streams** (opening it discovers: a search box and the
+  first 50 matches, Subscribe or Unsubscribe; a stream for sale shows
+  "0.001 SATORI each" and On the Market, which opens the Market tab's
+  streams for sale; other paid or gated ones can't be subscribed yet);
+  **Published Relay Streams** (each subscribed stream: latest value and
+  time, our `_pred` value, its seq, how many relays took it, Predict or Stop
+  predicting, Unsubscribe; none: "Not yet publishing any streams to the
+  relays."; selling and buying are the Market tab's);
+  **Prediction streams** (every prediction stream on the relays, watched on
   its own: "Watching 112 prediction streams · 23 with a record", or the
   scan's step with a small turning ring, "Finding prediction streams ·
   checking signatures 400 of 1,061"; each row "Predictions for <source>",
@@ -1157,12 +1159,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   it in place: the record in words, "Right way 15 of 20", a chart of the
   outcomes and the predictions (dashed), and "Seen by this app since
   …. It counts only predictions this app received before the
-  outcome.");
-  **Streams on the relays** (opening it discovers: a search box and the
-  first 50 matches, Subscribe or Unsubscribe; a stream sold on the Satori
-  contract shows "0.001 SATORI each", a deposit box (100 observations) and
-  Buy, which asks for the passphrase in place when the wallet is locked;
-  other paid or gated ones can't be subscribed yet).
+  outcome.").
 - **Wallet**: the **Base** card: the round, the RPC in plain words, the
   wallet's SATORI and ETH, Claimable (rewards, from the Satori Network,
   airdrop, a line each; Claim beside them when any is above 0), Staking ("Staked: 100 SATORI with this app"), Transfers

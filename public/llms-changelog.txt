@@ -4,6 +4,14 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-26 (the Streams and Market pages; no call changed)
+
+- Streams: every card folded until tapped, in this order: Network Streams (the Satori Network's line, Details and
+  Refresh, was the Satori Network card's Poll now, above its streams), Relay Streams (was Streams on the relays),
+  Published Relay Streams (was Satori relays), Prediction streams. The menu lists Streams before Models.
+- Market: Selling (each predicted stream: Sell, its buyers, Make free), Buying (Stop, Take back) and Find streams
+  for sale under Buying, which opens the priced streams with Buy; a channel's settings under Channel details.
+
 ## Changed 2026-10-25 (market: channels reused, grace periods, payout addresses)
 
 - Stop no longer refunds by itself: after the grace period the bought entry is `stopped` with `refundable`;
