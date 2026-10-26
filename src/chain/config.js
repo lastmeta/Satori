@@ -1,4 +1,4 @@
-// Base config (docs/design/base.md#config): the bundled D7 addresses (Base Sepolia, 2026-10-23). Central's
+// Base config (docs/design/base.md#config): the bundled D8 addresses (Base Sepolia, 2026-10-26). Central's
 // /api/v1/base/config is read, cached 1 h, as Satori Lite's base_config.py:16-36,66-88,
 // but its contract addresses are taken only when they equal the bundled ones (one
 // that differs is said, and the bundle's kept: a central must not move the app's
@@ -20,16 +20,16 @@ export const DEFAULTS = Object.freeze({
   chainId: CHAIN_ID,
   rpcUrl: 'https://sepolia.base.org',
   explorerUrl: 'https://sepolia.basescan.org',
-  token: '0x7Dd4F6EF7FE534e4962f975cffe93D19d9B891E1',
-  merkle: '0x20d398d45A3cC6D6A73a2381294E801736E120aB',
-  airdrop: '0xf8482f9640A7A2bb4Ab372DE677E8a82eBEC04A4',
-  rewards: '0xF353eb4843E3B8822dd3fE88e638B02C456749BE',
-  engine: '0x90C5Bc6f0322900ebAA12bb382Db44be7bc2e240',
-  games: '0x05096F2caB4D6E806604caDc2F78A8563be74783',
-  registry: '0x95989fc59B0Ed1c323Af14d9139cD05F0379F556',
-  hub: '0x17719B7B1A630dECBc5B7FFDdEd14ffb24120183',
-  lens: '0x877DD8bD95E1301E283CACF31F0ec60401dB746a',
-  voting: '0xD6cB62d0f07EF38642f096D9B48b5421B4d3Cc44', // SatoriEngine.satoriVoting() on D7
+  token: '0xe6A4b12Eae75795E4D427706dc67c1392f75D54A',
+  merkle: '0xeCc7f1d5Df7aCBD7D1b0615490A88d14CA2B1F1c',
+  airdrop: '0x5BF17B223D623CdbD37E3497b95c911e954a3E65',
+  rewards: '0x618138368f9Fc69585907d576DEA5C89F1C798D1',
+  engine: '0x438Ca7a87b4D384b57f27c0829C06Ef1F1f90A60',
+  games: '0x4AD128bF49841d8e970dC36E1D1e43b36a79B612',
+  registry: '0xcE4278b73dFE00772B485697FD1E97Bb0669c87f',
+  hub: '0x97D53d240e3dcfC6569d7B4001b03062681f4818',
+  lens: '0xBadE17EA7759D4fc19c1468Fc135e3292591A412',
+  voting: '0xb2679d77D96be59E2FA3F1e8BB575f669d5150DE', // SatoriEngine.satoriVoting() on D8
   multicall3: '0xcA11bde05977b3631167028862bE2a173976CA11',
   channels: PAYMENT_CHANNELS,
 });
