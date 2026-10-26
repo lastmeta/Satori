@@ -390,7 +390,7 @@ button.cell:disabled { cursor: default; }
 .day-inner { overflow: hidden; min-height: 0; }
 .day-body { padding-top: 12px; animation: day-in 0.25s ease; }
 .day-body .facts { margin: 6px 0 0; font-size: 0.9rem; }
-.day-body .line { display: block; }
+.day-body .lines { white-space: pre-line; }
 @keyframes day-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .day-panel, .day-body { transition: none; animation: none; } }
 @media (max-width: 1023px) { .desk-only { display: none !important; } }

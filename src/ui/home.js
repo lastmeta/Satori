@@ -56,6 +56,7 @@ function dayTitle(d) {
 const cell = (a, d) => html`<button class="${d.today ? 'cell today' : 'cell'}" data-test="day" data-date="${d.date}" data-code="${d.code}" title="${dayTitle(d)}" aria-label="${dayTitle(d)}" aria-pressed="${String(state.dayOpen === d.date)}" disabled="${d.code === 'before' || cachedNow()}" @click="${() => a.openDay(d.date)}"><i class="half" data-half="${d.network ?? 'none'}"></i><i class="half" data-half="${d.contract ?? 'none'}"></i></button>`;
 
 // ── a day opened (src/neuron/day.js) ──
+// the contract's lines are one text (pre-line): a list of templates of one text showed the first day's lines on every day
 const clock = (s) => new Date(s * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 function networkDay(n) {
@@ -78,7 +79,7 @@ function dayBody(d) {
   const title = new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
   return html`<div class="day-body" data-test="day-body" data-date="${d.date}"><b>${title}</b><dl class="facts">
     <div class="fact"><dt>Satori Network</dt><dd data-test="day-network">${networkDay(d.network)}</dd></div>
-    <div class="fact"><dt>Satori contract</dt><dd data-test="day-contract">${contractDay(d.contract).map((t) => html`<span class="line">${t}</span>`)}</dd></div>
+    <div class="fact"><dt>Satori contract</dt><dd class="lines" data-test="day-contract">${contractDay(d.contract).join('\n')}</dd></div>
   </dl>${!d.open && !d.network.sent ? html`<p class="muted small">The app wasn't open this day.</p>` : ''}</div>`;
 }
 
