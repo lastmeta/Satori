@@ -30,18 +30,21 @@ const NETWORK = () => html`<svg class="hw" viewBox="0 0 320 130" role="img" aria
   <rect class="dev" x="249" y="77" width="22" height="36" rx="4"></rect><path d="M257 108h6"></path>
 </svg>`;
 
-/** Phones sending predictions to the contract (a block on the chain); rewards (coins) coming back. */
+/** Phones sending predictions to the contract (a block on the chain), each with its reward (a coin) on its screen. */
 const CONTRACT = () => html`<svg class="hw" viewBox="0 0 320 130" role="img" aria-label="Phones send predictions to the Satori smart contract, which scores them and pays rewards back">
-  <path class="hout" d="M74 34C100 34 104 54 116 56M74 96C100 96 104 76 116 74M246 34C220 34 216 54 204 56M246 96C220 96 216 76 204 74"></path>
-  <path class="hhead" d="M110 50l8 6-8 6M110 68l8 6-8 6M210 50l-8 6 8 6M210 68l-8 6 8 6"></path>
+  <defs><marker id="how-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path class="hhead" d="M2 1.5l6 3.5-6 3.5"></path></marker></defs>
+  <path class="hout" marker-end="url(#how-arrow)" d="M68 36L116 53"></path>
+  <path class="hout" marker-end="url(#how-arrow)" d="M68 94L116 77"></path>
+  <path class="hout" marker-end="url(#how-arrow)" d="M252 36L204 53"></path>
+  <path class="hout" marker-end="url(#how-arrow)" d="M252 94L204 77"></path>
   <path class="hblock" d="M160 22l36 20v42l-36 20-36-20V42z"></path>
   <path class="hblock" d="M124 42l36 20 36-20M160 62v42"></path>
   <rect class="dev" x="40" y="14" width="22" height="38" rx="4"></rect><path d="M48 47h6"></path>
   <rect class="dev" x="40" y="76" width="22" height="38" rx="4"></rect><path d="M48 109h6"></path>
   <rect class="dev" x="258" y="14" width="22" height="38" rx="4"></rect><path d="M266 47h6"></path>
   <rect class="dev" x="258" y="76" width="22" height="38" rx="4"></rect><path d="M266 109h6"></path>
-  <circle class="hcoin" cx="78" cy="14" r="8"></circle><circle class="hcoin" cx="78" cy="76" r="8"></circle>
-  <circle class="hcoin" cx="242" cy="14" r="8"></circle><circle class="hcoin" cx="242" cy="76" r="8"></circle>
+  <circle class="hcoin" cx="51" cy="31" r="5.5"></circle><circle class="hcoin" cx="51" cy="93" r="5.5"></circle>
+  <circle class="hcoin" cx="269" cy="31" r="5.5"></circle><circle class="hcoin" cx="269" cy="93" r="5.5"></circle>
 </svg>`;
 
 /** Two people, the share icon between them. */
