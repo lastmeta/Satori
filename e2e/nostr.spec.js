@@ -74,6 +74,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await expect(row.getByRole('button', { name: 'Unsubscribe' })).toBeVisible();
 
   // Followed: the stored observation arrives with the follow REQ and is kept; nothing is predicted or published yet.
+  await page.locator('[data-test=relay-streams] > summary').click(); // Published Relay Streams: folded by default
   const sub = page.locator('[data-test=sub]').filter({ hasText: 'E2E walk' });
   await expect(sub.locator('[data-test=sub-obs]')).toHaveText('100');
   await expect(sub.locator('[data-test=sub-pred]')).toHaveText('–');
@@ -241,7 +242,7 @@ test("an https page: a ws:// relay is blocked, said once, and neither down nor c
   await expect(page.locator('[data-test=relay-for]')).toHaveCount(1);
   await page.locator('#settings-relays').screenshot({ path: test.info().outputPath('relays.png') });
   await page.evaluate(() => window.satori.go('streams'));
-  await expect(page.locator('.card').filter({ hasText: 'Satori relays' }).first()).toContainText('2 of 2 relays connected');
+  await expect.poll(async () => (await nostr(page)).relays.filter((r) => r.state === 'open').length).toBe(2);
 
   // the usable relays drop and refuse reconnects: within the grace it is not red ("Every relay is down" waits 10 min)
   cut = true;

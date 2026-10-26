@@ -9,7 +9,7 @@ import { state } from './state.js';
 import { fact, sparkPath } from './parts.js';
 import {
   fmtNum, fmtWhen, networkLine, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
-  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText,
+  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText,
 } from './format.js';
 import { listingOf } from '../neuron/market.js';
 import { watchText, recordGroups, firstRows, recordDetail, SHOWN } from './record.js';
@@ -59,7 +59,7 @@ function detail(r, names, a) {
 function streamsCard(a) {
   return html`
   <details class="card records" data-test="streams">
-    <summary>Streams <span class="muted small" data-test="streams-count">${() => (state.streams.length ? `${state.streams.length} from the Satori Network, with our forecasts` : '')}</span></summary>
+    <summary>Network Streams</summary>
     <p class="muted small" hidden="${() => state.streams.length > 0}">Streams: none yet. They arrive with the first poll.</p>
     <div class="srows" hidden="${() => !state.streams.length}">
       <div class="row srow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">In 24 h</span><span></span></div>
@@ -81,17 +81,14 @@ function subRow(s, a) {
 function nostrCard(a) {
   const n = () => state.nostr;
   return html`
-  <section class="card nostr">
-    <header class="card-head">
-      <h2>Satori relays</h2>
-      <span class="muted small">${() => `${n().subscriptions.length} of ${n().maxStreams} streams · ${relaysText(n().relays)}`}</span>
-    </header>
+  <details class="card nostr" data-test="relay-streams">
+    <summary>Published Relay Streams</summary>
     <p class="muted" hidden="${() => n().subscriptions.length > 0}">No streams yet: subscribe under Streams on the relays to follow one. Predict it to forecast each new value and publish the prediction as <code>&lt;stream&gt;_pred</code>.</p>
     <div class="srows" hidden="${() => !n().subscriptions.length}">
       <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
       <div>${() => n().subscriptions.map((s) => subRow(s, a).key(`${s.uuid} ${s.observation?.seq} ${s.prediction?.seq} ${s.predict}`))}</div>
     </div>
-  </section>`;
+  </details>`;
 }
 
 // ── the track record: every prediction stream on the relays, watched on its own ──

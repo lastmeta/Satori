@@ -133,7 +133,7 @@ test.describe.serial('a build, in a browser profile', () => {
       expect(await loaded(page)).toBe('home'); // DuckDB's worker and wasm from the cache, the keys from OPFS
       await expect(page.locator('[data-test=alias]')).toHaveText(alias);
       await expect(page.locator('[data-test=wallet]')).toHaveText(wallet);
-      await expect(page.locator('[data-test=streams-count]')).toHaveText('1 from the Satori Network, with our forecasts');
+      await expect(page.locator('[data-test=stream]')).toHaveCount(1);
       await expect(page.locator('[data-test=last-poll]')).toContainText('1 streams, 1 new, 1 predicted');
       await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable/);
       await expect(page.locator('[data-test=base-error]')).toContainText('The chain did not answer');
