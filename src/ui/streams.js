@@ -1,19 +1,18 @@
 // Streams: the Satori Network's (central: one line, its facts under Details, and Poll now; each stream with its latest
 // value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori relays (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
-// Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there.
+// Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there (its streams for sale open).
 // The words people see (docs/intent/ui.md); the addresses are Settings'.
 import { html } from '@arrow-js/core';
 import { formatEther } from 'viem';
 import { state } from './state.js';
-import { fact, form, sparkPath, unlockPrompt } from './parts.js';
+import { fact, sparkPath } from './parts.js';
 import {
   fmtNum, fmtWhen, networkLine, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
-  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText, saleText, boughtText, buyerText, graceText,
+  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, relaysText,
 } from './format.js';
-import { listingOf, DEPOSIT_OBS } from '../neuron/market.js';
+import { listingOf } from '../neuron/market.js';
 import { watchText, recordGroups, firstRows, recordDetail, SHOWN } from './record.js';
-import { layoutSwitch } from './layout.js';
 
 export const CATALOG_SHOWN = 50;
 
@@ -53,7 +52,7 @@ function streamRow(r, names, a) {
 const predRow = (p) => html`<li data-test="stream-prediction"><span>${fmtWhen(p.made_at)}</span><span>${p.model}</span><span>${`in 24 h ${fmtNum(p.t2)}`}</span><span>${p.status === 'sent' ? 'Sent' : 'Pending'}</span></li>`;
 
 /** An open stream, under its row: its trend, the forecast in 12 h, its model, its latest predictions. */
-export function detail(r, names, a) {
+function detail(r, names, a) {
   return html`<div class="detail" data-test="stream-detail"><div class="card-head"><h3>${r.name}</h3><button class="small-btn" @click="${() => a.openStream('')}">Close</button></div><svg class="spark" viewBox="0 0 70 20" preserveAspectRatio="none" aria-hidden="true"><path d="${() => sparkPath(state.sparks[r.uuid])}"></path></svg><dl class="facts">${fact('In 12 h', 't1', fmtNum(r.t1))}<div class="fact"><dt>Model</dt><dd data-test="model" title="${modelTitle(r, names)}">${modelText(r, names)}</dd></div></dl><p class="small muted">${modelTitle(r, names) || 'No model yet'}</p><ol>${() => state.streamPreds.map((p) => predRow(p).key(`${p.id}:${p.status}`))}</ol></div>`;
 }
 
@@ -77,47 +76,6 @@ function subRow(s, a) {
   // One root node, no whitespace around it (see streamRow).
   const p = s.prediction;
   return html`<div class="row nrow" data-test="sub"><span class="sname" title="${`${s.stream} from ${s.provider}`}">${s.name || s.stream}</span><span class="num" data-label="Latest" data-test="sub-obs" title="${s.observation ? `sent as ${rawText(s.observation)}` : ''}">${obsText(s.observation)}</span><span class="muted small" data-label="Observed">${fmtWhen(s.observation?.ts)}</span><span class="num accent" data-label="Our _pred" data-test="sub-pred" title="${p ? `${p.stream} · ${p.model} · sent as "${p.value}"` : ''}">${predText(p?.value)}</span><span class="num muted" data-label="Seq" data-test="sub-seq">${p?.seq ?? '–'}</span><span class="muted small" data-label="Relays" data-test="sub-relays">${p ? `${p.relays} relay${p.relays === 1 ? '' : 's'}` : '–'}</span><span class="subacts"><button class="small-btn" data-test="sub-predict" aria-pressed="${String(!!s.predict)}" title="${s.predict ? 'Stop predicting it: its _pred is withdrawn from the relays; still followed' : 'Predict it: each new value is forecast and the prediction published to the relays'}" @click="${() => a.setPredict(s.provider, s.stream, !s.predict)}" disabled="${() => !!state.subscribing}">${s.predict ? 'Stop predicting' : 'Predict'}</button><button class="link" data-test="unsubscribe" @click="${() => a.subscribe(s.provider, s.stream, false)}" disabled="${() => !!state.subscribing}">Unsubscribe</button></span></div>`;
-}
-
-// ── paid streams (docs/design/market.md) ──
-
-/** One of our `_pred` streams: Free with a price to set (Sell), or its price and buyers with Make free. */
-/**
- * A channel's grace period, and a form in place to change it (days; the wallet, Unlock in place): longer by the buyer
- * or shorter by the seller applies at once, otherwise the other side is asked for it.
- */
-function graceChange(channel, grace, a) {
-  return html`<details class="mchange" data-test="grace"><summary>Grace period ${graceText(grace)}</summary><form @submit="${(e) => a.setGrace(channel, form(e))}"><input name="days" inputmode="decimal" autocomplete="off" required value="${String(Math.round((grace / 86_400) * 100) / 100)}" aria-label="Grace period, in days" data-test="grace-days"><button class="small-btn" type="submit" data-test="grace-set" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `grace:${channel}` ? '…' : 'Set days')}</button></form><p class="muted small">Longer by the buyer, or shorter by the seller, applies at once. Otherwise the other side is asked, and it applies when they set it too.</p></details>`;
-}
-
-/** A buyer of one of our streams: what it paid, where its payments go (changed in place), its grace period. */
-function buyerRow(x, a) {
-  return html`<div class="small buyer" data-test="buyer" data-channel="${x.channel}"><span class="nowrap" title="${x.pubkey}">${shortKey(x.pubkey)}</span> · <span data-test="buyer-text">${buyerText(x)}</span><details class="mchange" data-test="payout"><summary>Paid into</summary><form @submit="${(e) => a.setPayout(x.channel, form(e))}"><input name="payout" autocomplete="off" required placeholder="0x…" aria-label="Address its payments go to" data-test="payout-address"><button class="small-btn" type="submit" data-test="payout-set" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `payout:${x.channel}` ? '…' : 'Set')}</button></form></details>${graceChange(x.channel, x.grace, a)}</div>`;
-}
-
-/** A stream's price per value when none is typed (owner, 2026-10-25), in SATORI. */
-export const DEFAULT_PRICE = '0.00001';
-
-export function sellRow(sub, a) {
-  // One root node, no whitespace around it (see streamRow).
-  const stream = `${sub.stream}_pred`;
-  const sale = () => state.nostr.market?.selling.find((x) => x.stream === stream);
-  const busy = () => state.marketBusy === `sell:${stream}`;
-  return html`<div class="crow" data-test="sell-row" data-stream="${stream}"><div class="cmain"><span class="sname">${stream}</span> <span class="muted small" data-test="sell-state">${() => saleText(sale())}</span>${() => (sale()?.buyers ?? []).filter((x) => !x.closing).map((x) => buyerRow(x, a).key(`${x.channel}:${x.paid}:${x.payout}:${x.grace}`))}</div>${() => (sale()
-    ? html`<button class="small-btn" data-test="unsell" disabled="${() => !!state.marketBusy}" @click="${() => a.unsell(stream)}">${() => (busy() ? '…' : 'Make free')}</button>`
-    : html`<form class="sell" @submit="${(e) => a.sell(stream, form(e))}"><input name="price" inputmode="decimal" autocomplete="off" aria-label="${`Price per observation of ${stream}, in SATORI (empty: ${DEFAULT_PRICE})`}" placeholder="${DEFAULT_PRICE}" data-test="sell-price"><button class="small-btn primary" type="submit" data-test="sell" disabled="${() => !!state.marketBusy}">${() => (busy() ? '…' : 'Sell')}</button></form>`)}</div>`;
-}
-
-/**
- * A stream we buy: the deposit left, its grace period and Stop; stopping, when what is left can be taken back;
- * stopped, Take back (an amount, to an address: the wallet by default). Buy again uses the channel again.
- */
-export function boughtRow(b, a) {
-  // One root node, no whitespace around it (see streamRow).
-  const key = `${b.pubkey}:${b.stream}`;
-  const take = b.status === 'stopped' && Number(b.refundable) > 0
-    ? html`<form class="takeback" @submit="${(e) => a.takeBack(b.channel, form(e))}"><input name="amount" inputmode="decimal" autocomplete="off" required value="${b.refundable}" aria-label="${`SATORI to take back from ${b.stream}`}" data-test="takeback-amount"><input name="to" autocomplete="off" placeholder="To: the wallet" aria-label="Address to send it to (the wallet if empty)" data-test="takeback-to"><button class="small-btn" type="submit" data-test="takeback" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `take:${b.channel}` ? '…' : 'Take back')}</button></form>` : '';
-  return html`<div class="crow" data-test="bought-row" data-key="${key}"><div class="cmain"><span class="sname">${b.name || b.stream}</span> <span class="muted small"><span class="nowrap" title="${b.pubkey}">${shortKey(b.pubkey)}</span> · ${b.price} SATORI each</span><div class="small" data-test="bought-left">${boughtText(b)}</div>${graceChange(b.channel, b.grace, a)}${take}</div>${b.status === 'open' ? html`<button class="small-btn" data-test="stop" disabled="${() => !!state.marketBusy}" @click="${() => a.stop(b.pubkey, b.stream)}">${() => (state.marketBusy === `stop:${key}` ? '…' : 'Stop')}</button>` : ''}</div>`;
 }
 
 function nostrCard(a) {
@@ -151,11 +109,11 @@ function recordItem(v, a) {
 }
 
 /** A source's group: its name, its author, "not announced" when so, then its prediction streams, best first. */
-export function recordGroup(g, a) {
+function recordGroup(g, a) {
   // One root node, no whitespace around it (see streamRow); keyed by everything it shows, so a change draws it again.
   return html`<div class="rgroup" data-test="record-source" data-key="${g.key}"><div class="rsrc"><b data-test="record-source-name" title="${g.stream}">${g.name}</b><span class="muted small" data-test="record-source-by" title="${g.byTitle}">${`by ${g.by}`}</span>${g.note ? html`<span class="badge warn" data-test="record-source-note">${g.note}</span>` : ''}</div>${g.rows.map((v) => recordItem(v, a))}</div>`;
 }
-export const groupKey = (g) => `${g.key}|${g.note}|${g.rows.map((v) => `${v.key},${v.markText},${v.from},${v.by},${v.own},${v.title}`).join(';')}`;
+const groupKey = (g) => `${g.key}|${g.note}|${g.rows.map((v) => `${v.key},${v.markText},${v.from},${v.by},${v.own},${v.title}`).join(';')}`;
 
 function recordsCard(a) {
   const groups = () => recordGroups(state.records);
@@ -172,25 +130,15 @@ function recordsCard(a) {
   </details>`;
 }
 
-/** A stream sold on the Satori contract: its price, a deposit (100 observations) and Buy; bought, the deposit left. */
-export function buyPart(s, l, a) {
-  const key = `${s.pubkey}:${s.stream_name}`;
-  const mine = () => state.nostr.market?.bought.find((b) => b.pubkey === s.pubkey && b.stream === s.stream_name && b.status === 'open');
-  const stopped = () => state.nostr.market?.bought.some((b) => b.pubkey === s.pubkey && b.stream === s.stream_name);
-  return html`${() => (mine()
-    ? html`<span class="muted small" data-test="catalog-bought">${`Bought · ${mine().left} SATORI left`}</span>`
-    : html`<form class="buy" @submit="${(e) => a.buy(s.pubkey, s.stream_name, form(e))}"><input name="deposit" inputmode="decimal" autocomplete="off" required value="${formatEther(l.price * BigInt(DEPOSIT_OBS))}" aria-label="${`Deposit for ${s.stream_name}, in SATORI`}" data-test="buy-deposit"><button class="small-btn primary" type="submit" data-test="buy" disabled="${() => !!state.marketBusy}">${() => (state.marketBusy === `buy:${key}` ? '…' : stopped() ? 'Buy again' : 'Buy')}</button></form>`)}`;
-}
-
 function catRow(s, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
   const l = listingOf(s);
   const paid = !l && (s.price_per_obs > 0 || s.encrypted || s.approval_required);
-  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}${l ? html` · <b data-test="catalog-price">${`${formatEther(l.price)} SATORI each`}</b>` : ''}</span><div class="muted small desc">${s.description}</div></div>${l ? html`<button class="small-btn" data-test="catalog-market" @click="${() => a.go('market')}">On the Market</button>` : html`<button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button>`}</div>`;
+  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}${l ? html` · <b data-test="catalog-price">${`${formatEther(l.price)} SATORI each`}</b>` : ''}</span><div class="muted small desc">${s.description}</div></div>${l ? html`<button class="small-btn" data-test="catalog-market" @click="${() => { state.forSaleOpen = true; a.go('market'); }}">On the Market</button>` : html`<button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button>`}</div>`;
 }
 
 /** Shown: the streams to subscribe to, and the ones sold on the Satori contract (prediction streams too); the rest of the prediction streams hidden. */
-export const listed = (s) => !s.pred || !!listingOf(s);
+const listed = (s) => !s.pred || !!listingOf(s);
 const shownCatalog = () => state.catalog.filter((s) => listed(s) && catalogMatch(s, state.catalogQuery));
 
 function network(a) {
@@ -218,7 +166,6 @@ function network(a) {
 export function streamsTab(a) {
   return html`
   <section class="tab-page" data-test="streams-tab" hidden="${() => state.tab !== 'streams'}">
-    ${layoutSwitch()}
     ${centralCard(a)}
     ${streamsCard(a)}
     ${nostrCard(a)}

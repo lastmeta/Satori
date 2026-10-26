@@ -1,8 +1,8 @@
 // Paid streams in Chrome (docs/design/market.md#selling-and-buying-over-the-relays): two neurons, a seller and a buyer,
 // each in its own browser context, on the test relay 7781 (scripts/test-relay.mjs) and the local fork of Base Sepolia on
 // :8545 (node scripts/fork.mjs start) with the real PaymentChannels and SATORI, fresh throwaway keys funded there. A
-// provider publishes a stream every 6 s; the seller predicts it and sells its `_pred` (Market › Your sales); the buyer finds it
-// on the Market tab and Buys (Unlock in place): the wallet opens a channel, each observation comes encrypted to it
+// provider publishes a stream every 6 s; the seller predicts it and sells its `_pred` (Market › Selling); the buyer finds it
+// on the Market tab (Buying › Find streams for sale) and Buys (Unlock in place): the wallet opens a channel, each observation comes encrypted to it
 // alone (in public a heartbeat), lands in its track record, and is paid with a voucher; Stop asks the contract to close, the
 // seller stops delivering and settles in its next pass (at most once a day; here a reload runs it), into its wallet. SHOTS=1 writes docs/screenshots/market-sell-* and market-buy-*.
 import { expect, test } from '@playwright/test';
@@ -40,6 +40,11 @@ async function neuron(browser) {
   await page.evaluate((u) => window.satori.setRelays({ relays: [u] }), RELAY);
   return { context, page, nostr: s.nostr.pubkey, alias: s.alias, wallet: s.wallet };
 }
+/** Market › Buying › Find streams for sale, opened unless it is. */
+const openForSale = async (page) => {
+  const find = page.locator('[data-test=market-find]');
+  if ((await find.getAttribute('aria-expanded')) !== 'true') await find.click();
+};
 const market = (page) => page.evaluate(async () => (await window.satori.nostr()).market);
 const tagOf = (e, n) => e.tags.find((t) => t[0] === n)?.[1];
 const shot = async (locator, name) => locator.screenshot({ path: process.env.SHOTS ? `docs/screenshots/${name}.png` : test.info().outputPath(`${name}.png`) });
@@ -78,6 +83,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     const b = buyer.page;
     await b.setViewportSize({ width: 390, height: 844 });
     await b.evaluate(() => window.satori.go('market'));
+    await openForSale(b);
     const item = b.locator('[data-test=market-item]', { hasText: pred });
     await expect(item.locator('[data-test=market-price]')).toHaveText('0.001 SATORI each', { timeout: 30_000 });
     await expect(item.locator('[data-test=buy-deposit]')).toHaveValue('0.1');
@@ -161,6 +167,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     expect((await read()).closed).toBe(false);
 
     // Buy again: the same channel, its close taken back and topped up; the seller serves it again
+    await openForSale(b);
     await expect(item.locator('[data-test=buy]')).toHaveText('Buy again');
     await item.locator('[data-test=buy-deposit]').fill('0.005');
     await unlock(b);

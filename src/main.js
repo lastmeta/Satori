@@ -38,7 +38,7 @@ import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from 
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
 import { listingOf } from './neuron/market.js';
-import { DEFAULT_PRICE } from './ui/streams.js';
+import { DEFAULT_PRICE } from './ui/market.js';
 import { formatEther } from 'viem';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
@@ -55,7 +55,6 @@ import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
 import { startPwa, registerWorker, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
-import { LAYOUT } from './ui/layout.js';
 
 // Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
 // checkout writes nothing to production) or a build's, each replaceable by a VITE_* variable.
@@ -1721,8 +1720,8 @@ watch(() => {
   void state.nostr.watching;
   if ((state.tab === 'streams' || state.tab === 'market') && state.screen === 'home') refreshRecords();
 });
-/** The Market tab (the new layout: Streams too): what the relays offer, asked for when it opens and nothing is known yet. */
-watch(() => (state.tab === 'market' || (LAYOUT === 'new' && state.tab === 'streams')) && state.screen === 'home', (open) => {
+/** The Market tab: what the relays offer, asked for when it opens and nothing is known yet. */
+watch(() => state.tab === 'market' && state.screen === 'home', (open) => {
   if (open && !state.catalog.length && !state.discovering) void actions.discover();
 });
 watch(lineOf(['reward'], createHold({ show: (v) => { state.rewardLine = v.line; } }))); // Settings › Reward address
