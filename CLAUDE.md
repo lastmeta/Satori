@@ -26,6 +26,11 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   greyed out with the switch. The game: base.md "The game" (alias if staked
   with it, else the wallet). Note `SatoriEngine.sol` reverts `Delegated` for a staked wallet
   playing itself.
+- **The alias and the Nostr key are not throwaway** (2026-10-26). Both are
+  kept for good, replaced only if the device is compromised (their private
+  keys sit in the app). Don't argue for a design from "the alias is
+  replaceable" (wallets.md's old wording), and don't weigh keeping old
+  history: the network is small, there is none worth keeping.
 - **Migrate in, never back.** Import and translate Dockerized Neuron (Lite) data;
   never keep legacy formats or limits so things can go back.
 - **Waits aren't problems** (2026-10-25). When something the user can't fix
