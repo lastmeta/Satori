@@ -1116,7 +1116,10 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   rewards with Claim (two cards). On a computer it is a dashboard: also the first
   8 streams (latest, forecast 24 h, model, a trend line) with a link to all,
   the wallet (claimable, the wallet, the alias's gas in days) and the
-  activity feed (open; a tap away on a phone).
+  activity feed (open; a tap away on a phone). Above Activity, **How Does
+  This Work?** (folded; `how`): four pictures, each with a sentence (the
+  app: streams in, predictions out; the network of apps; the contract
+  scoring and paying; sharing), then "What is Satori?".
 - **Models** (docs/design/models.md): on top the engine's status: *Working*
   (the step, Home's words), *Resting* ("Trained 2 h ago · next run in 9 h"),
   *No models yet*, or *Needs a look* (amber: the engine itself failed); the

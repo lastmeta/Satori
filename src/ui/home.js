@@ -8,6 +8,7 @@ import { mark, sparkPath, unlockPrompt } from './parts.js';
 import { fmtNum, figure, modelText, amountText, daysText, claimParts, claimableText, openingText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 import { chipCard } from './contract.js';
+import { howCard } from './how.js';
 
 const EMPTY = { status: 'idle', tone: 'idle', title: 'Starting', line: '', action: null, days: [], reasons: [], feed: [], notices: [],
   channels: { network: { state: 'idle', tone: 'idle', text: '–' }, contract: { state: 'idle', tone: 'idle', text: '–' },
@@ -185,6 +186,7 @@ export function home(a) {
       </section>
     </div>
 
+    ${howCard()}
     <details class="tile feed-tile" data-test="activity">
       <summary>Activity</summary>
       <div class="feed" data-test="feed">${() => h().feed.map((f) => feedRow(f).key(`${f.at}:${f.text}:${fmtAgo(state.now - f.at)}`))}</div>

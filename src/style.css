@@ -446,6 +446,21 @@ button.cell:disabled { cursor: default; }
 .feed-row time { color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 details.tile > summary { color: var(--text); font-weight: 600; font-size: 0.95rem; margin: -10px 0; }
 details.tile[open] > summary { margin-bottom: 0; }
+/* Home's How Does This Work? (src/ui/how.js): its pictures in the icons' line style, a sentence under each, then the question */
+.how { max-width: 520px; margin: 0 auto; text-align: center; }
+.how p { margin: 4px 0 22px; line-height: 1.5; }
+.hw { display: block; width: 100%; max-width: 360px; height: auto; margin: 18px auto 6px; fill: none; stroke: var(--text);
+  stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.hw .hin { stroke: var(--muted); }
+.hw .hout { stroke: var(--accent); stroke-dasharray: 6 5; }
+.hw .hhead, .hw .hshare { stroke: var(--accent); }
+.hw .dev { fill: var(--card); }
+.hw .hdot { fill: var(--accent); stroke: none; }
+.hw .hnet { stroke: var(--accent); stroke-width: 1.5; }
+.hw .hblock { fill: var(--card); }
+.hw .hcoin { fill: var(--sky); stroke: var(--sky-ink); stroke-width: 1.5; }
+.how-q { margin: 30px 0 8px; font-size: 1.6rem; }
+.how-a { font-size: 1.1rem; font-weight: 550; margin-bottom: 8px; }
 
 /* ── the inline Unlock prompt ── */
 .inline-unlock { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
@@ -812,7 +827,8 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .dash > .streams-tile { grid-column: span 8; order: 5; }
   .dash > .money { grid-column: span 4; order: 6; }
   .money > .wallet-tile { align-content: start; }
-  .dash > .feed-tile { order: 7; }
+  .dash > .how-tile { order: 7; }
+  .dash > .feed-tile { order: 8; }
   .engine { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.5fr); align-items: start; }
   .strip { grid-template-columns: repeat(30, minmax(0, 1fr)); }
   .strip .cell:nth-child(-n+16) { display: grid; }
