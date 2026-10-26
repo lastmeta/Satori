@@ -13,6 +13,7 @@ import {
 } from './format.js';
 import { listingOf, DEPOSIT_OBS } from '../neuron/market.js';
 import { watchText, recordGroups, firstRows, recordDetail, SHOWN } from './record.js';
+import { layoutSwitch } from './layout.js';
 
 export const CATALOG_SHOWN = 50;
 
@@ -52,7 +53,7 @@ function streamRow(r, names, a) {
 const predRow = (p) => html`<li data-test="stream-prediction"><span>${fmtWhen(p.made_at)}</span><span>${p.model}</span><span>${`in 24 h ${fmtNum(p.t2)}`}</span><span>${p.status === 'sent' ? 'Sent' : 'Pending'}</span></li>`;
 
 /** An open stream, under its row: its trend, the forecast in 12 h, its model, its latest predictions. */
-function detail(r, names, a) {
+export function detail(r, names, a) {
   return html`<div class="detail" data-test="stream-detail"><div class="card-head"><h3>${r.name}</h3><button class="small-btn" @click="${() => a.openStream('')}">Close</button></div><svg class="spark" viewBox="0 0 70 20" preserveAspectRatio="none" aria-hidden="true"><path d="${() => sparkPath(state.sparks[r.uuid])}"></path></svg><dl class="facts">${fact('In 12 h', 't1', fmtNum(r.t1))}<div class="fact"><dt>Model</dt><dd data-test="model" title="${modelTitle(r, names)}">${modelText(r, names)}</dd></div></dl><p class="small muted">${modelTitle(r, names) || 'No model yet'}</p><ol>${() => state.streamPreds.map((p) => predRow(p).key(`${p.id}:${p.status}`))}</ol></div>`;
 }
 
@@ -150,11 +151,11 @@ function recordItem(v, a) {
 }
 
 /** A source's group: its name, its author, "not announced" when so, then its prediction streams, best first. */
-function recordGroup(g, a) {
+export function recordGroup(g, a) {
   // One root node, no whitespace around it (see streamRow); keyed by everything it shows, so a change draws it again.
   return html`<div class="rgroup" data-test="record-source" data-key="${g.key}"><div class="rsrc"><b data-test="record-source-name" title="${g.stream}">${g.name}</b><span class="muted small" data-test="record-source-by" title="${g.byTitle}">${`by ${g.by}`}</span>${g.note ? html`<span class="badge warn" data-test="record-source-note">${g.note}</span>` : ''}</div>${g.rows.map((v) => recordItem(v, a))}</div>`;
 }
-const groupKey = (g) => `${g.key}|${g.note}|${g.rows.map((v) => `${v.key},${v.markText},${v.from},${v.by},${v.own},${v.title}`).join(';')}`;
+export const groupKey = (g) => `${g.key}|${g.note}|${g.rows.map((v) => `${v.key},${v.markText},${v.from},${v.by},${v.own},${v.title}`).join(';')}`;
 
 function recordsCard(a) {
   const groups = () => recordGroups(state.records);
@@ -189,7 +190,7 @@ function catRow(s, a) {
 }
 
 /** Shown: the streams to subscribe to, and the ones sold on the Satori contract (prediction streams too); the rest of the prediction streams hidden. */
-const listed = (s) => !s.pred || !!listingOf(s);
+export const listed = (s) => !s.pred || !!listingOf(s);
 const shownCatalog = () => state.catalog.filter((s) => listed(s) && catalogMatch(s, state.catalogQuery));
 
 function network(a) {
@@ -217,6 +218,7 @@ function network(a) {
 export function streamsTab(a) {
   return html`
   <section class="tab-page" data-test="streams-tab" hidden="${() => state.tab !== 'streams'}">
+    ${layoutSwitch()}
     ${centralCard(a)}
     ${streamsCard(a)}
     ${nostrCard(a)}

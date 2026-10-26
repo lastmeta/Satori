@@ -106,6 +106,7 @@ export const state = reactive({
   recordError: '',
   recordsAll: false,
   catalogQuery: '',
+  findFilter: 'all', // the new layout's Streams › Find streams: 'all' | 'free' | 'sale' | 'predictors' (src/ui/layout.js)
   discovering: false,
   subscribing: '', // `${pubkey}:${stream}` in flight
   networkError: '',

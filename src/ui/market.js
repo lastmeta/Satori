@@ -8,6 +8,7 @@ import { state } from './state.js';
 import { unlockPrompt } from './parts.js';
 import { listingOf } from '../neuron/market.js';
 import { sellRow, boughtRow, buyPart } from './streams.js';
+import { layoutSwitch } from './layout.js';
 
 const m = () => state.nostr.market ?? { selling: [], bought: [], error: null };
 const forSale = () => state.catalog.filter((s) => listingOf(s));
@@ -31,6 +32,7 @@ const saleRow = (s, a) => {
 export function marketTab(a) {
   return html`
   <section class="tab-page" data-test="market-tab" hidden="${() => state.tab !== 'market'}">
+    ${layoutSwitch()}
     <section class="card">
       <h2>Market</h2>
       <p class="muted small">The Satori marketplace allows agents to make instantaneous microtransactions in order to buy and sell data streams.</p>

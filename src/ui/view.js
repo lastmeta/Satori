@@ -13,6 +13,9 @@ import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
 import { walletTab } from './wallet.js';
 import { marketTab } from './market.js';
+import { streamsTabNew } from './streams-new.js';
+import { marketTabNew } from './market-new.js';
+import { LAYOUT } from './layout.js';
 import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 
 export { state };
@@ -248,8 +251,8 @@ export function render(root, a) {
       ${gameTab(a)}
       ${home(a)}
       ${modelsTab(a)}
-      ${streamsTab(a)}
-      ${marketTab(a)}
+      ${LAYOUT === 'new' ? streamsTabNew(a) : streamsTab(a)}
+      ${LAYOUT === 'new' ? marketTabNew(a) : marketTab(a)}
       ${walletTab(a)}
       ${settingsTab(a)}
     </div>

@@ -534,6 +534,37 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; min-wi
 .mchange summary { cursor: pointer; color: var(--muted); }
 .mchange form, .crow form.takeback { margin-top: 4px; flex-wrap: wrap; }
 .buyer { margin-top: 6px; }
+/* the layouts to compare (src/ui/layout.js), and the new one's Streams: one list of what the app follows, each row its
+   name, where it comes from, latest and forecast, then Predict; under a relay stream, Sell or its price, Unsubscribe */
+.layoutpick { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 10px; }
+.layoutpick .segmented { margin: 0; gap: 6px; }
+.ysrc { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.ysrc p { margin: 0; min-width: 0; }
+.yrows { margin-top: 8px; }
+.yitem { border-top: 1px solid var(--line); padding: 6px 0; }
+.yitem > .detail { margin: 6px 0 4px; }
+.yrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ymain { min-width: 0; }
+.ymain .sname { font-weight: 550; }
+.ymain button.sname { min-height: 32px; }
+.ytag { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--bg); color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+.yvals { display: flex; flex-wrap: wrap; gap: 2px 16px; font-variant-numeric: tabular-nums; }
+.yacts { flex: none; }
+.yacts .badge { margin: 0; }
+.yacts .small-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.ybar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 6px; font-size: 0.88rem; }
+.ybar form.sell { display: flex; gap: 8px; align-items: center; }
+.ybar form.sell input { margin: 0; width: 7.5em; }
+.ybar > .link:only-child { margin-left: auto; }
+.ysale .badge { margin: 0 4px 0 0; }
+.yacts { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+.yacts .link { font-size: 0.82rem; min-height: 32px; }
+.crow .cmain > .badge { margin: 0 0 0 4px; vertical-align: 1px; }
+.ffilters { gap: 4px; }
+.ffilters .small-btn { padding: 6px 8px; }
+.mempty { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.mempty p { margin: 0; }
+.mchange label { margin-right: 4px; }
 .market h3 { margin: 14px 0 2px; font-size: 0.95rem; }
 /* the track record (docs/design/track-record.md#ui-streams): a row per prediction stream, its pill the Models tab's (.q);
    a tap opens its detail in place: the record in words, the outcomes as a line and the predictions dashed */
