@@ -8,6 +8,7 @@
 import { expect, test } from '@playwright/test';
 import WebSocket from 'ws';
 import { createPublicClient, http, parseEther } from 'viem';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { connectProvider } from '../scripts/provider.mjs';
 import { advance, fund } from '../scripts/fork.mjs';
 import { createRelay } from '../src/nostr/relay.js';
@@ -148,7 +149,7 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     await b.evaluate(() => window.satori.go('market'));
     await expect(left).toHaveText(/^Stopped: [\d.]+ SATORI left in the channel\. Buy it again to use it, or take it back\.$/, { timeout: 60_000 });
     const brow = b.locator(`[data-test=bought-row][data-key="${seller.nostr}:${pred}"]`);
-    const elsewhere = '0x' + '7'.repeat(40);
+    const elsewhere = privateKeyToAccount(generatePrivateKey()).address; // fresh: the fork keeps earlier runs' balances
     const before = Number((await market(b)).bought[0].refundable);
     await brow.locator('[data-test=takeback-amount]').fill('0.001');
     await brow.locator('[data-test=takeback-to]').fill(elsewhere);
