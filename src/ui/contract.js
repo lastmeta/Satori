@@ -2,7 +2,7 @@
 // it, the same one closes it). Each says what its channel is for, as a picture (this app, an arrow green while it
 // works, where the data goes) and in words, and what has to be in place, each a check with its fix. The Satori
 // contract's also has the mode (Automatic, By hand) and its fixes: Stake, Base ETH to an address (Copy, a QR code),
-// Play. Their checks: src/ui/contractflow.js.
+// Game (by hand, until today's game is played). Their checks: src/ui/contractflow.js.
 import { html } from '@arrow-js/core';
 import qrcode from 'qrcode-generator';
 import { state } from './state.js';
@@ -48,7 +48,7 @@ const fundRow = (a, c) => html`<div class="fund" data-test="contract-fund">
 const fixOf = (a, c) => (c.fix === 'poll' ? html`<button class="small-btn" data-test="network-poll" disabled="${() => !!state.central.polling}" @click="${a.pollNow}">${() => (state.central.polling ? 'Polling…' : 'Poll now')}</button>`
   : c.fix === 'streams' ? html`<button class="small-btn with-icon" data-test="relays-streams" @click="${() => a.go('streams')}">${STREAMS_ICON()}Streams</button>`
       : c.fix === 'stake' ? html`<button class="primary small-btn" data-test="contract-stake" disabled="${() => !!state.baseBusy}" @click="${() => a.walletAction('contract', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? 'Staking…' : 'Stake with this app')}</button>`
-  : c.fix === 'game' ? html`<button class="small-btn" data-test="contract-play" @click="${() => a.go('game')}">Play today's game</button>`
+  : c.fix === 'game' ? html`<button class="small-btn with-icon" data-test="contract-play" @click="${() => a.go('game')}">${GAME_ICON()}Game</button>`
     : c.fix === 'fund' ? fundRow(a, c) : '');
 
 // plain values in each row, redrawn by key (src/ui/home.js cell: ArrowJS and live values in a redrawn list)
@@ -91,8 +91,7 @@ function contractCard(a) {
   <div class="card contract-card" data-test="contract-card">
     ${flow('contract', today, () => (b().play === 'manual' ? 'You, by hand' : 'This app'), () => (today() ? 'Predicted today' : 'Not yet today'), BLOCK, 'Satori contract')}
     <p class="muted small">Each day, predictions are sent directly to the Satori smart contract on Base. They are automatically scored on-chain and earn SATORI.</p>
-    <div class="cmode"><div class="segmented" role="group" aria-label="Who predicts">${[['auto', 'Automatic'], ['manual', 'By hand']].map(([mode, word]) => html`<button class="small-btn" data-test="${`contract-play-${mode}`}" aria-pressed="${() => String(b().play === mode)}" disabled="${() => !b().play}" @click="${() => a.setPlay(mode)}">${word}</button>`)}</div>
-      <button class="small-btn with-icon" data-test="contract-game" hidden="${() => b().play !== 'manual'}" @click="${() => a.go('game')}">${GAME_ICON()}Game</button></div>
+    <div class="cmode"><div class="segmented" role="group" aria-label="Who predicts">${[['auto', 'Automatic'], ['manual', 'By hand']].map(([mode, word]) => html`<button class="small-btn" data-test="${`contract-play-${mode}`}" aria-pressed="${() => String(b().play === mode)}" disabled="${() => !b().play}" @click="${() => a.setPlay(mode)}">${word}</button>`)}</div></div>
     ${checkList(a, () => contractChecks(b()))}
     ${unlockPrompt(a, 'contract', 'stake from the contract card')}
     <p class="error small" role="alert" hidden="${() => !(state.baseDid === 'stake' && state.baseError)}">${() => state.baseError}</p>

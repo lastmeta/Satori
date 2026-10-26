@@ -1287,7 +1287,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (the alias's Base address), `alias-key` (its private key: "Wallet
   passphrase to show the alias's private key", then `alias-backup-prompt`,
   `alias-backup-key`, `alias-backup-hex`), `wallets` (the Wallets card:
-  `wallet-row` with `data-id`, its `.badge` "In use", `wallet-switch`,
+  `wallet-row` with `data-id`, `wallet-address` (a tap copies it), its `.badge` "In use", `wallet-switch`,
   `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
   `add-wallet`; `wallets-error`), `base-connected` (a connected wallet's note).
   Setup: `other-wallets` with `wallet-back` (one per other wallet that was

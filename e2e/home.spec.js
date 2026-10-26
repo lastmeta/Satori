@@ -134,11 +134,11 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   // (bvar), sent. Predicting.
   expect((await polled(page)).lastSubmit).toMatchObject({ successful: 8 });
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'ok', title: 'Predicting', action: null, reasons: [] });
+  expect(h).toMatchObject({ status: 'ok', title: expect.stringMatching(/^Predict(ed|ing)$/), action: null, reasons: [] });
   expect(h.days).toHaveLength(30);
   expect(h.days.slice(-8).map((d) => d.code)).toEqual(['closed', 'closed', 'full', 'full', 'part', 'full', 'full', 'full']); // days 7 and 6 ago closed, 3 ago Base failed
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting');
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/);
   await expect(page.locator('[data-test=health-line]')).toHaveText(/^Sent 8 predictions just now · next in 11 h$/);
   await expect(page.locator('[data-test=action]')).toBeHidden();
   const chip = (c) => page.locator(`[data-test=chip][data-channel=${c}]`);
@@ -168,7 +168,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   s.balance[st.wallet.address.toLowerCase()] = 100n * E18;
   await page.evaluate(() => window.satori.base());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 11 h',
+  expect(h).toMatchObject({ status: 'ok', title: expect.stringMatching(/^Predict(ed|ing)$/), line: 'Up to date · next in 11 h',
     action: { id: 'stake', button: 'Stake', do: 'stake', text: "Stake with this app to earn on the Satori contract. While staked, your SATORI "
       + "can't be sent until you unstake." },
     channels: { contract: { state: 'idle', tone: 'off', text: 'Not staked' } } });
@@ -258,7 +258,7 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   release(); // no Poll now
   await expect(page.locator('[data-test=health-line]')).toHaveText('Closed for 2 days. Caught up just now.', { timeout: LOAD_TIMEOUT }); // history, bvar
   await expect(hero(page)).toHaveAttribute('data-s', 'idle'); // until the next normal cycle
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting'); // caught up
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/); // caught up
   await expect(page.locator('[data-test=chip][data-channel=network]')).toHaveAttribute('data-state', 'ok');
   h = await health(page);
   expect(h.feed).toContainEqual(expect.objectContaining({ level: 'ok', text: 'Caught up: sent 8 predictions' }));
@@ -354,7 +354,7 @@ test('register fails, then succeeds: it registers again before each poll until i
   await page.evaluate(() => window.satori.poll());
   expect(central.polls).toEqual([4, 5, 5]); // how many registers came before each poll
   h = await health(page);
-  expect(h).toMatchObject({ status: 'ok', title: 'Predicting' });
+  expect(h).toMatchObject({ status: 'ok', title: expect.stringMatching(/^Predict(ed|ing)$/) });
   expect(central.prod).toEqual([]);
 });
 
@@ -415,7 +415,7 @@ test('starting with a wallet mismatch: the title says Starting; the mismatch lea
   // The first poll: predicting, the mismatch still there.
   centralAt(central, nowS() - 60);
   release();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT }); // history, bvar
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT }); // history, bvar
   h = await health(page);
   expect(h).toMatchObject({ status: 'warn', title: 'Predicting', action: { id: 'wallet-mismatch' } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
@@ -476,7 +476,7 @@ test('an iPhone: Setup and Settings say how Satori runs; the hero says Keep Sato
   await expect(hero(page)).toHaveAttribute('data-tone', 'working'); // the words, not the colour: vivid stays for what is critical
   expect((await health(page)).work.text).toBe("Fetching today's observations…"); // agents read the step itself
   release();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
 
   // Home: Add to Home Screen as advice (the words given are the backup: no Back up card before it); Got it puts it away, for good
   await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'install');
@@ -485,7 +485,7 @@ test('an iPhone: Setup and Settings say how Satori runs; the hero says Keep Sato
   await page.locator('[data-test=action-button]').click(); // Got it
   await expect(page.locator('[data-test=action]')).toBeHidden();
   await page.reload();
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   await expect(page.locator('[data-test=action]')).toBeHidden();
 
   // Settings › This device says it too, with the same way to add it

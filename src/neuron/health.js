@@ -535,7 +535,10 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   // be predicting: staked with this neuron, or not read (its RPC down) after a batch went out. Nostr never moves it.
   const d = base?.wallet?.staked;
   const baseRed = (d === 'alias' || (d == null && !!base?.lastBatch)) && reasons.some((r) => r.id === 'base-failing'); // the batch fails
-  const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting' : c.title;
+  const tone = toneOf(status, leading(work, HERO));
+  // at rest and all good (sky): what it did, 'Predicted'; 'Predicting' while it works (the owner, 2026-10-26)
+  const title = baseRed && c.lastGood && c.title !== 'Not predicting' ? 'Partly predicting'
+    : c.title === 'Predicting' && tone === 'idle' ? 'Predicted' : c.title;
   const top = told[0];
   const centralTop = told.find((r) => r.channel === 'network');
 
@@ -553,7 +556,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const action = a ? { id: a.id, text: a.text, ...(a.act ? { button: a.button, ...a.act } : {}), ...(a.dismiss ? { dismiss: a.dismiss } : {}) } : null;
   const doing = leading(work);
   return {
-    status, tone: toneOf(status, leading(work, HERO)), title, line, action,
+    status, tone, title, line, action,
     days: daysOf(rows, now, since, DAYS, base?.lastPlay?.at ?? null),
     channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic, work }),
     feed: feedOf(rows),

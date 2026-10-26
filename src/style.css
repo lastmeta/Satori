@@ -842,6 +842,7 @@ a.chan:hover { border-color: var(--muted); }
 .wallet-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .wallet-row:first-child { border-top: 0; }
 .wallet-row code { flex: 1 1 auto; min-width: 0; }
+.wallet-row code[role=button] { cursor: pointer; }
 .confirm { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--warn-soft); }
 .confirm .actions { margin-top: 10px; }
 

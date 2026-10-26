@@ -96,7 +96,7 @@ of four levels, and the status is the worst `bad`, `warn` or `idle` one:
   (working while it starts or catches up, sky at rest).
   - *Was asleep*: a session missed work. It catches up at once on open
     ("Catching up now…") and shows until the next normal cycle, which is the second
-    good cycle after that session (the title says *Predicting* once it
+    good cycle after that session (the title says *Predicted* once it
     caught up). A device that slept with the page open catches up within
     one heartbeat ([the catch-up pass](../plans/runtime.md#catch-up-pass)).
   - *Starting*: a new neuron before its first good cycle, within `FIRST_S`:
@@ -473,7 +473,8 @@ The Contract chip's card explains and checks:
   with this app**), the alias's Base ETH (else its address with Copy and a
   QR code), predicted today. By hand: who plays (the alias for a staked
   wallet, else the wallet; staked elsewhere: can't), the player's Base ETH
-  (the same fix), played today (else **Play today's game**).
+  (the same fix), played today (else the **Game** button, the only one: it shows only
+  until today's game is played).
 
 By hand, the chip is green ("Played today") once played this round, grey
 ("Not played today") until then. Agents: `contract()`.

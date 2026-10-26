@@ -363,12 +363,12 @@ test('the Satori contract unused (not staked, no batch ever sent): an RPC error 
   central.noWalletAddress = true; // no wallet mismatch to read past
   await openApp(page);
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, fx.vectors[1].words]);
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   rpc.state.down = true; // the RPC stops answering
   expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ error: expect.any(String), unused: true });
   await page.evaluate(() => window.satori.base());
   const h = await page.evaluate(() => window.satori.health());
-  expect(h).toMatchObject({ status: 'ok', title: 'Predicting', action: null, channels: { contract: { state: 'note', tone: 'off', text: 'Unreachable' } } });
+  expect(h).toMatchObject({ status: 'ok', title: expect.stringMatching(/^Predict(ed|ing)$/), action: null, channels: { contract: { state: 'note', tone: 'off', text: 'Unreachable' } } });
   expect(h.reasons.map((r) => [r.id, r.status])).toEqual([['base-unused-unreachable', 'note']]);
   expect(h.days.at(-1).code).toBe('full'); // the check's error is no failure: not staked there
   expect(h.feed[0].text).toMatch(/^Couldn't reach the Satori contract \(not staked\): /);
@@ -387,7 +387,7 @@ test('a batch that never mines: past the max fee it says so (Settings); within i
   const [id, vk] = [fx.vectors[0], fx.vectors[1]];
   await openApp(page);
   await page.evaluate(([p, i, v]) => window.satori.setup({ passphrase: p, aliasWords: i, walletWords: v }), [PASS, id.words, vk.words]);
-  await expect(page.locator('[data-test=health-title]')).toHaveText('Predicting', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   const I = id.ethAddress.toLowerCase();
   const V = vk.ethAddress.toLowerCase();
   rpc.eth[I] = 10n ** 17n;

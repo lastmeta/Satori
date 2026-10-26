@@ -117,13 +117,13 @@ export function walletTab(a) {
 
 /**
  * The Wallets card (docs/design/wallets.md#several-wallets): this app's wallets, the one in use marked; Switch and
- * Remove on the others (Remove asks first); Add a wallet. One row template, its parts shown or hidden by its values:
+ * Remove on the others (Remove asks first); Add a wallet. Tapping an address copies it. One row template, its parts shown or hidden by its values:
  * ArrowJS 1.0.6 reuses a rendered chunk for any template of the same text (see txLink).
  */
 function walletsCard(a) {
   const removing = () => state.wallets.wallets.find((w) => w.id === state.walletRemove);
-  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><code title="${w.address ?? ''}">${w.address ? shortHash(w.address) : 'Not set up yet'}</code><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
-    .key(`${w.id}:${w.address}:${w.active}`);
+  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
+    .key(`${w.id}:${w.address}:${w.active}:${state.copied === `wallet-${w.id}`}`); // tap the address: copied
   return html`<section class="card" data-test="wallets">
     <h2>Wallets</h2>
     <p class="muted small">Each wallet keeps its own data in this app. One runs at a time.</p>

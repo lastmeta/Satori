@@ -35,7 +35,7 @@ const INSTALL_TEXT = "Satori works while it's open. Install it: it stays open in
 describe('ok: predicting', () => {
   test('central took predictions within the window; Base not staked with no SATORI; nothing subscribed', () => {
     const h = health();
-    expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h', action: null, reasons: [] });
+    expect(h).toMatchObject({ status: 'ok', title: 'Predicted', line: 'Sent 83 predictions 2 h ago · next in 9 h', action: null, reasons: [] });
     expect(h.channels).toEqual({ // by the words people see: the Satori Network, the Satori contract, the Satori relays
       network: { state: 'ok', tone: 'idle', text: '83 sent 2 h ago' },
       contract: { state: 'idle', tone: 'off', text: 'Not staked' },
@@ -55,7 +55,7 @@ describe('ok: predicting', () => {
     expect(isGood(failed(NOW))).toBe(false);
     expect(isGood(row('central', NOW, 'bad', { sent: 3, accepted: 0 }))).toBe(false); // central took none
     const h = health({ rows: [open(NOW - 3 * H), good(NOW - 2 * H), good(NOW - H, 0)] });
-    expect(h).toMatchObject({ status: 'ok', title: 'Predicting', line: 'Up to date · next in 9 h' });
+    expect(h).toMatchObject({ status: 'ok', title: 'Predicted', line: 'Up to date · next in 9 h' });
     expect(h.channels.network).toEqual({ state: 'ok', tone: 'idle', text: 'Up to date' });
     expect(h.feed.map((f) => f.text)).toEqual(['Checked the Satori Network: up to date', 'Sent 83 predictions to the Satori Network']);
     const polling = health({ rows: [open(NOW - 3 * H), good(NOW - H, 0)], central: central({ polling: true }) });
@@ -111,7 +111,7 @@ describe('idle: calm, never red for being closed', () => {
 
     const caught = good(NOW - 20, 83, { caughtUp: woke.data.gap });
     h = health({ rows: [...before, woke, caught] });
-    expect(h).toMatchObject({ status: 'idle', title: 'Predicting', line: 'Closed for 3 days. Caught up just now.' }); // caught up: predicting
+    expect(h).toMatchObject({ status: 'idle', title: 'Predicted', line: 'Closed for 3 days. Caught up just now.' }); // caught up: predicting
     expect(h.channels.network).toEqual({ state: 'ok', tone: 'idle', text: '83 sent just now' });
 
     // a reload after catching up keeps it; the next normal cycle ends it
@@ -250,14 +250,14 @@ const STAKED_ELSEWHERE_TEXT = "Your wallet is staked with another address, so th
 describe('staking (docs/design/health.md: stake, staked-elsewhere, stake-out-of-sync)', () => {
   test('not staked while the wallet holds SATORI: advice, the Stake card; the hero calm, the chip off', () => {
     const h = health({ base: base({ wallet: { satori: '100', staked: 'none' } }) });
-    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h' });
+    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicted', line: 'Sent 83 predictions 2 h ago · next in 9 h' });
     expect(h.reasons).toEqual([{ id: 'stake', status: 'advice', channel: 'contract', text: STAKE_TEXT }]);
     expect(h.action).toEqual({ id: 'stake', text: STAKE_TEXT, button: 'Stake', do: 'stake' });
     expect(h.channels.contract).toEqual({ state: 'idle', tone: 'off', text: 'Not staked' });
   });
   test('staked with another address (another app\'s alias, after a new phone or a restore): advice, a Stake card to move it here', () => {
     const h = health({ base: base({ wallet: { satori: '100', staked: 'other', stakedWith: '0x' + 'ab'.repeat(20) } }) });
-    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting' });
+    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicted' });
     expect(h.action).toEqual({ id: 'staked-elsewhere', text: STAKED_ELSEWHERE_TEXT, button: 'Stake here', do: 'stake' });
     expect(h.channels.contract).toEqual({ state: 'idle', tone: 'off', text: 'Staked elsewhere' });
   });
@@ -303,7 +303,7 @@ describe('warn: predicting, but something needs you', () => {
   test('Base not used (not staked, no batch ever sent): an RPC error is a note on the Contract chip, grey; Home stays green', () => {
     for (const b of [base({ error: 'HTTP request failed', config: null }), base({ lastCheck: { at: NOW, error: 'HTTP request failed', unused: true } })]) {
       const h = health({ base: b });
-      expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h', action: null });
+      expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicted', line: 'Sent 83 predictions 2 h ago · next in 9 h', action: null });
       expect(h.reasons).toEqual([{ id: 'base-unused-unreachable', status: 'note', channel: 'contract', text: expect.stringMatching(/^Can't reach Base/) }]);
       expect(h.channels.contract).toEqual({ state: 'note', tone: 'off', text: 'Unreachable' });
     }
@@ -351,7 +351,7 @@ describe('warn: predicting, but something needs you', () => {
 });
 
 describe('advice: the card, nothing wrong (never the status, the tone or the line)', () => {
-  const calm = { status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h' };
+  const calm = { status: 'ok', tone: 'idle', title: 'Predicted', line: 'Sent 83 predictions 2 h ago · next in 9 h' };
   test('storage not kept and no backup confirmed: the Back up card, the hero as it was', () => {
     const h = health({ storage: { persisted: false }, backedUp: false });
     expect(h).toMatchObject(calm);
@@ -377,7 +377,7 @@ describe('advice: the card, nothing wrong (never the status, the tone or the lin
     expect(health({ ...fresh, work: step('history') })).toMatchObject({ status: 'idle', tone: 'working', line: 'Getting its first predictions…' });
     expect(health({ ...fresh, work: step('send', true) })).toMatchObject({ status: 'idle', tone: 'critical' });
     const rest = health({ ...fresh, rows: [open(NOW - M), good(NOW - 10, 82)], central: central({ nextPoll: NOW + 11 * H }) });
-    expect(rest).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 82 predictions just now · next in 11 h',
+    expect(rest).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicted', line: 'Sent 82 predictions just now · next in 11 h',
       action: { id: 'backup', button: 'Back up' } });
   });
   test('a warn or bad reason with a button keeps the card; the advice waits', () => {
@@ -426,7 +426,7 @@ describe('Install, as advice on Home, once (docs/design/pwa.md#install): whereve
   test('Chromium offers its prompt: Install, or Not now', () => {
     const h = health({ app: app({ canInstall: true }) });
     expect(ids(h)).toEqual(['install']);
-    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicting', line: 'Sent 83 predictions 2 h ago · next in 9 h' }); // advice: nothing else moves
+    expect(h).toMatchObject({ status: 'ok', tone: 'idle', title: 'Predicted', line: 'Sent 83 predictions 2 h ago · next in 9 h' }); // advice: nothing else moves
     expect(h.action).toEqual({ id: 'install', text: INSTALL_TEXT, button: 'Install', do: 'install', dismiss: 'Not now' });
   });
   test.each([
@@ -580,7 +580,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     const [title, status, action] = cell.split(' ');
     expect(ids(h)).toContain(id);
     expect(h.reasons.find((r) => r.id === id).status).toBe(LEVEL[id]);
-    expect([h.title, h.status, h.action?.id ?? '–']).toEqual([TITLE[title], status, action]);
+    expect([h.title, h.status, h.action?.id ?? '–']).toEqual([title === 'P' && ['ok', 'idle'].includes(status) ? 'Predicted' : TITLE[title], status, action]); // at rest: Predicted
     expect([h, ...busy].map((x) => x.tone)).toEqual(STATUS_TONE[status]);
     if (LEVEL[id] === 'advice') { // the hero exactly as without it
       const plain = healthOf(input(state));
