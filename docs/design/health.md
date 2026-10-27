@@ -472,7 +472,9 @@ The Contract chip's card explains and checks:
   a grey clock for "not yet": automatic: staked with this app (else **Stake
   with this app**), the alias's Base ETH (else its address with Copy and a
   QR code), predicted today. By hand: who plays (the alias for a staked
-  wallet, else the wallet; staked elsewhere: can't), the player's Base ETH
+  wallet, else the wallet; staked elsewhere: can't), staked with this app
+  (else a grey clock and **Stake with this app**: unstaked, each play asks
+  for the passphrase), the player's Base ETH
   (the same fix), played today (else the **Game** button, the only one: it shows only
   until today's game is played).
 

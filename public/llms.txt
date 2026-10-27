@@ -1040,7 +1040,9 @@ the page's JS context:
   its arrow is green); checks as `contract()`'s, fixes `'poll'`, `'streams'` too.
 - `await satori.contract()` → `{ play, predictedToday, checks }`: Home's Satori contract card. Each check
   `{ id, state: 'ok' | 'bad' | 'wait', text, fix? }`; `fix`: `'stake'` (stake()), `'fund'` (with `address` and
-  `who`: send it a little Base ETH), `'game'` (play by hand).
+  `who`: send it a little Base ETH), `'game'` (play by hand). By hand, a
+  wallet not staked anywhere gets `{ id: 'stake', state: 'wait', fix: 'stake' }` (each play asks for its
+  passphrase until it stakes with this app).
 - `await satori.day('2026-10-24')` → one day of Home's strip: `{ date, network: { sent, first, last, marks },
   contract: { batches, skipped }, open }`.
 - `satori.dismiss('install' | 'notice')`: put away Home's Install card, or the recovered-database notice.

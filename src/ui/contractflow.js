@@ -6,7 +6,7 @@ export const predictedToday = (b) => b?.round != null && (b.lastBatch?.round ===
 
 /**
  * The checks for the mode the app is in. Each: { id, state: 'ok' | 'bad' | 'wait', text, fix? } (fix: 'stake',
- * 'fund' with its address, 'game'). by hand, the player is the alias when the wallet is staked with it, else the wallet.
+ * 'fund' with its address, 'game'). By hand, the player is the alias when the wallet is staked with it, else the wallet.
  */
 export function contractChecks(b) {
   if (!b?.config || b.play == null) return [];
@@ -19,6 +19,8 @@ export function contractChecks(b) {
     const byAlias = staked === 'alias';
     const out = [satori];
     if (staked === 'other') out.push({ id: 'free', state: 'bad', text: "Your wallet is staked with another address, so it can't play here. Unstake it on the Wallet tab." });
+    else if (byAlias) out.push({ id: 'stake', state: 'ok', text: 'Staked with this app: it sends your plays, no passphrase needed.' });
+    else out.push({ id: 'stake', state: 'wait', text: 'Not staked: each play asks for your passphrase. Stake with this app so it sends them for you.', fix: 'stake' });
     const noGas = byAlias ? b.alias?.noGas : b.wallet?.lowEth;
     out.push(noGas
       ? { id: 'gas', state: 'bad', text: `${byAlias ? "This app's address" : 'Your wallet'} needs a little Base ETH to send predictions.`,
