@@ -1104,7 +1104,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `game-submit`; then `game-submit-screen` with `game-daily` (Satori Daily, a new
   tab), `game-calls` (each li: the name and an arrow, aria-label up or down),
   `game-send` (SUBMIT), `game-send-error`; a swipe right goes back, left on to
-  the streams that aren't reward eligible; `game-sent` with `game-done` (or, played today, `game-tomorrow` and `game-dismiss`: the streams again with
+  the streams that aren't reward eligible; `game-sent` with `game-tomorrow` and `game-dismiss` (the streams again with
   `game-rest` where the buttons were);
   `game-nothing` with `game-again`. The alias plays when the wallet is
   staked with it, else the wallet (Unlock in place). With

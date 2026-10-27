@@ -1259,7 +1259,11 @@ const actions = {
     return actions.walletAction('game-claim', 'baseClaim');
   },
   /** Played today: the Sent screen put away (for this session), the streams shown again to look at. */
-  gameRest() { state.game = { ...state.game, rest: true, screen: 'play', index: 0 }; },
+  async gameRest() {
+    const fresh = !state.game.sent?.again; // just sent: the streams read again first, so they show as played
+    state.game = { ...state.game, rest: true, screen: 'play', index: 0 };
+    if (fresh) await actions.loadGame();
+  },
   /** Star a stream, or unstar it: kept on this device for this wallet; the next game shows favorites first. */
   gameStar(streamId) {
     const f = state.game.favorites;

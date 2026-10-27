@@ -129,10 +129,9 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'game-sent')).not.toContainText('Transaction');
   await expect(page.locator('[data-unlock-for=game]')).toBeHidden();
   expect(s.batches).toHaveLength(0);
-  // played with the game this round: its Sent screen, again
-  await t(page, 'game-done').click();
+  // one Sent screen: played today, and Dismiss (no Done)
   await expect(t(page, 'game-tomorrow')).toBeVisible();
-  await expect(t(page, 'game-sent')).toContainText('4 Predictions submitted');
+  await expect(t(page, 'game-done')).toHaveCount(0);
   // Dismiss (this session): the streams again, to look at; where the buttons were, come back tomorrow
   await t(page, 'game-dismiss').click();
   await expect(t(page, 'game-play')).toBeVisible();
