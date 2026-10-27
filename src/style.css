@@ -12,6 +12,7 @@
   --on-accent: #ffffff;
   --ok: #1f8a4c; --ok-soft: #e4f4ea;
   --streak-short: #3d84d6; /* the Game's streak, short of its turning point */
+  --game-blue: #3d84d6; --game-blue-soft: #e5effb; /* the Game's own blue (Submit), apart from the app's indigo accent */
   /* The three greens, one scale (docs/design/health.md#the-tone), worked out in OKLCH from --ok (oklch(0.560 0.134 152.5)):
      · sky (all good, at rest): as sky blue is to blue. Blue oklch(0.55 0.20 260) → sky blue oklch(0.80 0.10 235):
        lightness × 0.80/0.55 = 1.4545, chroma × 0.10/0.20 = 0.5, at our hue: oklch(0.814 0.067 152.5). Its fill: --ok-soft's
@@ -42,7 +43,7 @@
   :root:not([data-theme="light"]) {
     --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b; --btn-line: #6f7a8c;
     --accent: #9cb1ff; --accent-soft: #2d3e78; --on-accent: #10131a;
-    --ok: #5fd08f; --streak-short: #7db4f2; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
+    --ok: #5fd08f; --streak-short: #7db4f2; --game-blue: #7db4f2; --game-blue-soft: #1a2e48; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
     --sky: #b9edcb; --sky-soft: #2a3a30; --sky-ink: #b9edcb; --sky-on: #232a35; --vivid: #1ed964; --vivid-soft: #10351a;
     --bad: #ff8a80; --bad-soft: #3d1c1a; --idle: #9aa8c2; --idle-soft: #2e3747;
     --cell-off: #363e4b; color-scheme: dark;
@@ -52,7 +53,7 @@
 :root[data-theme="dark"] {
   --bg: #12151b; --card: #232a35; --text: #e6e9ee; --muted: #959fae; --line: #363e4b; --btn-line: #6f7a8c;
   --accent: #9cb1ff; --accent-soft: #2d3e78; --on-accent: #10131a;
-  --ok: #5fd08f; --streak-short: #7db4f2; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
+  --ok: #5fd08f; --streak-short: #7db4f2; --game-blue: #7db4f2; --game-blue-soft: #1a2e48; --ok-soft: #173325; --warn: #f0b45a; --warn-soft: #3a2c14;
   /* dark (--ok oklch(0.775 0.140 155.8)): sky takes the same step toward white, 0.25/0.45 of the way, oklch(0.900 0.070
      155.8), a calm light-on-dark tint, readable as itself; vivid oklch(0.775 0.211 149.3), chroma × 1.50 (the same 6.5°) */
   --sky: #b9edcb; --sky-soft: #2a3a30; --sky-ink: #b9edcb; --sky-on: #232a35; --vivid: #1ed964; --vivid-soft: #10351a;
@@ -150,7 +151,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gbtn.up { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 .gbtn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 3px; }
 .gbtn svg { width: 46%; height: auto; max-height: 72%; fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-.gbtn.submit { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); aspect-ratio: auto; width: 100%; height: 56px; }
+.gbtn.submit { background: var(--game-blue-soft); border-color: var(--game-blue); color: var(--game-blue); aspect-ratio: auto; width: 100%; height: 56px; }
 .gbtn .glabel { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; }
 .gwallet { flex: none; display: grid; gap: 10px; margin-bottom: 6px; }
 .gtop { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 12px; margin-bottom: 6px; }
