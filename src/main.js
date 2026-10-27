@@ -1100,6 +1100,19 @@ const actions = {
       state.subscribing = '';
     }
   }),
+  /** The Relay Streams list's one button: Predict follows the stream and predicts it; Stop predicting unfollows it. */
+  predictStream: shownAt('networkError', async (pubkey, stream, on) => {
+    state.subscribing = `${pubkey}:${stream}`;
+    try {
+      const followed = state.nostr.subscriptions.some((x) => x.provider === pubkey && x.stream === stream);
+      if (on && followed) {
+        await nostr.setPredict(pubkey, stream, true);
+        await refreshNostr();
+      } else await setSubscribed(pubkey, stream, on, { predict: true });
+    } finally {
+      state.subscribing = '';
+    }
+  }),
   /** Predict a followed stream (its `_pred` published to the relays), or stop. */
   setPredict: shownAt('networkError', async (pubkey, stream, on) => {
     state.subscribing = `${pubkey}:${stream}`;

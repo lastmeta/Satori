@@ -70,8 +70,9 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await expect(row).toHaveCount(1);
   await expect(row).toContainText('E2E walk');
   await expect(row).toContainText('1 min');
-  await row.getByRole('button', { name: 'Subscribe' }).click();
-  await expect(row.getByRole('button', { name: 'Unsubscribe' })).toBeVisible();
+  await expect(row.locator('[data-test=catalog-action]')).toHaveText('Predict'); // no Subscribe there: Predict follows and predicts
+  await page.evaluate(([p, s]) => window.satori.subscribe(p, s), [provider.pubkey, stream]); // a follow alone: the agent's call
+  await expect(row.locator('[data-test=catalog-action]')).toHaveText('Predict');
 
   // Followed: the stored observation arrives with the follow REQ and is kept; nothing is predicted or published yet.
   await page.locator('[data-test=relay-streams] > summary').click(); // Published Relay Streams: folded by default
@@ -81,6 +82,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   // Predict: the latest observation at once, `_pred` seq 1 published to 7781.
   await sub.locator('[data-test=sub-predict]').click();
   await expect(sub.locator('[data-test=sub-predict]')).toHaveText('Stop predicting');
+  await expect(row.locator('[data-test=catalog-action]')).toHaveText('Stop predicting');
   await expect(sub.locator('[data-test=sub-pred]')).toHaveText('100');
   await expect(sub.locator('[data-test=sub-pred]')).toHaveAttribute('title', `${stream}_pred · naive · sent as "100"`);
   await expect(sub.locator('[data-test=sub-seq]')).toHaveText('1');
@@ -149,6 +151,17 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   const [last] = await user.fetch([{ kinds: [34601], authors: [me], '#d': [pred] }]);
   expect(last.tags).toContainEqual(['seq', '3']);
   expect(await centralRelay.fetch([{ authors: [me] }])).toEqual([]);
+
+  // Relay Streams' one button: Predict follows and predicts at once; Stop predicting unfollows.
+  await page.getByText('Relay Streams', { exact: true }).click(); // folded again after the reload
+  await page.getByLabel('Search streams').fill(stream);
+  await row.locator('[data-test=catalog-action]').click();
+  await expect(row.locator('[data-test=catalog-action]')).toHaveText('Stop predicting');
+  await expect(row.locator('[data-test=catalog-action]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(sub.locator('[data-test=sub-predict]')).toHaveText('Stop predicting');
+  await row.locator('[data-test=catalog-action]').click();
+  await expect(row.locator('[data-test=catalog-action]')).toHaveText('Predict');
+  await expect(page.locator('[data-test=sub]')).toHaveCount(0);
 
   // The key's backup (the wallet's passphrase each time, as the others'): nsec and hex; it is random, not from the words.
   await expect(page.evaluate(() => window.satori.backup('nostr'))).rejects.toThrow(/passphrase is needed/);

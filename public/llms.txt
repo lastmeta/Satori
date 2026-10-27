@@ -1157,7 +1157,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   the model with its companions, "bvar · +eth +gold", in words, and its
   latest predictions; no URL: that is Settings');
   **Relay Streams** (opening it discovers: a search box and the
-  first 50 matches, Subscribe or Unsubscribe; a stream for sale shows
+  first 50 matches, each with one button on its right: Predict (follows it
+  and predicts it: `subscribe(pubkey, stream, { predict: true })`) or Stop
+  predicting (unfollows it: `unsubscribe`); a stream for sale shows
   "0.001 SATORI each" and On the Market, which opens the Market tab's
   streams for sale; other paid or gated ones can't be subscribed yet);
   **Published Relay Streams** (each subscribed stream: latest value and

@@ -120,11 +120,15 @@ function recordsCard(a) {
   </details>`;
 }
 
+/** Our subscription to a relay stream, if any: { predict } says whether we predict it. */
+const subOf = (s) => state.nostr.subscriptions.find((x) => x.provider === s.pubkey && x.stream === s.stream_name);
+
 function catRow(s, a) {
   const key = `${s.pubkey}:${s.stream_name}`;
   const l = listingOf(s);
   const paid = !l && (s.price_per_obs > 0 || s.encrypted || s.approval_required);
-  return html`<div class="crow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}${l ? html` · <b data-test="catalog-price">${`${formatEther(l.price)} SATORI each`}</b>` : ''}</span><div class="muted small desc">${s.description}</div></div>${l ? html`<button class="small-btn" data-test="catalog-market" @click="${() => { state.forSaleOpen = true; a.go('market'); }}">On the Market</button>` : html`<button class="${s.subscribed ? 'small-btn' : 'small-btn primary'}" data-test="catalog-action" disabled="${() => paid || !!state.subscribing}" @click="${() => a.subscribe(s.pubkey, s.stream_name, !s.subscribed)}">${() => (state.subscribing === key ? '…' : s.subscribed ? 'Unsubscribe' : 'Subscribe')}</button>`}</div>`;
+  const predicting = !!subOf(s)?.predict;
+  return html`<div class="crow catrow" data-test="catalog-row"><div class="cmain"><span class="sname">${s.name || s.stream_name}</span> <span class="muted small">${s.stream_name} · ${fmtCadence(s.cadence_seconds)} · <span class="nowrap" title="${s.pubkey}">${shortKey(s.pubkey)}</span>${paid ? ' · paid or gated (later)' : ''}${l ? html` · <b data-test="catalog-price">${`${formatEther(l.price)} SATORI each`}</b>` : ''}</span><div class="muted small desc">${s.description}</div></div>${l ? html`<button class="small-btn" data-test="catalog-market" @click="${() => { state.forSaleOpen = true; a.go('market'); }}">On the Market</button>` : html`<button class="small-btn" data-test="catalog-action" aria-pressed="${String(predicting)}" title="${predicting ? 'Stop predicting it, and stop following it' : 'Follow it and predict it: each new value is forecast and the prediction published to the relays'}" disabled="${() => paid || !!state.subscribing}" @click="${() => a.predictStream(s.pubkey, s.stream_name, !predicting)}">${() => (state.subscribing === key ? '…' : predicting ? 'Stop predicting' : 'Predict')}</button>`}</div>`;
 }
 
 /** Shown: the streams to subscribe to, and the ones sold on the Satori contract (prediction streams too); the rest of the prediction streams hidden. */
@@ -149,7 +153,7 @@ function network(a) {
     </form>
     <p class="muted small" data-test="catalog-summary">${() => state.networkLine || summary()}</p>
     <p class="error small" role="alert" data-test="network-error" hidden="${() => !state.networkError}">${() => state.networkError}</p>
-    <div class="crows">${() => shownCatalog().slice(0, CATALOG_SHOWN).map((s) => catRow(s, a).key(`${s.pubkey}:${s.stream_name}:${s.subscribed}`))}</div>
+    <div class="crows">${() => shownCatalog().slice(0, CATALOG_SHOWN).map((s) => catRow(s, a).key(`${s.pubkey}:${s.stream_name}:${s.subscribed}:${!!subOf(s)?.predict}`))}</div>
   </details>`;
 }
 

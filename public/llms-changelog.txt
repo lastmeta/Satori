@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-27 (Relay Streams: Predict; no call changed)
+
+- Streams › Relay Streams: each stream's one button (`catalog-action`, on the right) is Predict (follow and predict,
+  as `subscribe(pubkey, stream, { predict: true })`) or Stop predicting (`aria-pressed="true"`; unfollow, as
+  `unsubscribe`). No Subscribe button there any more; a follow alone is still `subscribe()`.
+
 ## Changed 2026-10-26 (derived keys: setup, importDocker, backup, status)
 
 - The alias and the Nostr key are derived from the wallet (docs/design/wallets.md#derived-keys). `setup()` takes no

@@ -7,8 +7,8 @@
   --muted: #677282; /* 4.5:1 on --bg (src/style.test.js) */
   --line: #e3e7ed;
   --btn-line: #9ea8b6; /* an outline button's edge: seen at a glance, on a card or the page */
-  --accent: #3a5bd9;
-  --accent-soft: #e9eefc;
+  --accent: #5863a2; /* a muted indigo, oklch(0.52 0.10 275): the dark theme's lavender, at light-page strength */
+  --accent-soft: #eff1fc;
   --on-accent: #ffffff;
   --ok: #1f8a4c; --ok-soft: #e4f4ea;
   /* The three greens, one scale (docs/design/health.md#the-tone), worked out in OKLCH from --ok (oklch(0.560 0.134 152.5)):
@@ -516,7 +516,7 @@ details.tile[open] > summary { margin-bottom: 0; }
 .records > summary .muted { margin-left: 8px; font-weight: 400; }
 .nrow { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) max-content minmax(0, 1fr) 36px 52px max-content; }
 .subacts { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.subacts .small-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.subacts .small-btn[aria-pressed="true"], .catrow .small-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .row.head { border-top: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .row .sname { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 button.sname { border: 0; background: none; padding: 0; min-height: 44px; min-width: 44px; color: var(--accent); font: inherit; font-weight: 550; cursor: pointer; }
@@ -540,6 +540,7 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; min-wi
 .crows { margin-top: 4px; }
 .crow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
 .cmain { min-width: 0; }
+.catrow .cmain { flex: 1; }
 .crow .sname { font-weight: 550; }
 .crow .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crow button { flex: none; }
@@ -801,6 +802,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .srow [data-label]::before { content: none; }
   .srow .num { text-align: right; }
   .crow { flex-wrap: wrap; }
+  .crow.catrow { flex-wrap: nowrap; } /* a relay stream: its button stays on the right */
   .card { padding: 14px; }
   .hero { padding: 14px; gap: 12px; }
   .ring { width: 56px; height: 56px; }
