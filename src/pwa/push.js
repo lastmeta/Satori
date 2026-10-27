@@ -1,9 +1,12 @@
 // The daily reminder (docs/design/push.md): Settings › This device's switch. On, this browser subscribes to the push
 // server (/push/, the push/ folder) with the player's address, its time zone and the time of day it was turned on (each
-// person's own time, one they are awake at); once a day at that time, if that player hasn't
-// predicted this round, the server wakes the service worker (src/pwa/wake.js), which sends the day's batch or reminds.
-// The subscription is the switch's truth: the browser keeps it, and the server is told it again at each start.
+// person's own time, one they are awake at); once a day at that time, if that player hasn't predicted this round, the
+// server wakes the service worker (src/pwa/wake.js), which sends the day's batch or reminds. The browser's subscription
+// is the switch's truth. The server is told only what changes: the player (followPlayer), and a subscription the
+// browser replaces (the service worker's pushsubscriptionchange, src/pwa/sw.js). What it was told is kept in IndexedDB.
 import { state } from '../ui/view.js';
+import { appGet, appPut } from '../wallets.js';
+import { REMINDER } from './handoff.js';
 
 export const BLOCKED = "Notifications are blocked for this site: allow them in the browser's settings, then turn this on.";
 export const NO_PUSH = "This browser can't wake Satori with a notification.";
@@ -18,23 +21,26 @@ async function post(path, body) {
   if (!r.ok) throw new Error(`The reminder server answered ${r.status}${r.status === 400 ? `: ${(await r.json().catch(() => ({}))).error}` : ''}.`);
   return r.json();
 }
-/** The server told the subscription; `minute` (of the local day) only when turned on, else it keeps its own. → its minute */
-async function tell(sub, player, minute = null) {
-  const r = await post('subscribe', { subscription: sub.toJSON(), player, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    ...(minute == null ? {} : { minute }) });
-  setReminder({ minute: Number.isInteger(r?.minute) ? r.minute : null });
-}
 
-/** The switch's state at start, and the server told the subscription again (with today's player). */
-export async function startReminder(player) {
+/** The switch's state at start, from the browser's subscription and what the server was told: no request. */
+export async function startReminder() {
   if (!supported()) return setReminder({ supported: false, on: false, note: state.app.addTo === 'ios' && !state.app.installed ? IOS_FIRST : NO_PUSH });
-  setReminder({ supported: true, note: '' });
-  const sub = await (await registration()).pushManager.getSubscription();
-  setReminder({ on: !!sub });
-  if (sub && player) await tell(sub, player).catch((err) => console.warn('[satori] reminder', err));
+  const [sub, told] = await Promise.all([registration().then((reg) => reg.pushManager.getSubscription()), appGet(REMINDER)]);
+  setReminder({ supported: true, note: '', on: !!sub, minute: sub ? told?.minute ?? null : null });
 }
 
-/** On: permission, the subscription, the server told. Off: the server told, the subscription dropped. → state.reminder */
+/** Another player (Stake, Unstake, Automatic or By hand): the server told, if the reminder is on and it was told another. */
+export async function followPlayer(player) {
+  if (!supported() || !player) return;
+  const told = await appGet(REMINDER);
+  if (!told || told.player === player) return;
+  const sub = await (await registration()).pushManager.getSubscription();
+  if (!sub) return;
+  await post('subscribe', { subscription: sub.toJSON(), player, tz: told.tz });
+  await appPut(REMINDER, { ...told, player });
+}
+
+/** On: permission, the subscription, the server told this time of day. Off: the server told, the subscription dropped. */
 export async function turnReminder(on, player) {
   if (!supported()) throw new Error(state.reminder?.note || NO_PUSH);
   const reg = await registration();
@@ -45,15 +51,19 @@ export async function turnReminder(on, player) {
     const { key } = await r.json();
     const sub = (await reg.pushManager.getSubscription()) ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const now = new Date();
-    await tell(sub, player, now.getHours() * 60 + now.getMinutes()); // this time of day, each day from tomorrow
+    const told = { player, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, minute: now.getHours() * 60 + now.getMinutes() };
+    const { minute } = await post('subscribe', { subscription: sub.toJSON(), ...told }); // this time of day, each day from tomorrow
+    await appPut(REMINDER, { ...told, minute });
+    setReminder({ on, minute });
   } else {
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
       await post('unsubscribe', { endpoint: sub.endpoint }).catch((err) => console.warn('[satori] reminder', err));
       await sub.unsubscribe();
     }
+    await appPut(REMINDER, null);
+    setReminder({ on, minute: null });
   }
-  setReminder({ on, ...(on ? {} : { minute: null }) });
   return state.reminder;
 }
 

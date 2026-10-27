@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createPublicKey, verify } from 'node:crypto';
 import { toFunctionSelector } from 'viem';
-import { checkSubscription, due, localTime, newVapid, publicOf, vapidHeader, predictedCounts, sendPush,
+import { checkSubscription, due, localTime, subscribed, newVapid, publicOf, vapidHeader, predictedCounts, sendPush,
   GET_CURRENT_ROUND, PREDICTED_STREAMS_COUNT } from './push.mjs';
 
 const PLAYER = '0x91dF4af6C0756efb195CcB1181738Bbdc414AD63';
@@ -48,6 +48,26 @@ describe('subscriptions', () => {
     expect(checkSubscription(s).minute).toBe(null);
     expect(() => checkSubscription({ ...s, minute: 1440 })).toThrow('minute');
     expect(() => checkSubscription({ ...s, minute: 9.5 })).toThrow('minute');
+  });
+});
+
+describe('kept', () => {
+  const at = Date.UTC(2026, 9, 27, 18, 45); // 18:45 UTC
+  const s = { endpoint: FCM, player: PLAYER, tz: 'UTC' };
+
+  it('turned on now: this minute, from tomorrow', () => {
+    expect(subscribed(undefined, { ...s, minute: 1125 }, at)).toMatchObject({ minute: 1125, done: '2026-10-27' });
+  });
+
+  it('a new player keeps the minute, and today still comes if its time has not', () => {
+    expect(subscribed({ ...s, minute: 1200, done: '2026-10-26' }, { ...s, player: '0x' + '2'.repeat(40), minute: null }, at))
+      .toMatchObject({ minute: 1200, done: null, player: '0x' + '2'.repeat(40) });
+    expect(subscribed({ ...s, minute: 600, done: '2026-10-27' }, { ...s, minute: null }, at)).toMatchObject({ minute: 600, done: '2026-10-27' });
+  });
+
+  it('a subscription the browser replaced keeps its minute; one never told any takes now', () => {
+    expect(subscribed(undefined, { ...s, minute: 1200 }, at)).toMatchObject({ minute: 1200, done: null });
+    expect(subscribed(undefined, { ...s, minute: null }, at)).toMatchObject({ minute: 1125, done: '2026-10-27' });
   });
 });
 

@@ -4,7 +4,7 @@
 // with the build's files. The dev server has no service worker. It also takes
 // the daily push (docs/design/push.md): src/pwa/wake.js.
 import { wake } from './wake.js';
-import { BATCH_LOCK } from './handoff.js';
+import { BATCH_LOCK, REMINDER } from './handoff.js';
 import { appGet, appPut } from '../wallets.js';
 
 /**
@@ -26,6 +26,7 @@ export function start(sw, files, name) {
     .then((keys) => Promise.all(keys.filter((k) => k !== name).map((k) => caches.delete(k))))));
   sw.addEventListener('message', (e) => e.data === 'update' && sw.skipWaiting()); // the page's "Update ready, reload"
   sw.addEventListener('push', (e) => e.waitUntil(onPush(sw)));
+  sw.addEventListener('pushsubscriptionchange', (e) => e.waitUntil(resubscribe(sw, e)));
   sw.addEventListener('notificationclick', (e) => {
     e.notification.close();
     e.waitUntil(openApp(sw, e.notification.data?.url ?? '/'));
@@ -65,4 +66,19 @@ async function openApp(sw, url) {
   await win.focus();
   if (new URL(url, sw.location.origin).hash !== new URL(win.url).hash) win.postMessage({ open: url });
   return win;
+}
+
+/**
+ * The browser replaced the push subscription: the server told the new one, with what it was told before (the player,
+ * the time zone, the time of day), and the old one dropped. Some browsers give no new one: this worker subscribes again.
+ */
+async function resubscribe(sw, e) {
+  const told = await appGet(REMINDER);
+  if (!told) return;
+  const post = (path, body) => fetch(`/push/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const key = async () => (await (await fetch('/push/key')).json()).key;
+  const sub = e.newSubscription ?? await sw.registration.pushManager.subscribe({ userVisibleOnly: true,
+    applicationServerKey: e.oldSubscription?.options?.applicationServerKey ?? await key() });
+  await post('subscribe', { subscription: sub.toJSON(), ...told });
+  if (e.oldSubscription && e.oldSubscription.endpoint !== sub.endpoint) await post('unsubscribe', { endpoint: e.oldSubscription.endpoint }).catch(() => {});
 }

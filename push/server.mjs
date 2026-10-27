@@ -8,7 +8,7 @@
 // The subscriptions and the VAPID key are one JSON file each in DATA. Env: PORT, DATA, RPC_URL, TOKEN, ENGINE, SUBJECT.
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
-import { checkSubscription, due, localTime, newVapid, predictedCounts, publicOf, sendPush } from './push.mjs';
+import { checkSubscription, due, newVapid, predictedCounts, publicOf, sendPush, subscribed } from './push.mjs';
 
 const env = process.env;
 const PORT = Number(env.PORT ?? 8080);
@@ -49,14 +49,10 @@ createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/push/subscribe') {
       const s = checkSubscription(await body(req));
       if (!subs.has(s.endpoint) && subs.size >= MAX_SUBS) return answer(res, 503, { error: 'full' });
-      const old = subs.get(s.endpoint);
-      const now = Date.now();
-      // the minute: as sent when turned on; else the one kept; else now's (local). Today counts as done: the first is tomorrow
-      const minute = s.minute ?? old?.minute ?? localTime(s.tz, now).minute;
-      const done = s.minute != null || !old ? localTime(s.tz, now).day : old.done;
-      subs.set(s.endpoint, { ...s, minute, done, at: now });
+      const kept = subscribed(subs.get(s.endpoint), s, Date.now());
+      subs.set(s.endpoint, kept);
       save();
-      return answer(res, 200, { ok: true, minute });
+      return answer(res, 200, { ok: true, minute: kept.minute });
     }
     if (req.method === 'POST' && req.url === '/push/unsubscribe') {
       const { endpoint } = await body(req);

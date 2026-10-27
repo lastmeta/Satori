@@ -56,7 +56,7 @@ import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
 import { startPwa, registerWorker, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
-import { startReminder, turnReminder, followNotifications } from './pwa/push.js';
+import { startReminder, followPlayer, turnReminder, followNotifications } from './pwa/push.js';
 
 // Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
 // checkout writes nothing to production) or a build's, each replaceable by a VITE_* variable.
@@ -139,7 +139,8 @@ const refreshRecords = coalesce('records', async () => {
 });
 const refreshBase = coalesce('base status', async () => {
   state.base = await base.status();
-  if (state.reminder.on && reminderPlayer() !== toldPlayer) tellReminder(); // staked or unstaked, by hand or not: the server's player follows
+  // staked or unstaked, by hand or not: the reminder server's player follows (only when it changed)
+  if (state.reminder.on) followPlayer(reminderPlayer()).catch((err) => console.warn('[satori] reminder', err));
 });
 
 /**
@@ -147,11 +148,7 @@ const refreshBase = coalesce('base status', async () => {
  * when staked with it; the wallet when it plays the Game itself.
  */
 const reminderPlayer = () => (state.base.play === 'manual' && state.base.wallet?.staked !== 'alias' ? state.wallet : state.alias);
-let toldPlayer = null;
-function tellReminder() {
-  toldPlayer = reminderPlayer();
-  return startReminder(toldPlayer).catch((err) => console.warn('[satori] reminder', err));
-}
+
 
 // ── the Models tab (docs/design/models.md) ──
 /** Every model (models()), from the given statuses, each with the backtest kept with it (the training pass's for Base's older ones). */
@@ -348,7 +345,7 @@ async function startNeuron() {
   backfill().then(refresh).catch((err) => console.error('[satori] history', err)); // streams with no history yet get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
-  tellReminder();
+  startReminder().catch((err) => console.warn('[satori] reminder', err));
   wakeUps();
   if (state.modelOpen) loadModel(state.modelOpen); // a link to a model (#models/<id>), now that every flow is up
   retrain.resume().catch((err) => console.error('[satori] retrain resume', err)); // pending work: a retrain asked before continues
@@ -1328,7 +1325,6 @@ const actions = {
     state.reminder = { ...state.reminder, busy: true, error: '' };
     try {
       await turnReminder(on, reminderPlayer());
-      toldPlayer = reminderPlayer();
     } catch (err) {
       state.reminder = { ...state.reminder, error: errorText(err) };
     } finally {
@@ -1755,7 +1751,6 @@ window.satori = {
     ready();
     if (typeof on !== 'boolean') throw new Error('setReminder(true) or setReminder(false).');
     await turnReminder(on, reminderPlayer());
-    toldPlayer = reminderPlayer();
     return this.reminder();
   },
   /** { supported, on, minute, note }: whether this browser can take the daily reminder, whether it is on, its time (minute

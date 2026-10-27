@@ -54,6 +54,17 @@ export function localTime(tz, at) {
   return { day: `${p.year}-${p.month}-${p.day}`, minute: Number(p.hour) * 60 + Number(p.minute) };
 }
 
+/**
+ * A subscription as kept, from the one kept before (or none) and the one just sent, at `now` (ms). Its minute: as sent
+ * (turned on, or a subscription the browser replaced), else the one kept, else now's. Its time already past today counts
+ * as done: turned on now, the first is tomorrow.
+ */
+export function subscribed(old, s, now) {
+  const t = localTime(s.tz, now);
+  const minute = s.minute ?? old?.minute ?? t.minute;
+  return { ...s, minute, done: old?.done === t.day || t.minute >= minute ? t.day : null, at: now };
+}
+
 /** A subscription is due once a local day, from its own minute on (the time the person turned it on). */
 export function due(sub, at) {
   const t = localTime(sub.tz, at);

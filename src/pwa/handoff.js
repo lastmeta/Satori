@@ -4,6 +4,7 @@
 export const HANDOFF = 'push-handoff';
 export const SW_BATCH = 'push-batch'; // { base_pending_batch?, base_last_batch? }
 export const BATCH_LOCK = 'satori-batch';
+export const REMINDER = 'push-reminder'; // what the server was told: { player, tz, minute } (src/pwa/push.js)
 
 /** fn() under BATCH_LOCK (waiting for it), or at once where there are no Web Locks (tests). */
 export const withBatchLock = (fn) => (globalThis.navigator?.locks ? navigator.locks.request(BATCH_LOCK, fn) : fn());
