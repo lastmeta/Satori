@@ -1758,8 +1758,9 @@ window.satori = {
     toldPlayer = reminderPlayer();
     return this.reminder();
   },
-  /** { supported, on, note }: whether this browser can take the daily reminder, whether it is on, and why not. */
-  reminder() { const { supported, on, note } = state.reminder; return { supported, on, note }; },
+  /** { supported, on, minute, note }: whether this browser can take the daily reminder, whether it is on, its time (minute
+   * of the local day: when it was turned on), and why not. */
+  reminder() { const { supported, on, minute, note } = state.reminder; return { supported, on, minute, note }; },
 };
 
 /** When this neuron began: the log's first session, or the keys' creation when earlier (records before it have none). */

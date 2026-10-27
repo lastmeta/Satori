@@ -24,7 +24,7 @@ describe('VAPID', () => {
 
 describe('subscriptions', () => {
   it('takes the browsers\' push services only, a player address and a known time zone', () => {
-    expect(checkSubscription({ subscription: { endpoint: FCM }, player: PLAYER, tz: 'Europe/Berlin' })).toEqual({ endpoint: FCM, player: PLAYER, tz: 'Europe/Berlin' });
+    expect(checkSubscription({ subscription: { endpoint: FCM }, player: PLAYER, tz: 'Europe/Berlin' })).toEqual({ endpoint: FCM, player: PLAYER, tz: 'Europe/Berlin', minute: null });
     expect(checkSubscription({ subscription: { endpoint: 'https://web.push.apple.com/x' }, player: PLAYER }).tz).toBe('UTC');
     expect(() => checkSubscription({ subscription: { endpoint: 'https://evil.example/x' }, player: PLAYER })).toThrow('not a push service');
     expect(() => checkSubscription({ subscription: { endpoint: 'http://fcm.googleapis.com/x' }, player: PLAYER })).toThrow('not a push service');
@@ -32,12 +32,22 @@ describe('subscriptions', () => {
     expect(() => checkSubscription({ subscription: { endpoint: FCM }, player: PLAYER, tz: 'Mars/Base' })).toThrow('time zone');
   });
 
-  it('is due once a local day, from the hour on', () => {
+  it('is due once a local day, from its own minute on', () => {
     const at = Date.UTC(2026, 9, 27, 8, 30); // 08:30 UTC = 09:30 in Berlin (CET from the 25th), 04:30 in New York
-    expect(localTime('Europe/Berlin', at)).toEqual({ day: '2026-10-27', hour: 9 });
-    expect(due({ tz: 'Europe/Berlin', done: null }, at, 9)).toBe('2026-10-27');
-    expect(due({ tz: 'Europe/Berlin', done: '2026-10-27' }, at, 9)).toBe(null);
-    expect(due({ tz: 'America/New_York', done: null }, at, 9)).toBe(null);
+    expect(localTime('Europe/Berlin', at)).toEqual({ day: '2026-10-27', minute: 9 * 60 + 30 });
+    expect(due({ tz: 'Europe/Berlin', minute: 9 * 60 + 30, done: null }, at)).toBe('2026-10-27');
+    expect(due({ tz: 'Europe/Berlin', minute: 9 * 60 + 31, done: null }, at)).toBe(null);
+    expect(due({ tz: 'Europe/Berlin', minute: 0, done: '2026-10-27' }, at)).toBe(null);
+    expect(due({ tz: 'America/New_York', minute: 21 * 60 + 15, done: '2026-10-26' }, at)).toBe(null);
+    expect(due({ tz: 'America/New_York', minute: 4 * 60, done: '2026-10-26' }, at)).toBe('2026-10-27');
+  });
+
+  it('takes the minute it reminds at, the time of day it was turned on', () => {
+    const s = { subscription: { endpoint: FCM }, player: PLAYER };
+    expect(checkSubscription({ ...s, minute: 581 }).minute).toBe(581);
+    expect(checkSubscription(s).minute).toBe(null);
+    expect(() => checkSubscription({ ...s, minute: 1440 })).toThrow('minute');
+    expect(() => checkSubscription({ ...s, minute: 9.5 })).toThrow('minute');
   });
 });
 

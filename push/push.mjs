@@ -32,7 +32,8 @@ const SERVICES = [/^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /^web\
   /^updates\.push\.services\.mozilla\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
 export const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
-/** A subscription as the app sends it, checked → { endpoint, player, tz }; else it throws. */
+/** A subscription as the app sends it, checked → { endpoint, player, tz, minute? }; else it throws. minute: the time of day
+ * (0-1439, local) it reminds at, sent when the person turns it on. */
 export function checkSubscription(body) {
   const endpoint = body?.subscription?.endpoint;
   let u;
@@ -41,20 +42,22 @@ export function checkSubscription(body) {
   if (!ADDRESS.test(body.player ?? '')) throw new Error('no player address');
   const tz = body.tz ?? 'UTC';
   try { new Intl.DateTimeFormat('en', { timeZone: tz }); } catch { throw new Error('unknown time zone'); }
-  return { endpoint: u.href, player: body.player, tz };
+  const minute = body.minute ?? null;
+  if (minute !== null && !(Number.isInteger(minute) && minute >= 0 && minute < 1440)) throw new Error('minute: 0 to 1439');
+  return { endpoint: u.href, player: body.player, tz, minute };
 }
 
-/** The local date (YYYY-MM-DD) and hour in `tz` at `at` (ms). */
+/** The local date (YYYY-MM-DD) and minute of the day (0-1439) in `tz` at `at` (ms). */
 export function localTime(tz, at) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', hourCycle: 'h23' }).formatToParts(at).map((x) => [x.type, x.value]));
-  return { day: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) };
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at).map((x) => [x.type, x.value]));
+  return { day: `${p.year}-${p.month}-${p.day}`, minute: Number(p.hour) * 60 + Number(p.minute) };
 }
 
-/** A subscription is due once a local day, from `hour` on. */
-export function due(sub, at, hour) {
+/** A subscription is due once a local day, from its own minute on (the time the person turned it on). */
+export function due(sub, at) {
   const t = localTime(sub.tz, at);
-  return t.hour >= hour && sub.done !== t.day ? t.day : null;
+  return t.minute >= sub.minute && sub.done !== t.day ? t.day : null;
 }
 
 // Selectors (checked against viem in push.test.js): SatoriToken.getCurrentRound(), SatoriEngine.predictedStreamsCount(address,uint256)

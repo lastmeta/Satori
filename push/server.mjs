@@ -2,19 +2,19 @@
 //   GET  /push/key          → { key }: the VAPID public key, the app's applicationServerKey
 //   POST /push/subscribe    { subscription, player, tz }  (kept by endpoint)
 //   POST /push/unsubscribe  { endpoint }
-// Every few minutes: each subscription whose local time has reached HOUR and that has had nothing today is checked on
+// Every minute: each subscription whose local time has reached its own minute of the day (the time the person turned it
+// on: people get theirs at different times, and at a time they are awake) and that has had nothing today is checked on
 // the chain; a player who has not predicted this round gets one push (no payload: the service worker decides what to do).
-// The subscriptions and the VAPID key are one JSON file each in DATA. Env: PORT, DATA, RPC_URL, TOKEN, ENGINE, SUBJECT, HOUR.
+// The subscriptions and the VAPID key are one JSON file each in DATA. Env: PORT, DATA, RPC_URL, TOKEN, ENGINE, SUBJECT.
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
-import { checkSubscription, due, newVapid, predictedCounts, publicOf, sendPush } from './push.mjs';
+import { checkSubscription, due, localTime, newVapid, predictedCounts, publicOf, sendPush } from './push.mjs';
 
 const env = process.env;
 const PORT = Number(env.PORT ?? 8080);
 const DATA = env.DATA ?? '/data';
-const HOUR = Number(env.HOUR ?? 9);
 const SUBJECT = env.SUBJECT ?? 'https://app.satorinet.io';
-const TICK_MS = 5 * 60_000;
+const TICK_MS = 60_000;
 const MAX_SUBS = 100_000;
 const MAX_BODY = 4096;
 for (const k of ['RPC_URL', 'TOKEN', 'ENGINE']) if (!env[k]) throw new Error(`${k} is not set`);
@@ -50,9 +50,13 @@ createServer(async (req, res) => {
       const s = checkSubscription(await body(req));
       if (!subs.has(s.endpoint) && subs.size >= MAX_SUBS) return answer(res, 503, { error: 'full' });
       const old = subs.get(s.endpoint);
-      subs.set(s.endpoint, { ...s, done: old?.done ?? null, at: Date.now() });
+      const now = Date.now();
+      // the minute: as sent when turned on; else the one kept; else now's (local). Today counts as done: the first is tomorrow
+      const minute = s.minute ?? old?.minute ?? localTime(s.tz, now).minute;
+      const done = s.minute != null || !old ? localTime(s.tz, now).day : old.done;
+      subs.set(s.endpoint, { ...s, minute, done, at: now });
       save();
-      return answer(res, 200, { ok: true });
+      return answer(res, 200, { ok: true, minute });
     }
     if (req.method === 'POST' && req.url === '/push/unsubscribe') {
       const { endpoint } = await body(req);
@@ -63,7 +67,7 @@ createServer(async (req, res) => {
   } catch (err) {
     return answer(res, 400, { error: err.message });
   }
-}).listen(PORT, () => console.log(`[push] on :${PORT}, ${subs.size} subscriptions, at ${HOUR}:00 local`));
+}).listen(PORT, () => console.log(`[push] on :${PORT}, ${subs.size} subscriptions`));
 
 let busy = false;
 async function tick() {
@@ -71,7 +75,7 @@ async function tick() {
   busy = true;
   try {
     const now = Date.now();
-    const list = [...subs.values()].map((s) => ({ s, day: due(s, now, HOUR) })).filter((x) => x.day);
+    const list = [...subs.values()].map((s) => ({ s, day: due(s, now) })).filter((x) => x.day);
     if (!list.length) return;
     const counts = await predictedCounts({ rpc: env.RPC_URL, token: env.TOKEN, engine: env.ENGINE, players: list.map((x) => x.s.player) });
     let sent = 0;

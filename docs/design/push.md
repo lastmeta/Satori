@@ -58,12 +58,19 @@ nginx is on; that nginx passes `/push/` to it (`deploy/nginx.conf`, resolved
 per request, so the app serves whether it is up or not). Same origin: the CSP
 needs nothing new.
 
-- `GET /push/key`, `POST /push/subscribe {subscription, player, tz}`,
+- `GET /push/key`, `POST /push/subscribe {subscription, player, tz, minute?}`
+  (→ `{ minute }`),
   `POST /push/unsubscribe {endpoint}`; bodies up to 4 KB, at most 100,000
   subscriptions.
 - Only the browsers' push services are taken as endpoints (FCM, Apple's,
   Mozilla's, Windows'): the server never posts to an address a page chose.
-- Every 5 minutes: each subscription whose local time has reached **9:00** and
+- **Each person's own time** (the owner, 2026-10-27: not everyone at once, and
+  not while they sleep): the time of day they turned it on, sent as `minute`
+  (of the local day, 0-1439) with that subscribe; the first is the next day.
+  Telling the server again at a start sends none, and the kept one stays (a
+  subscription that never had one takes the server's now). Settings says it:
+  "Each day at 9:41 AM, …".
+- Every minute: each subscription whose local time has reached its minute and
   that has had nothing that local day is due. One JSON-RPC batch reads the
   round (`getCurrentRound`) and each due player's `predictedStreamsCount` this
   round. A player with predictions gets nothing; one without gets a push. A

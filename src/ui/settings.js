@@ -6,7 +6,7 @@
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { backupPanel, form, idRow } from './parts.js';
-import { storageText, relayText, BLOCKED_NOTE, shortHash } from './format.js';
+import { storageText, relayText, BLOCKED_NOTE, shortHash, timeOfDay } from './format.js';
 import { ADD_TO } from '../neuron/health.js';
 
 /** How Satori runs (docs/intent/ui.md: say it plainly), on Setup and in Settings › This device. */
@@ -189,7 +189,9 @@ function reminder(a) {
   <div class="reminder" data-test="reminder">
     <div class="side-row"><p><b>Daily reminder</b></p>
       <div class="segmented" role="group" aria-label="Daily reminder">${[[false, 'Off'], [true, 'On']].map(([on, word]) => html`<button class="small-btn" data-test="${`reminder-${word.toLowerCase()}`}" aria-pressed="${() => String(r().on === on)}" disabled="${() => !r().supported || r().busy}" @click="${() => a.setReminder(on)}">${word}</button>`)}</div></div>
-    <p class="muted small">${() => r().note || "Once a day, if today's predictions aren't in, Satori sends them in the background and tells you, or reminds you to open it."}</p>
+    <p class="muted small" data-test="reminder-text">${() => r().note || (r().on && r().minute != null
+      ? `Each day at ${timeOfDay(r().minute)}, if today's predictions aren't in, Satori sends them in the background and tells you, or reminds you to open it.`
+      : "Once a day, at the time you turn this on, if today's predictions aren't in, Satori sends them in the background and tells you, or reminds you to open it.")}</p>
     <p class="error small" data-test="reminder-error" hidden="${() => !r().error}">${() => r().error}</p>
   </div>`;
 }

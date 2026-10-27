@@ -366,3 +366,6 @@ export function playNote(staked) {
   }
   return staked === 'none' ? ['Stake with this app to let it predict every round, or play ', ' by hand.'] : null;
 }
+
+/** "9:41 AM": a minute of the day, in this browser's own way of saying a time. */
+export const timeOfDay = (minute) => new Date(2000, 0, 1, Math.floor(minute / 60), minute % 60).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });

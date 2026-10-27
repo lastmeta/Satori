@@ -4,6 +4,10 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-27 (the reminder's own time)
+
+- The daily reminder comes at the time of day it was turned on, not 9:00; `reminder().minute` says it.
+
 ## Changed 2026-10-27 (the daily reminder)
 
 - `setReminder(on)` and `reminder()`: the daily push (Settings › This device: `reminder`, `reminder-off`, `reminder-on`,

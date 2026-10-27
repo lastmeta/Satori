@@ -1057,13 +1057,13 @@ the page's JS context:
   hand: the batch is not sent", with its `games`); `'auto'` (the default)
   sends it again. Nothing else changes. `base().play` says which.
 - `await satori.setReminder(on)` → `reminder()` (only on the person's request; `true` asks the browser for notification
-  permission): the daily reminder (Settings › This device). On, once a day at 9:00 in the device's time zone, if today's
+  permission): the daily reminder (Settings › This device). On, once a day at the time of day it was turned on (the device's time zone), if today's
   predictions aren't on the Satori contract, the app's service worker sends the day's batch from the alias (automatic,
   staked with this app) and says so in a notification, or a notification reminds the person to open the app ("Today's
   game is ready." by hand). Throws when the browser can't (the dev server, a Safari tab on iPhone: add Satori to the Home
   Screen first) or notifications are blocked.
-- `satori.reminder()` → `{ supported, on, note }`: whether this browser can take the daily reminder, whether it is on,
-  and why not (`note`).
+- `satori.reminder()` → `{ supported, on, minute, note }`: whether this browser can take the daily reminder, whether it
+  is on, its time (`minute` of the local day, or null), and why not (`note`).
 - `await satori.setBaseMaxFee(gwei)` → `base()` (only on the person's
   request): the most any transaction pays per gas, the batch's and the
   wallet's (a positive number; `''` or null = 2 gwei). Settings saves both at
