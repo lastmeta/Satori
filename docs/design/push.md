@@ -41,9 +41,15 @@ the proposal at once (the owner: "do all of it").
   (it sends the batch, and plays the Game when staked with it), or the wallet
   when it plays the Game by hand itself (`reminderPlayer`, `src/main.js`).
 - **Off**: the server is told, the subscription dropped.
-- The browser's subscription is the switch's truth. At each start, and when the
-  player changes (Stake, Unstake, Automatic or By hand), the server is told it
-  again.
+- The browser's subscription is the switch's truth. The server is told only
+  what changes (the owner, 2026-10-27: not at each start): the player, when it
+  changes (Stake, Unstake, Automatic or By hand: `followPlayer`), and a
+  subscription the browser replaces (the service worker's
+  `pushsubscriptionchange`: the new one told with the same player, time zone
+  and time, the old one dropped). What the server was told is kept in IndexedDB
+  (`push-reminder`); the switch and its time are read from it and the
+  subscription at start, with no request. The time zone is the one it was
+  turned on in, until it is turned off and on again.
 - **Can't**: the dev server (no service worker), a browser without the Push
   API: "This browser can't wake Satori with a notification."; a Safari tab on
   iPhone or iPad: "add Satori to the Home Screen first". Permission refused:
@@ -67,9 +73,9 @@ needs nothing new.
 - **Each person's own time** (the owner, 2026-10-27: not everyone at once, and
   not while they sleep): the time of day they turned it on, sent as `minute`
   (of the local day, 0-1439) with that subscribe; the first is the next day.
-  Telling the server again at a start sends none, and the kept one stays (a
-  subscription that never had one takes the server's now). Settings says it:
-  "Each day at 9:41 AM, …".
+  A new player is told with none, and the kept one stays (a subscription that
+  never had one takes the server's now). A minute already past today counts as
+  done today (`subscribed`, push.mjs). Settings says it: "Each day at 9:41 AM, …".
 - Every minute: each subscription whose local time has reached its minute and
   that has had nothing that local day is due. One JSON-RPC batch reads the
   round (`getCurrentRound`) and each due player's `predictedStreamsCount` this
