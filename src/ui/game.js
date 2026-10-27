@@ -216,8 +216,8 @@ function play(a) {
       const k = s?.streak; // { streak, bar }: at or above the bar, the streak earns on the S-curve's top
       return s ? html`<div class="gview">
         <div class="gtop">
-          <p class="gbalance" data-test="game-balance">${() => figure(state.base.wallet.satori)}</p>
-          <div class="gstreak" data-test="game-streak" hidden="${!k}" data-above="${String(!!k && k.streak >= k.bar)}" title="${k ? `Streak ${k.streak} on this stream: ${k.streak >= k.bar ? 'past' : 'short of'} this game's turning point (${k.bar}), where a streak starts earning at the top of the curve` : ''}" aria-label="${k ? `Streak ${k.streak}` : ''}"><b>${k ? String(k.streak) : ''}</b><i aria-hidden="true"></i></div>
+          <p class="gcard gbalance" data-test="game-balance"><span>Balance:</span> <b>${() => figure(state.base.wallet.satori)}</b></p>
+          <p class="gcard gstreak" data-test="game-streak" hidden="${!k}" data-above="${String(!!k && k.streak >= k.bar)}" title="${k ? `Streak ${k.streak} on this stream: ${k.streak >= k.bar ? 'past' : 'short of'} this game's turning point (${k.bar}), where a streak starts earning at the top of the curve` : ''}"><span>Streak:</span> <b>${k ? String(k.streak) : ''}</b><i aria-hidden="true"></i></p>
         </div>
         <div class="ghead">
           <button class="gstar" data-test="game-star" aria-pressed="${String(starred())}" aria-label="${starred() ? 'Unstar' : 'Star'}" title="Favorite: shown first" @click="${() => a.gameStar(s.streamId)}">${STAR()}</button>
