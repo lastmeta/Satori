@@ -194,7 +194,7 @@ function wallet(a) {
   <div class="gwallet">
     <div class="gclaim" data-test="game-claim-row" hidden="${() => !claimShown()}">
       <b class="gclaimable" data-test="game-claimable">${() => figure(claimed() ? g().claimAmount : claimable())}</b>
-      <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="label">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>
+      <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="glabel">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>
     </div>
     ${unlockPrompt(a, 'game-claim', 'claim')}
     <p class="error small" role="alert" data-test="game-claim-error" hidden="${() => !(state.baseDid === 'claim' && state.baseError)}">${() => state.baseError}</p>
@@ -234,7 +234,7 @@ function play(a) {
       <p class="grest" data-test="game-rest" hidden="${() => !resting()}">Come back tomorrow to see how your predictions were scored.</p>
     </div>
     <div class="gsubmit" data-test="game-submit-early" hidden="${resting}" data-open="${() => String(early())}" inert="${() => !early()}"><div>
-      <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${tap(m.submitNow)}"><span class="label">SUBMIT</span></button>
+      <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${tap(m.submitNow)}"><span class="glabel">SUBMIT</span></button>
     </div></div>
   </div>`;
 }
@@ -263,7 +263,7 @@ function submit(a) {
     </div>
     ${unlockPrompt(a, 'game', 'send your predictions')}
     <p class="error small" role="alert" data-test="game-send-error" hidden="${() => !g().sendError}">${() => g().sendError}</p>
-    <button class="gbtn submit" data-test="game-send" aria-label="Submit" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}"><span class="label">${() => (g().sending ? 'SENDING…' : 'SUBMIT')}</span></button>
+    <button class="gbtn submit" data-test="game-send" aria-label="Submit" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}"><span class="glabel">${() => (g().sending ? 'SENDING…' : 'SUBMIT')}</span></button>
   </div>`;
 }
 

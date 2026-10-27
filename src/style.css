@@ -143,15 +143,15 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gchart { width: 100%; height: 100%; min-height: 0; padding: 16px 14px; overflow: visible; } /* inset by more than half the line: its round ends show */
 .gchart polyline { fill: none; stroke: var(--accent); stroke-width: 7.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .gbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: none; max-width: 560px; width: 100%; margin: 0 auto; }
-.gbtn { border: 0; border-radius: 10px; aspect-ratio: 85.6 / 54; padding: 0; display: grid; place-items: center; min-height: 44px; /* a card's shape */
-  color: var(--on-accent); transition: filter 0.1s ease; } /* flat, as the app's other filled buttons */
-.gbtn:active { filter: brightness(0.92); }
-.gbtn.down { background: var(--bad); }
-.gbtn.up { background: var(--ok); }
+.gbtn { border-radius: 10px; aspect-ratio: 85.6 / 54; padding: 0; display: grid; place-items: center; min-height: 44px; /* a card's shape */
+  border: 1px solid; transition: filter 0.1s ease; } /* shaded inside, as a toggle that is on (.segmented): the soft fill, its colour's edge and ink */
+.gbtn:active { filter: brightness(0.95); }
+.gbtn.down { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.gbtn.up { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 .gbtn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 3px; }
 .gbtn svg { width: 46%; height: auto; max-height: 72%; fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-.gbtn.submit { background: var(--accent); aspect-ratio: auto; width: 100%; height: 56px; }
-.gbtn .label { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; }
+.gbtn.submit { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); aspect-ratio: auto; width: 100%; height: 56px; }
+.gbtn .glabel { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; }
 .gwallet { flex: none; display: grid; gap: 10px; margin-bottom: 6px; }
 .gtop { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 12px; margin-bottom: 6px; }
 /* the balance, a card on the left half: the label on the left, the value right aligned */
@@ -169,7 +169,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
   background: radial-gradient(circle closest-side, var(--streak) 70%, transparent 76%) left center / calc(100% / var(--n)) 100% repeat-x; }
 .gclaim { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; max-width: 560px; width: 100%; margin: 0 auto; }
 .gclaimable { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
-.gbtn.claim { background: var(--ok); }
+.gbtn.claim { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 .gbtns-area { position: relative; flex: none; }
 .gbtns[data-rest="true"] { visibility: hidden; } /* played today: the buttons' room kept, the note in it */
 .grest { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 0 24px; text-align: center; color: var(--muted); font-size: 0.95rem; }
@@ -180,8 +180,8 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gsubmit-screen { gap: 12px; padding-bottom: 8px; }
 .gdaily { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
 .gdaily p { margin: 0; flex: 1; font-size: 0.85rem; color: var(--muted); }
-.gbtn.daily { aspect-ratio: auto; flex: none; display: inline-flex; gap: 6px; padding: 0 14px; min-height: 48px; border-radius: 12px; font-weight: 700;
-  text-decoration: none; background: var(--accent); }
+.gbtn.daily { aspect-ratio: auto; flex: none; display: inline-flex; gap: 6px; padding: 0 14px; min-height: 48px; border-radius: 10px;
+  text-decoration: none; background: var(--card); border-color: var(--btn-line); color: var(--text); } /* an outline button, as the app's others */
 .gbtn.daily svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .gcalls-wrap { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .gcalls { list-style: none; padding: 0; margin: auto 0; display: grid; gap: 8px; } /* centred when short; scrolls when long */
