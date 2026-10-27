@@ -1271,10 +1271,14 @@ const actions = {
    * Send the calls: from the alias when staked with it; else from the wallet (Unlock in place, or its wallet app).
    * Streams already predicted (gameflow.js played) are not sent: done, as if they were. All of them: done, nothing sent.
    */
-  gameSend() {
+  async gameSend() {
     const g = state.game;
     const calls = g.queue.filter((s) => g.picks[s.streamId]).map((s) => ({ stream: s, direction: g.picks[s.streamId] }));
     if (!calls.length || g.sending) return undefined;
+    // who sends: the stake read from the chain now, at Submit (the tab's read may be minutes old, a Stake elsewhere since)
+    state.game = { ...state.game, sending: true, sendError: '' };
+    await base.refresh().then(refreshBase).catch(() => {}); // unread: the last read decides, and playHand reads again
+    state.game = { ...state.game, sending: false };
     const run = async () => {
       state.game = { ...state.game, sending: true, sendError: '' };
       try {
@@ -1283,8 +1287,7 @@ const actions = {
         state.game = { ...state.game, sending: false, sendError: errorText(err) };
       }
     };
-    // nothing to send (all already predicted), or the alias sends: no Unlock. Who sends is the stake as it is now,
-    // not as the tab read it (a Stake since then: the alias), the same as base.playHand decides.
+    // nothing to send (all already predicted), or the alias sends: no Unlock (base.playHand decides the same way)
     return state.base.wallet.staked === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
   },
   /** The Game tab's switch: 'manual' (play by hand: the daily batch is not sent) or 'auto' (docs/design/base.md#played-by-hand). */

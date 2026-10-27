@@ -174,7 +174,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   expect((await page.evaluate(() => window.satori.base())).pendingReferrer).toBe(null);
 });
 
-test('by hand: Stake while the Game tab was read with the wallet playing; Send then goes from the alias, no passphrase', async ({ context, page }) => {
+test('by hand: staked after the Game tab was read (here, or in the dapp); Submit reads the stake then: the alias sends, no passphrase', async ({ context, page }) => {
   test.setTimeout(120_000);
   const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
   await stubCentral(context, { rpc });
@@ -192,13 +192,8 @@ test('by hand: Stake while the Game tab was read with the wallet playing; Send t
   // the Game tab read now: the wallet plays
   await page.evaluate(() => window.satori.go('game'));
   await expect(name(page)).toHaveText('satori', { timeout: 30_000 });
-  // Stake (as from the contract card), then back to the game within its 5 minutes
-  await page.evaluate((p) => window.satori.unlock(p), PASS);
-  await page.evaluate(() => window.satori.stake());
-  await page.evaluate(() => window.satori.lock());
-  await page.evaluate(() => window.satori.go('home'));
-  await page.evaluate(() => window.satori.go('game'));
-  await expect(name(page)).toHaveText('satori', { timeout: 30_000 });
+  // staked outside this app (the dapp, say) while the tab stays as it was read: the app hasn't seen it
+  s.delegateOf[V] = A;
   await t(page, 'game-up').click();
   await expect(t(page, 'game-submit-screen')).toBeVisible();
   await t(page, 'game-send').click();
