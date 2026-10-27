@@ -137,26 +137,21 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .glatest { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .gstar { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; display: grid; place-items: center; color: var(--muted); margin-left: -9px; } /* centred under the Satori mark */
 .gstar svg { width: 26px; height: 26px; fill: var(--card); stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round;
-  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.5)) drop-shadow(0 -1px 0 rgb(0 0 0 / 0.2)); transition: fill 0.2s ease, color 0.2s ease; }
+  transition: fill 0.2s ease, color 0.2s ease; }
 .gstar[aria-pressed="true"] { color: #c99a06; }
 .gstar[aria-pressed="true"] svg { fill: #f5c518; }
 .gchart { width: 100%; height: 100%; min-height: 0; padding: 16px 14px; overflow: visible; } /* inset by more than half the line: its round ends show */
-.gchart polyline { fill: none; stroke: var(--accent); stroke-width: 15; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.gchart polyline { fill: none; stroke: var(--accent); stroke-width: 7.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .gbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: none; max-width: 560px; width: 100%; margin: 0 auto; }
-.gbtn { border: 0; border-radius: 12px; aspect-ratio: 85.6 / 54; padding: 0; display: grid; place-items: center; min-height: 44px; /* a card's shape */ transition: transform 0.1s ease, box-shadow 0.1s ease;
-  box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.12), inset 0 -5px 0 rgb(0 0 0 / 0.22), 0 3px 8px rgb(0 0 0 / 0.18); }
-.gbtn.down { background: linear-gradient(#e5534b, #c0362e); }
-.gbtn.up { background: linear-gradient(#34b267, #1f8a4c); }
-.gbtn:active { transform: translateY(2px); box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.3); }
+.gbtn { border: 0; border-radius: 10px; aspect-ratio: 85.6 / 54; padding: 0; display: grid; place-items: center; min-height: 44px; /* a card's shape */
+  color: var(--on-accent); transition: filter 0.1s ease; } /* flat, as the app's other filled buttons */
+.gbtn:active { filter: brightness(0.92); }
+.gbtn.down { background: var(--bad); }
+.gbtn.up { background: var(--ok); }
 .gbtn[aria-pressed="true"] { outline: 3px solid var(--text); outline-offset: 3px; }
-.gbtn svg { width: 46%; height: auto; max-height: 72%; fill: none; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-.gbtn svg .lit { stroke: rgb(255 255 255 / 0.16); transform: translateY(0.55px); } /* muted: the cut's light edge */
-.gbtn svg .shade { stroke: rgb(0 0 0 / 0.4); transform: translateY(-0.45px); }
-.gbtn.down svg .cut { stroke: #a5291f; }
-.gbtn.up svg .cut { stroke: #17703c; }
-.gbtn.submit { background: linear-gradient(#5a7cf0, #3a5bd9); aspect-ratio: auto; width: 100%; height: 56px; }
-.gbtn .engraved { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #2a43a6;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.16), 0 -1px 0 rgb(0 0 0 / 0.3); }
+.gbtn svg { width: 46%; height: auto; max-height: 72%; fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.gbtn.submit { background: var(--accent); aspect-ratio: auto; width: 100%; height: 56px; }
+.gbtn .label { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; }
 .gwallet { flex: none; display: grid; gap: 10px; margin-bottom: 6px; }
 .gtop { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 12px; margin-bottom: 6px; }
 /* the balance, a card on the left half: the label on the left, the value right aligned */
@@ -174,22 +169,19 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
   background: radial-gradient(circle closest-side, var(--streak) 70%, transparent 76%) left center / calc(100% / var(--n)) 100% repeat-x; }
 .gclaim { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; max-width: 560px; width: 100%; margin: 0 auto; }
 .gclaimable { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
-.gbtn .plain { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #fff; } /* the submit screen's SUBMIT: white, as Satori Daily */
-.gbtn.claim { background: linear-gradient(#34b267, #1f8a4c); }
-.gbtn.claim .engraved { color: #17703c; }
-.gbtn.claim:disabled { opacity: 1; filter: saturate(0.7); }
+.gbtn.claim { background: var(--ok); }
 .gbtns-area { position: relative; flex: none; }
 .gbtns[data-rest="true"] { visibility: hidden; } /* played today: the buttons' room kept, the note in it */
 .grest { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 0 24px; text-align: center; color: var(--muted); font-size: 0.95rem; }
 .gsubmit { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.3s ease; flex: none; }
 .gsubmit[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
 .gsubmit > div { overflow: hidden; min-height: 0; }
-.gsubmit .gbtn { margin: 12px 0 8px; } /* the bottom margin: room for its shadow inside the fold */
+.gsubmit .gbtn { margin: 12px 0 8px; }
 .gsubmit-screen { gap: 12px; padding-bottom: 8px; }
 .gdaily { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
 .gdaily p { margin: 0; flex: 1; font-size: 0.85rem; color: var(--muted); }
 .gbtn.daily { aspect-ratio: auto; flex: none; display: inline-flex; gap: 6px; padding: 0 14px; min-height: 48px; border-radius: 12px; font-weight: 700;
-  text-decoration: none; color: #fff; background: linear-gradient(#7b6cf0, #5a49d6); }
+  text-decoration: none; background: var(--accent); }
 .gbtn.daily svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .gcalls-wrap { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .gcalls { list-style: none; padding: 0; margin: auto 0; display: grid; gap: 8px; } /* centred when short; scrolls when long */

@@ -25,10 +25,9 @@ const showing = (what) => () => {
 };
 
 // the arrows point right, up at 45° and down at -45°; the star; each drawn as a raised (bevelled) mark
-// engraved: the arrow a darker shade of the button, lit along its lower edge and shaded along its upper one
-const engraved = (d) => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path class="lit" d="${d}"></path><path class="shade" d="${d}"></path><path class="cut" d="${d}"></path></svg>`;
-const ARROW_UP = () => engraved('M6 18L18 6M9 6h9v9');
-const ARROW_DOWN = () => engraved('M6 6l12 12M18 9v9H9');
+const arrow = (d) => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"></path></svg>`;
+const ARROW_UP = () => arrow('M6 18L18 6M9 6h9v9');
+const ARROW_DOWN = () => arrow('M6 6l12 12M18 9v9H9');
 const STAR = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path></svg>`;
 
 // ── moving between screens: the stream on screen slides off and the next slides on (the buttons stay, but for the
@@ -195,7 +194,7 @@ function wallet(a) {
   <div class="gwallet">
     <div class="gclaim" data-test="game-claim-row" hidden="${() => !claimShown()}">
       <b class="gclaimable" data-test="game-claimable">${() => figure(claimed() ? g().claimAmount : claimable())}</b>
-      <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="engraved">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>
+      <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="label">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>
     </div>
     ${unlockPrompt(a, 'game-claim', 'claim')}
     <p class="error small" role="alert" data-test="game-claim-error" hidden="${() => !(state.baseDid === 'claim' && state.baseError)}">${() => state.baseError}</p>
@@ -235,7 +234,7 @@ function play(a) {
       <p class="grest" data-test="game-rest" hidden="${() => !resting()}">Come back tomorrow to see how your predictions were scored.</p>
     </div>
     <div class="gsubmit" data-test="game-submit-early" hidden="${resting}" data-open="${() => String(early())}" inert="${() => !early()}"><div>
-      <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${tap(m.submitNow)}"><span class="engraved">SUBMIT</span></button>
+      <button class="gbtn submit" data-test="game-submit" aria-label="Submit" @click="${tap(m.submitNow)}"><span class="label">SUBMIT</span></button>
     </div></div>
   </div>`;
 }
@@ -264,7 +263,7 @@ function submit(a) {
     </div>
     ${unlockPrompt(a, 'game', 'send your predictions')}
     <p class="error small" role="alert" data-test="game-send-error" hidden="${() => !g().sendError}">${() => g().sendError}</p>
-    <button class="gbtn submit" data-test="game-send" aria-label="Submit" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}"><span class="plain">${() => (g().sending ? 'SENDING…' : 'SUBMIT')}</span></button>
+    <button class="gbtn submit" data-test="game-send" aria-label="Submit" hidden="${() => !pickCount()}" disabled="${() => g().sending}" @click="${a.gameSend}"><span class="label">${() => (g().sending ? 'SENDING…' : 'SUBMIT')}</span></button>
   </div>`;
 }
 
