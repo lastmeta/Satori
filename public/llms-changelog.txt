@@ -4,6 +4,13 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-27 (the next step)
+
+- Home's card `next-step` (advice, from the third day the app was opened): the first thing missing for the app to
+  predict on the Satori contract by itself: Base ETH in the wallet (Open Wallet: the Wallet tab's Receive, its QR
+  code), Preload gas (before Stake: it needs gas there), or Turn on Automatic. `dismiss('next-step')`: Not now, back after 3 days.
+- The Wallet tab: `base-receive` shows the wallet's address (`base-receive-address`) and its QR code (`base-qr`).
+
 ## Changed 2026-10-27 (How Does This Work?)
 
 - `how` opens with "What is Satori?" and ends with what to do each day: open the app, or play the game.

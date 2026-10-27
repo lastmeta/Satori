@@ -16,6 +16,7 @@ export function readFavorites(address, storage = local()) {
 }
 export const writeFavorites = (address, ids, storage = local()) => writePref(favoritesKey(address), JSON.stringify(ids), storage);
 export const INSTALL_KEY = 'satori-install-advice'; // 'dismissed': Home's Install card was put away (docs/design/pwa.md#install)
+export const NEXT_STEP_KEY = 'satori-next-step'; // when Home's next-step card was put away (Not now), s: back after 3 days
 
 const local = () => {
   try {
@@ -32,6 +33,16 @@ export function readPref(key, allowed, fallback, storage = local()) {
     return allowed.includes(v) ? v : fallback;
   } catch {
     return fallback;
+  }
+}
+
+/** A time kept for `key` (s), or null. */
+export function readTime(key, storage = local()) {
+  try {
+    const v = Number(storage?.getItem(key));
+    return v > 0 ? v : null;
+  } catch {
+    return null;
   }
 }
 

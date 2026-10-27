@@ -56,6 +56,14 @@ test('an encrypted backup, restored in a fresh browser; the game by call; a day 
   const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   expect(await call(page, 'day', today)).toMatchObject({ date: today, network: expect.any(Object), contract: expect.any(Object) });
 
+  // Home's next-step card put away for 3 days (kept on this device); the Wallet tab's Receive: the address and its QR code
+  await call(page, 'dismiss', 'next-step');
+  expect(Number(await page.evaluate(() => localStorage.getItem('satori-next-step')))).toBeGreaterThan(0);
+  await call(page, 'go', 'wallet');
+  await page.locator('[data-test=base-receive]').click();
+  await expect(page.locator('[data-test=base-receive-address]')).toHaveText(V);
+  await expect(page.locator('[data-test=base-qr]')).toHaveAttribute('src', /^data:image\/svg\+xml/);
+
   // a fresh browser (its storage wiped): the backup restores the same wallet
   const fresh = await browser.newContext();
   try {

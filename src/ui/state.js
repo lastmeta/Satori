@@ -1,7 +1,7 @@
 // The UI's one reactive state (ArrowJS). main.js and src/pwa/ write it; the screens read it.
 import { reactive } from '@arrow-js/core';
 import { themeOf } from './theme.js';
-import { readPref, SORT_KEY, INSTALL_KEY } from './prefs.js';
+import { readPref, readTime, SORT_KEY, INSTALL_KEY, NEXT_STEP_KEY } from './prefs.js';
 
 export const state = reactive({
   screen: 'loading', // loading | elsewhere | fatal | damaged (the database file won't open) | setup | finish (an earlier version's wallet: Unlock once) | home
@@ -132,6 +132,7 @@ export const state = reactive({
   // null), status().storage; the Install card put away on this device (Not now, Got it)
   app: { installed: false, canInstall: false, update: false, addTo: null },
   installDismissed: readPref(INSTALL_KEY, ['dismissed'], '') === 'dismissed',
+  nextStepDismissed: readTime(NEXT_STEP_KEY), // Home's next-step card put away (Not now), s
   phone: false, // a phone (a coarse pointer, or a small screen): Home's hero says "Keep Satori open · " while it works
   storage: null, // { persisted, usage, quota }
   reminder: { supported: false, on: false, minute: null, note: '', busy: false, error: '' }, // the daily reminder (src/pwa/push.js)

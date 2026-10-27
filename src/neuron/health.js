@@ -3,6 +3,7 @@
 // state in, one object out. Pure: the UI and window.satori.health() draw the same.
 import { POLL_EVERY_S } from './index.js';
 import { leading, workText, HERO } from './work.js';
+import { nextStep } from '../ui/contractflow.js';
 
 export const CADENCE_S = POLL_EVERY_S; // 11 h, Lite's
 export const GRACE_S = 3600;
@@ -29,7 +30,7 @@ export const LEVEL = {
   'central-failed': 'warn', 'wallet-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
   'base-stuck': 'warn', 'base-unreachable': 'warn',
   asleep: 'idle', starting: 'idle',
-  backup: 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
+  backup: 'advice', 'next-step': 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
   'base-unused-unreachable': 'note',
 };
 export const PRIORITY = Object.keys(LEVEL);
@@ -296,6 +297,26 @@ function networkReasons({ nostr, now }) {
   return out;
 }
 
+// ── the next step (the owner, 2026-10-27) ──
+export const NEXT_STEP_DAYS = 3; // shown from the third day the app was opened; Not now puts it away this long
+const NEXT_STEP = {
+  eth: ['To earn more, let this app predict for you each day. The first step: add a little Base ETH to your wallet.', 'Open Wallet', 'receive'],
+  gas: ['To earn more, preload a little gas: this app spends it to stake and to send your predictions each day.', 'Preload gas', 'preload'],
+  auto: ["To earn more without playing every day, turn on Automatic: this app sends your predictions each day on its own.", 'Turn on Automatic', 'auto'],
+};
+/**
+ * A helpful nudge, as advice: someone who keeps opening the app but whose contract predictions aren't automatic yet
+ * may not know what's missing. The first step (nextStep, src/ui/contractflow.js), its button, and Not now (away
+ * NEXT_STEP_DAYS, then back while the step is still missing). Not Stake: the Stake card says it from the first day.
+ */
+function nextStepReason({ base, days, dismissed, now }) {
+  if (days.filter((d) => d.ran).length < NEXT_STEP_DAYS || (dismissed != null && now - dismissed < NEXT_STEP_DAYS * 86400)) return [];
+  const step = NEXT_STEP[nextStep(base)];
+  if (!step) return [];
+  const [text, button, act] = step;
+  return [reason('next-step', 'contract', { text, button, act: { do: act }, dismiss: 'Not now' })];
+}
+
 /** How each browser without an install prompt adds Satori (docs/design/pwa.md#install): the card's words. */
 const STARTS_EMPTY = 'The added app starts empty: set it up there, or restore it from your 24 words.';
 export const ADD_TO = {
@@ -514,16 +535,20 @@ export const noticesOf = (rows, now) => rows.filter((r) => r.kind === 'setting' 
  * @param {{persisted: boolean}|null} o.storage
  * @param {{installed: boolean, canInstall: boolean, addTo?: string|null}} o.app
  * @param {boolean} [o.installDismissed] the Install card was put away on this device (Not now, Got it)
+ * @param {number|null} [o.nextStepDismissed] when the next step's card was put away (Not now), s
  * @param {boolean} o.backedUp the wallet's words confirmed (meta.backup_at)
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
  * @param {{central, base, network}} [o.traffic] each traffic channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
  * @param {Object<string, object>} [o.work] the work in progress, { [task]: entry } (src/neuron/work.js): the tones, `work`
  * @returns {{status, tone, title, line, action, days, channels, feed, reasons, work, notices}}
  */
-export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, installDismissed = false, since = null, traffic, work = {} }) {
+export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, installDismissed = false, nextStepDismissed = null,
+  since = null, traffic, work = {} }) {
   const sessions = sessionsOf(rows, now);
+  const days = daysOf(rows, now, since, DAYS, base?.lastPlay?.at ?? null);
   const c = centralReasons({ now, rows, sessions, central, work });
-  const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr, now }), ...installReason({ app, installDismissed })];
+  const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr, now }), ...installReason({ app, installDismissed }),
+    ...nextStepReason({ base, days, dismissed: nextStepDismissed, now })];
   if (storage && storage.persisted === false && !backedUp) {
     reasons.push(reason('backup', null, {
       text: 'This browser may clear Satori’s storage, your keys with it. Back up your wallet’s 24 words.', button: 'Back up', act: { do: 'backup' } }));
@@ -557,7 +582,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const doing = leading(work);
   return {
     status, tone, title, line, action,
-    days: daysOf(rows, now, since, DAYS, base?.lastPlay?.at ?? null),
+    days,
     channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic, work }),
     feed: feedOf(rows),
     reasons: reasons.map((r) => ({ id: r.id, status: r.status, channel: r.channel, text: r.text ?? r.line })),

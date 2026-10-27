@@ -396,7 +396,7 @@ test('each reason\'s level (docs/design/health.md): bad, warn, idle (a calm stat
     'central-failed': 'warn', 'wallet-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
     'base-stuck': 'warn', 'base-unreachable': 'warn',
     asleep: 'idle', starting: 'idle',
-    backup: 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
+    backup: 'advice', 'next-step': 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
     'base-unused-unreachable': 'note',
   });
   expect(PRIORITY).toEqual(Object.keys(LEVEL)); // highest first: every advice after every warn and bad
@@ -522,6 +522,8 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     asleep: (i) => i,
     starting: (i) => i,
     backup: (i) => ({ ...i, storage: { persisted: false }, backedUp: false }),
+    'next-step': (i) => ({ ...i, rows: [open(NOW - 2 * D - 4 * H, NOW - 2 * D - 4 * H), open(NOW - D - 4 * H, NOW - D - 4 * H), ...i.rows],
+      base: staked({ play: 'manual' }) }), // opened on 3 days, staked, by hand: Turn on Automatic
     stake: (i) => ({ ...i, base: base({ wallet: { satori: '100', staked: 'none' } }) }),
     'staked-elsewhere': (i) => ({ ...i, base: base({ wallet: { satori: '100', staked: 'other', stakedWith: '0x' + 'ab'.repeat(20) } }) }),
     install: (i) => ({ ...i, app: { installed: false, canInstall: true } }),
@@ -555,6 +557,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     asleep:             [X,                       'A idle –',              'P idle –',              X,                       X,                       X],
     starting:           ['S idle –',              X,                       X,                       X,                       X,                       X],
     backup:             ['S idle backup',         'A idle backup',         'P idle backup',         'P ok backup',           'P warn central-failed', 'N bad central-failing'],
+    'next-step':        ['S idle next-step',      'A idle next-step',      'P idle next-step',      'P ok next-step',        'P warn central-failed', 'N bad central-failing'],
     stake:              ['S idle stake',          'A idle stake',          'P idle stake',          'P ok stake',            'P warn central-failed', 'N bad central-failing'],
     'staked-elsewhere': ['S idle staked-elsewhere', 'A idle staked-elsewhere', 'P idle staked-elsewhere', 'P ok staked-elsewhere', 'P warn central-failed', 'N bad central-failing'],
     install:            ['S idle install',        'A idle install',        'P idle install',        'P ok install',          'P warn central-failed', 'N bad central-failing'],
@@ -783,5 +786,27 @@ describe('address changes: a quiet note on Home for 24 h, and in the feed (the s
     expect([h.status, h.notices, h.days]).toEqual(['ok', [], health().days]);
     expect(h.feed[0]).toEqual({ at: NOW - H, level: 'warn',
       text: "The Satori Network's contract addresses differ from the app's (token, hub): the app's are used" });
+  });
+});
+
+describe('the next step (the owner, 2026-10-27): a nudge toward predicting on the contract by itself', () => {
+  const days = (n) => Array.from({ length: n }, (_, k) => open(NOW - (n - 1 - k) * D - 3 * H, NOW - (n - 1 - k) * D - 2 * H));
+  const manual = staked({ play: 'manual' });
+  test('from the third day the app was opened, the first step missing, with its button and Not now', () => {
+    expect(ids(health({ rows: [...days(2), good(NOW - 2 * H)], base: manual }))).toEqual([]);
+    const h = health({ rows: [...days(3), good(NOW - 2 * H)], base: manual });
+    expect(h.reasons).toEqual([expect.objectContaining({ id: 'next-step', status: 'advice', channel: 'contract' })]);
+    expect(h.action).toEqual({ id: 'next-step', text: expect.stringMatching(/^To earn more/), button: 'Turn on Automatic', do: 'auto', dismiss: 'Not now' });
+    expect(h.status).toBe('ok'); // advice: never the status
+    const eth = health({ rows: [...days(3), good(NOW - 2 * H)], base: base({ play: 'auto', alias: { eth: '0', lowEth: true, noGas: true, batchesLeft: 0 }, wallet: { satori: '100', eth: '0', lowEth: true, staked: 'none' } }) });
+    expect(eth.action).toMatchObject({ id: 'next-step', button: 'Open Wallet', do: 'receive', text: expect.stringMatching(/Base ETH to your wallet/) });
+    expect(ids(eth)).toEqual(['next-step', 'stake']); // Stake can't send without ETH: the nudge comes first on the card
+    // Stake is the step: the Stake card says it already, from the first day
+    expect(ids(health({ rows: [...days(3), good(NOW - 2 * H)], base: base({ play: 'auto', wallet: { satori: '100', eth: '0.01', staked: 'none' } }) }))).toEqual(['stake']);
+  });
+  test('Not now: away for 3 days, then back while the step is still missing', () => {
+    const rows = [...days(4), good(NOW - 2 * H)];
+    expect(ids(health({ rows, base: manual, nextStepDismissed: NOW - 2 * D }))).toEqual([]);
+    expect(ids(health({ rows, base: manual, nextStepDismissed: NOW - 3 * D }))).toEqual(['next-step']);
   });
 });

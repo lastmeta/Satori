@@ -48,7 +48,7 @@ import { createHold } from './ui/hold.js';
 import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
-import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
+import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, NEXT_STEP_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
 import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
 import { deviceKey, toRest, fromRest } from './keys/atrest.js';
 import { HANDOFF, SW_BATCH } from './pwa/handoff.js';
@@ -1051,6 +1051,9 @@ const actions = {
     else if (a.do === 'install') actions.install();
     else if (a.do === 'dismiss') actions.dismissAdvice(a.id);
     else if (a.do === 'stake') actions.walletAction('card', 'baseDelegate');
+    else if (a.do === 'receive') { go('wallet', 'receive'); state.contractQr = state.wallet; } // the address, with its QR code
+    else if (a.do === 'preload') { go('wallet', 'preload'); requestAnimationFrame(actions.preloadForm); }
+    else if (a.do === 'auto') actions.setPlay('auto');
     else if (a.do === 'relink') withWallet('card', actions.baseRelink);
     else if (a.do === 'backup') {
       go('settings', 'backup');
@@ -1102,8 +1105,16 @@ const actions = {
   },
   pollNow: () => pollNow().catch((err) => console.error('[satori] poll', err)),
   install: () => install().catch((err) => console.warn('[satori] install', err)),
-  /** Home's Install card put away (Not now, Got it): once, on this device (docs/design/pwa.md#install). */
+  /**
+   * Home's Install card put away (Not now, Got it): once, on this device (docs/design/pwa.md#install). The next step's
+   * (Not now): for 3 days.
+   */
   dismissAdvice(id) {
+    if (id === 'next-step') {
+      state.nextStepDismissed = nowS();
+      writePref(NEXT_STEP_KEY, String(state.nextStepDismissed));
+      return;
+    }
     if (id !== 'install') return;
     state.installDismissed = true;
     writePref(INSTALL_KEY, 'dismissed');
@@ -1457,7 +1468,7 @@ window.satori = {
     ready();
     return healthOf({ now: nowS(), rows: activity.rows(), central: await centralStatus(), base: await base.status(),
       nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since(),
-      installDismissed: state.installDismissed, traffic: lastTraffic(), work: work.all() });
+      installDismissed: state.installDismissed, nextStepDismissed: state.nextStepDismissed, traffic: lastTraffic(), work: work.all() });
   },
   /**
    * Show a tab: 'home' | 'models' | 'streams' | 'wallet' | 'settings' (also #home … #settings in the URL), or a model's
@@ -1634,11 +1645,14 @@ window.satori = {
   },
   /** One day of Home's strip ('2026-10-24', local): when the app predicted, on the Satori Network and the contract, and how those did. */
   async day(date) { ready(); return dayDetail(String(date)); },
-  /** Put away Home's advice card ('install': Install, kept on this device) or the recovered-database notice ('notice'). */
+  /**
+   * Put away Home's advice card ('install': Install, kept on this device; 'next-step': the next step, for 3 days) or the
+   * recovered-database notice ('notice').
+   */
   dismiss(what) {
     if (what === 'notice') return void actions.dismissNotice();
-    if (what !== 'install') throw new Error("dismiss: 'install' or 'notice'.");
-    actions.dismissAdvice('install');
+    if (what !== 'install' && what !== 'next-step') throw new Error("dismiss: 'install', 'next-step' or 'notice'.");
+    actions.dismissAdvice(what);
   },
   /** Nostr: the key, the relays and their state, the subscribed streams with the latest observation and our `_pred`. */
   async nostr() { ready(); return nostrStatus(); },
@@ -1767,7 +1781,7 @@ watch(() => {
   void state.activityRev; // the log changed
   state.health = healthOf({ now: state.now, rows: activity.rows(), central: state.central, base: state.base, nostr: state.nostr,
     storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since(), installDismissed: state.installDismissed,
-    work: state.work });
+    nextStepDismissed: state.nextStepDismissed, work: state.work });
 });
 
 /**

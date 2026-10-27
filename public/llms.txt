@@ -588,7 +588,12 @@ the page's JS context:
     shown to the person), `install` (`install()`), `dismiss` (the person
     puts the card away; `action.dismiss`, when present, names a second
     button that does the same), `go` (`go(tab)`; the fix is
-    at `#<tab>-<section>`).
+    at `#<tab>-<section>`), `receive` (the wallet needs Base ETH: the Wallet
+    tab's Receive, the address and its QR code; the person sends it),
+    `preload` (`preloadGas()`, the person's request), `auto`
+    (`setPlay('auto')`). `next-step` (from the third day the app was opened:
+    the first of these missing for the app to predict on the Satori contract
+    by itself) has Not now: `dismiss('next-step')`, back after 3 days.
   - `reasons`: every reason, highest first: `[{ id, status, channel, text }]`,
     `status` the reason's level: `'bad'`, `'warn'` (something is wrong for
     predicting or earning), `'idle'` (a calm state) or `'advice'` (nothing
@@ -1050,7 +1055,8 @@ the page's JS context:
   passphrase until it stakes with this app).
 - `await satori.day('2026-10-24')` → one day of Home's strip: `{ date, network: { sent, first, last, marks },
   contract: { batches, skipped }, open }`.
-- `satori.dismiss('install' | 'notice')`: put away Home's Install card, or the recovered-database notice.
+- `satori.dismiss('install' | 'next-step' | 'notice')`: put away Home's Install card, its next-step card (for 3 days),
+  or the recovered-database notice.
 - `await satori.setPlay(mode)` → `base()` (only on the person's request):
   `'manual'` plays the Satori contract by hand in the Game tab: the daily
   batch is still worked out but never sent (`lastCheck.skipped`: "played by
@@ -1195,7 +1201,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   …. It counts only predictions this app received before the
   outcome.").
 - **Wallet**: the **Base** card: the round, the RPC in plain words, the
-  wallet's SATORI and ETH, Claimable (rewards, from the Satori Network,
+  wallet's SATORI and ETH, Receive (`base-receive`: the wallet's address
+  and its QR code, to add Base ETH or SATORI), Claimable (rewards, from the Satori Network,
   airdrop, a line each; Claim beside them when any is above 0), Staking ("Staked: 100 SATORI with this app"), Transfers
   ("Staked SATORI can't be sent until you unstake", "SATORI can be sent
   from <date> (round N)", "Free to send"), "Daily batch gas" (the alias's ETH as daily

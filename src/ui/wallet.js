@@ -10,6 +10,7 @@ import {
   referralText, referralNote, REFERRAL_PCT,
 } from './format.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
+import { qrDataUrl } from './contract.js';
 import { workText } from '../neuron/work.js';
 import { OUT_OF_SYNC } from '../neuron/base.js';
 
@@ -41,6 +42,7 @@ export function walletTab(a) {
   const busy = () => !!state.baseBusy;
   const play = () => playNote(b().wallet.staked);
   const q = () => state.sendReview;
+  const receiving = () => !!state.wallet && state.contractQr === state.wallet; // Receive: the wallet's address and its QR code
   return html`
   <section class="tab-page" data-test="wallet-tab" hidden="${() => state.tab !== 'wallet'}">
   <section class="card base">
@@ -55,6 +57,15 @@ export function walletTab(a) {
       <div><div class="sub">ETH</div><div class="big" data-test="base-wallet-eth">${() => figure(b().wallet.eth)}</div></div>
       <div title="Base ETH this app holds to send predictions for you (its alias pays their gas)"><div class="sub">Preloaded</div><div class="big" data-test="base-preloaded">${() => figure(b().alias.eth)}</div><div class="muted small" data-test="base-preloaded-days" hidden="${() => !daysText(b().alias.batchesLeft)}">${() => daysText(b().alias.batchesLeft)}</div></div>
     </div>
+    <div class="side-row" id="wallet-receive">
+      <p class="muted small">Add Base ETH or SATORI: send it on Base to your wallet's address.</p>
+      <button data-test="base-receive" @click="${() => a.toggleContractQr(state.wallet)}">${() => (receiving() ? 'Hide' : 'Receive')}</button>
+    </div>
+    <div class="fund" data-test="base-receive-panel" hidden="${() => !receiving()}">
+      <code class="block" data-test="base-receive-address">${() => state.wallet ?? ''}</code>
+      <div class="actions"><button class="small-btn" @click="${() => a.copy('base-receive', state.wallet)}">${() => (state.copied === 'base-receive' ? 'Copied' : 'Copy')}</button></div>
+      <img class="qr" data-test="base-qr" alt="QR code of your wallet's address" src="${() => (receiving() ? qrDataUrl(state.wallet) : '')}">
+    </div>
     <dl class="facts">
       <div class="fact"><dt>Claimable</dt><dd class="claim-dd"><span data-test="base-claimable">${CLAIM_LINES.map((i) => html`<span class="line">${() => claimLine(b().claimable, i)}</span>`)}</span>
         <button data-test="base-claim" hidden="${() => !(Number(b().claimable?.total) > 0)}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button></dd></div>
@@ -68,7 +79,7 @@ export function walletTab(a) {
       <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
     </div>
     <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().wallet.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
-    <div class="side-row">
+    <div class="side-row" id="wallet-preload">
       <p class="muted small">Preload gas so this app can make predictions on your behalf: it sends Base ETH from your wallet to this app.</p>
       <button data-test="base-preload" disabled="${busy}" @click="${a.preloadForm}">Preload gas</button>
     </div>
