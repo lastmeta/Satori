@@ -51,10 +51,12 @@ import { setTheme, applyTheme } from './ui/theme.js';
 import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
 import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
 import { deviceKey, toRest, fromRest } from './keys/atrest.js';
+import { HANDOFF, SW_BATCH } from './pwa/handoff.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
 import { startPwa, registerWorker, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
+import { startReminder, turnReminder, followNotifications } from './pwa/push.js';
 
 // Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
 // checkout writes nothing to production) or a build's, each replaceable by a VITE_* variable.
@@ -135,7 +137,21 @@ const refreshRecords = coalesce('records', async () => {
   if (state.recordOpen) state.recordDetail = await recordOf(state.recordOpen);
   await new Promise((r) => setTimeout(r, 1000));
 });
-const refreshBase = coalesce('base status', async () => { state.base = await base.status(); });
+const refreshBase = coalesce('base status', async () => {
+  state.base = await base.status();
+  if (state.reminder.on && reminderPlayer() !== toldPlayer) tellReminder(); // staked or unstaked, by hand or not: the server's player follows
+});
+
+/**
+ * Whom the daily reminder watches on the chain (docs/design/push.md): the alias, which sends the batch and plays the Game
+ * when staked with it; the wallet when it plays the Game itself.
+ */
+const reminderPlayer = () => (state.base.play === 'manual' && state.base.wallet?.staked !== 'alias' ? state.wallet : state.alias);
+let toldPlayer = null;
+function tellReminder() {
+  toldPlayer = reminderPlayer();
+  return startReminder(toldPlayer).catch((err) => console.warn('[satori] reminder', err));
+}
 
 // ── the Models tab (docs/design/models.md) ──
 /** Every model (models()), from the given statuses, each with the backtest kept with it (the training pass's for Base's older ones). */
@@ -314,7 +330,8 @@ async function startNeuron() {
     alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, chain: () => base.channels() });
   await refreshNostr();
   base = createBase({ db, alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
-    onChange: refreshBase, onCheck: (r) => { activity.base(r); if (r.sent) publishContract(r.sent.games, r.sent.at); }, onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work });
+    onChange: refreshBase, onCheck: (r) => { activity.base(r); if (r.sent) publishContract(r.sent.games, r.sent.at); }, onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work,
+    sw: { get: appGet, put: appPut, handoff: leaveHandoff } });
   if (invitedBy) await base.holdReferrer(invitedBy); // the invite link's ?ref=, kept until Stake registers it
   state.base = { ...state.base, play: await base.play() }; // at once (the database): the Game tab never shows the wrong switch
   await refreshBase();
@@ -331,6 +348,7 @@ async function startNeuron() {
   backfill().then(refresh).catch((err) => console.error('[satori] history', err)); // streams with no history yet get it now, not at the first poll
   nostr.start().catch((err) => console.error('[satori] nostr start', err));
   base.start();
+  tellReminder();
   wakeUps();
   if (state.modelOpen) loadModel(state.modelOpen); // a link to a model (#models/<id>), now that every flow is up
   retrain.resume().catch((err) => console.error('[satori] retrain resume', err)); // pending work: a retrain asked before continues
@@ -424,6 +442,15 @@ async function setBaseSettings(o) {
   return s;
 }
 
+/**
+ * The daily push's handoff (docs/design/push.md, src/pwa/wake.js): what the service worker needs to send the day's batch
+ * with the app closed. The alias sealed with this browser's key, as in the keys record; in hex where it keeps none.
+ */
+async function leaveHandoff(info) {
+  const { sealed } = await toRest({ alias: record.alias, nostr: null }, await restKey());
+  await appPut(HANDOFF, { ...info, ...(sealed ? { sealed } : { alias: record.alias }), at: Date.now() });
+}
+
 /** This browser's key for the alias and the Nostr key at rest (docs/design/keys.md#at-rest), or null: checked once a page. */
 let restKeyOf;
 const restKey = () => (restKeyOf ??= deviceKey({ get: appGet, put: appPut }));
@@ -504,6 +531,8 @@ async function reopenWith(list) {
   await writeWallets(list);
   dropSnapshot();
   const other = pathOf(activeOf(list)) !== dbPath;
+  // the push's wake (src/pwa/wake.js) is this wallet's alias's: gone until the next wallet's first check leaves its own
+  if (other) await Promise.all([appPut(HANDOFF, null), appPut(SW_BATCH, null)]).catch(() => {});
   setTimeout(() => {
     if (other) releaseTab(); // the next page opens another wallet's file: this page's open database is not in its way
     location.reload();
@@ -1294,6 +1323,18 @@ const actions = {
     // nothing to send (all already predicted), or the alias sends: no Unlock (base.playHand decides the same way)
     return state.base.wallet.staked === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
   },
+  /** The daily reminder (Settings › This device; docs/design/push.md): on or off. */
+  async setReminder(on) {
+    state.reminder = { ...state.reminder, busy: true, error: '' };
+    try {
+      await turnReminder(on, reminderPlayer());
+      toldPlayer = reminderPlayer();
+    } catch (err) {
+      state.reminder = { ...state.reminder, error: errorText(err) };
+    } finally {
+      state.reminder = { ...state.reminder, busy: false };
+    }
+  },
   /** The Game tab's switch: 'manual' (play by hand: the daily batch is not sent) or 'auto' (docs/design/base.md#played-by-hand). */
   async setPlay(mode) {
     const was = state.base.play;
@@ -1706,6 +1747,19 @@ window.satori = {
   async setBaseMaxFee(gwei) { ready(); return base.setSettings({ maxFee: gwei }); },
   /** Who sends the Satori contract predictions: 'auto' (the daily batch) or 'manual' (the Game tab: not sent). → base() */
   async setPlay(mode) { ready(); const v = await base.setPlay(mode); state.base = v; return v; },
+  /**
+   * The daily reminder (docs/design/push.md): on, this browser asks for notification permission and subscribes; once a
+   * day, if today's predictions aren't in, the app sends them in the background, or a notification reminds the person.
+   * → reminder() */
+  async setReminder(on) {
+    ready();
+    if (typeof on !== 'boolean') throw new Error('setReminder(true) or setReminder(false).');
+    await turnReminder(on, reminderPlayer());
+    toldPlayer = reminderPlayer();
+    return this.reminder();
+  },
+  /** { supported, on, note }: whether this browser can take the daily reminder, whether it is on, and why not. */
+  reminder() { const { supported, on, note } = state.reminder; return { supported, on, note }; },
 };
 
 /** When this neuron began: the log's first session, or the keys' creation when earlier (records before it have none). */
@@ -1880,6 +1934,7 @@ async function boot() {
   glowChips();
   smoothHero();
   startPwa();
+  followNotifications();
   // one tab runs the neuron; another waits, says so, and takes over when that one closes (no reload)
   releaseTab = await claimTab(undefined, undefined, { onWait: () => { state.screen = 'elsewhere'; } });
   if (state.screen === 'elsewhere') state.screen = 'loading';

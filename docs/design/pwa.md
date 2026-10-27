@@ -31,9 +31,10 @@ nothing like it, so there is no Lite pattern to follow here.
 ## What it does not do
 
 - **It does not run the neuron while closed.** The service worker caches
-  files and nothing else: it holds no keys, opens no database and never
-  polls. A browser kills an idle service worker, and one cannot start
-  DuckDB's worker.
+  files, opens no database and never polls: a browser kills an idle service
+  worker, and one cannot start DuckDB's worker. With the daily reminder on, a
+  push wakes it once a day to send the Satori contract's batch, or to remind
+  ([push.md](push.md)).
 - **Periodic Background Sync** is not used: Chromium only, installed apps only,
   the browser picks the times, and the service worker could not run DuckDB
   anyway ([runtime plan](../plans/runtime.md#periodic-background-sync)).

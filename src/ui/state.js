@@ -134,6 +134,7 @@ export const state = reactive({
   installDismissed: readPref(INSTALL_KEY, ['dismissed'], '') === 'dismissed',
   phone: false, // a phone (a coarse pointer, or a small screen): Home's hero says "Keep Satori open · " while it works
   storage: null, // { persisted, usage, quota }
+  reminder: { supported: false, on: false, note: '', busy: false, error: '' }, // the daily reminder (src/pwa/push.js)
   version: '', // browser-<package version>+<git short sha> (main.js; Settings › This device)
   theme: themeOf(), // Settings → Appearance: 'system' | 'light' | 'dark', this device's (src/ui/theme.js)
   systemDark: globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false, // what 'system' shows (main.js keeps it)

@@ -15,6 +15,7 @@ import { createSchedule } from './schedule.js';
 import { createWork } from './work.js';
 import { inviteLink, referrerOf } from './referral.js';
 import { emit, traced } from '../traffic.js';
+import { adopt, withBatchLock } from '../pwa/handoff.js';
 
 export const FIRST_CHECK_S = 10;
 /**
@@ -348,10 +349,12 @@ export function nextCheckAt({ now, chainTime, pendingAt = null }) {
  * @param {(keys: string[], url: string) => void} [o.onConfigDiffers] central's contract addresses differ from the bundle's
  *   (which are kept): the keys, once per fetch of its config (Home's activity log, a quiet warning)
  * @param {object} [o.work] what the neuron is doing (src/neuron/work.js): the batch ('base') and the wallet's actions say their steps
+ * @param {object} [o.sw] the daily push's wake (src/pwa/wake.js): { get, put } over IndexedDB, and handoff(info), which
+ *   leaves the service worker what it needs to send a batch; null where there is none (tests)
  */
 export function createBase({ db, alias, walletAddress, wallet, central, defaultRpc, transport, forecast = engineForecast,
   now = () => Date.now() / 1000, onChange = () => {}, onCheck = () => {}, onConfigDiffers = () => {}, setTimeout: st = setTimeout,
-  clearTimeout: ct = clearTimeout, origin = globalThis.location?.href, onTraffic = () => emit('base'), work = createWork() }) {
+  clearTimeout: ct = clearTimeout, origin = globalThis.location?.href, onTraffic = () => emit('base'), work = createWork(), sw = null }) {
   let cache = null; // central's config, 1 h
   let made = null; // { key, chain, rpc }
   let status = null; // the last status read
@@ -485,7 +488,11 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     try {
       const { chain } = await chainNow();
       const manual = (await readPlay()) === 'manual';
-      result = await work.run('base', async (report) => runBatch({ chain, alias, db, forecast, maxFeeWei: await maxFeeWei(), manual, now, report }));
+      // one sender at a time, the app or the push's service worker; a batch the worker sent is the app's to wait for
+      result = await withBatchLock(async () => {
+        if (sw) await adopt({ get: sw.get, put: sw.put, db });
+        return work.run('base', async (report) => runBatch({ chain, alias, db, forecast, maxFeeWei: await maxFeeWei(), manual, now, report }));
+      });
     } catch (err) {
       result = { at: null, error: errorText(err) };
     }
@@ -494,7 +501,19 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     lastCheck = result;
     onCheck(result); // Home's activity log
     await refresh();
+    await leave();
     return result;
+  }
+
+  /** The handoff for the push's service worker (src/pwa/wake.js): this chain, its RPCs, the max fee, how the app plays. */
+  async function leave() {
+    if (!sw || !made) return;
+    try {
+      await sw.handoff({ rpc: made.rpc.map(resolve), config: made.config, maxFeeWei: String(await maxFeeWei()),
+        play: await readPlay(), staked: !!status && status.alias.power > 0n });
+    } catch (err) {
+      console.warn('[satori] push handoff', err);
+    }
   }
   const schedule = createSchedule(check, {
     now, setTimeout: st, clearTimeout: ct, name: 'base', onChange: changed,
@@ -635,6 +654,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       play = mode;
       await db.set('base_play', mode);
       await db.checkpoint();
+      await leave();
       changed();
       return this.status();
     },
@@ -647,6 +667,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       await db.checkpoint();
       if (url !== undefined) await refresh();
       else changed();
+      await leave();
       return this.status();
     },
 

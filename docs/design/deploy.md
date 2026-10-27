@@ -290,6 +290,19 @@ database. `S` means `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175`
    and `no-cache`), then
    `DEPLOY_URL=https://app.satorinet.io npm run e2e:deploy`.
 
+6. The daily push's server ([push.md](push.md#the-server)), only when `push/`
+   changed. Its data (the VAPID key: losing it ends every subscription) is in
+   `/root/satori-push/data`, owned by uid 1000 (the image's `node`):
+
+   ```sh
+   tar -czf /tmp/push.tgz -C push push.mjs server.mjs Dockerfile
+   scp -i ~/.ssh/id_ed25519 -P 2222 /tmp/push.tgz root@157.180.104.175:/root/satori-push/
+   $S "cd /root/satori-push && mkdir -p ctx data && chown 1000:1000 data && tar -xzf push.tgz -C ctx && docker build -q -t satori-push:$SHA -t satori-push:latest ctx && docker rm -f satori-push; docker run -d --name satori-push --network central-lite_default --restart unless-stopped -v /root/satori-push/data:/data -e RPC_URL=<VITE_BASE_RPC> -e TOKEN=<token> -e ENGINE=<engine> satori-push:$SHA"
+   curl -s https://app.satorinet.io/push/key
+   ```
+
+   TOKEN and ENGINE: `src/chain/config.js` DEFAULTS.
+
 Live since 2026-10-16. The check passed then, and a real smoke test also
 passed: a fresh profile registered with central2, which accepted 83 of 83
 predictions, and the relay was open. Central2 has no history route yet, so

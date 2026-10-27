@@ -432,6 +432,7 @@ button.cell:disabled { cursor: default; }
 .side-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
 .side-row > p { flex: 1; margin: 0; }
 .side-row > button { flex: none; max-width: 8.5em; line-height: 1.25; } /* "Stake with this app" on two lines, the text beside it wide enough */
+.reminder { margin-top: 12px; } .reminder .side-row { margin: 0; } .reminder .segmented { margin: 0; flex-wrap: nowrap; } .reminder > p { margin: 6px 0 0; }
 a.ext-btn { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border: 1px solid var(--btn-line); border-radius: 999px;
   background: var(--card); color: var(--text); font-weight: 600; text-decoration: none; white-space: nowrap; }
 a.ext-btn:hover { border-color: var(--accent); color: var(--accent); }

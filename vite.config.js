@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, loadEnv } from 'vite';
+import { build, defineConfig, loadEnv } from 'vite';
 import { CSP, DEV_CSP } from './csp.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './src/config.js';
 
@@ -50,7 +50,7 @@ const serviceWorker = {
   name: 'service-worker',
   apply: 'build',
   enforce: 'post', // after the page (index.html) is in the bundle
-  generateBundle(_, bundle) {
+  async generateBundle(_, bundle) {
     const eager = new Set(); // the JS chunks the page loads: its entries and what they import statically
     const walk = (f) => { if (!eager.has(f) && bundle[f]?.type === 'chunk') { eager.add(f); bundle[f].imports.forEach(walk); } };
     Object.values(bundle).filter((c) => c.type === 'chunk' && c.isEntry).forEach((c) => walk(c.fileName));
@@ -58,8 +58,11 @@ const serviceWorker = {
     const files = ['/', '/theme.js', ...Object.keys(bundle).filter(kept).sort().map((f) => `/${f}`)];
     const theme = readFileSync(new URL('./public/theme.js', import.meta.url), 'utf8');
     const name = `satori-${createHash('sha256').update(files.join() + bundle['index.html'].source + theme).digest('hex').slice(0, 12)}`;
-    const code = readFileSync(new URL('./src/pwa/sw.js', import.meta.url), 'utf8').replace(/^export /gm, '');
-    this.emitFile({ type: 'asset', fileName: 'sw.js', source: `${code}\nstart(self, ${JSON.stringify(files)}, '${name}');\n` });
+    // bundled on its own (the daily push's wake brings the chain, the engine and the keys: src/pwa/wake.js), one classic script
+    const out = await build({ configFile: false, logLevel: 'warn', build: { write: false, minify: true, emptyOutDir: false,
+      lib: { entry: fileURLToPath(new URL('./src/pwa/sw.js', import.meta.url)), formats: ['iife'], name: 'satoriSw', fileName: () => 'sw.js' } } });
+    const code = [out].flat()[0].output[0].code;
+    this.emitFile({ type: 'asset', fileName: 'sw.js', source: `${code}\nsatoriSw.start(self, ${JSON.stringify(files)}, '${name}');\n` });
   },
 };
 
@@ -77,7 +80,7 @@ const config = {
   // DuckDB's worker and wasm are loaded by URL (?url), never pre-bundled; its
   // apache-arrow is, else the dev page loads it as ~125 separate modules.
   optimizeDeps: { exclude: ['@duckdb/duckdb-wasm'], include: ['@duckdb/duckdb-wasm > apache-arrow'] },
-  test: { include: ['src/**/*.test.js'], maxWorkers: 2 },
+  test: { include: ['src/**/*.test.js', 'push/*.test.js'], maxWorkers: 2 },
 };
 
 export default defineConfig(({ command, mode }) => {

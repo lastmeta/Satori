@@ -1,7 +1,11 @@
 // The service worker (docs/design/pwa.md). The app never imports this file:
-// in a build the `service-worker` plugin (vite.config.js) writes it out as
-// dist/sw.js, a classic script (`export` dropped), followed by a call to
-// start() with the build's files. The dev server has no service worker.
+// in a build the `service-worker` plugin (vite.config.js) bundles it, with what
+// it imports, into dist/sw.js, a classic script, followed by a call to start()
+// with the build's files. The dev server has no service worker. It also takes
+// the daily push (docs/design/push.md): src/pwa/wake.js.
+import { wake } from './wake.js';
+import { BATCH_LOCK } from './handoff.js';
+import { appGet, appPut } from '../wallets.js';
 
 /**
  * What the worker does with a request: 'asset' (a hashed build file: cache
@@ -21,6 +25,11 @@ export function start(sw, files, name) {
   sw.addEventListener('activate', (e) => e.waitUntil(caches.keys()
     .then((keys) => Promise.all(keys.filter((k) => k !== name).map((k) => caches.delete(k))))));
   sw.addEventListener('message', (e) => e.data === 'update' && sw.skipWaiting()); // the page's "Update ready, reload"
+  sw.addEventListener('push', (e) => e.waitUntil(onPush(sw)));
+  sw.addEventListener('notificationclick', (e) => {
+    e.notification.close();
+    e.waitUntil(openApp(sw, e.notification.data?.url ?? '/'));
+  });
   sw.addEventListener('fetch', (e) => {
     const r = route(e.request, sw.location.origin);
     // ignoreVary: a host's `Vary: Origin` would miss for a module script, which is sent with an Origin header.
@@ -36,4 +45,24 @@ async function precache(files, name) {
     const old = f.startsWith('/assets/') && (await caches.match(f)); // the page and /theme.js are not hashed: fetched
     await (old ? cache.put(f, old) : cache.add(new Request(f, { cache: 'no-cache' })));
   }));
+}
+
+/**
+ * The daily push: the day's batch sent if the app can't (wake), then always one notification, as browsers require. The
+ * batch lock is asked for, not waited on: held, the app is sending it now.
+ */
+async function onPush(sw) {
+  const lock = (fn) => (sw.navigator?.locks ? sw.navigator.locks.request(BATCH_LOCK, { ifAvailable: true }, (l) => (l ? fn() : null)) : fn());
+  const n = await wake({ get: appGet, put: appPut, lock });
+  await sw.registration.showNotification(n.title, { body: n.body, icon: '/icon-192.png', tag: 'satori-daily', data: { url: n.url } });
+}
+
+/** A notification's tap: the app's window to the front (at the notification's page), or a new one. */
+async function openApp(sw, url) {
+  const wins = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const win = wins.find((c) => new URL(c.url).origin === sw.location.origin);
+  if (!win) return sw.clients.openWindow(url);
+  await win.focus();
+  if (new URL(url, sw.location.origin).hash !== new URL(win.url).hash) win.postMessage({ open: url });
+  return win;
 }

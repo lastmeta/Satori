@@ -113,7 +113,8 @@ engagement (often a day or more; only on a network the device has used
 before), and runs in the service worker, which cannot start DuckDB's own
 worker (a service worker cannot create workers), so it could not open the
 database or the keys. At most it could warm caches; the 11 h poll and the
-daily batch stay with an open window.
+daily batch stay with an open window. The daily batch can also go from a push's wake
+([../design/push.md](../design/push.md)).
 
 ## What the user sees
 

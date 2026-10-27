@@ -176,9 +176,22 @@ function device(a) {
     <p class="${() => (state.storage?.persisted ? 'small muted' : 'small')}" data-test="storage">${() => storageText(state.storage)}</p>
     ${install(a)}
     <p class="small" data-test="runs-while-open">${RUNS_WHILE_OPEN}</p>
+    ${reminder(a)}
     <p class="muted small" data-test="version">Version ${() => state.version}</p>
     <div class="actions" hidden="${() => !state.app.update}"><button class="primary" data-test="update-settings" @click="${a.update}">Update ready, reload</button></div>
   </section>`;
+}
+
+/** The daily reminder (docs/design/push.md): a push once a day, when today's predictions aren't in. */
+function reminder(a) {
+  const r = () => state.reminder;
+  return html`
+  <div class="reminder" data-test="reminder">
+    <div class="side-row"><p><b>Daily reminder</b></p>
+      <div class="segmented" role="group" aria-label="Daily reminder">${[[false, 'Off'], [true, 'On']].map(([on, word]) => html`<button class="small-btn" data-test="${`reminder-${word.toLowerCase()}`}" aria-pressed="${() => String(r().on === on)}" disabled="${() => !r().supported || r().busy}" @click="${() => a.setReminder(on)}">${word}</button>`)}</div></div>
+    <p class="muted small">${() => r().note || "Once a day, if today's predictions aren't in, Satori sends them in the background and tells you, or reminds you to open it."}</p>
+    <p class="error small" data-test="reminder-error" hidden="${() => !r().error}">${() => r().error}</p>
+  </div>`;
 }
 
 /** The settings few people change, folded at the bottom; Home's action card opens it when it points inside (go()). */
