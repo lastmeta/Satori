@@ -29,8 +29,16 @@ export async function startReminder() {
   setReminder({ supported: true, note: '', on: !!sub, minute: sub ? told?.minute ?? null : null });
 }
 
-/** Another player (Stake, Unstake, Automatic or By hand): the server told, if the reminder is on and it was told another. */
-export async function followPlayer(player) {
+/**
+ * Another player (Stake, Unstake, Automatic or By hand): the server told, if the reminder is on and it was told another.
+ * One at a time: refreshes that overlap tell it once.
+ */
+let following = Promise.resolve();
+export function followPlayer(player) {
+  following = following.catch(() => {}).then(() => tellPlayer(player));
+  return following;
+}
+async function tellPlayer(player) {
   if (!supported() || !player) return;
   const told = await appGet(REMINDER);
   if (!told || told.player === player) return;
