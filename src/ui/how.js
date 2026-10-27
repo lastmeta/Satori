@@ -1,7 +1,8 @@
-// Home's "How Does This Work?" card (owner, 2026-10-26): folded like Activity; open, four pictures in the icons' line
-// style, each with the owner's sentence: the app (streams in, a phone, predictions out: the Models icon, big), the
-// network of apps listening to each other's predictions, the contract scoring them and paying, sharing the app; then
-// "What is Satori?". The pictures are static SVG, each one literal (no nested templates inside an <svg>).
+// Home's "How Does This Work?" card (owner, 2026-10-26): folded like Activity; open, "What is Satori?" first, then
+// five pictures in the icons' line style, each with the owner's sentence: the app (streams in, a phone, predictions
+// out: the Models icon, big), the network of apps listening to each other's predictions, the contract scoring them and
+// paying, sharing the app, and last what to do each day (2026-10-27: a phone, the Game's pad). The pictures are static
+// SVG, each one literal (no nested templates inside an <svg>).
 import { html } from '@arrow-js/core';
 
 /** Streams in on the left, the phone with its model, predictions out on the right (dashed, with arrowheads). */
@@ -56,11 +57,26 @@ const SHARING = () => html`<svg class="hw" viewBox="0 0 320 120" role="img" aria
   <g class="hshare"><circle cx="146" cy="64" r="8"></circle><circle cx="178" cy="42" r="8"></circle><circle cx="178" cy="86" r="8"></circle><path d="M153 60l18-14M153 68l18 14"></path></g>
 </svg>`;
 
+/** The phone (the app opened) on the left, the Game's pad (the nav's icon, big) on the right. */
+const DAILY = () => html`<svg class="hw" viewBox="0 0 320 120" role="img" aria-label="Open the app on your phone, or play the game">
+  <rect class="dev" x="48" y="14" width="44" height="92" rx="8"></rect>
+  <path d="M65 97h10"></path>
+  <path class="hnet" d="M60 42l20 10-14 16zM60 42l6 26"></path>
+  <circle class="hdot" cx="60" cy="42" r="3.5"></circle><circle class="hdot" cx="80" cy="52" r="3.5"></circle><circle class="hdot" cx="66" cy="68" r="3.5"></circle>
+  <g transform="translate(197 4) scale(4.4)">
+    <path class="dev" vector-effect="non-scaling-stroke" d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path>
+    <path vector-effect="non-scaling-stroke" d="M7.5 9.5v4M5.5 11.5h4"></path>
+    <circle class="hdot" cx="16" cy="10.6" r="0.85"></circle><circle class="hdot" cx="18" cy="12.6" r="0.85"></circle>
+  </g>
+</svg>`;
+
 export function howCard() {
   return html`
     <details class="tile how-tile" data-test="how">
       <summary>How Does This Work?</summary>
       <div class="how">
+        <h3 class="how-q">What is Satori?</h3>
+        <p class="how-a">A network of AI agents incentivized to predict the future for all humanity.</p>
         ${APP()}
         <p>This app listens to real world datastreams, makes unique models and broadcasts predictions of them.</p>
         ${NETWORK()}
@@ -69,8 +85,8 @@ export function howCard() {
         <p>The predictions get scored and you get rewarded based on how accurate those predictions are.</p>
         ${SHARING()}
         <p>Sharing this app with others grows the network and provides more rewards.</p>
-        <h3 class="how-q">What is Satori?</h3>
-        <p class="how-a">A network of AI agents incentivized to predict the future for all humanity.</p>
+        ${DAILY()}
+        <p class="how-a">Just open the app every day to predict automatically, or play the game.</p>
       </div>
     </details>`;
 }

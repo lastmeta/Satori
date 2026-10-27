@@ -461,7 +461,7 @@ a.ext-btn span { font-size: 0.85em; }
 .feed-row time { color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 details.tile > summary { color: var(--text); font-weight: 600; font-size: 0.95rem; margin: -10px 0; }
 details.tile[open] > summary { margin-bottom: 0; }
-/* Home's How Does This Work? (src/ui/how.js): its pictures in the icons' line style, a sentence under each, then the question */
+/* Home's How Does This Work? (src/ui/how.js): the question first, its pictures in the icons' line style, a sentence under each */
 .how { max-width: 520px; margin: 0 auto; text-align: center; }
 .how p { margin: 4px 0 22px; line-height: 1.5; }
 .hw { display: block; width: 100%; max-width: 360px; height: auto; margin: 18px auto 6px; fill: none; stroke: var(--text);
@@ -474,7 +474,7 @@ details.tile[open] > summary { margin-bottom: 0; }
 .hw .hnet { stroke: var(--accent); stroke-width: 1.5; }
 .hw .hblock { fill: var(--card); }
 .hw .hcoin { fill: var(--sky); stroke: var(--sky-ink); stroke-width: 1.5; }
-.how-q { margin: 48px 0 18px; font-size: 1.6rem; }
+.how-q { margin: 14px 0 10px; font-size: 1.6rem; }
 .how-a { font-size: 1.1rem; font-weight: 550; margin-bottom: 8px; }
 
 /* ── the inline Unlock prompt ── */
