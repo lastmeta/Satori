@@ -672,11 +672,13 @@ const walletOps = {
   async delegate() {
     const r = await base.delegate();
     if (r.steps.length) activity.wallet('stake', 'Staked with this app');
+    state.game = { ...state.game, loaded: 0 }; // the player changed (the alias now): the Game tab reads again
     return r;
   },
   async undelegate() {
     const r = await base.undelegate();
     if (r.steps.length) activity.wallet('unstake', 'Unstaked');
+    state.game = { ...state.game, loaded: 0 }; // the player changed (the wallet now): the Game tab reads again
     return r;
   },
   async claim() {
@@ -1281,8 +1283,9 @@ const actions = {
         state.game = { ...state.game, sending: false, sendError: errorText(err) };
       }
     };
-    // nothing to send (all already predicted), or the alias sends: no Unlock
-    return g.by === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
+    // nothing to send (all already predicted), or the alias sends: no Unlock. Who sends is the stake as it is now,
+    // not as the tab read it (a Stake since then: the alias), the same as base.playHand decides.
+    return state.base.wallet.staked === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
   },
   /** The Game tab's switch: 'manual' (play by hand: the daily batch is not sent) or 'auto' (docs/design/base.md#played-by-hand). */
   async setPlay(mode) {

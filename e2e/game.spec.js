@@ -173,3 +173,36 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   expect(s.referral[V]).toBe(REFERRER);
   expect((await page.evaluate(() => window.satori.base())).pendingReferrer).toBe(null);
 });
+
+test('by hand: Stake while the Game tab was read with the wallet playing; Send then goes from the alias, no passphrase', async ({ context, page }) => {
+  test.setTimeout(120_000);
+  const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
+  await stubCentral(context, { rpc });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page);
+  await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS);
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  const b = await page.evaluate(() => window.satori.base());
+  const [V, A] = [b.wallet.address.toLowerCase(), b.alias.address.toLowerCase()];
+  rpc.eth[V] = 10n ** 17n;
+  rpc.eth[A] = 10n ** 17n;
+  s.balance[V] = 100n * E18;
+  await page.evaluate(() => window.satori.setPlay('manual'));
+
+  // the Game tab read now: the wallet plays
+  await page.evaluate(() => window.satori.go('game'));
+  await expect(name(page)).toHaveText('satori', { timeout: 30_000 });
+  // Stake (as from the contract card), then back to the game within its 5 minutes
+  await page.evaluate((p) => window.satori.unlock(p), PASS);
+  await page.evaluate(() => window.satori.stake());
+  await page.evaluate(() => window.satori.lock());
+  await page.evaluate(() => window.satori.go('home'));
+  await page.evaluate(() => window.satori.go('game'));
+  await expect(name(page)).toHaveText('satori', { timeout: 30_000 });
+  await t(page, 'game-up').click();
+  await expect(t(page, 'game-submit-screen')).toBeVisible();
+  await t(page, 'game-send').click();
+  await expect(t(page, 'game-sent')).toContainText('1 Prediction submitted', { timeout: 30_000 });
+  await expect(page.locator('[data-unlock-for=game]')).toBeHidden();
+  expect(s.batches.at(-1)).toMatchObject({ from: A });
+});
