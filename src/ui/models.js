@@ -255,7 +255,7 @@ function drill(a) {
       </section>
       <div class="flow" aria-hidden="true"></div>
       <section class="tile stage" data-test="model-out">
-        <div class="stage-h"><b>Out</b><span>${() => { const n = v()?.outputs.length ?? 0; return n === 1 ? 'the stream it predicts, and where the forecast went' : `${n} streams it predicts, and where each forecast went`; }}</span></div>
+        <div class="stage-h"><b>Out</b></div>
         <div class="outs">${() => (v()?.outputs ?? []).map((o, i) => outBlock(o, i).key(`${state.modelRev}:${i}:${o.key}`))}</div>
       </section>
     </div>

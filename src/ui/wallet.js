@@ -81,7 +81,6 @@ export function walletTab(a) {
       <form class="unlock" @submit="${(e) => a.confirmSend(form(e), e.target)}"><input name="pass" type="password" aria-label="Wallet passphrase to send" placeholder="Wallet passphrase" autocomplete="current-password" required hidden="${() => !!state.connected}" disabled="${() => !!state.connected}"><button class="primary" type="submit" disabled="${busy}">${() => (state.baseBusy === 'send' ? BUSY.send : state.connected ? `Send in ${state.connected.name}` : 'Send')}</button><button type="button" disabled="${busy}" @click="${a.backSend}">Back</button></form>
     </div>
     ${unlockPrompt(a, 'wallet', 'use the wallet')}
-    <p class="muted small" hidden="${() => state.unlocked || !!state.connected}">Stake, Claim and Send ask for the wallet's passphrase. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).</p>
     <p class="muted small" hidden="${() => !state.unlocked}">Send asks for the wallet's passphrase each time.</p>
     <p class="muted small" data-test="base-connected" hidden="${() => !state.connected}">${() => (state.connected ? `Stake, Claim and Send ask ${state.connected.name} to approve. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).` : '')}</p>
     <p class="small" role="status" data-test="base-result" hidden="${() => !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>

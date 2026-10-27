@@ -25,7 +25,6 @@ async function setup(context) {
 
 const fact = (page, name) => page.locator(`[data-test=base-${name}]`);
 const go = (page, tab) => page.evaluate((t) => window.satori.go(t), tab);
-const ASKS = "Stake, Claim and Send ask for the wallet's passphrase. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).";
 const sent = (rpc) => rpc.sent.map((t) => t.functionName);
 /** SHOTS=1: a phone's Home into docs/screenshots (else the test's output). */
 async function phoneShot(page, name) {
@@ -57,7 +56,6 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'play')).toHaveText(CHOICE);
   await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://games.satorinet.io');
   await expect(fact(page, 'check')).toContainText('Waits until you stake');
-  await expect(page.getByText(ASKS)).toBeVisible();
 
   rpc.eth[I] = 10n ** 17n;
   rpc.eth[V] = 10n ** 17n;
@@ -198,7 +196,6 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
     .toMatchObject({ hash: expect.any(String) });
   expect(rpc.eth[to]).toBe(10n ** 16n);
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
-  await expect(page.getByText(ASKS)).toBeVisible();
   await expect(page.evaluate(() => window.satori.claim())).rejects.toThrow('Unlock the wallet first');
   // Claim while locked asks for the passphrase in place, then claims, then the wallet locks again: it was unlocked for that
   s.airdrop[V] = E18; // something to claim, so Claim shows

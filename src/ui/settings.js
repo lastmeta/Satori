@@ -53,8 +53,7 @@ function backup(a) {
   return html`
   <section class="card settings-section" id="settings-backup">
     <h2>Backup</h2>
-    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words; Import brings it back. Showing a key
-      asks for the wallet's passphrase each time.</p>
+    <p class="muted small" hidden="${() => !!state.connected}">The wallet is 24 words.</p>
     <p class="muted small" hidden="${() => !state.connected}">${() => (state.connected ? `Your wallet is backed up in ${state.connected.name}. Showing a key asks ${state.connected.name} to confirm.` : '')}</p>
     <p class="muted small" data-test="keys-note">${() => (state.keysFrom === 'random' ? "The alias and the Nostr key are random: back them up too."
       : "The alias and the Nostr key are derived from your wallet: no need to back them up, but you can see them here.")}</p>
@@ -87,7 +86,7 @@ function rewardCard(a) {
   <section class="card settings-section" id="settings-reward">
     <form class="fields reward-form" @submit="${(e) => a.saveReward(form(e), e.target)}">
       <h2>Reward address</h2>
-      <p class="muted small">Where the Satori Network sends this app's rewards. Not set, they go to your wallet. A Base address (0x…) sends them there instead, such as a pool's.</p>
+      <p class="muted small">Where the Satori Network sends this app's rewards. Not set, they go to your wallet.</p>
       <div class="id reward-now"><span class="label">Now</span><span class="reward-val"><code data-test="reward-address" title="${() => r().address ?? ''}" hidden="${() => !r().address}">${() => shortHash(r().address)}</code><span class="badge" data-test="reward-whose" hidden="${() => !r().whose}">${() => WHOSE[r().whose] ?? ''}</span><span data-test="reward-none" hidden="${() => !!r().address}">${() => rewardWhen(r())}</span>${spin('reward-reading', () => !r().reading || busy())}</span><button class="small-btn" type="button" hidden="${() => !r().address}" @click="${() => a.copy('reward-address', r().address)}">${() => (state.copied === 'reward-address' ? 'Copied' : 'Copy')}</button></div>
       <p class="error small" data-test="reward-alias" hidden="${() => r().whose !== 'alias'}">That is this app's alias: this app claims rewards only from the wallet, so rewards sent there aren't claimed here. Save another address, or Clear to send them to your wallet.</p>
       <p class="error small" role="alert" data-test="reward-read-error" hidden="${() => !r().error}">${() => r().error ?? ''} <button class="small-btn" type="button" data-test="reward-retry" disabled="${() => r().reading}" @click="${a.readReward}">Try again</button></p>
@@ -100,7 +99,6 @@ function rewardCard(a) {
         <button class="primary" type="submit" data-test="reward-save" disabled="${busy}">${() => (state.rewardBusy === 'save' ? 'Saving…' : 'Save')}</button>
         <button type="button" data-test="reward-clear" hidden="${() => !r().address}" disabled="${busy}" @click="${a.clearReward}">${() => (state.rewardBusy === 'clear' ? 'Clearing…' : 'Clear')}</button>
       </div>
-      <p class="muted small">Free: the app signs it, so it needs no passphrase and no gas. It doesn't change staking. Home notes a change for a day.</p>
     </form>
   </section>`;
 }
@@ -110,12 +108,11 @@ function centralForm(a) {
   <section class="adv" id="settings-central">
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
       <h3>Satori Network</h3>
-      <p class="muted small">Where the app gets its streams and sends its predictions. Free: sending costs nothing.</p>
+      <p class="muted small">Where the app gets its streams and sends its predictions.</p>
       <label>Satori Network server
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>
-      <p class="muted small">Now: <code data-test="central-url">${() => state.central.url}</code>. Empty: the default, ${() => state.centralDefault}.
-        Saving registers there at once, and Home notes the change for a day.</p>
+      <p class="muted small">Now: <code data-test="central-url">${() => state.central.url}</code>. Empty: the default, ${() => state.centralDefault}.</p>
       <p class="error" role="alert" hidden="${() => !state.settingsError}">${() => state.settingsError}</p>
       <div class="actions"><button class="primary" type="submit">Save</button></div>
     </form>
@@ -133,8 +130,6 @@ function relaysForm(a) {
         <textarea name="relays" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
       <label class="check"><input name="centralWrite" type="checkbox"> Publish to the Satori Network's relays</label>
-      <p class="muted small">The Satori Network's relays are always read. Unticked, they are read only: the dev server's default,
-        so a checkout never writes to the production relay. The relays above are always written to.</p>
       <p class="error" role="alert" hidden="${() => !state.relaysError}">${() => state.relaysError}</p>
       <div class="actions"><button class="primary" type="submit">Save relays</button></div>
     </form>
@@ -146,13 +141,12 @@ function baseForm(a) {
   <section class="adv" id="settings-base">
     <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
       <h3>Satori contract</h3>
-      <p class="muted small">The daily batch of predictions on Base. It uses gas, paid in Base ETH (the Wallet tab shows how much is left).</p>
+      <p class="muted small">The daily batch of predictions on Base.</p>
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>
       <p class="muted small" title="The default: the build's RPC (sepolia.base.org), then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
-        An https:// URL, or a path on this site. Empty: the default (on the dev server, the local test chain). A saved one replaces it,
-        and Home notes the change for a day.</p>
+        An https:// URL, or a path on this site. Empty: the default (on the dev server, the local test chain).</p>
       <label>Max fee (gwei)
         <input name="maxFee" inputmode="decimal" autocomplete="off" placeholder="2">
       </label>

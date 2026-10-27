@@ -247,7 +247,6 @@ export function retrainView(d, s = null) {
   return { button, ...resultWords(res) };
 }
 
-const IN_NOTE = 'Each bar: how far a typical move of that stream shifts this forecast, as a share of all of them.';
 const ALONE_NOTE = 'It reads only this stream.';
 
 /** The drill-in: In (the chosen output's inputs, ranked), the Model, Out (every output). `output`: which one's inputs. */
@@ -262,7 +261,7 @@ export function drillView(d, { now = Date.now() / 1000, explorer = null, output 
     kindLabel: d.kindLabel ?? kindLabelOf({ algorithms, inputs: d.inputs }), // always shown under the name
     quality: { mark: d.quality.mark ?? 'none', short: markText(d.quality), text: qualityText(d.quality) },
     choose: d.outputs.length > 1 ? d.outputs.map((o) => o.name) : null, output: i,
-    inputs, note: inputs.length > 1 ? IN_NOTE : ALONE_NOTE,
+    inputs, note: inputs.length > 1 ? '' : ALONE_NOTE,
     model: modelView(d, now, d.description ?? descriptionOf({ algorithms, inputs: d.inputs, outputs: d.outputs })),
     outputs: d.outputs.map((o) => outputView(o, { explorer })),
   };
