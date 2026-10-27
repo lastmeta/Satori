@@ -422,6 +422,13 @@ button.cell:disabled { cursor: default; }
 .sub { color: var(--muted); font-size: 0.8rem; }
 .wallet-tile { display: grid; gap: 10px; }
 .money { display: grid; gap: inherit; align-content: start; } /* Home: the wallet, then the claimable rewards */
+.side-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+.side-row > p { flex: 1; margin: 0; }
+.side-row > button { flex: none; max-width: 8.5em; line-height: 1.25; } /* "Stake with this app" on two lines, the text beside it wide enough */
+a.ext-btn { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border: 1px solid var(--btn-line); border-radius: 999px;
+  background: var(--card); color: var(--text); font-weight: 600; text-decoration: none; white-space: nowrap; }
+a.ext-btn:hover { border-color: var(--accent); color: var(--accent); }
+a.ext-btn span { font-size: 0.85em; }
 .balance { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 4px 0 12px; }
 .wallet-tile .line { display: flex; justify-content: space-between; gap: 12px; font-size: 0.88rem; }
 .wallet-tile .line span:first-child { color: var(--muted); }

@@ -52,7 +52,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await go(page, 'wallet');
   await expect(fact(page, 'alias')).toHaveText('0 ETH · about 0 daily batches'); // no warning before staking
   await expect(fact(page, 'staking')).toHaveText('Not staked: Stake with this app, below');
-  const CHOICE = 'Stake with this app to let it predict every round, or play Satori Daily by hand.';
+  const CHOICE = 'Stake with this app to let it predict every round, or play Satori Daily↗ by hand.'; // the link a button, ↗: a new tab
   await expect(fact(page, 'play')).toHaveText(CHOICE);
   await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://games.satorinet.io');
   await expect(fact(page, 'check')).toContainText('Waits until you stake');
@@ -83,7 +83,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
     [I, 'setPredictorFee'], [I, 'setAllowedDelegator'], [V, 'delegatePredictionPower'],
   ]);
   await expect(fact(page, 'staking')).toHaveText('Staked: 100 SATORI with this app');
-  await expect(fact(page, 'play')).toHaveText("Your SATORI is staked with this app, so it can't also play Satori Daily by hand. "
+  await expect(fact(page, 'play')).toHaveText("Your SATORI is staked with this app, so it can't also play Satori Daily↗ by hand. "
     + 'Unstake to play manually.');
   await expect(fact(page, 'lock')).toHaveText("Staked SATORI can't be sent until you unstake");
   await expect(page.getByRole('button', { name: 'Unstake' })).toBeVisible();
@@ -147,11 +147,11 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   // the zero address burns what it gets: refused before the review
   await page.getByLabel('Amount').fill('1');
   await page.getByLabel('To (0x address)').fill('0x' + '00'.repeat(20));
-  await page.getByRole('button', { name: 'Send from the wallet' }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(fact(page, 'action-error')).toHaveText('The zero address (0x000…000) burns what is sent to it: refused.');
   await expect(review).toBeHidden();
   await page.getByLabel('To (0x address)').fill(to);
-  await page.getByRole('button', { name: 'Send from the wallet' }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   // SATORI that can't be sent is said at the review, before the passphrase
   await expect(fact(page, 'action-error')).toContainText(`SATORI can be sent from Oct 18, 00:00 UTC (round ${ROUND + 3}).`);
   await expect(review).toBeHidden();
@@ -163,7 +163,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'lock')).toHaveText('Free to send');
   // Send's review: the recipient in full, the amount and the asset, the estimated fee; then the passphrase (each time,
   // unlocked or not) and Send, or Back
-  await page.getByRole('button', { name: 'Send from the wallet' }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(review).toBeVisible();
   await expect(page.locator('form.send')).toBeHidden();
   await expect(review.locator('[data-test=review-amount]')).toHaveText('1 SATORI');
@@ -173,7 +173,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await review.getByRole('button', { name: 'Back' }).click(); // back to the form, as typed
   await expect(review).toBeHidden();
   await expect(page.getByLabel('To (0x address)')).toHaveValue(to);
-  await page.getByRole('button', { name: 'Send from the wallet' }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await review.getByLabel('Wallet passphrase to send').fill('not the passphrase');
   await review.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(fact(page, 'action-error')).toHaveText('Wrong passphrase');

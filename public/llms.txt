@@ -1192,7 +1192,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   batch's gas is paid from it.", and "Private key"), who plays (this app,
   or Satori Daily by hand, linked); then "Stake with this app" or "Unstake", "Claim" (while locked each asks for the passphrase
   in place, does it, then locks the wallet again), and the send form
-  (asset, Amount, "To (0x address)", "Send from the wallet"), which opens a
+  (asset, Amount, "To (0x address)", "Send"), which opens a
   review ("Check before sending": the amount and asset, the recipient in
   full, the fee), then "Wallet passphrase to send" (each time), Send or Back.
   Then the **Wallets** card: each wallet's address (or "Not set up yet"), the

@@ -97,7 +97,7 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await page.getByLabel('Asset').selectOption('ETH');
   await page.getByLabel('Amount').fill('0.001');
   await page.getByLabel('To (0x address)').fill('0x4444444444444444444444444444444444444444');
-  await page.getByRole('button', { name: 'Send from the wallet' }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByLabel('Wallet passphrase to send', { exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Send in TestWallet' }).click();
   await expect(fact(page, 'result')).toHaveText('Sent 0.001 ETH.', { timeout: 60_000 });

@@ -61,20 +61,22 @@ export function walletTab(a) {
       ${fact('Staking', 'base-staking', () => (notStaked() ? 'Not staked: Stake with this app, below' : delegationText(b())))}
     </dl>
     <p class="error small" role="alert" data-test="base-low-gas" hidden="${() => !lowEth()}">The alias is low on Base ETH for the daily batch: ${() => gasText(b().alias)}. Preload gas, below.</p>
-    <p class="muted small" data-test="base-play" hidden="${() => !play()}">${() => play()?.[0] ?? ''}<a href="${SATORI_DAILY_URL}" target="_blank" rel="noopener">Satori Daily</a>${() => play()?.[1] ?? ''}</p>
-    <div class="actions">
+    <p class="muted small" data-test="base-play" hidden="${() => !play()}">${() => play()?.[0] ?? ''}<a class="ext-btn" data-test="base-daily" href="${SATORI_DAILY_URL}" target="_blank" rel="noopener">Satori Daily<span aria-hidden="true">↗</span></a>${() => play()?.[1] ?? ''}</p>
+    <div class="side-row">
+      <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your wallet's SATORI every round. The SATORI stays in the wallet and earns; it can't be sent while staked, or through the round after you unstake.</p>
       <button class="primary" data-test="base-stake" hidden="${staked}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseDelegate')}">${() => (state.baseBusy === 'stake' ? BUSY.stake : 'Stake with this app')}</button>
       <button data-test="base-unstake" hidden="${() => !staked()}" disabled="${busy}" @click="${() => a.walletAction('wallet', 'baseUndelegate')}">${() => (state.baseBusy === 'unstake' ? BUSY.unstake : 'Unstake')}</button>
+    </div>
+    <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().wallet.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
+    <div class="side-row">
+      <p class="muted small">Preload gas so this app can make predictions on your behalf: it sends Base ETH from your wallet to this app.</p>
       <button data-test="base-preload" disabled="${busy}" @click="${a.preloadForm}">Preload gas</button>
     </div>
-    <p class="muted small">Preload gas so this app can make predictions on your behalf: it sends Base ETH from your wallet to this app.</p>
-    <p class="muted small" data-test="base-referral-note" hidden="${() => !b().pendingReferrer || !!b().wallet.referral || staked()}">${() => referralNote(shortHash(b().pendingReferrer))}</p>
-    <p class="muted small" data-test="base-stake-note">Staking lets this app predict with your wallet's SATORI every round. The SATORI stays in the wallet and earns; it can't be sent while staked, or through the round after you unstake.</p>
     <form class="send" hidden="${() => !!state.sendReview}" @submit="${(e) => a.reviewSend(form(e), e.target)}">
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
       <input name="to" aria-label="To (0x address)" placeholder="To: 0x…" autocomplete="off" spellcheck="false" required>
-      <button type="submit" disabled="${() => busy() || state.sendQuoting}">${() => (state.sendQuoting ? 'Reading the fee…' : 'Send from the wallet')}</button>
+      <button type="submit" disabled="${() => busy() || state.sendQuoting}">${() => (state.sendQuoting ? 'Reading the fee…' : 'Send')}</button>
     </form>
     <div class="review" data-test="send-review" hidden="${() => !state.sendReview}">
       <h3>Check before sending</h3>
@@ -110,7 +112,7 @@ export function walletTab(a) {
       </div>
       <div hidden="${() => !b().inviteLink}">
         ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
-        <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you get ${REFERRAL_PCT}% of the rewards they earn, forever, in Claimable.</p>
+        <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you earn a residual ${REFERRAL_PCT}% bonus.</p>
       </div>
     </details>
   </section>
