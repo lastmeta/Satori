@@ -1543,7 +1543,7 @@ window.satori = {
     const { queue, split } = queueOf(streams, favorites);
     return { play: state.base.play, by, round, playedToday: last && last.round === round ? last : null, favorites,
       streams: queue.map((s, i) => ({ streamId: s.streamId, gameId: s.gameId, name: s.name, named: s.named, eligible: i < split,
-        alreadyPredicted: played(s), latest: latestText(s), history: s.history })),
+        alreadyPredicted: played(s), latest: latestText(s), streak: s.streak ?? null, history: s.history })),
       unavailable: streams.filter((s) => !queue.includes(s)).map((s) => ({ streamId: s.streamId, name: s.name, why: s.blocked })) };
   },
   /**

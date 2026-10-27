@@ -29,6 +29,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     },
     deadGames: {}, // gameId → error name ('' = none): a game that always reverts (a stale bridge, say)
     predicted: {}, // `${addr}:${round}` → games in the batch
+    streak: {}, // `${addr}:${gameId}` → the player's streak
+    threshold: {}, // gameId → its adaptive streak threshold (the bar: max(2, it))
     lastPred: {}, // `${addr}:${gameId}` → hour
     batches: [], // [{ from, round, hour, requests }]
     delegateOf: {}, // addr → delegate
@@ -121,6 +123,9 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         if (ctx.write && r !== zeroAddress && r !== ctx.from && !s.referral[ctx.from]) s.referral[ctx.from] = r; // setReferralFor
       },
       predictedStreamsCount: ([a, r]) => BigInt(s.predicted[`${lc(a)}:${r}`] ?? 0),
+      streaks: ([a, g]) => BigInt(s.streak[`${lc(a)}:${g}`] ?? 0),
+      curveConfig: () => [2n, 3n, 12n, 0n],
+      gameStreakState: ([g]) => [s.threshold[g] ?? 0, 0],
     }),
     [DEFAULTS.games]: fns(abi.gamesAbi, { binaryGameByStream: ([id]) => s.streams[id]?.game ?? 0 }),
     [DEFAULTS.registry]: fns(abi.registryAbi, {

@@ -26,6 +26,10 @@ export const engineAbi = abi(
   // the same, setting the sender's referral first when it has none (SatoriRewards.setReferralFor: never reverts)
   'function predictMultipleWithReferral(address referrer, Request[] requests)',
   'function predictedStreamsCount(address, uint256) view returns (uint256)',
+  // the streak and its S-curve's turning point (SatoriEngine.sol:557, 469, 80): h = max(curveConfig's f, the game's threshold)
+  'function streaks(address user, uint32 gameId) view returns (uint256)',
+  'function curveConfig() view returns (uint256 f, uint256 g, uint256 r, uint256 b)',
+  'function gameStreakState(uint32 gameId) view returns (uint16 threshold, uint40 round)',
 );
 
 export const gamesAbi = abi('function binaryGameByStream(uint32) view returns (uint32)');

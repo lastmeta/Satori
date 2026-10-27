@@ -47,6 +47,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   const V = (await page.evaluate(() => window.satori.base())).wallet.address.toLowerCase();
   rpc.eth[V] = 10n ** 17n;
   s.predicted[`${V}:${ROUND}`] = 1; // predicted this round already, not with the game (Satori Daily, say)
+  s.streak[`${V}:2`] = 3; // bitcoin: past its game's turning point (the floor, 2)
+  s.streak[`${V}:3`] = 1; // ether: short of it
 
   // automatic: the game greyed out under the switch
   await page.evaluate(() => window.satori.go('game'));
@@ -77,6 +79,16 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
 
   // the wallet on top: its balance always; something to claim: the amount and CLAIM, which claims (Unlock in place)
   await expect(t(page, 'game-balance')).toHaveText('0');
+  // the balance on the left above the star; the streak on the right above the value, green past the turning point
+  await expect(t(page, 'game-streak')).toHaveText('3');
+  await expect(t(page, 'game-streak')).toHaveAttribute('data-above', 'true');
+  {
+    const [bal, st, sk, lt] = await Promise.all(['game-balance', 'game-star', 'game-streak', 'game-latest'].map((id) => t(page, id).boundingBox()));
+    expect(bal.y + bal.height).toBeLessThanOrEqual(st.y + 1);
+    expect(Math.abs(bal.x - st.x)).toBeLessThan(16);
+    expect(sk.y + sk.height).toBeLessThanOrEqual(lt.y + 1);
+    expect(Math.abs((sk.x + sk.width) - (lt.x + lt.width))).toBeLessThan(2);
+  }
   await expect(t(page, 'game-claim-row')).toBeHidden();
   s.airdrop[V] = E18;
   await page.evaluate(() => window.satori.base()); // read again
@@ -93,6 +105,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
 
   await t(page, 'game-up').click(); // bitcoin up
   await expect(name(page)).toHaveText('ether');
+  await expect(t(page, 'game-streak')).toHaveText('1'); // ether's: short of the turning point, blue
+  await expect(t(page, 'game-streak')).toHaveAttribute('data-above', 'false');
   await t(page, 'game-star').click(); // a favorite: shown first next time
   await expect(t(page, 'game-star')).toHaveAttribute('aria-pressed', 'true');
   await swipe(page, 'left'); // skip ether

@@ -418,13 +418,17 @@ between the header and the tab bar.
   the reward-eligible ones (voting weight > 0) first, favorites as starred
   then by weight; then the ineligible ones, favorites first. Favorites are
   kept on this device per wallet (`satori-favorites-<address>`, the dapp's key).
-- **The wallet, on top**: its SATORI balance, centred, the largest text,
-  always; while something can be claimed, the amount in bold on the left and
+- **The wallet, on top**: while something can be claimed, the amount in bold on the left and
   a big green bevelled CLAIM (the size of the buttons below) on the right:
   Home's Claim (Unlock in place), then CLAIMED. The chart gives way to it.
-- **A stream**: its name with a star on the left, its latest value on the
-  right (a Sentiment stream's lean, the dapp's `leanLabel`, never the
-  counter), its line alone (no axes, grid, bars or numbers), then two big
+- **A stream**: on top, the wallet's SATORI balance on the left (above the
+  star) and the player's streak on this stream's game on the right (above
+  the value), a line under it: blue while short of the game's turning point,
+  green at or past it (2026-10-27). The turning point is the S-curve's
+  inflection, h = max(the floor f, the game's adaptive threshold)
+  (`curveConfig`, `gameStreakState`, `streaks`; SatoriEngine.sol:866): a
+  streak at or above it earns on the curve's top. Then its name with a star
+  on the left, its latest value on the right, its line alone (no axes, grid, bars or numbers), then two big
   buttons: down, red, an arrow at -45° (pointing right and down), and up,
   green, at 45°. A press picks and moves on; a swipe left skips, a swipe
   right goes back. Every move slides: the stream (name, star, value and

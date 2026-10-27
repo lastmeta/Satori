@@ -2,9 +2,12 @@
   "deploy": "D7, Base Sepolia, 2026-10-23, contract commit 59151a65 (ABIs: satori-ui/src/contracts)",
   "functions": {
     "SatoriEngine": [
+      "function curveConfig() -> (uint256,uint256,uint256,uint256) view",
+      "function gameStreakState(uint32) -> (uint16,uint40) view",
       "function predictMultipleWithPayloads((uint32,bytes)[]) -> () nonpayable",
       "function predictMultipleWithReferral(address,(uint32,bytes)[]) -> () nonpayable",
-      "function predictedStreamsCount(address,uint256) -> (uint256) view"
+      "function predictedStreamsCount(address,uint256) -> (uint256) view",
+      "function streaks(address,uint32) -> (uint256) view"
     ],
     "SatoriGames": [
       "function binaryGameByStream(uint32) -> (uint32) view"

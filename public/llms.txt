@@ -1034,7 +1034,7 @@ the page's JS context:
 - `await satori.game()` → `{ play, by, round, playedToday, favorites, streams, unavailable }`: the Game tab.
   `by`: who sends (the alias when the wallet is staked with it, else the wallet); `streams` in the game's order
   (favorites first, the reward eligible before the rest), each `{ streamId, gameId, name, named, eligible,
-  alreadyPredicted, latest, history }` (`alreadyPredicted`: played as usual, not sent); `unavailable`: those that
+  alreadyPredicted, latest, streak, history }` (`streak`: `{ streak, bar }` or null, bar the game's turning point; `alreadyPredicted`: played as usual, not sent); `unavailable`: those that
   can't be played now, and why (the contract's error).
 - `await satori.playGame([{ streamId, direction: 'up' | 'down' }])` → `{ count, hash, by, at, round }` (only on the
   person's request; `setPlay('manual')` first): one transaction, from the alias or the wallet (unlocked). Streams
@@ -1096,9 +1096,11 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   while the app plays automatically the game is greyed out under
   `play-switch` with **Play by hand** (`play-manual`); back to automatic in
   Settings › Satori contract predictions (`play-setting`, with
-  `play-setting-auto` and `play-setting-manual`). The game (`game-board`): on top `game-balance` (the wallet's SATORI) and, while
+  `play-setting-auto` and `play-setting-manual`). The game (`game-board`): on top, while
   something is claimable, `game-claim-row` with `game-claimable` and `game-claim` (CLAIM, then CLAIMED); then one stream at a
-  time, `game-name` with `game-star` (`aria-pressed`), `game-latest`,
+  time, `game-balance` (the wallet's SATORI) above the star and `game-streak` above the value (the player's
+  streak on its game; `data-above` "true" at or past the game's turning point, green; else blue), `game-name`
+  with `game-star` (`aria-pressed`), `game-latest`,
   `game-chart`, `game-down` and `game-up` (a press picks and moves on; a
   swipe left skips, right goes back), `game-submit-early` (`data-open`) with
   `game-submit`; then `game-submit-screen` with `game-daily` (Satori Daily, a new

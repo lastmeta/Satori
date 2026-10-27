@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-27 (the Game's streak)
+
+- The Game tab: `game-balance` moved above the star; `game-streak` (`data-above`) above the value. `gameState()`'s
+  streams carry `streak`: `{ streak, bar }` (bar: the game's turning point), or null.
+
 ## Changed 2026-10-27 (the Game's one Sent screen)
 
 - After Submit, the Sent screen has `game-tomorrow` and `game-dismiss` at once; `game-done` is gone.

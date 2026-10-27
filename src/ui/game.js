@@ -193,7 +193,6 @@ const claimShown = () => claimable() > 0 || (claimed() && g().claimAmount > 0);
 function wallet(a) {
   return html`
   <div class="gwallet">
-    <p class="gbalance" data-test="game-balance">${() => figure(state.base.wallet.satori)}</p>
     <div class="gclaim" data-test="game-claim-row" hidden="${() => !claimShown()}">
       <b class="gclaimable" data-test="game-claimable">${() => figure(claimed() ? g().claimAmount : claimable())}</b>
       <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="engraved">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>
@@ -214,7 +213,12 @@ function play(a) {
     ${wallet(a)}
     <div class="gstream" data-move="${() => g().move || false}">${() => {
       const s = current();
+      const k = s?.streak; // { streak, bar }: at or above the bar, the streak earns on the S-curve's top
       return s ? html`<div class="gview">
+        <div class="gtop">
+          <p class="gbalance" data-test="game-balance">${() => figure(state.base.wallet.satori)}</p>
+          <div class="gstreak" data-test="game-streak" hidden="${!k}" data-above="${String(!!k && k.streak >= k.bar)}" title="${k ? `Streak ${k.streak} on this stream: ${k.streak >= k.bar ? 'past' : 'short of'} this game's turning point (${k.bar}), where a streak starts earning at the top of the curve` : ''}" aria-label="${k ? `Streak ${k.streak}` : ''}"><b>${k ? String(k.streak) : ''}</b><i aria-hidden="true"></i></div>
+        </div>
         <div class="ghead">
           <button class="gstar" data-test="game-star" aria-pressed="${String(starred())}" aria-label="${starred() ? 'Unstar' : 'Star'}" title="Favorite: shown first" @click="${() => a.gameStar(s.streamId)}">${STAR()}</button>
           <b class="gname" data-test="game-name">${s.name}</b>

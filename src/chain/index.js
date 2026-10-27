@@ -442,6 +442,23 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return res.map((r) => (r.status === 'success' ? r.result[0] : ''));
     },
 
+    /**
+     * The player's streak on each game and that game's bar, the S-curve's turning point h = max(the floor f, its adaptive
+     * threshold) (SatoriEngine.sol:866): a streak at or above it earns on the curve's top. One multicall.
+     * → [{ streak, bar }] in the order of `gameIds`, null where unread (an engine without these views)
+     */
+    async streaks(player, gameIds) {
+      if (!gameIds.length) return [];
+      const res = await client.multicall({ allowFailure: true, contracts: [engine('curveConfig'),
+        ...gameIds.flatMap((g) => [engine('streaks', [addressOf(player), g]), engine('gameStreakState', [g])])] });
+      const floor = res[0].status === 'success' ? Number(res[0].result[0]) : null;
+      return gameIds.map((_, i) => {
+        const [s, st] = res.slice(1 + 2 * i, 3 + 2 * i);
+        if (floor == null || s.status !== 'success') return null;
+        return { streak: Number(s.result), bar: Math.max(floor, st.status === 'success' ? Number(st.result[0]) : 0) };
+      });
+    },
+
     /** One game alone, from the alias, without sending: null when it would pass, else the revert's name. RPC errors throw. */
     async simulateGame(alias, { gameId, direction }) {
       try {
