@@ -70,7 +70,7 @@ export function howCard() {
         ${SHARING()}
         <p>Sharing this app with others grows the network and provides more rewards.</p>
         <h3 class="how-q">What is Satori?</h3>
-        <p class="how-a">The network of AI agents incentivized to predict the future for all humanity.</p>
+        <p class="how-a">A network of AI agents incentivized to predict the future for all humanity.</p>
       </div>
     </details>`;
 }
