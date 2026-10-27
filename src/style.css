@@ -158,17 +158,20 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gbtn .engraved { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #2a43a6;
   text-shadow: 0 1px 0 rgb(255 255 255 / 0.16), 0 -1px 0 rgb(0 0 0 / 0.3); }
 .gwallet { flex: none; display: grid; gap: 10px; margin-bottom: 6px; }
-.gtop { display: flex; align-items: stretch; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-/* the balance and the streak, each its own card: "Balance: x", "Streak: x" */
-.gcard { position: relative; margin: 0; padding: 6px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-  font-size: 1.05rem; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; }
+.gtop { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 12px; margin-bottom: 6px; }
+/* the balance, a card on the left half: the label on the left, the value right aligned */
+.gcard { margin: 0; padding: 6px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  display: flex; justify-content: space-between; gap: 8px; font-size: 1.05rem; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; }
 .gcard span { color: var(--muted); }
 .gcard b { font-weight: 800; }
-/* the streak on this stream: blue while short of the game's turning point, green past it (the S-curve's top); a line under it */
-.gstreak { --streak: var(--streak-short); padding-bottom: 9px; }
+/* the streak on the right half: a dot per prediction in it, centred, smaller to fit; its number right aligned. Blue while
+   short of the game's turning point, green past it (the S-curve's top) */
+.gstreak { --streak: var(--streak-short); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .gstreak[data-above="true"] { --streak: var(--ok); }
-.gstreak b { color: var(--streak); }
-.gstreak i { position: absolute; left: 12px; right: 12px; bottom: 4px; height: 3px; border-radius: 2px; background: var(--streak); }
+.gstreak b { color: var(--streak); font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; }
+.gdots { container-type: inline-size; display: flex; justify-content: center; align-items: center; min-width: 0; height: 12px; }
+.gdots > span { width: min(100cqw, var(--n) * 12px); height: min(12px, 100cqw / var(--n));
+  background: radial-gradient(circle closest-side, var(--streak) 70%, transparent 76%) left center / calc(100% / var(--n)) 100% repeat-x; }
 .gclaim { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; max-width: 560px; width: 100%; margin: 0 auto; }
 .gclaimable { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
 .gbtn .plain { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.14em; color: #fff; } /* the submit screen's SUBMIT: white, as Satori Daily */

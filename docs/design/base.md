@@ -421,9 +421,11 @@ between the header and the tab bar.
 - **The wallet, on top**: while something can be claimed, the amount in bold on the left and
   a big green bevelled CLAIM (the size of the buttons below) on the right:
   Home's Claim (Unlock in place), then CLAIMED. The chart gives way to it.
-- **A stream**: on top, two cards: "Balance: x" (the wallet's SATORI) on the
-  left, above the star, and "Streak: x" (the player's streak on this stream's
-  game) on the right, above the value, a line under it: blue while short of the game's turning point,
+- **A stream**: on top, the left half a card, "Balance:" on its left and the
+  wallet's SATORI right aligned, above the star; the right half the player's
+  streak on this stream's game, above the value (no label, no card): a dot
+  per prediction in the streak, centred, smaller to fit, and its number
+  right aligned: blue while short of the game's turning point,
   green at or past it (2026-10-27). The turning point is the S-curve's
   inflection, h = max(the floor f, the game's adaptive threshold)
   (`curveConfig`, `gameStreakState`, `streaks`; SatoriEngine.sol:866): a

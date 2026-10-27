@@ -80,7 +80,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   // the wallet on top: its balance always; something to claim: the amount and CLAIM, which claims (Unlock in place)
   await expect(t(page, 'game-balance')).toHaveText('Balance: 0');
   // the balance on the left above the star; the streak on the right above the value, green past the turning point
-  await expect(t(page, 'game-streak')).toHaveText('Streak: 3');
+  await expect(t(page, 'game-streak')).toHaveText('3');
+  await expect(t(page, 'game-streak-dots')).toHaveAttribute('data-n', '3'); // a dot per prediction in the streak
   await expect(t(page, 'game-streak')).toHaveAttribute('data-above', 'true');
   {
     const [bal, st, sk, lt] = await Promise.all(['game-balance', 'game-star', 'game-streak', 'game-latest'].map((id) => t(page, id).boundingBox()));
@@ -105,7 +106,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
 
   await t(page, 'game-up').click(); // bitcoin up
   await expect(name(page)).toHaveText('ether');
-  await expect(t(page, 'game-streak')).toHaveText('Streak: 1'); // ether's: short of the turning point, blue
+  await expect(t(page, 'game-streak')).toHaveText('1'); // ether's: short of the turning point, blue
   await expect(t(page, 'game-streak')).toHaveAttribute('data-above', 'false');
   await t(page, 'game-star').click(); // a favorite: shown first next time
   await expect(t(page, 'game-star')).toHaveAttribute('aria-pressed', 'true');

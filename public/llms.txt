@@ -1099,7 +1099,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `play-setting-auto` and `play-setting-manual`). The game (`game-board`): on top, while
   something is claimable, `game-claim-row` with `game-claimable` and `game-claim` (CLAIM, then CLAIMED); then one stream at a
   time, `game-balance` (the wallet's SATORI) above the star and `game-streak` above the value (the player's
-  streak on its game; `data-above` "true" at or past the game's turning point, green; else blue), `game-name`
+  streak on its game, its number; `data-above` "true" at or past the game's turning point, green; else blue) with
+  `game-streak-dots` (`data-n`: a dot per prediction), `game-name`
   with `game-star` (`aria-pressed`), `game-latest`,
   `game-chart`, `game-down` and `game-up` (a press picks and moves on; a
   swipe left skips, right goes back), `game-submit-early` (`data-open`) with

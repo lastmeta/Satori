@@ -217,7 +217,7 @@ function play(a) {
       return s ? html`<div class="gview">
         <div class="gtop">
           <p class="gcard gbalance" data-test="game-balance"><span>Balance:</span> <b>${() => figure(state.base.wallet.satori)}</b></p>
-          <p class="gcard gstreak" data-test="game-streak" hidden="${!k}" data-above="${String(!!k && k.streak >= k.bar)}" title="${k ? `Streak ${k.streak} on this stream: ${k.streak >= k.bar ? 'past' : 'short of'} this game's turning point (${k.bar}), where a streak starts earning at the top of the curve` : ''}"><span>Streak:</span> <b>${k ? String(k.streak) : ''}</b><i aria-hidden="true"></i></p>
+          <div class="gstreak" hidden="${!k}" data-above="${String(!!k && k.streak >= k.bar)}" title="${k ? `Streak ${k.streak} on this stream: ${k.streak >= k.bar ? 'past' : 'short of'} this game's turning point (${k.bar}), where a streak starts earning at the top of the curve` : ''}"><span class="gdots" aria-hidden="true"><span data-test="game-streak-dots" data-n="${k ? String(k.streak) : '0'}" style="${`--n: ${k ? Math.max(k.streak, 1) : 1}`}" hidden="${!k?.streak}"></span></span><b data-test="game-streak" data-above="${String(!!k && k.streak >= k.bar)}" aria-label="${k ? `Streak ${k.streak}` : ''}">${k ? String(k.streak) : ''}</b></div>
         </div>
         <div class="ghead">
           <button class="gstar" data-test="game-star" aria-pressed="${String(starred())}" aria-label="${starred() ? 'Unstar' : 'Star'}" title="Favorite: shown first" @click="${() => a.gameStar(s.streamId)}">${STAR()}</button>
