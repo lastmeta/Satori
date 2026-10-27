@@ -948,7 +948,7 @@ the page's JS context:
   written to.
 - `await satori.base()` (also `status().base`, without the fresh read) → `{ rpc: ['/rpc'],
   rpcSetting, localFork, explorer, maxFeeSetting, maxFeeGwei, config: 'central' | 'bundled', error, errors, round, chainTime,
-  alias: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth, noGas },
+  alias: { address, eth, power, fee, allowedStaker, batchesLeft, lowEth, noGas, preload },
   wallet: { address, eth, satori, stakedWith, referral, staked: 'alias' | 'none' | 'other', inSync, shortfall,
   lock: { locked, indefinite, untilRound, freeAt }, lowEth }, claimable: { rewards, drop, airdrop, total },
   pendingReferrer, inviteLink,
@@ -1017,6 +1017,11 @@ the page's JS context:
   is opened for this send alone). The zero address is refused. SATORI that
   can't be sent (staked, or through the round after Unstake) throws, saying
   when it can.
+- `await satori.preloadGas({ amount?, passphrase })` → `{ hash }`, only on
+  the person's request: Preload gas, Base ETH from the wallet to this app's
+  alias (it pays the daily batch's gas), as `send()`; `amount` defaults to
+  `base().alias.preload` (a month of daily batches at the most they cost,
+  rounded up). The Wallet tab shows the alias's ETH as Preloaded.
 - `await satori.setBaseRpc(url)` → `base()` (only on the person's request):
   an https URL, a path on this site (such as `/rpc`), or `''` for the
   default. A saved URL replaces the default; a change is noted on Home for
@@ -1287,7 +1292,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `sell-price`, `sell`, `unsell`), `bought-row` (`data-key`
   `<pubkey>:<stream>`; `bought-left`, `stop`) and `market-error`. Wallet: `base-refresh`, `base-rpc`, `base-error`,
   `base-alias`, `base-wallet`, `base-staking`, `base-stake-note`,
-  `base-sync`, `base-play`, `base-lock`, `base-claimable`,
+  `base-sync`, `base-play`, `base-lock`, `base-claimable`, `base-preloaded`
+  (the alias's ETH) with `base-preloaded-days`, `base-preload` (fills the Send form),
   `base-last-batch`, `base-check`, `base-stake`, `base-unstake`,
   `base-claim`, `base-result`, `base-txs`, `base-action-error`, `base-low-gas`,
   `base-details` (a closed `<details>`; open it to click inside: `base-referral`, `base-lock`, `base-alias`,

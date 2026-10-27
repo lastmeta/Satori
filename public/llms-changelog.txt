@@ -4,9 +4,15 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-27 (Preload gas)
+
+- `preloadGas({ amount?, passphrase })`: Base ETH from the wallet to the alias; `base().alias.preload`, its default.
+  Wallet tab: `base-preloaded` (the alias's ETH), `base-preload` (fills the Send form with it).
+- `contract()` by hand: the `stake` check comes after `gas`.
+
 ## Changed 2026-10-27 (by hand: the stake check)
 
-- `contract()` by hand: a `stake` check after `satori`: 'ok' when staked with this app, else 'wait' with `fix: 'stake'`
+- `contract()` by hand: a `stake` check after `gas`: 'ok' when staked with this app, else 'wait' with `fix: 'stake'`
   (Stake with this app, `contract-stake`, on the card).
 
 ## Changed 2026-10-27 (no earlier alias)

@@ -1188,6 +1188,16 @@ const actions = {
     }
     requestAnimationFrame(() => document.querySelector('[data-test=send-review] input')?.focus());
   }),
+  /** Preload gas: the Send form filled in, Base ETH to this app's alias, a month of daily batches; the person checks and sends. */
+  preloadForm() {
+    const f = document.querySelector('form.send');
+    if (!f) return;
+    Object.assign(state, { sendReview: null, baseError: '' });
+    f.elements.asset.value = 'ETH';
+    f.elements.to.value = state.base.alias.address;
+    f.elements.amount.value = state.base.alias.preload ?? '';
+    f.elements.amount.focus();
+  },
   /** Back to the form, as it was typed. */
   backSend() { Object.assign(state, { sendReview: null, baseError: '' }); },
   /** Step two: Send, with the wallet's passphrase (asked each time, unlocked or not). */
@@ -1674,6 +1684,12 @@ window.satori = {
   async quoteSend(o) { ready(); return base.quoteSend(o); },
   /** From the wallet, with its passphrase each time: { asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5', passphrase } → { hash } */
   async send(o) { ready(); return baseAction('send', () => walletOps.send(o)); },
+  /** Preload gas: Base ETH from the wallet to this app's alias (it pays the daily batch's gas); `amount` defaults to base().alias.preload. → { hash } */
+  async preloadGas({ amount, passphrase } = {}) {
+    ready();
+    const to = state.base.alias.address;
+    return baseAction('send', () => walletOps.send({ asset: 'ETH', to, amount: amount ?? state.base.alias.preload, passphrase }));
+  },
   /** The Base RPC: an https URL, a same-origin path, or '' for the default. → base() */
   async setBaseRpc(url) { ready(); return setBaseSettings({ rpc: url }); },
   /** The unattended batch's ceiling on the max fee per gas, in gwei (null or '' = the default, 2). → base() */

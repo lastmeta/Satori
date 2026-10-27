@@ -27,6 +27,9 @@ export const CHECK_EVERY_S = 3600;
 const AFTER_ROUND_S = 60; // the check after a round starts: 00:01 UTC, chain time
 const BATCH_GAS = 1_500_000n; // a one-game batch's limit (estimate + HOOK_GAS); measured 410k–790k used on the fork
 const LOW_BATCHES = 7; // warn below a week of batches
+const PRELOAD_BATCHES = 30n; // Preload gas suggests a month of daily batches
+/** Rounded up to one significant digit: 0.000437 → 0.0005. */
+const roundUp = (wei) => { let p = 1n; while (p * 10n <= wei) p *= 10n; return ((wei + p - 1n) / p) * p; };
 /**
  * The unattended batch's ceiling on the max fee per gas (Settings). Base's fees
  * are ~0.01 gwei (Base Sepolia, 2026-10-15: base fee 0.005, tip 0.001), so 2
@@ -452,6 +455,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
         fee: s?.alias.fee ?? null, allowedStaker: s?.alias.allowedDelegator ?? null,
         batchesLeft, lowEth: batchesLeft != null && batchesLeft < LOW_BATCHES,
         noGas: lowOnGas(s?.alias.eth, gas), // under one transaction's gas: Stake says so before it tries
+        preload: gas ? formatEther(roundUp(gas * PRELOAD_BATCHES)) : null, // Preload gas's suggested amount (ETH)
       },
       wallet: {
         address: walletAddress, eth: plainAmount(s?.wallet.eth), satori: plainAmount(s?.wallet.satori),

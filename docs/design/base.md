@@ -617,6 +617,16 @@ daily batches of gas and warns below 7: a batch is counted at 1,500,000 gas
 gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 645k–790k once it also scores the previous prediction.
 
+### Preload gas (2026-10-27)
+
+The alias pays the daily batch's gas, so it needs Base ETH: the Wallet tab
+shows its balance as **Preloaded** (beside the wallet's SATORI and ETH,
+with about how many days it lasts) and a **Preload gas** button. The button
+fills the Send form, ETH to the alias, with a month of daily batches at the
+most they cost (`alias.preload`: 30 × one batch's gas at the max fee,
+rounded up to one significant digit); the person can change the amount, then
+sends as any Send (the review, the passphrase). Agents: `preloadGas()`.
+
 ## Deviations from Lite and the dapp, and why
 
 | Deviation | Why |

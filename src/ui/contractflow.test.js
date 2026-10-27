@@ -20,12 +20,12 @@ test('automatic: staked, gas, predicted today; each missing one says its fix', (
   expect(states(base({ wallet: { staked: 'other' } }))[1]).toBe('stake:bad');
 });
 
-test("by hand: staked (else Stake), the player's gas, played today (else Play)", () => {
-  expect(states(base({ play: 'manual', lastPlay: { round: 20 } }))).toEqual(['satori:ok', 'stake:ok', 'gas:ok', 'today:ok']);
-  expect(states(base({ play: 'manual' }))).toEqual(['satori:ok', 'stake:ok', 'gas:ok', 'today:wait:game']);
+test("by hand: the player's gas, staked (else Stake), played today (else Play)", () => {
+  expect(states(base({ play: 'manual', lastPlay: { round: 20 } }))).toEqual(['satori:ok', 'gas:ok', 'stake:ok', 'today:ok']);
+  expect(states(base({ play: 'manual' }))).toEqual(['satori:ok', 'gas:ok', 'stake:ok', 'today:wait:game']);
   const wallet = contractChecks(base({ play: 'manual', wallet: { staked: 'none', address: '0xW', lowEth: true } }));
-  expect(wallet[1]).toMatchObject({ id: 'stake', state: 'wait', fix: 'stake' }); // not staked: invited to, calmly
-  expect(wallet[2]).toMatchObject({ state: 'bad', fix: 'fund', address: '0xW', who: 'wallet' });
+  expect(wallet[2]).toMatchObject({ id: 'stake', state: 'wait', fix: 'stake' }); // not staked: invited to, calmly
+  expect(wallet[1]).toMatchObject({ state: 'bad', fix: 'fund', address: '0xW', who: 'wallet' });
   expect(contractChecks(base({ play: 'manual' }))[0].text).toBe('Must have at least 1 SATORI in your wallet to participate');
   expect(states(base({ play: 'manual', wallet: { staked: 'other' } })).slice(0, 2)).toEqual(['satori:bad', 'free:bad']);
   expect(contractChecks(base({ play: null }))).toEqual([]);

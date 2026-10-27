@@ -195,6 +195,19 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   expect(await page.evaluate(([t, p]) => window.satori.send({ asset: 'ETH', to: t, amount: '0.01', passphrase: p }), [to, PASS]))
     .toMatchObject({ hash: expect.any(String) });
   expect(rpc.eth[to]).toBe(10n ** 16n);
+
+  // Preload gas: the button fills the Send form (ETH to the alias, a month of batches); preloadGas() sends it.
+  const aliasAddr = await page.evaluate(() => window.satori.status().then((s) => s.alias));
+  const preload = (await page.evaluate(() => window.satori.base())).alias.preload;
+  expect(Number(preload)).toBeGreaterThan(0);
+  await page.locator('[data-test=base-preload]').click();
+  await expect(page.getByLabel('Amount')).toHaveValue(preload);
+  await expect(page.getByLabel('To (0x address)')).toHaveValue(aliasAddr);
+  const before = rpc.eth[aliasAddr.toLowerCase()] ?? 0n;
+  expect(await page.evaluate((p) => window.satori.preloadGas({ amount: '0.001', passphrase: p }), PASS)).toMatchObject({ hash: expect.any(String) });
+  expect(rpc.eth[aliasAddr.toLowerCase()]).toBe(before + 10n ** 15n);
+  await page.evaluate(() => window.satori.base());
+  await expect(fact(page, 'preloaded')).not.toHaveText('–');
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.evaluate(() => window.satori.claim())).rejects.toThrow('Unlock the wallet first');
   // Claim while locked asks for the passphrase in place, then claims, then the wallet locks again: it was unlocked for that

@@ -42,12 +42,12 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   // by hand, from the card: the wallet plays (Stake invited, calmly); its gas; Play
   await expect(t(page, 'contract-play')).toBeHidden(); // the Game button only by hand, in today's check
   await t(page, 'contract-play-manual').click();
-  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'stake:wait', 'gas:bad', 'today:wait']);
+  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'gas:bad', 'stake:wait', 'today:wait']);
   await expect(t(page, 'contract-stake')).toBeVisible(); // by hand and not staked: Stake with this app, in its check
   await expect(t(page, 'contract-fund-address')).toHaveText(wallet.address);
   rpc.eth[wallet.address.toLowerCase()] = 10n ** 17n;
   await page.evaluate(() => window.satori.base());
-  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'stake:wait', 'gas:ok', 'today:wait']);
+  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'gas:ok', 'stake:wait', 'today:wait']);
   await expect(chip(page)).toHaveAttribute('data-tone', 'off');
   await expect(t(page, 'contract-play')).toBeVisible();
 
@@ -55,7 +55,7 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   await page.evaluate((p) => window.satori.unlock(p), PASS);
   await page.evaluate(() => window.satori.playGame([{ streamId: 1, direction: 'up' }]));
   await page.evaluate(() => window.satori.base());
-  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'stake:wait', 'gas:ok', 'today:ok']);
+  await expect.poll(() => checks(page)).toEqual(['satori:bad', 'gas:ok', 'stake:wait', 'today:ok']);
   await expect(t(page, 'contract-play')).toBeHidden(); // played: no Game button
   await expect(t(page, 'contract-arrow')).toHaveAttribute('data-on', 'true');
   await expect(chip(page)).toHaveAttribute('data-tone', 'idle');
