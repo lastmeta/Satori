@@ -113,9 +113,8 @@ importing the wallet brings them back with nothing else to keep.
   words, the alias's and the Nostr key's private keys (derived: "no need to
   back them up, but you can see them here"; random: "back them up too").
 - **Earlier records** (random keys): an in-app wallet's next Unlock derives
-  its keys and replaces them, with a new link; the old ones are kept in the
-  record (`retired`) and shown under Settings › Backup, so nothing they hold is
-  lost. The wallet then shows as staked elsewhere until Stake (one
+  its keys and replaces them, with a new link; the old ones are not kept
+  (only the owner had any, and their ETH was moved by hand). The wallet then shows as staked elsewhere until Stake (one
   transaction). A connected wallet's stay random until it is connected again.
 - **Import takes the wallet only**: the alias, Nostr and Docker alias files
   are no longer asked for (the owner: no keeping old keys).

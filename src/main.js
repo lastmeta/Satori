@@ -15,7 +15,7 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage, retiredAlias,
+  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
@@ -270,7 +270,6 @@ async function startNeuron() {
   state.alias = alias.evmAddress;
   state.wallet = walletPublic.evmAddress;
   state.keysFrom = record.from ?? 'random'; // docs/design/wallets.md#derived-keys: derived keys need no backup of their own
-  state.retiredAlias = retiredAlias(record);
   if (walletPublic.connected) await findConnected();
   if (wallets && activeOf(wallets).address !== state.wallet) await keepWallets(withAddress(wallets, state.wallet)).catch(() => {});
   state.wallets = walletsView(wallets, state.wallet);

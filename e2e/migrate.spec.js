@@ -66,8 +66,8 @@ for (const p of SHAPES) {
     await pass.fill('not the passphrase');
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'Wrong passphrase' })).toBeVisible({ timeout: 30_000 });
-    // The right one: the wallet stored in this app's format, its alias and Nostr key derived from it now (the earlier
-    // ones retired, docs/design/wallets.md#derived-keys), and the app starts again with them (the page reloads, locked).
+    // The right one: the wallet stored in this app's format, its alias and Nostr key derived from it now (replacing the earlier
+    // ones, docs/design/wallets.md#derived-keys), and the app starts again with them (the page reloads, locked).
     const d = keysFromWallet(hex(p.expect.wallet));
     const newPub = publicKey(d.alias);
     await pass.fill(p.passphrase);
@@ -87,14 +87,13 @@ for (const p of SHAPES) {
         cipher: expect.objectContaining({ name: 'AES-GCM' }), data: expect.any(String) },
       link: { message: link, signature: expect.stringMatching(/^0x[0-9a-f]{130}$/) } });
 
-    // From now on it opens in the new format, with the same passphrase; the derived keys, the earlier alias kept.
+    // From now on it opens in the new format, with the same passphrase; the derived keys.
     expect(await openApp(page)).toBe('home');
     await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(newPub));
     expect(await page.evaluate((x) => window.satori.unlock(x), p.passphrase)).toBe(true);
     const b = await page.evaluate((x) => window.satori.backup(undefined, x), p.passphrase);
     expect([b.alias.words, b.wallet.words]).toEqual([wordsOf(d.alias), wordsOf(hex(p.expect.wallet))]);
     expect([b.alias.privateKey, b.nostr.secret]).toEqual([`0x${bytesToHex(d.alias)}`, d.nostr]);
-    expect((await page.evaluate((x) => window.satori.backup('retired', x), p.passphrase)).words).toBe(wordsOf(hex(p.expect.alias)));
   });
 }
 

@@ -405,7 +405,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   expect(nostrPubkey(all.nostr.secret)).toBe((await status(page)).nostr.pubkey);
   expect(await page.evaluate(() => typeof window.satori.file)).toBe('undefined');
   for (const which of ['Wallet', 'wallets', '', 'wallet.yaml']) {
-    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'alias', 'wallet', 'nostr' or 'retired'/);
+    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'alias', 'wallet' or 'nostr'/);
   }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked');

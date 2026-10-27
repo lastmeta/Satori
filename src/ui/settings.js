@@ -62,10 +62,8 @@ function backup(a) {
       <button class="small-btn" hidden="${() => !!state.connected}" @click="${() => a.askBackup('wallet')}">Wallet words</button>
       <button class="small-btn" data-test="alias-key" @click="${() => a.askBackup('alias')}">Alias key</button>
       <button class="small-btn" data-test="nostr-key" @click="${() => a.askBackup('nostr')}">Nostr key</button>
-      <button class="small-btn" data-test="retired-key" hidden="${() => !state.retiredAlias}" @click="${() => a.askBackup('retired')}">Earlier alias key</button>
     </div>
-    <p class="muted small" data-test="retired-alias" hidden="${() => !state.retiredAlias}">${() => (state.retiredAlias ? `Your earlier alias, ${shortHash(state.retiredAlias)}, was replaced by the one derived from your wallet: any Base ETH left there is yours.` : '')}</p>
-    ${backupPanel(a, ['wallet', 'alias', 'nostr', 'retired'])}
+    ${backupPanel(a, ['wallet', 'alias', 'nostr'])}
   </section>`;
 }
 

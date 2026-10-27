@@ -6,7 +6,7 @@ const store = () => {
   return { m, get: async (k) => m.get(k), put: async (k, v) => { m.set(k, v); } };
 };
 const RECORD = { v: 1, created: 1, alias: 'aa'.repeat(32), nostr: 'bb'.repeat(32), from: 'wallet', wallet: { pubkey: '02' + 'cc'.repeat(32) },
-  retired: [{ alias: 'dd'.repeat(32), nostr: 'ee'.repeat(32), at: 2 }], link: { message: 'm', signature: 's' } };
+  link: { message: 'm', signature: 's' } };
 
 describe('the keys at rest (docs/design/keys.md#at-rest)', () => {
   test("this browser's key: made once, kept, non-extractable; the same one after", async () => {
@@ -22,10 +22,8 @@ describe('the keys at rest (docs/design/keys.md#at-rest)', () => {
     const key = await deviceKey(store());
     const stored = await toRest(RECORD, key);
     expect(stored).toEqual({ v: 1, created: 1, from: 'wallet', wallet: RECORD.wallet, link: RECORD.link, sealed: { iv: expect.any(String), data: expect.any(String) } });
-    expect(JSON.stringify(stored)).not.toMatch(/aaaa|bbbb|dddd|eeee/);
+    expect(JSON.stringify(stored)).not.toMatch(/aaaa|bbbb/);
     expect(await fromRest(stored, key)).toEqual(RECORD);
-    const { retired: _r, ...noRetired } = RECORD;
-    expect(await fromRest(await toRest(noRetired, key), key)).toEqual(noRetired);
   });
 
   test("where it can't be kept or checked: null, and the record stays in hex", async () => {

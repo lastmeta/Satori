@@ -115,10 +115,9 @@ describe('the passphrase each time: Backup and Send (docs/design/keys.md#backup)
     await expect(backupKeys(r, 'wallet')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'alias', '')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'nostr', 'not it at all')).rejects.toThrow(/^Wrong passphrase$/);
-    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet', 'nostr' or 'retired'/); // the name first, before 0.3 s
+    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet' or 'nostr'/); // the name first, before 0.3 s
     expect(await backupKeys(r, 'wallet', PASS)).toEqual({ words: b.words, privateKey: `0x${b.entropyHex}` });
     expect(await backupKeys(r, 'alias', PASS)).toEqual({ words: dAlias.words, privateKey: `0x${dAlias.hex}` });
-    expect(await backupKeys(r, 'retired', PASS)).toBe(null); // derived from the start: no earlier alias
     const nostr = await backupKeys(r, 'nostr', PASS);
     expect(nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: d.nostr });
     expect(await backupKeys(r, null, PASS)).toEqual({ alias: { words: dAlias.words, privateKey: `0x${dAlias.hex}` },
@@ -190,12 +189,11 @@ describe('every earlier version\'s keys (test/fixtures/profiles.json) carried fo
 
       // The next Unlock: the wallet re-encrypted in this app's format, with the same passphrase.
       await expect(unlockWallet(record, 'not the passphrase')).rejects.toThrow(/^Wrong passphrase$/);
-      // Its alias and Nostr key derived from the wallet now, the earlier ones retired (docs/design/wallets.md#derived-keys).
+      // Its alias and Nostr key derived from the wallet now, replacing the earlier ones (docs/design/wallets.md#derived-keys).
       const first = await unlockWallet(record, p.passphrase);
       expect(first.wallet.backup().words).toBe(wordsOf(hex(p.expect.wallet)));
       const dw = keysFromWallet(hex(p.expect.wallet));
       expect(first.record).toEqual({ ...record, alias: bytesToHex(dw.alias), nostr: dw.nostr, from: 'wallet',
-        retired: [{ alias: record.alias, nostr: record.nostr, at: expect.any(Number) }],
         wallet: { pubkey: walletPub, kdf: expect.any(Object), cipher: expect.any(Object), data: expect.any(String) },
         link: { message: expect.stringContaining(`alias: ${evmAddress(publicKey(dw.alias))}\nwallet: ${evmAddress(walletPub)}`), signature: expect.any(String) } }); // its link made at this Unlock
       const again = await unlockWallet(first.record, p.passphrase);

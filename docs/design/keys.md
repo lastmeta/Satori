@@ -89,8 +89,7 @@ nothing):
 - The alias and the Nostr key are their secrets, in hex or sealed with this
   device's key ([at rest](#at-rest)); everything else about them (public
   keys, addresses) is worked out at load. `from` is where they came from
-  (`wallet`, `signature`, `random`: [wallets.md](wallets.md#derived-keys));
-  `retired` keeps the ones they replaced (`[{ alias, nostr, at }]`).
+  (`wallet`, `signature`, `random`: [wallets.md](wallets.md#derived-keys)).
 - The wallet's public key is in clear: its Base address shows while locked.
   At Unlock the decrypted secret must give the same public key.
 - A **connected** wallet (its wallet app holds it,

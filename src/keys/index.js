@@ -1,10 +1,10 @@
 // The app's keys, in its own record, meta `keys` (docs/design/keys.md, docs/design/wallets.md):
-//   { v: 1, alias: hex, nostr: hex, from, retired?, wallet: { pubkey, kdf, cipher, data }, link: { message, signature } }
+//   { v: 1, alias: hex, nostr: hex, from, wallet: { pubkey, kdf, cipher, data }, link: { message, signature } }
 // alias  — not behind the passphrase on purpose: the app signs on its own (central's login, the Base batch);
 // nostr  — the same: it signs the Nostr events on its own;
 // from   — where those two came from (docs/design/wallets.md#derived-keys): 'wallet' (derived from the wallet in the
 //          app), 'signature' (from a connected wallet's signature of keysText), 'random' (a connected wallet whose
-//          signatures differ; an earlier record, until its next Unlock); retired: the keys they replaced;
+//          signatures differ; an earlier record, until its next Unlock);
 // wallet — sealed with the passphrase (wallet.js), holds the funds; its public key in clear,
 //          so its Base address shows while locked;
 // link   — the wallet's EIP-191 signature of its link to the alias (linkMessage), sent with every register;
@@ -245,17 +245,15 @@ export async function unlockWallet(record, passphrase) {
 }
 
 /**
- * The record with the alias and the Nostr key derived from the wallet (an earlier record's random ones: retired, kept
- * in `retired`, and a new link, since the alias changed); the record itself when they already are.
+ * The record with the alias and the Nostr key derived from the wallet (an earlier record's random ones replaced, with a
+ * new link, since the alias changed); the record itself when they already are.
  */
 function withDerived(r, secret) {
   if (r.from === 'wallet') return r;
   const { alias, nostr } = derivedFrom(secret);
   try {
-    const at = Math.floor(Date.now() / 1000);
-    const retired = [...(r.retired ?? []), { alias: r.alias, nostr: r.nostr, at }];
     const { link: _old, ...rest } = r;
-    return { ...rest, alias: bytesToHex(alias), nostr, from: 'wallet', retired };
+    return { ...rest, alias: bytesToHex(alias), nostr, from: 'wallet' };
   } finally {
     alias.fill(0);
   }
@@ -284,19 +282,7 @@ export async function withPassphrase(record, passphrase, fn) {
   }
 }
 
-const BACKUP_KEYS = ['alias', 'wallet', 'nostr', 'retired'];
-
-/** The alias an earlier record used, before its keys were derived (retired at that Unlock): { words, privateKey }, or null. */
-const retiredOf = (r) => {
-  const old = r.retired?.at(-1);
-  return old ? { words: wordsOf(hexToBytes(old.alias)), privateKey: privateKeyHex(hexToBytes(old.alias)) } : null;
-};
-
-/** The address of the alias an earlier record used (its Base ETH may still be there), or null. */
-export const retiredAlias = (record) => {
-  const old = record?.retired?.at(-1);
-  return old ? evmAddress(publicKey(hexToBytes(old.alias))) : null;
-};
+const BACKUP_KEYS = ['alias', 'wallet', 'nostr'];
 
 /**
  * Backup, from the passphrase each time: 'alias' | 'wallet' → { words, privateKey }; 'nostr' → { nsec, secret };
@@ -305,12 +291,11 @@ export const retiredAlias = (record) => {
  */
 export async function backupKeys(record, which, passphrase) {
   if (which != null && !BACKUP_KEYS.includes(which)) {
-    throw new Error("Name the key: 'alias', 'wallet', 'nostr' or 'retired' (or nothing, for the first three).");
+    throw new Error("Name the key: 'alias', 'wallet' or 'nostr' (or nothing, for all three).");
   }
   return withPassphrase(record, passphrase, (wallet) => {
     const { alias, nostr } = loadKeys(record);
     try {
-      if (which === 'retired') return retiredOf(record);
       const all = { alias: alias.backup(), wallet: wallet.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };
       return which == null ? all : all[which];
     } finally {
@@ -328,7 +313,6 @@ export function connectedBackup(record, which) {
   if (r.wallet.kind !== 'connected') throw new Error('Not a connected wallet.');
   if (which === 'wallet') throw new Error(`This wallet's words are in ${r.wallet.name}: back it up there.`);
   if (which != null && !BACKUP_KEYS.includes(which)) throw new Error("Name the key: 'alias' or 'nostr' (or nothing, for both).");
-  if (which === 'retired') return retiredOf(r);
   const { alias, nostr } = loadKeys(r);
   try {
     const all = { alias: alias.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };

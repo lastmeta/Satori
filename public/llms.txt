@@ -183,7 +183,7 @@ Every method is below; `await satori.status()` shows everything at once.
   keeps one, else in hex (docs/design/keys.md#at-rest). A Docker install's wallet file is imported
   (read and translated), never written. An earlier version's stored keys
   are carried forward; at the wallet's next Unlock its alias and Nostr key
-  are derived and replace the earlier ones (kept as `retired`), and the page
+  are derived and replace the earlier ones, and the page
   reloads with them.
 - Central (the Satori Network): `https://network.satorinet.io` in a build
   unless the build sets another (`VITE_CENTRAL_URL`; app.satorinet.io
@@ -816,8 +816,7 @@ the page's JS context:
   first Unlock (same passphrase). On the `finish` screen it also starts the
   neuron. The wallet locks on its own 5 minutes after the last interaction
   (`status().lockAt`; a wallet call counts), never in the middle of an action.
-- `await satori.backup('alias' | 'wallet' | 'retired', passphrase)` (only on the person's request; 'retired': the
-  alias an earlier record used, null when none) → `{ words,
+- `await satori.backup('alias' | 'wallet', passphrase)` (only on the person's request) → `{ words,
   privateKey }` (the 24 words; `privateKey` is `0x` and 64 hex, what a Base
   wallet's "Import account" takes: the words follow satorilib's scheme, so a
   standard wallet derives another account from them);
@@ -1300,8 +1299,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   set up); `connect-wallet` (Connect a wallet), then `connect-step` with
   `connect-to` (one per wallet found, `data-rdns`) or `no-wallet`. Settings:
   `wallet-connected` (a connected wallet's note).
-  Settings: `wallet` (the Base address), `wallet-state`, Backup's `alias-key`, `nostr-key`, `retired-key`
-  (an earlier alias's, `retired-alias`), `keys-note` (derived, or random),
+  Settings: `wallet` (the Base address), `wallet-state`, Backup's `alias-key`, `nostr-key`, `keys-note` (derived, or random),
   `nostr-pubkey`, `unlock`, `lock-wallet`, `backup-prompt`, `backup-key` (a
   private key, or the nsec), `backup-hex`, `reward-address` (the address
   shortened; `title` the whole one), `reward-whose` ("your wallet", "your
