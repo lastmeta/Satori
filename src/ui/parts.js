@@ -43,7 +43,7 @@ export function backupPanel(a, keys, test = 'backup', label = 'Wallet passphrase
   const mine = (k) => keys.includes(k);
   return html`<form class="inline-unlock" data-test="${`${test}-prompt`}" hidden="${() => !mine(state.backupAsk)}" @submit="${(e) => a.showBackup(form(e), e.target)}"><input name="pass" type="password" aria-label="${label}" placeholder="Wallet passphrase" autocomplete="current-password" required hidden="${() => !!state.connected}" disabled="${() => !!state.connected}"><button class="primary" type="submit" disabled="${() => state.revealing}">${() => (state.revealing ? 'Checking…' : state.connected ? `Confirm in ${state.connected.name}` : 'Show')}</button><button type="button" @click="${a.cancelBackup}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.backupError}">${() => state.backupError}</p></form>
     <div class="backup" hidden="${() => !mine(state.backup)}">
-      <div hidden="${() => state.backup === 'nostr'}">
+      <div hidden="${() => state.backup === 'nostr' || state.backup === 'retired'}">
         <h3>${() => (state.backup === 'alias' ? 'Alias' : 'Wallet')} words</h3>
         ${wordList(() => state.backupWords.split(' ').filter(Boolean))}
         <div class="label">Private key (imports into a Base wallet)</div>
@@ -51,6 +51,10 @@ export function backupPanel(a, keys, test = 'backup', label = 'Wallet passphrase
       <div hidden="${() => state.backup !== 'nostr'}">
         <h3>Nostr key</h3>
         <div class="label">nsec</div>
+      </div>
+      <div hidden="${() => state.backup !== 'retired'}">
+        <h3>Earlier keys</h3>
+        <p class="muted small">Keys this wallet's app used before. Anything sent to an earlier alias is still there: import its private key into a Base wallet to move it.</p>
       </div>
       <code class="block" data-test="${`${test}-key`}">${() => state.backupKey}</code>
       <div hidden="${() => !state.backupHex}">

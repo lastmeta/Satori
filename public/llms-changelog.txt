@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (earlier keys)
+
+- Keys are never dropped: an alias or Nostr key the app replaces is kept, and `backup('retired', passphrase)` (Settings ›
+  Backup › Earlier keys) shows each one's address and private key. `backup(undefined, …)` adds `retired`; the encrypted
+  backup file carries them and `setup({ backup })` brings them back.
+
 ## Changed 2026-10-28 (sending all the ETH)
 
 - `quoteSend()` of all the wallet's ETH gives `amount` = the balance less the max fee, with `lessFee: true` (the review

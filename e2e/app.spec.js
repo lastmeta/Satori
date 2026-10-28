@@ -399,13 +399,15 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   await expect(page.evaluate(() => window.satori.backup('wallet'))).rejects.toThrow(/passphrase is needed/); // unlocked: still asked
   expect(await page.evaluate(() => window.satori.backup('wallet', 'pass phrase'))).toEqual({ words: v.words, privateKey: `0x${v.entropyHex}` });
   const all = await page.evaluate(() => window.satori.backup(undefined, 'pass phrase'));
-  expect(Object.keys(all)).toEqual(['alias', 'wallet', 'nostr']);
+  expect(Object.keys(all)).toEqual(['alias', 'wallet', 'nostr', 'retired']);
+  expect(all.retired).toEqual([]); // a new wallet's: no earlier keys (Settings › Backup › Earlier keys hidden)
+  await expect(page.locator('[data-test=retired-keys]')).toBeHidden();
   expect(evmAddress(publicKey(hex(all.alias.privateKey.slice(2))))).toBe(s0.alias);
   expect(all.nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: expect.stringMatching(/^[0-9a-f]{64}$/) });
   expect(nostrPubkey(all.nostr.secret)).toBe((await status(page)).nostr.pubkey);
   expect(await page.evaluate(() => typeof window.satori.file)).toBe('undefined');
   for (const which of ['Wallet', 'wallets', '', 'wallet.yaml']) {
-    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'alias', 'wallet' or 'nostr'/);
+    await expect(page.evaluate((w) => window.satori.backup(w, 'pass phrase'), which)).rejects.toThrow(/'alias', 'wallet', 'nostr' or 'retired'/);
   }
   await page.evaluate(() => window.satori.lock());
   await expect(page.locator('[data-test=wallet-state]')).toHaveText('Locked');

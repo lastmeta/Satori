@@ -826,8 +826,11 @@ the page's JS context:
   privateKey }` (the 24 words; `privateKey` is `0x` and 64 hex, what a Base
   wallet's "Import account" takes: the words follow satorilib's scheme, so a
   standard wallet derives another account from them);
-  `backup('nostr', passphrase)` → `{ nsec, secret }`; `backup(undefined,
-  passphrase)` → `{ alias, wallet, nostr }`. The passphrase each time,
+  `backup('nostr', passphrase)` → `{ nsec, secret }`; `backup('retired',
+  passphrase)` → `[{ address, privateKey, npub, nsec, at }]`, the earlier
+  aliases and Nostr keys the app keeps (never dropped; Settings › Backup ›
+  Earlier keys), newest first; `backup(undefined,
+  passphrase)` → `{ alias, wallet, nostr, retired }`. The passphrase each time,
   unlocked or not (~0.3 s); any other name throws, before the passphrase is
   checked. The alias and the Nostr key need it too, although they are
   stored unencrypted: they are private keys. Show them to the person; don't

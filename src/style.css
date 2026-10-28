@@ -511,6 +511,7 @@ details.tile[open] > summary { margin-bottom: 0; }
 .backup-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .backup { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .backup .label { margin-top: 12px; }
+.backup code.block { white-space: pre-wrap; overflow-wrap: anywhere; }
 .settings-section h2 { margin-bottom: 4px; }
 .segmented { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 8px; }
 .segmented button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }

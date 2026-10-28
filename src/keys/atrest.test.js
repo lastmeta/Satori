@@ -24,6 +24,10 @@ describe('the keys at rest (docs/design/keys.md#at-rest)', () => {
     expect(stored).toEqual({ v: 1, created: 1, from: 'wallet', wallet: RECORD.wallet, link: RECORD.link, sealed: { iv: expect.any(String), data: expect.any(String) } });
     expect(JSON.stringify(stored)).not.toMatch(/aaaa|bbbb/);
     expect(await fromRest(stored, key)).toEqual(RECORD);
+    const withEarlier = { ...RECORD, retired: [{ alias: 'dd'.repeat(32), nostr: 'ee'.repeat(32), at: 5 }] }; // sealed too
+    const kept = await toRest(withEarlier, key);
+    expect(JSON.stringify(kept)).not.toMatch(/dddd|eeee/);
+    expect(await fromRest(kept, key)).toEqual(withEarlier);
   });
 
   test("where it can't be kept or checked: null, and the record stays in hex", async () => {

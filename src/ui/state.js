@@ -23,6 +23,7 @@ export const state = reactive({
   passNote: '', // the passphrase step's note (an import whose password can't be reused)
   // the keys
   alias: '', // the alias's Base address
+  retiredKeys: 0, // the earlier aliases and Nostr keys the record keeps (keepRetired): Backup's "Earlier keys"
   keysFrom: '', // where the alias and the Nostr key came from: 'wallet' | 'signature' (derived) | 'random' (docs/design/wallets.md#derived-keys)
   wallet: '', // the wallet's Base address (shown while locked)
   connected: null, // a connected wallet (docs/design/wallets.md#a-connected-wallet): { name, found }, else null
@@ -40,7 +41,7 @@ export const state = reactive({
   backupAsk: '', // the key whose backup asks for the passphrase (each time): '' | 'alias' | 'wallet' | 'nostr'
   backupError: '',
   revealing: false, // a backup's passphrase is being checked (~0.3 s)
-  backup: '', // '' | 'alias' | 'wallet' | 'nostr': which key's backup is shown
+  backup: '', // '' | 'alias' | 'wallet' | 'nostr' | 'retired': which key's backup is shown
   backupWords: '', // alias, wallet: the 24 words
   backupKey: '', // alias, wallet: the private key (0x hex); nostr: the nsec
   backupHex: '', // nostr: the secret (hex)

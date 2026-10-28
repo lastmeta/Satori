@@ -3,7 +3,7 @@
 // one; else as before, in hex. Only the stored record changes: the keys module works on the plain one.
 //
 //   const key = await deviceKey({ get, put })        // the CryptoKey, or null: this browser can't keep one (checked)
-//   const stored = await toRest(record, key)          // to store: { ...record, sealed } in place of alias and nostr
+//   const stored = await toRest(record, key)          // to store: { ...record, sealed } in place of alias, nostr, retired
 //   const record = await fromRest(stored, key)        // as read: the plain record again
 import { base64 } from '@scure/base';
 
@@ -42,8 +42,8 @@ export async function deviceKey({ get, put }) {
 /** The record to store: its alias and Nostr key sealed with `key`; with no key, the record in hex. */
 export async function toRest(record, key) {
   if (!key) return record;
-  const { alias, nostr, ...rest } = record;
-  const plain = new TextEncoder().encode(JSON.stringify({ alias, nostr }));
+  const { alias, nostr, retired, ...rest } = record;
+  const plain = new TextEncoder().encode(JSON.stringify({ alias, nostr, ...(retired && { retired }) }));
   try {
     return { ...rest, sealed: await seal(key, plain) };
   } finally {
@@ -63,8 +63,8 @@ export async function fromRest(stored, key) {
     throw new Error(KEY_GONE);
   }
   try {
-    const { alias, nostr } = JSON.parse(new TextDecoder().decode(plain));
-    return { ...rest, alias, nostr };
+    const { alias, nostr, retired } = JSON.parse(new TextDecoder().decode(plain));
+    return { ...rest, alias, nostr, ...(retired && { retired }) };
   } finally {
     plain.fill(0);
   }

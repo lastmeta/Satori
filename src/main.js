@@ -15,7 +15,7 @@ import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
 import {
   generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
+  withPassphrase, backupKeys, keepRetired, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
@@ -453,11 +453,14 @@ let restKeyOf;
 const restKey = () => (restKeyOf ??= deviceKey({ get: appGet, put: appPut }));
 
 /** The keys record, stored in one commit (each commit is checkpointed: docs/design/storage.md); critical work. */
-const storeKeys = (r) => work.run('keys', async (step) => {
+/** The one place keys are written: any key the stored record held is kept (keepRetired), whatever replaces it. */
+const storeKeys = (next) => work.run('keys', async (step) => {
   step('save');
+  const r = keepRetired(record, next);
   await db.set('keys', await toRest(r, await restKey())); // the alias and the Nostr key sealed where this browser keeps a key
   await db.checkpoint();
   record = r;
+  state.retiredKeys = r.retired?.length ?? 0;
 });
 
 /**
@@ -545,6 +548,9 @@ const removeWallet = (id) => exclusive('wallets', async () => {
   await keepWallets(list);
   state.walletRemove = 0;
 });
+
+/** Backup's "Earlier keys" (keepRetired), as text: each earlier alias's address and private key, its Nostr key. */
+const retiredText = (list) => list.map((k) => `Alias ${k.address}\nPrivate key ${k.privateKey}\nNostr ${k.npub}\nnsec ${k.nsec}`).join('\n\n');
 
 /** The wallet's backup is confirmed (meta.backup_at): Home stops asking for it while storage is not kept. */
 async function markBackup() {
@@ -1079,7 +1085,8 @@ const actions = {
     try {
       const b = await backupOf(which, f.pass);
       el.reset();
-      Object.assign(state, { backupAsk: '', backup: which, backupWords: b.words ?? '', backupKey: b.privateKey ?? b.nsec, backupHex: b.secret ?? '' });
+      const key = which === 'retired' ? retiredText(b) : b.privateKey ?? b.nsec;
+      Object.assign(state, { backupAsk: '', backup: which, backupWords: b.words ?? '', backupKey: key, backupHex: b.secret ?? '' });
       if (autoLock.lockAt == null) autoLock.start();
       else autoLock.touch();
     } finally {
@@ -1444,16 +1451,18 @@ window.satori = {
   async setAside() { await setAsideDb(); return window.satori.status(); },
   /** Create a wallet (a new one unless its words or private key are given; its alias and Nostr key derived). Stays locked. */
   async setup({ passphrase, walletWords, backup } = {}) {
+    let retired = [];
     if (backup) { // exportBackup()'s file, opened with its passphrase
       const b = await openBackup(backup, passphrase);
       if (!b.walletWords) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()).");
-      ({ walletWords } = b);
+      ({ walletWords, retired } = b);
     }
     await setup(async () => {
       const keys = {};
       try {
         keys.wallet = walletWords ? secretFromText(walletWords) : generateSecret();
-        return await newKeys(keys, passphrase);
+        const r = await newKeys(keys, passphrase);
+        return retired.length ? keepRetired(null, { ...r, retired }) : r; // its earlier keys come back with it
       } finally {
         keys.wallet?.fill(0);
       }
@@ -1965,6 +1974,7 @@ async function boot() {
     const stored = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
     record = await fromRest(stored, await restKey());
     if (!record) return void Object.assign(state, { screen: 'setup', cached: null });
+    state.retiredKeys = record.retired?.length ?? 0;
     if (!stored.sealed && await restKey()) await storeKeys(record); // in hex until now: sealed from now on
     // an earlier version's wallet whose public key was not in clear: the neuron needs it (register, the Base address)
     const w = loadKeys(record).wallet;

@@ -333,6 +333,9 @@ unencrypted, but they are private keys). It shows:
   Base wallet (the words don't, [above](#one-key-one-secret)).
 - **Nostr key**: its `nsec` (NIP-19) and its hex secret. It is random, so the
   words don't bring it back; Import takes either form.
+- **Earlier keys** (only when the record has some,
+  [wallets.md](wallets.md#keys-are-never-lost)): each earlier alias's address
+  and private key, and its Nostr key's npub and nsec.
 
 No files are downloaded: Docker's formats are not written any more.
 `window.satori.backup(undefined, passphrase)` gives all three,

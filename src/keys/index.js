@@ -9,6 +9,8 @@
 //          so its Base address shows while locked;
 // link   — the wallet's EIP-191 signature of its link to the alias (linkMessage), sent with every register;
 //          made whenever the wallet is in hand (newKeys, an Unlock without one).
+// retired — the alias and Nostr keys this record held before, never dropped (keepRetired): [{ alias, nostr, at }].
+//          Funds sent to an earlier alias stay reachable (Backup's "Earlier keys").
 // An earlier version's wallet, until its next Unlock: wallet: { pubkey | null, yaml } (Docker's text).
 //
 //   const record = await newKeys({ wallet }, passphrase)   // create, restore, import: the alias and Nostr key derived
@@ -29,7 +31,7 @@ import { checkKey, generateSecret, publicKey, wordsOf, evmAddress, signDigest, p
 import { sealSecret, openSecret, checkNewPassphrase } from './wallet.js';
 import { readKeyFile, readNostrYaml, secrecy, walletPubkey } from './docker.js';
 import { loginSignature } from '../central/login.js';
-import { generateNostrSecret, nostrPubkey, nsec } from '../nostr/event.js';
+import { generateNostrSecret, nostrPubkey, nsec, npub, nostrSecretOf } from '../nostr/event.js';
 import { keysFromWallet, keysFromSignature, keysText } from './derive.js';
 
 export const RECORD_VERSION = 1;
@@ -191,7 +193,28 @@ function checkRecord(r) {
   const connected = v.kind === 'connected' && ADDRESS.test(v.address ?? '') && typeof v.rdns === 'string';
   if (!sealed && !legacy && !connected) throw new Error('The stored wallet is not readable.');
   if (r.link != null && !(typeof r.link.message === 'string' && typeof r.link.signature === 'string')) throw new Error('The stored link is not readable.');
+  if (r.retired != null && !(Array.isArray(r.retired) && r.retired.every((k) => HEX64.test(k?.alias) && HEX64.test(k?.nostr)))) {
+    throw new Error('The stored earlier keys are not readable.');
+  }
   return r;
+}
+
+/**
+ * The record to store in place of `old`: any alias or Nostr key `old` held that `next` doesn't is kept in `retired`
+ * (the owner, 2026-10-28: an upgrade dropped an alias that held ETH). Keys are only ever added, never lost.
+ */
+export function keepRetired(old, next, now = Math.floor(Date.now() / 1000)) {
+  const held = (r) => (r ? [{ alias: r.alias, nostr: r.nostr }, ...(r.retired ?? [])] : []);
+  const current = new Set([next.alias, next.nostr]);
+  const seen = new Set();
+  const retired = [...(next.retired ?? []), ...held(old)].filter((k) => {
+    const id = `${k.alias}:${k.nostr}`;
+    if (!k.alias || seen.has(id) || (current.has(k.alias) && current.has(k.nostr))) return false;
+    seen.add(id);
+    return true;
+  }).map((k) => ({ alias: k.alias, nostr: k.nostr, at: k.at ?? now }));
+  if (JSON.stringify(retired) === JSON.stringify(next.retired ?? [])) return next; // nothing more to keep
+  return { ...next, retired };
 }
 
 /** The record's keys: the alias's signer, the Nostr key, the wallet's public key and Base address (null until an old wallet's Unlock). */
@@ -282,7 +305,20 @@ export async function withPassphrase(record, passphrase, fn) {
   }
 }
 
-const BACKUP_KEYS = ['alias', 'wallet', 'nostr'];
+const BACKUP_KEYS = ['alias', 'wallet', 'nostr', 'retired'];
+
+/** The record's earlier keys (keepRetired), newest first: [{ address, privateKey, npub, nsec, at }]. */
+function retiredBackup(r) {
+  return [...(r.retired ?? [])].reverse().map((k) => {
+    const alias = signer(checkKey(hexToBytes(k.alias)));
+    const nostr = nostrOf(k.nostr);
+    try {
+      return { address: alias.evmAddress, privateKey: alias.backup().privateKey, npub: npub(nostr.pubkey), nsec: nsec(nostr.secret), at: k.at ?? null };
+    } finally {
+      alias.lock();
+    }
+  });
+}
 
 /**
  * Backup, from the passphrase each time: 'alias' | 'wallet' → { words, privateKey }; 'nostr' → { nsec, secret };
@@ -291,12 +327,13 @@ const BACKUP_KEYS = ['alias', 'wallet', 'nostr'];
  */
 export async function backupKeys(record, which, passphrase) {
   if (which != null && !BACKUP_KEYS.includes(which)) {
-    throw new Error("Name the key: 'alias', 'wallet' or 'nostr' (or nothing, for all three).");
+    throw new Error("Name the key: 'alias', 'wallet', 'nostr' or 'retired' (or nothing, for all of them).");
   }
   return withPassphrase(record, passphrase, (wallet) => {
     const { alias, nostr } = loadKeys(record);
     try {
-      const all = { alias: alias.backup(), wallet: wallet.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };
+      const all = { alias: alias.backup(), wallet: wallet.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret },
+        retired: retiredBackup(record) };
       return which == null ? all : all[which];
     } finally {
       alias.lock();
@@ -312,10 +349,10 @@ export function connectedBackup(record, which) {
   const r = checkRecord(record);
   if (r.wallet.kind !== 'connected') throw new Error('Not a connected wallet.');
   if (which === 'wallet') throw new Error(`This wallet's words are in ${r.wallet.name}: back it up there.`);
-  if (which != null && !BACKUP_KEYS.includes(which)) throw new Error("Name the key: 'alias' or 'nostr' (or nothing, for both).");
+  if (which != null && !BACKUP_KEYS.includes(which)) throw new Error("Name the key: 'alias', 'nostr' or 'retired' (or nothing, for all of them).");
   const { alias, nostr } = loadKeys(r);
   try {
-    const all = { alias: alias.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret } };
+    const all = { alias: alias.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret }, retired: retiredBackup(r) };
     return which == null ? all : all[which];
   } finally {
     alias.lock();
@@ -334,12 +371,19 @@ export const BACKUP_FILE = 'satori-backup';
  */
 export async function sealBackup({ address, keys, passphrase, at = new Date().toISOString() }) {
   checkNewPassphrase(passphrase);
-  const plain = new TextEncoder().encode(JSON.stringify({ wallet: keys.wallet?.words ?? null, alias: keys.alias.words, nostr: keys.nostr.nsec }));
+  const plain = new TextEncoder().encode(JSON.stringify({ wallet: keys.wallet?.words ?? null, alias: keys.alias.words, nostr: keys.nostr.nsec,
+    retired: (keys.retired ?? []).map((k) => ({ alias: k.privateKey, nostr: k.nsec, at: k.at })) }));
   try {
     return { kind: BACKUP_FILE, v: 1, address, at, sealed: await sealSecret(plain, passphrase) };
   } finally {
     plain.fill(0);
   }
+}
+
+/** A backup file's earlier keys as the record keeps them: [{ alias: hex, nostr: hex, at }]. */
+function retiredFromBackup(list) {
+  return (Array.isArray(list) ? list : []).map((k) => ({ alias: String(k.alias).replace(/^0x/, '').toLowerCase(),
+    nostr: nostrSecretOf(k.nostr), at: k.at ?? null })).filter((k) => HEX64.test(k.alias) && HEX64.test(k.nostr));
 }
 
 /** A backup file opened with its passphrase: { walletWords (null: a connected wallet's), aliasWords, nostrKey, address }. */
@@ -349,7 +393,7 @@ export async function openBackup(backup, passphrase) {
   const plain = await openSecret(b.sealed, passphrase);
   try {
     const k = JSON.parse(new TextDecoder().decode(plain));
-    return { walletWords: k.wallet, aliasWords: k.alias, nostrKey: k.nostr, address: b.address };
+    return { walletWords: k.wallet, aliasWords: k.alias, nostrKey: k.nostr, address: b.address, retired: retiredFromBackup(k.retired) };
   } finally {
     plain.fill(0);
   }

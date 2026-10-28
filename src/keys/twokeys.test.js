@@ -6,7 +6,7 @@ import { recoverMessageAddress } from 'viem';
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockWallet, publicKey, wordsOf, evmAddress, withPassphrase, backupKeys, IMPORT_MAX,
+  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockWallet, publicKey, wordsOf, evmAddress, withPassphrase, backupKeys, IMPORT_MAX, keepRetired,
   PASSPHRASE_NEEDED,
 } from './index.js';
 import { verifyMessage } from 'viem';
@@ -115,13 +115,13 @@ describe('the passphrase each time: Backup and Send (docs/design/keys.md#backup)
     await expect(backupKeys(r, 'wallet')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'alias', '')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'nostr', 'not it at all')).rejects.toThrow(/^Wrong passphrase$/);
-    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet' or 'nostr'/); // the name first, before 0.3 s
+    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet', 'nostr' or 'retired'/); // the name first, before 0.3 s
     expect(await backupKeys(r, 'wallet', PASS)).toEqual({ words: b.words, privateKey: `0x${b.entropyHex}` });
     expect(await backupKeys(r, 'alias', PASS)).toEqual({ words: dAlias.words, privateKey: `0x${dAlias.hex}` });
     const nostr = await backupKeys(r, 'nostr', PASS);
     expect(nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: d.nostr });
     expect(await backupKeys(r, null, PASS)).toEqual({ alias: { words: dAlias.words, privateKey: `0x${dAlias.hex}` },
-      wallet: { words: b.words, privateKey: `0x${b.entropyHex}` }, nostr });
+      wallet: { words: b.words, privateKey: `0x${b.entropyHex}` }, nostr, retired: [] });
     expect(await backupKeys(r, undefined, PASS)).toHaveProperty('wallet');
   });
 });
@@ -199,6 +199,12 @@ describe('every earlier version\'s keys (test/fixtures/profiles.json) carried fo
       const again = await unlockWallet(first.record, p.passphrase);
       expect(again.record).toBe(null);
       expect(again.wallet.pubkey).toBe(walletPub);
+      // The replaced alias and Nostr key are kept, never dropped (the owner, 2026-10-28: ETH sent to one was stranded).
+      const kept = keepRetired(record, first.record, 7);
+      expect(kept.retired).toEqual([{ alias: record.alias, nostr: record.nostr, at: 7 }]);
+      expect(keepRetired(kept, kept)).toBe(kept); // the same keys again: nothing more retired
+      const [earlier] = await backupKeys(kept, 'retired', p.passphrase);
+      expect(earlier).toMatchObject({ address: evmAddress(publicKey(hex(p.expect.alias))), privateKey: `0x${record.alias}`, at: 7 });
     });
   }
   test('a plain-text wallet an early import kept is encrypted at its next Unlock, with a passphrase that meets the rule', async () => {
