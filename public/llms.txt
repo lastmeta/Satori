@@ -1013,8 +1013,11 @@ the page's JS context:
 - `await satori.quoteSend({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`
   → `{ asset, to, amount, fee: { gas, about, max } }`: the review before a
   send, no key needed (`to` checksummed; the fee in ETH, `about` at the
-  latest base fee + the tip, `max` at the gas limit and the max fee). It
-  throws what the send would: a bad asset, address or amount, the zero
+  latest base fee + the tip, `max` at the gas limit and the max fee). ETH
+  that fits the balance but not with `max` (all of it): `amount` is the
+  balance less `max`, with `lessFee: true` ("all of it, less the fee"); send
+  that `amount` (the send fits it again to the fee then). It throws what the
+  send would: too little ETH ("Not enough Base ETH for this and its fee."), a bad asset, address or amount, the zero
   address, SATORI that can't be sent yet (saying when), too little to send,
   a fee over the max fee.
 - `await satori.send({ asset, to, amount, passphrase })` → `{ hash }`, only

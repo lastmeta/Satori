@@ -195,6 +195,11 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   expect(await page.evaluate(([t, p]) => window.satori.send({ asset: 'ETH', to: t, amount: '0.01', passphrase: p }), [to, PASS]))
     .toMatchObject({ hash: expect.any(String) });
   expect(rpc.eth[to]).toBe(10n ** 16n);
+  // all the wallet's ETH: the review takes the fee out of it (the owner, 2026-10-28: a full send failed for the fee)
+  const allEth = await page.evaluate(() => window.satori.base().then((b) => b.wallet.eth));
+  const most = await page.evaluate(([t, a]) => window.satori.quoteSend({ asset: 'ETH', to: t, amount: a }), [to, allEth]);
+  expect(most.lessFee).toBe(true);
+  expect(Number(most.amount)).toBeLessThan(Number(allEth));
 
   // Preload gas: the button fills the Send form (ETH to the alias, a month of batches); preloadGas() sends it.
   const aliasAddr = await page.evaluate(() => window.satori.status().then((s) => s.alias));

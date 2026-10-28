@@ -3,7 +3,7 @@
 // transport) and a Map for the database.
 import { forecast } from '../engine/index.js';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { formatEther, formatGwei, zeroAddress } from 'viem';
+import { formatEther, formatGwei, parseEther, zeroAddress } from 'viem';
 import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { CentralError } from '../central/index.js';
@@ -873,12 +873,15 @@ describe('createBase', () => {
     const gas = 0x30000n;
     expect(eth).toEqual({ asset: 'ETH', to: '0x4444444444444444444444444444444444444444', amount: '0.01',
       fee: { gas: Number(gas), about: formatEther(gas * (1n + 1_000_000n)), max: formatEther(gas * (2n + 1_000_000n)) } });
+    const all = formatEther(rpc.eth[V]);
+    const most = await base.quoteSend({ asset: 'ETH', to, amount: all }); // all of it: what is left once the fee is paid
+    expect([most.amount, most.lessFee]).toEqual([formatEther(parseEther(all) - parseEther(most.fee.max)), true]);
     const sat = await base.quoteSend({ asset: 'SATORI', to, amount: '2.5' });
     expect(sat.fee).toEqual({ gas: Number(gas + HOOK_GAS), about: formatEther(gas * (1n + 1_000_000n)),
       max: formatEther((gas + HOOK_GAS) * (2n + 1_000_000n)) }); // a contract call's limit has the hook's pad (unused gas is not charged)
     expect(rpc.sent).toHaveLength(0); // nothing sent
     s.lock[V] = INDEFINITE; // SATORI that can't be sent: said at the review, before the passphrase
     await expect(base.quoteSend({ asset: 'SATORI', to, amount: '1' })).rejects.toThrow("Staked SATORI can't be sent until you unstake.");
-    await expect(base.quoteSend({ asset: 'ETH', to, amount: '1000' })).rejects.toThrow(/insufficient funds/);
+    await expect(base.quoteSend({ asset: 'ETH', to, amount: '1000' })).rejects.toThrow('Not enough Base ETH for this and its fee.');
   });
 });

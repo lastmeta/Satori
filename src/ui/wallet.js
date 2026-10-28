@@ -75,7 +75,7 @@ export function walletTab(a) {
     <div class="review" data-test="send-review" hidden="${() => !state.sendReview}">
       <h3>Check before sending</h3>
       <dl class="facts">
-        ${fact('Send', 'review-amount', () => (q() ? `${q().amount} ${q().asset}` : ''))}
+        ${fact('Send', 'review-amount', () => (q() ? `${q().amount} ${q().asset}${q().lessFee ? ' (all of it, less the fee)' : ''}` : ''))}
         ${fact('To', 'review-to', html`<code class="block">${() => q()?.to ?? ''}</code>`)}
         ${fact('Fee', 'review-fee', () => (q() ? `about ${ethFeeText(q().fee.about)}, at most ${ethFeeText(q().fee.max)} (Base ETH, from the wallet)` : ''))}
       </dl>

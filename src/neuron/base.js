@@ -773,7 +773,9 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       const { chain } = await chainNow();
       if (asset === 'SATORI') await sendable(chain);
       const fee = await chain.sendFee(walletAddress, { asset, to, wei });
-      return { asset, to: getAddress(to), amount, fee: { gas: Number(fee.gas), about: formatEther(fee.about), max: formatEther(fee.max) } };
+      const less = fee.value != null && fee.value !== wei; // all the ETH: what is left once the fee is paid
+      return { asset, to: getAddress(to), amount: less ? formatEther(fee.value) : amount, ...(less && { lessFee: true }),
+        fee: { gas: Number(fee.gas), about: formatEther(fee.about), max: formatEther(fee.max) } };
     },
 
     /**

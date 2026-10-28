@@ -152,8 +152,13 @@ function declined(err) {
   return false;
 }
 export const DECLINED = 'Declined in the wallet app.';
-/** A wallet app's no, in one line (else the error as it was). */
-const plainNo = (err) => { throw declined(err) ? Object.assign(new Error(DECLINED), { code: 4001 }) : err; };
+/** A wallet app's no, and too little ETH, in one line (else the error as it was). */
+const plainNo = (err) => {
+  if (declined(err)) throw Object.assign(new Error(DECLINED), { code: 4001 });
+  for (let e = err; e; e = e.cause) if (e.name === 'InsufficientFundsError') throw new Error(NO_FUNDS);
+  throw err;
+};
+export const NO_FUNDS = 'Not enough Base ETH for this and its fee.';
 
 /**
  * @param {{config: object, transport: any, pollingInterval?: number, settle?: {tries: number, ms: number},
@@ -195,6 +200,14 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   async function fees() {
     const [block, tip] = await Promise.all([client.getBlock(), client.estimateMaxPriorityFeePerGas()]);
     return { maxFeePerGas: 2n * (block.baseFeePerGas ?? 0n) + tip, maxPriorityFeePerGas: tip };
+  }
+  /**
+   * ETH to send: `value`, or, when it fits the balance but not with the fee (`cost`, the most the gas can take), the
+   * balance less the fee: "all of it" sends what is left once the fee is paid.
+   */
+  async function fitted(from, value, cost) {
+    const balance = await client.getBalance({ address: from });
+    return value <= balance && value + cost > balance && balance > cost ? balance - cost : value;
   }
   /** `fee`, if its max fee per gas is within the ceiling; else FeeCeilingError. */
   async function capped(fee) {
@@ -537,13 +550,14 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      */
     async sendFee(from, { asset, to, wei }) {
       const [estimate, block, tip] = await Promise.all([
-        asset === 'ETH' ? client.estimateGas({ account: from, to, value: wei })
+        asset === 'ETH' ? client.estimateGas({ account: from, to, value: wei }).catch(plainNo)
           : client.estimateContractGas({ ...token('transfer', [to, wei]), account: from }),
         client.getBlock(), client.estimateMaxPriorityFeePerGas()]);
       const base = block.baseFeePerGas ?? 0n;
       const gas = asset === 'ETH' ? estimate : estimate + HOOK_GAS;
       await capped({ maxFeePerGas: 2n * base + tip, maxPriorityFeePerGas: tip });
-      return { gas, about: estimate * (base + tip), max: gas * (2n * base + tip) };
+      const max = gas * (2n * base + tip);
+      return { gas, about: estimate * (base + tip), max, ...(asset === 'ETH' && { value: await fitted(from, wei, max) }) };
     },
 
     /** SATORI from the wallet (the token refuses while transfer-locked: the simulate says Locked). */
@@ -551,9 +565,10 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     /** ETH from the wallet: estimated first (a failure throws before sending); a plain transfer runs no hook, so no pad. */
     sendEth: (wallet, to, value, { onSent } = {}) => queued(async () => {
       const account = toAccount(wallet);
-      const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }), fees().then(capped)]);
+      const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }).catch(plainNo), fees().then(capped)]);
       const writer = await writerFor(account);
-      const hash = await writer.sendTransaction({ to, value, gas, ...fee }).catch(plainNo);
+      const hash = await writer.sendTransaction({ to, value: await fitted(account.address, value, gas * fee.maxFeePerGas), gas, ...fee })
+        .catch(plainNo);
       await onSent?.(hash);
       return receiptOf(hash, 'transfer');
     }),

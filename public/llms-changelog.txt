@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (sending all the ETH)
+
+- `quoteSend()` of all the wallet's ETH gives `amount` = the balance less the max fee, with `lessFee: true` (the review
+  says "all of it, less the fee"); before, the send failed for the fee. Too little ETH says "Not enough Base ETH for
+  this and its fee." in one line.
+
 ## Changed 2026-10-28 (announcements)
 
 - No hourly re-announce: our announcements go on every relay (re)connect and on a change, each signed with the time

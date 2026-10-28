@@ -10,7 +10,7 @@ import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { fakeWallet } from '../../test/fake-wallet.js';
 import { connectedWallet } from '../keys/connect.js';
 
-import { createChain, transferLock, payload, revertName, errorText, panicOf, UP, DOWN, HOOK_GAS, INDEFINITE } from './index.js';
+import { createChain, transferLock, payload, revertName, errorText, panicOf, UP, DOWN, HOOK_GAS, INDEFINITE, NO_FUNDS } from './index.js';
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
@@ -283,10 +283,21 @@ describe('claims and sends (the wallet)', () => {
   });
   test('ETH: estimated first; more than the balance throws before sending', async () => {
     const to = '0x' + '44'.repeat(20);
-    await expect(chain.sendEth(wallet, to, 10n ** 18n)).rejects.toThrow();
+    await expect(chain.sendEth(wallet, to, 10n ** 18n)).rejects.toThrow(NO_FUNDS); // in a line, not viem's paragraph
+    await expect(chain.sendFee(V, { asset: 'ETH', to, wei: 10n ** 18n })).rejects.toThrow(NO_FUNDS);
     expect(rpc.sent).toHaveLength(0);
     await chain.sendEth(wallet, to, 10n ** 15n);
     expect(rpc.eth[to]).toBe(10n ** 15n);
+  });
+  test('ETH, all of it: the quote and the send take the fee out of the balance; less than all is sent as asked', async () => {
+    const to = '0x' + '45'.repeat(20);
+    const all = rpc.eth[V.toLowerCase()];
+    const q = await chain.sendFee(V, { asset: 'ETH', to, wei: all });
+    expect(q.value).toBe(all - q.max);
+    expect((await chain.sendFee(V, { asset: 'ETH', to, wei: 10n ** 15n })).value).toBe(10n ** 15n);
+    await chain.sendEth(wallet, to, all);
+    expect(rpc.eth[to]).toBeGreaterThan(0n);
+    expect(rpc.eth[to]).toBeLessThan(all);
   });
 });
 
