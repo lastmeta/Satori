@@ -6,6 +6,7 @@ import { fmtNum, fmtWhen, shortHash } from './format.js';
 import { recordChart } from './record.js';
 import { fmtAgo } from '../neuron/health.js';
 import { spanText, markWords, kindLabelOf, descriptionOf, DESTS } from '../neuron/models.js';
+import { classify } from '../neuron/quality.js';
 
 export { spanText, DESTS };
 
@@ -187,12 +188,15 @@ function modelView(d, now, description) {
   return { lines, details };
 }
 
-/** A ratio to no change's error in words: '14% better', '3% worse', 'the same as no change'. */
+/**
+ * A ratio to no change's error in words, by the one rule (neuron/quality.js: within ±5 % is a tie): '14% better',
+ * '20% worse', 'the same as no change'.
+ */
 export function ratioWords(r) {
   if (r == null || Number.isNaN(r)) return '–';
   if (!Number.isFinite(r)) return 'worse';
-  const n = Math.round((r - 1) * 100);
-  return n < 0 ? `${-n}% better` : n > 0 ? `${n}% worse` : 'the same as no change';
+  const mark = classify(r);
+  return mark === 'tie' ? 'the same as no change' : markWords({ mark, ratio: r });
 }
 const tries = (n) => `${n} ${n === 1 ? 'try' : 'tries'}`;
 const OUTCOME = { found: 'found one', stopped: 'stopped', error: 'failed', history: 'too little history' };
@@ -202,20 +206,19 @@ function lastRetrain(r) {
   return `${fmtWhen(r.at)} · ${what} · ${r.tried} tried in ${(r.ms / 1000).toFixed(1)} s`;
 }
 
-const GOAL = 0.95; // better than no change: the tab's rule (src/engine/retrain.js GOAL)
 /** The last retrain's result in plain words (docs/design/models.md#retrain). → { line, tone, note } */
 function resultWords(r) {
   if (r.note === 'same-data') return { line: 'Already retrained on this data. Try again after its next observation.', tone: '', note: '' };
   if (r.outcome === 'error') return { line: `Retrain failed: ${r.error}`, tone: 'bad', note: '' };
   if (r.outcome === 'history') return { line: 'Retrain needs about four weeks of this stream\'s history.', tone: '', note: '' };
   const next = 'Used from the next prediction.';
-  if (r.kept === 'new' && r.ratio < GOAL) return { line: `Found one: ${Math.round((1 - r.ratio) * 100)}% better. ${next}`, tone: 'ok', note: '' };
+  if (r.kept === 'new' && classify(r.ratio) === 'better') return { line: `Found one: ${ratioWords(r.ratio)}. ${next}`, tone: 'ok', note: '' };
   if (r.outcome === 'stopped') return { line: `Stopped after ${tries(r.tried)}. Kept the current one.`, tone: '', note: '' };
   if (r.kept === 'new') {
     return { line: `Couldn't find a model that beats no change. Kept a closer one: ${ratioWords(r.ratio)}, was ${ratioWords(r.was)}. ${next}`,
       tone: '', note: '' };
   }
-  if (r.was < GOAL) return { line: 'Couldn\'t find a better model. Kept the current one.', tone: '', note: '' };
+  if (classify(r.was) === 'better') return { line: 'Couldn\'t find a better model. Kept the current one.', tone: '', note: '' };
   // a model worse than no change kept: its fade already pulls what it sends toward no change (engine.md)
   return { line: 'Couldn\'t find a model that beats no change. Kept the current one.', tone: '',
     note: r.was > 1 ? 'Its fade already pulls the forecast toward no change.' : '' };

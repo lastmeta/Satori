@@ -216,7 +216,8 @@ describe('Retrain in the drill-in\'s header (docs/design/models.md#retrain)', ()
   test('while it runs, a line that changes: the count and the best so far; behind another; waiting for a poll', () => {
     const run = (o) => retrainView(model('worse'), { ...idle, running: true, ...o });
     expect(run({}).line).toBe('Retraining…');
-    expect(run({ tried: 40, best: 1.034 })).toMatchObject({ line: 'Retraining · tried 40 · best so far 3% worse', tone: 'working' });
+    expect(run({ tried: 40, best: 1.084 })).toMatchObject({ line: 'Retraining · tried 40 · best so far 8% worse', tone: 'working' });
+    expect(run({ tried: 40, best: 1.034 }).line).toBe('Retraining · tried 40 · best so far the same as no change'); // within ±5 %: a tie, as the badge says
     expect(run({ tried: 41, best: 0.88 }).line).toBe('Retraining · tried 41 · best so far 12% better');
     expect(run({ tried: 1, best: 1.001 }).line).toBe('Retraining · tried 1 · best so far the same as no change');
     expect(run({ waiting: 'queue', after: 'eth' }).line).toBe('Retraining · after eth');
@@ -232,8 +233,10 @@ describe('Retrain in the drill-in\'s header (docs/design/models.md#retrain)', ()
       line: 'Couldn\'t find a model that beats no change. Kept the current one.', tone: '', note: 'Its fade already pulls the forecast toward no change.' });
     expect(done({ outcome: 'budget', kept: 'current', ratio: 0.99, was: 0.99 }, 'tie')).toMatchObject({
       line: 'Couldn\'t find a model that beats no change. Kept the current one.', note: '' });
-    expect(done({ outcome: 'budget', kept: 'new', ratio: 1.03, was: 1.2 }).line)
-      .toBe('Couldn\'t find a model that beats no change. Kept a closer one: 3% worse, was 20% worse. Used from the next prediction.');
+    expect(done({ outcome: 'budget', kept: 'new', ratio: 1.08, was: 1.2 }).line)
+      .toBe('Couldn\'t find a model that beats no change. Kept a closer one: 8% worse, was 20% worse. Used from the next prediction.');
+    expect(done({ outcome: 'budget', kept: 'new', ratio: 0.97, was: 1.2 }).line) // a tie by the badge's rule: never "3% better" beside "Same as no change"
+      .toBe('Couldn\'t find a model that beats no change. Kept a closer one: the same as no change, was 20% worse. Used from the next prediction.');
     expect(done({ outcome: 'checked', kept: 'current', ratio: 0.8, was: 0.8 }, 'better').line).toBe('Couldn\'t find a better model. Kept the current one.');
     expect(done({ outcome: 'stopped', kept: 'current', ratio: 1.1, was: 1.1, tried: 1 }).line).toBe('Stopped after 1 try. Kept the current one.');
     expect(done({ outcome: 'stopped', kept: 'current', ratio: 1.1, was: 1.1 }).line).toBe('Stopped after 340 tries. Kept the current one.');
