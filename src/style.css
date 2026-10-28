@@ -409,7 +409,7 @@ button.cell:disabled { cursor: default; }
 .legend i[data-code="error"] { background: var(--bad); }
 .legend i[data-code="before"] { background: none; border: 1px dashed var(--muted); opacity: 0.6; }
 .chans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.chan { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 4px; min-width: 0; align-content: start; /* a shorter chip stretched to its row keeps its lines together */
+.chan { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; grid-template-rows: auto 1fr; gap: 4px; min-width: 0; /* each chip's text at its bottom, in line across the row (the owner, 2026-10-28) */
   position: relative; }
 /* traffic (src/ui/glow.js sets data-live): only the overlay's opacity moves, so nothing is laid out again;
    in 150 ms, out in 600 ms once traffic has been quiet for 1.5 s */
@@ -420,8 +420,7 @@ button.cell:disabled { cursor: default; }
   .chan::after { transition: none; box-shadow: none; background: var(--live-tint); } /* still: a faint tint, no fades */
 }
 .chan .row1 { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; font-weight: 600; font-size: 0.85rem; }
-.chan .cost { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 0.72rem; white-space: nowrap; } /* free, or uses gas */
-.chan .sub { color: var(--muted); font-size: 0.76rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.chan .sub { align-self: end; color: var(--muted); font-size: 0.76rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 .wallet-tile .staked { color: var(--sky-ink); font-size: 1.35rem; font-weight: 800; }
 .earn { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -825,7 +824,6 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .ring { width: 56px; height: 56px; }
   /* a narrow chip: the icon, the name, and "free" or "uses gas" right under the name, the same in every chip */
   .chan .row1 { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; column-gap: 6px; }
-  .chan .cost { grid-column: 2; margin: 0; line-height: 1.2; }
   .mcontrols .segmented { gap: 4px; }
   .mcontrols .segmented .small-btn { padding: 6px 8px; } /* the three filters on one line, down to 360 px */
 }

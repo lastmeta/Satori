@@ -1139,8 +1139,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   the last 24 h), at most one action card (its words and one button that
   does the thing or goes there, amber or red for a problem, sky for advice;
   when it needs the wallet the passphrase is asked in place), the last 14
-  days (30 on a computer, with a legend), the **Network** ("free"),
-  **Contract** ("uses gas") and **Relays** chips (each opens its tab and
+  days (30 on a computer, with a legend), the **Service**, **Contract**
+  and **Network** chips (each opens its card under them and
   glows while its channel talks), the wallet's SATORI, then the claimable
   rewards with Claim (two cards). On a computer it is a dashboard: also the first
   8 streams (latest, forecast 24 h, model, a trend line) with a link to all,

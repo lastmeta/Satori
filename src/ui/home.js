@@ -84,10 +84,10 @@ function dayBody(d) {
   </dl>${!d.open && !d.network.sent ? html`<p class="muted small">The app wasn't open this day.</p>` : ''}</div>`;
 }
 
-function chip(a, key, name, cost = '') {
+function chip(a, key, name) {
   const c = () => h().channels[key];
   // a chip opens its card under the chips (src/ui/contract.js)
-  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" aria-expanded="${() => String(state.chipOpen === key)}" @click="${(e) => { e.preventDefault(); if (!cachedNow()) a.toggleChip(key); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
+  return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" aria-expanded="${() => String(state.chipOpen === key)}" @click="${(e) => { e.preventDefault(); if (!cachedNow()) a.toggleChip(key); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}</span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
 }
 
 /** The claimable rewards: the total of the parts known (staking rewards, the Satori Service's drop, the airdrop). */
@@ -155,7 +155,7 @@ export function home(a) {
       <div class="legend desk-only"><span><i data-half="ok"></i>Predicted</span><span><i data-half="error"></i>Errors only</span><span><i data-half="none"></i>Nothing</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 
-    <section class="chans" data-test="channels">${chip(a, 'network', 'Service', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Network')}${chipCard(a)}</section>
+    <section class="chans" data-test="channels">${chip(a, 'network', 'Service')}${chip(a, 'contract', 'Contract')}${chip(a, 'relays', 'Network')}${chipCard(a)}</section>
 
     <section class="tile streams-tile desk-only" hidden="${cachedNow}">
       <div class="tile-h"><b>Streams</b><span>${streamsSummary}</span></div>
