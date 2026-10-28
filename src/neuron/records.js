@@ -13,7 +13,7 @@
 import { PRED, relayUuid, numericValue } from '../nostr/satori.js';
 import { EPOCH } from '../central/index.js';
 import { qualityOf } from './quality.js';
-import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
+import { DEFAULT_CADENCE_S, RELAY_WINDOW } from '../window.js';
 import { AHEAD_S } from '../db/index.js';
 
 export const WATCH_CAP = 200; // prediction streams watched at most: ours first, then the newest announced

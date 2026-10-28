@@ -14,7 +14,7 @@ import { TIE, classify, worded, markWords, qualityOf } from './quality.js';
 import { canRetrain } from '../engine/retrain.js';
 import { explainForecast, STEP_S, HORIZON_STEPS, median } from '../engine/index.js';
 import { UP } from '../chain/index.js';
-import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
+import { RELAY_WINDOW, cadenceOf as windowCadence } from '../window.js';
 import { fmtAgo, fmtIn } from './health.js';
 import { outcomePairs } from './outcomes.js';
 
@@ -130,7 +130,7 @@ export function centralModels(rows) {
   });
 }
 
-const cadenceOf = (s) => (s.cadence_seconds > 0 ? s.cadence_seconds : DEFAULT_CADENCE_S);
+const cadenceOf = (s) => windowCadence(s.cadence_seconds);
 
 /**
  * The Nostr models: each subscription's `<stream>_pred`, one cadence ahead, published to the relays (none before its

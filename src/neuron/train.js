@@ -12,7 +12,7 @@
 //   createTrainer({ db, work, read, after, baseHistory }) → { run(), last, baseFits }: one pass at a time, as Home's work
 import { fitter } from '../engine/evolve.js';
 import { explainForecast } from '../engine/index.js';
-import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
+import { RELAY_WINDOW, cadenceOf as windowCadence } from '../window.js';
 
 /** Bumped when the engine's scoring changes, so every stored fit is computed again. */
 export const FIT_VERSION = 1;
@@ -39,7 +39,7 @@ const parse = (text) => {
   try { return text == null ? null : JSON.parse(text); } catch { return null; }
 };
 const UNSCORED = new Set(['naive', 'echo']); // no change itself, or no number: nothing to score
-const cadenceOf = (s) => (s.cadence_seconds > 0 ? s.cadence_seconds : DEFAULT_CADENCE_S);
+const cadenceOf = (s) => windowCadence(s.cadence_seconds);
 
 /**
  * The models without a current fit, each with its `id` (tried: the ids attempted this session with the same data,

@@ -24,6 +24,7 @@
 // `conn` is an AsyncDuckDBConnection (browser) or a blocking one (node tests).
 import { MIGRATIONS, ADDITIVE } from './schema.js';
 import { serial } from '../util.js';
+import { DEFAULT_CADENCE_S } from '../window.js';
 
 /** How far ahead of its arrival an observation's timestamp may be: max(its stream's cadence, this) s (docs/design/nostr.md#data-growth). */
 export const AHEAD_S = 300;
@@ -146,7 +147,7 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
    * would otherwise move the window past the whole history).
    */
   const pruneBatch = (obsTable, streamTable) => inOrder(async (buckets, batch, now) => {
-    const cadence = `(CASE WHEN s.cadence_seconds > 0 THEN s.cadence_seconds ELSE 86400 END)`;
+    const cadence = `(CASE WHEN s.cadence_seconds > 0 THEN s.cadence_seconds ELSE ${DEFAULT_CADENCE_S} END)`; // window.js cadenceOf
     const [{ Count }] = await rows(`DELETE FROM ${obsTable} WHERE rowid IN (
         SELECT o.rowid FROM ${obsTable} o JOIN (
           SELECT s.uuid, n.newest - ? * ${cadence} AS cutoff, ? + greatest(${cadence}, ?) AS ahead

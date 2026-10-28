@@ -9,7 +9,7 @@ import {
   sourceOf, selectWatched, watchRows, followFilters, scoreRecord, sortRecords, createWatch,
   WATCH_CAP, WATCH_DROP_S, WATCH_SCAN_S, RECORD_N, RECORD_READ, MIN_SCORED,
 } from './records.js';
-import { DEFAULT_CADENCE_S, RELAY_WINDOW } from './nostr.js';
+import { DEFAULT_CADENCE_S, RELAY_WINDOW } from '../window.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 

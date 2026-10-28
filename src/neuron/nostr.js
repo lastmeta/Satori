@@ -24,15 +24,9 @@ import { createWork } from './work.js';
 import { createWatch, followFilters, watchable, WATCH_SCAN_S, WATCH_CAP } from './records.js';
 import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
+import { RELAY_WINDOW, cadenceOf } from '../window.js';
 
 export const MAX_STREAMS = 100; // network_db.py:14-36, until central says (relay-config)
-export const DEFAULT_CADENCE_S = 86_400; // a stream that announces none: a day, the owner's default (docs/intent/engine.md)
-/**
- * The engine's window for a relay stream, in its cadences (docs/design/nostr.md#data-growth): the intake, the training
- * pass and the Models tab read only this much back from the stream's newest observation, and the daily prune keeps no
- * more (a daily stream ~400 days; a 1-minute one ~7 h). The engine needs 6 lag pairs and 28 backtest origins.
- */
-export const RELAY_WINDOW = 400;
 export const RECONCILE_S = 3600; // start.py:292
 export const RELAY_LIST_S = 86_400; // start.py:291
 export const FOLLOW_ID = 'satori-follow'; // client.py:76
@@ -402,7 +396,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
    */
   async function predict(e, o, uuid, sub, at = now()) {
     const ts = safeEpoch(o.timestamp);
-    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
+    const cadence = cadenceOf(sub.cadence_seconds);
     const windowS = cadence * RELAY_WINDOW;
     if (ts !== null && ts > at + Math.max(cadence, AHEAD_S)) return; // far ahead of its arrival: never kept
     if (ts !== null && sub.obs_ts != null && ts < sub.obs_ts - windowS) return; // older than the window: a replay, never kept
@@ -423,7 +417,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
    * the latest one when Predict is turned on). `value`: its number (null: none, echoed as Lite does), `raw`: as sent.
    */
   async function forecastAndPublish(uuid, sub, { seq: obsSeq, value, raw }) {
-    const cadence = sub.cadence_seconds > 0 ? sub.cadence_seconds : DEFAULT_CADENCE_S;
+    const cadence = cadenceOf(sub.cadence_seconds);
     const windowS = cadence * RELAY_WINDOW;
     const o = { seq: obsSeq, value: raw };
     // one cadence ahead (docs/intent/engine.md): steps of the cadence, one of them; from the engine's window
