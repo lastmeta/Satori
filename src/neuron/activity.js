@@ -6,10 +6,10 @@
 // logged, never thrown: the neuron goes on.
 import { serial } from '../util.js';
 import { UP } from '../chain/index.js';
-import { DAYS, FIXABLE_SKIPS, HEARTBEAT_S, KEEP_S, SLEEP_S, isGood, missedBy } from './health.js';
+import { DAYS, HEARTBEAT_S, KEEP_S, SLEEP_S, isGood, missedBy } from './health.js';
+import { QUIET_SKIPS, FIXABLE_SKIPS } from './skip.js';
 
 const LOAD_S = (DAYS + 1) * 86400; // what health reads: the day strip's 30 days and the feed
-const QUIET_SKIPS = /^(already predicted|waiting for the batch|played by hand)/; // done, in flight, or by hand: not news
 
 /**
  * @param {{db: object, now?: () => number, onChange?: () => void}} o
@@ -125,12 +125,12 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
         return void (await add('base', 'ok', { round, hash, games: games.map((g) => g.gameId), dropped: dropped.map((g) => g.gameId), calls }));
       }
       if (r?.stuck) {
-        return void (await merge('base', 'warn', { round: r.round ?? null, skipped: r.skipped, stuck: r.stuck }, `stuck:${r.stuck.ceiling ? 'ceiling' : 'retry'}`));
+        return void (await merge('base', 'warn', { round: r.round ?? null, skip: r.skip, skipped: r.skipped, stuck: r.stuck }, `stuck:${r.stuck.ceiling ? 'ceiling' : 'retry'}`));
       }
       if (r?.skipped) {
-        if (QUIET_SKIPS.test(r.skipped)) return;
-        const level = FIXABLE_SKIPS.test(r.skipped) ? 'warn' : 'idle';
-        return void (await merge('base', level, { round: r.round ?? null, skipped: r.skipped }, `skip:${r.skipped.split(':')[0]}`));
+        if (QUIET_SKIPS.has(r.skip)) return;
+        const level = FIXABLE_SKIPS.has(r.skip) ? 'warn' : 'idle';
+        return void (await merge('base', level, { round: r.round ?? null, skip: r.skip, skipped: r.skipped }, `skip:${r.skip ?? r.skipped.split(':')[0]}`));
       }
       // the contract unused (not staked, no batch ever sent): its RPC's trouble is calm, and the day strip leaves it out
       if (r?.error && r.unused) await merge('base', 'idle', { round: r.round ?? null, error: r.error, unused: true }, `unused:${r.error.slice(0, 120)}`);

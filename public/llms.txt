@@ -977,7 +977,7 @@ the page's JS context:
   and `forecast` the engine's at `horizon` seconds ahead, in the same units,
   rounded, both as decimal strings (they pass 2^53; a batch stored before the
   horizon rule has `t2` instead); `lastCheck` is the last batch check:
-  `{ at, round, sent }`, `{ at, round, skipped }` or `{ at, error }`.
+  `{ at, round, sent }`, `{ at, round, skip, skipped }` or `{ at, error }`.
   `claimable`: the staking rewards, the Satori Service's reward drop not
   claimed yet (`drop`: null when this central does not serve it), the
   airdrop, and `total` (the parts known); `wallet.lowEth`: under one
@@ -1012,8 +1012,12 @@ the page's JS context:
   when the RPC quotes more than the max fee.
 - `await satori.unstake()` (needs Unlock; only on the person's request) → the same shape.
 - `await satori.predictBase()` → the batch now, if due: `{ at, round, sent: { round, at, hash, games, dropped } }`
-  or `{ …, skipped: 'already predicted this round' | 'nothing staked with this app' |
-  'gas above the ceiling: …' | 'waiting for the batch already sent (0x…)' | … }` or `{ at, error }`.
+  or `{ …, skip, skipped }` or `{ at, error }`: `skip` says why, as a code to
+  test (`predicted`, `unstaked`, `gas-ceiling`, `pending`, `by-hand`,
+  `no-games`, `no-pass`, `stuck-retry`, `stuck-ceiling`); `skipped` is its
+  words ('already predicted this round', 'nothing staked with this app',
+  'gas above the ceiling: …', 'waiting for the batch already sent (0x…)', …),
+  for people.
 - `await satori.claim()` (needs Unlock; only on the person's request) → `{ rewards, merkle, airdrop }`, each
   `{ hash, amount }`, `{ skipped: why }` or `{ error }`.
 - `await satori.quoteSend({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`

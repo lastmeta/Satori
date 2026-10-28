@@ -292,17 +292,17 @@ describe('warn: predicting, but something needs you', () => {
     expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Gas: 3 batches' });
   });
   test("this round's batch skipped for a fixable reason; other skips are calm", () => {
-    const check = { at: NOW, round: 20742, skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' };
+    const check = { at: NOW, round: 20742, skip: 'gas-ceiling', skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' };
     const h = health({ base: staked({ lastCheck: check }) });
     expect(h).toMatchObject({ status: 'warn', line: 'The Satori Service is fine. The Satori contract batch was skipped.' });
     expect(h.action).toMatchObject({ id: 'base-skipped', do: 'go', tab: 'settings', section: 'base' });
     expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Skipped: gas above the ceiling' });
-    const sim = health({ base: staked({ lastCheck: { at: NOW, round: 20742, skipped: 'no game passes its simulation',
+    const sim = health({ base: staked({ lastCheck: { at: NOW, round: 20742, skip: 'no-pass', skipped: 'no game passes its simulation',
       dropped: [{ streamId: 1, gameId: 1, named: true, error: 'DuplicatePrediction' }, { streamId: 4, gameId: 2, error: 'SomethingNew' }] } }) });
     expect(sim.action).toMatchObject({ id: 'base-skipped', tab: 'wallet', text: 'Satori contract batch skipped: no game passes its '
       + "simulation (Sentiment stream 1: predicted less than 24 hours ago; stream 4: the contract refused it, SomethingNew). The next check tries again." });
-    expect(health({ base: staked({ lastCheck: { round: 20742, skipped: 'no streams with a game' } }) }).status).toBe('ok');
-    expect(health({ base: staked({ lastCheck: { round: 20741, skipped: 'no game passes its simulation' } }) }).status).toBe('ok'); // last round's
+    expect(health({ base: staked({ lastCheck: { round: 20742, skip: 'no-games', skipped: 'no streams with a game' } }) }).status).toBe('ok');
+    expect(health({ base: staked({ lastCheck: { round: 20741, skip: 'no-pass', skipped: 'no game passes its simulation' } }) }).status).toBe('ok'); // last round's
   });
   test('Base unreachable while it is in use (staked, or a batch sent before): warn', () => {
     for (const b of [staked({ error: 'HTTP request failed' }), base({ error: 'HTTP request failed', config: null, lastBatch: { round: 20741 } })]) {
@@ -528,7 +528,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'wallet-mismatch': reg(mismatch),
     'not-registered': reg({ ok: false, error: 'Satori Service unreachable: Failed to fetch' }),
     'gas-low': (i) => ({ ...i, base: staked({ alias: { power: '100', lowEth: true, batchesLeft: 3, eth: '0.00001' } }) }),
-    'base-skipped': (i) => ({ ...i, base: staked({ lastCheck: { at: NOW, round: 20742, skipped: 'gas above the ceiling: 3 gwei > 2 gwei' } }) }),
+    'base-skipped': (i) => ({ ...i, base: staked({ lastCheck: { at: NOW, round: 20742, skip: 'gas-ceiling', skipped: 'gas above the ceiling: 3 gwei > 2 gwei' } }) }),
     'base-stuck': (i) => ({ ...i, base: staked({ pendingBatch: { round: 20742, hash: '0xab', sentAt: NOW - M, stuck: { at: NOW, replaced: 1, fee: '0.02' } } }) }),
     'base-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null, lastBatch: { round: 20741 } }) }),
     asleep: (i) => i,
@@ -674,7 +674,7 @@ describe('the day strip: local days', () => {
     // each day's two halves: the Satori Service (off-chain) and the Satori contract (on-chain)
     expect(days.slice(-6).map((d) => `${d.network}/${d.contract}`)).toEqual(['ok/ok', 'ok/error', 'error/none', 'none/none', 'none/none', 'ok/none']);
     // a skipped check is no failure; the game's Submit with nothing to send (its time) is a play
-    const skip = daysOf([open(day(0, 8), NOW), row('base', day(0, 9), 'warn', { skipped: 'gas above the ceiling' }), row('base', day(0, 10), 'ok', { games: [{}] })], NOW).at(-1);
+    const skip = daysOf([open(day(0, 8), NOW), row('base', day(0, 9), 'warn', { skip: 'gas-ceiling', skipped: 'gas above the ceiling' }), row('base', day(0, 10), 'ok', { games: [{}] })], NOW).at(-1);
     expect(skip.contract).toBe('ok');
     expect(daysOf([open(day(0, 8), NOW)], NOW, null, DAYS, day(0, 11)).at(-1).contract).toBe('ok');
     const play = daysOf([open(day(0, 8), NOW), row('wallet', day(0, 10), 'ok', { action: 'play', text: 'Sent 2…' })], NOW).at(-1);
@@ -694,7 +694,7 @@ describe('the day strip: local days', () => {
   test('a merged failure counts on every day it spans; a skip that is not a failure counts on none', () => {
     const rows = [open(day(2, 1), NOW), good(day(2, 2)), good(day(1, 2)), good(day(0, 2)),
       row('base', day(2, 3), 'bad', { error: 'x' }, { until: day(1, 3), count: 20 }),
-      row('base', day(2, 3), 'idle', { skipped: 'nothing staked with this app' }, { until: day(0, 3), count: 30 })];
+      row('base', day(2, 3), 'idle', { skip: 'unstaked', skipped: 'nothing staked with this app' }, { until: day(0, 3), count: 30 })];
     expect(daysOf(rows, NOW).slice(-3).map((d) => d.code)).toEqual(['part', 'part', 'full']);
   });
 });
@@ -706,7 +706,7 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
     open(NOW - 2 * H, NOW, { gap: 3 * D - 4 * H, missed: true }),
     row('history', NOW - 2 * H + 30, 'ok', { streams: 83, rows: 83000 }),
     good(NOW - H, 83, { caughtUp: 3 * D - 4 * H }),
-    row('base', NOW - 50 * M, 'warn', { round: 20742, skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' },
+    row('base', NOW - 50 * M, 'warn', { round: 20742, skip: 'gas-ceiling', skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' },
       { count: 3, until: NOW - 10 * M }),
     row('nostr', NOW - 40 * M, 'ok', { published: 3 }),
     row('wallet', NOW - 30 * M, 'ok', { action: 'stake', text: 'Staked with this app' }),
@@ -740,7 +740,7 @@ test('times in a few words', () => {
 });
 
 test('the feed is by time: a cycle logged when it ends sits at its start, after what happened meanwhile', () => {
-  const rows = [open(NOW - H), row('base', NOW - 50 * M, 'idle', { skipped: 'no streams with a game' }), good(NOW - 55 * M)];
+  const rows = [open(NOW - H), row('base', NOW - 50 * M, 'idle', { skip: 'no-games', skipped: 'no streams with a game' }), good(NOW - 55 * M)];
   expect(health({ rows }).feed.map((f) => f.text)).toEqual(['Satori contract batch skipped: no streams with a game', 'Sent 83 predictions to the Satori Service']);
 });
 
@@ -754,7 +754,7 @@ describe('the Satori contract unused: its RPC errors are not failures (the day s
     expect(feedOf([unused])).toEqual([{ at: NOW - H, level: 'idle', text: "Couldn't reach the Satori contract (not staked): HTTP request failed (×3)" }]);
   });
   test('a stuck batch, logged: amber in the feed and a failure on the strip until it mines', () => {
-    const stuck = row('base', NOW - H, 'warn', { round: 20742, skipped: 'stuck: retrying with a higher fee (0.02 gwei)', stuck: { replaced: 1, fee: '0.02' } }, { mkey: 'stuck' });
+    const stuck = row('base', NOW - H, 'warn', { round: 20742, skip: 'stuck-retry', skipped: 'stuck: retrying with a higher fee (0.02 gwei)', stuck: { replaced: 1, fee: '0.02' } }, { mkey: 'stuck' });
     expect(feedOf([stuck])).toEqual([{ at: NOW - H, level: 'warn', text: 'Satori contract batch stuck: sent again with a higher fee (0.02 gwei)' }]);
     expect(daysOf([open(NOW - 3 * H, NOW), good(NOW - 2 * H), stuck], NOW).at(-1).code).toBe('part');
   });

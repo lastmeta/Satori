@@ -98,23 +98,23 @@ describe('Base checks', () => {
     const a = make();
     await a.start();
     await a.base({ at: T, round: 7, sent: { round: 7, at: T, hash: '0xab', games: [{ gameId: 1, streamId: 1, named: true, direction: 1, cadenceMinutes: 60 }], dropped: [{ gameId: 70, error: 'x' }] } });
-    await a.base({ at: T + 1, round: 7, skipped: 'already predicted this round' });
-    await a.base({ at: T + 2, round: 7, skipped: 'waiting for the batch already sent (0xab)' });
+    await a.base({ at: T + 1, round: 7, skip: 'predicted', skipped: 'already predicted this round' });
+    await a.base({ at: T + 2, round: 7, skip: 'pending', skipped: 'waiting for the batch already sent (0xab)' });
     clock = T + 86400;
-    await a.base({ at: clock, round: 8, skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' });
+    await a.base({ at: clock, round: 8, skip: 'gas-ceiling', skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' });
     clock += 3600;
-    await a.base({ at: clock, round: 8, skipped: 'gas above the ceiling: a max fee of 4 gwei > 2 gwei; the next check tries again' });
+    await a.base({ at: clock, round: 8, skip: 'gas-ceiling', skipped: 'gas above the ceiling: a max fee of 4 gwei > 2 gwei; the next check tries again' });
     await a.base({ at: clock, error: 'HTTP request failed' });
     clock += 3600;
     await a.base({ at: clock, error: 'HTTP request failed' });
-    await a.base({ at: clock, round: 8, skipped: 'nothing staked with this app' });
+    await a.base({ at: clock, round: 8, skip: 'unstaked', skipped: 'nothing staked with this app' });
     const base = a.rows().filter((r) => r.kind === 'base');
     expect(base.map((r) => [r.level, r.count, r.data])).toEqual([
       ['ok', 1, { round: 7, hash: '0xab', games: [1], dropped: [70],
         calls: [{ streamId: 1, named: true, direction: 'up', cadenceMinutes: 60, hour: Math.floor(T / 3600) }] }],
-      ['warn', 2, { round: 8, skipped: 'gas above the ceiling: a max fee of 4 gwei > 2 gwei; the next check tries again' }],
+      ['warn', 2, { round: 8, skip: 'gas-ceiling', skipped: 'gas above the ceiling: a max fee of 4 gwei > 2 gwei; the next check tries again' }],
       ['bad', 2, { round: null, error: 'HTTP request failed' }],
-      ['idle', 1, { round: 8, skipped: 'nothing staked with this app' }],
+      ['idle', 1, { round: 8, skip: 'unstaked', skipped: 'nothing staked with this app' }],
     ]);
     expect(base[1]).toMatchObject({ at: T + 86400, until: T + 86400 + 3600 });
     expect(await db.activity(0)).toEqual(a.rows());
@@ -124,11 +124,11 @@ describe('Base checks', () => {
     await a.start();
     await a.base({ at: T, error: 'HTTP request failed', unused: true });
     await a.base({ at: T, error: 'HTTP request failed', unused: true });
-    await a.base({ at: T, round: 9, skipped: 'stuck: retrying with a higher fee (0.025 gwei)', stuck: { at: T, replaced: 1, fee: '0.025' }, pendingAt: T });
+    await a.base({ at: T, round: 9, skip: 'stuck-retry', skipped: 'stuck: retrying with a higher fee (0.025 gwei)', stuck: { at: T, replaced: 1, fee: '0.025' }, pendingAt: T });
     const base = a.rows().filter((r) => r.kind === 'base');
     expect(base.map((r) => [r.level, r.count, r.data])).toEqual([
       ['idle', 2, { round: null, error: 'HTTP request failed', unused: true }],
-      ['warn', 1, { round: 9, skipped: 'stuck: retrying with a higher fee (0.025 gwei)', stuck: { at: T, replaced: 1, fee: '0.025' } }],
+      ['warn', 1, { round: 9, skip: 'stuck-retry', skipped: 'stuck: retrying with a higher fee (0.025 gwei)', stuck: { at: T, replaced: 1, fee: '0.025' } }],
     ]);
   });
 });

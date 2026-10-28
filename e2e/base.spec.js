@@ -123,13 +123,13 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
 
   // Above the batch's max-fee ceiling it waits for the next check, and says why.
   await page.evaluate(() => window.satori.setBaseMaxFee(0.0000001));
-  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ round: ROUND + 1, skipped: expect.stringMatching(/^gas above the ceiling/) });
+  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ round: ROUND + 1, skip: 'gas-ceiling', skipped: expect.stringMatching(/^gas above the ceiling/) });
   await expect(fact(page, 'check')).toContainText('gas above the ceiling');
   await page.evaluate(() => window.satori.setBaseMaxFee(''));
   const next = await page.evaluate(() => window.satori.predictBase());
   expect(next).toMatchObject({ round: ROUND + 1, sent: { games: [{ gameId: 1 }] } });
   await expect(fact(page, 'last-batch')).toContainText(`Round ${ROUND + 1}`);
-  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ skipped: 'already predicted this round' });
+  expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ skip: 'predicted', skipped: 'already predicted this round' });
 
   // Staked, the alias's gas matters: below a week of batches it says so.
   rpc.eth[I] = 10n ** 12n;

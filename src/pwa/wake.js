@@ -4,6 +4,7 @@
 // src/keys/atrest.js), the chain's config and RPCs, the max fee and how the app plays. The batch is the app's own
 // (runBatch): the same streams read from the chain, the same forecasts, a fresh day. What it sends is kept in IndexedDB
 // for the app to take in at its next check (adopt, handoff.js), so it waits for that batch as for its own.
+import { SKIP } from '../neuron/skip.js';
 import { fallback, http } from 'viem';
 import { createChain } from '../chain/index.js';
 import { runBatch } from '../neuron/base.js';
@@ -48,7 +49,7 @@ export async function wake({ get, put, lock = (fn) => fn(), chainOf = chainFor, 
       return run({ chain, alias, db: batchDb(get, put), maxFeeWei });
     });
     if (r?.sent) return SENT(r.sent.games.length);
-    if (r?.skipped === 'already predicted this round') return IN;
+    if (r?.skip === SKIP.predicted) return IN;
     return REMIND;
   } catch (err) {
     console.warn('[satori] push wake', err);

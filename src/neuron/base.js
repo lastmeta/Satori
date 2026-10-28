@@ -4,6 +4,7 @@
 //   · claims (Unlock: hub.claim, merkle, airdrop) · send (Unlock)
 // The batch goes at the first check of each UTC round: 10 s after start (at
 // once when one is due), at the next round's start (chain time) and at least hourly.
+import { SKIP } from './skip.js';
 import {
   fallback, formatEther, formatGwei, getAddress, http, isAddress, parseEther, parseGwei, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
@@ -210,14 +211,14 @@ async function unstick({ chain, alias, db, pending, maxFeeWei, now, at, round, r
     const max = gweiText(maxFeeWei);
     const stuck = { at: now(), ceiling: true, fee, max, replaced: pending.stuck?.replaced ?? 0 };
     await keep({ ...pending, stuck });
-    return { at, round, stuck, skipped: `stuck: a higher fee (${fee} gwei) would pass the max fee (${max} gwei); raise it in Settings` };
+    return { at, round, stuck, skip: SKIP.stuckCeiling, skipped: `stuck: a higher fee (${fee} gwei) would pass the max fee (${max} gwei); raise it in Settings` };
   }
   report('send');
   const hash = await chain.replaceBatch(alias, pending.games, { nonce: pending.nonce, gas: BigInt(pending.gas), fees });
   const stuck = { at: now(), fee, replaced: (pending.stuck?.replaced ?? 0) + 1 };
   await keep({ ...pending, hash, hashes: [...(pending.hashes ?? [pending.hash]), hash], fees: feesText(fees), sentAt: now(), stuck });
   report('confirm');
-  return { at, round, stuck, pendingAt: now(), skipped: `stuck: retrying with a higher fee (${fee} gwei)` };
+  return { at, round, stuck, pendingAt: now(), skip: SKIP.stuckRetry, skipped: `stuck: retrying with a higher fee (${fee} gwei)` };
 }
 
 /**
@@ -247,7 +248,7 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
           const r = await unstick({ chain, alias, db, pending, maxFeeWei, now, at: st.chainTime, round: st.round, report });
           if (r) return r;
         } else if (known || pending.round === st.round) {
-          return { at: st.chainTime, round: st.round, skipped: `waiting for the batch already sent (${pending.hash})`,
+          return { at: st.chainTime, round: st.round, skip: SKIP.pending, skipped: `waiting for the batch already sent (${pending.hash})`,
             ...(known ? { pendingAt: pending.sentAt } : {}) };
         }
       }
@@ -258,8 +259,8 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
     const state = await chain.batchState(alias.evmAddress);
     at = state.chainTime;
     const { round } = state;
-    if (state.power === 0n) return { at, round, skipped: 'nothing staked with this app' };
-    if (state.predicted !== 0) return { at, round, skipped: 'already predicted this round' };
+    if (state.power === 0n) return { at, round, skip: SKIP.unstaked, skipped: 'nothing staked with this app' };
+    if (state.predicted !== 0) return { at, round, skip: SKIP.predicted, skipped: 'already predicted this round' };
 
     report('check');
     const games = [];
@@ -294,14 +295,14 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
       if (error) dropped.push({ ...game, error });
       else games.push(game);
     }
-    if (!games.length) return { at, round, skipped: dropped.length ? 'no game passes its simulation' : 'no streams with a game', dropped };
+    if (!games.length) return { at, round, skip: dropped.length ? SKIP.noPass : SKIP.noGames, skipped: dropped.length ? 'no game passes its simulation' : 'no streams with a game', dropped };
     // played by hand (the Game tab): the day's calls are made, as always, and not sent
-    if (manual) return { at, round, skipped: PLAYED_BY_HAND, games, dropped };
+    if (manual) return { at, round, skip: SKIP.byHand, skipped: PLAYED_BY_HAND, games, dropped };
 
     const fees = await chain.fees();
     if (fees.maxFeePerGas > maxFeeWei) {
       return { at, round, dropped,
-        skipped: `gas above the ceiling: a max fee of ${formatGwei(fees.maxFeePerGas)} gwei > ${formatGwei(maxFeeWei)} gwei; the next check tries again` };
+        skip: SKIP.gasCeiling, skipped: `gas above the ceiling: a max fee of ${formatGwei(fees.maxFeePerGas)} gwei > ${formatGwei(maxFeeWei)} gwei; the next check tries again` };
     }
     report('send');
     let sent;
@@ -315,7 +316,7 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
     } catch (err) {
       if (!(err instanceof WaitForTransactionReceiptTimeoutError)) throw err;
       const p = await db.get('base_pending_batch'); // sent, not mined yet: the next check looks again
-      return { at, round, skipped: `waiting for the batch already sent (${p?.hash})`, pendingAt: p?.sentAt ?? null };
+      return { at, round, skip: SKIP.pending, skipped: `waiting for the batch already sent (${p?.hash})`, pendingAt: p?.sentAt ?? null };
     }
     return finish(db, { hash: sent.hash, games, dropped }, sent);
   } catch (err) {

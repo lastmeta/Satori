@@ -1,6 +1,7 @@
 // Home's answer to "is my neuron predicting every day on its own, and is
 // anything broken?" (docs/design/health.md): the activity log and the current
 // state in, one object out. Pure: the UI and window.satori.health() draw the same.
+import { FIXABLE_SKIPS } from './skip.js';
 import { POLL_EVERY_S } from './index.js';
 import { leading, workText, HERO } from './work.js';
 import { nextStep } from '../ui/contractflow.js';
@@ -35,7 +36,6 @@ export const LEVEL = {
 };
 export const PRIORITY = Object.keys(LEVEL);
 const FRESH_LINK = ' Link this wallet: it signs a fresh link, and the Satori Service pays it.';
-export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
 
 /** The engine's refusals a batch's simulate names (SatoriEngine.sol predictMultipleWithPayloads), in a few words. */
 const REFUSED = {
@@ -261,7 +261,7 @@ function baseReasons({ rows, base }) {
       text: `The app has gas for about ${n} daily batch${n === 1 ? '' : 'es'}. Send a little Base ETH to its alias, on the Wallet tab.`,
       button: 'Add gas', act: go('wallet') }));
   }
-  if (d === 'alias' && check?.skipped && FIXABLE_SKIPS.test(check.skipped) && (check.round == null || check.round === base.round)) {
+  if (d === 'alias' && check?.skipped && FIXABLE_SKIPS.has(check.skip) && (check.round == null || check.round === base.round)) {
     const why = check.skipped.split(':')[0];
     const gas = why.startsWith('gas');
     out.push(reason('base-skipped', 'contract', { line: 'The Satori contract batch was skipped.', chip: `Skipped: ${why}`,

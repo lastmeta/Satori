@@ -48,7 +48,7 @@ describe('wake', () => {
 
   it('says the predictions are in when the round already has them, and reminds when anything fails', async () => {
     const store = idb({ [HANDOFF]: handoff() });
-    expect((await wake({ ...store, chainOf: () => chain(), runBatch: async () => ({ skipped: 'already predicted this round' }) })).body)
+    expect((await wake({ ...store, chainOf: () => chain(), runBatch: async () => ({ skip: 'predicted', skipped: 'already predicted this round' }) })).body)
       .toBe("Today's predictions are in.");
     expect(await wake({ ...store, chainOf: () => chain(), runBatch: async () => ({ error: 'rpc down' }) })).toBe(REMIND);
     expect(await wake({ ...idb({ [HANDOFF]: handoff({ alias: 'zz' }) }), chainOf: () => chain() })).toBe(REMIND);
