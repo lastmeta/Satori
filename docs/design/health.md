@@ -392,7 +392,10 @@ fill and on a card, and each icon on its disc, light and dark.
 starts (vivid when it is critical), and to amber or red in 300 ms. At rest
 only a number moves, `--hero-rest` from 0 to 1, and the colours are mixed
 from the tone before (`data-from`, set by `main.js`) toward sky: over
-2.5 min, linear, after work (barely seen while watching), else in 300 ms.
+1 s after work, else in 300 ms. (It was 2.5 min, meant to be barely seen;
+the owner, 2026-10-28: "Predicted" sat on working green for minutes. The
+colour follows the word.) The last visit's hero, while the app opens, has
+its own colour too: sky under "Predicted", the ring turning.
 The mix reads the current theme's tokens, so a theme change (the system's,
 or Settings → Appearance) shows at once, mid-fade too. It used to fade the
 colours themselves, so a theme change mid-fade kept the old theme's fill
@@ -702,7 +705,7 @@ used". A session that missed nothing is not shown.
 - `e2e/work.spec.js`: a new neuron against the stub central: the turning
   ring as the only animation, at least three steps in order, each at least a
   second on screen, the history count ticking, working green, vivid while
-  sending, then Predicting in sky green fading over 2.5 min; Poll now back to
+  sending, then Predicting in sky green fading in over 1 s; Poll now back to
   green; a theme change half way through the fade, readable at once (the
   system's light to dark, Settings' dark to light); reduced motion: no animation, the dots; random keys with storage
   not kept (the backup is advice): working, vivid, then sky, never amber,

@@ -56,7 +56,7 @@ const line = (page) => page.locator('[data-test=health-line]');
 const animations = (page) => page.evaluate(() => document.getAnimations().filter((a) => a instanceof CSSAnimation)
   .map((a) => ({ name: a.animationName, on: a.effect.target.className, pseudo: a.effect.pseudoElement })));
 
-/** The hero's colour transitions, run to their end (the 2.5 min fade included). */
+/** The hero's colour transitions, run to their end (the fade to sky included). */
 const settle = (page) => hero(page).evaluate((el) => el.getAnimations().forEach((a) => a.finish()));
 
 /**
@@ -120,16 +120,15 @@ test('a new neuron: one turning ring, each step in order and readable, then Pred
   expect(await animations(page)).toHaveLength(1);
   await shot(page, ['tone-critical']);
 
-  // done: Predicting, sky green (fading in over 2.5 min), nothing moving
+  // done: Predicting, sky green (fading in over 1 s), nothing moving
   send();
   await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   await expect(line(page)).toHaveText('Sent 8 predictions just now · next in 11 h');
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
   await expect(hero(page)).toHaveAttribute('data-from', 'critical');
   await expect(hero(page)).not.toHaveAttribute('data-work');
-  // the fade to sky, from vivid: running, 2.5 min long; only its progress moves, not the colours
-  expect(await hero(page).evaluate((el) => el.getAnimations().filter((a) => a instanceof CSSTransition)
-    .map((a) => [a.transitionProperty, a.effect.getTiming().duration]))).toEqual([['--hero-rest', 150_000]]);
+  // the fade to sky, from vivid: 1 s; only its progress moves, not the colours
+  expect(await hero(page).evaluate((el) => getComputedStyle(el).transition)).toBe('--hero-rest 1s ease-out');
   expect(await animations(page)).toEqual([]);
   expect(await page.evaluate(() => window.satori.health())).toMatchObject({ status: 'ok', tone: 'idle', work: null });
 
@@ -172,11 +171,13 @@ test('a theme change during the fade to sky shows at once: the hero stays readab
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: 'light' });
   await openApp(page);
+  // the 1 s fade made long, so this test can stop half way through it
+  await page.addStyleTag({ content: '.hero[data-tone="idle"][data-from] { transition-duration: 60s !important; }' });
   await page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, v.words]);
   await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/, { timeout: LOAD_TIMEOUT });
   await expect(hero(page)).toHaveAttribute('data-tone', 'idle');
 
-  // half way through the 2.5 min fade, the system goes dark: the fill is dark at once, under the light text
+  // half way through the fade, the system goes dark: the fill is dark at once, under the light text
   await halfway(page);
   await page.emulateMedia({ colorScheme: 'dark' });
   await frames(page);

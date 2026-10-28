@@ -25,12 +25,13 @@ function B() {
 }
 /**
  * The hero: the health, or the step the neuron is on (src/ui/hold.js's pace; docs/design/health.md#work). The last
- * visit's: its title and colour, the ring turning while the neuron opens, the line saying what it waits for.
+ * visit's: its title and colour (sky with "Predicted", the owner 2026-10-28: not working green under it), the ring
+ * turning while the neuron opens, the line saying what it waits for.
  */
 function hero() {
   if (cachedNow()) {
     const c = h();
-    const tone = c.status === 'warn' || c.status === 'bad' ? c.status : 'working';
+    const tone = c.status === 'warn' || c.status === 'bad' ? c.status : 'idle';
     return { status: c.status, tone, title: c.title, key: 'open', working: true, line: openingText(state.engine) };
   }
   return state.hero ?? { ...h(), key: 'idle', working: false };

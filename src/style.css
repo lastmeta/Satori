@@ -286,7 +286,8 @@ details.card > summary { color: var(--text); font-weight: 600; }
 
 /* The hero's colours are registered so they can move: to green within 300 ms when work starts (vivid when it is
    critical), and to amber or red. At rest (sky) only a number moves, --hero-rest, 0 → 1: the colours are mixed from
-   the tone before (data-from, main.js) toward sky, over 2.5 min, linear, after work (barely seen), else in 300 ms. The
+   the tone before (data-from, main.js) toward sky, over 1 s after work (the owner, 2026-10-28: "Predicted" in working
+   green read wrong; it was 2.5 min), else in 300 ms. The
    mix reads the current theme's tokens, so a theme change shows at once, mid-fade too (it once kept the old theme's
    fill under the new theme's text). */
 @property --hero-tone { syntax: "<color>"; inherits: true; initial-value: #a2cfae; }
@@ -301,7 +302,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
   --hero-tone: color-mix(in srgb, var(--from-tone, var(--tone)), var(--tone) calc(var(--hero-rest) * 100%));
   --hero-soft: color-mix(in srgb, var(--from-soft, var(--soft)), var(--soft) calc(var(--hero-rest) * 100%));
   --hero-ink: color-mix(in srgb, var(--from-ink, var(--ink)), var(--ink) calc(var(--hero-rest) * 100%)); }
-.hero[data-tone="idle"]:is([data-from="working"], [data-from="critical"]) { transition: --hero-rest 150s linear; }
+.hero[data-tone="idle"]:is([data-from="working"], [data-from="critical"]) { transition: --hero-rest 1s ease-out; }
 .hero[data-from="working"] { --from-tone: var(--ok); --from-soft: var(--ok-soft); --from-ink: var(--ok); }
 .hero[data-from="critical"] { --from-tone: var(--vivid); --from-soft: var(--vivid-soft); --from-ink: var(--vivid); }
 .hero[data-from="warn"] { --from-tone: var(--warn); --from-soft: var(--warn-soft); --from-ink: var(--warn); }
