@@ -134,8 +134,8 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
       return was.length ? save() : undefined;
     }
     const price = m.prices[sub.stream_name];
-    const c = sub.channel;
-    if (!price || !c || !HEX32.test(String(c.id)) || Number(c.chain) !== config.chainId || !same(c.contract, config.channels)) return;
+    const c = sub.channel && { ...sub.channel, id: String(sub.channel.id).toLowerCase() }; // a channel id is kept lowercase, everywhere
+    if (!price || !c || !HEX32.test(c.id) || Number(c.chain) !== config.chainId || !same(c.contract, config.channels)) return;
     const known = m.sales[c.id];
     if (known && !known.closing) return; // seen (a relay sends it again on each connect)
     const { channels } = await chain();
@@ -159,7 +159,7 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
     let p;
     try { p = JSON.parse(await nip04Decrypt(key.secret, e.pubkey, e.content)); } catch { return; }
     const v = p?.voucher;
-    const s = m.sales[v?.channel];
+    const s = m.sales[String(v?.channel ?? '').toLowerCase()];
     if (!s || s.buyer !== e.pubkey || s.stream !== p.stream_name) return;
     let cumulative;
     try { cumulative = BigInt(String(v.cumulative)); } catch { return; }

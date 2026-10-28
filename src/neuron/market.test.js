@@ -286,6 +286,22 @@ describe('selling and buying', () => {
     expect(buyer.status().bought).toEqual([]); // closed on chain: gone
   });
 
+  test("a channel id in another letter case is the same channel: one sale, and its vouchers found", async () => {
+    await seller.sell(STREAM, PRICE);
+    const v = await buyer.buy(entryOf(), 5n * PRICE);
+    const sub = last(KIND.SUBSCRIPTION);
+    const content = JSON.parse(sub.content);
+    const upper = { ...content.payment_channel, id: `0x${content.payment_channel.id.slice(2).toUpperCase()}` };
+    const shouted = signEvent(subscriptionEvent({ stream: STREAM, provider: SP, subscriber: BP, now: clock, paymentChannel: upper }), B_NOSTR);
+    await seller.onEvent(shouted);
+    await seller.onEvent(sub); // the same channel, as the buyer usually writes it
+    expect(seller.status().selling[0].buyers.map((b) => b.channel)).toEqual([v.channel]);
+    await observe(1);
+    const { payments } = await observe(2);
+    expect(payments).toHaveLength(1);
+    expect(seller.status().selling[0].buyers[0].paid).toBe('0.00002'); // each voucher found its sale
+  });
+
   test("buy again when the old channel can't be used (another payee): the old one is asked to close and kept, never dropped", async () => {
     const v = await bought();
     await buyer.stop(SP, STREAM);

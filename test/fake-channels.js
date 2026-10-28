@@ -23,7 +23,7 @@ export function fakeChannels(now) {
       return { id, hash: `0xopen${n}` };
     },
     async readChannel(id) {
-      const c = map.get(id);
+      const c = map.get(String(id).toLowerCase()); // a bytes32: any letter case is the same id, as on chain
       return c ? { ...c, graceEndsAt: c.closeRequestedAt == null ? null : c.closeRequestedAt + c.grace } : null;
     },
     async settleMany(alias, entries) {
