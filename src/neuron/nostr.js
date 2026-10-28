@@ -21,7 +21,7 @@ import { createMarket, listingOf, amountOf, priceOf } from './market.js';
 import { AHEAD_S } from '../db/index.js';
 import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
-import { createWatch, followFilters, WATCH_SCAN_S } from './records.js';
+import { createWatch, followFilters, WATCH_SCAN_S, WATCH_CAP } from './records.js';
 import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
 
@@ -328,7 +328,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
   function scanWatch() {
     watching ??= progress.run('watch', async (step) => {
       try {
-        await applyWatch(await scan(step));
+        await applyWatch(await watchScan(step));
       } catch (err) {
         watchInfo = { ...watchInfo, error: err?.message ?? String(err) };
         // no relay open is expected now and then (it is tried again at the next relay open or hourly pass); anything else is worth a warning
@@ -430,13 +430,16 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     if (priced) background(market.deliver(stream, { seq, timestamp: made, value: pub }));
   }
 
-  /** Every open relay's 34600s, paged back with `until` as discover_datastreams (client.py:809-882). */
-  async function pages(relay) {
+  /**
+   * Every open relay's 34600s, paged back with `until` as discover_datastreams (client.py:809-882); `enough(fresh)`
+   * after each page: true stops there (the watch's scan: the newest only).
+   */
+  async function pages(relay, enough = () => false) {
     const seen = new Set();
     const out = [];
     let until;
     let stepped = false;
-    for (let i = 0; i < MAX_PAGES; i++) {
+    for (let i = 0; i < MAX_PAGES && !enough(out); i++) {
       const f = { kinds: [KIND.ANNOUNCE], limit: PAGE };
       if (until !== undefined) f.until = until;
       const fresh = (await relay.fetch([f])).filter((e) => e?.id && !seen.has(e.id));
@@ -486,6 +489,48 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       scanSteps.clear();
     });
     return scanning;
+  }
+
+  /**
+   * The scan for prediction streams (the watch's), bounded whatever the network's size (the owner, 2026-10-28: scale;
+   * scan() reads the whole catalog, up to MAX_PAGES × PAGE per relay). The selection takes newcomers most recently
+   * announced first, at most WATCH_CAP (selectWatched), so each relay is read newest first only until WATCH_CAP
+   * prediction streams we don't know are among its pages; then the current announcements of those we know (watched,
+   * bought, ours, and every one's source) by author and #d. → as scan()
+   */
+  function watchScan(step) {
+    return (async () => {
+      const from = new Map();
+      const asked = await readable();
+      const got = [];
+      const known = new Set([...watch.pairs().map(([p, s]) => `${p}:${s}`), ...market.bought()]);
+      const tagOf = (e, n) => e?.tags?.find?.((t) => t[0] === n)?.[1];
+      const isPred = (e) => typeof tagOf(e, 'd') === 'string' && tagOf(e, 'd').endsWith(PRED) && !!tagOf(e, 'source_pubkey');
+      const enough = (out) => new Set(out.filter((e) => isPred(e) && !known.has(`${e.pubkey}:${tagOf(e, 'd')}`))
+        .map((e) => `${e.pubkey}:${tagOf(e, 'd')}`)).size >= WATCH_CAP;
+      let answered = 0;
+      step('ask', 0, asked.length);
+      const events = (await Promise.all(asked.map(async (e) => {
+        try {
+          const list = await pages(e.relay, enough);
+          // the ones we know and every one's source, as they are now: one filter per author (≤ MAX_FILTERS a request)
+          const pairs = [...watch.pairs(), ...[...market.bought()].map((k) => k.split(':')),
+            ...list.filter(isPred).map((x) => [tagOf(x, 'source_pubkey'), tagOf(x, 'source_stream')])].filter(([p, s]) => p && s);
+          const filters = [{ kinds: [KIND.ANNOUNCE], authors: [key.pubkey] },
+            ...followFilters(pairs).map((f) => ({ ...f, kinds: [KIND.ANNOUNCE] }))];
+          for (let i = 0; i < filters.length; i += MAX_FILTERS) list.push(...await e.relay.fetch(filters.slice(i, i + MAX_FILTERS)));
+          got.push(e.url);
+          for (const ev of list) from.set(ev.id, [...new Set([...(from.get(ev.id) ?? []), e.url])]);
+          return list;
+        } catch {
+          return [];
+        } finally {
+          step('ask', ++answered, asked.length);
+        }
+      }))).flat();
+      const signed = await genuine(events, (done, total) => step('verify', done, total));
+      return { list: catalog(signed), gone: tombstoned(signed), from, reached: got };
+    })();
   }
 
   /**

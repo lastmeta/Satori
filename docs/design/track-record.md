@@ -12,7 +12,7 @@ set and forget, the way the neuron predicts everything it sees. There are no
 controls. Watching only reads: it publishes nothing, not even a 34602.
 
 ```
-relays open ─▶ scan the catalog (as discover(): pages, signatures in slices)   again hourly, at most every 6 h
+relays open ─▶ scan the newest of the catalog and the known ones (signatures in slices)   again hourly, at most every 6 h
             ─▶ every `<name>_pred` that names its source (≤ 200) + each source ─▶ watch_streams
 follow REQ = the subscriptions' #d filters ∪ the watched streams' (one filter per author)
 34601 in ─▶ verify ─▶ subscribed? the existing path (store, forecast, publish `_pred`)
@@ -69,6 +69,14 @@ unannounced one for what it is.
   has 112 today (2026-10-20), from 24 authors; `nostr().watching.left`
   says how many prediction streams the last scan found that are not
   watched.
+- **Bounded** (2026-10-28, the owner on scale). The scan doesn't read the
+  whole catalog, as `discover()` does (up to 100 pages of 500 per relay):
+  each relay is read newest first only until 200 prediction streams it
+  doesn't watch yet are among its pages (newcomers are taken most recently
+  announced first, so older ones could never be picked), then the current
+  announcements of the ones it knows (watched, bought, ours, and every one's
+  source) by author and `#d`. Its cost stays a page or two per relay at any
+  network size.
 - **When.** The scan runs once relays are open: the first relay to open
   after the page loads starts it, and it waits up to 10 s for the others
   still connecting, as `discover()` does. Then again in the hourly pass,

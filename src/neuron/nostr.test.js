@@ -15,7 +15,7 @@ import { nip04Decrypt, nip04Encrypt } from '../nostr/nip04.js';
 import { deliveryEvent, subscriptionEvent, predMetadata } from '../nostr/satori.js';
 import { signBinding } from './market.js';
 import { fakeChannels } from '../../test/fake-channels.js';
-import { WATCH_SCAN_S, WATCH_DROP_S } from './records.js';
+import { WATCH_SCAN_S, WATCH_DROP_S, WATCH_CAP } from './records.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -45,11 +45,11 @@ function fakeRelays() {
       unsub(id) { r.subs.delete(id); },
       async fetch(filters) {
         if (r.state !== 'open') throw new Error('not connected');
-        const [f] = filters;
-        return r.stored.filter((e) => (!f.kinds || f.kinds.includes(e.kind)) && (!f.authors || f.authors.includes(e.pubkey))
+        const one = (f) => r.stored.filter((e) => (!f.kinds || f.kinds.includes(e.kind)) && (!f.authors || f.authors.includes(e.pubkey))
           && (!f['#d'] || e.tags.some((t) => t[0] === 'd' && f['#d'].includes(t[1])))
           && (f.until === undefined || e.created_at <= f.until))
           .sort((a, b) => b.created_at - a.created_at).slice(0, f.limit ?? 500);
+        return [...new Set(filters.flatMap(one))]; // any filter's (a REQ's filters are OR-ed)
       },
       mute: false, // never answers OK until release()
       held: [],
@@ -854,6 +854,25 @@ describe('the track record: watching prediction streams (docs/design/track-recor
     await nostr.subscribe(PROV_PUB, 'eth', PREDICT);
     expect(c.subs.get(FOLLOW_ID)).toEqual(byAuthor([{ kinds: [34601], authors: [PROV_PUB], '#d': ['btc', 'eth'] },
       { kinds: [34601], authors: [P_PUB], '#d': ['btc_pred'] }])); // merged per author
+  });
+
+  test('bounded whatever the network\'s size: the newest pages only until WATCH_CAP newcomers, then the known ones by author and #d', async () => {
+    const c = await watching(['btc']); // btc_pred watched
+    // the network grows: more newer prediction streams than the cap (forged here: they count toward the cap, then fail
+    // their signature), the watched one's announcement now older than every one of them
+    const junk = Array.from({ length: 600 }, (_, i) => ({ id: `j${i}`, sig: 'x', pubkey: 'f'.repeat(64), kind: 34600, created_at: clock + 10 + i,
+      content: '{}', tags: [['d', `s${i}_pred`], ['source_pubkey', PROV_PUB], ['source_stream', `s${i}`]] }));
+    c.stored.push(...junk);
+    const fetch = vi.spyOn(c, 'fetch');
+    clock += WATCH_SCAN_S;
+    await nostr.reconcile();
+    await settle();
+    const paged = fetch.mock.calls.filter(([[f]]) => f.kinds?.includes(34600) && !f.authors);
+    expect(paged).toHaveLength(1); // 500 newest hold more than WATCH_CAP newcomers: no second page
+    expect(WATCH_CAP).toBeLessThan(500);
+    const targeted = fetch.mock.calls.flatMap(([fs]) => fs).filter((f) => f.authors);
+    expect(targeted).toEqual(expect.arrayContaining([expect.objectContaining({ kinds: [34600], authors: [P_PUB], '#d': ['btc_pred'] })]));
+    expect((await nostr.status()).watching).toMatchObject({ streams: 1, sources: 1 }); // still watched, found by its key
   });
 
   test('again in the hourly pass only 6 h after the last, not at a reconnect before; the same set sends no new REQ, a new one does', async () => {
