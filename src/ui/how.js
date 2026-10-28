@@ -80,7 +80,7 @@ export function howCard() {
         ${APP()}
         <p>This app listens to real world datastreams, makes unique models and broadcasts predictions of them.</p>
         ${NETWORK()}
-        <p>Other apps on the Satori network listen to those predictions which help better inform their own predictions, improving the accuracy of the entire network.</p>
+        <p>Predictions are shared on the Satori Network, forming an open and coherent image of the world's future.</p>
         ${CONTRACT()}
         <p>The predictions get scored and you get rewarded based on how accurate those predictions are.</p>
         ${SHARING()}
