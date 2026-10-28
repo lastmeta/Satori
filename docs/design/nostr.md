@@ -75,7 +75,7 @@ Every stream this app produces goes to the relays unless it is private
   (1 up, -1 down; a day's cadence), tagged `satori-contract`.
 
 `publishOwn` announces (34600) and observes (34601, each stream its own seq,
-kept in `meta.nostr_own_seq`) where we write. A relay stream we predict
+kept with its first time in `meta.nostr_own`, saved before anything is sent) where we write. A relay stream we predict
 keeps its `<name>_pred`: ours of the same name is skipped. Announced with
 each publication, with the time its content last changed (so unchanged, a relay
 stores nothing new), not in the hourly pass. Not built: private streams (none yet).

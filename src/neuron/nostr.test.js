@@ -729,6 +729,24 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await settle();
   });
 
+  test("our other streams: kept one record each, before anything is sent; an earlier version's two keys read into it", async () => {
+    await boot();
+    await db.set('nostr_own_seq', { aave_pred: 41 });
+    await db.set('nostr_own_created', { aave_pred: 7 });
+    openAll();
+    await settle();
+    let kept;
+    const u = relays.get(USER_RELAY);
+    const publish = u.publish;
+    u.publish = async (e) => { kept ??= await db.get('nostr_own'); return publish(e); }; // what was saved when the first event went
+    await nostr.publishOwn([{ stream: 'aave_pred', name: 'Predictions for aave', value: 1, at: clock, source: 'aave' }]);
+    await settle();
+    expect(kept).toEqual({ aave_pred: { seq: 42, created: 7 } });
+    const obs = u.published.find((e) => e.kind === 34601);
+    expect(JSON.parse(obs.content).seq_num).toBe(42);
+    expect(JSON.parse(u.published.find((e) => e.kind === 34600).content).created_at).toBe(7);
+  });
+
   test('following is not predicting: a followed stream is kept, never forecast or published; setPredict starts and stops its `_pred`', async () => {
     await boot();
     openAll();

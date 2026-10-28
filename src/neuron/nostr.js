@@ -122,6 +122,18 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     return results.filter((r) => r.ok).length;
   }
 
+  /**
+   * Our other streams, one record each (meta `nostr_own`: { [stream]: { seq, created } }); an earlier version kept them
+   * in two keys, `nostr_own_seq` and `nostr_own_created`, read once into it.
+   */
+  async function ownStreams() {
+    const own = await db.get('nostr_own');
+    if (own) return own;
+    const seqs = (await db.get('nostr_own_seq')) ?? {};
+    const created = (await db.get('nostr_own_created')) ?? {};
+    return Object.fromEntries(Object.entries(seqs).map(([s, seq]) => [s, { seq, created: created[s] ?? 0 }]));
+  }
+
   /** Our `_pred` announcements, to the given relays, all at once (start.py:3442-3482). */
   async function announce(targets = writable()) {
     if (!targets.length) return;
@@ -605,7 +617,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     /** Central's max_streams once (start.py:236-246), the relay settings, then a reconcile and the hourly timer. */
     async start() {
       await watch.load(); // the watched streams are followed from the first REQ
-      ownInfo.streams = Object.keys((await db.get('nostr_own_seq')) ?? {}).length; // our other streams so far
+      ownInfo.streams = Object.keys(await ownStreams()).length; // our other streams so far
       await market.load(); // and the streams we buy
       const cfg = await Promise.resolve().then(() => central().relayConfig()).catch(() => null);
       maxStreams = Number(cfg?.max_streams) > 0 ? Number(cfg.max_streams) : MAX_STREAMS;
@@ -835,28 +847,24 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     publishOwn: (list) => ownLine(async () => {
       if (!list?.length || !writable().length) return 0;
       const taken = new Set((await predicted()).map((r) => r.stream_name + PRED));
-      const seqs = (await db.get('nostr_own_seq')) ?? {};
+      const own = await ownStreams();
       const at = t();
-      let n = 0;
-      const announced = [];
+      const events = [];
       for (const x of list) {
         if (taken.has(x.stream)) continue;
-        const seq = (seqs[x.stream] ?? 0) + 1;
-        seqs[x.stream] = seq;
+        const o = (own[x.stream] ??= { seq: 0, created: at });
+        o.seq += 1;
         const meta = { stream_name: x.stream, nostr_pubkey: key.pubkey, name: x.name, description: x.description ?? '',
-          created_at: (await db.get('nostr_own_created'))?.[x.stream] ?? at, cadence_seconds: x.cadence ?? null, tags: x.tags ?? [],
+          created_at: o.created, cadence_seconds: x.cadence ?? null, tags: x.tags ?? [],
           metadata: { source_stream_name: x.source ?? null, alias_pubkey: aliasPubkey } };
-        announced.push(await stamped(announceEvent(meta, at)));
-        background(publish(sign(observationEvent({ stream: x.stream, value: String(x.value), seq, timestamp: Math.floor(x.at ?? at) }))));
-        n++;
+        events.push(await stamped(announceEvent(meta, at)),
+          sign(observationEvent({ stream: x.stream, value: String(x.value), seq: o.seq, timestamp: Math.floor(x.at ?? at) })));
       }
-      for (const ev of announced) background(publish(ev));
-      await db.set('nostr_own_seq', seqs);
-      const created = (await db.get('nostr_own_created')) ?? {};
-      for (const x of list) created[x.stream] ??= at;
-      await db.set('nostr_own_created', created);
-      await db.checkpoint();
-      ownInfo = { published: n, at, streams: Object.keys(seqs).length };
+      await db.set('nostr_own', own);
+      await db.checkpoint(); // kept before anything is sent: a reload never sends a seq again
+      for (const ev of events) background(publish(ev));
+      const n = events.length / 2;
+      ownInfo = { published: n, at, streams: Object.keys(own).length };
       onChange();
       return n;
     }),
