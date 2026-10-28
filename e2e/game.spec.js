@@ -154,6 +154,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   const sentCalls = () => t(page, 'game-sent-calls').locator('li').evaluateAll((li) => li.map((x) => `${x.textContent} ${x.querySelector('svg').getAttribute('aria-label')}`));
   await expect.poll(sentCalls).toEqual(['bitcoin up', 'ether down', 'satori up', 'dogecoin down']);
   expect(await t(page, 'game-sent-calls').evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto');
+  await shot(page, 'game-sent.png');
   await expect(t(page, 'game-done')).toHaveCount(0);
   // Dismiss (this session): the streams again, to look at; where the buttons were, come back tomorrow
   await t(page, 'game-dismiss').click();

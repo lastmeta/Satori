@@ -278,17 +278,17 @@ export function gameTab(a) {
         <p class="muted center gmsg" hidden="${showing('loading')}">Reading the games…</p>
         <div class="gmsg" hidden="${showing('error')}"><p class="error">${() => `The chain did not answer: ${g().error}`}</p><button @click="${a.loadGame}">Try again</button></div>
         <div class="gmsg" data-test="game-nothing" hidden="${showing('nothing')}"><p>${() => nothingText(g().streams)}</p><button data-test="game-again" @click="${a.loadGame}">Check again</button></div>
-        <div class="gmsg" data-test="game-sent" hidden="${showing('sent')}">
-          <h2>${() => `${g().sent?.count ?? 0} Prediction${g().sent?.count === 1 ? '' : 's'} submitted`}</h2>
-          <p class="muted small">${() => (g().sent?.count === 1 ? 'It will be scored in 24 hours.' : 'They will be scored in 24 hours.')}</p>
-          <p class="muted small" data-test="game-again-in">${() => (g().sent ? againText(opensAgain(g().sent, g().streams), state.now) : '')}</p>
-          <div class="gsent-buttons">
+        <div class="gmsg gsent" data-test="game-sent" hidden="${showing('sent')}">
+          <div class="gsent-top">
+            <h2>${() => `${g().sent?.count ?? 0} Prediction${g().sent?.count === 1 ? '' : 's'} submitted`}</h2>
+            <p class="muted small">${() => (g().sent?.count === 1 ? 'It will be scored in 24 hours.' : 'They will be scored in 24 hours.')}</p>
+            <p class="muted small" data-test="game-again-in">${() => (g().sent ? againText(opensAgain(g().sent, g().streams), state.now) : '')}</p>
             <button data-test="game-remind" hidden="${() => !state.reminder.supported}" disabled="${() => g().reminding || reminded()}"
               @click="${a.gameRemind}">${() => (reminded() ? 'Reminder set' : g().reminding ? 'Setting…' : 'Remind me')}</button>
-            <button data-test="game-dismiss" @click="${a.gameRest}">Dismiss</button>
+            <p class="error small" role="alert" data-test="game-remind-error" hidden="${() => !g().remindError}">${() => g().remindError}</p>
           </div>
-          <p class="error small" role="alert" data-test="game-remind-error" hidden="${() => !g().remindError}">${() => g().remindError}</p>
           <ul class="gcalls gsent-calls" data-test="game-sent-calls" hidden="${() => !g().sent?.calls?.length}">${() => (g().sent?.calls ?? []).map((c) => html`<li><span>${c.name}</span>${callArrow(c.direction)}</li>`.key(`${c.streamId}:${c.direction}`))}</ul>
+          <button class="gsent-dismiss" data-test="game-dismiss" @click="${a.gameRest}">Dismiss</button>
         </div>
         ${play(a)}
         ${submit(a)}

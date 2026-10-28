@@ -192,8 +192,12 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .garrow.up { stroke: #1f8a4c; }
 .garrow.down { stroke: #c0362e; }
 .gcalls-wrap > p { margin: auto 0; }
-.gsent-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; } /* the Sent screen: Remind me, Dismiss */
-.gsent-calls { margin: 16px 0 0; max-height: 38vh; overflow-y: auto; text-align: left; overscroll-behavior: contain; } /* the Sent screen: what was predicted, scrolls when long */
+.gsent { align-self: stretch; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 32px; padding-block: 24px 16px; min-height: 0; } /* the Sent screen: the message, time and Remind me at the top; the predictions; Dismiss under them */
+.gsent-top { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.gsent-top h2, .gsent-top p { margin: 0; }
+.gsent-dismiss { margin-top: 28px; } /* well apart from the list: it puts away the whole screen, not the predictions */
+.gsent-calls { margin: 0; width: 100%; min-height: 0; overflow-y: auto; text-align: left; overscroll-behavior: contain; } /* what was predicted, scrolls when long */
+
 .gsubmit-screen > .gbtn.submit { flex: none; }
 @media (prefers-reduced-motion: reduce) { .gsubmit { transition: none; } }
 @media (min-width: 1024px) { .game { height: calc(100dvh - 68px - 32px); } body[data-tab="game"] #app { padding-bottom: 32px; } }
