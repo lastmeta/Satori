@@ -15,6 +15,7 @@ import { fakeRpc, revert, panic } from './fake-rpc.js';
 export const E18 = 10n ** 18n;
 
 const lc = (a) => a.toLowerCase();
+const ADAPTER = `0x${'ad'.repeat(20)}`; // the adapter whose valueDisplay a stream's `display` answers
 
 /**
  * @param {{round?: number, hour?: number, eth?: Record<string, bigint>}} [opts]
@@ -147,7 +148,17 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         const st = s.streams[id] ?? revert('InvalidStreamId');
         return [st.name ?? (id === 1 ? 'satori' : `stream ${id}`), zeroAddress, 1, BigInt(st.history.at(-1)?.value ?? 0), BigInt(st.history.at(-1)?.hour ?? 0), true];
       },
+      // streams[id].display ({ decimals, unit, label }): an adapter stream (ADAPTER says it); else a simple one (adapterId 0)
+      streams: ([i]) => {
+        const id = Number(i) + 1;
+        const st = s.streams[id] ?? revert();
+        return [zeroAddress, st.display ? 2 : 1, st.cadence ?? 0, st.display ? 7 : 0, !!st.named, `0x${id.toString(16).padStart(64, '0')}`, st.name ?? ''];
+      },
+      adapter: ([a]) => (a === 7 ? ADAPTER : zeroAddress),
       isNamedStream: ([id]) => (s.streams[id] && !s.streams[id].namedReverts ? s.streams[id].named : revert()), // reverts for an unknown id (D6 and D7)
+    }),
+    [ADAPTER]: fns(abi.adapterUiAbi, {
+      valueDisplay: ([, config]) => { const d = s.streams[Number(BigInt(config))].display; return [d.decimals, d.unit, d.label]; },
     }),
     [DEFAULTS.hub]: fns(abi.hubAbi, {
       delegatePredictionPower: delegate,

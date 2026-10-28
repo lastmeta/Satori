@@ -17,7 +17,7 @@ import {
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import {
-  airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, tokenAbi, votingAbi,
+  adapterUiAbi, airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, tokenAbi, votingAbi,
 } from './abi.js';
 import { serial } from '../util.js';
 
@@ -440,6 +440,32 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       if (!ids.length) return [];
       const res = await client.multicall({ allowFailure: true, contracts: ids.map((id) => registry('getDataStreamInfo', [id])) });
       return res.map((r) => (r.status === 'success' ? r.result[0] : ''));
+    },
+
+    /**
+     * How streams' values read, as their adapters say (valueDisplay, IStreamAdapterUIDescriptor.sol): the values are
+     * integers in the stream's own units, `decimals` of them after the point (a Sentiment stream: 18, "SATORI", "Net
+     * prediction flow"). Three multicalls: the streams' adapter and config, the adapters' addresses, their displays.
+     * → [{ decimals, unit, label }] in the order of `ids`; null for a stream with no adapter (set by its key) or unread
+     */
+    async streamDisplays(ids) {
+      if (!ids.length) return [];
+      const metas = (await client.multicall({ allowFailure: true, contracts: ids.map((id) => registry('streams', [BigInt(id - 1)])) }))
+        .map((r) => (r.status === 'success' && r.result[3] ? { provider: r.result[0], adapterId: r.result[3], config: r.result[5] } : null));
+      const adapterIds = [...new Set(metas.filter(Boolean).map((m) => m.adapterId))];
+      if (!adapterIds.length) return ids.map(() => null);
+      const at = new Map((await client.multicall({ allowFailure: true, contracts: adapterIds.map((a) => registry('adapter', [a])) }))
+        .map((r, i) => [adapterIds[i], r.status === 'success' ? r.result : null]));
+      const asked = metas.map((m) => (m && at.get(m.adapterId) ? m : null));
+      const live = asked.filter(Boolean);
+      const shown = live.length ? await client.multicall({ allowFailure: true, contracts: live.map((m) => ({ address: at.get(m.adapterId),
+        abi: adapterUiAbi, functionName: 'valueDisplay', args: [m.provider, m.config] })) }) : [];
+      let k = 0;
+      return asked.map((m) => {
+        if (!m) return null;
+        const r = shown[k++];
+        return r.status === 'success' ? { decimals: r.result[0], unit: r.result[1], label: r.result[2] } : null;
+      });
     },
 
     /**

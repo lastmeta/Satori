@@ -1039,7 +1039,7 @@ the page's JS context:
 - `await satori.game()` → `{ play, by, round, playedToday, favorites, streams, unavailable }`: the Game tab.
   `by`: who sends (the alias when the wallet is staked with it, else the wallet); `streams` in the game's order
   (favorites first, the reward eligible before the rest), each `{ streamId, gameId, name, named, eligible,
-  alreadyPredicted, latest, streak, history }` (`streak`: `{ streak, bar }` or null, bar the game's turning point; `alreadyPredicted`: played as usual, not sent); `unavailable`: those that
+  alreadyPredicted, latest, display, streak, history }` (`latest`: the newest value in the stream's own units; `display`: `{ decimals, unit, label }` from its adapter, or null; `history`'s values are the chain's integers, `decimals` of them after the point; `streak`: `{ streak, bar }` or null, bar the game's turning point; `alreadyPredicted`: played as usual, not sent); `unavailable`: those that
   can't be played now, and why (the contract's error).
 - `await satori.playGame([{ streamId, direction: 'up' | 'down' }])` → `{ count, hash, by, at, round }` (only on the
   person's request; `setPlay('manual')` first): one transaction, from the alias or the wallet (unlocked). Streams

@@ -181,7 +181,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   // An open drill-in follows the model: the next `_pred` shows in its Out without reopening it.
   const rainId = (await models(page)).find((m) => m.source === 'nostr').id;
   await page.evaluate((id) => window.satori.go(`models/${id}`), rainId);
-  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Relays\s*e2e-models-\w+_pred #16 · 1 relay$/);
+  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Network\s*e2e-models-\w+_pred #16 · 1 relay$/);
   await page.waitForTimeout(1050);
   await provider.observe({ stream, value: '14', seq: 17, timestamp: t0 + 16 * H });
   await expect(page.locator('[data-test=model-destination]')).toHaveText(/_pred #17 · 1 relay$/, { timeout: 60_000 });

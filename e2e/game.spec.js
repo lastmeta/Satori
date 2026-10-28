@@ -39,6 +39,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   s.streams[3] = { game: 3, named: false, cadence: 60, name: 'ether', history: hourly(72, (i) => 3000 - 40 * Math.cos(i / 5)) };
   s.weights[2] = 3n * E18;
   s.weights[3] = 2n * E18;
+  s.streams[1].display = { decimals: 18, unit: 'SATORI', label: 'Net prediction flow' }; // the Sentiment stream: 18 decimals
   s.streams[4] = { game: 4, named: false, cadence: 60, name: 'dogecoin', history: hourly(72, (i) => 100 + i) }; // no weight: not reward eligible
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page, `/?ref=${REFERRER}`); // an invite link: it holds who invited
@@ -68,6 +69,9 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
     .toEqual(['manual', true]);
   await expect(name(page)).toHaveText('bitcoin', { timeout: 30_000 });
   await expect(t(page, 'game-latest')).toHaveText(/^\d{2},\d{3}\.\d{2}$/);
+  // a stream's value in its own units: the Sentiment stream's 59058240589371161, 18 decimals after the point
+  expect((await page.evaluate(() => window.satori.game())).streams.find((x) => x.streamId === 1))
+    .toMatchObject({ latest: '0.059058', display: { decimals: 18, unit: 'SATORI', label: 'Net prediction flow' } });
   const [star, mark] = [await t(page, 'game-star').boundingBox(), await page.locator('.brand-mark').boundingBox()];
   expect(Math.abs((star.x + star.width / 2) - (mark.x + mark.width / 2))).toBeLessThan(1.5); // the star centred under the Satori mark
   const [theme, latest] = [await page.locator('[data-test=theme-toggle] svg').boundingBox(), await t(page, 'game-latest').boundingBox()];

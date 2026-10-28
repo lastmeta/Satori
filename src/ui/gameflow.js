@@ -51,10 +51,14 @@ export const favoritesIn = (queue, favorites = []) => queue.filter((s) => favori
  */
 export const submitEarly = ({ index, favorites, picks, split = 0 }) => picks > 0 && ((favorites > 1 && index >= favorites) || (split > 0 && index >= split));
 
-/** The latest value as the game shows it, above the chart: the number, Sentiment streams too (the owner, 2026-10-26). */
+/**
+ * The latest value as the game shows it, above the chart: the number, Sentiment streams too (the owner, 2026-10-26), in
+ * the stream's own units: the chain keeps an integer with the adapter's `decimals` after the point (`display`; a
+ * Sentiment stream's 18: 999999228392505300 is 0.999999).
+ */
 export function latestText(stream) {
   const h = stream?.history ?? [];
-  return h.length ? fmtNum(Number(h.at(-1).value)) : '';
+  return h.length ? fmtNum(Number(h.at(-1).value) / 10 ** (stream.display?.decimals ?? 0)) : '';
 }
 
 /** The chart's line: SVG points in a w × h box, oldest on the left; flat when every value is the same. */

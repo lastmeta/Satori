@@ -599,7 +599,8 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     /**
      * The Game tab's streams (docs/design/base.md#the-game): every stream with a game (weight 0: not reward eligible), each with its name, its history
      * (decimal strings), whether the player can predict it now (`blocked`: the simulate's revert name, else null) and the
-     * player's streak on it with the game's bar (`streak`: { streak, bar }, or null).
+     * player's streak on it with the game's bar (`streak`: { streak, bar }, or null), and how its values read (`display`:
+ * { decimals, unit, label } from its adapter, or null).
      * The player: the alias when the wallet is staked with it, else the wallet. → { by: 'alias' | 'wallet', streams }
      */
     async gameStreams() {
@@ -608,12 +609,15 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
       const player = by === 'alias' ? alias.evmAddress : walletAddress;
       const list = await chain.streams({ all: true });
-      const [names, streaks] = await Promise.all([chain.streamNames(list.map((g) => g.streamId)),
-        chain.streaks(player, list.map((g) => g.gameId)).catch(() => list.map(() => null))]);
+      const ids = list.map((g) => g.streamId);
+      const [names, streaks, displays] = await Promise.all([chain.streamNames(ids),
+        chain.streaks(player, list.map((g) => g.gameId)).catch(() => list.map(() => null)),
+        chain.streamDisplays(ids).catch(() => ids.map(() => null))]);
       const streams = await Promise.all(list.map(async (g, i) => {
         const [history, blocked] = await Promise.all([chain.history(g.streamId), chain.simulateGame(player, { gameId: g.gameId, direction: UP })]);
         return { streamId: g.streamId, gameId: g.gameId, name: names[i] || `Stream ${g.streamId}`, named: g.named,
           cadenceMinutes: g.cadenceMinutes, weight: String(g.weight), blocked, streak: streaks[i], // { streak, bar } or null
+          display: displays[i], // { decimals, unit, label }: how its values read; null: plain numbers
           history: history.map((h) => ({ hour: h.hour, value: String(h.value) })) };
       }));
       return { by, streams, round: view().round, played: (await db.get('game_last_play')) ?? null };

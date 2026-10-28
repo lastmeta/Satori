@@ -165,6 +165,12 @@ describe('the batch\'s pieces', () => {
     s.weights[9] = 1n;
     expect((await chain.streams()).find((g) => g.streamId === 3).named).toBe(false);
   });
+  test('streamDisplays: each adapter stream\'s decimals, unit and label (valueDisplay); a simple stream null', async () => {
+    s.streams[1].display = { decimals: 18, unit: 'SATORI', label: 'Net prediction flow' };
+    s.streams[2] = { game: 0, named: false, cadence: 60, history: [] };
+    expect(await chain.streamDisplays([1, 2, 9])).toEqual([{ decimals: 18, unit: 'SATORI', label: 'Net prediction flow' }, null, null]);
+    expect(await chain.streamDisplays([])).toEqual([]);
+  });
   test('history: the whole ring, oldest first', async () => {
     s.streams[1].history = Array.from({ length: 900 }, (_, i) => ({ hour: i, value: BigInt(i) }));
     const h = await chain.history(1);

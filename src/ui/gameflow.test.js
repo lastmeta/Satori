@@ -42,6 +42,9 @@ test('latestText: the latest value, a Sentiment stream too', () => {
   expect(latestText(s(1, 1, { named: true, history: [{ value: '100' }, { value: '90' }] }))).toBe('90');
   expect(latestText(s(1, 1, { history: [{ value: '1234.5' }] }))).toBe('1,234.50');
   expect(latestText(s(1, 1))).toBe('');
+  // the adapter's decimals: a Sentiment stream's 18
+  expect(latestText(s(1, 1, { named: true, display: { decimals: 18 }, history: [{ value: '999999228392505300' }] }))).toBe('0.999999');
+  expect(latestText(s(1, 1, { display: { decimals: 8 }, history: [{ value: '8053494000000' }] }))).toBe('80,534.94');
 });
 
 test('linePoints: oldest left, highest at the top, flat when level', () => {

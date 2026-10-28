@@ -40,7 +40,12 @@ export const registryAbi = abi(
   'function getHistoryPage(uint32 streamId, uint256 offset, uint256 limit) view returns (int232[] values, uint24[] entryHours, uint16 total)',
   'function isNamedStream(uint32) view returns (bool)',
   'function getDataStreamInfo(uint32 streamId) view returns (string name, address provider, uint8 streamType, int256 value, uint256 valueHour, bool exists)',
+  'function streams(uint256) view returns (address provider, uint8 streamType, uint24 minCadenceMinutes, uint32 adapterId, bool named, bytes config, string name)',
+  'function adapter(uint32) view returns (address)',
 );
+
+/** A stream adapter's UI descriptor (IStreamAdapterUIDescriptor.sol): how its values read. Must not revert; some adapters lack it. */
+export const adapterUiAbi = abi('function valueDisplay(address target, bytes config) view returns (uint8 decimals, string unit, string label)');
 
 export const hubAbi = abi(
   'function delegatePredictionPower(address delegate)',
