@@ -28,6 +28,7 @@ const parse = (text) => {
   try { return text == null ? null : JSON.parse(text); } catch { return null; }
 };
 const num = (x) => (x == null || x === '' ? null : Number.isFinite(Number(x)) ? Number(x) : null);
+const scaled = (x, unit) => { const n = num(x); return n == null ? null : n / unit; };
 const direction = (forecast, latest) => (forecast == null || latest == null ? null
   : forecast > latest ? 'up' : forecast < latest ? 'down' : 'flat');
 
@@ -169,12 +170,13 @@ export function baseModels(batch, baseFits = new Map()) {
     const stream = String(g.streamId);
     const dir = g.direction === UP ? 'up' : 'down'; // as sent (a tie follows the stream's last move: g.rule)
     const fit = 'tests' in g || 'score' in g ? g : baseFits.get(`${batch.hash ?? batch.round}:${g.streamId}`) ?? {};
+    const unit = 10 ** (g.decimals ?? 0); // the chain's integers, `decimals` after the point (a batch before they were kept: as they are)
     const quality = qualityOf({ kind: g.model, score: fit.score ?? null, persist: fit.persist ?? null });
     return modelOf({
       id: `base:${stream}`, source: 'base', kind: g.model, inputs: [{ stream, name }], trained: batch.at,
       outputs: [{
-        stream, name, latest: { value: num(g.latest), ts: null },
-        forecast: { value: num(g.forecast), step: g.step ?? null, horizon: g.horizon, at: batch.at }, direction: dir,
+        stream, name, latest: { value: scaled(g.latest, unit), ts: null },
+        forecast: { value: scaled(g.forecast, unit), step: g.step ?? null, horizon: g.horizon, at: batch.at }, direction: dir,
         influence: [{ stream, name, share: 1 }], quality,
         destinations: [{ to: 'contract', status: sent ? 'sent' : 'left out', when: batch.at,
           ref: { round: batch.round, game: g.gameId, direction: dir, ...(g.rule ? { rule: g.rule } : {}), tx: sent ? batch.hash : null,
@@ -345,9 +347,11 @@ async function baseDetail(key, lastBatch, baseHistory) {
   const m = baseModels(lastBatch).find((x) => x.outputs[0].stream === key);
   if (!m) return null;
   const { step, horizon } = m.outputs[0].forecast;
+  const g = [...lastBatch.games, ...(lastBatch.dropped ?? [])].find((x) => String(x.streamId) === key);
+  const unit = 10 ** (g?.decimals ?? 0); // the history in the stream's own units, as its latest and forecast
   let points = [];
   try {
-    points = baseHistory ? await baseHistory(Number(key)) : [];
+    points = baseHistory ? (await baseHistory(Number(key))).map((p) => ({ ...p, value: p.value / unit })) : [];
   } catch (err) {
     console.warn('[satori] base history', err);
   }

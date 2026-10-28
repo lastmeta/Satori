@@ -158,6 +158,9 @@ describe('the list: every model, named for the stream it predicts', () => {
     expect(tied[0].outputs[0]).toMatchObject({ direction: 'up', destinations: [{ ref: { direction: 'up', rule: 'last-move' } }] });
     expect(list[2].outputs[0].destinations[0]).toMatchObject({ status: 'left out', ref: { tx: null, error: 'DuplicatePrediction' } });
     expect(baseModels(null)).toEqual([]);
+    // in the stream's own units: a game kept with its adapter's decimals (a Sentiment stream's 18)
+    const wad = baseModels({ ...batch, games: [{ ...batch.games[1], decimals: 18, latest: '999999228392505300', forecast: '1500000000000000000' }], dropped: [] });
+    expect(wad[0].outputs[0]).toMatchObject({ latest: { value: 0.9999992283925053 }, forecast: { value: 1.5 } });
     // a game from a batch before backtests were kept: the training pass's fit (in memory, by `<hash>:<stream id>`)
     expect(baseModels(batch, new Map([['0xabc:5', { score: 0.5, persist: 1, tests: 9 }]]))[2].quality).toMatchObject({ mark: 'better', ratio: 0.5 });
   });

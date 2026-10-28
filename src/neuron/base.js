@@ -264,11 +264,15 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
     report('check');
     const games = [];
     const dropped = [];
-    for (const g of await chain.streams()) {
+    const list = await chain.streams();
+    // how each stream's values read (the adapter's decimals), kept with its game for the Models tab; unread: plain numbers
+    const displays = chain.streamDisplays ? await chain.streamDisplays(list.map((g) => g.streamId)).catch(() => []) : [];
+    for (const [i, g] of list.entries()) {
       const history = await chain.history(g.streamId);
       const step = stepFor(g.cadenceMinutes);
       const f = history.length ? forecast(toPoints(history), { step, horizon: horizonFor(g.cadenceMinutes) }) : null;
-      const base = { streamId: g.streamId, gameId: g.gameId, named: g.named, cadenceMinutes: g.cadenceMinutes };
+      const base = { streamId: g.streamId, gameId: g.gameId, named: g.named, cadenceMinutes: g.cadenceMinutes,
+        ...(displays[i] ? { decimals: displays[i].decimals } : {}) };
       if (!f) {
         // no values yet: nothing to forecast, so the no-opinion rule (DOWN, as 'flat'). A Sentiment stream records its
         // first value when it is first predicted (updateValuesStrict), so skipping it would leave it empty for good

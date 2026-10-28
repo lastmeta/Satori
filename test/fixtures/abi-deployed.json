@@ -13,11 +13,13 @@
       "function binaryGameByStream(uint32) -> (uint32) view"
     ],
     "SatoriRegistry": [
+      "function adapter(uint32) -> (address) view",
       "function getAllDataStreams() -> (uint32[]) view",
       "function getDataStreamInfo(uint32) -> (string,address,uint8,int256,uint256,bool) view",
       "function getHistoryPage(uint32,uint256,uint256) -> (int232[],uint24[],uint16) view",
       "function getLatestUpdateInfo(uint32) -> (uint16,uint64,uint64,uint24,bool,int232) view",
-      "function isNamedStream(uint32) -> (bool) view"
+      "function isNamedStream(uint32) -> (bool) view",
+      "function streams(uint256) -> (address,uint8,uint24,uint32,bool,bytes,string) view"
     ],
     "SatoriHub": [
       "function allowedDelegator(address) -> (address) view",
