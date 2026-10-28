@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (announcements)
+
+- No hourly re-announce: our announcements go on every relay (re)connect and on a change, each signed with the time
+  its content last changed, so an unchanged one is the same event (the same id) and a relay stores nothing new.
+
 ## Changed 2026-10-28 (a stream's units)
 
 - `game()`'s streams carry `display` (`{ decimals, unit, label }`, the adapter's valueDisplay), and `latest` is in the

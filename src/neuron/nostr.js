@@ -1,7 +1,7 @@
 // The Nostr flow, as Satori Lite runs it (docs/design/nostr.md):
 //   relays = central's /peer/relays + the user's; each relay: REQ follow, announce `<stream>_pred`
 //   34601 in ─▶ subscribed? ─▶ verify ─▶ store once ─▶ forecast (one cadence ahead) ─▶ publish `<stream>_pred`
-//   hourly: refetch the relay list, reconnect, re-announce; NIP-65 daily
+//   hourly: refetch the relay list, reconnect (each open announces again: the same events); NIP-65 daily
 //   the track record (docs/design/track-record.md): once relays are open, then hourly at most every 6 h, the catalog is
 //   scanned for prediction streams; they and their sources are followed with the subscriptions, and a watched stream's
 //   34601 is kept (src/neuron/records.js): never forecast, never published
@@ -155,10 +155,27 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
   }
 
   /** A `_pred`'s announcement: priced, with its listing (market.listing: price_per_obs and the channel's market). */
-  const announcementOf = (sub, at) => sign(announceEvent(predMetadata({ sub, pubkey: key.pubkey, aliasPubkey,
+  /**
+   * An announcement (or tombstone) signed with the time its content last changed (the owner, 2026-10-28): sent again
+   * unchanged it is the same event (the same id), which a relay already holding it ignores; a change gets a later time.
+   */
+  let stamps;
+  async function stamped(template) {
+    stamps ??= db.get('nostr_announced').then((m) => m ?? {});
+    const memo = await stamps;
+    const d = template.tags.find((x) => x[0] === 'd')?.[1];
+    const body = JSON.stringify([template.content, template.tags]);
+    const was = memo[d];
+    if (was?.body === body) return sign({ ...template, created_at: was.at });
+    const at = Math.max(template.created_at, (was?.at ?? 0) + 1); // a newer one replaces it on every relay
+    memo[d] = { body, at };
+    await db.set('nostr_announced', memo);
+    return sign({ ...template, created_at: at });
+  }
+  const announcementOf = (sub, at) => stamped(announceEvent(predMetadata({ sub, pubkey: key.pubkey, aliasPubkey,
     listing: market.listing(sub.stream_name + PRED) }), at));
   const predicted = async () => (await db.relayStreams({ active: true })).filter((r) => r.predict !== false);
-  const announcements = async (at) => (await predicted()).map((sub) => announcementOf(sub, at));
+  const announcements = async (at) => Promise.all((await predicted()).map((sub) => announcementOf(sub, at)));
 
   /** NIP-65 of the open relays, when the last one is a day old (start.py:370-389); one at a time. */
   let listing = null;
@@ -268,7 +285,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
 
   /**
    * The hourly pass (start.py:200-292): central's relay list again (kept when
-   * central fails), connect new and dropped relays, re-announce, NIP-65.
+   * central fails), connect new and dropped relays, NIP-65; no re-announce (a reconnect does, with the same events: stamped).
    */
   function reconcile() {
     lastReconcile = now();
@@ -289,7 +306,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     await connectNew(added);
     onChange();
     scanDue(); // not awaited: it waits for relays still connecting, and the pass need not
-    await Promise.all([background(announce()), background(relayList()), background(prune()), background(market.pass())]);
+    await Promise.all([background(relayList()), background(prune()), background(market.pass())]);
   }
 
   /**
@@ -707,7 +724,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       await refollow();
       await db.checkpoint();
       background(publish(sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at }))));
-      if (predict) background(publish(announcementOf(sub, at)));
+      if (predict) background(publish(await announcementOf(sub, at)));
       onChange();
       return viewOf(uuid);
     }),
@@ -716,14 +733,14 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     async sell(stream, price) {
       const sub = await ownPred(stream);
       await market.sell(sub.stream_name + PRED, priceOf(price));
-      background(publish(announcementOf(sub, t())));
+      background(publish(await announcementOf(sub, t())));
       return this.status();
     },
     /** Free again: announced without a price, published in the clear. → status() */
     async unsell(stream) {
       const sub = await ownPred(stream);
       await market.unsell(sub.stream_name + PRED);
-      background(publish(announcementOf(sub, t())));
+      background(publish(await announcementOf(sub, t())));
       return this.status();
     },
     /**
@@ -796,7 +813,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
         }
         await db.setRelayPredict(uuid, true);
         await db.checkpoint();
-        background(publish(announcementOf({ ...sub, predict: true }, at)));
+        background(publish(await announcementOf({ ...sub, predict: true }, at)));
         // its latest observation: predicted at once, not at the next one
         if (sub.obs_seq != null) {
           await forecastAndPublish(uuid, { ...sub, predict: true }, { seq: sub.obs_seq, value: sub.obs_value, raw: parseRaw(sub.obs_raw) });
@@ -805,7 +822,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
         await db.setRelayPredict(uuid, false);
         await watch.drop([[key.pubkey, s + PRED]]); // our `_pred` leaves the track record with its tombstone
         await db.checkpoint();
-        await sendKept([sign(tombstoneEvent(s + PRED, key.pubkey, at))]);
+        await sendKept([await stamped(tombstoneEvent(s + PRED, key.pubkey, at))]);
       }
       onChange();
       return viewOf(uuid);
@@ -824,6 +841,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       const seqs = (await db.get('nostr_own_seq')) ?? {};
       const at = t();
       let n = 0;
+      const announced = [];
       for (const x of list) {
         if (taken.has(x.stream)) continue;
         const seq = (seqs[x.stream] ?? 0) + 1;
@@ -831,10 +849,11 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
         const meta = { stream_name: x.stream, nostr_pubkey: key.pubkey, name: x.name, description: x.description ?? '',
           created_at: (await db.get('nostr_own_created'))?.[x.stream] ?? at, cadence_seconds: x.cadence ?? null, tags: x.tags ?? [],
           metadata: { source_stream_name: x.source ?? null, alias_pubkey: aliasPubkey } };
-        background(publish(sign(announceEvent(meta, at))));
+        announced.push(await stamped(announceEvent(meta, at)));
         background(publish(sign(observationEvent({ stream: x.stream, value: String(x.value), seq, timestamp: Math.floor(x.at ?? at) }))));
         n++;
       }
+      for (const ev of announced) background(publish(ev));
       await db.set('nostr_own_seq', seqs);
       const created = (await db.get('nostr_own_created')) ?? {};
       for (const x of list) created[x.stream] ??= at;
@@ -856,7 +875,7 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       await refollow();
       await db.checkpoint();
       await sendKept([sign(subscriptionEvent({ stream: s, provider: p, subscriber: key.pubkey, now: at, unsubscribe: true })),
-        sign(tombstoneEvent(s + PRED, key.pubkey, at))]);
+        await stamped(tombstoneEvent(s + PRED, key.pubkey, at))]);
       onChange();
       return this.status();
     },

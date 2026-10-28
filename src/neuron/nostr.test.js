@@ -593,7 +593,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     error.mockRestore();
   });
 
-  test('announce on every (re)connect where we write; reconcile re-announces, refetches the relay list and reconnects', async () => {
+  test('announce on every (re)connect where we write, the same event until it changes; reconcile refetches the relay list and reconnects, no re-announce', async () => {
     await subscribed('btc');
     const u = relays.get(USER_RELAY);
     u.published = [];
@@ -602,12 +602,25 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await settle();
     expect(kinds(u)).toEqual([[34600, 'btc_pred']]);
     expect(relays.get(CENTRAL_RELAY).published).toEqual([]);
+    const first = u.published[0];
+    clock += 60;
+    u.drop();
+    u.open();
+    await settle();
+    expect(u.published[1].id).toBe(first.id); // unchanged: the same event, which a relay holding it ignores
+    await nostr.setPredict(PROV_PUB, 'btc', false);
+    await nostr.setPredict(PROV_PUB, 'btc', true);
+    await settle();
+    const [tomb, back] = u.published.filter((e) => e.kind === 34600).slice(-2);
+    expect(tomb.created_at).toBeGreaterThan(first.created_at); // changed (its tombstone): a later one replaces it
+    expect(back.created_at).toBeGreaterThan(tomb.created_at); // and predicting again outdates the tombstone, even within a second
+    u.published = [];
     central.relayList = [{ relay_url: 'wss://new.test' }];
     clock += 3600;
     await nostr.reconcile();
     expect(relays.get(CENTRAL_RELAY).closed).toBe(true);
     expect(relays.get('wss://new.test').connects).toBe(1);
-    expect(kinds(u).slice(1)).toContainEqual([34600, 'btc_pred']);
+    expect(kinds(u)).not.toContainEqual([34600, 'btc_pred']); // the hourly pass announces nothing
     const before = u.connects;
     u.drop();
     await nostr.reconcile();

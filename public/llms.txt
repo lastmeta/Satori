@@ -341,8 +341,9 @@ Every method is below; `await satori.status()` shows everything at once.
   central.
   Unsubscribe publishes the unsubscription and deletes the `_pred`
   announcement (a tombstone).
-- Hourly: the relay list again, dropped relays reconnected, `_pred`
-  announcements again; daily: a NIP-65 relay list (10002), and the relay
+- Announcements go on every (re)connect and on a change, signed with the
+  time their content last changed: unchanged, a re-send is the same event.
+  Hourly: the relay list again, dropped relays reconnected; daily: a NIP-65 relay list (10002), and the relay
   streams' observations older than their window pruned.
 - The track record (docs/design/track-record.md): on its own, the neuron
   watches every prediction stream the relays announce (a `<name>_pred`
