@@ -341,6 +341,21 @@ export function nextCheckAt({ now, chainTime, pendingAt = null }) {
 }
 
 /**
+ * A play noted without its calls (before the Sent screen listed them): read from its transaction, named from the streams.
+ * Nothing sent (no hash), or the read fails: as noted.
+ */
+async function withCalls(chain, play, streams) {
+  if (!play?.hash || play.calls) return play;
+  const sent = await chain.batchOf(play.hash).catch(() => null);
+  if (!sent) return play;
+  const calls = sent.map(({ gameId, direction }) => {
+    const s = streams.find((x) => x.gameId === gameId);
+    return s ? { streamId: s.streamId, name: s.name, direction } : null;
+  }).filter(Boolean);
+  return { ...play, calls };
+}
+
+/**
  * @param {object} o
  * @param {object} o.db the app's db
  * @param {{evmAddress: string, signDigest: Function}} o.alias
@@ -625,7 +640,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
           display: displays[i], // { decimals, unit, label }: how its values read; null: plain numbers
           history: history.map((h) => ({ hour: h.hour, value: String(h.value) })) };
       }));
-      return { by, streams, round: view().round, played: (await db.get('game_last_play')) ?? null };
+      return { by, streams, round: view().round, played: await withCalls(chain, (await db.get('game_last_play')) ?? null, streams) };
     },
 
     /** Who sends the Satori contract predictions, from the database alone (no chain): what the Game tab needs first. */

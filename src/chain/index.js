@@ -11,7 +11,7 @@
 //   await chain.claimRewards(wallet) / claimMerkle(wallet, proof) / claimAirdrop(wallet) / sendEth / sendSatori
 //   createChannels({ chain, config })              // payment channels on this chain (channels.js)
 import {
-  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, encodePacked, formatGwei, hashTypedData,
+  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, decodeFunctionData, encodePacked, formatGwei, hashTypedData,
   hexToBytes, keccak256, serializeSignature, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
@@ -496,6 +496,15 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
         if (floor == null || s.status !== 'success') return null;
         return { streak: Number(s.result), bar: Math.max(floor, st.status === 'success' ? Number(st.result[0]) : 0) };
       });
+    },
+
+    /** A sent batch's calls, read from its transaction: [{ gameId, direction }]; null when it is not one. */
+    async batchOf(hash) {
+      const tx = await client.getTransaction({ hash });
+      if (!same(tx.to, config.engine)) return null;
+      const { functionName, args } = decodeFunctionData({ abi: engineAbi, data: tx.input });
+      const requests = { predictMultipleWithPayloads: args[0], predictMultipleWithReferral: args[1] }[functionName];
+      return requests ? requests.map((r) => ({ gameId: Number(r.gameId), direction: Number(r.payload) })) : null;
     },
 
     /** One game alone, from the alias, without sending: null when it would pass, else the revert's name. RPC errors throw. */

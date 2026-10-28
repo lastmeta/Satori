@@ -607,6 +607,16 @@ describe('createBase', () => {
     expect(rpc.sent).toHaveLength(0); // nothing sent from the alias
   });
 
+  test("a play noted without its calls (an earlier version's): the Game tab reads them from its transaction", async () => {
+    await staked();
+    await base.refresh();
+    const r = await base.playHand([{ gameId: 1, direction: DOWN }]);
+    await base.notePlay({ hash: r.hash, at: r.at, by: 'alias', count: 1, round: ROUND }); // no `calls`
+    const { played, streams } = await base.gameStreams();
+    const s = streams.find((x) => x.gameId === 1);
+    expect(played.calls).toEqual([{ streamId: s.streamId, name: s.name, direction: DOWN }]);
+  });
+
   test('played by hand (setPlay, kept): a due batch is worked out and not sent; automatic again, it is sent', async () => {
     await staked();
     expect((await base.status()).play).toBe(null); // not read yet

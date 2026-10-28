@@ -451,9 +451,11 @@ between the header and the tab bar.
   look at and swipe through, and where the buttons were "Come back tomorrow
   to see how your predictions were scored."
 - **Played with the game this round**: each Submit is noted
-  (`game_last_play`: round, time, count, hash or none), and while it is the
-  same round the tab opens on its Sent screen ("Played today. The next game
-  opens tomorrow.").
+  (`game_last_play`: round, time, count, hash or none, and the calls), and
+  while it is the same round the tab opens on its Sent screen ("Played today.
+  The next game opens tomorrow."), the calls listed under Dismiss (scrolling).
+  A play noted without its calls (before they were kept) has them read from
+  its transaction (`chain.batchOf`).
 - **Already predicted, not with the game** (this round, or in the last 24
   hours, e.g. the app's own batch): the game plays as usual, and Submit says it was sent
   without sending those (owner, 2026-10-25: it doesn't matter, and must not
