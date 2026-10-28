@@ -34,7 +34,7 @@ export const MARKET_ID = 'satori-market'; // 34602 and 34603 addressed to us (Li
 const PAGE = 500; // strfry's maxFilterLimit (client.py:72-75)
 const MAX_FILTERS = 200; // strfry's maxReqFilterSize
 const MAX_PAGES = 100;
-const OUTBOX_MAX = 100; // unsubscribes and tombstones waiting for a relay
+const OUTBOX_MAX = 100; // events waiting for each relay (unsubscribes, tombstones, vouchers)
 const VERIFY_SLICE = 20; // catalog events checked between yields (~4 ms each): the page stays responsive
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -200,11 +200,23 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
   // write to that were not open or did not answer; sent when they open.
   const outbox = serial();
   const editOutbox = (fn) => outbox(async () => {
-    await db.set('nostr_outbox', fn((await db.get('nostr_outbox')) ?? []).slice(-OUTBOX_MAX));
+    await db.set('nostr_outbox', capEach(fn((await db.get('nostr_outbox')) ?? [])));
     await db.checkpoint();
   });
-  /** An answer, OK or not, means the relay has seen it; nothing to resend. */
-  const answered = (r) => !['not connected', 'timeout', 'disconnected'].includes(r.message) || r.ok;
+  /** The newest OUTBOX_MAX for each relay: one that never opens can't push out what waits for another. */
+  const capEach = (box) => {
+    const left = new Map();
+    return box.toReversed().filter((x) => {
+      const n = left.get(x.url) ?? 0;
+      left.set(x.url, n + 1);
+      return n < OUTBOX_MAX;
+    }).reverse();
+  };
+  /**
+   * The relay is done with it: OK, or a refusal that sending again won't change (NIP-01: duplicate, invalid, blocked,
+   * pow, restricted). No answer, a lost connection, `rate-limited:` and `error:` are tried again.
+   */
+  const answered = (r) => r.ok || !(['not connected', 'timeout', 'disconnected'].includes(r.message) || /^(rate-limited|error):/.test(r.message ?? ''));
   async function flushOutbox(e) {
     await outbox.idle();
     const mine = ((await db.get('nostr_outbox')) ?? []).filter((x) => x.url === e.url);

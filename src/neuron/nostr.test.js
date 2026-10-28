@@ -60,7 +60,7 @@ function fakeRelays() {
         r.published.push(e);
         r.log?.push(`publish ${e.kind}`);
         if (r.mute) return new Promise((resolve) => r.held.push(() => resolve({ ok: r.ok, message: '' })));
-        return { ok: r.ok, message: '' };
+        return { ok: r.ok, message: r.answer ?? '' };
       },
       release() { for (const f of r.held.splice(0)) f(); },
       deliver(e) { return hooks.onEvent(FOLLOW_ID, e); },
@@ -847,6 +847,20 @@ describe('subscribe → follow → intake → `_pred`', () => {
     relays.get(USER_RELAY).open();
     await again.idle();
     expect(kinds(relays.get(USER_RELAY)).filter(([k]) => k !== 10002)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
+    expect(await db.get('nostr_outbox')).toEqual([]);
+  });
+
+  test("a relay's refusal to try later (rate-limited:, error:) keeps an event waiting; a final one (duplicate:, invalid:) is done", async () => {
+    await subscribed('btc');
+    const u = relays.get(USER_RELAY);
+    Object.assign(u, { ok: false, answer: 'rate-limited: slow down' });
+    await nostr.unsubscribe(PROV_PUB, 'btc');
+    await nostr.idle();
+    expect((await db.get('nostr_outbox')).map((x) => x.event.kind)).toEqual([34602, 34600]); // kept, for the next open
+    u.answer = 'duplicate: have it';
+    u.drop();
+    u.open();
+    await nostr.idle();
     expect(await db.get('nostr_outbox')).toEqual([]);
   });
 });
