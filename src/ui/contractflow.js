@@ -86,7 +86,7 @@ export function networkChecks(c, now) {
 }
 
 const usable = (n) => (n?.relays ?? []).filter((r) => r.state !== 'blocked');
-/** The Satori relays: at least one connected. */
+/** The Satori Network: at least one connected. */
 export const relaysOn = (n) => usable(n).some((r) => r.state === 'open');
 
 /** The Relays card's checks: connected, watching prediction streams, publishing (fix: 'streams'). */

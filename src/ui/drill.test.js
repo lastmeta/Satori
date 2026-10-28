@@ -45,7 +45,7 @@ describe('the drill-in', () => {
     ]);
     expect(gold.destinations[1].href).toBe(`https://sepolia.basescan.org/tx/0x${'ab'.repeat(32)}`);
     expect(silver).toMatchObject({ name: 'silver', arrow: '↓', forecast: 'In 12 h 30.9 · in 24 h 30.5' });
-    expect(silver.destinations).toEqual([{ to: 'relays', label: 'Relays', text: 'silver_pred #12 · 2 relays', href: null }]);
+    expect(silver.destinations).toEqual([{ to: 'relays', label: 'Network', text: 'silver_pred #12 · 2 relays', href: null }]);
     for (const o of v.outputs) expect(o.chart.line).toMatch(/^M/);
     // In: the first output's inputs by default, ranked; the other output's on choosing it
     expect(v.inputs.map((i) => [i.name, i.pct, i.own])).toEqual([['oil', '60%', false], ['gold', '30%', true], ['silver', '10%', false]]);

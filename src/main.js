@@ -385,7 +385,7 @@ const pollNow = () => poller.poll();
  */
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
-  if (url && !isHttps(url)) throw new Error('The Satori Service server must be an https:// address.');
+  if (url && !isHttps(url)) throw new Error('The Satori Service address must be an https:// address.');
   const moved = (url || DEFAULT_CENTRAL) !== central.url;
   if (moved) {
     await poller.idle(); // its rows are the old central's
@@ -1138,7 +1138,7 @@ const actions = {
       state.subscribing = '';
     }
   }),
-  /** The Relay Streams list's one button: Predict follows the stream and predicts it; Stop predicting unfollows it. */
+  /** The Network Streams list's one button: Predict follows the stream and predicts it; Stop predicting unfollows it. */
   predictStream: shownAt('networkError', async (pubkey, stream, on) => {
     state.subscribing = `${pubkey}:${stream}`;
     try {

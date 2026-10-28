@@ -172,7 +172,7 @@ readers depend on, not Lite's bytes. Checked against satorilib
   relay over TLS, as the user's relay by default
   ([deploy.md](deploy.md#build-variables)).
 
-  <img src="../screenshots/settings-relay-stand-in.png" alt="Settings › Satori relays on an https page (the e2e): wss://relay.satorinet.io for ws://satorian.satorinet.io:7777, connected; a ws:// relay with no stand-in, not reachable here" width="240">
+  <img src="../screenshots/settings-relay-stand-in.png" alt="Settings › Satori Network on an https page (the e2e): wss://relay.satorinet.io for ws://satorian.satorinet.io:7777, connected; a ws:// relay with no stand-in, not reachable here" width="240">
 - **Publish to central's relays** (Settings, `meta.nostr_central_write`).
   Off by default on the dev server, on in a build (a build's default is
   `VITE_NOSTR_CENTRAL_WRITE` when set). When off, central's relays

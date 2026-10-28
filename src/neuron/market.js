@@ -1,4 +1,4 @@
-// Paid streams over the Satori relays (docs/design/market.md#selling-and-buying-over-the-relays): satorilib's data-stream
+// Paid streams over the Satori Network (docs/design/market.md#selling-and-buying-over-the-relays): satorilib's data-stream
 // market (satori_nostr/client.py), its Evrmore parts replaced by the Satori contract's payment channels (src/chain/channels.js).
 //   sell: our `<stream>_pred` announced with Lite's price_per_obs (satoshis); each observation encrypted (NIP-04) to each
 //   buyer in good standing

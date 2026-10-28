@@ -35,7 +35,7 @@ Every model the neuron runs, from what the app already holds:
 |---|---|---|---|---|
 | central | one per central stream with a forecast (`db.streams()`) | `bvar`, `bar1`, `bar1d`, `naive` (the latest prediction's) | the stream, 24 h ahead in two 12 h steps (t1, t2) | Network (the Satori Service, `network`) |
 | Base | one per registry stream in the last batch, and each one left out after a forecast (`meta.base_last_batch`) | `bar1`, `bar1d`, `naive` | the stream at its horizon (max(24 h, cadence)) | Contract (the Satori contract, `contract`) |
-| Nostr | one per subscription with a `_pred` (`nostr.status()`) | `bar1`, `bar1d`, `naive`, `echo` (a value that is not a number, echoed) | `<stream>_pred`, one cadence ahead | Relays (the Satori relays, `relays`) |
+| Nostr | one per subscription with a `_pred` (`nostr.status()`) | `bar1`, `bar1d`, `naive`, `echo` (a value that is not a number, echoed) | `<stream>_pred`, one cadence ahead | Relays (the Satori Network, `relays`) |
 
 A model's id is `<source>:<key>`: `central:<stream uuid>`, `base:<stream
 id>`, `nostr:<relay stream uuid>`.
@@ -69,7 +69,7 @@ quality = { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange,
             text }   // the mark in words: "7% better", "Same as no change", "12% worse", "Not scored yet"
 destinations: network  { status: 'accepted' | 'pending', ref: null }                        // the Satori Service (central)
               contract { status: 'sent' | 'left out', ref: { round, game, direction, tx, error? } } // the Satori contract (Base)
-              relays   { status: 'published' | 'waiting', ref: { stream, seq, relays } }         // the Satori relays (Nostr)
+              relays   { status: 'published' | 'waiting', ref: { stream, seq, relays } }         // the Satori Network (Nostr)
 // (until 2026-10-18 the destinations were 'central' | 'base' | 'network': renamed to the words people see)
 ```
 

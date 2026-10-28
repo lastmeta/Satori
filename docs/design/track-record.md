@@ -5,7 +5,7 @@
 [../intent/network.md](../intent/network.md)
 
 A market only works if a buyer can tell good sellers from bad (owner,
-2026-10-20). So every prediction stream on the Satori relays gets a
+2026-10-20). So every prediction stream on the Satori Network gets a
 **verified track record**: how its predictions did against no change,
 worked out by this neuron from what it saw arrive, live. It runs on its own,
 set and forget, the way the neuron predicts everything it sees. There are no
@@ -272,7 +272,7 @@ and its source.
 
 ## UI (Streams)
 
-A **Prediction streams** card, after the Satori relays card, folded until
+A **Prediction streams** card, after the Satori Network card, folded until
 tapped ("112 on the relays" beside its name):
 
 - the status line: "Watching 112 prediction streams · 23 with a record"
@@ -316,7 +316,7 @@ tapped ("112 on the relays" beside its name):
 - records are read again while Streams shows, when a watched stream gets
   an observation or the watched set changes, at most about once a second.
 
-The words people see: the Satori relays, never central or server.
+The words people see: the Satori Network, never central or server.
 
 <img src="../screenshots/streams-records-phone-light.png" alt="Prediction streams on a phone (the e2e): Watching 3 prediction streams · 2 with a record; 75% better from 9, 100% worse from 9, Not scored yet 2 of 5" width="240"> <img src="../screenshots/streams-record-detail-phone-light.png" alt="One opened: 75% less error than no change over the last 9 predictions, Right way 9 of 9, the outcomes and the predictions (dashed), Seen by this app since …" width="240">
 

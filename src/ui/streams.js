@@ -1,5 +1,5 @@
 // Streams: the Satori Service's (folded by default: central's line, its facts under Details, and Refresh, then each stream with its latest
-// value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori relays (Nostr), every prediction stream on the
+// value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori Network (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
 // Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there (its streams for sale open).
 // The words people see (docs/intent/ui.md); the addresses are Settings'.
@@ -75,7 +75,7 @@ function nostrCard(a) {
   const n = () => state.nostr;
   return html`
   <details class="card nostr" data-test="relay-streams">
-    <summary>Published Relay Streams</summary>
+    <summary>Published Network Streams</summary>
     <p class="muted" hidden="${() => n().subscriptions.length > 0}">Not yet publishing any streams to the relays.</p>
     <div class="srows" hidden="${() => !n().subscriptions.length}">
       <div class="row nrow head" aria-hidden="true"><span>Stream</span><span class="num">Latest</span><span>Observed</span><span class="num">Our _pred</span><span class="num">Seq</span><span>Relays</span><span></span></div>
@@ -145,7 +145,7 @@ function network(a) {
   };
   return html`
   <details class="card" data-test="network" @toggle="${(e) => e.target.open && !state.catalog.length && !state.discovering && a.discover()}">
-    <summary>Relay Streams</summary>
+    <summary>Network Streams</summary>
     <form class="search" @submit="${(e) => { e.preventDefault(); a.discover(); }}">
       <input name="q" type="search" aria-label="Search streams" placeholder="Search: bitcoin, weather, …" autocomplete="off"
         @input="${(e) => (state.catalogQuery = e.target.value)}">

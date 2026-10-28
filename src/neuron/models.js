@@ -230,7 +230,7 @@ export function sortModels(list, by = 'quality') {
   return [...list].sort((a, b) => rank(a) - rank(b) || ratio(a) - ratio(b) || byName(a, b));
 }
 
-/** Where predictions go, by the words people see: the Satori Service (central), the Satori contract (Base), the Satori relays (Nostr). */
+/** Where predictions go, by the words people see: the Satori Service (central), the Satori contract (Base), the Satori Network (Nostr). */
 export const DESTS = ['network', 'contract', 'relays'];
 
 /** The models whose predictions go to any of `to` (the filters that are on). */

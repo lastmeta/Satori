@@ -22,10 +22,10 @@ welcome).
 
 The words the page shows, and the code's names (docs/intent/ui.md):
 
-- the **Satori Service** ("Network") = central, Satori's server; free to
+- the **Satori Service** ("Service") = central, Satori's server; free to
   submit to. Its address is the one URL Settings shows ("Satori Service
   server").
-- the **Satori relays** ("Relays") = the Nostr relays.
+- the **Satori Network** ("Network") = the Nostr relays (each one a "relay").
 - the **Satori contract** ("Contract") = the Base contracts; they cost gas.
   Base stays the chain's name (ETH on Base, Base addresses).
 - the **alias** = the wallet's automated signing key, made by the app, unencrypted, which signs on its
@@ -619,7 +619,7 @@ the page's JS context:
     not counted in `days-summary`, "1 full day", "2 of 3 full days"). The
     phone shows the last 14.
   - `channels`: `{ network, contract, relays }` (the Satori Service, the
-    Satori contract, the Satori relays), each `{ state: 'ok' | 'warn' |
+    Satori contract, the Satori Network), each `{ state: 'ok' | 'warn' |
     'bad' | 'idle' | 'advice', tone, text, lastTraffic }` (`tone`: `working`, `idle`,
     `off`, `warn`, `bad`) ("83 sent 2 h ago", "Up to date ·
     next in 9 h" (nothing to send), "Round 20742
@@ -735,7 +735,7 @@ the page's JS context:
   network (the Satori Service) `{ status: 'accepted' | 'pending', when, ref:
   null }`; contract (the Satori contract) `{ status: 'sent' | 'left out',
   when, ref: { round, game, direction, tx, error? } }`; relays (the Satori
-  relays) `{ status: 'published' | 'waiting', when, ref: { stream, seq,
+  Network) `{ status: 'published' | 'waiting', when, ref: { stream, seq,
   relays } }`. Cheap: it reads what the Models tab shows,
   refreshed after every poll (`poll()` resolves after it), Nostr publish and
   Base check.
@@ -1162,7 +1162,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   "Same as no change", "12% worse", "Not scored yet"), the stream it
   predicts ("publishes x_pred" for a Relays model), its kind, "reads +eth
   +gold" (its inputs by influence), now → the forecast with ↑ ↓ →, and where
-  it goes as tags ("Network", "Contract", "Relays"). A tap opens the
+  it goes as tags ("Service", "Contract", "Network"). A tap opens the
   drill-in: **In** (each input's share), **Model** (plain lines; Details: λ1,
   λ2, mutations, coefficients, the fade weight, the errors; Retrain for a
   Network model), **Out** (each output: the forecast, the latest value, a
@@ -1180,13 +1180,13 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   a tap on the name opens it in place under the row: its trend, "In 12 h",
   the model with its companions, "bvar · +eth +gold", in words, and its
   latest predictions; no URL: that is Settings');
-  **Relay Streams** (opening it discovers: a search box and the
+  **Network Streams** (opening it discovers: a search box and the
   first 50 matches, each with one button on its right: Predict (follows it
   and predicts it: `subscribe(pubkey, stream, { predict: true })`) or Stop
   predicting (unfollows it: `unsubscribe`); a stream for sale shows
   "0.001 SATORI each" and On the Market, which opens the Market tab's
   streams for sale; other paid or gated ones can't be subscribed yet);
-  **Published Relay Streams** (each subscribed stream: latest value and
+  **Published Network Streams** (each subscribed stream: latest value and
   time, our `_pred` value, its seq, how many relays took it, Predict or Stop
   predicting, Unsubscribe; none: "Not yet publishing any streams to the
   relays."; selling and buying are the Market tab's);
@@ -1245,8 +1245,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   open…"; Daily reminder, Off and On; the version; "Update ready, reload" when one waits), then
   **Advanced** at the bottom, folded until tapped (`settings-advanced`, a
   `<details>`; Home's action card opens it when it points inside):
-  **Satori Service** ("Satori Service server", an
-  https URL, empty = the default; Save), **Satori relays** (each relay with
+  **Satori Service** ("Satori Service address", an
+  https URL, empty = the default; Save), **Satori Network** (each relay with
   its state, "Connected", "Not reachable here" for a blocked one, with one
   note why; a wss stand-in with "for ws://…" under its address; "Your
   relays" one per line; "Publish to the Satori Service's

@@ -21,7 +21,7 @@ fabricated logs), with what the neuron is doing right now
 **Words people see** (the owner, 2026-10-18, [../intent/ui.md](../intent/ui.md)):
 central is the **Satori Service** ("Network"; free to submit to), the
 Base contracts are the **Satori contract** ("Contract"; it costs gas), the
-Nostr relays are the **Satori relays** ("Relays"). The channels are named
+Nostr relays are the **Satori Network** ("Relays"). The channels are named
 so for agents too: `network`, `contract`, `relays` (they were `central`,
 `base`, `network`). The code's identifiers (the log's kinds `central`,
 `base`, `nostr`; the reason ids; the work tasks) keep their names. The live
@@ -432,7 +432,7 @@ health.js map them).
   "Unreachable" (off, grey: the contract unused); warn
   "Gas: 3 batches", "Skipped: …", "Batch stuck", "Unreachable" (in use); bad "Failed 3
   times", "Out of sync".
-- **Relays** (the Satori relays): idle "No streams" (nothing subscribed or watched); ok "2 relays" (a blocked one is not
+- **Relays** (the Satori Network): idle "No streams" (nothing subscribed or watched); ok "2 relays" (a blocked one is not
   counted); advice "1 of 2 relays down" (sky, or green while working); bad "Relays down". A
   relay that is connecting, or reconnecting within 10 min, counts as up.
   **Watching** (2026-10-20, [track-record.md](track-record.md#home)): with
@@ -508,7 +508,7 @@ a failure. Once staked, or once a batch went out, the same error is
   and counted like any relay, so it is not blocked.
   It is neither down nor counted: not toward "1 of 2 relays down", not in "2
   relays", not in the Streams card's "1 of 1 relay connected". Settings ›
-  Satori relays says it once, under the list: "A ws:// relay can't be
+  Satori Network says it once, under the list: "A ws:// relay can't be
   reached from this page (only wss:// can), so it is left out: it doesn't
   count as down." (`relays-blocked`); its own line reads
   "Not reachable here". Only blocked relays left: none can carry the
@@ -687,7 +687,7 @@ to send), "Caught up: sent 83 predictions" ("Caught up: up to date"), "The
 Satori Service refused the batch: Satori Service 401: Invalid signature",
 "Satori contract batch for round 20742: 1 game", "Satori contract batch
 skipped: gas above the ceiling (×3)", "Published 3 forecasts to the Satori
-relays", "Satori was closed for 2 d", "Staked with this app",
+Network", "Satori was closed for 2 d", "Staked with this app",
 "Satori Service address changed to https://central.example", "The Satori
 Service's contract addresses differ from the app's (token): the app's are
 used". A session that missed nothing is not shown.

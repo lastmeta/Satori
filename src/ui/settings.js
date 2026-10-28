@@ -1,7 +1,7 @@
 // Settings: the technical detail, behind Home (docs/intent/ui.md): this device (storage, install, update), the appearance (System, Light, Dark:
 // src/ui/theme.js), the backup, the keys and their addresses with Unlock and Lock, the reward address (where the
 // Satori Service sends the rewards), who sends the Satori contract predictions (automatic or by hand), and folded under Advanced the Satori Service's server
-// (central's URL), the Satori relays, the Base RPC and the batch's max fee. Each section has an id (#settings-<name>)
+// (central's URL), the Satori Network, the Base RPC and the batch's max fee. Each section has an id (#settings-<name>)
 // Home's action card scrolls to, opening Advanced when the section is in it.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
@@ -109,7 +109,7 @@ function centralForm(a) {
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
       <h3>Satori Service</h3>
       <p class="muted small">Where the app gets its streams and sends its predictions.</p>
-      <label>Satori Service server
+      <label>Satori Service address
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>
       <p class="muted small">Now: <code data-test="central-url">${() => state.central.url}</code>. Empty: the default, ${() => state.centralDefault}.</p>
@@ -123,7 +123,7 @@ function relaysForm(a) {
   return html`
   <section class="adv" id="settings-relays">
     <form class="fields relays-form" @submit="${(e) => a.saveRelays(form(e), e.target)}">
-      <h3>Satori relays</h3>
+      <h3>Satori Network</h3>
       <ul class="relays">${() => state.nostr.relays.map((r) => html`<li class="relay" data-test="relay"><span class="relay-name"><code>${r.url}</code>${r.for ? html`<span class="muted small relay-for" data-test="relay-for">for ${r.for}</span>` : ''}</span><span class="${r.state === 'open' ? 'badge on' : 'badge'}" data-test="relay-state">${relayText(r)}</span></li>`.key(`${r.url} ${r.state} ${r.write} ${r.for}`))}</ul>
       <p class="muted small" data-test="relays-blocked" hidden="${() => !state.nostr.relays.some((r) => r.state === 'blocked')}">${BLOCKED_NOTE}</p>
       <label>Your relays (Nostr; one per line, ws:// or wss://)
@@ -211,7 +211,7 @@ function predictions(a) {
 function advanced(a) {
   return html`
   <details class="card settings-section advanced" id="settings-advanced" data-test="settings-advanced">
-    <summary>Advanced <span class="muted small">Satori Service server, relays, Base RPC and fee</span></summary>
+    <summary>Advanced <span class="muted small">Satori Service address, relays, Base RPC and fee</span></summary>
     ${centralForm(a)}
     ${relaysForm(a)}
     ${baseForm(a)}

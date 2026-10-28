@@ -70,8 +70,8 @@ const network = (a) => html`<div class="card contract-card" data-test="network-c
 </div>`;
 
 const relays = (a) => html`<div class="card contract-card" data-test="relays-card">
-  ${flow('relays', () => relaysOn(state.nostr), 'This app', () => (relaysOn(state.nostr) ? 'Connected' : 'Not connected'), TOWER, 'Satori relays')}
-  <p class="muted small">The Satori relays carry prediction streams from anyone. This app watches them and scores each one against no change, and it publishes its own predictions for the streams you subscribe to. It's free.</p>
+  ${flow('relays', () => relaysOn(state.nostr), 'This app', () => (relaysOn(state.nostr) ? 'Connected' : 'Not connected'), TOWER, 'Satori Network')}
+  <p class="muted small">The Satori Network carries prediction streams from anyone. This app watches them and scores each one against no change, and it publishes its own predictions for the streams you subscribe to. It's free.</p>
   ${checkList(a, () => relayChecks(state.nostr))}
 </div>`;
 

@@ -38,7 +38,7 @@ function hero() {
 }
 const HOME_ROWS = 8;
 const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this app' };
-// the Satori Service (free to submit to), the Satori contract (uses gas), the Satori relays (docs/intent/ui.md)
+// the Satori Service (free to submit to), the Satori contract (uses gas), the Satori Network (docs/intent/ui.md)
 const CHANNEL_TAB = { network: 'streams', contract: 'wallet', relays: 'streams' };
 
 const fullDays = (n) => daysText(h().days.slice(-n));
@@ -155,7 +155,7 @@ export function home(a) {
       <div class="legend desk-only"><span><i data-half="ok"></i>Predicted</span><span><i data-half="error"></i>Errors only</span><span><i data-half="none"></i>Nothing</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 
-    <section class="chans" data-test="channels">${chip(a, 'network', 'Service', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}${chipCard(a)}</section>
+    <section class="chans" data-test="channels">${chip(a, 'network', 'Service', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Network')}${chipCard(a)}</section>
 
     <section class="tile streams-tile desk-only" hidden="${cachedNow}">
       <div class="tile-h"><b>Streams</b><span>${streamsSummary}</span></div>

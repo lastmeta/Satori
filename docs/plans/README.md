@@ -62,7 +62,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    ([../design/models.md](../design/models.md)). Then the same day: a
    training pass, so the neuron never rests with a model unscored; Sort as
    a menu; the tab in plain words; the words people see (the Satori
-   Service, the Satori contract, the Satori relays); icons only where they
+   Service, the Satori contract, the Satori Network); icons only where they
    are understood. ✅ **Retrain**: a model's drill-in asks the neuron to keep
    training it until one beats no change on recent data it never chose on,
    then stop ([../design/models.md](../design/models.md#retrain)).

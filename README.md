@@ -21,7 +21,7 @@ Satori Service, polls it, forecasts, sends its predictions back. AI agents: read
 **Words.** What people see, and what the code calls it
 ([intent](docs/intent/ui.md)): the **Satori Service** ("Network") is central,
 free to submit to; the **Satori contract** ("Contract") is the Base
-contracts, which cost gas; the **Satori relays** ("Relays") are the Nostr
+contracts, which cost gas; the **Satori Network** ("Relays") are the Nostr
 relays. Base is the chain's own name (ETH on Base, Base addresses). This
 README, the design docs and the code keep the code's names.
 
@@ -56,7 +56,7 @@ value as far as its own backtest says it trails it ([engine](docs/design/engine.
 day on its own, and is anything broken? One status (predicting, was asleep,
 needs you, problem), at most one thing to do, the last 14 days, and the
 Network, Contract and Relays connections (the Satori Service, free; the
-Satori contract, which uses gas; the Satori relays); on a computer it is a dashboard with
+Satori contract, which uses gas; the Satori Network); on a computer it is a dashboard with
 the streams, the wallet and the activity ([health](docs/design/health.md)).
 Streams, Wallet and Settings hold the rest.
 
@@ -84,7 +84,7 @@ node scripts/provider.mjs ws://localhost:7778 demo-walk 60   # a demo stream, a 
 ```
 
 Open **Streams on the relays**, search `demo-walk`, **Subscribe**: the Satori
-relays card shows the latest observation and our `_pred`. Tick **Publish to
+Network card shows the latest observation and our `_pred`. Tick **Publish to
 the Satori Service's relays** under Settings to write to satorian too (a build does by default).
 An https page can't open `ws://`: there the app reaches satorian through its wss stand-in,
 `wss://relay.satorinet.io`, as central's relay ([docs/design/nostr.md](docs/design/nostr.md#relays-and-the-read-only-flag)).

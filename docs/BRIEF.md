@@ -27,7 +27,7 @@ The short version; owner rulings are in `CLAUDE.md` and `/code/Satori/CLAUDE.md`
 - **Base only, no Evrmore.** Central's login is EIP-191. A tiny Evrmore helper remains only if central lacks `wallet_address`; it has it now.
 - **Words people see:**
   - central is the **Satori Service** (free);
-  - Nostr is the **Satori relays**;
+  - Nostr is the **Satori Network**;
   - the Base contracts are the **Satori contract** (costs gas);
   - delegating is "**stake with** this neuron" / "Unstake";
   - Lock and Unlock refer only to the wallet passphrase;
@@ -143,7 +143,7 @@ curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" ht
 - Central's stake gate only counts peers with a `reward_address`. It's latent while the requirement is 0, but fix it in central before raising it.
 
 **3. The market of data streams (owner, 2026-10-20; `docs/intent/network.md`, `docs/plans/market.md`, `docs/design/market.md`):**
-What the owner asked for: a data-stream marketplace on the Satori relays and the Base contract. A seller sets a price per observation; a buyer pays tiny SATORI amounts per observation through a payment channel, with no gas per payment. Lite's Evrmore flow, ported, nothing more.
+What the owner asked for: a data-stream marketplace on the Satori Network and the Base contract. A seller sets a price per observation; a buyer pays tiny SATORI amounts per observation through a payment channel, with no gas per payment. Lite's Evrmore flow, ported, nothing more.
 - Done and live:
   - a relay everyone can reach: `wss://relay.satorinet.io`;
   - the channel contract: `PaymentChannels` v2 at `0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c` (Base Sepolia, the same address everywhere; contract repo `humble` `e5c8830f`: reusable channels, a per-channel grace period, the payee's payout address), `contract/docs/design/payment-channels.md`;

@@ -353,7 +353,7 @@ export const toneOf = (status, work) => (status === 'warn' || status === 'bad' ?
 
 /**
  * The channels, by the words people see (docs/intent/ui.md, 2026-10-18): `network` the Satori Service (central, free to
- * submit to), `contract` the Satori contract (Base, uses gas), `relays` the Satori relays (Nostr). Each one's work:
+ * submit to), `contract` the Satori contract (Base, uses gas), `relays` the Satori Network (Nostr). Each one's work:
  * central's poll; the batch and the wallet's actions; discover and subscribe. TRAFFIC: each one's traffic channel
  * (src/traffic.js keeps the code's names).
  */
@@ -497,7 +497,7 @@ function feedText(r) {
       }
       if (d.skipped) return `Satori contract batch skipped: ${d.skipped.split(':')[0]}${times(r)}`;
       return `Satori contract batch for round ${d.round}: ${games(d.games?.length ?? 0)}`;
-    case 'nostr': return `Published ${d.published} forecast${d.published === 1 ? '' : 's'} to the Satori relays`;
+    case 'nostr': return `Published ${d.published} forecast${d.published === 1 ? '' : 's'} to the Satori Network`;
     case 'wallet': return d.text;
     case 'setting': return settingText(d);
     case 'config': return `The Satori Service's contract addresses differ from the app's (${(d.keys ?? []).join(', ')}): the app's are used${times(r)}`;

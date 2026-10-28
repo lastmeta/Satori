@@ -10,9 +10,9 @@ import { spanText, markWords, kindLabelOf, descriptionOf, DESTS } from '../neuro
 export { spanText, DESTS };
 
 const ARROW = { up: '↑', down: '↓', flat: '→' };
-// by the words people see (docs/intent/ui.md): the Satori Service (free), the Satori contract (uses gas), the Satori relays
-const LABEL = { network: 'Service', contract: 'Contract', relays: 'Relays' };
-const SOURCE = { central: 'Satori Service stream', base: 'Satori contract stream', nostr: 'Stream on the Satori relays' };
+// by the words people see (docs/intent/ui.md): the Satori Service (free), the Satori contract (uses gas), the Satori Network
+const LABEL = { network: 'Service', contract: 'Contract', relays: 'Network' };
+const SOURCE = { central: 'Satori Service stream', base: 'Satori contract stream', nostr: 'Stream on the Satori Network' };
 const KINDS = ['bvar', 'bar1', 'bar1d', 'naive', 'echo'];
 
 const minus = (s) => s.replace(/-/g, '−');

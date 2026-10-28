@@ -14,9 +14,9 @@ import { menuKey } from './prefs.js';
 /** The models (models()), the open model (model(id)) and Retrain's statuses (central uuid → status), set by main.js. */
 export const box = { list: [], detail: null, retrains: {} };
 
-// where predictions go, by the words people see (docs/intent/ui.md): the Satori Service, the Satori contract, the Satori relays
-const TO = { network: 'Service', contract: 'Contract', relays: 'Relays' };
-const FILTERS = [['network', 'Service'], ['contract', 'Contract'], ['relays', 'Relays']]; // toggles, all on at first
+// where predictions go, by the words people see (docs/intent/ui.md): the Satori Service, the Satori contract, the Satori Network
+const TO = { network: 'Service', contract: 'Contract', relays: 'Network' };
+const FILTERS = [['network', 'Service'], ['contract', 'Contract'], ['relays', 'Network']]; // toggles, all on at first
 const SORTS = [['quality', 'Quality'], ['name', 'Name']];
 
 /** The models' hash route: ids are `<source>:<key>`, kept readable. */

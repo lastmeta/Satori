@@ -62,9 +62,9 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await expect.poll(async () => (await nostr(page)).relays.map((r) => r.state)).toEqual(['open', 'open']);
   await expect(page.locator('[data-test=relay]').filter({ hasText: CENTRAL_RELAY })).toContainText('Connected · read only');
 
-  // Relay Streams (on Streams): discover, search, subscribe from the UI.
+  // Network Streams (on Streams): discover, search, subscribe from the UI.
   await page.evaluate(() => window.satori.go('streams'));
-  await page.getByText('Relay Streams', { exact: true }).click();
+  await page.getByText('Network Streams', { exact: true }).click();
   await page.getByLabel('Search streams').fill(stream);
   const row = page.locator('[data-test=catalog-row]').filter({ hasText: stream });
   await expect(row).toHaveCount(1);
@@ -75,7 +75,7 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await expect(row.locator('[data-test=catalog-action]')).toHaveText('Predict');
 
   // Followed: the stored observation arrives with the follow REQ and is kept; nothing is predicted or published yet.
-  await page.locator('[data-test=relay-streams] > summary').click(); // Published Relay Streams: folded by default
+  await page.locator('[data-test=relay-streams] > summary').click(); // Published Network Streams: folded by default
   const sub = page.locator('[data-test=sub]').filter({ hasText: 'E2E walk' });
   await expect(sub.locator('[data-test=sub-obs]')).toHaveText('100');
   await expect(sub.locator('[data-test=sub-pred]')).toHaveText('–');
@@ -152,8 +152,8 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   expect(last.tags).toContainEqual(['seq', '3']);
   expect(await centralRelay.fetch([{ authors: [me] }])).toEqual([]);
 
-  // Relay Streams' one button: Predict follows and predicts at once; Stop predicting unfollows.
-  await page.getByText('Relay Streams', { exact: true }).click(); // folded again after the reload
+  // Network Streams' one button: Predict follows and predicts at once; Stop predicting unfollows.
+  await page.getByText('Network Streams', { exact: true }).click(); // folded again after the reload
   await page.getByLabel('Search streams').fill(stream);
   await row.locator('[data-test=catalog-action]').click();
   await expect(row.locator('[data-test=catalog-action]')).toHaveText('Stop predicting');

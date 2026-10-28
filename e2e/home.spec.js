@@ -329,7 +329,7 @@ test('a failed send: amber, named, retried in minutes; a second quick failure st
   await shots(page, 'bad');
   await page.locator('[data-test=action-button]').click();
   await expect(page).toHaveURL(/#settings$/);
-  await expect(page.getByLabel('Satori Service server')).toBeInViewport();
+  await expect(page.getByLabel('Satori Service address')).toBeInViewport();
   expect(central.prod).toEqual([]);
 });
 

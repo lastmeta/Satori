@@ -494,7 +494,7 @@ test("import Docker files; central pays this wallet's rewards to another Base ad
   // Settings: https only; an unreachable central is shown, not thrown.
   await go(page, 'settings');
   await page.locator('#settings-advanced > summary').click(); // folded under Advanced
-  const url = page.getByLabel('Satori Service server');
+  const url = page.getByLabel('Satori Service address');
   await url.fill('http://central.test');
   await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.getByRole('alert').filter({ hasText: 'https://' })).toBeVisible();

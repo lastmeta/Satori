@@ -1,4 +1,4 @@
-// The track record (docs/design/track-record.md): every prediction stream on the Satori relays watched on its own and
+// The track record (docs/design/track-record.md): every prediction stream on the Satori Network watched on its own and
 // scored against no change from what this neuron saw arrive. Watching only reads: nothing is published.
 //
 //   selectWatched(catalog, { me, cap, watched, gone, since }) → { list, lingering, found, left }   which `_pred` streams to watch

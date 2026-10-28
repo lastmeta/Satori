@@ -288,7 +288,7 @@ channels** are UDP hole punching, standardized: ICE with STUN, a TURN relay
 for networks that can't be punched through, and encryption built in. They
 run in every browser and in Python (aiortc), Go (pion) and C++
 (libdatachannel). The rendezvous a hole punch needs can be the Satori
-relays themselves: the offer, answer and candidates travel as encrypted
+Network themselves: the offer, answer and candidates travel as encrypted
 Nostr events, so no new server is needed beyond STUN and a fallback TURN.
 
 ## Sources

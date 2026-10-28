@@ -36,7 +36,7 @@ describe('ok: predicting', () => {
   test('central took predictions within the window; Base not staked with no SATORI; nothing subscribed', () => {
     const h = health();
     expect(h).toMatchObject({ status: 'ok', title: 'Predicted', line: 'Sent 83 predictions 2 h ago · next in 9 h', action: null, reasons: [] });
-    expect(h.channels).toEqual({ // by the words people see: the Satori Service, the Satori contract, the Satori relays
+    expect(h.channels).toEqual({ // by the words people see: the Satori Service, the Satori contract, the Satori Network
       network: { state: 'ok', tone: 'idle', text: '83 sent 2 h ago' },
       contract: { state: 'idle', tone: 'off', text: 'Not staked' },
       relays: { state: 'idle', tone: 'off', text: 'No streams' },
@@ -707,7 +707,7 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
     ['bad', 'A relay forecast failed: IO Error'],
     ['bad', 'The Satori Service refused the login: Satori Service 401: Invalid signature'],
     ['ok', 'Staked with this app'],
-    ['ok', 'Published 3 forecasts to the Satori relays'],
+    ['ok', 'Published 3 forecasts to the Satori Network'],
     ['warn', 'Satori contract batch skipped: gas above the ceiling (×3)'],
     ['ok', 'Caught up: sent 83 predictions'],
     ['ok', 'History loaded for 83 streams'],

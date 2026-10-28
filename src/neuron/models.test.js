@@ -175,7 +175,7 @@ describe('the list: every model, named for the stream it predicts', () => {
       games: [{ streamId: 2, gameId: 2, named: false, direction: UP, model: 'bar1', latest: '1', forecast: '2', horizon: 86_400, step: 43_200 }] } });
     expect(sortModels(list, 'quality').map((m) => m.name)).toEqual(['gold', 'oil', 'eth', 'Stream 2']);
     expect(sortModels(list, 'name').map((m) => m.name)).toEqual(['eth', 'gold', 'oil', 'Stream 2']);
-    // by the words people see: the Satori Service, the Satori contract, the Satori relays; independent toggles, a model
+    // by the words people see: the Satori Service, the Satori contract, the Satori Network; independent toggles, a model
     // shown when it goes to any one selected
     expect(DESTS).toEqual(['network', 'contract', 'relays']);
     expect(filterModels(list, ['contract']).map((m) => m.name)).toEqual(['Stream 2']);

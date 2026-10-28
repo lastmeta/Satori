@@ -176,8 +176,8 @@ uses central's `rpcUrl`, then publicnode.
 - **Words people see** (owner, 2026-10-18, [../intent/ui.md](../intent/ui.md)):
   central is the **Satori Service** ("Network", free to submit to), the
   Base contracts the **Satori contract** ("Contract", it uses gas), the
-  Nostr relays the **Satori relays** ("Relays"). The UI never says
-  "central" or "server", except Settings' "Satori Service server", the one
+  Nostr relays the **Satori Network** ("Relays"). The UI never says
+  "central" or "server", except Settings' "Satori Service address", the one
   place a URL shows; Base stays the chain's name (ETH on Base, Base
   addresses). Agents' channel and destination keys use the words
   (`health().channels.{network, contract, relays}`, `destinations[].to`);
@@ -187,7 +187,7 @@ uses central's `rpcUrl`, then publicnode.
   meaning is obvious to someone new, or when the same icon is paired with
   its word nearby; else the word, or the icon and the word. The audit
   ([below](#icons)).
-- **The Satori Service server** (Settings, `meta.central_url`, the code's "central URL"): https only. Empty means the
+- **The Satori Service address** (Settings, `meta.central_url`, the code's "central URL"): https only. Empty means the
   default: `https://central2.satorinet.io` on the dev server (so nobody writes
   to prod from a dev checkout), `https://network.satorinet.io` in a build, or
   the build's `VITE_CENTRAL_URL` ([deploy.md](deploy.md#build-variables); the

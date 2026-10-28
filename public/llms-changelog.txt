@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (Satori Network)
+
+- The Satori relays are called the **Satori Network** (short: "Network": Home's chip, the Models tab's tags and filter,
+  the Streams tab's "Network Streams" and "Published Network Streams"); one server is still "a relay". Settings'
+  "Satori Service server" is "Satori Service address".
+
 ## Changed 2026-10-28 (Satori Service)
 
 - The Satori Network is called the **Satori Service** in every text (short: "Service": Home's chip, the Models tab's
