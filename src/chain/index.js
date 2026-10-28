@@ -502,7 +502,9 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     async batchOf(hash) {
       const tx = await client.getTransaction({ hash });
       if (!same(tx.to, config.engine)) return null;
-      const { functionName, args } = decodeFunctionData({ abi: engineAbi, data: tx.input });
+      let call;
+      try { call = decodeFunctionData({ abi: engineAbi, data: tx.input }); } catch { return null; } // another engine call
+      const { functionName, args } = call;
       const requests = { predictMultipleWithPayloads: args[0], predictMultipleWithReferral: args[1] }[functionName];
       return requests ? requests.map((r) => ({ gameId: Number(r.gameId), direction: Number(r.payload) })) : null;
     },
