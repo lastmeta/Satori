@@ -15,13 +15,13 @@ import { signEvent, verifyEvent, npub, SeenSet } from '../nostr/event.js';
 import { createRelay } from '../nostr/relay.js';
 import {
   KIND, PRED, observationEvent, announceEvent, tombstoneEvent, subscriptionEvent, relayListEvent, predMetadata,
-  catalog, tombstoned, parseObservation, numericValue, predValue, relayUuid, heartbeatEvent,
+  catalog, tombstoned, parseObservation, deliveryOf, numericValue, predValue, relayUuid, heartbeatEvent,
 } from '../nostr/satori.js';
 import { createMarket, listingOf, amountOf, priceOf } from './market.js';
 import { AHEAD_S } from '../db/index.js';
 import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
-import { createWatch, followFilters, WATCH_SCAN_S, WATCH_CAP } from './records.js';
+import { createWatch, followFilters, watchable, WATCH_SCAN_S, WATCH_CAP } from './records.js';
 import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
 
@@ -383,6 +383,8 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
       if (verifyEvent(e)) background(marketLine(() => market.onEvent(e)));
       return;
     }
+    const d = parseObservation(e) ? null : deliveryOf(e);
+    if (d && !watch.has(relayUuid(d.provider, d.stream_name))) return; // a delivery is paid only when it is kept
     const o = parseObservation(e) ?? (await market.received(e)); // a bought stream's delivery: verified, decrypted and paid
     if (!o) return;
     const uuid = relayUuid(o.provider, o.stream_name);
@@ -757,9 +759,10 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
         && e.tags.some((x) => Array.isArray(x) && x[0] === 'd' && x[1] === s)));
       if (!found) throw new Error(`${s} is not announced by ${p.slice(0, 8)}… on the connected relays.`);
       if (!listingOf(found)) throw new Error(`${s} is not for sale on the Satori contract.`);
+      if (!watchable(found)) throw new Error(`${s} is not a prediction stream naming its source: this app buys only those (it keeps them in the track record).`);
       const v = await market.buy(found, wei);
       await refollow();
-      if (!watch.has(relayUuid(p, s))) background(scanWatch()); // watched as ours are, so what it delivers lands
+      if (!watch.has(relayUuid(p, s))) await scanWatch().catch(log); // watched as ours are, before its first delivery, so it lands
       onChange();
       return v;
     },

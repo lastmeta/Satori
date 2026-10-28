@@ -902,8 +902,10 @@ the page's JS context:
   request; needs Unlock; gas): a stream sold on the Satori contract
   (`discover()`'s `price_per_obs` and `metadata.market`); the wallet opens a channel with
   `deposit` SATORI (100 observations by default) → `nostr().market.bought`'s
-  entry. Throws in plain words: not for sale, locked, a staked wallet, not
-  enough SATORI. `await satori.stop(pubkey, stream)` (only on the person's
+  entry. Only a prediction stream that names its source (what the track
+  record keeps; `market().forSale` lists only those). Throws in plain words:
+  not for sale, not a prediction stream, locked, a staked wallet, not
+  enough SATORI, an earlier channel that can't be read now. `await satori.stop(pubkey, stream)` (only on the person's
   request; gas from the alias) → the same entry, `status: 'closing'`; once
   its grace period ends, `status: 'stopped'` with `refundable` SATORI left in
   the channel. A `buy()` of a stream bought before uses its channel again (the

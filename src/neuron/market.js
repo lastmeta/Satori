@@ -113,7 +113,9 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
       for (const x of r.settled) for (const s of due) if (s.channel === x.id) s.settled = String(x.settled);
       m.settledAt = t();
     }
-    for (const s of list) if (s.closing && B(s.cumulative) <= B(s.settled)) delete m.sales[s.channel];
+    // a closing sale goes once everything delivered is paid and settled (a last voucher may still be on its way);
+    // else when its channel is closed (pass)
+    for (const s of list) if (s.closing && B(s.settled) >= owed(s)) delete m.sales[s.channel];
     await save();
   }
 
@@ -230,6 +232,7 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
       let id;
       try {
         const ch = old && await channels.readChannel(old.channel);
+        if (old && !ch) throw new Error("Your earlier channel for this stream can't be read just now: try again in a minute.");
         if (ch && !ch.closed && same(ch.payee, l.payee) && same(ch.token, config.token) && same(ch.signer, needAlias().evmAddress)) {
           // its stopped channel used again: the close taken back, topped up to `amount` past what is spent (the vouchers
           // signed, or what is settled, which counts what was taken back)
@@ -241,7 +244,14 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
           Object.assign(old, { name: entry.name ?? old.name, price: String(l.price), deposit: String(short > 0n ? ch.deposit + short : ch.deposit),
             settled: String(ch.settled), cumulative: String(spent), grace: ch.grace, status: 'open', closeAt: null, at: t() });
         } else {
-          if (old) delete m.buys[old.channel]; // ended, or no longer this seller's or our alias's: a new channel
+          // ended, or no longer this seller's or our alias's: a new channel. A closed one is empty and goes; a live one is
+          // never dropped (it holds the deposit): the wallet asks to close it and it is kept, closing, to take back after its grace period
+          if (old && ch.closed) delete m.buys[old.channel];
+          else if (old) {
+            if (!ch.closeRequestedAt) await channels.requestClose(v, old.channel);
+            const asked = await channels.readChannel(old.channel);
+            Object.assign(old, { status: 'closing', closeAt: asked?.graceEndsAt ?? null });
+          }
           const r = await channels.openChannel({ wallet: v, alias: needAlias(), payee: l.payee, deposit: amount });
           id = r.id;
           m.buys[id] = { pubkey: entry.pubkey, stream: entry.stream_name, name: entry.name ?? '', channel: id, hash: r.hash, price: String(l.price),
@@ -393,9 +403,12 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
         const buys = Object.values(m.buys);
         if (!sales.length && !buys.length) return;
         const { channels, chainTime } = await chain();
+        // a channel goes only when the chain says it is closed: a read that finds none (a lagging RPC, another contract)
+        // proves nothing, and the record is what lets its money be collected or taken back
         for (const s of sales) {
           const ch = await channels.readChannel(s.channel);
-          if (!ch || ch.closed) {
+          if (!ch) continue;
+          if (ch.closed) {
             delete m.sales[s.channel];
             continue;
           }
@@ -406,7 +419,8 @@ export function createMarket({ db, key, alias = null, walletAddress = null, wall
         const at = buys.some((b) => b.status === 'closing') ? await chainTime() : 0;
         for (const b of buys) {
           const ch = await channels.readChannel(b.channel);
-          if (!ch || ch.closed) {
+          if (!ch) continue;
+          if (ch.closed) {
             delete m.buys[b.channel];
             continue;
           }

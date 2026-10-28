@@ -8,13 +8,14 @@ import { formatEther } from 'viem';
 import { state } from './state.js';
 import { form, unlockPrompt } from './parts.js';
 import { listingOf, DEPOSIT_OBS } from '../neuron/market.js';
+import { watchable } from '../neuron/records.js';
 import { shortKey, saleText, boughtText, buyerText, graceText } from './format.js';
 
 /** A stream's price per value when none is typed (owner, 2026-10-25), in SATORI. */
 export const DEFAULT_PRICE = '0.00001';
 
 const m = () => state.nostr.market ?? { selling: [], bought: [], error: null };
-const forSale = () => state.catalog.filter((s) => listingOf(s));
+const forSale = () => state.catalog.filter((s) => listingOf(s) && watchable(s)); // what this app can buy (nostr buy)
 const predicted = () => state.nostr.subscriptions.filter((s) => s.predict);
 const sum = (xs) => xs.reduce((n, x) => n + Number(x || 0), 0);
 const fmt = (n) => (Math.round(n * 1e8) / 1e8).toString();

@@ -37,6 +37,7 @@ import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from 
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
 import { listingOf } from './neuron/market.js';
+import { watchable } from './neuron/records.js';
 import { DEFAULT_PRICE } from './ui/market.js';
 import { formatEther } from 'viem';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
@@ -1676,7 +1677,7 @@ window.satori = {
     ready();
     const list = state.catalog.length ? state.catalog : await window.satori.discover();
     const records = await nostr.records();
-    const forSale = list.filter((s) => listingOf(s)).map((s) => ({ pubkey: s.pubkey, stream: s.stream_name, name: s.name,
+    const forSale = list.filter((s) => listingOf(s) && watchable(s)).map((s) => ({ pubkey: s.pubkey, stream: s.stream_name, name: s.name,
       description: s.description, cadence_seconds: s.cadence_seconds, price: formatEther(listingOf(s).price),
       record: records.find((r) => r.pubkey === s.pubkey && r.stream === s.stream_name)?.markText ?? null }));
     const { market: mk } = await nostrStatus();

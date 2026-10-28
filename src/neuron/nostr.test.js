@@ -1251,6 +1251,9 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     await settle();
     const u = relays.get(USER_RELAY);
     await expect(nostr.buy(PROV_PUB, 'btc')).rejects.toThrow('btc is not for sale on the Satori contract');
+    c.stored.push(signEvent(announceEvent({ stream_name: 'eth', nostr_pubkey: OTHER_PUB, name: 'ETH', price_per_obs: 100000,
+      metadata: { market: listing.market } }, clock - 10), OTHER)); // priced, but no prediction stream: never watched, so never bought
+    await expect(nostr.buy(OTHER_PUB, 'eth')).rejects.toThrow('eth is not a prediction stream naming its source');
     await expect(nostr.buy(OTHER_PUB, 'btc_pred', '0')).rejects.toThrow('The deposit must be a positive amount');
     u.published = [];
     const v = await nostr.buy(OTHER_PUB, 'btc_pred', '0.005');

@@ -60,6 +60,14 @@ not part of it.
   that buyer owes is settled.
 - **Paid into** (each buyer of ours): the wallet's `setPayout`; the row says "into the wallet" or the address.
 - Each has its `window.satori` call: `takeBack`, `setGrace`, `setPayout` (public/llms.txt).
+- **Never forgotten** (2026-10-28, [CLAUDE.md](../../../CLAUDE.md): money-related records are never deleted): a
+  channel's record goes only when the chain reads it `closed`. A read that finds no channel (a lagging RPC) keeps it.
+  A closing sale stays until everything delivered is paid and settled (a last voucher may still be on its way). A Buy
+  that can't reuse the old channel (another payee, another alias) has the wallet ask to close it and keeps it,
+  closing, so its deposit can be taken back; a channel that can't be read refuses the Buy ("try again in a minute").
+- **What is bought**: only a `_pred` that names its source (records.js `watchable`), the streams the track record
+  keeps, so every delivery lands; the Market tab lists only those, and a delivery is paid only once its stream is
+  watched (Buy waits for the scan).
 
 ## The Market tab
 

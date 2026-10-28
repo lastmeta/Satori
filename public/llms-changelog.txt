@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (the market keeps every channel)
+
+- `buy()` takes only a prediction stream naming its source (`market().forSale` lists only those): another priced
+  stream was paid for and dropped. A channel is forgotten only once closed on chain.
+
 ## Changed 2026-10-28 (earlier keys)
 
 - Keys are never dropped: an alias or Nostr key the app replaces is kept, and `backup('retired', passphrase)` (Settings ›

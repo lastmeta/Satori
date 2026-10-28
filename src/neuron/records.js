@@ -44,6 +44,9 @@ export function sourceOf(entry) {
     ?? pair(m.source_provider_pubkey, m.source_stream_name);
 }
 
+/** What the track record can watch, and so what this app buys (a delivery lands only in a watched stream): a `_pred` that names its source. */
+export const watchable = (entry) => !!entry?.stream_name?.endsWith(PRED) && !!sourceOf(entry);
+
 /**
  * Which prediction streams to watch, from the relays' verified catalog (catalog() of the signed 34600s: newest per
  * author and `d`, no tombstones; each with its `event`): every `_pred` that names its source, but those `gone` (keys
@@ -67,9 +70,8 @@ export function selectWatched(entries, { me = null, cap = WATCH_CAP, watched = [
   const was = new Set(watched.map((w) => key(w.pubkey, w.stream)));
   const found = [];
   for (const s of entries) {
-    if (!s.stream_name?.endsWith(PRED) || gone.has(key(s.pubkey, s.stream_name))) continue;
+    if (!watchable(s) || gone.has(key(s.pubkey, s.stream_name))) continue;
     const src = sourceOf(s);
-    if (!src) continue;
     const own = announced.get(key(src.pubkey, src.stream));
     const cadence = cadenceOf(s.cadence_seconds) ?? cadenceOf(own?.cadence_seconds) ?? DEFAULT_CADENCE_S;
     found.push({

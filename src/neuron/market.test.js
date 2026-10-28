@@ -264,6 +264,39 @@ describe('selling and buying', () => {
     expect(settles()).toBe(2); // nothing due: no transaction
   });
 
+  test('never forgotten: a read that finds no channel keeps both sides; a closing sale waits for the voucher still on its way; only closed goes', async () => {
+    const v = await bought();
+    await observe(1);
+    const real = chainApi.map.get(v.channel);
+    chainApi.map.delete(v.channel); // a lagging RPC, say: no channel found
+    await seller.pass();
+    await buyer.pass();
+    expect([seller.status().selling[0].buyers.length, buyer.status().bought.length]).toEqual([1, 1]);
+    chainApi.map.set(v.channel, real);
+    const { payments } = await observe(2, '102', { pay: false }); // delivered; its voucher not yet at the seller
+    real.closeRequestedAt = clock;
+    await seller.pass();
+    expect(seller.status().selling[0].buyers).toHaveLength(1); // still owed: kept
+    await seller.onEvent(payments[0]);
+    await seller.pass();
+    expect(real.settled).toBe(2n * PRICE);
+    expect(seller.status().selling[0].buyers).toEqual([]); // all paid and settled: it goes
+    real.closed = true;
+    await buyer.pass();
+    expect(buyer.status().bought).toEqual([]); // closed on chain: gone
+  });
+
+  test("buy again when the old channel can't be used (another payee): the old one is asked to close and kept, never dropped", async () => {
+    const v = await bought();
+    await buyer.stop(SP, STREAM);
+    chainApi.map.get(v.channel).payee = X_ID.evmAddress; // the seller moved its wallet, say
+    const again = await buyer.buy(entryOf(), 5n * PRICE);
+    expect(again.channel).not.toBe(v.channel);
+    expect(buyer.view(v.channel)).toMatchObject({ status: 'closing', refundable: '0.00005' }); // its deposit still tracked, to take back
+    chainApi.map.delete(v.channel);
+    await expect(buyer.buy(entryOf(), 5n * PRICE)).resolves.toMatchObject({ channel: again.channel }); // the open one is reused
+  });
+
   test("stop: the alias asks to close, Lite's unsubscribe; the seller stops and settles at once; after the grace period the rest stays, taken back by the wallet", async () => {
     const v = await bought();
     await observe(1);
