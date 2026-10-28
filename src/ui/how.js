@@ -82,7 +82,7 @@ export function howCard() {
         ${NETWORK()}
         <p>Predictions are shared on the Satori Network, forming an open and coherent image of the world's future.</p>
         ${CONTRACT()}
-        <p>The predictions get scored and you get rewarded based on how accurate those predictions are.</p>
+        <p>Accurate predictions earn rewards.</p>
         ${SHARING()}
         <p>Sharing this app with others grows the network and provides more rewards.</p>
         ${DAILY()}
