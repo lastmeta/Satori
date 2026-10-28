@@ -38,7 +38,7 @@ function hero() {
 }
 const HOME_ROWS = 8;
 const DAY_WORDS = { full: 'Predicted', part: 'Part of the day', error: 'Only failures', closed: 'App closed', before: 'Before this app' };
-// the Satori Network (free to submit to), the Satori contract (uses gas), the Satori relays (docs/intent/ui.md)
+// the Satori Service (free to submit to), the Satori contract (uses gas), the Satori relays (docs/intent/ui.md)
 const CHANNEL_TAB = { network: 'streams', contract: 'wallet', relays: 'streams' };
 
 const fullDays = (n) => daysText(h().days.slice(-n));
@@ -47,7 +47,7 @@ const HALF_WORDS = { ok: 'predicted', error: 'errors only', none: 'nothing' };
 function dayTitle(d) {
   const when = new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const word = d.code === 'closed' && d.ran ? 'Nothing due' : DAY_WORDS[d.code];
-  const halves = d.code === 'before' || !d.network ? '' : `. Satori Network: ${HALF_WORDS[d.network]}; Satori contract: ${HALF_WORDS[d.contract]}`;
+  const halves = d.code === 'before' || !d.network ? '' : `. Satori Service: ${HALF_WORDS[d.network]}; Satori contract: ${HALF_WORDS[d.contract]}`;
   return `${when}${d.today ? ' (today)' : ''}: ${word}${halves}`;
 }
 
@@ -79,7 +79,7 @@ function dayBody(d) {
   if (d.error) return html`<p class="error small">${d.error}</p>`;
   const title = new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
   return html`<div class="day-body" data-test="day-body" data-date="${d.date}"><b>${title}</b><dl class="facts">
-    <div class="fact"><dt>Satori Network</dt><dd data-test="day-network">${networkDay(d.network)}</dd></div>
+    <div class="fact"><dt>Satori Service</dt><dd data-test="day-network">${networkDay(d.network)}</dd></div>
     <div class="fact"><dt>Satori contract</dt><dd class="lines" data-test="day-contract">${contractDay(d.contract).join('\n')}</dd></div>
   </dl>${!d.open && !d.network.sent ? html`<p class="muted small">The app wasn't open this day.</p>` : ''}</div>`;
 }
@@ -90,9 +90,9 @@ function chip(a, key, name, cost = '') {
   return html`<a class="chan" href="${`#${CHANNEL_TAB[key]}`}" data-test="chip" data-channel="${key}" data-state="${() => c().state}" data-tone="${() => c().tone}" aria-expanded="${() => String(state.chipOpen === key)}" @click="${(e) => { e.preventDefault(); if (!cachedNow()) a.toggleChip(key); }}"><span class="row1"><span class="state" data-tone="${() => c().tone}"><i class="ico"></i></span>${name}<small class="cost" hidden="${!cost}">${cost}</small></span><span class="sub" data-test="chip-text">${() => c().text}</span></a>`;
 }
 
-/** The claimable rewards: the total of the parts known (staking rewards, the Satori Network's drop, the airdrop). */
+/** The claimable rewards: the total of the parts known (staking rewards, the Satori Service's drop, the airdrop). */
 const claimable = () => (B().claimable?.total == null ? '–' : fmtNum(Number(B().claimable.total)));
-/** The parts behind it, those above 0 ('3.62 from the Satori Network'); all of them on hover. */
+/** The parts behind it, those above 0 ('3.62 from the Satori Service'); all of them on hover. */
 const claimBreakdown = () => claimParts(B().claimable).filter(([, x]) => Number(x) > 0).map(([what, x]) => `${fmtNum(Number(x))} ${what}`).join(' · ');
 const claimTitle = () => claimableText(B().claimable);
 
@@ -155,7 +155,7 @@ export function home(a) {
       <div class="legend desk-only"><span><i data-half="ok"></i>Predicted</span><span><i data-half="error"></i>Errors only</span><span><i data-half="none"></i>Nothing</span><span hidden="${() => !h().days.some((d) => d.code === 'before')}"><i data-code="before"></i>Before this app</span></div>
     </section>
 
-    <section class="chans" data-test="channels">${chip(a, 'network', 'Network', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}${chipCard(a)}</section>
+    <section class="chans" data-test="channels">${chip(a, 'network', 'Service', 'free')}${chip(a, 'contract', 'Contract', 'uses gas')}${chip(a, 'relays', 'Relays')}${chipCard(a)}</section>
 
     <section class="tile streams-tile desk-only" hidden="${cachedNow}">
       <div class="tile-h"><b>Streams</b><span>${streamsSummary}</span></div>

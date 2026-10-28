@@ -47,7 +47,7 @@ describe('the last visit\'s Home (docs/design/health.md#the-last-visit): painted
     days: [{ date: '2026-10-19', code: 'full', ran: true, today: true }],
     channels: { network: { state: 'ok', tone: 'idle', text: '82 sent 2 h ago', lastTraffic: 1 }, contract: { state: 'idle', tone: 'off', text: 'Not staked' },
       relays: { state: 'idle', tone: 'off', text: 'No streams' } },
-    feed: [{ at: 1, level: 'ok', text: 'Sent 82 predictions to the Satori Network' }],
+    feed: [{ at: 1, level: 'ok', text: 'Sent 82 predictions to the Satori Service' }],
   };
   const base = { claimable: { rewards: '0', drop: '3.6', airdrop: '0', total: '3.6' }, wallet: { satori: '100', staked: 'none', eth: '0.1' },
     alias: { batchesLeft: 40, eth: '0.1' }, lastBatch: { round: 1 } };

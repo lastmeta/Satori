@@ -236,7 +236,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   expect(v).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false } });
 });
 
-test("the Satori Network's reward drop before it is claimed: Home's claimable rewards and the Wallet card show it", async ({ context, page }) => {
+test("the Satori Service's reward drop before it is claimed: Home's claimable rewards and the Wallet card show it", async ({ context, page }) => {
   test.setTimeout(180_000);
   const { s, rpc, central } = await setup(context);
   central.noWalletAddress = true;
@@ -258,11 +258,11 @@ test("the Satori Network's reward drop before it is claimed: Home's claimable re
   await page.reload(); // a new page load asks central again (it is asked at most hourly)
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
   await expect(page.locator('[data-test=claimable-amount]')).toHaveText('3', { timeout: 30_000 });
-  await expect(page.locator('[data-test=claimable-parts]')).toHaveText('2 from the Satori Network · 1 airdrop');
+  await expect(page.locator('[data-test=claimable-parts]')).toHaveText('2 from the Satori Service · 1 airdrop');
   base = await page.evaluate(() => window.satori.base());
   expect(base.claimable).toEqual({ rewards: '0', drop: '2', airdrop: '1', total: '3' });
   await go(page, 'wallet');
-  await expect(fact(page, 'claimable').locator('.line')).toHaveText(['0 SATORI rewards', '2 SATORI from the Satori Network', '1 SATORI airdrop']);
+  await expect(fact(page, 'claimable').locator('.line')).toHaveText(['0 SATORI rewards', '2 SATORI from the Satori Service', '1 SATORI airdrop']);
   await expect(fact(page, 'claim')).toBeVisible(); // something to claim: Claim beside the lines
 
   // no ETH on the wallet: Claim says so before it tries (and before asking for the passphrase)
@@ -310,7 +310,7 @@ test('staking out of sync (the token-hook bug): Home red on the Contract chip, t
   s.skipHook(V, 1n); // anyone sends the staked wallet 1 wei with the bare gas estimate: its hook runs out of gas
   expect((await page.evaluate(() => window.satori.base())).wallet).toMatchObject({ inSync: false, shortfall: '0.000000000000000001' });
   h = await page.evaluate(() => window.satori.health());
-  expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'The Satori Network is fine. Staking is out of sync.',
+  expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'The Satori Service is fine. Staking is out of sync.',
     action: { id: 'stake-out-of-sync', text: "Unstaking will fail until the contract fix. Don't add SATORI to the wallet." },
     channels: { contract: { state: 'bad', text: 'Out of sync' } } });
   expect(h.action).not.toHaveProperty('button');
@@ -437,7 +437,7 @@ test('a batch that never mines: past the max fee it says so (Settings); within i
   expect(await page.evaluate(() => window.satori.predictBase())).toMatchObject({ stuck: { replaced: 1 }, skipped: expect.stringMatching(/^stuck: retrying with a higher fee/) });
   const [first, again] = rpc.sent.filter((t) => t.functionName === 'predictMultipleWithPayloads');
   expect([again.nonce, first.replaced]).toEqual([first.nonce, true]);
-  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Network is fine. The Satori contract batch is stuck; retrying with a higher fee.');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Service is fine. The Satori contract batch is stuck; retrying with a higher fee.');
   expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'base-stuck' });
   expect((await page.evaluate(() => window.satori.base())).pendingBatch).toMatchObject({ hashes: [first.hash, again.hash], stuck: { replaced: 1 } });
   await phoneShot(page, 'home-batch-stuck');

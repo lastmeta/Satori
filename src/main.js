@@ -86,7 +86,7 @@ let registration = null; // this page load's register result
 let poller = null;
 let base = null; // the Base flow
 const invitedBy = referrerOf(location.search); // an invite link's ?ref= (docs/design/base.md#referral-invite-links), read once at load
-let reward = null; // the reward address, as the Satori Network keeps it (src/neuron/reward.js): read when Settings opens
+let reward = null; // the reward address, as the Satori Service keeps it (src/neuron/reward.js): read when Settings opens
 let activity = null; // the activity log Home's health reads (docs/design/health.md)
 let trainer = null; // the training pass (src/neuron/train.js): every model's current fit, from stored history
 let retrain = null; // Retrain (src/neuron/retrain.js): a model trained on until it beats no change, as the user asked
@@ -252,17 +252,17 @@ async function runCycle(report) {
 
 /**
  * Every stream this app produces goes to the relays (CLAUDE.md, docs/design/nostr.md#our-other-streams): a poll's
- * Satori Network predictions, each as `<stream>_pred` (its forecast, 24 h ahead).
+ * Satori Service predictions, each as `<stream>_pred` (its forecast, 24 h ahead).
  */
 async function publishNetwork(since) {
   try {
     const list = (await db.streams()).filter((s) => s.made_at != null && s.made_at >= since - 1 && Number.isFinite(s.t2))
       .map((s) => ({ stream: `${s.name}_pred`, name: `Predictions for ${s.name}`, value: s.t2, at: s.made_at, source: s.name,
-        description: `This app's forecast of the Satori Network stream ${s.name}, 24 hours ahead, as sent to the Satori Network.`,
+        description: `This app's forecast of the Satori Service stream ${s.name}, 24 hours ahead, as sent to the Satori Service.`,
         tags: ['satori-network'] }));
     await nostr?.publishOwn(list);
   } catch (err) {
-    console.warn('[satori] publishing the Satori Network predictions to the relays', err);
+    console.warn('[satori] publishing the Satori Service predictions to the relays', err);
   }
 }
 
@@ -385,7 +385,7 @@ const pollNow = () => poller.poll();
  */
 async function setCentral(raw) {
   const url = String(raw ?? '').trim().replace(/\/+$/, '');
-  if (url && !isHttps(url)) throw new Error('The Satori Network server must be an https:// address.');
+  if (url && !isHttps(url)) throw new Error('The Satori Service server must be an https:// address.');
   const moved = (url || DEFAULT_CENTRAL) !== central.url;
   if (moved) {
     await poller.idle(); // its rows are the old central's
@@ -410,7 +410,7 @@ function readRewardNow() {
   return reward.read();
 }
 
-/** The reward address, read from the Satori Network once Settings shows it: once per page load and central, again after a failed read. */
+/** The reward address, read from the Satori Service once Settings shows it: once per page load and central, again after a failed read. */
 function readReward() {
   if (state.tab === 'settings' && reward && !reward.known && !reward.status.reading) void readRewardNow();
 }
@@ -424,7 +424,7 @@ const setReward = (address) => exclusive(address == null || !String(address).tri
   const r = await reward.set(address);
   if (r.changed) await activity.setting('reward', r.address ?? '');
   state.rewardDone = !r.address ? 'Cleared: rewards go to your wallet.'
-    : `Saved: the Satori Network sends this app's rewards to ${r.address}${r.whose === 'wallet' ? ', your wallet' : ''}.`;
+    : `Saved: the Satori Service sends this app's rewards to ${r.address}${r.whose === 'wallet' ? ', your wallet' : ''}.`;
   return reward.status;
 }, 'rewardBusy');
 
@@ -564,7 +564,7 @@ async function unlock(passphrase) {
     v.lock();
     return void location.reload();
   }
-  if (linked && central) registerWith(central).catch(() => {}); // the Satori Network learns the link at once
+  if (linked && central) registerWith(central).catch(() => {}); // the Satori Service learns the link at once
   if (count !== lockCount) return void v.lock();
   wallet?.lock();
   wallet = v;
@@ -853,7 +853,7 @@ const shownAt = (key, fn) => async (...args) => {
 
 /** A Base action from the card: its result (text, and its txs, linked) or error is shown there. */
 /**
- * A fresh link (issued now), signed by the wallet, kept with the keys and sent with a register at once. The Satori Network
+ * A fresh link (issued now), signed by the wallet, kept with the keys and sent with a register at once. The Satori Service
  * keeps the newest link per wallet, so this takes the wallet back from another app's alias (docs/design/wallets.md).
  */
 async function relinkWallet() {
@@ -867,7 +867,7 @@ async function relinkWallet() {
   await storeKeys({ ...record, link });
   await registerWith(central);
   if (registration?.ok && registration.walletMismatch) {
-    throw new Error(`The Satori Network did not take the link${registration.walletLinkError ? `: ${registration.walletLinkError}` : ''}.`);
+    throw new Error(`The Satori Service did not take the link${registration.walletLinkError ? `: ${registration.walletLinkError}` : ''}.`);
   }
   return registration;
 }
@@ -1198,7 +1198,7 @@ const actions = {
   },
   baseRelink: () => baseUi('link', async () => {
     await relinkWallet();
-    return { text: 'Linked: the Satori Network pays this wallet.' };
+    return { text: 'Linked: the Satori Service pays this wallet.' };
   }),
   baseDelegate: () => baseUi('stake', async () => {
     const r = await walletOps.delegate();
@@ -1502,14 +1502,14 @@ window.satori = {
     return d && { ...d, retrain: retrainOf(d) };
   },
   /**
-   * Retrain a Satori Network model (docs/design/models.md#retrain): keep training it, from stored history, until one
+   * Retrain a Satori Service model (docs/design/models.md#retrain): keep training it, from stored history, until one
    * beats no change, then stop; never a prediction. Resolves when it ends (or at once with a note when its last retrain
    * looked at the same data) → model(id).retrain's status. Throws when it can't: not a Network model, no history.
    */
   async retrain(id) {
     ready();
     const uuid = centralUuid(id);
-    if (!uuid) throw new Error(`Retrain is for Satori Network models for now (got ${id}).`);
+    if (!uuid) throw new Error(`Retrain is for Satori Service models for now (got ${id}).`);
     if ((await retrain.start(uuid)).running) await retrain.done(uuid);
     return retrain.status(uuid);
   },
@@ -1517,7 +1517,7 @@ window.satori = {
   async stopRetrain(id) {
     ready();
     const uuid = centralUuid(id);
-    if (!uuid) throw new Error(`No Satori Network model: ${id}.`);
+    if (!uuid) throw new Error(`No Satori Service model: ${id}.`);
     retrain.stop(uuid);
     await retrain.done(uuid);
     return retrain.status(uuid);
@@ -1527,7 +1527,7 @@ window.satori = {
   /** Set the central URL ('' = the default) and register there. → status().central */
   async setCentral(url) { ready(); await setCentral(url); return centralStatus(); },
   /**
-   * Where the Satori Network sends this neuron's rewards, read from it now (signed in by the alias). → { address: '0x…'
+   * Where the Satori Service sends this neuron's rewards, read from it now (signed in by the alias). → { address: '0x…'
    * (checksummed) | null (not set: the wallet), whose: 'wallet' | 'alias' | null, at }; throws when it could not be read.
    */
   async rewardAddress() {
@@ -1643,7 +1643,7 @@ window.satori = {
     if (key === 'relays') { const n = await nostrStatus(); return { working: relaysOn(n), checks: relayChecks(n) }; }
     throw new Error("channel: 'network', 'contract' or 'relays'.");
   },
-  /** One day of Home's strip ('2026-10-24', local): when the app predicted, on the Satori Network and the contract, and how those did. */
+  /** One day of Home's strip ('2026-10-24', local): when the app predicted, on the Satori Service and the contract, and how those did. */
   async day(date) { ready(); return dayDetail(String(date)); },
   /**
    * Put away Home's advice card ('install': Install, kept on this device; 'next-step': the next step, for 3 days) or the

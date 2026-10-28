@@ -15,7 +15,7 @@ let id = 0;
 const row = (kind, at, level, data, o = {}) => ({ id: ++id, kind, at, until: null, level, data, count: 1, mkey: null, ...o });
 const open = (at, until = at, data = {}) => row('open', at, data.missed ? 'idle' : 'ok', { gap: null, missed: false, ...data }, { until });
 const good = (at, accepted = 83, data = {}) => row('central', at, 'ok', { streams: 83, new: 83, predicted: accepted, sent: accepted, accepted, pending: 0, ...data });
-const failed = (at, error = 'Satori Network 500: boom', data = {}) => row('central', at, 'bad', { streams: 83, new: 1, predicted: 1, sent: 83, accepted: 0, pending: 83, error, ...data });
+const failed = (at, error = 'Satori Service 500: boom', data = {}) => row('central', at, 'bad', { streams: 83, new: 1, predicted: 1, sent: 83, accepted: 0, pending: 83, error, ...data });
 
 const central = (o = {}) => ({ url: 'https://central2.satorinet.io', registration: { ok: true, peer_id: 7, walletMismatch: false }, nextPoll: NOW + 9 * H,
   polling: false, pending: 0, ...o });
@@ -36,7 +36,7 @@ describe('ok: predicting', () => {
   test('central took predictions within the window; Base not staked with no SATORI; nothing subscribed', () => {
     const h = health();
     expect(h).toMatchObject({ status: 'ok', title: 'Predicted', line: 'Sent 83 predictions 2 h ago · next in 9 h', action: null, reasons: [] });
-    expect(h.channels).toEqual({ // by the words people see: the Satori Network, the Satori contract, the Satori relays
+    expect(h.channels).toEqual({ // by the words people see: the Satori Service, the Satori contract, the Satori relays
       network: { state: 'ok', tone: 'idle', text: '83 sent 2 h ago' },
       contract: { state: 'idle', tone: 'off', text: 'Not staked' },
       relays: { state: 'idle', tone: 'off', text: 'No streams' },
@@ -57,7 +57,7 @@ describe('ok: predicting', () => {
     const h = health({ rows: [open(NOW - 3 * H), good(NOW - 2 * H), good(NOW - H, 0)] });
     expect(h).toMatchObject({ status: 'ok', title: 'Predicted', line: 'Up to date · next in 9 h' });
     expect(h.channels.network).toEqual({ state: 'ok', tone: 'idle', text: 'Up to date' });
-    expect(h.feed.map((f) => f.text)).toEqual(['Checked the Satori Network: up to date', 'Sent 83 predictions to the Satori Network']);
+    expect(h.feed.map((f) => f.text)).toEqual(['Checked the Satori Service: up to date', 'Sent 83 predictions to the Satori Service']);
     const polling = health({ rows: [open(NOW - 3 * H), good(NOW - H, 0)], central: central({ polling: true }) });
     expect([polling.line, polling.channels.network.text]).toEqual(['Up to date · next now…', 'Up to date']);
     // caught up after being asleep, with nothing to send
@@ -153,7 +153,7 @@ describe('bad: predictions are failing', () => {
   test('a failed cycle: amber while it retries in minutes, named for what failed; two quick failures stay amber', () => {
     let h = health({ rows: [...running(), failed(NOW - H)], central: central({ nextPoll: NOW + 2 * M, failures: 1 }) });
     expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Sending failed; next try in 2 min.' });
-    expect(h.action).toEqual({ id: 'central-failed', text: 'Satori Network 500: boom. It tries again in 2 min; try now if something was fixed.',
+    expect(h.action).toEqual({ id: 'central-failed', text: 'Satori Service 500: boom. It tries again in 2 min; try now if something was fixed.',
       button: 'Try again', do: 'poll' });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Sending failed' });
     // the bug: a second failure minutes later (a manual retry) turned Home red, though predictions went out minutes before
@@ -161,10 +161,10 @@ describe('bad: predictions are failing', () => {
     expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'Sending failed; next try in 8 min.' });
     expect(ids(h)).toEqual(['central-failed']);
     // named for what failed: not reached at all, or central answered the poll with an error; trying again now
-    const unreached = failed(NOW - M, 'Satori Network unreachable: Failed to fetch', { sent: 0, unreachable: true });
+    const unreached = failed(NOW - M, 'Satori Service unreachable: Failed to fetch', { sent: 0, unreachable: true });
     h = health({ rows: [...running(), unreached], central: central({ nextPoll: NOW + 9 * M }) });
-    expect([h.line, h.channels.network.text]).toEqual(["Couldn't reach the Satori Network; next try in 9 min.", 'Unreachable']);
-    h = health({ rows: [...running(), failed(NOW - M, 'Satori Network 502: Bad Gateway', { sent: 0 })], central: central({ nextPoll: NOW + 9 * M }) });
+    expect([h.line, h.channels.network.text]).toEqual(["Couldn't reach the Satori Service; next try in 9 min.", 'Unreachable']);
+    h = health({ rows: [...running(), failed(NOW - M, 'Satori Service 502: Bad Gateway', { sent: 0 })], central: central({ nextPoll: NOW + 9 * M }) });
     expect([h.line, h.channels.network.text]).toEqual(['The poll failed; next try in 9 min.', 'Poll failed']);
     const unsent = failed(NOW - M, undefined, { error: undefined }); // central answered, and took none of the batch
     expect(health({ rows: [...running(), unsent], central: central({ polling: true }) }).line).toBe('Sending failed; trying again now…');
@@ -174,20 +174,20 @@ describe('bad: predictions are failing', () => {
     const h = health({ rows: [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 6 * H), failed(NOW - H)] });
     expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: 'Nothing sent for 13 h: sending failed.' });
     expect(h.action).toEqual({ id: 'central-failing', button: 'Try again', do: 'poll',
-      text: "Satori Network 500: boom. Nothing went out for 13 h while Satori was open. It keeps trying; try now, or check the Satori Network's address in Settings." });
+      text: "Satori Service 500: boom. Nothing went out for 13 h while Satori was open. It keeps trying; try now, or check the Satori Service's address in Settings." });
     expect(h.channels.network).toEqual({ state: 'bad', tone: 'bad', text: 'Sending failed' });
     expect(ids(h)).toEqual(['central-failing']); // not also overdue
     // the same failures within 11.5 h of open time: amber
     expect(health({ rows: [open(NOW - 12 * H), good(NOW - 11.5 * H), failed(NOW - 6 * H), failed(NOW - H)] }).status).toBe('warn');
     // a new neuron: no good cycle within FIRST_S of open time, its tries failing
-    const fresh = [open(NOW - 2 * H), failed(NOW - 110 * M, 'Satori Network unreachable: Failed to fetch', { sent: 0, unreachable: true })];
-    expect(health({ rows: fresh }).line).toBe("Nothing sent for 2 h: couldn't reach the Satori Network.");
+    const fresh = [open(NOW - 2 * H), failed(NOW - 110 * M, 'Satori Service unreachable: Failed to fetch', { sent: 0, unreachable: true })];
+    expect(health({ rows: fresh }).line).toBe("Nothing sent for 2 h: couldn't reach the Satori Service.");
   });
 
   test('login refused: bad at once', () => {
-    const h = health({ rows: [...running(), failed(NOW - H, 'Satori Network 401: Invalid signature', { login: true })] });
-    expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Network refused this app's login." });
-    expect(h.action).toEqual({ id: 'login-refused', text: "The Satori Network rejects this app's login. Check its address in Settings.",
+    const h = health({ rows: [...running(), failed(NOW - H, 'Satori Service 401: Invalid signature', { login: true })] });
+    expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Service refused this app's login." });
+    expect(h.action).toEqual({ id: 'login-refused', text: "The Satori Service rejects this app's login. Check its address in Settings.",
       button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' });
     expect(h.channels.network).toEqual({ state: 'bad', tone: 'bad', text: 'Login refused' });
   });
@@ -201,7 +201,7 @@ describe('bad: predictions are failing', () => {
   test("Base failing: staked, the check's same error twice in a row", () => {
     const err = row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' });
     const h = health({ rows: [...running(), err], base: staked({ lastCheck: { at: NOW - H, error: 'HTTP request failed' } }) });
-    expect(h).toMatchObject({ status: 'bad', title: 'Partly predicting', line: 'The Satori Network is fine. The Satori contract batch failed 2 times.' });
+    expect(h).toMatchObject({ status: 'bad', title: 'Partly predicting', line: 'The Satori Service is fine. The Satori contract batch failed 2 times.' });
     expect(h.action).toMatchObject({ id: 'base-failing', do: 'go', tab: 'settings', section: 'base' });
     expect(h.channels.contract).toEqual({ state: 'bad', tone: 'bad', text: 'Failed 2 times' });
   });
@@ -209,7 +209,7 @@ describe('bad: predictions are failing', () => {
   test('every relay down with a stream subscribed (a blocked one is not counted: none can carry them)', () => {
     const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }, { url: 'ws://b', state: 'blocked' }] });
     const h = health({ nostr: n });
-    expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'The Satori Network is fine. Every relay is down.' });
+    expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'The Satori Service is fine. Every relay is down.' });
     expect(h.channels.relays).toEqual({ state: 'bad', tone: 'bad', text: 'Relays down' });
     expect(health({ nostr: nostr({ subscriptions: [sub], relays: [] }) }).channels.relays.state).toBe('bad');
     expect(health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'ws://b', state: 'blocked' }] }) }).channels.relays.state).toBe('bad');
@@ -264,7 +264,7 @@ describe('staking (docs/design/health.md: stake, staked-elsewhere, stake-out-of-
   test('out of sync (power under the wallet\'s SATORI): bad, on the Contract chip; the card explains, with no button; still predicting', () => {
     const h = health({ base: staked({ wallet: { satori: '100.000000000000000001', eth: '0.1', staked: 'alias', inSync: false,
       shortfall: '0.000000000000000001' } }) });
-    expect(h).toMatchObject({ status: 'bad', tone: 'bad', title: 'Predicting', line: 'The Satori Network is fine. Staking is out of sync.' });
+    expect(h).toMatchObject({ status: 'bad', tone: 'bad', title: 'Predicting', line: 'The Satori Service is fine. Staking is out of sync.' });
     expect(h.action).toEqual({ id: 'stake-out-of-sync', text: "Unstaking will fail until the contract fix. Don't add SATORI to the wallet." });
     expect(h.channels.contract).toEqual({ state: 'bad', tone: 'bad', text: 'Out of sync' });
     // in sync, or not checked (other stakers possible): nothing
@@ -282,7 +282,7 @@ describe('warn: predicting, but something needs you', () => {
   test("this round's batch skipped for a fixable reason; other skips are calm", () => {
     const check = { at: NOW, round: 20742, skipped: 'gas above the ceiling: a max fee of 3 gwei > 2 gwei; the next check tries again' };
     const h = health({ base: staked({ lastCheck: check }) });
-    expect(h).toMatchObject({ status: 'warn', line: 'The Satori Network is fine. The Satori contract batch was skipped.' });
+    expect(h).toMatchObject({ status: 'warn', line: 'The Satori Service is fine. The Satori contract batch was skipped.' });
     expect(h.action).toMatchObject({ id: 'base-skipped', do: 'go', tab: 'settings', section: 'base' });
     expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Skipped: gas above the ceiling' });
     const sim = health({ base: staked({ lastCheck: { at: NOW, round: 20742, skipped: 'no game passes its simulation',
@@ -295,7 +295,7 @@ describe('warn: predicting, but something needs you', () => {
   test('Base unreachable while it is in use (staked, or a batch sent before): warn', () => {
     for (const b of [staked({ error: 'HTTP request failed' }), base({ error: 'HTTP request failed', config: null, lastBatch: { round: 20741 } })]) {
       const h = health({ base: b });
-      expect(h).toMatchObject({ status: 'warn', line: "The Satori Network is fine. Can't reach Base." });
+      expect(h).toMatchObject({ status: 'warn', line: "The Satori Service is fine. Can't reach Base." });
       expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Unreachable' });
     }
     expect(health({ base: base({ config: null }) }).channels.contract).toEqual({ state: 'idle', tone: 'working', text: 'Connecting…' });
@@ -311,14 +311,14 @@ describe('warn: predicting, but something needs you', () => {
   test('a Satori contract batch that never mines: amber, retrying with a higher fee; past the max fee, said, with Settings', () => {
     const pending = (stuck) => staked({ pendingBatch: { round: 20742, hash: '0xab', sentAt: NOW - M, stuck } });
     let h = health({ base: pending({ at: NOW - M, replaced: 1, fee: '0.025' }) });
-    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Network is fine. The Satori contract batch is stuck; retrying with a higher fee.' });
+    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Service is fine. The Satori contract batch is stuck; retrying with a higher fee.' });
     expect(h.action).toEqual({ id: 'base-stuck', text: 'The Satori contract batch was not mined for 10 min, so it was sent again with a higher fee '
       + '(0.025 gwei), within the max fee. It keeps checking.' });
     expect(h.channels.contract).toEqual({ state: 'warn', tone: 'warn', text: 'Batch stuck' });
     h = health({ base: pending({ at: NOW - M, ceiling: true, fee: '2.5', max: '2' }) });
     expect(h.action).toEqual({ id: 'base-stuck', button: 'Open Settings', do: 'go', tab: 'settings', section: 'base',
       text: 'The Satori contract batch is stuck: a higher fee (2.5 gwei) would pass the max fee (2 gwei), so it waits. Raise the max fee in Settings.' });
-    expect(h.line).toBe('The Satori Network is fine. The Satori contract batch is stuck.');
+    expect(h.line).toBe('The Satori Service is fine. The Satori contract batch is stuck.');
     expect(ids(health({ base: pending(null) }))).toEqual([]); // waiting, not stuck yet
   });
   test("central: a wallet mismatch, by register's wallet_address; none is 'not linked', with why a link was refused", () => {
@@ -326,15 +326,15 @@ describe('warn: predicting, but something needs you', () => {
     const reg = (wallet_address, walletMismatch, walletLinkError = null) => central({ registration: { ok: true, peer_id: 7, wallet: ours,
       wallet_address, walletLinkError, walletMismatch } });
     let h = health({ central: reg(theirs, 'other') });
-    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "The Satori Network pays this wallet's rewards to another address." });
+    expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: "The Satori Service pays this wallet's rewards to another address." });
     expect(h.action).toEqual({ id: 'wallet-mismatch', do: 'relink', button: 'Link this wallet',
-      text: `The Satori Network pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.`
-        + ' Link this wallet: it signs a fresh link, and the Satori Network pays it.' });
+      text: `The Satori Service pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.`
+        + ' Link this wallet: it signs a fresh link, and the Satori Service pays it.' });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Wallet mismatch' });
     h = health({ central: reg(null, 'none') });
-    expect(h).toMatchObject({ status: 'warn', line: 'The Satori Network has no wallet linked to this app.' });
-    expect(h.action).toMatchObject({ id: 'wallet-mismatch', text: 'The Satori Network has no wallet linked to this app, so it has no Base address '
-      + 'to pay its rewards to. Link this wallet: it signs a fresh link, and the Satori Network pays it.' });
+    expect(h).toMatchObject({ status: 'warn', line: 'The Satori Service has no wallet linked to this app.' });
+    expect(h.action).toMatchObject({ id: 'wallet-mismatch', text: 'The Satori Service has no wallet linked to this app, so it has no Base address '
+      + 'to pay its rewards to. Link this wallet: it signs a fresh link, and the Satori Service pays it.' });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Wallet not linked' });
     h = health({ central: reg(null, 'none', 'stale link') });
     expect(h.action.text).toContain("It refused the wallet's link: stale link.");
@@ -343,9 +343,9 @@ describe('warn: predicting, but something needs you', () => {
       h = health({ central: r });
       expect([h.status, ids(h), h.channels.network.state]).toEqual(['ok', [], 'ok']);
     }
-    h = health({ central: central({ registration: { ok: false, error: 'Satori Network unreachable: Failed to fetch' } }) });
+    h = health({ central: central({ registration: { ok: false, error: 'Satori Service unreachable: Failed to fetch' } }) });
     expect(h.action).toEqual({ id: 'not-registered', button: 'Try again', do: 'poll', // a poll registers again first
-      text: 'Registering with the Satori Network failed: Satori Network unreachable: Failed to fetch. It registers again before each poll until it succeeds.' });
+      text: 'Registering with the Satori Service failed: Satori Service unreachable: Failed to fetch. It registers again before each poll until it succeeds.' });
     expect(h.channels.network).toEqual({ state: 'warn', tone: 'warn', text: 'Not registered' });
   });
 });
@@ -382,7 +382,7 @@ describe('advice: the card, nothing wrong (never the status, the tone or the lin
   });
   test('a warn or bad reason with a button keeps the card; the advice waits', () => {
     const h = health({ storage: { persisted: false }, backedUp: false, base: staked({ alias: { power: '100', lowEth: true, batchesLeft: 3, eth: '0' } }) });
-    expect([h.status, h.tone, h.action.id, h.line]).toEqual(['warn', 'warn', 'gas-low', 'The Satori Network is fine. Gas for the daily batch is running low.']);
+    expect([h.status, h.tone, h.action.id, h.line]).toEqual(['warn', 'warn', 'gas-low', 'The Satori Service is fine. Gas for the daily batch is running low.']);
     // two advice reasons: the first in order, the backup before the stake
     const two = health({ storage: { persisted: false }, backedUp: false, base: base({ wallet: { satori: '5', staked: 'none' } }) });
     expect([two.status, two.action.id]).toEqual(['ok', 'backup']);
@@ -409,7 +409,7 @@ test('the action priority: the worst status; one card, the highest reason that h
   let h = health(many);
   expect(ids(h)).toEqual(['wallet-mismatch', 'backup', 'stake', 'relay-down']);
   expect([h.status, h.action.id]).toEqual(['warn', 'wallet-mismatch']);
-  h = health({ ...many, rows: [...running(), failed(NOW - H, 'Satori Network 401: Invalid signature', { login: true })] });
+  h = health({ ...many, rows: [...running(), failed(NOW - H, 'Satori Service 401: Invalid signature', { login: true })] });
   expect([h.status, h.action.id, h.title]).toEqual(['bad', 'login-refused', 'Not predicting']);
   // only advice: the first of them, in order (the backup before the relay)
   h = health({ nostr: n, storage: { persisted: false }, backedUp: false });
@@ -467,7 +467,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     const check = { lastCheck: { at: NOW - H, error: 'HTTP request failed' } };
     const failing = (b, rows = running()) => health({ rows: [...rows, err], base: b });
     // the bug: red, and the title said Predicting
-    expect(failing(staked(check))).toMatchObject({ status: 'bad', title: 'Partly predicting', line: 'The Satori Network is fine. The Satori contract batch failed 2 times.',
+    expect(failing(staked(check))).toMatchObject({ status: 'bad', title: 'Partly predicting', line: 'The Satori Service is fine. The Satori contract batch failed 2 times.',
       action: { id: 'base-failing' }, channels: { network: { state: 'ok' }, contract: { state: 'bad' } } });
     // its RPC down since this page loaded: the stake is not read, and a batch went out before: still Base's job
     const unread = base({ ...check, error: 'HTTP request failed', lastBatch: { round: 20741 }, wallet: { satori: null, eth: null, staked: null } });
@@ -486,7 +486,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
   test('the bug: a new neuron with a wallet mismatch is Starting, not Predicting; the mismatch keeps the status, the line and the card', () => {
     const h = health({ rows: [open(NOW - 10 * M)], central: central({ nextPoll: NOW + 12 * M, registration: mismatch }) });
     expect(ids(h)).toEqual(['wallet-mismatch', 'starting']);
-    expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Network pays this wallet's rewards to another address.",
+    expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Service pays this wallet's rewards to another address.",
       action: { id: 'wallet-mismatch', button: 'Link this wallet' } });
   });
 
@@ -505,7 +505,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
   const reg = (registration) => (i) => ({ ...i, central: { ...i.central, registration } });
   const ADD = {
     'db-error': rows(failed(NOW - 10, 'IO Error: Could not write file', { local: true, sent: 0 })),
-    'login-refused': rows(failed(NOW - 10, 'Satori Network 401: Invalid signature', { login: true })),
+    'login-refused': rows(failed(NOW - 10, 'Satori Service 401: Invalid signature', { login: true })),
     'central-failing': (i) => ({ ...rows(failed(NOW + WINDOW_S - 10))(i), now: NOW + WINDOW_S }), // failing, open WINDOW_S more
     'central-overdue': (i) => ({ ...i, now: NOW + WINDOW_S }), // open WINDOW_S more with nothing sent
     'base-failing': (i) => ({ ...rows(row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' }))(i),
@@ -514,7 +514,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'relays-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }] }) }),
     'central-failed': rows(failed(NOW - 10)),
     'wallet-mismatch': reg(mismatch),
-    'not-registered': reg({ ok: false, error: 'Satori Network unreachable: Failed to fetch' }),
+    'not-registered': reg({ ok: false, error: 'Satori Service unreachable: Failed to fetch' }),
     'gas-low': (i) => ({ ...i, base: staked({ alias: { power: '100', lowEth: true, batchesLeft: 3, eth: '0.00001' } }) }),
     'base-skipped': (i) => ({ ...i, base: staked({ lastCheck: { at: NOW, round: 20742, skipped: 'gas above the ceiling: 3 gwei > 2 gwei' } }) }),
     'base-stuck': (i) => ({ ...i, base: staked({ pendingBatch: { round: 20742, hash: '0xab', sentAt: NOW - M, stuck: { at: NOW, replaced: 1, fee: '0.02' } } }) }),
@@ -659,7 +659,7 @@ describe('the day strip: local days', () => {
       ['2026-10-15', 'closed', false], ['2026-10-16', 'full', true]]);
     expect(days.filter((d) => d.today)).toHaveLength(1);
     expect(days[0]).toMatchObject({ date: '2026-09-17', code: 'before', ran: false }); // before the first session
-    // each day's two halves: the Satori Network (off-chain) and the Satori contract (on-chain)
+    // each day's two halves: the Satori Service (off-chain) and the Satori contract (on-chain)
     expect(days.slice(-6).map((d) => `${d.network}/${d.contract}`)).toEqual(['ok/ok', 'ok/error', 'error/none', 'none/none', 'none/none', 'ok/none']);
     // a skipped check is no failure; the game's Submit with nothing to send (its time) is a play
     const skip = daysOf([open(day(0, 8), NOW), row('base', day(0, 9), 'warn', { skipped: 'gas above the ceiling' }), row('base', day(0, 10), 'ok', { games: [{}] })], NOW).at(-1);
@@ -698,14 +698,14 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
       { count: 3, until: NOW - 10 * M }),
     row('nostr', NOW - 40 * M, 'ok', { published: 3 }),
     row('wallet', NOW - 30 * M, 'ok', { action: 'stake', text: 'Staked with this app' }),
-    failed(NOW - 20 * M, 'Satori Network 401: Invalid signature', { login: true }),
+    failed(NOW - 20 * M, 'Satori Service 401: Invalid signature', { login: true }),
     row('error', NOW - 10 * M, 'bad', { where: 'nostr', message: 'IO Error' }),
     open(NOW - 5 * M, NOW, { gap: 30 }),
   ];
   const { feed } = health({ rows });
   expect(feed.map((f) => [f.level, f.text])).toEqual([
     ['bad', 'A relay forecast failed: IO Error'],
-    ['bad', 'The Satori Network refused the login: Satori Network 401: Invalid signature'],
+    ['bad', 'The Satori Service refused the login: Satori Service 401: Invalid signature'],
     ['ok', 'Staked with this app'],
     ['ok', 'Published 3 forecasts to the Satori relays'],
     ['warn', 'Satori contract batch skipped: gas above the ceiling (×3)'],
@@ -713,7 +713,7 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
     ['ok', 'History loaded for 83 streams'],
     ['idle', 'Satori was closed for 3 d'],
     ['ok', 'Satori contract batch for round 20739: 2 games'],
-    ['ok', 'Sent 83 predictions to the Satori Network'],
+    ['ok', 'Sent 83 predictions to the Satori Service'],
   ]);
   expect(feed[0]).toEqual({ at: NOW - 10 * M, level: 'bad', text: 'A relay forecast failed: IO Error' });
   const busy = Array.from({ length: 30 }, (_, i) => good(NOW - (30 - i) * H));
@@ -729,7 +729,7 @@ test('times in a few words', () => {
 
 test('the feed is by time: a cycle logged when it ends sits at its start, after what happened meanwhile', () => {
   const rows = [open(NOW - H), row('base', NOW - 50 * M, 'idle', { skipped: 'no streams with a game' }), good(NOW - 55 * M)];
-  expect(health({ rows }).feed.map((f) => f.text)).toEqual(['Satori contract batch skipped: no streams with a game', 'Sent 83 predictions to the Satori Network']);
+  expect(health({ rows }).feed.map((f) => f.text)).toEqual(['Satori contract batch skipped: no streams with a game', 'Sent 83 predictions to the Satori Service']);
 });
 
 describe('the Satori contract unused: its RPC errors are not failures (the day strip, the feed)', () => {
@@ -750,21 +750,21 @@ describe('the Satori contract unused: its RPC errors are not failures (the day s
 
 describe('address changes: a quiet note on Home for 24 h, and in the feed (the security review, 2026-10-19)', () => {
   const changed = (at, data) => row('setting', at, 'idle', data);
-  test("the Satori Network's address or the Base RPC changed: a note each, newest first, for 24 h; the status, the card and the strip untouched", () => {
+  test("the Satori Service's address or the Base RPC changed: a note each, newest first, for 24 h; the status, the card and the strip untouched", () => {
     const rows = [...running(), changed(NOW - 25 * H, { what: 'central', to: 'https://old.example' }),
       changed(NOW - 3 * H, { what: 'rpc', to: '', default: 'https://sepolia.base.org' }),
       changed(NOW - 30 * M, { what: 'central', to: 'https://other.example' })];
     const h = health({ rows });
     expect(h.notices).toEqual([
-      { at: NOW - 30 * M, what: 'central', text: 'Satori Network address changed to https://other.example' },
+      { at: NOW - 30 * M, what: 'central', text: 'Satori Service address changed to https://other.example' },
       { at: NOW - 3 * H, what: 'rpc', text: 'Base RPC changed to the default, https://sepolia.base.org' },
     ]); // the one 25 h old has gone
     expect([h.status, h.action, h.reasons]).toEqual(['ok', null, []]);
     expect(h.days).toEqual(health().days);
     expect(h.feed.filter((f) => /changed/.test(f.text)).map((f) => [f.level, f.text])).toEqual([
-      ['idle', 'Satori Network address changed to https://other.example'],
+      ['idle', 'Satori Service address changed to https://other.example'],
       ['idle', 'Base RPC changed to the default, https://sepolia.base.org'],
-      ['idle', 'Satori Network address changed to https://old.example']]); // the feed keeps it
+      ['idle', 'Satori Service address changed to https://old.example']]); // the feed keeps it
     expect(health().notices).toEqual([]);
     const rpc = changed(NOW - M, { what: 'rpc', to: 'https://mine.example' });
     expect(health({ rows: [...running(), rpc] }).notices[0].text).toBe('Base RPC changed to https://mine.example');
@@ -785,7 +785,7 @@ describe('address changes: a quiet note on Home for 24 h, and in the feed (the s
     const h = health({ rows: [...running(), r] });
     expect([h.status, h.notices, h.days]).toEqual(['ok', [], health().days]);
     expect(h.feed[0]).toEqual({ at: NOW - H, level: 'warn',
-      text: "The Satori Network's contract addresses differ from the app's (token, hub): the app's are used" });
+      text: "The Satori Service's contract addresses differ from the app's (token, hub): the app's are used" });
   });
 });
 

@@ -17,12 +17,12 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   suites afterwards; fix and redeploy if they fail. The owner doesn't wait on
   suites.
 - **Autonomous by default; the Game tab plays by hand** (2026-10-25,
-  replacing "Autonomous only"). The app plays off-chain (the Satori Network)
+  replacing "Autonomous only"). The app plays off-chain (the Satori Service)
   and on-chain (the alias's daily batch once the wallet stakes) automatically.
   The Game tab is a much simplified dapp; playing there means switching the
   app to "by hand": one flag (`base_play`), and the only thing it changes is
   that the daily batch is worked out but not sent. Data, models, the Satori
-  Network and the stake are all left alone. While automatic, the Game tab is
+  Service and the stake are all left alone. While automatic, the Game tab is
   greyed out with the switch. The game: base.md "The game" (alias if staked
   with it, else the wallet). Note `SatoriEngine.sol` reverts `Delegated` for a staked wallet
   playing itself.
@@ -53,7 +53,7 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
 - **Every stream we produce goes to the relays** (2026-10-25). Any data stream
   this app produces, a prediction stream or a raw one, is announced and
   published to the Nostr relays, unless it is private: the predictions sent
-  to the Satori Network and the Satori contract too. And **subscribing is not
+  to the Satori Service and the Satori contract too. And **subscribing is not
   predicting**: a person can follow a stream without predicting it, and
   chooses which streams to predict (a Predict action on the Streams tab).
   Not built yet: plan it with the owner before building.

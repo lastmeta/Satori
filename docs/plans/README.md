@@ -62,7 +62,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    ([../design/models.md](../design/models.md)). Then the same day: a
    training pass, so the neuron never rests with a model unscored; Sort as
    a menu; the tab in plain words; the words people see (the Satori
-   Network, the Satori contract, the Satori relays); icons only where they
+   Service, the Satori contract, the Satori relays); icons only where they
    are understood. ✅ **Retrain**: a model's drill-in asks the neuron to keep
    training it until one beats no change on recent data it never chose on,
    then stop ([../design/models.md](../design/models.md#retrain)).
@@ -98,7 +98,7 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
    stamped, secrets wiped where JS can ([../design/keys.md](../design/keys.md#secrets-in-memory)).
    Left: the keys in a worker ([runtime.md](runtime.md)).
 14. ✅ **A reward address** (owner, 2026-10-19: "in the settings or in the
-   wallet"): Settings › Reward address, where the Satori Network sends the
+   wallet"): Settings › Reward address, where the Satori Service sends the
    rewards instead of the wallet (a Base address; checked, signed in by the
    alias, free), `rewardAddress()` and `setRewardAddress()`, noted on Home
    ([../design/central.md](../design/central.md#the-reward-address));

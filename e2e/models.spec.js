@@ -277,7 +277,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
     await expect(goldRow.locator('.ichip')).toHaveText(gold.outputs[0].influence.filter((i) => i.stream !== gold.uuid).map((i) => `+${i.name}`));
   }
   // where it goes, in words; its quality in words; its values labelled (now, and in 24 h, the arrow after it)
-  await expect(goldRow.locator('[data-test=model-to] .tag')).toHaveText(['Network']);
+  await expect(goldRow.locator('[data-test=model-to] .tag')).toHaveText(['Service']);
   await expect(goldRow.locator('[data-test=model-mark]')).toHaveText(gold.quality.text);
   for (const t of await rows(page).locator('[data-test=model-mark]').allTextContents()) {
     expect(t).toMatch(/^(\d+% better|Same as no change|\d+% worse|Worse|Not scored yet)$/);
@@ -313,7 +313,7 @@ test('Models: the engine\'s status, every model (central, Base, Network), filter
   await expect(page.locator('[data-test=model-details]')).toContainText(`${bvar.spec.lambda1}, ${bvar.spec.lambda2}`);
   await expect(page.locator('[data-test=model-output]')).toHaveCount(1);
   await expect(page.locator('[data-test=model-output-name]')).toHaveText(bvar.name);
-  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Network\s*Accepted /);
+  await expect(page.locator('[data-test=model-destination]')).toHaveText(/Service\s*Accepted /);
   await expect(page.locator('[data-test=model-chart] path.hist')).toHaveAttribute('d', /^M[\d.]+ [\d.]+( L[\d.]+ [\d.]+){10,}$/);
   await expect(page.locator('[data-test=model-endpoint]')).toBeVisible();
   // the agent's drill-in: the same, recomputed on demand, cheap

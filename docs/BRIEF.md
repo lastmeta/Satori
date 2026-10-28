@@ -26,7 +26,7 @@ The short version; owner rulings are in `CLAUDE.md` and `/code/Satori/CLAUDE.md`
 - **Two keys.** The alias is plaintext and signs on its own. The wallet is encrypted with PBKDF2-SHA256 at 600k rounds plus AES-GCM, and holds the funds. The Nostr key is random and plaintext.
 - **Base only, no Evrmore.** Central's login is EIP-191. A tiny Evrmore helper remains only if central lacks `wallet_address`; it has it now.
 - **Words people see:**
-  - central is the **Satori Network** (free);
+  - central is the **Satori Service** (free);
   - Nostr is the **Satori relays**;
   - the Base contracts are the **Satori contract** (costs gas);
   - delegating is "**stake with** this neuron" / "Unstake";
@@ -112,7 +112,7 @@ curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" ht
 ## State at handoff (deployed `b004d5a`)
 - **Built and live:**
   - keys and import/backup;
-  - the Satori Network flow: register, poll, submit, history backfill;
+  - the Satori Service flow: register, poll, submit, history backfill;
   - the engine: `bvar` multivariate with evolving specs, training pass, Retrain with a held-out check;
   - Nostr: subscribe, intake, `_pred`, announce, NIP-65;
   - Base: stake/unstake, daily batch with the tie rule "follow the last move", claims (the Network drop is now counted in claimable), sends with a review step;

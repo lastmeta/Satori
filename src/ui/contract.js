@@ -14,7 +14,7 @@ const today = () => predictedToday(b());
 
 const PHONE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"></rect><path d="M11 18.5h2"></path></svg>`;
 // the contract: a block on the chain
-// the Satori Network: a server; the relays: a tower sending out
+// the Satori Service: a server; the relays: a tower sending out
 const SERVER = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="1.5"></rect><rect x="4" y="13.5" width="16" height="7" rx="1.5"></rect><path d="M8 7h.01M8 17h.01"></path></svg>`;
 const TOWER = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 10.5v10M8.5 20.5h7"></path><circle cx="12" cy="9" r="1.5"></circle><path d="M8.5 5.5a5 5 0 0 0 0 7M15.5 5.5a5 5 0 0 1 0 7M6 3a8.5 8.5 0 0 0 0 12M18 3a8.5 8.5 0 0 1 0 12"></path></svg>`;
 // the Game tab's own icon (src/ui/view.js)
@@ -64,7 +64,7 @@ const checkList = (a, list) => html`<ul class="checks" data-test="chip-checks">$
 const nowS = () => Date.now() / 1000;
 
 const network = (a) => html`<div class="card contract-card" data-test="network-card">
-  ${flow('network', () => networkSent(state.central, nowS()), 'This app', () => (networkSent(state.central, nowS()) ? 'Sent today' : 'Nothing sent lately'), SERVER, 'Satori Network')}
+  ${flow('network', () => networkSent(state.central, nowS()), 'This app', () => (networkSent(state.central, nowS()) ? 'Sent today' : 'Nothing sent lately'), SERVER, 'Satori Service')}
   <p class="muted small">The app reads each data stream's latest values from the network, predicts the next ones with its own models, and sends the predictions back. Doing so costs no gas, those predictions are scored off-chain and rewards are provided on-chain.</p>
   ${checkList(a, () => networkChecks(state.central, nowS()))}
 </div>`;

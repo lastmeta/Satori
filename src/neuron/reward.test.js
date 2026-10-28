@@ -56,7 +56,7 @@ describe("rewardFrom: central's answer → the address, or null (not set: the wa
     }
     expect(() => rewardFrom(null)).toThrow(UNREADABLE);
     expect(() => rewardFrom('oops')).toThrow(UNREADABLE);
-    expect(UNREADABLE).toBe("The Satori Network answered a reward address that isn't a Base address, so it isn't shown.");
+    expect(UNREADABLE).toBe("The Satori Service answered a reward address that isn't a Base address, so it isn't shown.");
   });
 });
 
@@ -123,8 +123,8 @@ describe('createReward: read and set, with the status', () => {
     const central = fakeCentral(ADDR);
     const r = createReward({ central: () => central, now: at });
     await r.read();
-    central.fail = new CentralError(0, 'network', 'Satori Network unreachable: Failed to fetch');
-    expect(await r.read()).toEqual({ address: ADDR, whose: null, at: 1_800_000_000, error: 'Satori Network unreachable: Failed to fetch', reading: false });
+    central.fail = new CentralError(0, 'network', 'Satori Service unreachable: Failed to fetch');
+    expect(await r.read()).toEqual({ address: ADDR, whose: null, at: 1_800_000_000, error: 'Satori Service unreachable: Failed to fetch', reading: false });
     expect(r.known).toBe(true);
     const fresh = createReward({ central: () => fakeCentral(), now: at });
     expect(fresh.known).toBe(false);
@@ -158,7 +158,7 @@ describe('createReward: read and set, with the status', () => {
     const work = createWork();
     const r = createReward({ central: () => central, work, now: at });
     central.fail = new CentralError(400, 'Invalid Base address');
-    await expect(r.set(ADDR)).rejects.toThrow('Satori Network 400: Invalid Base address');
+    await expect(r.set(ADDR)).rejects.toThrow('Satori Service 400: Invalid Base address');
     expect(work.all()).toEqual({});
     expect(r.status).toEqual({ address: null, whose: null, at: null, error: null, reading: false });
     expect(await r.set(ADDR)).toEqual({ address: ADDR, whose: null, changed: true }); // never read: counted as a change
@@ -174,7 +174,7 @@ describe('createReward: read and set, with the status', () => {
     await reading;
     expect(r.status.address).toBe(ADDR);
   });
-  test('reset (another Satori Network): unknown again', async () => {
+  test('reset (another Satori Service): unknown again', async () => {
     const r = createReward({ central: () => fakeCentral(ADDR), now: at });
     await r.read();
     r.reset();

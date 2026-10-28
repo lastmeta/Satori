@@ -115,7 +115,7 @@ newest. `src/neuron/history.js`:
   warning) and remembered for a day (`meta.central_history.retryAt`), then
   asked again. (Before, one deleted stream failed first every day and held
   all the others with it.)
-- **Shown**: the Streams tab's Satori Network card has, under its Details, a History line ("Oct 16, 09:30 · 83
+- **Shown**: the Streams tab's Satori Service card has, under its Details, a History line ("Oct 16, 09:30 · 83
   streams, 81,234 rows", or "Not on this central (central 404: Not Found);
   next try …"); `status().central.history` = the last run `{at, url, streams,
   rows, left, error, retryAt}` and `needed` (streams with no history yet).
@@ -182,18 +182,18 @@ The `'other'` text on a phone: [Home](../screenshots/wallet-mismatch-phone.png),
 
 The owner (2026-10-19, [../intent/INTENT.md](../intent/INTENT.md)): "We need
 to be able to specify a reward address, in the settings or in the wallet."
-It is where the Satori Network sends this neuron's rewards instead of the
+It is where the Satori Service sends this neuron's rewards instead of the
 wallet, such as a pool. Satori is Base only, so it is a Base (0x) address.
 With none set, rewards go to the wallet (register's `wallet_address`,
 [above](#the-wallets-link)). It has nothing to do with staking:
 Stake with this app gives the wallet's prediction power on the Satori
-contract; the reward address only says where the Satori Network pays.
+contract; the reward address only says where the Satori Service pays.
 
 **Where: Settings › Reward address**, a card of its own after Keys and
 Backup (`#settings-reward`). Not the Wallet: the Wallet is the Base card,
 the wallet's balances and its transactions, each one asking for the
 passphrase and using gas. The reward address is none of that: the Satori
-Network keeps it, the alias signs it on its own, it is free, and it is
+Service keeps it, the alias signs it on its own, it is free, and it is
 set and forgotten. The UI intent puts addresses and endpoints behind
 Settings ([../intent/ui.md](../intent/ui.md)); the card comes right after
 the keys, whose wallet it replaces as the payee.
@@ -209,10 +209,10 @@ again and retries once, as the predictions batch does. Central answers 400
 for the zero address. Lite reads it without a login
 (by its alias's pubkey, satorilib `server.py`) and keeps a copy in its
 config, synced on each start (`start.py`); this app keeps no copy:
-the Satori Network's answer is the one source.
+the Satori Service's answer is the one source.
 
 **When it is read**: when Settings opens, once per page load and Satori
-Network (again after a read that failed, or with Try again), and by
+Service (again after a read that failed, or with Try again), and by
 `window.satori.rewardAddress()`. Never in a loop, and not at load unless the
 page opens on Settings (a link or a reload on `#settings`: then at once,
 beside the first poll; central takes both logins): a load's first poll logs
@@ -241,7 +241,7 @@ answers the Base address the reward is paid at: a value set before Base
 reads as the same key's Base address (a pool's, or this neuron's own
 alias or wallet), and null when unset or unknown. A 0x address is shown
 checksummed; null (or `''`) is **not set**: rewards go to the wallet.
-Anything else (it should not happen) is an error, "The Satori Network
+Anything else (it should not happen) is an error, "The Satori Service
 answered a reward address that isn't a Base address, so it isn't shown.",
 never read as not set. This neuron's own addresses are named: "your wallet",
 or "your alias" with a note that rewards there aren't claimed in this
@@ -251,20 +251,20 @@ app (Save another address, or Clear). `status().central.reward.whose` and
 **Shown**: "Not set · rewards go to your wallet", or the address shortened
 (`0x3a91…B6E7`, as the Wallet shortens a recipient; the full one in its
 hover) with Copy and its name when it is this neuron's own; while it is read,
-"Reading it from the Satori Network…"; when it could not be read, the error
+"Reading it from the Satori Service…"; when it could not be read, the error
 with Try again. A field for a new one, **Save**, and **Clear** (only while
 one is set). Save and Clear say "Saving…", "Clearing…", and the card's line
 says each step at Home's pace (`src/ui/hold.js`): "Signing in to the Satori
-Network…", "Saving the reward address…" (or "Clearing the reward
-address…"), then "Saved: the Satori Network sends this neuron's rewards to
+Service…", "Saving the reward address…" (or "Clearing the reward
+address…"), then "Saved: the Satori Service sends this neuron's rewards to
 0x…" with the full address, or "Cleared: rewards go to your wallet". It is
 the `reward` task in `health().work`, which Home's hero shows too. While it
 reads or saves, a small ring turns beside the words: the hero's ring
 (`.spin`, the same `ring-turn`, still under reduced motion), so the wait is
 never silent on Settings, where the hero is not; it is the only moving thing
-there. Errors are the check's words, or the Satori Network's ("Satori
-Network 400: Invalid Base address", "Satori Network unreachable: …"). A
-change of the Satori Network's address forgets the last one's: its reward
+there. Errors are the check's words, or the Satori Service's ("Satori
+Service 400: Invalid Base address", "Satori Service unreachable: …"). A
+change of the Satori Service's address forgets the last one's: its reward
 address, and the card's saved line and error; a new read drops the last
 save's line ("Cleared: …" may no longer hold when it changed elsewhere).
 
@@ -283,14 +283,14 @@ words and turning ring meanwhile; a checksum typo, a non-Base address and
 this neuron's alias refused before any call; Save's steps with the ring,
 the address shortened with its hover, Home's note; the same address again
 is no change; Clear; this neuron's wallet and alias named; the agent API;
-a refusal in the Satori Network's words; another Satori Network forgets the
+a refusal in the Satori Service's words; another Satori Service forgets the
 last words). Unit tests: `src/neuron/reward.test.js` (the checks, the
 alias refused, central's answers, an unreadable one never "not set",
 whose, the read and the set, a read overtaken by a set),
 `src/central/central.test.js` (signed in, the body, a 401 retried once, a
 400's words).
 
-<img src="../screenshots/reward-set-phone-light.png" alt="Settings › Reward address on a phone: 0x3a91…B6E7 with Copy, Saved: the Satori Network sends this neuron's rewards to 0x3a91ecc0…" width="240"> <img src="../screenshots/reward-none-phone-dark.png" alt="Settings › Reward address, dark: Not set · rewards go to your wallet" width="240"> <img src="../screenshots/reward-alias-phone-light.png" alt="Settings › Reward address: the alias's address, named your alias, with its note" width="240">
+<img src="../screenshots/reward-set-phone-light.png" alt="Settings › Reward address on a phone: 0x3a91…B6E7 with Copy, Saved: the Satori Service sends this neuron's rewards to 0x3a91ecc0…" width="240"> <img src="../screenshots/reward-none-phone-dark.png" alt="Settings › Reward address, dark: Not set · rewards go to your wallet" width="240"> <img src="../screenshots/reward-alias-phone-light.png" alt="Settings › Reward address: the alias's address, named your alias, with its note" width="240">
 [desktop](../screenshots/reward-set-desktop-light.png),
 [desktop, dark, not set](../screenshots/reward-none-desktop-dark.png),
 [desktop, the alias](../screenshots/reward-alias-desktop-light.png),
@@ -310,7 +310,7 @@ central2 with `base-upgrade` 8dcc016 (a reviewer's probe): 84 of 84
 accepted; `setRewardAddress()` with a padded lower-case address answered
 it checksummed in about 1 s, and `rewardAddress()` read it back; a set
 alongside a poll went through; Save in the card said "Saving…" with
-"Signing in to the Satori Network…", then "Saving the reward address…",
+"Signing in to the Satori Service…", then "Saving the reward address…",
 then "Saved: …"; the alias's own address was refused before any call;
 cleared at the end (null). Nothing was sent to prod.
 
@@ -371,7 +371,7 @@ relay list and Base's config are read from the new central at once.
   status (last poll, last submission), logged in the activity log and shown on
   Home ([health.md](health.md)) and on Streams. A failure that never reached
   central (a network error or a timeout: status 0) carries `unreachable:
-  true`, so Home names it ("Couldn't reach the Satori Network") apart from
+  true`, so Home names it ("Couldn't reach the Satori Service") apart from
   a refused batch ("Sending failed") and a refused login.
 - **Retries** (2026-10-19). A failed cycle (its poll or submission failed, a
   local failure, or central took none of the batch: `failedCycle`) is tried
@@ -387,7 +387,7 @@ relay list and Base's config are read from the new central at once.
   nothing good went out for a cycle's 12 h of open time
   ([health.md](health.md#reasons-in-priority-order)).
 - **Register again.** While the last register failed, each poll registers
-  first (Home's step "Signing in to the Satori Network…"), until it succeeds;
+  first (Home's step "Signing in to the Satori Service…"), until it succeeds;
   a poll runs whatever register's result. Lite registers on every start, and
   restarts daily. A local failure in a
   cycle (a database write) is logged with `console.error` and shown as the last
@@ -416,7 +416,7 @@ relay list and Base's config are read from the new central at once.
 | No per-prediction signature (step 1 signed each prediction locally). | Lite does not sign predictions; the login signature authenticates the batch. |
 | Prediction numbers are sent as JS prints them (`100`, `1e-7`), not as Python's `str` (`100.0`, `1e-07`). | Central reads them with `float()`; nothing depends on the layout ([the protocol audit](#the-protocol-audit)). |
 | The register result checks the wallet (`walletMismatch`, with both Base addresses). | Central pays the linked wallet: a mismatch, or no link, means this wallet is not paid ([the wallet's link](#the-wallets-link)). |
-| The reward address is read signed in (the login's Bearer token), not by the alias's pubkey alone; no copy is kept in the app, and it is read when Settings opens (and by `rewardAddress()`), not synced both ways (Lite: `start.py:5020-5085`). | The owner's call (2026-10-19): read it as the app's other signed calls. The Satori Network is the one source, so nothing local can disagree with it ([the reward address](#the-reward-address)). |
+| The reward address is read signed in (the login's Bearer token), not by the alias's pubkey alone; no copy is kept in the app, and it is read when Settings opens (and by `rewardAddress()`), not synced both ways (Lite: `start.py:5020-5085`). | The owner's call (2026-10-19): read it as the app's other signed calls. The Satori Service is the one source, so nothing local can disagree with it ([the reward address](#the-reward-address)). |
 | The model is `bvar`/`bar1`/`naive` after namaste_club, not Lite's adapters; each target's spec is drawn from the alias and evolved after each poll. | [engine.md](engine.md#deviations-and-why) |
 | Central's history is fetched once per stream (`/observations/history`, [above](#history-an-addition-beyond-lite)); Lite never asks for history. | The owner's direction (2026-10-15): a new neuron starts with data instead of from nothing ([../intent/engine.md](../intent/engine.md)). |
 
@@ -462,7 +462,7 @@ browser profiles, no stubs, nothing sent to prod:
   '0' }` with no error (a new peer has no entry in central2's drop).
 - Another new profile, its predictions batch answered 503 twice by network
   interception (the send and its one resend): `lastSubmit.error` "Satori
-  Network 503: a test outage", `failures` 1, 84 pending, the next poll
+  Service 503: a test outage", `failures` 1, 84 pending, the next poll
   120 s out; Home amber, "Sending failed; next try in 2 min." (*Starting*:
   no good cycle yet). With no hook and no Poll now, the retry ran 123 s after
   the failure: 84 of 84 accepted, `failures` 0, the next poll 11 h out, Home

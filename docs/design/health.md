@@ -19,7 +19,7 @@ fabricated logs), with what the neuron is doing right now
 `window.satori.health()` → `{ status, tone, title, line, action, days, channels, feed, reasons, work }`.
 
 **Words people see** (the owner, 2026-10-18, [../intent/ui.md](../intent/ui.md)):
-central is the **Satori Network** ("Network"; free to submit to), the
+central is the **Satori Service** ("Network"; free to submit to), the
 Base contracts are the **Satori contract** ("Contract"; it costs gas), the
 Nostr relays are the **Satori relays** ("Relays"). The channels are named
 so for agents too: `network`, `contract`, `relays` (they were `central`,
@@ -54,7 +54,7 @@ Rows older than 90 days are deleted at start and once a day.
 | `base` | `ok` sent, `warn` fixable skip, `idle` other skip, `bad` error | `{ round, hash?, games?, dropped?, skipped?, error? }` | each batch check that sent, skipped or failed, except "already predicted" and "waiting for the batch already sent". The same skip or error again is merged into its row (`count`, `until`) |
 | `nostr` | `ok` | `{ published }` | each `_pred` a relay took, merged per hour |
 | `wallet` | `ok` | `{ action, text }` | Stake, Unstake, Claim, Send |
-| `setting` | `idle` | `{ what: 'central' \| 'rpc' \| 'reward', to, default? }` | the Satori Network's address, the Base RPC or the reward address changed, in Settings or by `window.satori` (`to` `''`: the default, `default` its URL; a reward address cleared); Home notes it for 24 h ([below](#address-changes)) |
+| `setting` | `idle` | `{ what: 'central' \| 'rpc' \| 'reward', to, default? }` | the Satori Service's address, the Base RPC or the reward address changed, in Settings or by `window.satori` (`to` `''`: the default, `default` its URL; a reward address cleared); Home notes it for 24 h ([below](#address-changes)) |
 | `config` | `warn` | `{ url, keys }` | central's `base/config` named contract addresses that are not the app's (`keys`); the app's were kept ([base.md](base.md#config)). Merged per central and keys |
 | `error` | `bad` | `{ where, message }` | an engine or database failure outside central's cycle (a relay stream's intake) |
 
@@ -165,11 +165,11 @@ no warn or bad reason is present.
 
 **Failures, by what failed** (2026-10-19). The line and the chip name it:
 "Sending failed" (central refused the batch, or took none of it), "Couldn't
-reach the Satori Network" (chip "Unreachable": a network error or a
+reach the Satori Service" (chip "Unreachable": a network error or a
 timeout, the row's `unreachable`), "The poll failed" (central answered the
 observations with an error), "Login refused". While it retries the line says
 when: "Sending failed; next try in 2 min." ("trying again now…" while the
-poll runs), the card the error: "Satori Network 503: boom. It tries again in
+poll runs), the card the error: "Satori Service 503: boom. It tries again in
 2 min; try now if something was fixed." Red only once the failures span a
 real cycle: "Nothing sent for 13 h: sending failed." A failed login is red
 at once (only the person can fix it), as a database failure is. Before, any
@@ -270,7 +270,7 @@ until the next normal cycle (sky green on Home, not grey). `src/neuron/health.te
 failing for over 12 h of open time) with every reason (a table).
 
 The line is the top reason's short text (advice has none), after "The
-Satori Network is fine." when the network channel has no reason. With no reason, or only advice, it is
+Satori Service is fine." when the network channel has no reason. With no reason, or only advice, it is
 "Sent 83 predictions 2 h ago · next in 9 h", or "Up to date · next in 9 h" when the last poll had nothing
 new to predict and nothing to send. Words appear only when something needs
 them.
@@ -284,7 +284,7 @@ set by the code doing the work; nothing polls:
 
 | task | step | words (Home) | critical |
 |---|---|---|---|
-| `central` | `register` | Signing in to the Satori Network… (only when a poll follows at once: a new neuron, or one reopened with a poll due; and in a poll that registers again first, the last register having failed) | |
+| `central` | `register` | Signing in to the Satori Service… (only when a poll follows at once: a new neuron, or one reopened with a poll due; and in a poll that registers again first, the last register having failed) | |
 | | `observations` | Fetching today's observations… (the batch, stored) | |
 | | `history` | Loading history · 34 of 82 streams (the streams in hand; [central.md](central.md#history-an-addition-beyond-lite)) | |
 | | `models` | Building models · 40 of 82 (the engine yields to the page between targets: the same results) | |
@@ -294,7 +294,7 @@ set by the code doing the work; nothing polls:
 | `stake`, `unstake`, `send` | `send`, `confirm` (k of n), `settle` | Step 1 of 3: sending…, Step 1 of 3: waiting for Base to confirm…, Checking it on Base… | yes |
 | `claim` | `rewards`, `drop`, `airdrop`, `confirm` | Claiming rewards…, Claiming the reward drop…, Claiming the airdrop…, Waiting for Base to confirm… | yes |
 | `keys` | `save` | Saving your keys… (an earlier version's record, rewritten at Unlock) | yes |
-| `reward` | `login`, `save`, `clear` | Signing in to the Satori Network…, Saving the reward address…, Clearing the reward address… ([central.md](central.md#the-reward-address); a read is quiet: Settings' row says it) | |
+| `reward` | `login`, `save`, `clear` | Signing in to the Satori Service…, Saving the reward address…, Clearing the reward address… ([central.md](central.md#the-reward-address); a read is quiet: Settings' row says it) | |
 | `discover` | `ask` (relays answered) | Asking the relays · 1 of 2 | |
 | | `verify` (announcements checked) | Checking the announcements' signatures · 400 of 1,061 | |
 | `subscribe` | `find` | Finding the stream on the relays… | |
@@ -420,7 +420,7 @@ Streams, Wallet, Streams). Their traffic channels in `src/traffic.js` keep
 the code's names (`central`, `base`, `network`: `TRAFFIC` and `CHIP_OF` in
 health.js map them).
 
-- **Network** (the Satori Network): ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
+- **Network** (the Satori Service): ok "83 sent 2 h ago", or "Up to date · next in 9 h" when
   the last poll had nothing to send (never "0 sent"); idle "First poll now…",
   "Catching up now…" (while the poll runs; "Catching up soon" when due and
   not yet running, "… in 2 h" when a poll is still ahead); warn "Sending failed",
@@ -598,13 +598,13 @@ health changes, and when the page is hidden or left.
 
 ## The day strip
 
-Each day is two halves (owner, 2026-10-25): **top, the Satori Network**
+Each day is two halves (owner, 2026-10-25): **top, the Satori Service**
 (off-chain scoring), **bottom, the Satori contract** (on-chain: a batch
 sent, or the game played by hand), each coloured on its own (`daysOf`'s
 `network` and `contract`: ok, error (it only failed: a skipped check is no
 failure), none), so a day shows one working and the other not; the game's
 Submit counts on the day it was made, with nothing to send too. "Top: the
-Satori Network · Bottom: the Satori contract" under the strip. The days are
+Satori Service · Bottom: the Satori contract" under the strip. The days are
 thin bars 8 px apart; only the opened day is outlined. A half that worked is
 sky green (done, all good: the regular green means working), as the cards'
 ticks and arrows are.
@@ -643,7 +643,7 @@ again closes it. Opening, the card grows as the day fades in; closing, the
 day fades out first, then the card shrinks (`src/neuron/day.js`, read by
 `main.js` `dayDetail`):
 
-- **Satori Network:** how many predictions were sent that day, and when
+- **Satori Service:** how many predictions were sent that day, and when
   (the first to the last). Each is marked [against no change](models.md#quality-against-no-change):
   its 24 h forecast and no change (the stream's last value when it was
   made) against the stream's first value 24 h on, up to a day late. Better,
@@ -658,7 +658,7 @@ day fades out first, then the card shrinks (`src/neuron/day.js`, read by
 
 ## Address changes
 
-The security review (2026-10-19): whoever changes the Satori Network's
+The security review (2026-10-19): whoever changes the Satori Service's
 address or the Base RPC chooses whom the neuron trusts for its data, its
 balances and its transactions' fees, and whoever changes the reward address
 where its rewards go; a browser extension or a misled
@@ -667,7 +667,7 @@ is a `setting` row (only a real change: saving the same address is none),
 and Home shows a quiet line under the hero's for 24 h (`NOTICE_S`), newest
 first, with how long ago:
 
-- "Satori Network address changed to https://central.example · 2 h ago"
+- "Satori Service address changed to https://central.example · 2 h ago"
   ("… changed to the default, https://network.satorinet.io" when emptied);
 - "Base RPC changed to https://rpc.example" ("… changed to the default,
   https://sepolia.base.org");
@@ -682,14 +682,14 @@ rows for 90 days.
 ## The feed
 
 The log, newest first, 20 rows: `{ at, level, text }`. "Sent 83 predictions
-to the Satori Network", "Checked the Satori Network: up to date" (nothing
+to the Satori Service", "Checked the Satori Service: up to date" (nothing
 to send), "Caught up: sent 83 predictions" ("Caught up: up to date"), "The
-Satori Network refused the batch: Satori Network 401: Invalid signature",
+Satori Service refused the batch: Satori Service 401: Invalid signature",
 "Satori contract batch for round 20742: 1 game", "Satori contract batch
 skipped: gas above the ceiling (×3)", "Published 3 forecasts to the Satori
 relays", "Satori was closed for 2 d", "Staked with this app",
-"Satori Network address changed to https://central.example", "The Satori
-Network's contract addresses differ from the app's (token): the app's are
+"Satori Service address changed to https://central.example", "The Satori
+Service's contract addresses differ from the app's (token): the app's are
 used". A session that missed nothing is not shown.
 
 ## Verify
@@ -852,7 +852,7 @@ each state on a phone (390 × 844, the first screen) and a computer (1280
 wide), light and dark, `docs/screenshots/home-<state>-<phone|desktop>-<light|dark>.png`
 for `ok`, `idle`, `warn` and `bad`, and `new` (a new neuron's first day).
 
-<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: the alias's gas is low" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: the Satori Network refused the login" width="240">
+<img src="../screenshots/home-ok-phone-light.png" alt="ok: predicting" width="240"> <img src="../screenshots/home-idle-phone-light.png" alt="idle: caught up after being asleep, predicting" width="240"> <img src="../screenshots/home-warn-phone-dark.png" alt="warn: the alias's gas is low" width="240"> <img src="../screenshots/home-bad-phone-dark.png" alt="bad: the Satori Service refused the login" width="240">
 
 The Stake card, advice (the hero stays green; the risk said before staking):
 

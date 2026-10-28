@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (Satori Service)
+
+- The Satori Network is called the **Satori Service** in every text (short: "Service": Home's chip, the Models tab's
+  tags and filter, the Streams tab's "Service Streams"). Calls and fields keep their names (`central`, `network`).
+
 ## Changed 2026-10-28 (the Wallet tab's cards)
 
 - The Wallet tab is a card each: Base (balances, Send), Receive, Claimable, Staking, Preload gas, Details (folded).

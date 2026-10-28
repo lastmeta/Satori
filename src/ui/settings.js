@@ -1,6 +1,6 @@
 // Settings: the technical detail, behind Home (docs/intent/ui.md): this device (storage, install, update), the appearance (System, Light, Dark:
 // src/ui/theme.js), the backup, the keys and their addresses with Unlock and Lock, the reward address (where the
-// Satori Network sends the rewards), who sends the Satori contract predictions (automatic or by hand), and folded under Advanced the Satori Network's server
+// Satori Service sends the rewards), who sends the Satori contract predictions (automatic or by hand), and folded under Advanced the Satori Service's server
 // (central's URL), the Satori relays, the Base RPC and the batch's max fee. Each section has an id (#settings-<name>)
 // Home's action card scrolls to, opening Advanced when the section is in it.
 import { html } from '@arrow-js/core';
@@ -67,14 +67,14 @@ function backup(a) {
 }
 
 /**
- * The reward address (docs/design/central.md#the-reward-address): where the Satori Network sends this neuron's rewards
+ * The reward address (docs/design/central.md#the-reward-address): where the Satori Service sends this neuron's rewards
  * instead of the wallet. Read when Settings opens; saved or cleared signed in by the alias (no passphrase, no gas).
  * While it reads or saves, the card's one moving mark turns (the hero's ring, small: style.css .spin) beside the words.
  */
 function rewardWhen(r) {
   if (r.address) return '';
   if (r.at != null) return 'Not set · rewards go to your wallet';
-  return r.reading || !r.error ? 'Reading it from the Satori Network…' : "Couldn't read it from the Satori Network.";
+  return r.reading || !r.error ? 'Reading it from the Satori Service…' : "Couldn't read it from the Satori Service.";
 }
 const WHOSE = { wallet: 'your wallet', alias: 'your alias' };
 const spin = (test, hide) => html`<i class="spin" data-test="${test}" aria-hidden="true" hidden="${hide}"></i>`;
@@ -86,7 +86,7 @@ function rewardCard(a) {
   <section class="card settings-section" id="settings-reward">
     <form class="fields reward-form" @submit="${(e) => a.saveReward(form(e), e.target)}">
       <h2>Reward address</h2>
-      <p class="muted small">Where the Satori Network sends this app's rewards. Not set, they go to your wallet.</p>
+      <p class="muted small">Where the Satori Service sends this app's rewards. Not set, they go to your wallet.</p>
       <div class="id reward-now"><span class="label">Now</span><span class="reward-val"><code data-test="reward-address" title="${() => r().address ?? ''}" hidden="${() => !r().address}">${() => shortHash(r().address)}</code><span class="badge" data-test="reward-whose" hidden="${() => !r().whose}">${() => WHOSE[r().whose] ?? ''}</span><span data-test="reward-none" hidden="${() => !!r().address}">${() => rewardWhen(r())}</span>${spin('reward-reading', () => !r().reading || busy())}</span><button class="small-btn" type="button" hidden="${() => !r().address}" @click="${() => a.copy('reward-address', r().address)}">${() => (state.copied === 'reward-address' ? 'Copied' : 'Copy')}</button></div>
       <p class="error small" data-test="reward-alias" hidden="${() => r().whose !== 'alias'}">That is this app's alias: this app claims rewards only from the wallet, so rewards sent there aren't claimed here. Save another address, or Clear to send them to your wallet.</p>
       <p class="error small" role="alert" data-test="reward-read-error" hidden="${() => !r().error}">${() => r().error ?? ''} <button class="small-btn" type="button" data-test="reward-retry" disabled="${() => r().reading}" @click="${a.readReward}">Try again</button></p>
@@ -107,9 +107,9 @@ function centralForm(a) {
   return html`
   <section class="adv" id="settings-central">
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
-      <h3>Satori Network</h3>
+      <h3>Satori Service</h3>
       <p class="muted small">Where the app gets its streams and sends its predictions.</p>
-      <label>Satori Network server
+      <label>Satori Service server
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
       </label>
       <p class="muted small">Now: <code data-test="central-url">${() => state.central.url}</code>. Empty: the default, ${() => state.centralDefault}.</p>
@@ -129,7 +129,7 @@ function relaysForm(a) {
       <label>Your relays (Nostr; one per line, ws:// or wss://)
         <textarea name="relays" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
       </label>
-      <label class="check"><input name="centralWrite" type="checkbox"> Publish to the Satori Network's relays</label>
+      <label class="check"><input name="centralWrite" type="checkbox"> Publish to the Satori Service's relays</label>
       <p class="error" role="alert" hidden="${() => !state.relaysError}">${() => state.relaysError}</p>
       <div class="actions"><button class="primary" type="submit">Save relays</button></div>
     </form>
@@ -211,7 +211,7 @@ function predictions(a) {
 function advanced(a) {
   return html`
   <details class="card settings-section advanced" id="settings-advanced" data-test="settings-advanced">
-    <summary>Advanced <span class="muted small">Satori Network server, relays, Base RPC and fee</span></summary>
+    <summary>Advanced <span class="muted small">Satori Service server, relays, Base RPC and fee</span></summary>
     ${centralForm(a)}
     ${relaysForm(a)}
     ${baseForm(a)}

@@ -342,7 +342,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
 .action > .inline-unlock, .action > .error { flex-basis: 100%; }
 
 .strip { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 8px; } /* room for the outlines: today's and the opened day's never touch */
-/* a day: two halves, the Satori Network on top (off-chain), the Satori contract below (on-chain), each its own colour */
+/* a day: two halves, the Satori Service on top (off-chain), the Satori contract below (on-chain), each its own colour */
 .cell { aspect-ratio: 1 / 2.4; min-width: 0; min-height: 0; display: grid; grid-template-rows: 1fr 1fr; gap: 2px; border-radius: 4px; }
 .cell .half { display: block; border-radius: 3px; background: var(--cell-off); }
 .cell .half:first-child { border-radius: 4px 4px 2px 2px; }

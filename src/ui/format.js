@@ -43,14 +43,14 @@ export function registrationText(r) {
   return `No: ${r.error}`;
 }
 
-/** Why the Satori Network does not pay this wallet (register's wallet_address), or '' (it does, or it does not say). */
+/** Why the Satori Service does not pay this wallet (register's wallet_address), or '' (it does, or it does not say). */
 export function mismatchText(r) {
   if (!r?.ok || !r.walletMismatch) return '';
   const refused = r.walletLinkError ? ` It refused the wallet's link: ${r.walletLinkError}.` : '';
   if (r.walletMismatch === 'other') {
-    return `Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${r.wallet_address}, not this wallet's ${r.wallet}.${refused}`;
+    return `Wallet mismatch: the Satori Service pays this wallet's rewards to a different Base address, ${r.wallet_address}, not this wallet's ${r.wallet}.${refused}`;
   }
-  return `Wallet not linked: the Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.${refused}`
+  return `Wallet not linked: the Satori Service has no wallet linked to this app, so it has no Base address to pay its rewards to.${refused}`
     + ' Link this wallet, on Home: it signs a fresh link.';
 }
 
@@ -67,7 +67,7 @@ export function submitText(s) {
   return `${fmtWhen(s.at)} · ${s.successful} of ${s.total_submitted} accepted${s.successful > 0 ? '' : kept}`;
 }
 
-/** The Satori Network card in one line (Streams); its facts sit under Details. */
+/** The Satori Service card in one line (Streams); its facts sit under Details. */
 export function networkLine(c) {
   const r = c.registration;
   if (!r) return 'Registering…';
@@ -123,7 +123,7 @@ export function historyText(h) {
   if (!h) return 'Not yet';
   const wait = h.needed ? `${h.needed} streams wait for the next poll` : '';
   if (h.at == null) return wait || 'Not yet';
-  if (h.retryAt) return `No history from the Satori Network yet (${h.error}); next try ${fmtWhen(h.retryAt)}`;
+  if (h.retryAt) return `No history from the Satori Service yet (${h.error}); next try ${fmtWhen(h.retryAt)}`;
   const done = `${fmtWhen(h.at)} · ${h.streams} streams, ${h.rows.toLocaleString('en-US')} rows`;
   if (h.error) return `${done} · failed: ${h.error}${wait ? `; ${wait}` : ''}`;
   return wait ? `${done} · ${wait}` : done;
@@ -241,10 +241,10 @@ export function amountText(x, unit) {
 }
 
 /**
- * What the wallet can claim, part by part (base().claimable): its staking rewards, the Satori Network's reward drop
- * ("from the Satori Network"; '–' when this Satori Network does not say), the airdrop.
+ * What the wallet can claim, part by part (base().claimable): its staking rewards, the Satori Service's reward drop
+ * ("from the Satori Service"; '–' when this Satori Service does not say), the airdrop.
  */
-export const claimParts = (c) => [['rewards', c?.rewards], ['from the Satori Network', c?.drop], ['airdrop', c?.airdrop]];
+export const claimParts = (c) => [['rewards', c?.rewards], ['from the Satori Service', c?.drop], ['airdrop', c?.airdrop]];
 export function claimableText(c) {
   return claimParts(c).map(([what, x]) => `${amountText(x, 'SATORI')} ${what}`).join(' · ');
 }

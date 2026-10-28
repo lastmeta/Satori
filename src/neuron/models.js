@@ -230,7 +230,7 @@ export function sortModels(list, by = 'quality') {
   return [...list].sort((a, b) => rank(a) - rank(b) || ratio(a) - ratio(b) || byName(a, b));
 }
 
-/** Where predictions go, by the words people see: the Satori Network (central), the Satori contract (Base), the Satori relays (Nostr). */
+/** Where predictions go, by the words people see: the Satori Service (central), the Satori contract (Base), the Satori relays (Nostr). */
 export const DESTS = ['network', 'contract', 'relays'];
 
 /** The models whose predictions go to any of `to` (the filters that are on). */
@@ -288,7 +288,7 @@ export async function modelDetail({ db, id, streams = [], subscriptions = [], la
   return d && { ...d, ms: ms(clock() - t0), readMs: ms(read) };
 }
 
-/** Retrain is offered on Satori Network models only, with the history to split (docs/design/models.md#retrain). */
+/** Retrain is offered on Satori Service models only, with the history to split (docs/design/models.md#retrain). */
 const NO_RETRAIN = { available: false, why: 'source', last: null };
 const PAST_N = 1000; // the forecasts read for How it did, newest first (an hourly stream: about 6 weeks)
 

@@ -11,7 +11,7 @@ deployed ([../design/track-record.md](../design/track-record.md)); step 3
 
 ## The goal
 
-The Satori Network is the relays: anyone publishes a data stream, anyone
+The Satori Service is the relays: anyone publishes a data stream, anyone
 subscribes. Predictions are streams too. A stream doesn't have to be free:
 its publisher can charge a tiny amount per observation, in SATORI on Base,
 with no gas on each payment. Then the best predictor of something can sell

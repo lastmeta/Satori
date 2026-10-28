@@ -152,7 +152,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await expect(page.locator('[data-test=day]').last()).toHaveAttribute('data-code', 'full');
   await expect(page.locator('[data-test=day].today')).toHaveCount(1);
   await expect(page.locator('[data-test=home-stream]')).toHaveCount(8);
-  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Sent 8 predictions to the Satori Network' }).first()).toBeVisible();
+  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Sent 8 predictions to the Satori Service' }).first()).toBeVisible();
   await shots(page, 'ok');
   await phoneChecks(page, 390, 844);
   await phoneChecks(page, 360, 740);
@@ -160,7 +160,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   expect(await page.evaluate(() => window.satori.poll())).toMatchObject({ poll: { new: 0, predicted: 0 }, submit: null });
   await expect(chip('network').locator('[data-test=chip-text]')).toHaveText('Up to date');
   await expect(page.locator('[data-test=health-line]')).toHaveText('Up to date · next in 11 h');
-  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Checked the Satori Network: up to date' })).toHaveCount(1);
+  await expect(page.locator('[data-test=feed-item]').filter({ hasText: 'Checked the Satori Service: up to date' })).toHaveCount(1);
   await page.setViewportSize({ width: 1280, height: 900 });
 
   // The wallet gets SATORI: staking is offered as advice while the contract bug is live (the hero stays green), and the
@@ -204,7 +204,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   rpc.eth[st.alias.address.toLowerCase()] = 10n ** 12n;
   await page.evaluate(() => window.satori.base());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Network is fine. Gas for the daily batch is running low.',
+  expect(h).toMatchObject({ status: 'warn', title: 'Predicting', line: 'The Satori Service is fine. Gas for the daily batch is running low.',
     action: { id: 'gas-low', button: 'Add gas', do: 'go', tab: 'wallet' } });
   await expect(hero(page)).toHaveAttribute('data-s', 'warn');
   await shots(page, 'warn');
@@ -218,7 +218,7 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await page.evaluate(() => window.satori.predictBase());
   await expect(page.locator('[data-test=health-title]')).toHaveText('Partly predicting');
   await expect(hero(page)).toHaveAttribute('data-s', 'bad');
-  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Network is fine. The Satori contract batch failed 2 times.');
+  await expect(page.locator('[data-test=health-line]')).toHaveText('The Satori Service is fine. The Satori contract batch failed 2 times.');
   h = await health(page);
   expect(h).toMatchObject({ status: 'bad', title: 'Partly predicting', action: { id: 'base-failing' },
     channels: { network: { state: 'ok' }, contract: { state: 'bad', text: 'Failed 2 times' } } });
@@ -322,14 +322,14 @@ test('a failed send: amber, named, retried in minutes; a second quick failure st
   central.refuseLogin = true;
   await page.evaluate(() => window.satori.poll());
   h = await health(page);
-  expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Network refused this app's login.",
+  expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Service refused this app's login.",
     action: { id: 'login-refused', button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' },
     channels: { network: { state: 'bad', text: 'Login refused' } } });
   await expect(hero(page)).toHaveAttribute('data-s', 'bad');
   await shots(page, 'bad');
   await page.locator('[data-test=action-button]').click();
   await expect(page).toHaveURL(/#settings$/);
-  await expect(page.getByLabel('Satori Network server')).toBeInViewport();
+  await expect(page.getByLabel('Satori Service server')).toBeInViewport();
   expect(central.prod).toEqual([]);
 });
 
@@ -405,7 +405,7 @@ test('starting with a wallet mismatch: the title says Starting; the mismatch lea
   await start(page);
   await expect(hero(page)).toHaveAttribute('data-s', 'warn'); // registered: the mismatch
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Network pays this wallet's rewards to another address.",
+  expect(h).toMatchObject({ status: 'warn', title: 'Starting', line: "The Satori Service pays this wallet's rewards to another address.",
     action: { id: 'wallet-mismatch', button: 'Link this wallet', do: 'relink' } });
   expect(h.reasons.map((r) => r.id)).toEqual(['wallet-mismatch', 'starting']);
   await expect(page.locator('[data-test=health-title]')).toHaveText('Starting');

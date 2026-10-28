@@ -27,15 +27,15 @@ test('fmtWhen: unix seconds → local month, day and time', () => {
 test('registrationText and mismatchText', () => {
   expect(registrationText(null)).toBe('Registering…');
   expect(registrationText({ ok: true, peer_id: 7 })).toBe('Yes · peer 7');
-  expect(registrationText({ ok: false, error: 'Satori Network 409: taken' })).toBe('No: Satori Network 409: taken');
+  expect(registrationText({ ok: false, error: 'Satori Service 409: taken' })).toBe('No: Satori Service 409: taken');
   expect(mismatchText(null)).toBe('');
   const [ours, theirs] = ['0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4'];
   expect(mismatchText({ ok: true, wallet: ours, wallet_address: ours, walletMismatch: false })).toBe('');
   expect(mismatchText({ ok: true, wallet: ours, wallet_address: null, walletMismatch: null })).toBe(''); // central does not say: unknown
   expect(mismatchText({ ok: true, wallet: ours, wallet_address: theirs, walletMismatch: 'other' }))
-    .toBe(`Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.`);
+    .toBe(`Wallet mismatch: the Satori Service pays this wallet's rewards to a different Base address, ${theirs}, not this wallet's ${ours}.`);
   expect(mismatchText({ ok: true, wallet: ours, wallet_address: null, walletMismatch: 'none' }))
-    .toBe('Wallet not linked: the Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.'
+    .toBe('Wallet not linked: the Satori Service has no wallet linked to this app, so it has no Base address to pay its rewards to.'
       + ' Link this wallet, on Home: it signs a fresh link.');
 });
 
@@ -43,15 +43,15 @@ test('pollText and submitText', () => {
   const at = new Date(2026, 9, 15, 14, 3).getTime() / 1000;
   expect(pollText(null)).toBe('Not yet');
   expect(pollText({ at, streams: 83, new: 80, predicted: 80 })).toBe('Oct 15, 14:03 · 83 streams, 80 new, 80 predicted');
-  expect(pollText({ at, error: 'Satori Network timed out (15 s)' })).toBe('Oct 15, 14:03 · failed: Satori Network timed out (15 s)');
+  expect(pollText({ at, error: 'Satori Service timed out (15 s)' })).toBe('Oct 15, 14:03 · failed: Satori Service timed out (15 s)');
   expect(submitText(null)).toBe('Not yet');
   expect(submitText({ at, total_submitted: 80, successful: 80, failed: 0 })).toBe('Oct 15, 14:03 · 80 of 80 accepted');
   expect(submitText({ at, total_submitted: 2, successful: 0, failed: 2, errors: ['x'] }))
     .toBe('Oct 15, 14:03 · 0 of 2 accepted; kept for the next poll');
-  expect(submitText({ at, error: 'Satori Network 500: boom' })).toBe('Oct 15, 14:03 · failed: Satori Network 500: boom; kept for the next poll');
+  expect(submitText({ at, error: 'Satori Service 500: boom' })).toBe('Oct 15, 14:03 · failed: Satori Service 500: boom; kept for the next poll');
 });
 
-test('networkLine: the Satori Network card in one line; its facts are under Details', () => {
+test('networkLine: the Satori Service card in one line; its facts are under Details', () => {
   const at = new Date(2026, 9, 15, 14, 3).getTime() / 1000;
   const nextPoll = new Date(2026, 9, 16, 2, 3).getTime() / 1000;
   const ok = { ok: true, peer_id: 7 };
@@ -62,8 +62,8 @@ test('networkLine: the Satori Network card in one line; its facts are under Deta
     .toBe('Sent 80 predictions Oct 15, 14:03, all accepted · next Oct 16, 02:03');
   expect(networkLine({ registration: ok, lastSubmit: { at, total_submitted: 80, successful: 78 }, nextPoll }))
     .toBe('Sent 80 predictions Oct 15, 14:03, 78 accepted · next Oct 16, 02:03');
-  expect(networkLine({ registration: ok, lastSubmit: { at, error: 'Satori Network 500: boom' }, nextPoll }))
-    .toBe('Sending failed Oct 15, 14:03: Satori Network 500: boom; kept for the next poll');
+  expect(networkLine({ registration: ok, lastSubmit: { at, error: 'Satori Service 500: boom' }, nextPoll }))
+    .toBe('Sending failed Oct 15, 14:03: Satori Service 500: boom; kept for the next poll');
   expect(networkLine({ registration: ok, lastSubmit: { at, total_submitted: 2, successful: 0 }, nextPoll }))
     .toBe('Sent 2 predictions Oct 15, 14:03, none accepted; kept for the next poll');
 });
@@ -151,9 +151,9 @@ test('Base: amounts, the stake, the transfer rule (sent from round N + 1 at 00:0
   const v = { alias: { power: '100' }, wallet: { staked: 'alias', stakedWith: '0xI' } };
   expect(delegationText(v)).toBe('Staked: 100 SATORI with this app');
   expect(delegationText({ ...v, wallet: { ...v.wallet, inSync: false } })).toBe('Staked: 100 SATORI with this app · out of sync');
-  // what can be claimed, part by part: the Satori Network's drop in plain words; unknown (a central without the route) is '–', not 0
-  expect(claimableText({ rewards: '3', drop: '3.61850955', airdrop: '0' })).toBe('3 SATORI rewards · 3.6185 SATORI from the Satori Network · 0 SATORI airdrop');
-  expect(claimableText({ rewards: '0', drop: null, airdrop: '0' })).toBe('0 SATORI rewards · – from the Satori Network · 0 SATORI airdrop');
+  // what can be claimed, part by part: the Satori Service's drop in plain words; unknown (a central without the route) is '–', not 0
+  expect(claimableText({ rewards: '3', drop: '3.61850955', airdrop: '0' })).toBe('3 SATORI rewards · 3.6185 SATORI from the Satori Service · 0 SATORI airdrop');
+  expect(claimableText({ rewards: '0', drop: null, airdrop: '0' })).toBe('0 SATORI rewards · – from the Satori Service · 0 SATORI airdrop');
   expect(delegationText({ ...v, wallet: { staked: 'none' } })).toBe('Not staked');
   expect(delegationText({ ...v, wallet: { staked: 'other', stakedWith: '0xO' } })).toBe('Staked with 0xO, not this app');
   expect(delegationText(null)).toBe('–');
@@ -240,15 +240,15 @@ test('modelTitle: bvar with its spec, score and generation; a fallback says what
       + ' · its spec: bvar with eth, gold, λ1 0.2, λ2 0.5, generation 0, until it has 8 aligned 12 h rows');
 });
 
-test('historyText: the Satori Network\'s history for our streams (its card on Streams)', () => {
+test('historyText: the Satori Service\'s history for our streams (its card on Streams)', () => {
   const at = Date.UTC(2026, 9, 16, 9, 30) / 1000;
   expect(historyText(null)).toBe('Not yet');
   expect(historyText({ at, streams: 83, rows: 81234, left: 0, error: null, retryAt: null, needed: 0 }))
     .toBe(`${fmtWhen(at)} · 83 streams, 81,234 rows`);
-  expect(historyText({ at, streams: 0, rows: 0, left: 83, error: 'Satori Network 404: Not Found', retryAt: at + 86400, needed: 83 }))
-    .toBe(`No history from the Satori Network yet (Satori Network 404: Not Found); next try ${fmtWhen(at + 86400)}`);
-  expect(historyText({ at, streams: 2, rows: 10, left: 3, error: 'Satori Network 500: boom', retryAt: null, needed: 3 }))
-    .toBe(`${fmtWhen(at)} · 2 streams, 10 rows · failed: Satori Network 500: boom; 3 streams wait for the next poll`);
+  expect(historyText({ at, streams: 0, rows: 0, left: 83, error: 'Satori Service 404: Not Found', retryAt: at + 86400, needed: 83 }))
+    .toBe(`No history from the Satori Service yet (Satori Service 404: Not Found); next try ${fmtWhen(at + 86400)}`);
+  expect(historyText({ at, streams: 2, rows: 10, left: 3, error: 'Satori Service 500: boom', retryAt: null, needed: 3 }))
+    .toBe(`${fmtWhen(at)} · 2 streams, 10 rows · failed: Satori Service 500: boom; 3 streams wait for the next poll`);
   expect(historyText({ needed: 5 })).toBe('5 streams wait for the next poll');
 });
 

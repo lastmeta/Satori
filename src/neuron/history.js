@@ -63,7 +63,7 @@ export async function backfillHistory({ db, central, now = nowS, onProgress = ()
         let clean = []; // a stream central doesn't know: nothing to fetch, done, so it never blocks the others
         try {
           const list = await central.history(uuid, { limit: HISTORY_LIMIT, since: Math.floor(at) - HISTORY_SPAN_S });
-          if (!Array.isArray(list)) throw new Error('the Satori Network sent no list of observations');
+          if (!Array.isArray(list)) throw new Error('the Satori Service sent no list of observations');
           clean = list.map((o) => normalizeObservation({ ...o, stream_uuid: o?.stream_uuid || uuid }))
             .filter((o) => o?.stream_uuid === uuid);
         } catch (err) {

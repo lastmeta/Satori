@@ -121,7 +121,7 @@ describe('staking in sync (the token-hook bug: docs/issues/token-hook-gas-estima
   });
 });
 
-describe("the Satori Network's reward drop, before it is claimed", () => {
+describe("the Satori Service's reward drop, before it is claimed", () => {
   const entry = { root: '0xd97c', address: '0xda47', amountWei: '3618509550000000000', amount: 3.61850955, proof: ['0x' + 'ab'.repeat(32)] };
   test("central's answer, or its 404s: an entry, no drop published, not in the drop, or a central without the route (unknown)", () => {
     expect(proofState({ entry })).toEqual({ state: 'ok', amountWei: 3618509550000000000n, proof: entry.proof, root: '0xd97c' });
@@ -710,7 +710,7 @@ describe('createBase', () => {
     expect((await base.refresh()).wallet).toMatchObject({ inSync: null });
   });
 
-  test("claimable: rewards, the Satori Network's drop (central's proof − alreadyMintedTo, in the status multicall) and the airdrop, and their total", async () => {
+  test("claimable: rewards, the Satori Service's drop (central's proof − alreadyMintedTo, in the status multicall) and the airdrop, and their total", async () => {
     const proof = ['0x' + 'ab'.repeat(32)];
     central.root = '0xroot';
     central.proofs[V] = { root: '0xroot', address: V, amountWei: (5n * E18).toString(), amount: 5, proof };
@@ -743,7 +743,7 @@ describe('createBase', () => {
     at.t += PROOF_TTL_S;
     expect((await base.refresh()).claimable.drop).toBe('3');
     const ask = central.merkleProof;
-    central.merkleProof = async () => { throw new CentralError(0, 'network', 'Satori Network unreachable: Failed to fetch'); };
+    central.merkleProof = async () => { throw new CentralError(0, 'network', 'Satori Service unreachable: Failed to fetch'); };
     at.t += PROOF_TTL_S;
     expect((await base.refresh()).claimable.drop).toBe('3');
     central.merkleProof = ask;

@@ -69,7 +69,7 @@ function signer(secret, { login = false } = {}) {
   return s;
 }
 
-/** The text a wallet signs to link its alias for the Satori Network (docs/design/wallets.md#the-satori-network-register-login-and-the-link). */
+/** The text a wallet signs to link its alias for the Satori Service (docs/design/wallets.md#the-satori-network-register-login-and-the-link). */
 export const linkMessage = ({ alias, wallet, issued }) =>
   `Satori: link this alias to my wallet\nalias: ${alias}\nwallet: ${wallet}\nissued: ${issued}`;
 

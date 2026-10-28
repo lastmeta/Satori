@@ -175,7 +175,7 @@ describe('the list: every model, named for the stream it predicts', () => {
       games: [{ streamId: 2, gameId: 2, named: false, direction: UP, model: 'bar1', latest: '1', forecast: '2', horizon: 86_400, step: 43_200 }] } });
     expect(sortModels(list, 'quality').map((m) => m.name)).toEqual(['gold', 'oil', 'eth', 'Stream 2']);
     expect(sortModels(list, 'name').map((m) => m.name)).toEqual(['eth', 'gold', 'oil', 'Stream 2']);
-    // by the words people see: the Satori Network, the Satori contract, the Satori relays; independent toggles, a model
+    // by the words people see: the Satori Service, the Satori contract, the Satori relays; independent toggles, a model
     // shown when it goes to any one selected
     expect(DESTS).toEqual(['network', 'contract', 'relays']);
     expect(filterModels(list, ['contract']).map((m) => m.name)).toEqual(['Stream 2']);
@@ -253,7 +253,7 @@ describe('modelDetail: one model, recomputed from the stored history and spec', 
     expect((await modelDetail({ db, id: 'gold', streams: rows })).id).toBe('central:u-gold');
     expect((await modelDetail({ db, id: 'u-gold', streams: rows })).id).toBe('central:u-gold');
     expect(await modelDetail({ db, id: 'central:nope', streams: rows })).toBeNull();
-    // Retrain is offered: a Satori Network model with the history to split (docs/design/models.md#retrain)
+    // Retrain is offered: a Satori Service model with the history to split (docs/design/models.md#retrain)
     expect(d.retrain).toEqual({ available: true, why: null, last: null });
     const last2 = { n: 2, at: 9, outcome: 'found', kept: 'new', ratio: 0.8, was: 1.1, tried: 40 };
     const asked = rows.map((r) => (r.uuid === 'u-gold' ? { ...r, retrain: JSON.stringify({ n: 2, status: 'done', result: last2 }) } : r));

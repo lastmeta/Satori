@@ -1,5 +1,5 @@
 // Retrain, as the app runs it (docs/design/models.md#retrain; docs/intent/engine.md: never rest with work pending): a
-// user's request to keep training one Satori Network model until one beats no change, then stop. The request is kept
+// user's request to keep training one Satori Service model until one beats no change, then stop. The request is kept
 // with the spec (model_specs.retrain) when asked, with the search's place every few seconds, so a closed app continues
 // on open. One retrain at a time, in the order asked; it waits while central's work runs (one writer of a spec), then
 // continues on the new data with the champion read again. From stored history only: it never predicts, never submits
@@ -182,7 +182,7 @@ export function createRetrain({ db, work, seed, nameOf = (u) => u, after = async
     async start(uuid) {
       if (live.has(uuid)) return status(uuid);
       const row = (await db.specs()).get(uuid);
-      if (!row) throw new RetrainError(`No Satori Network model for ${uuid}: it has not predicted yet.`);
+      if (!row) throw new RetrainError(`No Satori Service model for ${uuid}: it has not predicted yet.`);
       const can = canRetrain({ target: uuid, histories: await db.histories([uuid]) });
       if (!can.ok) throw new RetrainError('Retrain needs about four weeks of this stream\'s history.');
       const last = row.retrain?.result;

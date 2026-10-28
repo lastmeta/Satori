@@ -34,7 +34,7 @@ export const LEVEL = {
   'base-unused-unreachable': 'note',
 };
 export const PRIORITY = Object.keys(LEVEL);
-const FRESH_LINK = ' Link this wallet: it signs a fresh link, and the Satori Network pays it.';
+const FRESH_LINK = ' Link this wallet: it signs a fresh link, and the Satori Service pays it.';
 export const FIXABLE_SKIPS = /^(gas above the ceiling|no game passes its simulation)/;
 
 /** The engine's refusals a batch's simulate names (SatoriEngine.sol predictMultipleWithPayloads), in a few words. */
@@ -118,7 +118,7 @@ export function missedBy(rows, at) {
  */
 function failedWhat(d) {
   if (d.login) return ['Login refused', 'Login refused'];
-  if (d.unreachable) return ["Couldn't reach the Satori Network", 'Unreachable'];
+  if (d.unreachable) return ["Couldn't reach the Satori Service", 'Unreachable'];
   if (d.sent > 0) return ['Sending failed', 'Sending failed'];
   return ['The poll failed', 'Poll failed'];
 }
@@ -143,17 +143,17 @@ function centralReasons({ now, rows, sessions, central, work }) {
 
   if (failed) {
     const d = last.data;
-    const err = d.error ?? `The Satori Network took none of ${d.sent} predictions`;
+    const err = d.error ?? `The Satori Service took none of ${d.sent} predictions`;
     const [what, chip] = failedWhat(d);
     if (d.local) {
       out.push(reason('db-error', 'network', { line: 'The database failed.', chip: 'Database error',
         text: `Saving or forecasting failed: ${err}. Reload Satori; your keys are safe.`, button: 'Reload', act: { do: 'reload' } }));
     } else if (d.login) {
-      out.push(reason('login-refused', 'network', { line: "The Satori Network refused this app's login.", chip: 'Login refused',
-        text: "The Satori Network rejects this app's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
+      out.push(reason('login-refused', 'network', { line: "The Satori Service refused this app's login.", chip: 'Login refused',
+        text: "The Satori Service rejects this app's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
     } else if (overdue) {
       out.push(reason('central-failing', 'network', { line: `Nothing sent for ${fmtDur(ran)}: ${what[0].toLowerCase()}${what.slice(1)}.`, chip,
-        text: `${err}. Nothing went out for ${fmtDur(ran)} while Satori was open. It keeps trying; try now, or check the Satori Network's address in Settings.`,
+        text: `${err}. Nothing went out for ${fmtDur(ran)} while Satori was open. It keeps trying; try now, or check the Satori Service's address in Settings.`,
         button: 'Try again', act: { do: 'poll' } }));
     } else {
       out.push(reason('central-failed', 'network', { line: `${what}; ${central?.polling ? 'trying again now…' : `next try ${next}.`}`, chip,
@@ -171,14 +171,14 @@ function centralReasons({ now, rows, sessions, central, work }) {
     const other = reg.walletMismatch === 'other';
     const refused = reg.walletLinkError ? ` It refused the wallet's link: ${reg.walletLinkError}.` : '';
     out.push(reason('wallet-mismatch', 'network', { chip: other ? 'Wallet mismatch' : 'Wallet not linked',
-      line: other ? "The Satori Network pays this wallet's rewards to another address." : 'The Satori Network has no wallet linked to this app.',
-      text: `${other ? `The Satori Network pays this wallet's rewards to a different Base address, ${reg.wallet_address}, not this wallet's ${reg.wallet}.`
-        : 'The Satori Network has no wallet linked to this app, so it has no Base address to pay its rewards to.'}${refused}${FRESH_LINK}`,
+      line: other ? "The Satori Service pays this wallet's rewards to another address." : 'The Satori Service has no wallet linked to this app.',
+      text: `${other ? `The Satori Service pays this wallet's rewards to a different Base address, ${reg.wallet_address}, not this wallet's ${reg.wallet}.`
+        : 'The Satori Service has no wallet linked to this app, so it has no Base address to pay its rewards to.'}${refused}${FRESH_LINK}`,
       button: 'Link this wallet', act: { do: 'relink' } }));
   }
   if (reg && !reg.ok) {
-    out.push(reason('not-registered', 'network', { line: "The Satori Network didn't register this app.", chip: 'Not registered',
-      text: `Registering with the Satori Network failed: ${reg.error}. It registers again before each poll until it succeeds.`,
+    out.push(reason('not-registered', 'network', { line: "The Satori Service didn't register this app.", chip: 'Not registered',
+      text: `Registering with the Satori Service failed: ${reg.error}. It registers again before each poll until it succeeds.`,
       button: 'Try again', act: { do: 'poll' } }));
   }
 
@@ -352,7 +352,7 @@ export const toneOf = (status, work) => (status === 'warn' || status === 'bad' ?
   : work ? (work.critical ? 'critical' : 'working') : 'idle');
 
 /**
- * The channels, by the words people see (docs/intent/ui.md, 2026-10-18): `network` the Satori Network (central, free to
+ * The channels, by the words people see (docs/intent/ui.md, 2026-10-18): `network` the Satori Service (central, free to
  * submit to), `contract` the Satori contract (Base, uses gas), `relays` the Satori relays (Nostr). Each one's work:
  * central's poll; the batch and the wallet's actions; discover and subscribe. TRAFFIC: each one's traffic channel
  * (src/traffic.js keeps the code's names).
@@ -431,7 +431,7 @@ const halfOf = (ok, fail) => (ok ? 'ok' : fail ? 'error' : 'none');
  * The last `n` local days, oldest first: { date, code: full | part | error | closed | before, ran, today, network,
  * contract }. `before`: the day ended before the neuron began, its first session or `since` (the keys' creation, the
  * log's first session) when earlier. network and contract: each a half of the day's cell (halfOf): the Satori
- * Network's scoring off-chain, the Satori contract's on-chain (a batch sent, or the game played by hand, `played`:
+ * Service's scoring off-chain, the Satori contract's on-chain (a batch sent, or the game played by hand, `played`:
  * its last Submit's time, with nothing to send too). A skipped check is no failure: only an error is.
  */
 export function daysOf(rows, now, since = null, n = DAYS, played = null) {
@@ -466,13 +466,13 @@ export function daysOf(rows, now, since = null, n = DAYS, played = null) {
 
 const times = (r) => (r.count > 1 ? ` (×${r.count})` : '');
 /**
- * An address change in words: 'Satori Network address changed to https://…', 'Base RPC changed to the default,
+ * An address change in words: 'Satori Service address changed to https://…', 'Base RPC changed to the default,
  * https://…', 'Reward address set to 0x…' (the whole address: a swap is seen), 'Reward address cleared: …'.
  */
 const settingText = (d) => {
   if (d.what === 'reward') return d.to ? `Reward address set to ${d.to}` : 'Reward address cleared: rewards go to your wallet';
   const to = d.to || (d.default ? `the default, ${d.default}` : 'the default');
-  return d.what === 'rpc' ? `Base RPC changed to ${to}` : `Satori Network address changed to ${to}`;
+  return d.what === 'rpc' ? `Base RPC changed to ${to}` : `Satori Service address changed to ${to}`;
 };
 const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
 
@@ -482,11 +482,11 @@ function feedText(r) {
     case 'open': return d.missed ? `Satori was closed for ${fmtDur(d.gap ?? 0, true)}` : null;
     case 'central':
       if (d.local) return `Saving or forecasting failed: ${d.error}`;
-      if (d.login) return `The Satori Network refused the login: ${d.error}`;
-      if (d.error) return `${d.sent > 0 ? 'The Satori Network refused the batch' : 'The poll failed'}: ${d.error}`;
-      if (d.sent > 0 && !(d.accepted > 0)) return `The Satori Network took none of ${d.sent} predictions`;
+      if (d.login) return `The Satori Service refused the login: ${d.error}`;
+      if (d.error) return `${d.sent > 0 ? 'The Satori Service refused the batch' : 'The poll failed'}: ${d.error}`;
+      if (d.sent > 0 && !(d.accepted > 0)) return `The Satori Service took none of ${d.sent} predictions`;
       if (d.caughtUp != null) return d.accepted > 0 ? `Caught up: sent ${d.accepted} predictions` : 'Caught up: up to date';
-      return d.accepted > 0 ? `Sent ${d.accepted} predictions to the Satori Network` : 'Checked the Satori Network: up to date';
+      return d.accepted > 0 ? `Sent ${d.accepted} predictions to the Satori Service` : 'Checked the Satori Service: up to date';
     case 'history': return d.error ? `History not loaded: ${d.error}` : `History loaded for ${d.streams} streams`;
     case 'base':
       if (d.error && d.unused) return `Couldn't reach the Satori contract (not staked): ${d.error}${times(r)}`;
@@ -500,7 +500,7 @@ function feedText(r) {
     case 'nostr': return `Published ${d.published} forecast${d.published === 1 ? '' : 's'} to the Satori relays`;
     case 'wallet': return d.text;
     case 'setting': return settingText(d);
-    case 'config': return `The Satori Network's contract addresses differ from the app's (${(d.keys ?? []).join(', ')}): the app's are used${times(r)}`;
+    case 'config': return `The Satori Service's contract addresses differ from the app's (${(d.keys ?? []).join(', ')}): the app's are used${times(r)}`;
     case 'error': return `${d.where === 'nostr' ? 'A relay forecast failed' : 'Something failed'}: ${d.message}`;
     default: return null;
   }
@@ -573,7 +573,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   if (!top) { // no reason but advice: a good cycle is in the log
     line = lg.data.accepted > 0 ? `Sent ${lg.data.accepted} predictions ${fmtAgo(now - lg.at)} · next ${next}` : sentText(lg, now, next);
   } else {
-    line = top.channel === 'network' || centralTop ? top.line : `The Satori Network is fine. ${top.line}`;
+    line = top.channel === 'network' || centralTop ? top.line : `The Satori Service is fine. ${top.line}`;
   }
 
   // the card: the highest reason with words for it, most with a button (one without: what to know, nothing to press)

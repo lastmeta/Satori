@@ -153,7 +153,7 @@ export function proofState({ entry, error } = {}) {
   try {
     return { state: 'ok', amountWei: BigInt(entry.amountWei), proof: entry.proof, root: entry.root };
   } catch {
-    return { state: 'unknown', missing: false, error: new Error('the Satori Network sent no amount') };
+    return { state: 'unknown', missing: false, error: new Error('the Satori Service sent no amount') };
   }
 }
 
@@ -379,7 +379,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     const loaded = await loadConfig({ fetchCentral: () => c.baseConfig(), url: c.url, cache, now: now(), pinned: !!defaultRpc });
     cache = loaded.cache;
     if (loaded.fresh && loaded.differs.length) {
-      console.warn('[satori] the Satori Network\'s contract addresses differ from the app\'s; the app\'s are used', c.url, loaded.differs);
+      console.warn('[satori] the Satori Service\'s contract addresses differ from the app\'s; the app\'s are used', c.url, loaded.differs);
       onConfigDiffers(loaded.differs, c.url);
     }
     const setting = (await db.get('base_rpc_url')) || '';
@@ -469,7 +469,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
         lock: s?.wallet.lock ?? null,
         lowEth: lowOnGas(s?.wallet.eth, gas), // under one transaction's gas: Claim says so before it tries
       },
-      // the drop: the Satori Network's reward drop not claimed yet (null: this central does not say)
+      // the drop: the Satori Service's reward drop not claimed yet (null: this central does not say)
       claimable: { rewards: plainAmount(c?.rewards), drop: plainAmount(drop), airdrop: plainAmount(c?.airdrop),
         total: parts.length ? formatEther(parts.reduce((a, b) => a + b, 0n)) : null },
       lastCheck, nextCheck: schedule.next, checking: schedule.running, play,

@@ -10,9 +10,9 @@ import { spanText, markWords, kindLabelOf, descriptionOf, DESTS } from '../neuro
 export { spanText, DESTS };
 
 const ARROW = { up: '↑', down: '↓', flat: '→' };
-// by the words people see (docs/intent/ui.md): the Satori Network (free), the Satori contract (uses gas), the Satori relays
-const LABEL = { network: 'Network', contract: 'Contract', relays: 'Relays' };
-const SOURCE = { central: 'Satori Network stream', base: 'Satori contract stream', nostr: 'Stream on the Satori relays' };
+// by the words people see (docs/intent/ui.md): the Satori Service (free), the Satori contract (uses gas), the Satori relays
+const LABEL = { network: 'Service', contract: 'Contract', relays: 'Relays' };
+const SOURCE = { central: 'Satori Service stream', base: 'Satori contract stream', nostr: 'Stream on the Satori relays' };
 const KINDS = ['bvar', 'bar1', 'bar1d', 'naive', 'echo'];
 
 const minus = (s) => s.replace(/-/g, '−');
@@ -230,7 +230,7 @@ function resultWords(r) {
 export function retrainView(d, s = null) {
   const r = d?.retrain;
   if (!r?.available && !s?.running) {
-    const note = !r || r.why === 'source' ? 'Retrain is for Satori Network models for now: this one reads only its own stream.'
+    const note = !r || r.why === 'source' ? 'Retrain is for Satori Service models for now: this one reads only its own stream.'
       : 'Retrain needs about four weeks of this stream\'s history.';
     return { button: null, line: '', tone: '', note };
   }

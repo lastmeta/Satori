@@ -33,7 +33,7 @@ Every model the neuron runs, from what the app already holds:
 
 | Source | Models | Kind | Output | Goes to |
 |---|---|---|---|---|
-| central | one per central stream with a forecast (`db.streams()`) | `bvar`, `bar1`, `bar1d`, `naive` (the latest prediction's) | the stream, 24 h ahead in two 12 h steps (t1, t2) | Network (the Satori Network, `network`) |
+| central | one per central stream with a forecast (`db.streams()`) | `bvar`, `bar1`, `bar1d`, `naive` (the latest prediction's) | the stream, 24 h ahead in two 12 h steps (t1, t2) | Network (the Satori Service, `network`) |
 | Base | one per registry stream in the last batch, and each one left out after a forecast (`meta.base_last_batch`) | `bar1`, `bar1d`, `naive` | the stream at its horizon (max(24 h, cadence)) | Contract (the Satori contract, `contract`) |
 | Nostr | one per subscription with a `_pred` (`nostr.status()`) | `bar1`, `bar1d`, `naive`, `echo` (a value that is not a number, echoed) | `<stream>_pred`, one cadence ahead | Relays (the Satori relays, `relays`) |
 
@@ -67,7 +67,7 @@ model).
 }
 quality = { mark: 'better' | 'tie' | 'worse' | null, ratio, error, noChange,
             text }   // the mark in words: "7% better", "Same as no change", "12% worse", "Not scored yet"
-destinations: network  { status: 'accepted' | 'pending', ref: null }                        // the Satori Network (central)
+destinations: network  { status: 'accepted' | 'pending', ref: null }                        // the Satori Service (central)
               contract { status: 'sent' | 'left out', ref: { round, game, direction, tx, error? } } // the Satori contract (Base)
               relays   { status: 'published' | 'waiting', ref: { stream, seq, relays } }         // the Satori relays (Nostr)
 // (until 2026-10-18 the destinations were 'central' | 'base' | 'network': renamed to the words people see)
@@ -94,7 +94,7 @@ neuron's **backtest**: how its model would have done on past data against
 scoring of the predictions the neuron submitted. The tab says so in one
 plain line under the bar: "The neuron's own backtest, made as it trains:
 how each model would have done on past data against no change. Not the
-Satori Network's score of the predictions it sent." (`engine-note`).
+Satori Service's score of the predictions it sent." (`engine-note`).
 
 *Later (a plan, not built):* also show the real-world score, central's
 scoring of what was sent, next to the backtest, once central serves a
@@ -244,7 +244,7 @@ quality words (a word, no icon). It is the accent (primary) button when the
 model is worse than no change or the same; a plain one when it is already
 better (a retrain then looks for a model better than it).
 
-- **Shown** on Satori Network (central) models, `bvar`, `bar1`, `bar1d` or
+- **Shown** on Satori Service (central) models, `bvar`, `bar1`, `bar1d` or
   `naive`, whose stream has the history to split: 14 older backtest origins
   besides the tab's 28, which takes 52 back-to-back 12 h buckets, about four
   weeks (central serves ~41 days of an hourly stream, so every hourly
@@ -253,7 +253,7 @@ better (a retrain then looks for a model better than it).
 - **Not on Contract (Base) and Relays (Nostr) models**, for now: they read
   only their own stream (`bar1`, [engine.md](engine.md#scope)), so there is
   no spec to search and none is stored. Their drill-in says so in one muted
-  line where the button would be: "Retrain is for Satori Network models for
+  line where the button would be: "Retrain is for Satori Service models for
   now: this one reads only its own stream."
 - A Network model without that history has no button either, and one
   muted line: "Retrain needs about four weeks of this stream's history."
@@ -263,7 +263,7 @@ better (a retrain then looks for a model better than it).
 
 A focused search on this one target, from stored history only. Like the
 training pass, it **never predicts and never submits**, and never calls
-the Satori Network.
+the Satori Service.
 
 - **The space**: 1–3 companions from the target's aligned pool (the poll's
   pool, [engine.md](engine.md#the-spec)), λ1 and λ2 on their grids, and the
@@ -512,7 +512,7 @@ change · not enough history yet", "Echo · the value is not a number"; a
 model of several algorithms (`algorithms` is a list) would read "Ensemble ·
 3 algorithms". Beside the name, its mark in words, and under the mark the
 **Retrain** button ([Retrain](#retrain)); under them all, Retrain's line
-while it runs and its result after. Then the source ("Satori Network
+while it runs and its result after. Then the source ("Satori Service
 stream"). Top to bottom, joined by short arrows:
 
 - **In**: each input with its share as a bar, ranked; for a model of several
@@ -597,7 +597,7 @@ in four digits and a power of ten ("5.906e16", "1.234e−6"), never "0".
   generation, accepted, trained, quality }`, each output's `history` (the
   chart's points) and `influence` from the refit, `ms` and `readMs`. `id`:
   models()'s, or a central stream's uuid or name. null when there is none.
-- `await satori.retrain(id)` → keeps training a Satori Network model until
+- `await satori.retrain(id)` → keeps training a Satori Service model until
   it beats no change ([Retrain](#retrain)), resolving when it ends with `{
   running, waiting, after, tried, best, result }`; `await
   satori.stopRetrain(id)` → the same, after it stopped. `model(id).retrain`

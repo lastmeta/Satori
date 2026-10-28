@@ -133,5 +133,5 @@ the page) or opens one.
 - **A native app** (an APK through Capacitor and Android's WorkManager): the
   only daily background run with no notification, at the cost of a store
   listing and a second release process.
-- The Satori Network's predictions and the relays still need the app open: the
+- The Satori Service's predictions and the relays still need the app open: the
   worker sends only the Satori contract's batch.

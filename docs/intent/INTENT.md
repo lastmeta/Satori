@@ -57,7 +57,7 @@ Set by the owner; quoted where these are the owner's own words.
 - **MIT** licensed.
 - **A reward address (owner, 2026-10-19).** "We need to be able to specify a
   reward address, in the settings or in the wallet." It is where the Satori
-  Network sends the neuron's rewards instead of the wallet, such as a pool: a
+  Service sends the neuron's rewards instead of the wallet, such as a pool: a
   Base (0x) address. With none set, rewards go to the wallet. It has nothing
   to do with staking.
 - **The neuron is for automatic play.** It predicts on its own, off-chain
@@ -72,9 +72,9 @@ Set by the owner; quoted where these are the owner's own words.
   (encrypted) or in an outside wallet they connect (MetaMask or another). Its
   **alias** is the app's own signing key, made by the app, unencrypted,
   replaceable, and not something people need to think about. The wallet
-  signs a link to its alias for the Satori Network. One app holds several
+  signs a link to its alias for the Satori Service. One app holds several
   wallets, one active at a time; the models and the engine do not change. See
   [../design/wallets.md](../design/wallets.md).
-- **The network (owner, 2026-10-20):** the Satori Network is the relays,
+- **The network (owner, 2026-10-20):** the Satori Service is the relays,
   where anyone publishes and anyone subscribes, predictions included; next,
   a market of data streams. See [network.md](network.md).

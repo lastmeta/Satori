@@ -135,7 +135,7 @@ test.describe.serial('a build, in a browser profile', () => {
       await expect(page.locator('[data-test=wallet]')).toHaveText(wallet);
       await expect(page.locator('[data-test=stream]')).toHaveCount(1);
       await expect(page.locator('[data-test=last-poll]')).toContainText('1 streams, 1 new, 1 predicted');
-      await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable/);
+      await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Service unreachable/);
       await expect(page.locator('[data-test=base-error]')).toContainText('The chain did not answer');
       expect(await page.evaluate(() => fetch('/llms.txt').then(() => 'fetched', () => 'failed'))).toBe('failed'); // never cached
       expect(await page.evaluate(() => window.violations)).toEqual([]);

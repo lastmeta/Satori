@@ -2,7 +2,7 @@
 // reads it when it opens (its moving mark and words meanwhile), Save checks the address before any call (this
 // neuron's alias refused), saves it signed in by the alias with its steps said and the mark turning, shows it
 // shortened with Copy, and Home notes it; Clear; this app's wallet and alias named; the agent API; a refusal; another
-// Satori Network forgets the last words. No wallet, no chain. SHOTS=1 writes
+// Satori Service forgets the last words. No wallet, no chain. SHOTS=1 writes
 // docs/screenshots/reward-{none,set,alias}-{phone,desktop}-{light,dark}.png and reward-saving-phone-light.png (else the
 // test's output).
 import { expect, test } from '@playwright/test';
@@ -53,11 +53,11 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   expect(stub.rewardCalls).toEqual([]); // not read at load: only when it is shown or asked for
   expect((await status(page)).central.reward).toEqual({ address: null, whose: null, at: null, error: null, reading: false });
 
-  // Settings opens: read, signed in; its moving mark and words while the Satori Network answers; then not set.
+  // Settings opens: read, signed in; its moving mark and words while the Satori Service answers; then not set.
   const card = page.locator('#settings-reward');
   let release = hold(stub);
   await go(page, 'settings');
-  await expect(card.locator('[data-test=reward-none]')).toHaveText('Reading it from the Satori Network…');
+  await expect(card.locator('[data-test=reward-none]')).toHaveText('Reading it from the Satori Service…');
   await expect(card.locator('[data-test=reward-reading]')).toBeVisible();
   expect(await animations(page)).toEqual(['spin::after']); // the one moving thing on the screen
   release();
@@ -88,7 +88,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await expect(card.locator('[data-test=reward-error]')).toHaveText(ALIAS);
   expect(stub.rewardCalls).toHaveLength(1);
 
-  // Save: its steps said, at Home's pace, the mark turning, while the Satori Network answers; sent checksummed.
+  // Save: its steps said, at Home's pace, the mark turning, while the Satori Service answers; sent checksummed.
   release = hold(stub);
   await input.fill(POOL.toLowerCase());
   await save.click();
@@ -103,7 +103,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/reward-saving-phone-light.png' : test.info().outputPath('reward-saving.png') });
   expect((await page.evaluate(() => window.satori.health())).work).toMatchObject({ task: 'reward', step: 'save', critical: false });
   release();
-  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Network sends this app's rewards to ${POOL}.`);
+  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Service sends this app's rewards to ${POOL}.`);
   await expect(card.locator('[data-test=reward-saving]')).toBeHidden();
   await expect(save).toHaveText('Save');
   expect(stub.rewardCalls.at(-1)).toMatchObject({ method: 'POST', body: { reward_address: POOL } });
@@ -132,7 +132,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   // Saving the same again is no change; Clear: back to the wallet, noted.
   await input.fill(POOL);
   await save.click();
-  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Network sends this app's rewards to ${POOL}.`);
+  await expect(card.locator('[data-test=reward-line]')).toHaveText(`Saved: the Satori Service sends this app's rewards to ${POOL}.`);
   await card.locator('[data-test=reward-clear]').click();
   await expect(card.locator('[data-test=reward-none]')).toHaveText('Not set · rewards go to your wallet');
   await expect(card.locator('[data-test=reward-line]')).toHaveText('Cleared: rewards go to your wallet.');
@@ -171,16 +171,16 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await shots(page, 'alias');
   await page.setViewportSize({ width: 390, height: 844 });
 
-  // A refusal is said in the Satori Network's words; nothing changes.
+  // A refusal is said in the Satori Service's words; nothing changes.
   stub.rewardRefuse = 'Invalid Base address';
   await input.fill(POOL);
   await save.click();
-  await expect(card.locator('[data-test=reward-error]')).toHaveText('Satori Network 400: Invalid Base address');
+  await expect(card.locator('[data-test=reward-error]')).toHaveText('Satori Service 400: Invalid Base address');
   await expect(card.locator('[data-test=reward-whose]')).toHaveText('your alias');
-  await expect(page.evaluate((a) => window.satori.setRewardAddress(a), POOL)).rejects.toThrow('Satori Network 400: Invalid Base address');
+  await expect(page.evaluate((a) => window.satori.setRewardAddress(a), POOL)).rejects.toThrow('Satori Service 400: Invalid Base address');
   stub.rewardRefuse = null;
 
-  // Another Satori Network: the last one's words go; its reward address is read (Settings is open).
+  // Another Satori Service: the last one's words go; its reward address is read (Settings is open).
   await card.locator('[data-test=reward-clear]').click();
   await expect(card.locator('[data-test=reward-line]')).toHaveText('Cleared: rewards go to your wallet.');
   await input.fill('0x123');

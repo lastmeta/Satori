@@ -30,14 +30,14 @@ it in walls of text.
   canvas. The Streams tab stays for now and may later become "streams I
   publish".
 - **Words people see (owner, 2026-10-18).** People don't think about servers.
-  - Central is the **Satori Network** ("Network" for short). It is free to
+  - Central is the **Satori Service** ("Network" for short). It is free to
     submit to.
   - Nostr is the **Satori relays**, named only where detail is needed.
   - Base is the **Satori contract**. It costs gas, so people need to know it
     is separate.
 
   Code identifiers keep their names. Later, central may simply read the
-  relays, and the Satori Network and the relays become one thing.
+  relays, and the Satori Service and the relays become one thing.
 - **Icons over words, but only when they're instantly understood.** An icon
   stands alone only if its meaning is obvious, or if the same icon is paired
   with its word somewhere nearby (a filter, a header). If it's at all

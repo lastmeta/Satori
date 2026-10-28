@@ -67,8 +67,8 @@ subscriptions made before were all predicted, so they stay so. One
 Every stream this app produces goes to the relays unless it is private
 (owner, 2026-10-25), not only the `_pred` of the relay streams it predicts:
 
-- **The Satori Network's predictions**: after each poll that predicted,
-  each stream's forecast (24 h ahead, as sent to the Satori Network) as
+- **The Satori Service's predictions**: after each poll that predicted,
+  each stream's forecast (24 h ahead, as sent to the Satori Service) as
   `<stream>_pred`, tagged `satori-network`, its source `<stream>`.
 - **The Satori contract's calls**: each game's call when the batch is sent,
   or the game played by hand sends, as `satori-contract-<stream id>_pred`

@@ -73,7 +73,7 @@ account).
   (only for chain 84532), cached 1 h in memory as BCFG does (`:16,66-88`), but
   **its contract addresses are never used**: the app keeps its own, and an
   address central names that is not the app's (case aside) is a quiet warning
-  in the activity feed, "The Satori Network's contract addresses differ from
+  in the activity feed, "The Satori Service's contract addresses differ from
   the app's (token): the app's are used" (`config` row, merged), and a
   `console.warn` (the security review, 2026-10-19: Lite takes them, BCFG's
   overlay, but a central that could point the wallet at other contracts would
@@ -120,7 +120,7 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 | `lens.getTotalClaimableRewards(wallet)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
 | `airdrop.claimableAirdrop(wallet)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
 | `rewards.referral(wallet)` | who the wallet's referral is, if set ([Referral](#referral-invite-links)) |
-| `merkle.alreadyMintedTo(wallet)` | the Satori Network's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims-unlock)) |
+| `merkle.alreadyMintedTo(wallet)` | the Satori Service's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims-unlock)) |
 
 Each read may fail on its own (`allowFailure`), so one reverting view does
 not hide the rest.
@@ -396,7 +396,7 @@ in `base().play`:
   `{ skipped: 'played by hand: the batch is not sent', games, dropped }`.
   The activity log keeps quiet about it, and Home's Contract chip says
   "Played by hand", grey. Nothing else changes: the stake, claims, the Satori
-  Network and the models.
+  Service and the models.
 
 The Game tab while automatic: the game greyed out under "The app plays for
 you" and **Play by hand**. By hand: the game alone; the way back is
@@ -563,7 +563,7 @@ did, why it skipped, or its error.
 **What can be claimed, before claiming** (2026-10-19; Home said 0 while the
 owner had an unclaimed drop: it summed only the first and the third). The
 status reads all three: the lens's rewards, the airdrop, and the Satori
-Network's reward drop, `max(0, amountWei − alreadyMintedTo(wallet))`
+Service's reward drop, `max(0, amountWei − alreadyMintedTo(wallet))`
 (`dropClaimable`), from central's proof for the wallet (`proofState`: cached,
 asked again at most hourly, since central publishes a new drop after its
 daily run, and kept from a claim's own call) and `alreadyMintedTo` in the
@@ -572,9 +572,9 @@ without the route (prod on `main`): unknown (`null`), not 0; a central that
 did not answer keeps the last answer and is asked again at the next read.
 Nothing is shown as an error. `base().claimable` = `{ rewards, drop, airdrop,
 total }` (`total`: the parts known). Home shows the total, the parts above 0
-under it ("2 from the Satori Network · 1 airdrop"; all three on hover), the
+under it ("2 from the Satori Service · 1 airdrop"; all three on hover), the
 Wallet card all three, a line each ("0 SATORI rewards", "3.6185 SATORI
-from the Satori Network", "0 SATORI airdrop"), with Claim on their right only
+from the Satori Service", "0 SATORI airdrop"), with Claim on their right only
 when the total is above 0. Claim stays one button and runs the three.
 Read-only, the owner's wallet `0xda47…8c91`: central2's proof 3.61850955
 SATORI, `alreadyMintedTo` 0, so 3.61850955 claimable.
@@ -676,7 +676,7 @@ sends as any Send (the review, the passphrase). Agents: `preloadGas()`.
   SATORI with this app"; until then "Not staked: Stake with this app,
   below"); Transfers ("Staked SATORI can't be sent until you unstake", after
   Unstake "SATORI can be sent from <date> (round N)", then "Free to send");
-  what is claimable (rewards, from the Satori Network, airdrop: [above](#claims-unlock)); the last batch (round, time, each game's direction, what
+  what is claimable (rewards, from the Satori Service, airdrop: [above](#claims-unlock)); the last batch (round, time, each game's direction, what
   was left out, the tx); the last check and the next ("Waits until you stake"
   until then); under them, who plays (`base-play`): while staked "Your
   SATORI is staked with this app, so it can't also play Satori Daily by

@@ -15,7 +15,7 @@ import { qrDataUrl } from './contract.js';
 import { workText } from '../neuron/work.js';
 import { OUT_OF_SYNC } from '../neuron/base.js';
 
-// Claimable, one line each (rewards, from the Satori Network, airdrop); Claim beside them when any is above 0
+// Claimable, one line each (rewards, from the Satori Service, airdrop); Claim beside them when any is above 0
 const CLAIM_LINES = [0, 1, 2];
 const claimLine = (c, i) => { const [what, x] = claimParts(c)[i]; return `${amountText(x, 'SATORI')} ${what}`; };
 /** How long the preloaded ETH lasts, in daily batches. */
@@ -128,7 +128,7 @@ export function walletTab(a) {
 
   <details class="card" data-test="base-details">
       <summary>Details</summary>
-      <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Network\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Network serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+      <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Service\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Service serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
       <dl class="facts">
         ${fact('Referral', 'base-referral', () => referralText(b()))}
         ${fact('Transfers', 'base-lock', () => lockText(b().wallet.lock))}

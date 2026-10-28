@@ -306,7 +306,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   stub.fail.push(500, 500); // a 5xx is resent once
   const r3 = await poll();
   expect(r3.poll).toMatchObject({ new: 1, predicted: 1 });
-  expect(r3.submit.error).toBe('Satori Network 500: boom');
+  expect(r3.submit.error).toBe('Satori Service 500: boom');
   expect((await status(page)).central.pending).toBe(1);
   await expect(page.locator('[data-test=pending]')).toHaveText('1');
   await expect(row(page, 'bitcoin').locator('[data-test=status]')).toHaveText('Pending');
@@ -347,7 +347,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   // pending queue and the stream list are dropped and refill from it.
   stub.batch = [entry('u-btc', 'bitcoin', T0 + (ZIG.length + 1) * STEP_S, '67005.5'), BATCH[1]]; // newer than its latest: predicted
   stub.fail.push(500, 500);
-  expect((await poll()).submit.error).toBe('Satori Network 500: boom');
+  expect((await poll()).submit.error).toBe('Satori Service 500: boom');
   await expect(page.evaluate(() => window.satori.setCentral('http://central.test'))).rejects.toThrow(/https:\/\//);
   expect((await status(page)).central.pending).toBe(1); // a refused URL changes nothing
   elsewhere.batch = [{ ...entry('u-btc-2', 'bitcoin', T0 + 120, '67005.5'), stream: { uuid: 'u-btc-2', name: 'bitcoin', meta: '{"unit":"USD"}' } }];
@@ -369,8 +369,8 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   // each change is noted on Home for 24 h (health().notices) and in the feed; a save of the same URL is none
   await page.evaluate(() => window.satori.setCentral(''));
   expect((await page.evaluate(() => window.satori.health())).notices.map((n) => n.text)).toEqual([
-    `Satori Network address changed to the default, ${CENTRAL}`, 'Satori Network address changed to https://central.test']);
-  await expect(page.locator('[data-test=notice-line]').first()).toContainText(`Satori Network address changed to the default, ${CENTRAL}`);
+    `Satori Service address changed to the default, ${CENTRAL}`, 'Satori Service address changed to https://central.test']);
+  await expect(page.locator('[data-test=notice-line]').first()).toContainText(`Satori Service address changed to the default, ${CENTRAL}`);
 
   // A poll still running when the URL changes: its rows land before the reset, never after it.
   stub.batch = [entry('u-late', 'late', T0 + 180, '1.5')];
@@ -487,14 +487,14 @@ test("import Docker files; central pays this wallet's rewards to another Base ad
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered[0]).toMatchObject({ 'alias-pubkey': alias.pubkey, 'wallet-signature': expect.stringMatching(/^0x[0-9a-f]{130}$/) });
   await expect(page.locator('[data-test=mismatch]')).toHaveText(
-    `Wallet mismatch: the Satori Network pays this wallet's rewards to a different Base address, ${stub.otherWallet}, not this wallet's ${wallet.ethAddress}.`);
+    `Wallet mismatch: the Satori Service pays this wallet's rewards to a different Base address, ${stub.otherWallet}, not this wallet's ${wallet.ethAddress}.`);
   expect((await page.evaluate(() => window.satori.health())).action).toMatchObject({ id: 'wallet-mismatch',
     text: expect.stringContaining(`a different Base address, ${stub.otherWallet}, not this wallet's ${wallet.ethAddress}.`) });
 
   // Settings: https only; an unreachable central is shown, not thrown.
   await go(page, 'settings');
   await page.locator('#settings-advanced > summary').click(); // folded under Advanced
-  const url = page.getByLabel('Satori Network server');
+  const url = page.getByLabel('Satori Service server');
   await url.fill('http://central.test');
   await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.getByRole('alert').filter({ hasText: 'https://' })).toBeVisible();
@@ -502,10 +502,10 @@ test("import Docker files; central pays this wallet's rewards to another Base ad
   await url.fill('https://down.test');
   await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://down.test');
-  await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Network unreachable: /);
+  await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Service unreachable: /);
   await go(page, 'streams');
   await page.locator('[data-test=poll-now]').click();
-  await expect(page.locator('[data-test=last-poll]')).toContainText('failed: Satori Network unreachable');
+  await expect(page.locator('[data-test=last-poll]')).toContainText('failed: Satori Service unreachable');
   await go(page, 'settings');
   await url.fill('');
   await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own

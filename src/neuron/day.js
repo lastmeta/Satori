@@ -1,4 +1,4 @@
-// One day on Home's strip, opened (docs/design/health.md#a-day-opened): when the app predicted, on the Satori Network
+// One day on Home's strip, opened (docs/design/health.md#a-day-opened): when the app predicted, on the Satori Service
 // and on the Satori contract, and how those predictions turned out. Pure; main.js reads the rows and the histories.
 import { classify } from './quality.js';
 

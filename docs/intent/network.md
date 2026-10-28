@@ -2,7 +2,7 @@
 
 ## In a nutshell
 
-Neurons talk to each other. The **Satori Network** is a decentralized
+Neurons talk to each other. The **Satori Service** is a decentralized
 network of Nostr relays where anyone can publish a data stream and anyone
 can subscribe to one (owner, 2026-10-20). Raw data and predictions are both
 just data streams. To predict something, a neuron may want others'
@@ -26,7 +26,7 @@ from the relays.
   predictions.
 - **Everything a neuron produces is published** (owner, 2026-10-25): every
   stream it makes, predictions included (those it sends to the Satori
-  Network and the Satori contract), goes to the relays unless it is private.
+  Service and the Satori contract), goes to the relays unless it is private.
   Following a stream and predicting it are separate choices.
 - Research the Base equivalent of payment channels first, and whether it
   belongs in the Satori contract, in a new contract, or off the shelf.

@@ -1,4 +1,4 @@
-// Streams: the Satori Network's (folded by default: central's line, its facts under Details, and Refresh, then each stream with its latest
+// Streams: the Satori Service's (folded by default: central's line, its facts under Details, and Refresh, then each stream with its latest
 // value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori relays (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
 // Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there (its streams for sale open).
@@ -36,7 +36,7 @@ function streamsCard(a) {
   const failing = () => (c().registration && !c().registration.ok) || !!c().lastSubmit?.error || c().lastSubmit?.successful === 0;
   return html`
   <details class="card records central" data-test="streams">
-    <summary>Network Streams</summary>
+    <summary>Service Streams</summary>
     <div class="nhead">
       <p data-test="network-line" class="${() => (failing() ? 'error' : '')}">${() => networkLine(c())}</p>
       <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Refreshing…' : 'Refresh')}</button>

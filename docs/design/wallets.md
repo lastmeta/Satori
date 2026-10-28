@@ -11,11 +11,11 @@ and sealed.
 | Word | What it is |
 |---|---|
 | **wallet** | The person's key: their identity, and it holds the funds. Either **in the app**, sealed with their passphrase, or **connected**: kept in an outside wallet (MetaMask or another) that the app asks. |
-| **alias** | The wallet's automated signing key. Derived from the wallet ([derived keys](#derived-keys)), kept on this device and used freely, so the app works with nobody present. It acts for the wallet with the Satori Network, on the relays and in the daily Base batch. App-level: people meet it only on the Wallet tab (its gas, and its private key for the rare case funds were sent to it). |
+| **alias** | The wallet's automated signing key. Derived from the wallet ([derived keys](#derived-keys)), kept on this device and used freely, so the app works with nobody present. It acts for the wallet with the Satori Service, on the relays and in the daily Base batch. App-level: people meet it only on the Wallet tab (its gas, and its private key for the rare case funds were sent to it). |
 | **Nostr key** | The third key: derived from the wallet like the alias, signs the app's Nostr events ([nostr.md](nostr.md)). |
 
 These are the only names, in the UI, the code, the stored record,
-`window.satori`, the Satori Network's protocol and the docs. A wallet in the
+`window.satori`, the Satori Service's protocol and the docs. A wallet in the
 app's list comes with its alias, its Nostr key and its own data.
 
 ## How they relate
@@ -36,13 +36,13 @@ wallet = sealed in the app (passphrase; Unlock / Lock)
 - **The wallet authorizes its alias**, twice: on chain, Stake sets the
   alias's fee to 0, has it accept only this wallet, and stakes the wallet
   with it (`hub.delegatePredictionPower(alias)`, [base.md](base.md)); with
-  the Satori Network, the wallet signs a **link** to its alias (below).
+  the Satori Service, the wallet signs a **link** to its alias (below).
 - **The alias and the Nostr key are derived from the wallet** ([derived
   keys](#derived-keys)): the wallet brought back from its words, on any
   device, gives the same alias (still staked with) and the same Nostr key
   (the same streams). They are kept for good; they are replaced only when the
   device is compromised (owner, 2026-10-26).
-- **One at a time.** The app runs one wallet: the Satori Network, the relays
+- **One at a time.** The app runs one wallet: the Satori Service, the relays
   and the Base batch are one alias's. Another wallet is another peer with its
   own streams, so wallets share nothing but the app's code.
 - **Models do not change**: each wallet's engine builds its models from its
@@ -76,7 +76,7 @@ wallet asks the person for each action that needs the wallet:
 | The referral, payment channels' open and top-up | Unlock | the outside wallet asks |
 | The link to its alias (below) | at setup, else at the next Unlock | once, at connect |
 | Showing the alias's and the Nostr key's backups | the passphrase each time | a signature of a fixed text |
-| The Satori Network's login, predictions, the Base batch, Nostr events, channel vouchers | the alias and the Nostr key, unattended | the same |
+| The Satori Service's login, predictions, the Base batch, Nostr events, channel vouchers | the alias and the Nostr key, unattended | the same |
 
 ## Derived keys
 
@@ -119,7 +119,7 @@ importing the wallet brings them back with nothing else to keep.
 - **Import takes the wallet only**: the alias, Nostr and Docker alias files
   are no longer asked for (the owner: no keeping old keys).
 
-## The Satori Network: register, login and the link
+## The Satori Service: register, login and the link
 
 A request in the **current form** carries `alias-pubkey`. One without it is
 an older neuron's, read the older way (`wallet-pubkey` is then its alias and
@@ -192,7 +192,7 @@ else tells the forms apart.
   refused at setup ("This wallet is already in this app").
 - **For agents**: `wallets()` → `{ active, wallets: [{ id, address, active }] }`,
   `addWallet()`, `switchWallet(id)` (both reload the page), `removeWallet(id)`.
-- **Preferences stay per wallet** (the Satori Network's URL, the Base RPC,
+- **Preferences stay per wallet** (the Satori Service's URL, the Base RPC,
   the max fee, the relays), in each database, as now; the theme and the
   other device choices are the device's.
 
@@ -263,7 +263,7 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
 
 - **A. The words**: alias and wallet everywhere; "neuron" leaves the UI; the
   alias appears only on the Wallet tab.
-- **A2. The link and the current form**: the Satori Network accepts both
+- **A2. The link and the current form**: the Satori Service accepts both
   forms and the link (central `base-upgrade`); the app, satorilib and Satori
   Lite send the current form.
 - **B. Several wallets**: the list, a file each, the switch, Add and Remove (2026-10-23).

@@ -146,7 +146,7 @@ export function createActivity({ db, now = () => Date.now() / 1000, onChange = (
     wallet: safely(async (action, text) => { await add('wallet', 'ok', { action, text }); }),
 
     /**
-     * The Satori Network's address ('central'), the Base RPC ('rpc') or the reward address ('reward') changed, from
+     * The Satori Service's address ('central'), the Base RPC ('rpc') or the reward address ('reward') changed, from
      * Settings or an agent: `to` the new one ('' for the default, `fallback` its URL; a reward address cleared). Home
      * notes it for 24 h (healthOf's notices).
      */

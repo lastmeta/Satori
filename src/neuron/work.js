@@ -36,7 +36,7 @@ const count = (n) => Number(n ?? 0).toLocaleString('en-US');
 const tx = (e, what) => (e.total > 1 ? `Step ${e.done} of ${e.total}: ${what[0].toLowerCase()}${what.slice(1)}` : what);
 
 const TEXT = {
-  'central:register': () => 'Signing in to the Satori Network…',
+  'central:register': () => 'Signing in to the Satori Service…',
   'central:observations': () => "Fetching today's observations…",
   'central:history': (e) => `Loading history · ${e.done} of ${e.total} streams`,
   'central:models': (e) => `Building models · ${e.done} of ${e.total}`,
@@ -54,7 +54,7 @@ const TEXT = {
   'watch:verify': (e) => `Finding prediction streams · checking signatures ${count(e.done)} of ${count(e.total)}`,
   'keys:save': () => 'Saving your keys…',
   // the reward address saved or cleared (src/neuron/reward.js): signed in first; a read is quiet (Settings' row says it)
-  'reward:login': () => 'Signing in to the Satori Network…',
+  'reward:login': () => 'Signing in to the Satori Service…',
   'reward:save': () => 'Saving the reward address…',
   'reward:clear': () => 'Clearing the reward address…',
   'train:score': (e) => `Scoring models · ${e.done} of ${e.total}`,

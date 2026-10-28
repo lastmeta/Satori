@@ -115,7 +115,7 @@ describe('the drill-in', () => {
   });
 
   test('destinations in words: central accepted or pending; Base left out; a relay that has not taken it yet', () => {
-    expect(destinationView({ to: 'network', status: 'pending', when: AT, ref: null })).toMatchObject({ label: 'Network', text: expect.stringMatching(/^Pending since /) });
+    expect(destinationView({ to: 'network', status: 'pending', when: AT, ref: null })).toMatchObject({ label: 'Service', text: expect.stringMatching(/^Pending since /) });
     expect(destinationView({ to: 'contract', status: 'left out', when: AT, ref: { round: 5, direction: 'down', tx: null, error: 'DuplicatePrediction' } }))
       .toEqual({ to: 'contract', label: 'Contract', text: 'Round 5 · DOWN · left out: DuplicatePrediction', href: null });
     expect(destinationView({ to: 'relays', status: 'waiting', when: AT, ref: { stream: 'x_pred', seq: 1, relays: 0 } }).text).toBe('x_pred #1 · no relay yet');
@@ -208,7 +208,7 @@ describe('Retrain in the drill-in\'s header (docs/design/models.md#retrain)', ()
 
   test('none for Relays and Contract models, or without the history: one muted line says why', () => {
     const v = retrainView(model('worse', { source: 'nostr', retrain: { available: false, why: 'source', last: null } }), idle);
-    expect(v).toEqual({ button: null, line: '', tone: '', note: 'Retrain is for Satori Network models for now: this one reads only its own stream.' });
+    expect(v).toEqual({ button: null, line: '', tone: '', note: 'Retrain is for Satori Service models for now: this one reads only its own stream.' });
     expect(retrainView(model('worse', { retrain: { available: false, why: 'history', last: null } }), idle))
       .toMatchObject({ button: null, note: 'Retrain needs about four weeks of this stream\'s history.' });
   });

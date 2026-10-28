@@ -64,20 +64,20 @@ export function nextStep(b) {
 const DAY_S = 86400;
 const ago = (s) => (s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min ago` : s < DAY_S ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / DAY_S)} d ago`);
 
-/** The Satori Network: predictions went out in the last day (central took some). */
+/** The Satori Service: predictions went out in the last day (central took some). */
 export function networkSent(c, now) {
   const s = c?.lastSubmit;
   return !!s && !s.error && s.successful > 0 && now - s.at < DAY_S;
 }
 
-/** The Network card's checks: registered, predictions sent (fix: 'poll'). (A wallet the Satori Network won't pay: Home's card.) */
+/** The Network card's checks: registered, predictions sent (fix: 'poll'). (A wallet the Satori Service won't pay: Home's card.) */
 export function networkChecks(c, now) {
   if (!c) return [];
   const reg = c.registration;
   const s = c.lastSubmit;
   return [
-    !reg ? { id: 'register', state: 'wait', text: 'Registering with the Satori Network…' }
-      : reg.ok ? { id: 'register', state: 'ok', text: 'Registered with the Satori Network.' }
+    !reg ? { id: 'register', state: 'wait', text: 'Registering with the Satori Service…' }
+      : reg.ok ? { id: 'register', state: 'ok', text: 'Registered with the Satori Service.' }
         : { id: 'register', state: 'bad', text: `Not registered: ${reg.error}.`, fix: 'poll' },
     networkSent(c, now) ? { id: 'sent', state: 'ok', text: `Sent ${s.successful} predictions ${ago(now - s.at)}.` }
       : s?.error ? { id: 'sent', state: 'bad', text: `The last send failed: ${s.error}.`, fix: 'poll' }
@@ -101,8 +101,8 @@ export function relayChecks(n) {
       : { id: 'connected', state: all.length ? 'bad' : 'wait', text: all.length ? 'No relay connected right now; it keeps trying.' : 'No relays yet.' },
     watching ? { id: 'watching', state: 'ok', text: `Watching ${watching} prediction stream${watching === 1 ? '' : 's'}, keeping their track records.` }
       : { id: 'watching', state: 'wait', text: 'Looking for prediction streams…' },
-    (n.own?.streams ?? 0) ? { id: 'own', state: 'ok', text: `Publishing this app's ${n.own.streams} other stream${n.own.streams === 1 ? '' : 's'}: its Satori Network and Satori contract predictions.` }
-      : { id: 'own', state: 'wait', text: "This app's Satori Network and Satori contract predictions are published after its next poll." },
+    (n.own?.streams ?? 0) ? { id: 'own', state: 'ok', text: `Publishing this app's ${n.own.streams} other stream${n.own.streams === 1 ? '' : 's'}: its Satori Service and Satori contract predictions.` }
+      : { id: 'own', state: 'wait', text: "This app's Satori Service and Satori contract predictions are published after its next poll." },
     subs ? { id: 'publishing', state: 'ok', text: `Publishing your predictions for ${subs} stream${subs === 1 ? '' : 's'} you subscribe to.` }
       : { id: 'publishing', state: 'wait', text: 'You can choose streams to predict; their predictions are relayed to the Nostr network.', fix: 'streams' },
   ];
