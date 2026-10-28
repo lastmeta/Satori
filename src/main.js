@@ -37,6 +37,7 @@ import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from 
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
 import { listingOf } from './neuron/market.js';
+import { playerOf, sendsToday } from './neuron/play.js';
 import { watchable } from './neuron/records.js';
 import { DEFAULT_PRICE } from './ui/market.js';
 import { formatEther } from 'viem';
@@ -144,11 +145,8 @@ const refreshBase = coalesce('base status', async () => {
   if (state.reminder.on) followPlayer(reminderPlayer()).catch((err) => console.warn('[satori] reminder', err));
 });
 
-/**
- * Whom the daily reminder watches on the chain (docs/design/push.md): the alias, which sends the batch and plays the Game
- * when staked with it; the wallet when it plays the Game itself.
- */
-const reminderPlayer = () => (state.base.play === 'manual' && state.base.wallet?.staked !== 'alias' ? state.wallet : state.alias);
+/** Whom the daily reminder watches on the chain (neuron/play.js sendsToday): its address. */
+const reminderPlayer = () => (sendsToday({ play: state.base.play, staked: state.base.wallet?.staked }) === 'alias' ? state.alias : state.wallet);
 
 
 // ── the Models tab (docs/design/models.md) ──
@@ -1337,7 +1335,7 @@ const actions = {
       }
     };
     // nothing to send (all already predicted), or the alias sends: no Unlock (base.playHand decides the same way)
-    return state.base.wallet.staked === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
+    return playerOf(state.base.wallet.staked) === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
   },
   /** The daily reminder (Settings › This device; docs/design/push.md): on or off. */
   async setReminder(on) {

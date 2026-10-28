@@ -5,6 +5,7 @@
 // The batch goes at the first check of each UTC round: 10 s after start (at
 // once when one is due), at the next round's start (chain time) and at least hourly.
 import { SKIP } from './skip.js';
+import { playerOf } from './play.js';
 import {
   fallback, formatEther, formatGwei, getAddress, http, isAddress, parseEther, parseGwei, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
@@ -611,7 +612,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     async gameStreams() {
       await refresh(); // the round now (a game played this round shows its Sent screen) and whom the wallet stakes with
       const { chain } = await chainNow();
-      const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
+      const by = playerOf(view().wallet.staked);
       const player = by === 'alias' ? alias.evmAddress : walletAddress;
       const list = await chain.streams({ all: true });
       const ids = list.map((g) => g.streamId);
@@ -643,7 +644,8 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
      */
     async playHand(picks) {
       if (!picks?.length) throw new Error('No predictions to send.');
-      const by = view().wallet.staked === 'alias' ? 'alias' : 'wallet';
+      await refresh(); // whom the wallet stakes with now, read from the chain: a Stake or Unstake elsewhere since counts
+      const by = playerOf(view().wallet.staked);
       const player = by === 'alias' ? alias : needWallet();
       // the wallet's first prediction from an invite link registers who invited it, as the dapp does (the alias's
       // can't: the referral would be the alias's; a staked wallet's was registered by Stake)

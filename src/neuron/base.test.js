@@ -597,6 +597,16 @@ describe('createBase', () => {
     rpc.state.down = false;
   });
 
+  test('playHand reads whom the wallet stakes with at Submit: unstaked elsewhere since, the wallet plays (it asks for Unlock)', async () => {
+    await staked();
+    await base.refresh();
+    expect((await base.status()).wallet.staked).toBe('alias');
+    await chainOf().undelegate({ wallet: walletKey }); // in Satori Daily, say: this app's last read still says staked
+    rpc.sent.length = 0;
+    await expect(base.playHand([{ gameId: 1, direction: UP }])).rejects.toThrow(/Unlock/);
+    expect(rpc.sent).toHaveLength(0); // nothing sent from the alias
+  });
+
   test('played by hand (setPlay, kept): a due batch is worked out and not sent; automatic again, it is sent', async () => {
     await staked();
     expect((await base.status()).play).toBe(null); // not read yet

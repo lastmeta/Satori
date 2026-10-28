@@ -1,5 +1,6 @@
 // Home's Satori contract card (docs/design/health.md#the-contract-card), pure: what the contract is for, whether a
 // prediction went to it this round, and what has to be in place for it to keep happening, each a check with its fix.
+import { playerOf } from '../neuron/play.js';
 
 /** A prediction went to the contract this round: the app's batch, or the game played by hand. */
 export const predictedToday = (b) => b?.round != null && (b.lastBatch?.round === b.round || b.lastPlay?.round === b.round);
@@ -16,7 +17,7 @@ export function contractChecks(b) {
   // first, in both modes: SATORI to take part with (the owner's words)
   const satori = { id: 'satori', state: Number(b.wallet?.satori ?? 0) >= 1 ? 'ok' : 'bad', text: 'Must have at least 1 SATORI in your wallet to participate' };
   if (b.play === 'manual') {
-    const byAlias = staked === 'alias';
+    const byAlias = playerOf(staked) === 'alias';
     const out = [satori];
     if (staked === 'other') out.push({ id: 'free', state: 'bad', text: "Your wallet is staked with another address, so it can't play here. Unstake it on the Wallet tab." });
     const noGas = byAlias ? b.alias?.noGas : b.wallet?.lowEth;
