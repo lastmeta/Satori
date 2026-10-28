@@ -658,6 +658,9 @@ describe('createBase', () => {
     expect(v.wallet).toMatchObject({ staked: 'none', lock: { locked: true, indefinite: false, untilRound: ROUND + 1 } });
     await expect(base.send({ asset: 'SATORI', to: '0x' + '33'.repeat(20), amount: '1' }))
       .rejects.toThrow(`SATORI can be sent from Oct 17, 00:00 UTC (round ${ROUND + 2}).`);
+    // staking again, once the lock is over: the alias's fee and allowed staker are still set, so only the wallet's call is sent
+    delete s.lock[V];
+    expect((await base.delegate()).steps.map((x) => x.step)).toEqual(['delegatePredictionPower(alias)']);
     base.stop();
   });
 
