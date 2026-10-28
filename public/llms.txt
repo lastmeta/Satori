@@ -682,7 +682,9 @@ the page's JS context:
   (`address` null: not set up yet). `await satori.addWallet()` and
   `await satori.switchWallet(id)` → `{ reloading: true }`: the wallet is
   locked and the page reloads, on Setup for the new one (then `setup()`), or
-  with the other wallet. `await satori.removeWallet(id)` → `wallets()`:
+  with the other wallet. `await satori.removeWallet(id, passphrase)` → `wallets()`:
+  that wallet's own passphrase, checked against its file (a wrong one throws
+  'Wrong passphrase'; none needed for a connected wallet or one never set up);
   takes a wallet that is not in use off the list (its words are the way
   back; only on the person's request, after its backup); its file is set
   aside in this browser, never deleted (keys are never lost). The one in
@@ -1216,7 +1218,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   …. It counts only predictions this app received before the
   outcome.").
 - **Wallet**: a card each (2026-10-28): Base (the balances and Send),
-  Receive, Claimable (Claim), Staking (Stake or Unstake), Preload gas, then
+  Receive, Preload gas, Staking (Stake or Unstake), Claimable (Claim), then
   Details (folded) and Wallets. Each action's passphrase prompt and result
   show in its own card. In all: the round, the RPC in plain words, the
   wallet's SATORI and ETH, Receive (`base-receive`: the wallet's address
@@ -1235,7 +1237,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   Then the **Wallets** card: each wallet's address (or "Not set up yet"), the
   one running marked "In use", Switch and Remove on the others (Remove asks:
   "Remove 0x…? It leaves this list, and its 24 words are the way back…
-  Its file stays set aside in this browser, never deleted.", Remove it or Cancel), and Add a wallet.
+  Its file stays set aside in this browser, never deleted. Enter that wallet's
+  passphrase to remove it.", its passphrase, Remove it or Cancel), and Add a wallet.
 - **Settings**, top to bottom: This device, Appearance, Backup, Keys,
   Reward address, Satori contract predictions (Automatic or By hand: the
   Game tab), Advanced. **Keys** (each key with Copy: the wallet's Base address with

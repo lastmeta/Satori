@@ -6,7 +6,7 @@ import { recoverMessageAddress } from 'viem';
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockWallet, publicKey, wordsOf, evmAddress, withPassphrase, backupKeys, IMPORT_MAX, keepRetired,
+  newKeys, readDockerFiles, recordFromRows, loadKeys, unlockWallet, publicKey, wordsOf, evmAddress, withPassphrase, backupKeys, IMPORT_MAX, keepRetired, checkWalletPassphrase,
   PASSPHRASE_NEEDED,
 } from './index.js';
 import { verifyMessage } from 'viem';
@@ -203,6 +203,9 @@ describe('every earlier version\'s keys (test/fixtures/profiles.json) carried fo
       const kept = keepRetired(record, first.record, 7);
       expect(kept.retired).toEqual([{ alias: record.alias, nostr: record.nostr, at: 7 }]);
       expect(keepRetired(kept, kept)).toBe(kept); // the same keys again: nothing more retired
+      expect(await checkWalletPassphrase(first.record, p.passphrase)).toBe('checked'); // Remove's check, from the wallet part alone
+      await expect(checkWalletPassphrase(first.record, 'not the passphrase')).rejects.toThrow(/^Wrong passphrase$/);
+      await expect(checkWalletPassphrase(record, 'not the passphrase')).rejects.toThrow(/^Wrong passphrase$/); // an earlier form too
       const [earlier] = await backupKeys(kept, 'retired', p.passphrase);
       expect(earlier).toMatchObject({ address: evmAddress(publicKey(hex(p.expect.alias))), privateKey: `0x${record.alias}`, at: 7 });
     });

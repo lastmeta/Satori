@@ -79,7 +79,17 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('[data-test=wallet-remove-confirm]')).toBeHidden();
   await expect(page.evaluate(() => window.satori.removeWallet(2))).rejects.toThrow(/switch to another first/);
+  // that wallet's own passphrase is asked (the owner, 2026-10-28), checked against its file: wrong, nothing removed
+  await expect(page.evaluate(() => window.satori.removeWallet(1))).rejects.toThrow("The wallet's passphrase is needed");
   await rows.nth(0).locator('[data-test=wallet-remove]').click();
+  const pass = page.locator('[data-test=wallet-remove-pass]');
+  await expect(pass).toBeVisible();
+  await expect(page.locator('[data-test=wallet-remove-confirm]')).toContainText("Enter that wallet's passphrase to remove it.");
+  await pass.fill('not its passphrase');
+  await page.locator('[data-test=wallet-remove-yes]').click();
+  await expect(page.locator('[data-test=wallets-error]')).toHaveText('Wrong passphrase');
+  await expect(rows).toHaveCount(3);
+  await pass.fill(PASS);
   await page.locator('[data-test=wallet-remove-yes]').click();
   await expect(rows).toHaveCount(2);
   expect(await page.evaluate(() => window.satori.removeWallet(3))).toEqual({ active: 2, wallets: [{ id: 2, address: B.ethAddress, active: true }] });

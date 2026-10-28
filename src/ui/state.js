@@ -32,6 +32,7 @@ export const state = reactive({
   walletConnectReady: false, // this build has a WalletConnect project id: Connect offers "Other wallet"
   wallets: { active: 1, wallets: [] }, // this app's wallets (src/wallets.js walletsView): the Wallets card, Setup's switch back
   walletRemove: 0, // the wallet whose Remove asks to confirm (its id), or 0
+  walletRemoveNeeds: '', // what that Remove asks for: '' (being read), 'passphrase' (that wallet's own), 'none'
   unlocked: false,
   lockAt: null, // when the wallet locks on its own (ms), or null (src/keys/autolock.js)
   lockNow: 0, // the clock "Locks in 4 min" is counted from (ms; moves every 15 s while unlocked)

@@ -4,6 +4,10 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (Remove asks for the wallet's passphrase)
+
+- `removeWallet(id, passphrase)`: that wallet's own passphrase (none for a connected one); the Wallets card asks for it.
+
 ## Changed 2026-10-28 (a skip's code)
 
 - A batch check that sent nothing has `skip`, a code (`predicted`, `unstaked`, `gas-ceiling`, `pending`, `by-hand`,

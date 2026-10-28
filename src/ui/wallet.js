@@ -98,11 +98,12 @@ export function walletTab(a) {
     </div>
   </section>
 
-  <section class="card" data-test="wallet-claim-card">
-    <dl class="facts"><div class="fact"><dt>Claimable</dt><dd class="claim-dd"><span data-test="base-claimable">${CLAIM_LINES.map((i) => html`<span class="line">${() => claimLine(b().claimable, i)}</span>`)}</span>
-      <button class="primary" data-test="base-claim" hidden="${() => !(Number(b().claimable?.total) > 0)}" disabled="${busy}" @click="${() => a.walletAction('wallet-claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button></dd></div></dl>
-    ${unlockPrompt(a, 'wallet-claim', 'claim from the Claimable card')}
-    ${outcome('claim')}
+  <section class="card" id="wallet-preload" data-test="wallet-preload-card">
+    <p class="error small" role="alert" data-test="base-low-gas" hidden="${() => !lowEth()}">The alias is low on Base ETH for the daily batch: ${() => gasText(b().alias)}. Preload gas, below.</p>
+    <div class="side-row">
+      <p class="muted small">Preload gas so this app can make predictions on your behalf: it sends Base ETH from your wallet to this app.</p>
+      <button data-test="base-preload" disabled="${busy}" @click="${a.preloadForm}">Preload gas</button>
+    </div>
   </section>
 
   <section class="card" data-test="wallet-stake-card">
@@ -118,12 +119,11 @@ export function walletTab(a) {
     ${outcome('stake')}
   </section>
 
-  <section class="card" id="wallet-preload" data-test="wallet-preload-card">
-    <p class="error small" role="alert" data-test="base-low-gas" hidden="${() => !lowEth()}">The alias is low on Base ETH for the daily batch: ${() => gasText(b().alias)}. Preload gas, below.</p>
-    <div class="side-row">
-      <p class="muted small">Preload gas so this app can make predictions on your behalf: it sends Base ETH from your wallet to this app.</p>
-      <button data-test="base-preload" disabled="${busy}" @click="${a.preloadForm}">Preload gas</button>
-    </div>
+  <section class="card" data-test="wallet-claim-card">
+    <dl class="facts"><div class="fact"><dt>Claimable</dt><dd class="claim-dd"><span data-test="base-claimable">${CLAIM_LINES.map((i) => html`<span class="line">${() => claimLine(b().claimable, i)}</span>`)}</span>
+      <button class="primary" data-test="base-claim" hidden="${() => !(Number(b().claimable?.total) > 0)}" disabled="${busy}" @click="${() => a.walletAction('wallet-claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button></dd></div></dl>
+    ${unlockPrompt(a, 'wallet-claim', 'claim from the Claimable card')}
+    ${outcome('claim')}
   </section>
 
   <details class="card" data-test="base-details">
@@ -166,8 +166,8 @@ function walletsCard(a) {
     <p class="muted small">Each wallet keeps its own data in this app. One runs at a time.</p>
     <ul class="wallet-list">${() => state.wallets.wallets.map(row)}</ul>
     <div class="confirm" data-test="wallet-remove-confirm" hidden="${() => !removing()}">
-      <p class="small">${() => (removing() ? `Remove ${removing().address ? shortHash(removing().address) : 'this wallet'}? It leaves this list, and its 24 words are the way back: back them up first (switch to it, then Settings › Backup). Its file stays set aside in this browser, never deleted.` : '')}</p>
-      <div class="actions"><button class="primary" data-test="wallet-remove-yes" @click="${() => a.removeWallet(state.walletRemove)}">Remove it</button><button @click="${a.cancelRemoveWallet}">Cancel</button></div>
+      <p class="small">${() => (removing() ? `Remove ${removing().address ? shortHash(removing().address) : 'this wallet'}? It leaves this list, and its 24 words are the way back: back them up first (switch to it, then Settings › Backup). Its file stays set aside in this browser, never deleted.${state.walletRemoveNeeds === 'passphrase' ? " Enter that wallet's passphrase to remove it." : ''}` : '')}</p>
+      <form class="unlock" @submit="${(e) => a.removeWallet(form(e), e.target)}"><input name="pass" type="password" data-test="wallet-remove-pass" aria-label="That wallet's passphrase to remove it" placeholder="Its wallet passphrase" autocomplete="off" required hidden="${() => state.walletRemoveNeeds !== 'passphrase'}" disabled="${() => state.walletRemoveNeeds !== 'passphrase'}"><button class="primary" type="submit" data-test="wallet-remove-yes" disabled="${() => !state.walletRemoveNeeds}">Remove it</button><button type="button" @click="${a.cancelRemoveWallet}">Cancel</button></form>
     </div>
     <div class="actions"><button data-test="add-wallet" @click="${a.addWallet}">Add a wallet</button></div>
     <p class="error small" role="alert" data-test="wallets-error" hidden="${() => !state.walletsError}">${() => state.walletsError}</p>

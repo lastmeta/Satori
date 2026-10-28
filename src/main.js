@@ -12,10 +12,10 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
-import { openOpfsDb, hasDatabase, setAsideOpfsDb } from './db/opfs.js';
+import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
 import {
   generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, keepRetired, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
+  withPassphrase, backupKeys, keepRetired, checkWalletPassphrase, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
@@ -540,12 +540,26 @@ async function reopenWith(list) {
 
 const addWallet = () => exclusive('wallets', () => reopenWith(withAdded(wallets, state.wallet || null)));
 const switchWallet = (id) => exclusive('wallets', () => reopenWith(withActive(wallets, Number(id))));
-/** Remove a wallet that is not in use: its entry gone, its database file (its keys among it) set aside, never deleted. */
-const removeWallet = (id) => exclusive('wallets', async () => {
+/**
+ * What removing a wallet asks for: 'passphrase' (its own, checked against its file), or 'none' (a connected wallet's is
+ * in its wallet app; a wallet never set up has no keys).
+ */
+async function removeNeeds(id) {
+  const { file } = withoutWallet(wallets, Number(id));
+  const stored = await readStoredKeys(file);
+  return !stored || stored.wallet?.kind === 'connected' ? 'none' : 'passphrase';
+}
+/**
+ * Remove a wallet that is not in use, with that wallet's passphrase (the owner, 2026-10-28): its entry gone, its database
+ * file (its keys among it) set aside, never deleted.
+ */
+const removeWallet = (id, passphrase) => exclusive('wallets', async () => {
   const { list, file } = withoutWallet(wallets, Number(id));
+  const stored = await readStoredKeys(file);
+  if (stored) await checkWalletPassphrase(stored, passphrase);
   await setAsideWalletFile(file);
   await keepWallets(list);
-  state.walletRemove = 0;
+  Object.assign(state, { walletRemove: 0, walletRemoveNeeds: '' });
 });
 
 /** Backup's "Earlier keys" (keepRetired), as text: each earlier alias's address and private key, its Nostr key. */
@@ -1372,9 +1386,17 @@ const actions = {
   /** The Wallets card (docs/design/wallets.md#several-wallets): Add, Switch, and Remove after it asks. */
   addWallet: shownAt('walletsError', () => addWallet()),
   switchWallet: shownAt('walletsError', (id) => switchWallet(id)),
-  askRemoveWallet(id) { Object.assign(state, { walletRemove: id, walletsError: '' }); },
-  cancelRemoveWallet() { state.walletRemove = 0; },
-  removeWallet: shownAt('walletsError', (id) => removeWallet(id)),
+  askRemoveWallet: shownAt('walletsError', async (id) => {
+    Object.assign(state, { walletRemove: id, walletRemoveNeeds: '', walletsError: '' });
+    const needs = await removeNeeds(id);
+    if (state.walletRemove === id) state.walletRemoveNeeds = needs;
+    requestAnimationFrame(() => document.querySelector('[data-test=wallet-remove-pass]')?.focus());
+  }),
+  cancelRemoveWallet() { Object.assign(state, { walletRemove: 0, walletRemoveNeeds: '', walletsError: '' }); },
+  removeWallet: shownAt('walletsError', async (f, el) => {
+    await removeWallet(state.walletRemove, f.pass);
+    el.reset();
+  }),
 };
 
 // ── window.satori: the same app for agents (see /llms.txt) ──────────────────
@@ -1436,9 +1458,9 @@ window.satori = {
   async addWallet() { await addWallet(); return { reloading: true }; },
   /** Another wallet of this app's, by id: the keys locked, the page reloaded with it. → { reloading: true } */
   async switchWallet(id) { await switchWallet(id); return { reloading: true }; },
-  /** Remove a wallet that is not in use: its database (its keys among it) deleted from this browser. Only on the person's
-   * request, after its words are backed up. → wallets() */
-  async removeWallet(id) { await removeWallet(id); return walletsView(wallets, state.wallet || null); },
+  /** Remove a wallet that is not in use, with that wallet's passphrase (none for a connected one): off the list, its file
+   * set aside, never deleted. Only on the person's request, after its words are backed up. → wallets() */
+  async removeWallet(id, passphrase) { await removeWallet(id, passphrase); return walletsView(wallets, state.wallet || null); },
   /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
   install() { return install(); },
   /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */

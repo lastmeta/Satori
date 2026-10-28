@@ -305,6 +305,32 @@ export async function withPassphrase(record, passphrase, fn) {
   }
 }
 
+/**
+ * A stored record's wallet passphrase checked, from the wallet part alone (sealed with the passphrase; the alias and
+ * the Nostr key, sealed with this browser's key, are not needed): another wallet's, before it is removed. A wrong one
+ * throws 'Wrong passphrase'. → 'checked', or 'connected' (its wallet is in its wallet app: there is no passphrase).
+ */
+export async function checkWalletPassphrase(stored, passphrase) {
+  const v = stored?.wallet ?? {};
+  if (v.kind === 'connected') return 'connected';
+  if (typeof passphrase !== 'string' || !passphrase) throw new Error(PASSPHRASE_NEEDED);
+  if (typeof v.data === 'string') {
+    const secret = await openSecret(v, passphrase);
+    try {
+      if (publicKey(secret) !== v.pubkey) throw new Error('Wrong passphrase');
+    } finally {
+      secret.fill(0);
+    }
+    return 'checked';
+  }
+  if (typeof v.yaml !== 'string') throw new Error('The stored wallet is not readable.');
+  if (secrecy(v.yaml) === 'plain') return 'checked'; // an early import kept in plain text: no passphrase yet
+  const { secret, mismatches } = await readKeyFile(v.yaml, { password: passphrase, encodings: ['latin1', 'utf8'] });
+  secret.fill(0);
+  if (mismatches.length) throw new Error('Wrong passphrase');
+  return 'checked';
+}
+
 const BACKUP_KEYS = ['alias', 'wallet', 'nostr', 'retired'];
 
 /** The record's earlier keys (keepRetired), newest first: [{ address, privateKey, npub, nsec, at }]. */

@@ -50,7 +50,7 @@ function fileError(err) {
  * onStep({ step: 'download', loaded, total } | { step: 'start' } | { step: 'open' }): the wasm's download in bytes on
  * the wire (transferProgress), its start (compiled), the database opening.
  */
-export async function connectOpfs(path, { onStep = () => {} } = {}) {
+export async function connectOpfs(path, { onStep = () => {}, readOnly = false } = {}) {
   const bundle = await duckdb.selectBundle({
     mvp: { mainModule: mvpWasm, mainWorker: mvpWorker },
     eh: { mainModule: ehWasm, mainWorker: ehWorker },
@@ -66,7 +66,7 @@ export async function connectOpfs(path, { onStep = () => {} } = {}) {
     onStep({ step: 'open' });
     let conn;
     try {
-      await duck.open({ path, accessMode: duckdb.DuckDBAccessMode.READ_WRITE });
+      await duck.open({ path, accessMode: readOnly ? duckdb.DuckDBAccessMode.READ_ONLY : duckdb.DuckDBAccessMode.READ_WRITE });
       conn = await duck.connect();
     } catch (err) {
       throw fileError(err);
@@ -112,4 +112,21 @@ export async function openOpfsDb(path = DB_PATH, { onStep } = {}) {
  */
 export async function setAsideOpfsDb(path = DB_PATH) {
   return setAsideDatabase(await navigator.storage.getDirectory(), path.slice('opfs://'.length));
+}
+
+/**
+ * Another wallet's stored keys record (meta `keys`), read from its database file without opening it for the app: a
+ * second DuckDB, read only, ended at once. → the record as stored (its alias and Nostr key may be sealed), or null when
+ * the file has none (a wallet never set up).
+ */
+export async function readStoredKeys(file) {
+  if (!(await hasDatabase(`opfs://${file}`))) return null;
+  const { conn, close } = await connectOpfs(`opfs://${file}`, { readOnly: true });
+  try {
+    const t = await conn.query("SELECT value FROM meta WHERE key = 'keys'");
+    const v = t.toArray()[0]?.value;
+    return v == null ? null : JSON.parse(String(v));
+  } finally {
+    await close();
+  }
 }
