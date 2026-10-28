@@ -683,9 +683,10 @@ the page's JS context:
   `await satori.switchWallet(id)` → `{ reloading: true }`: the wallet is
   locked and the page reloads, on Setup for the new one (then `setup()`), or
   with the other wallet. `await satori.removeWallet(id)` → `wallets()`:
-  deletes a wallet that is not in use from this browser, keys and all (its
-  words are the only way back; only on the person's request, after its
-  backup); the one in use throws.
+  takes a wallet that is not in use off the list (its words are the way
+  back; only on the person's request, after its backup); its file is set
+  aside in this browser, never deleted (keys are never lost). The one in
+  use throws.
 - `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
   each stream in the batch whose latest observation has no prediction yet
   (a new row, or one an interrupted poll stored), and send everything pending. `submit` is null
@@ -1229,8 +1230,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   full, the fee), then "Wallet passphrase to send" (each time), Send or Back.
   Then the **Wallets** card: each wallet's address (or "Not set up yet"), the
   one running marked "In use", Switch and Remove on the others (Remove asks:
-  "Remove 0x…? Its keys and data are deleted from this browser, and its 24
-  words are the only way back…", Remove it or Cancel), and Add a wallet.
+  "Remove 0x…? It leaves this list, and its 24 words are the way back…
+  Its file stays set aside in this browser, never deleted.", Remove it or Cancel), and Add a wallet.
 - **Settings**, top to bottom: This device, Appearance, Backup, Keys,
   Reward address, Satori contract predictions (Automatic or By hand: the
   Game tab), Advanced. **Keys** (each key with Copy: the wallet's Base address with

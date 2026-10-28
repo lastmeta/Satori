@@ -50,7 +50,7 @@ import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
 import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, NEXT_STEP_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
-import { readWallets, writeWallets, deleteWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
+import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
 import { deviceKey, toRest, fromRest } from './keys/atrest.js';
 import { HANDOFF, SW_BATCH } from './pwa/handoff.js';
 import { isHttps } from './util.js';
@@ -542,10 +542,10 @@ async function reopenWith(list) {
 
 const addWallet = () => exclusive('wallets', () => reopenWith(withAdded(wallets, state.wallet || null)));
 const switchWallet = (id) => exclusive('wallets', () => reopenWith(withActive(wallets, Number(id))));
-/** Remove a wallet that is not in use: its database file (its keys among it) deleted, its entry gone. */
+/** Remove a wallet that is not in use: its entry gone, its database file (its keys among it) set aside, never deleted. */
 const removeWallet = (id) => exclusive('wallets', async () => {
   const { list, file } = withoutWallet(wallets, Number(id));
-  await deleteWalletFile(file);
+  await setAsideWalletFile(file);
   await keepWallets(list);
   state.walletRemove = 0;
 });

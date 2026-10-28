@@ -53,11 +53,11 @@ const stamp = (now) => now.toISOString().replace(/[:.]/g, '-');
  * `<name>.wal.corrupt-<time>` (a fresh file must not replay another's WAL). The person asked for it ("Set aside and
  * start again"). → the database file's new name
  */
-export async function setAsideDatabase(dir, name, { now = new Date(), tries, wait } = {}) {
+export async function setAsideDatabase(dir, name, { kind = 'corrupt', now = new Date(), tries, wait } = {}) {
   const at = stamp(now);
-  const to = await moveWhenFree(dir, name, `${name}.corrupt-${at}`, { tries, wait });
+  const to = await moveWhenFree(dir, name, `${name}.${kind}-${at}`, { tries, wait });
   const wal = await dir.getFileHandle(`${name}.wal`).then(() => true, () => false);
-  if (wal) await moveWhenFree(dir, `${name}.wal`, `${name}.wal.corrupt-${at}`, { tries, wait });
+  if (wal) await moveWhenFree(dir, `${name}.wal`, `${name}.wal.${kind}-${at}`, { tries, wait });
   return to;
 }
 

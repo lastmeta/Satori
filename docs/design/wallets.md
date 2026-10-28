@@ -198,8 +198,10 @@ else tells the forms apart.
   on a phone, 2026-10-24) would otherwise show "Satori is open in another tab".
 - **On the Wallet tab**, a **Wallets** card: each wallet's address, the
   active one marked; Switch on the others; Remove on the others (it asks
-  first, says its words are its only backup, then deletes its database file
-  and its entry); **Add a wallet**: a new entry, active, so the reload opens
+  first, says its words are the way back, then takes its entry off the list
+  and sets its database file aside, `….removed-<time>`, never deleted: its
+  keys may include ones the words can't bring back, [keys are never
+  lost](#keys-are-never-lost)); **Add a wallet**: a new entry, active, so the reload opens
   Setup's four ways on an empty database. Setup then names the other wallets
   to switch back to. A wallet whose address is already in the list is
   refused at setup ("This wallet is already in this app").

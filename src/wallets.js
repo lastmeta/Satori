@@ -5,6 +5,7 @@
 //   await writeWallets(withAdded(list, address))  // Add a wallet: a new entry, active (the reload opens Setup)
 //   withAddress(list, address) / withActive(list, id) / withoutWallet(list, id)
 // Each with* returns a new list (or throws, said plainly) and never changes the one given.
+import { setAsideDatabase } from './db/recover.js';
 
 export const FIRST_FILE = 'satori-mvp.duckdb';
 export const ALREADY = 'This wallet is already in this app: switch to it from the Wallet tab.';
@@ -94,14 +95,12 @@ export const appPut = (key, value) => run('readwrite', (s) => s.put(value, key))
 export const readWallets = async () => (await run('readonly', (s) => s.get(KEY))) ?? null;
 export const writeWallets = (list) => run('readwrite', (s) => s.put(list, KEY));
 
-/** A removed wallet's database file and its WAL, from OPFS (only ever an inactive one: no worker holds it). */
-export async function deleteWalletFile(file) {
+/**
+ * A removed wallet's database file and its WAL, renamed `….removed-<time>`, never deleted (only ever an inactive one: no
+ * worker holds it). Its keys stay in it: an earlier or random alias its words can't bring back may hold funds.
+ */
+export async function setAsideWalletFile(file) {
   const dir = await navigator.storage.getDirectory();
-  for (const name of [file, `${file}.wal`]) {
-    try {
-      await dir.removeEntry(name);
-    } catch (err) {
-      if (err?.name !== 'NotFoundError') throw err;
-    }
-  }
+  if (!(await dir.getFileHandle(file).then(() => true, () => false))) return null; // never set up: no file
+  return setAsideDatabase(dir, file, { kind: 'removed' });
 }

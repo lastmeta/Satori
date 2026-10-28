@@ -75,7 +75,7 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   // Remove: asked first; Cancel keeps it; the one in use can't be
   await page.evaluate(() => { location.hash = '#wallet'; });
   await rows.nth(0).locator('[data-test=wallet-remove]').click();
-  await expect(page.locator('[data-test=wallet-remove-confirm]')).toContainText('its 24 words are the only way back');
+  await expect(page.locator('[data-test=wallet-remove-confirm]')).toContainText('never deleted');
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('[data-test=wallet-remove-confirm]')).toBeHidden();
   await expect(page.evaluate(() => window.satori.removeWallet(2))).rejects.toThrow(/switch to another first/);
@@ -83,7 +83,10 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   await page.locator('[data-test=wallet-remove-yes]').click();
   await expect(rows).toHaveCount(2);
   expect(await page.evaluate(() => window.satori.removeWallet(3))).toEqual({ active: 2, wallets: [{ id: 2, address: B.ethAddress, active: true }] });
-  expect(await opfsFiles(page)).toEqual(['satori-2.duckdb']); // the first wallet's file (and the unfinished one's) gone
+  // the first wallet's file set aside, never deleted (its keys may be ones its words can't bring back); the unfinished one had none
+  expect(await opfsFiles(page)).toEqual(['satori-2.duckdb']);
+  const all = await page.evaluate(async () => { const n = []; for await (const [k] of (await navigator.storage.getDirectory()).entries()) n.push(k); return n; });
+  expect(all.filter((n) => /^satori-mvp\.duckdb\.removed-/.test(n))).toHaveLength(1);
 
   // a reload keeps the second wallet
   await page.reload();

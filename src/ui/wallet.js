@@ -166,7 +166,7 @@ function walletsCard(a) {
     <p class="muted small">Each wallet keeps its own data in this app. One runs at a time.</p>
     <ul class="wallet-list">${() => state.wallets.wallets.map(row)}</ul>
     <div class="confirm" data-test="wallet-remove-confirm" hidden="${() => !removing()}">
-      <p class="small">${() => (removing() ? `Remove ${removing().address ? shortHash(removing().address) : 'this wallet'}? Its keys and data are deleted from this browser, and its 24 words are the only way back. Back them up first: switch to it, then Settings › Backup.` : '')}</p>
+      <p class="small">${() => (removing() ? `Remove ${removing().address ? shortHash(removing().address) : 'this wallet'}? It leaves this list, and its 24 words are the way back: back them up first (switch to it, then Settings › Backup). Its file stays set aside in this browser, never deleted.` : '')}</p>
       <div class="actions"><button class="primary" data-test="wallet-remove-yes" @click="${() => a.removeWallet(state.walletRemove)}">Remove it</button><button @click="${a.cancelRemoveWallet}">Cancel</button></div>
     </div>
     <div class="actions"><button data-test="add-wallet" @click="${a.addWallet}">Add a wallet</button></div>
