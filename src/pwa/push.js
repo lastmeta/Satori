@@ -1,8 +1,9 @@
 // The daily reminder (docs/design/push.md): Settings › This device's switch. On, this browser subscribes to the push
 // server (/push/, the push/ folder) with the player's address, its time zone and the time of day it was turned on (each
 // person's own time, one they are awake at); once a day at that time, if that player hasn't predicted this round, the
-// server wakes the service worker (src/pwa/wake.js), which sends the day's batch or reminds. The browser's subscription
-// is the switch's truth. The server is told only what changes: the player (followPlayer), and a subscription the
+// server wakes the service worker (src/pwa/wake.js), which sends the day's batch or reminds. On means both: the
+// browser's subscription, and what the server was told (IndexedDB REMINDER), written only once it said yes; a
+// subscription the server never took is not On. The server is told only what changes: the player (followPlayer), and a subscription the
 // browser replaces (the service worker's pushsubscriptionchange, src/pwa/sw.js). What it was told is kept in IndexedDB.
 import { state } from '../ui/view.js';
 import { appGet, appPut } from '../wallets.js';
@@ -26,7 +27,8 @@ async function post(path, body) {
 export async function startReminder() {
   if (!supported()) return setReminder({ supported: false, on: false, note: state.app.addTo === 'ios' && !state.app.installed ? IOS_FIRST : NO_PUSH });
   const [sub, told] = await Promise.all([registration().then((reg) => reg.pushManager.getSubscription()), appGet(REMINDER)]);
-  setReminder({ supported: true, note: '', on: !!sub, minute: sub ? told?.minute ?? null : null });
+  const on = !!sub && !!told;
+  setReminder({ supported: true, note: '', on, minute: on ? told.minute ?? null : null });
 }
 
 /**
@@ -57,10 +59,17 @@ export async function turnReminder(on, player) {
     const r = await fetch('/push/key');
     if (!r.ok) throw new Error(`The reminder server answered ${r.status}.`);
     const { key } = await r.json();
-    const sub = (await reg.pushManager.getSubscription()) ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    const had = await reg.pushManager.getSubscription();
+    const sub = had ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const now = new Date();
     const told = { player, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, minute: now.getHours() * 60 + now.getMinutes() };
-    const { minute } = await post('subscribe', { subscription: sub.toJSON(), ...told }); // this time of day, each day from tomorrow
+    let minute;
+    try {
+      ({ minute } = await post('subscribe', { subscription: sub.toJSON(), ...told })); // this time of day, each day from tomorrow
+    } catch (err) {
+      if (!had) await sub.unsubscribe().catch(() => {}); // the server never took it: not On
+      throw err;
+    }
     await appPut(REMINDER, { ...told, minute });
     setReminder({ on, minute });
   } else {
