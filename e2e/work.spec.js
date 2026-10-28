@@ -246,6 +246,10 @@ test('the backup reminder is advice: a new neuron with random keys and storage n
   const h = await page.evaluate(() => window.satori.health());
   expect(h).toMatchObject({ status: 'ok', tone: 'idle', action: { id: 'backup', do: 'backup' } });
   expect(h.reasons.map((r) => [r.id, r.status])).toEqual([['backup', 'advice']]);
+  await page.evaluate((p) => window.satori.backup('nostr', p), PASS); // another key shown is not the wallet backed up
+  expect((await page.evaluate(() => window.satori.health())).reasons.map((r) => r.id)).toEqual(['backup']);
+  await page.evaluate((p) => window.satori.backup('wallet', p), PASS);
+  await expect.poll(() => page.evaluate(() => window.satori.health().then((x) => x.reasons.map((r) => r.id)))).toEqual([]);
   // from setup to rest: green only (working, vivid while sending, sky), never amber
   const tones = [...new Set((await page.evaluate(() => window.__hero)).map((r) => r.tone))];
   expect(tones).toEqual(expect.arrayContaining(['working', 'critical', 'idle']));

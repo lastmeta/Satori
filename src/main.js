@@ -613,7 +613,7 @@ async function finishUpdate(passphrase) {
  */
 async function backupOf(which, passphrase) {
   const b = walletPublic.connected ? await connectedBackupOf(which) : await backupKeys(record, which, passphrase);
-  markBackup().catch((err) => console.warn('[satori] backup_at', err)); // shown: the backup is confirmed
+  if (which == null || which === 'wallet') markBackup().catch((err) => console.warn('[satori] backup_at', err)); // the wallet's words shown: backed up
   return b;
 }
 

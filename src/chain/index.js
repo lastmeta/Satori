@@ -202,8 +202,8 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     return { maxFeePerGas: 2n * (block.baseFeePerGas ?? 0n) + tip, maxPriorityFeePerGas: tip };
   }
   /**
-   * ETH to send: `value`, or, when it fits the balance but not with the fee (`cost`, the most the gas can take), the
-   * balance less the fee: "all of it" sends what is left once the fee is paid.
+   * The review's ETH amount: `value`, or, when it fits the balance but not with the fee (`cost`, the most the gas can
+   * take), the balance less the fee ("all of it"). Only the review sizes it: the send takes the amount confirmed.
    */
   async function fitted(from, value, cost) {
     const balance = await client.getBalance({ address: from });
@@ -567,8 +567,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       const account = toAccount(wallet);
       const [gas, fee] = await Promise.all([client.estimateGas({ account, to, value }).catch(plainNo), fees().then(capped)]);
       const writer = await writerFor(account);
-      const hash = await writer.sendTransaction({ to, value: await fitted(account.address, value, gas * fee.maxFeePerGas), gas, ...fee })
-        .catch(plainNo);
+      const hash = await writer.sendTransaction({ to, value, gas, ...fee }).catch(plainNo); // exactly what was confirmed
       await onSent?.(hash);
       return receiptOf(hash, 'transfer');
     }),

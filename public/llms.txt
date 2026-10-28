@@ -1019,7 +1019,8 @@ the page's JS context:
   latest base fee + the tip, `max` at the gas limit and the max fee). ETH
   that fits the balance but not with `max` (all of it): `amount` is the
   balance less `max`, with `lessFee: true` ("all of it, less the fee"); send
-  that `amount` (the send fits it again to the fee then). It throws what the
+  that `amount`: a send takes exactly the amount given (fees that rose since
+  make it throw too little ETH; quote again). It throws what the
   send would: too little ETH ("Not enough Base ETH for this and its fee."), a bad asset, address or amount, the zero
   address, SATORI that can't be sent yet (saying when), too little to send,
   a fee over the max fee.

@@ -295,9 +295,8 @@ describe('claims and sends (the wallet)', () => {
     const q = await chain.sendFee(V, { asset: 'ETH', to, wei: all });
     expect(q.value).toBe(all - q.max);
     expect((await chain.sendFee(V, { asset: 'ETH', to, wei: 10n ** 15n })).value).toBe(10n ** 15n);
-    await chain.sendEth(wallet, to, all);
-    expect(rpc.eth[to]).toBeGreaterThan(0n);
-    expect(rpc.eth[to]).toBeLessThan(all);
+    await chain.sendEth(wallet, to, q.value); // the amount the review showed, exactly
+    expect(rpc.eth[to]).toBe(q.value);
   });
 });
 
