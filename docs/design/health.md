@@ -518,6 +518,10 @@ a failure. Once staked, or once a batch went out, the same error is
   from its first try or its last drop, through every reconnect; `nostr()`'s
   relays carry it). Its backoff reaches 5 min, so a relay that drops and
   comes back is never red; one that stays away is, 10 min on.
+- **Starting** (the owner, 2026-10-28: Home flashed red at load): a relay
+  not asked to connect yet (closed, no `downSince`) is not down, and no
+  relay listed yet is the page starting, not "Relays down". So at load the
+  chip and the hero stay calm; the 10 minutes run from the first try.
 
 ### A batch that never mines
 

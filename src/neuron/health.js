@@ -273,10 +273,11 @@ function baseReasons({ rows, base }) {
 }
 
 /**
- * A relay that is down: not open for RELAY_GRACE_S (its reconnects get that long; downSince, ms, from src/nostr/relay.js),
- * or closed when it does not say since when. A blocked one (ws:// on an https page) is neither down nor counted.
+ * A relay that is down: not open for RELAY_GRACE_S (its reconnects get that long; downSince, ms, from src/nostr/relay.js).
+ * One not asked to connect yet (closed, no downSince: the page just loaded) is starting, not down (the owner, 2026-10-28:
+ * no red flash at load). A blocked one (ws:// on an https page) is neither down nor counted.
  */
-const relayDown = (r, now) => r.state !== 'open' && (r.downSince == null ? r.state === 'closed' : now - r.downSince / 1000 >= RELAY_GRACE_S);
+const relayDown = (r, now) => r.state !== 'open' && r.downSince != null && now - r.downSince / 1000 >= RELAY_GRACE_S;
 /** The relays that count: not blocked (ws:// on an https page can never open there). */
 export const usableRelays = (nostr) => (nostr?.relays ?? []).filter((r) => r.state !== 'blocked');
 
@@ -285,7 +286,8 @@ function networkReasons({ nostr, now }) {
   if (!nostr?.subscriptions?.length) return out;
   const relays = usableRelays(nostr);
   const down = relays.filter((r) => relayDown(r, now));
-  if (!relays.length || down.length === relays.length) {
+  // none usable: every one blocked is down for good; none listed yet is the page starting
+  if (relays.length ? down.length === relays.length : nostr.relays?.length > 0) {
     out.push(reason('relays-down', 'relays', { line: 'Every relay is down.', chip: 'Relays down',
       text: "No relay is connected, so subscribed streams aren't predicted. Check the relays in Settings.",
       button: 'Open Settings', act: go('settings', 'relays') }));
@@ -392,7 +394,7 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   // watching prediction streams (the track record, docs/design/track-record.md#home) is use of the relays, but predicts
   // nothing: "Watching 112", and with every relay down the chip alone says so (no reason: the hero is the predicting's)
   const watched = nostr?.watching?.streams ?? 0;
-  const allDown = () => { const r = usableRelays(nostr); return !r.length || r.every((x) => relayDown(x, now)); };
+  const allDown = () => { const r = usableRelays(nostr); return r.length ? r.every((x) => relayDown(x, now)) : nostr.relays?.length > 0; };
   const relays = n ? { state: n.status, text: n.chip }
     : nostr?.subscriptions?.length ? { state: 'ok', text: `${usableRelays(nostr).length} relay${usableRelays(nostr).length === 1 ? '' : 's'}` }
       : watched > 0 ? (allDown() ? { state: 'warn', text: 'Relays down' } : { state: 'ok', text: `Watching ${watched}` })

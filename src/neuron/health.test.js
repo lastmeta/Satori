@@ -207,18 +207,20 @@ describe('bad: predictions are failing', () => {
   });
 
   test('every relay down with a stream subscribed (a blocked one is not counted: none can carry them)', () => {
-    const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }, { url: 'ws://b', state: 'blocked' }] });
+    const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed', downSince: 0 }, { url: 'ws://b', state: 'blocked' }] });
     const h = health({ nostr: n });
     expect(h).toMatchObject({ status: 'bad', title: 'Predicting', line: 'The Satori Service is fine. Every relay is down.' });
     expect(h.channels.relays).toEqual({ state: 'bad', tone: 'bad', text: 'Relays down' });
-    expect(health({ nostr: nostr({ subscriptions: [sub], relays: [] }) }).channels.relays.state).toBe('bad');
+    expect(health({ nostr: nostr({ subscriptions: [sub], relays: [] }) }).channels.relays.state).toBe('ok'); // none listed yet: starting
     expect(health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'ws://b', state: 'blocked' }] }) }).channels.relays.state).toBe('bad');
-    expect(health({ nostr: nostr({ relays: [{ url: 'wss://a', state: 'closed' }] }) }).status).toBe('ok'); // nothing subscribed
+    expect(health({ nostr: nostr({ relays: [{ url: 'wss://a', state: 'closed', downSince: 0 }] }) }).status).toBe('ok'); // nothing subscribed
     // watching only: every relay down shows on the chip alone, amber; Home's answer (is it predicting?) stays ok
-    const watchDown = health({ nostr: nostr({ watching: { streams: 3, sources: 1 }, relays: [{ url: 'wss://a', state: 'closed' }] }) });
+    const watchDown = health({ nostr: nostr({ watching: { streams: 3, sources: 1 }, relays: [{ url: 'wss://a', state: 'closed', downSince: 0 }] }) });
     expect(watchDown).toMatchObject({ status: 'ok', reasons: [], channels: { relays: { state: 'warn', tone: 'warn', text: 'Relays down' } } });
     const watchGrace = health({ nostr: nostr({ watching: { streams: 3, sources: 1 }, relays: [{ url: 'wss://a', state: 'connecting', downSince: (NOW - 60) * 1000 }] }) });
     expect(watchGrace.channels.relays).toMatchObject({ state: 'ok', text: 'Watching 3' }); // reconnecting within 10 min counts as up
+    const watchStart = health({ nostr: nostr({ watching: { streams: 3, sources: 1 }, relays: [] }) });
+    expect(watchStart.channels.relays).toMatchObject({ state: 'ok', text: 'Watching 3' }); // at load: starting
   });
 
   test(`a relay reconnecting has ${RELAY_GRACE_S / 60} min before it counts as down: then every relay down is red`, () => {
@@ -233,6 +235,16 @@ describe('bad: predictions are failing', () => {
     expect([ids(h), h.channels.relays.text]).toEqual([['relay-down'], '1 of 2 relays down']);
     h = health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open', downSince: null }, relays(3)[0]] }) });
     expect(ids(h)).toEqual([]);
+  });
+
+  test('at load, before the relays are asked to connect (closed, no downSince) or listed at all: starting, not down (the owner, 2026-10-28: no red flash)', () => {
+    for (const relays of [[{ url: 'wss://a', state: 'closed', downSince: null }, { url: 'wss://b', state: 'closed', downSince: null }], []]) {
+      const h = health({ nostr: nostr({ subscriptions: [sub], relays }) });
+      expect([h.status, ids(h), h.channels.relays.tone]).toEqual(['ok', [], 'idle']);
+    }
+    // every relay blocked (ws:// on an https page): none can ever connect, red at once
+    const blocked = health({ nostr: nostr({ subscriptions: [sub], relays: [{ url: 'ws://x:7777', state: 'blocked' }] }) });
+    expect(ids(blocked)).toEqual(['relays-down']);
   });
 
   test('a relay blocked (ws:// on an https page) is neither down nor counted', () => {
@@ -364,7 +376,7 @@ describe('advice: the card, nothing wrong (never the status, the tone or the lin
     expect(ids(health({ storage: null, backedUp: false }))).toEqual([]); // not read yet
   });
   test('a relay down (another is up): the chip says so, calm; the card when nothing else needs one', () => {
-    const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] });
+    const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed', downSince: 0 }] });
     const h = health({ nostr: n });
     expect(h).toMatchObject(calm);
     expect(h.action).toMatchObject({ id: 'relay-down', do: 'go', tab: 'settings', section: 'relays' });
@@ -403,7 +415,7 @@ test('each reason\'s level (docs/design/health.md): bad, warn, idle (a calm stat
 });
 
 test('the action priority: the worst status; one card, the highest reason that has an action', () => {
-  const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] });
+  const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed', downSince: 0 }] });
   const many = { nostr: n, storage: { persisted: false }, backedUp: false, base: base({ wallet: { satori: '5', staked: 'none' } }),
     central: central({ registration: { ok: true, walletMismatch: 'none' } }) };
   let h = health(many);
@@ -479,7 +491,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     // central failing wins; a new neuron with no good cycle yet is starting; Nostr never moves the title
     expect(failing(staked(check), [open(NOW - 14 * H), good(NOW - 13 * H), failed(NOW - 6 * H), failed(NOW - H)]).title).toBe('Not predicting');
     expect(failing(staked(check), [open(NOW - 10 * M)]).title).toBe('Starting');
-    const down = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }] });
+    const down = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed', downSince: 0 }] });
     expect(health({ nostr: down })).toMatchObject({ status: 'bad', title: 'Predicting' });
   });
 
@@ -511,7 +523,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'base-failing': (i) => ({ ...rows(row('base', NOW - 2 * H, 'bad', { round: 20742, error: 'HTTP request failed' }, { count: 2, until: NOW - H, mkey: 'e' }))(i),
       base: staked({ lastCheck: { at: NOW - H, error: 'HTTP request failed' } }) }),
     'stake-out-of-sync': (i) => ({ ...i, base: staked({ wallet: { satori: '101', eth: '0.1', staked: 'alias', inSync: false, shortfall: '1' } }) }),
-    'relays-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed' }] }) }),
+    'relays-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'closed', downSince: (NOW - RELAY_GRACE_S) * 1000 }] }) }),
     'central-failed': rows(failed(NOW - 10)),
     'wallet-mismatch': reg(mismatch),
     'not-registered': reg({ ok: false, error: 'Satori Service unreachable: Failed to fetch' }),
@@ -527,7 +539,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     stake: (i) => ({ ...i, base: base({ wallet: { satori: '100', staked: 'none' } }) }),
     'staked-elsewhere': (i) => ({ ...i, base: base({ wallet: { satori: '100', staked: 'other', stakedWith: '0x' + 'ab'.repeat(20) } }) }),
     install: (i) => ({ ...i, app: { installed: false, canInstall: true } }),
-    'relay-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] }) }),
+    'relay-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed', downSince: 0 }] }) }),
     'base-unused-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null }) }),
   };
   const TITLE = { S: 'Starting', A: 'Was asleep', P: 'Predicting', B: 'Partly predicting', N: 'Not predicting' };
@@ -626,7 +638,7 @@ describe('the tone: green while all is well (sky at rest, regular while working,
     expect(ch({ base: base({ wallet: { satori: '100', staked: 'none' } }) }).contract).toMatchObject({ state: 'idle', tone: 'off', text: 'Not staked' });
     expect(ch({ base: staked({ wallet: { satori: '101', staked: 'alias', inSync: false } }) }).contract).toMatchObject({ state: 'bad', tone: 'bad' });
     expect(ch({ nostr: nostr({ subscriptions: [sub] }) }).relays).toMatchObject({ tone: 'idle', text: '2 relays' });
-    const oneDown = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed' }] });
+    const oneDown = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed', downSince: 0 }] });
     expect(ch({ nostr: oneDown, work: { subscribe: e('subscribe', 'find') } }).relays).toEqual({ state: 'advice', tone: 'working', text: '1 of 2 relays down' });
     expect(ch({ work: { discover: e('discover', 'ask') } }).relays).toMatchObject({ tone: 'working', text: 'No streams' });
     // watching prediction streams (the track record), nothing subscribed: use of the relays, sky at rest, green while the scan runs
