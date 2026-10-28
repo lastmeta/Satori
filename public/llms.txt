@@ -1200,7 +1200,10 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   outcomes and the predictions (dashed), and "Seen by this app since
   …. It counts only predictions this app received before the
   outcome.").
-- **Wallet**: the **Base** card: the round, the RPC in plain words, the
+- **Wallet**: a card each (2026-10-28): Base (the balances and Send),
+  Receive, Claimable (Claim), Staking (Stake or Unstake), Preload gas, then
+  Details (folded) and Wallets. Each action's passphrase prompt and result
+  show in its own card. In all: the round, the RPC in plain words, the
   wallet's SATORI and ETH, Receive (`base-receive`: the wallet's address
   and its QR code, to add Base ETH or SATORI), Claimable (rewards, from the Satori Network,
   airdrop, a line each; Claim beside them when any is above 0), Staking ("Staked: 100 SATORI with this app"), Transfers

@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (the Wallet tab's cards)
+
+- The Wallet tab is a card each: Base (balances, Send), Receive, Claimable, Staking, Preload gas, Details (folded).
+  Claim's and Stake's passphrase prompts are in their cards: `data-unlock-for` `wallet-claim`, `wallet-stake`.
+
 ## Changed 2026-10-27 (the next step)
 
 - Home's card `next-step` (advice, from the third day the app was opened): the first thing missing for the app to

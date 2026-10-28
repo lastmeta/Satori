@@ -214,8 +214,8 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   s.airdrop[V] = E18; // something to claim, so Claim shows
   await fact(page, 'refresh').click();
   await fact(page, 'claim').click();
-  await page.getByLabel('Wallet passphrase to use the wallet').fill(PASS);
-  await page.locator('[data-unlock-for=wallet]').getByRole('button', { name: 'Unlock' }).click();
+  await page.getByLabel('Wallet passphrase to claim from the Claimable card').fill(PASS);
+  await page.locator('[data-unlock-for=wallet-claim]').getByRole('button', { name: 'Unlock' }).click();
   await expect(fact(page, 'result')).toContainText('Rewards: nothing to claim on-chain', { timeout: 30_000 });
   await expect(fact(page, 'result')).toContainText('Airdrop: claimed 1 SATORI');
   await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
