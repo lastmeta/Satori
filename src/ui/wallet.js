@@ -99,8 +99,8 @@ export function walletTab(a) {
   </section>
 
   <section class="card" data-test="wallet-claim-card">
-    <div class="claim-dd"><div><div class="sub">Claimable</div><span data-test="base-claimable">${CLAIM_LINES.map((i) => html`<span class="line">${() => claimLine(b().claimable, i)}</span>`)}</span></div>
-      <button class="primary" data-test="base-claim" hidden="${() => !(Number(b().claimable?.total) > 0)}" disabled="${busy}" @click="${() => a.walletAction('wallet-claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button></div>
+    <dl class="facts"><div class="fact"><dt>Claimable</dt><dd class="claim-dd"><span data-test="base-claimable">${CLAIM_LINES.map((i) => html`<span class="line">${() => claimLine(b().claimable, i)}</span>`)}</span>
+      <button class="primary" data-test="base-claim" hidden="${() => !(Number(b().claimable?.total) > 0)}" disabled="${busy}" @click="${() => a.walletAction('wallet-claim', 'baseClaim')}">${() => (state.baseBusy === 'claim' ? BUSY.claim : 'Claim')}</button></dd></div></dl>
     ${unlockPrompt(a, 'wallet-claim', 'claim from the Claimable card')}
     ${outcome('claim')}
   </section>
