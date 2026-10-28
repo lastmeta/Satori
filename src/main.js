@@ -14,8 +14,8 @@ import { state, render, TABS } from './ui/view.js';
 import { pickIndexes } from './ui/format.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
 import {
-  generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, loadKeys, unlockWallet, passphraseOk, MIN_PASSPHRASE,
-  withPassphrase, backupKeys, keepRetired, checkWalletPassphrase, IMPORT_MAX, evmAddress, connectedRecord, connectedBackup, linkMessage,
+  generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, passphraseOk, MIN_PASSPHRASE,
+  keepRetired, checkWalletPassphrase, IMPORT_MAX, evmAddress, connectedRecord, linkMessage,
 } from './keys/index.js';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
@@ -52,7 +52,8 @@ import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
 import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, NEXT_STEP_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
 import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
-import { deviceKey, toRest, fromRest } from './keys/atrest.js';
+import { deviceKey } from './keys/atrest.js';
+import { createSession } from './session.js';
 import { HANDOFF, SW_BATCH } from './pwa/handoff.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
@@ -74,11 +75,7 @@ let wallets = null; // this app's wallets as stored (src/wallets.js; null: one, 
 let dbPath = pathOf(activeOf(null)); // the active wallet's database
 let releaseTab = () => {}; // lets the one-tab lock go (claimTab)
 let dbOpening = null; // the database's open, begun at boot: a first visit's Setup runs meanwhile, and its keys wait for it
-let record = null; // the keys as stored (meta `keys`)
-let alias = null;
-let nostrKey = null; // { secret, pubkey }: plaintext, as the alias
 let nostr = null; // the Nostr flow
-let walletPublic = { pubkey: null, evmAddress: null }; // from the record, while locked
 let wallet = null; // only while unlocked; a connected wallet's (src/keys/connect.js) while its wallet app is in this browser
 let foundWallets = []; // Setup's Connect: the wallets in this browser, with their providers
 let lockCount = 0; // a Lock during an Unlock in flight wins
@@ -96,6 +93,11 @@ let afterUnlock = null; // the action an inline Unlock prompt was opened for
 const nowS = () => Date.now() / 1000;
 /** What the neuron is doing now (src/neuron/work.js): Home's hero and action lines, and health().work. */
 const work = createWork({ onChange: () => { state.work = work.all(); } });
+/** This browser's key for the alias and the Nostr key at rest (docs/design/keys.md#at-rest), or null: checked once a page. */
+let restKeyOf;
+const restKey = () => (restKeyOf ??= deviceKey({ get: appGet, put: appPut }));
+/** The keys (src/session.js): the record and everything read from it, kept nowhere else. */
+const session = createSession({ db: { get: (k) => db.get(k), set: (k, v) => db.set(k, v), checkpoint: () => db.checkpoint() }, restKey });
 
 /** status().central: central's state, and the reward address as last read ({ address, at, error, reading }). */
 const centralStatus = async () => ({ ...(await statusOf({ db, central, registration, poller })), reward: reward?.status ?? null });
@@ -206,14 +208,14 @@ let fromList = false; // the open model was opened from the list: its back link 
 /** The stored (or default) central; a new client means a new register result. */
 async function connect() {
   const url = (await db.get('central_url')) || DEFAULT_CENTRAL;
-  central = createCentral({ url, alias, version: VERSION });
+  central = createCentral({ url, alias: session.alias, version: VERSION });
   registration = null;
   return central;
 }
 
 /** Register, as Lite does on every start; the result is shown, never thrown. */
 async function registerWith(c) {
-  const r = await register({ central: c, wallet: walletPublic.evmAddress, link: record.link, nostrPubkey: nostrKey.pubkey });
+  const r = await register({ central: c, wallet: session.walletPublic.evmAddress, link: session.record.link, nostrPubkey: session.nostr.pubkey });
   if (c !== central) return; // the URL changed meanwhile
   registration = r;
   console[r.ok && !r.walletMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
@@ -241,7 +243,7 @@ async function runCycle(report) {
     await registerWith(central);
   }
   // never throws: errors are in r and in the status; seed: the alias draws each target's spec
-  const r = await cycle({ db, central, seed: alias.pubkey, backfill, report });
+  const r = await cycle({ db, central, seed: session.alias.pubkey, backfill, report });
   console[r.poll.error || r.submit?.error ? 'warn' : 'info']('[satori] central cycle', r);
   await refresh();
   await activity.central(r, state.central.pending); // Home still shows the last step, then the answer (src/ui/hold.js)
@@ -278,10 +280,10 @@ function publishContract(games, at) {
 }
 
 async function startNeuron() {
-  ({ alias, nostr: nostrKey, wallet: walletPublic } = loadKeys(record));
+  const { alias, walletPublic } = session;
   state.alias = alias.evmAddress;
   state.wallet = walletPublic.evmAddress;
-  state.keysFrom = record.from ?? 'random'; // docs/design/wallets.md#derived-keys: derived keys need no backup of their own
+  state.keysFrom = session.from; // docs/design/wallets.md#derived-keys: derived keys need no backup of their own
   if (walletPublic.connected) await findConnected();
   if (wallets && activeOf(wallets).address !== state.wallet) await keepWallets(withAddress(wallets, state.wallet)).catch(() => {});
   state.wallets = walletsView(wallets, state.wallet);
@@ -318,7 +320,7 @@ async function startNeuron() {
     state.central = { ...state.central, nextPoll: next, polling: running };
   } });
   await refresh();
-  nostr = createNostr({ db, key: nostrKey, aliasPubkey: alias.pubkey, central: () => central, ws: import.meta.env.DEV, // csp.js: only the dev page allows ws:
+  nostr = createNostr({ db, key: session.nostr, aliasPubkey: alias.pubkey, central: () => central, ws: import.meta.env.DEV, // csp.js: only the dev page allows ws:
     defaults: { relays: DEFAULTS.relays, centralWrite: DEFAULTS.centralWrite, wss: DEFAULTS.wss }, // wss: relays' stand-ins (config.js)
     onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err),
     onRecords: refreshRecords, work,
@@ -443,23 +445,14 @@ async function setBaseSettings(o) {
  * with the app closed. The alias sealed with this browser's key, as in the keys record; in hex where it keeps none.
  */
 async function leaveHandoff(info) {
-  const { sealed } = await toRest({ alias: record.alias, nostr: null }, await restKey());
-  await appPut(HANDOFF, { ...info, ...(sealed ? { sealed } : { alias: record.alias }), at: Date.now() });
+  await appPut(HANDOFF, { ...info, ...await session.handoffAlias(), at: Date.now() });
 }
 
-/** This browser's key for the alias and the Nostr key at rest (docs/design/keys.md#at-rest), or null: checked once a page. */
-let restKeyOf;
-const restKey = () => (restKeyOf ??= deviceKey({ get: appGet, put: appPut }));
-
-/** The keys record, stored in one commit (each commit is checkpointed: docs/design/storage.md); critical work. */
-/** The one place keys are written: any key the stored record held is kept (keepRetired), whatever replaces it. */
+/** The keys record, stored in one commit (session.save: every key it replaces kept); critical work. */
 const storeKeys = (next) => work.run('keys', async (step) => {
   step('save');
-  const r = keepRetired(record, next);
-  await db.set('keys', await toRest(r, await restKey())); // the alias and the Nostr key sealed where this browser keeps a key
-  await db.checkpoint();
-  record = r;
-  state.retiredKeys = r.retired?.length ?? 0;
+  await session.save(next);
+  state.retiredKeys = session.retired;
 });
 
 /**
@@ -485,10 +478,10 @@ async function saveKeys(r, { backedUp = false } = {}) {
  * signer, or none (another browser, the extension removed): the app still predicts, and wallet actions say so.
  */
 async function findConnected() {
-  const { rdns, name } = walletPublic.connected;
+  const { rdns, name } = session.walletPublic.connected;
   const relay = RELAYS.includes(rdns);
   const provider = relay ? await relayed(rdns) : (await findWallets()).find((x) => x.rdns === rdns)?.provider;
-  wallet = provider ? connectedWallet({ address: walletPublic.evmAddress, name, provider }) : null;
+  wallet = provider ? connectedWallet({ address: session.walletPublic.evmAddress, name, provider }) : null;
   state.connected = { name, found: !!provider, relay };
 }
 
@@ -497,7 +490,7 @@ async function relayed(rdns) {
   try {
     const r = await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect });
     const accounts = r ? await r.provider.request({ method: 'eth_accounts' }) : [];
-    return accounts.some((a) => a.toLowerCase() === walletPublic.evmAddress.toLowerCase()) ? r.provider : null;
+    return accounts.some((a) => a.toLowerCase() === session.walletPublic.evmAddress.toLowerCase()) ? r.provider : null;
   } catch (err) {
     console.warn('[satori] the wallet\'s relay session', err);
     return null;
@@ -509,10 +502,10 @@ const notHere = () => new Error(state.connected.relay ? `The link to ${state.con
 
 /** Reconnect a phone path whose session ended: the person approves again, and it must be the same account. */
 const reconnect = () => exclusive('reconnect', async () => {
-  const { rdns, name } = walletPublic.connected;
+  const { rdns, name } = session.walletPublic.connected;
   const { provider } = await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect, connect: true });
   const address = await requestAddress(provider);
-  if (address !== walletPublic.evmAddress) throw new Error(`That is another account: choose ${walletPublic.evmAddress} in ${name}.`);
+  if (address !== session.walletPublic.evmAddress) throw new Error(`That is another account: choose ${session.walletPublic.evmAddress} in ${name}.`);
   wallet = connectedWallet({ address, name, provider });
   state.connected = { name, found: true, relay: true };
 });
@@ -575,11 +568,9 @@ async function markBackup() {
 
 async function unlock(passphrase) {
   const count = lockCount;
-  const { wallet: v, record: upgraded } = await unlockWallet(record, passphrase);
-  const linked = !record.link && upgraded?.link;
-  const rekeyed = alias && upgraded && upgraded.alias !== record.alias; // an earlier record's keys, derived from the wallet now
-  if (upgraded) await storeKeys(upgraded); // its link made now, or an earlier version's wallet in this app's format
-  if (rekeyed) { // the running app is the old alias's: start again with the new one (docs/design/wallets.md#derived-keys)
+  const { wallet: v, linked, rekeyed } = await work.run('keys', () => session.unlock(passphrase)); // an upgrade saved
+  state.retiredKeys = session.retired;
+  if (rekeyed && base) { // the running app is the old alias's: start again with the new one (docs/design/wallets.md#derived-keys)
     v.lock();
     return void location.reload();
   }
@@ -625,17 +616,17 @@ async function finishUpdate(passphrase) {
  * from the passphrase each time, unlocked or not (keys' backupKeys: ~0.3 s; docs/design/keys.md#backup).
  */
 async function backupOf(which, passphrase) {
-  const b = walletPublic.connected ? await connectedBackupOf(which) : await backupKeys(record, which, passphrase);
+  const b = session.walletPublic.connected ? await connectedBackupOf(which) : await session.backup(which, passphrase);
   if (which == null || which === 'wallet') markBackup().catch((err) => console.warn('[satori] backup_at', err)); // the wallet's words shown: backed up
   return b;
 }
 
 /** A connected wallet's Backup: the alias's or the Nostr key's, once its wallet app has signed showKeysText (checked). */
 async function connectedBackupOf(which) {
-  if (which === 'wallet') return connectedBackup(record, which); // its words are in its wallet app: said so
+  if (which === 'wallet') return session.connectedBackup(which); // its words are in its wallet app: said so
   if (!wallet) throw notHere();
-  await signText(wallet.provider, walletPublic.evmAddress, showKeysText(walletPublic.evmAddress));
-  return connectedBackup(record, which);
+  await signText(wallet.provider, session.walletPublic.evmAddress, showKeysText(session.walletPublic.evmAddress));
+  return session.connectedBackup(which);
 }
 
 /**
@@ -735,8 +726,8 @@ const walletOps = {
   /** { asset, to, amount, passphrase }: the inputs checked first, then the wallet opened from the passphrase for this send alone. */
   async send(o = {}) {
     const { asset, amount } = checkSend(o);
-    const r = walletPublic.connected ? await base.send(o, wallet ?? (() => { throw notHere(); })())
-      : await withPassphrase(record, o.passphrase, (v) => base.send(o, v));
+    const r = session.walletPublic.connected ? await base.send(o, wallet ?? (() => { throw notHere(); })())
+      : await session.withPassphrase(o.passphrase, (v) => base.send(o, v));
     activity.wallet('send', `Sent ${amount} ${asset} from the wallet`);
     return r;
   },
@@ -876,14 +867,14 @@ const shownAt = (key, fn) => async (...args) => {
  * keeps the newest link per wallet, so this takes the wallet back from another app's alias (docs/design/wallets.md).
  */
 async function relinkWallet() {
-  if (!wallet) throw new Error(walletPublic.connected ? notHere().message : 'Unlock the wallet first.');
+  if (!wallet) throw new Error(session.walletPublic.connected ? notHere().message : 'Unlock the wallet first.');
   const issued = Math.floor(nowS()); // whole seconds: the network refuses any other issued line
   let link;
-  if (walletPublic.connected) {
-    const message = linkMessage({ alias: alias.evmAddress, wallet: walletPublic.evmAddress, issued });
-    link = { message, signature: await signText(wallet.provider, walletPublic.evmAddress, message) };
-  } else link = wallet.signLink(alias.evmAddress, issued);
-  await storeKeys({ ...record, link });
+  if (session.walletPublic.connected) {
+    const message = linkMessage({ alias: session.alias.evmAddress, wallet: session.walletPublic.evmAddress, issued });
+    link = { message, signature: await signText(wallet.provider, session.walletPublic.evmAddress, message) };
+  } else link = wallet.signLink(session.alias.evmAddress, issued);
+  await storeKeys({ ...session.record, link });
   await registerWith(central);
   if (registration?.ok && registration.walletMismatch) {
     throw new Error(`The Satori Service did not take the link${registration.walletLinkError ? `: ${registration.walletLinkError}` : ''}.`);
@@ -1281,7 +1272,7 @@ const actions = {
     state.game = { ...g, loading: true, error: '' };
     try {
       const { by, streams, round, played: last } = await base.gameStreams();
-      const favorites = readFavorites(walletPublic?.evmAddress);
+      const favorites = readFavorites(session.walletPublic?.evmAddress);
       const { queue, split } = queueOf(streams, favorites);
       // played with the game this round: its Sent screen again (predictions made elsewhere are played as usual)
       const sent = last && round != null && last.round === round ? { ...last, again: true } : null;
@@ -1325,7 +1316,7 @@ const actions = {
   gameStar(streamId) {
     const f = state.game.favorites;
     const favorites = f.includes(streamId) ? f.filter((id) => id !== streamId) : [...f, streamId];
-    writeFavorites(walletPublic?.evmAddress, favorites);
+    writeFavorites(session.walletPublic?.evmAddress, favorites);
     state.game = { ...state.game, favorites };
   },
   /**
@@ -1595,7 +1586,7 @@ window.satori = {
   async exportBackup(passphrase) {
     ready();
     const keys = await backupOf(undefined, passphrase);
-    return sealBackup({ address: walletPublic.evmAddress, keys, passphrase });
+    return sealBackup({ address: session.walletPublic.evmAddress, keys, passphrase });
   },
   /** Import a Docker (Lite) install: its { wallet } file's text, its `password`, and `passphrase` for this app (default: the password). */
   async importDocker({ wallet: walletText, password = '', passphrase = password } = {}) {
@@ -1617,7 +1608,7 @@ window.satori = {
   async game() {
     ready();
     const { by, streams, round, played: last } = await base.gameStreams();
-    const favorites = readFavorites(walletPublic?.evmAddress);
+    const favorites = readFavorites(session.walletPublic?.evmAddress);
     const { queue, split } = queueOf(streams, favorites);
     return { play: state.base.play, by, round, playedToday: last && last.round === round ? last : null, favorites,
       streams: queue.map((s, i) => ({ streamId: s.streamId, gameId: s.gameId, name: s.name, named: s.named, eligible: i < split,
@@ -1647,7 +1638,7 @@ window.satori = {
   /** The game's favorites (stream ids, shown first, in this order), kept on this device for this wallet. → them */
   setGameFavorites(ids = []) {
     const favorites = [...new Set(ids.map(Number).filter(Number.isInteger))];
-    writeFavorites(walletPublic?.evmAddress, favorites);
+    writeFavorites(session.walletPublic?.evmAddress, favorites);
     state.game = { ...state.game, favorites, loaded: 0 };
     return favorites;
   },
@@ -1803,7 +1794,7 @@ window.satori = {
 };
 
 /** When this neuron began: the log's first session, or the keys' creation when earlier (records before it have none). */
-const since = () => Math.min(activity.first() ?? Infinity, record?.created ?? Infinity);
+const since = () => Math.min(activity.first() ?? Infinity, session.record?.created ?? Infinity);
 
 /** Home's health, kept current from the log and the statuses (the UI's; agents' health() reads fresh). */
 watch(() => {
@@ -1992,13 +1983,10 @@ async function boot() {
     registerWorker();
     state.recovered = db.recovered; // a WAL DuckDB could not replay, set aside (docs/design/storage.md#recovery)
     if (fresh) return; // Setup is on screen: it writes the keys (saveKeys)
-    const stored = (await db.get('keys')) ?? null; // an earlier version's rows were translated by migration 7
-    record = await fromRest(stored, await restKey());
-    if (!record) return void Object.assign(state, { screen: 'setup', cached: null });
-    state.retiredKeys = record.retired?.length ?? 0;
-    if (!stored.sealed && await restKey()) await storeKeys(record); // in hex until now: sealed from now on
+    if (!(await session.load())) return void Object.assign(state, { screen: 'setup', cached: null }); // migration 7 translated earlier rows
+    state.retiredKeys = session.retired;
     // an earlier version's wallet whose public key was not in clear: the neuron needs it (register, the Base address)
-    const w = loadKeys(record).wallet;
+    const w = session.walletPublic;
     if (!w.pubkey && !w.connected) return void Object.assign(state, { screen: 'finish', cached: null });
     await startNeuron();
   } catch (err) {

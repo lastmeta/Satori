@@ -54,6 +54,16 @@ export function walletTab(a) {
   </div>`;
   return html`
   <section class="tab-page" data-test="wallet-tab" hidden="${() => state.tab !== 'wallet'}">
+  <details class="card" id="wallet-receive" data-test="wallet-receive-card" open="${receiving}" @toggle="${(e) => { if (e.target.open !== receiving()) a.toggleContractQr(state.wallet); }}">
+    <summary data-test="base-receive">Show address and QR code</summary>
+    <div class="fund" data-test="base-receive-panel">
+      <p class="muted small">Add Base ETH or SATORI: send it on Base to your wallet's address.</p>
+      <code class="block" data-test="base-receive-address">${() => state.wallet ?? ''}</code>
+      <div class="actions"><button class="small-btn" @click="${() => a.copy('base-receive', state.wallet)}">${() => (state.copied === 'base-receive' ? 'Copied' : 'Copy')}</button></div>
+      <img class="qr" data-test="base-qr" alt="QR code of your wallet's address" src="${() => (receiving() ? qrDataUrl(state.wallet) : '')}">
+    </div>
+  </details>
+
   <section class="card base">
     <header class="card-head">
       <h2>Base</h2>
@@ -84,18 +94,6 @@ export function walletTab(a) {
     <p class="muted small" hidden="${() => !state.unlocked}">Send asks for the wallet's passphrase each time.</p>
     <p class="muted small" data-test="base-connected" hidden="${() => !state.connected}">${() => (state.connected ? `Stake, Claim and Send ask ${state.connected.name} to approve. The alias sends the daily batch to the Satori contract on its own; it uses gas (Base ETH).` : '')}</p>
     ${outcome('base')}
-  </section>
-
-  <section class="card" id="wallet-receive" data-test="wallet-receive-card">
-    <div class="side-row">
-      <p class="muted small">Add Base ETH or SATORI: send it on Base to your wallet's address.</p>
-      <button data-test="base-receive" @click="${() => a.toggleContractQr(state.wallet)}">${() => (receiving() ? 'Hide' : 'Receive')}</button>
-    </div>
-    <div class="fund" data-test="base-receive-panel" hidden="${() => !receiving()}">
-      <code class="block" data-test="base-receive-address">${() => state.wallet ?? ''}</code>
-      <div class="actions"><button class="small-btn" @click="${() => a.copy('base-receive', state.wallet)}">${() => (state.copied === 'base-receive' ? 'Copied' : 'Copy')}</button></div>
-      <img class="qr" data-test="base-qr" alt="QR code of your wallet's address" src="${() => (receiving() ? qrDataUrl(state.wallet) : '')}">
-    </div>
   </section>
 
   <section class="card" id="wallet-preload" data-test="wallet-preload-card">
