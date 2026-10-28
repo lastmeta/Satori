@@ -1042,8 +1042,8 @@ the page's JS context:
 - `await satori.preloadGas({ amount?, passphrase })` → `{ hash }`, only on
   the person's request: Preload gas, Base ETH from the wallet to this app's
   alias (it pays the daily batch's gas), as `send()`; `amount` defaults to
-  `base().alias.preload` (a month of daily batches at the most they cost,
-  rounded up). The Wallet tab shows the alias's ETH as Preloaded.
+  `base().alias.preload` (half the wallet's ETH, up to 0.1 ETH; null with
+  no ETH). The Wallet tab shows the alias's ETH as Preloaded.
 - `await satori.setBaseRpc(url)` → `base()` (only on the person's request):
   an https URL, a path on this site (such as `/rpc`), or `''` for the
   default. A saved URL replaces the default; a change is noted on Home for
@@ -1054,7 +1054,9 @@ the page's JS context:
 - `await satori.importDocker({ wallet, password, passphrase? })` → status: a Docker (Lite)
   install's wallet file (its text), its `password`, and this app's passphrase (default: the password).
 - `await satori.game()` → `{ play, by, round, playedToday, favorites, streams, unavailable }`: the Game tab.
-  `by`: who sends (the alias when the wallet is staked with it, else the wallet); `streams` in the game's order
+  `by`: who sends (the alias when the wallet is staked with it, else the wallet); `playedToday`: this round's play by
+  the game (`{ round, at, count, hash, by, calls: [{ streamId, name, direction }] }`, the Sent screen's list), or null;
+  `streams` in the game's order
   (favorites first, the reward eligible before the rest), each `{ streamId, gameId, name, named, eligible,
   alreadyPredicted, latest, display, streak, history }` (`latest`: the newest value in the stream's own units; `display`: `{ decimals, unit, label }` from its adapter, or null; `history`'s values are the chain's integers, `decimals` of them after the point; `streak`: `{ streak, bar }` or null, bar the game's turning point; `alreadyPredicted`: played as usual, not sent); `unavailable`: those that
   can't be played now, and why (the contract's error).

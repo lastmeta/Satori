@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (Preload's amount, Receive first)
+
+- `base().alias.preload` is half the wallet's ETH, up to 0.1 ETH (it was a month of batches). The Wallet tab opens with
+  Receive, folded: "Show address and QR code".
+- The Game's Sent screen lists the predictions made under Dismiss; `game().playedToday.calls` has them.
+
 ## Changed 2026-10-28 (Remove asks for the wallet's passphrase)
 
 - `removeWallet(id, passphrase)`: that wallet's own passphrase (none for a connected one); the Wallets card asks for it.

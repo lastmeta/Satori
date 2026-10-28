@@ -148,8 +148,11 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'game-sent')).not.toContainText('Transaction');
   await expect(page.locator('[data-unlock-for=game]')).toBeHidden();
   expect(s.batches).toHaveLength(0);
-  // one Sent screen: played today, and Dismiss (no Done)
+  // one Sent screen: played today, and Dismiss (no Done); under it the predictions made, scrolling when long
   await expect(t(page, 'game-tomorrow')).toBeVisible();
+  const sentCalls = () => t(page, 'game-sent-calls').locator('li').evaluateAll((li) => li.map((x) => `${x.textContent} ${x.querySelector('svg').getAttribute('aria-label')}`));
+  await expect.poll(sentCalls).toEqual(['bitcoin up', 'ether down', 'satori up', 'dogecoin down']);
+  expect(await t(page, 'game-sent-calls').evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto');
   await expect(t(page, 'game-done')).toHaveCount(0);
   // Dismiss (this session): the streams again, to look at; where the buttons were, come back tomorrow
   await t(page, 'game-dismiss').click();

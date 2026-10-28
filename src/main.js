@@ -685,13 +685,14 @@ const marketAction = (what, fn) => exclusive(what, fn, 'marketBusy').finally(() 
  */
 async function playCalls(calls, { by, round }) {
   const real = calls.filter((c) => !played(c.stream));
-  let sent = { hash: null, by, count: calls.length, at: Math.floor(nowS()), round };
+  const made = calls.map((c) => ({ streamId: c.stream.streamId, name: c.stream.name, direction: c.direction })); // the Sent screen lists them
+  let sent = { hash: null, by, count: calls.length, calls: made, at: Math.floor(nowS()), round };
   if (!real.length) activity.wallet('play', `Played the game by hand: ${calls.length} prediction${calls.length === 1 ? '' : 's'}`); // the round's were sent already
   if (real.length) {
     const r = await baseAction('play', () => base.playHand(real.map((c) => ({ gameId: c.stream.gameId, direction: c.direction }))));
     publishContract(real.map((c) => ({ streamId: c.stream.streamId, direction: c.direction })), r.at);
     activity.wallet('play', `Sent ${real.length} prediction${real.length === 1 ? '' : 's'} to the Satori contract by hand`);
-    sent = { ...r, count: calls.length };
+    sent = { ...r, count: calls.length, calls: made };
   }
   await base.notePlay(sent).catch((err) => console.warn('[satori] game', err));
   return sent;

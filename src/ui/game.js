@@ -280,6 +280,7 @@ export function gameTab(a) {
           <p class="muted small">${() => (g().sent?.count === 1 ? 'It will be scored in 24 hours.' : 'They will be scored in 24 hours.')}</p>
           <p class="muted small" data-test="game-tomorrow">Played today. The next game opens tomorrow.</p>
           <button data-test="game-dismiss" @click="${a.gameRest}">Dismiss</button>
+          <ul class="gcalls gsent-calls" data-test="game-sent-calls" hidden="${() => !g().sent?.calls?.length}">${() => (g().sent?.calls ?? []).map((c) => html`<li><span>${c.name}</span>${callArrow(c.direction)}</li>`.key(`${c.streamId}:${c.direction}`))}</ul>
         </div>
         ${play(a)}
         ${submit(a)}

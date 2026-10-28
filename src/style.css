@@ -192,6 +192,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .garrow.up { stroke: #1f8a4c; }
 .garrow.down { stroke: #c0362e; }
 .gcalls-wrap > p { margin: auto 0; }
+.gsent-calls { margin: 16px 0 0; max-height: 38vh; overflow-y: auto; text-align: left; overscroll-behavior: contain; } /* the Sent screen: what was predicted, scrolls when long */
 .gsubmit-screen > .gbtn.submit { flex: none; }
 @media (prefers-reduced-motion: reduce) { .gsubmit { transition: none; } }
 @media (min-width: 1024px) { .game { height: calc(100dvh - 68px - 32px); } body[data-tab="game"] #app { padding-bottom: 32px; } }

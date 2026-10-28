@@ -201,10 +201,11 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   expect(most.lessFee).toBe(true);
   expect(Number(most.amount)).toBeLessThan(Number(allEth));
 
-  // Preload gas: the button fills the Send form (ETH to the alias, a month of batches); preloadGas() sends it.
+  // Preload gas: the button fills the Send form (ETH to the alias, half the wallet's ETH up to 0.1); preloadGas() sends it.
   const aliasAddr = await page.evaluate(() => window.satori.status().then((s) => s.alias));
-  const preload = (await page.evaluate(() => window.satori.base())).alias.preload;
-  expect(Number(preload)).toBeGreaterThan(0);
+  const now = await page.evaluate(() => window.satori.base());
+  const preload = now.alias.preload;
+  expect(Number(preload)).toBe(Math.min(Number(now.wallet.eth) / 2, 0.1)); // half the wallet's ETH, up to 0.1
   await page.locator('[data-test=base-preload]').click();
   await expect(page.getByLabel('Amount')).toHaveValue(preload);
   await expect(page.getByLabel('To (0x address)')).toHaveValue(aliasAddr);
