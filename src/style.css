@@ -192,6 +192,7 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .garrow.up { stroke: #1f8a4c; }
 .garrow.down { stroke: #c0362e; }
 .gcalls-wrap > p { margin: auto 0; }
+.gsent-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; } /* the Sent screen: Remind me, Dismiss */
 .gsent-calls { margin: 16px 0 0; max-height: 38vh; overflow-y: auto; text-align: left; overscroll-behavior: contain; } /* the Sent screen: what was predicted, scrolls when long */
 .gsubmit-screen > .gbtn.submit { flex: none; }
 @media (prefers-reduced-motion: reduce) { .gsubmit { transition: none; } }

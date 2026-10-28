@@ -47,6 +47,14 @@ export function checkSubscription(body) {
   return { endpoint: u.href, player: body.player, tz, minute };
 }
 
+/** A one-off reminder as the app sends it, checked → { endpoint, at (ms) }; else it throws. at: unix seconds, within 2 days. */
+export function checkOnce(body, now) {
+  const { endpoint } = checkSubscription({ ...body, player: body?.player ?? '0x' + '0'.repeat(40) });
+  const at = body?.at;
+  if (!Number.isInteger(at) || at * 1000 > now + 2 * 86_400_000) throw new Error('at: unix seconds, within 2 days');
+  return { endpoint, at: at * 1000 };
+}
+
 /** The local date (YYYY-MM-DD) and minute of the day (0-1439) in `tz` at `at` (ms). */
 export function localTime(tz, at) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',

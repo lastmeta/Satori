@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { queueOf, stepOf, played, favoritesIn, submitEarly, latestText, linePoints, nothingText } from './gameflow.js';
+import { queueOf, stepOf, played, favoritesIn, submitEarly, latestText, linePoints, nothingText, opensAgain, againText } from './gameflow.js';
 
 const s = (streamId, weight, o = {}) => ({ streamId, weight: String(weight), blocked: null, named: false, history: [], ...o });
 
@@ -58,4 +58,16 @@ test('nothingText: calm, with what to do', () => {
   expect(nothingText([])).toBe('No games on the Satori contract yet.');
   expect(nothingText([s(1, 1, { blocked: 'Delegated' })])).toMatch(/staked with another address/);
   expect(nothingText([s(1, 1, { blocked: 'StaleValue' })])).toBe('Unable to predict right now. Come back later.');
+});
+
+test('when the player can predict again: the next round, a Sentiment game 24 clock hours after its hour; the earliest', () => {
+  const R = 20754;
+  const at = R * 86400 + 14 * 3600 + 1800; // 14:30 UTC
+  const streams = [{ streamId: 1, named: true }, { streamId: 2, named: false }];
+  expect(opensAgain({ round: R, at, calls: [{ streamId: 1 }] }, streams)).toBe((R + 1) * 86400 + 14 * 3600); // 14:00 tomorrow
+  expect(opensAgain({ round: R, at, calls: [{ streamId: 1 }, { streamId: 2 }] }, streams)).toBe((R + 1) * 86400); // 00:00 UTC
+  expect(opensAgain({ round: R, at }, streams)).toBe((R + 1) * 86400);
+  expect(againText(1000 + 7 * 3600 + 12 * 60, 1000)).toBe('You can predict again in 7 h 12 min.');
+  expect(againText(1000 + 59, 1000)).toBe('You can predict again in 1 min.');
+  expect(againText(1000, 1000)).toBe('You can predict again now.');
 });

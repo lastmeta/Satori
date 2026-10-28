@@ -452,8 +452,13 @@ between the header and the tab bar.
   to see how your predictions were scored."
 - **Played with the game this round**: each Submit is noted
   (`game_last_play`: round, time, count, hash or none, and the calls), and
-  while it is the same round the tab opens on its Sent screen ("Played today.
-  The next game opens tomorrow."), the calls listed under Dismiss (scrolling).
+  while it is the same round the tab opens on its Sent screen: a countdown to
+  when the player can predict again ("You can predict again in 7 h 12 min.":
+  the earliest of the played streams, each once a round from 00:00 UTC, a
+  Sentiment stream also 24 clock hours after the hour it was predicted in;
+  `opensAgain`, `src/ui/gameflow.js`), **Remind me** (one notification then,
+  [push.md](push.md#remind-me); shown where push works) left of Dismiss,
+  and the calls listed under them (scrolling).
   A play noted without its calls (before they were kept) has them read from
   its transaction (`chain.batchOf`).
 - **Already predicted, not with the game** (this round, or in the last 24

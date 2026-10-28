@@ -9,6 +9,8 @@ import { state } from '../ui/view.js';
 import { appGet, appPut } from '../wallets.js';
 import { REMINDER } from './handoff.js';
 
+const ONCE = 'push-once'; // the Game's Remind me: the time it was set for (unix seconds)
+
 export const BLOCKED = "Notifications are blocked for this site: allow them in the browser's settings, then turn this on.";
 export const NO_PUSH = "This browser can't wake Satori with a notification.";
 export const IOS_FIRST = 'On iPhone and iPad, add Satori to the Home Screen first, then turn this on there.';
@@ -26,9 +28,9 @@ async function post(path, body) {
 /** The switch's state at start, from the browser's subscription and what the server was told: no request. */
 export async function startReminder() {
   if (!supported()) return setReminder({ supported: false, on: false, note: state.app.addTo === 'ios' && !state.app.installed ? IOS_FIRST : NO_PUSH });
-  const [sub, told] = await Promise.all([registration().then((reg) => reg.pushManager.getSubscription()), appGet(REMINDER)]);
+  const [sub, told, once] = await Promise.all([registration().then((reg) => reg.pushManager.getSubscription()), appGet(REMINDER), appGet(ONCE)]);
   const on = !!sub && !!told;
-  setReminder({ supported: true, note: '', on, minute: on ? told.minute ?? null : null });
+  setReminder({ supported: true, note: '', on, minute: on ? told.minute ?? null : null, once: sub ? once : null });
 }
 
 /**
@@ -50,17 +52,42 @@ async function tellPlayer(player) {
   await appPut(REMINDER, { ...told, player });
 }
 
+/** Permission (on a tap), and this browser's subscription: the one it has, else a new one. → { sub, had } */
+async function subscription(reg) {
+  if ((await Notification.requestPermission()) !== 'granted') throw new Error(BLOCKED);
+  const had = await reg.pushManager.getSubscription();
+  if (had) return { sub: had, had };
+  const r = await fetch('/push/key');
+  if (!r.ok) throw new Error(`The reminder server answered ${r.status}.`);
+  const { key } = await r.json();
+  return { sub: await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }), had: null };
+}
+
+/**
+ * The Game's Remind me: one notification at `at` (unix seconds: when the game opens again), whether or not the daily
+ * reminder is on. The browser subscribes if it hasn't; a server that refuses leaves nothing set (a new subscription
+ * dropped). Kept in IndexedDB (ONCE) so the button says it is set. → at
+ */
+export async function remindOnce(at) {
+  if (!supported()) throw new Error(state.reminder?.note || NO_PUSH);
+  const { sub, had } = await subscription(await registration());
+  try {
+    await post('once', { subscription: sub.toJSON(), at });
+  } catch (err) {
+    if (!had) await sub.unsubscribe().catch(() => {});
+    throw err;
+  }
+  await appPut(ONCE, at);
+  setReminder({ once: at });
+  return at;
+}
+
 /** On: permission, the subscription, the server told this time of day. Off: the server told, the subscription dropped. */
 export async function turnReminder(on, player) {
   if (!supported()) throw new Error(state.reminder?.note || NO_PUSH);
   const reg = await registration();
   if (on) {
-    if ((await Notification.requestPermission()) !== 'granted') throw new Error(BLOCKED);
-    const r = await fetch('/push/key');
-    if (!r.ok) throw new Error(`The reminder server answered ${r.status}.`);
-    const { key } = await r.json();
-    const had = await reg.pushManager.getSubscription();
-    const sub = had ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    const { sub, had } = await subscription(reg);
     const now = new Date();
     const told = { player, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, minute: now.getHours() * 60 + now.getMinutes() };
     let minute;
@@ -79,7 +106,8 @@ export async function turnReminder(on, player) {
       await sub.unsubscribe();
     }
     await appPut(REMINDER, null);
-    setReminder({ on, minute: null });
+    await appPut(ONCE, null); // the subscription is gone, and the server dropped it with the daily one
+    setReminder({ on, minute: null, once: null });
   }
   return state.reminder;
 }

@@ -79,3 +79,23 @@ export function nothingText(streams) {
   if (why.every((w) => w === 'Delegated')) return "Your wallet is staked with another address, so it can't play here. Unstake on the Wallet tab to play.";
   return 'Unable to predict right now. Come back later.';
 }
+
+/**
+ * When the player can predict again after a play (unix seconds): the earliest of its calls' streams to open. Each game
+ * is once a round (from the next 00:00 UTC); a Sentiment (named) game also waits 24 clock hours from the hour it was
+ * predicted in (the deployed engine's DuplicatePrediction: `hour < last + 24`, test/fake-satori.js). No calls: the next round.
+ */
+export function opensAgain(sent, streams = []) {
+  const next = (sent.round + 1) * 86_400;
+  const named = (id) => streams.find((s) => s.streamId === id)?.named;
+  const day = (Math.floor(sent.at / 3600) + 24) * 3600;
+  const each = (sent.calls ?? []).map((c) => (named(c.streamId) ? Math.max(next, day) : next));
+  return each.length ? Math.min(...each) : next;
+}
+
+/** The countdown to `at` from `now` (unix seconds): 'You can predict again in 7 h 12 min.' */
+export function againText(at, now) {
+  const m = Math.ceil((at - now) / 60);
+  if (m <= 0) return 'You can predict again now.';
+  return `You can predict again in ${m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`}.`;
+}

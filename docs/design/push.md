@@ -56,6 +56,17 @@ the proposal at once (the owner: "do all of it").
   "Notifications are blocked for this site…".
 - Agents: `setReminder(on)`, `reminder()` ([llms.txt](../../public/llms.txt)).
 
+## Remind me
+
+The Game's Sent screen: **Remind me**, left of Dismiss, sets one notification
+for when the player can predict again (`remindOnce`, `src/pwa/push.js`), the
+daily reminder on or not. It asks for permission and subscribes if the browser
+hasn't, then `POST /push/once {subscription, at}`; the button then says
+"Reminder set" (IndexedDB `push-once`). At that time the server sends one push,
+with no chain read, and the service worker shows its notification as for the
+daily push ("Today's game is ready." by hand). One per subscription (a new one
+replaces it); turning the daily reminder off drops it too. Agents: `remindMe()`.
+
 ## The server
 
 `push/` (`server.mjs` around `push.mjs`; Node's own modules, no npm), the
@@ -66,7 +77,9 @@ needs nothing new.
 
 - `GET /push/key`, `POST /push/subscribe {subscription, player, tz, minute?}`
   (→ `{ minute }`),
-  `POST /push/unsubscribe {endpoint}`; bodies up to 4 KB, at most 100,000
+  `POST /push/unsubscribe {endpoint}` (its one-off too), `POST /push/once
+  {subscription, at}` (unix seconds, within 2 days; kept in `once.json`, sent
+  at the first tick after, tried for an hour); bodies up to 4 KB, at most 100,000
   subscriptions.
 - Only the browsers' push services are taken as endpoints (FCM, Apple's,
   Mozilla's, Windows'): the server never posts to an address a page chose.

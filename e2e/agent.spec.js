@@ -50,6 +50,8 @@ test('an encrypted backup, restored in a fresh browser; the game by call; a day 
   expect(s.batches[0]).toMatchObject({ from: V.toLowerCase(), requests: [{ gameId: 2, payload: '0x01' }, { gameId: 1, payload: '0x02' }] });
   g = await call(page, 'game');
   expect(g.playedToday).toMatchObject({ count: 2 });
+  expect(g.opensAt).toBe((g.round + 1) * 86400); // bitcoin isn't a Sentiment stream: the next 00:00 UTC
+  await expect(call(page, 'remindMe')).rejects.toThrow("This browser can't wake Satori with a notification."); // the dev server
   expect(g.streams.every((x) => x.alreadyPredicted)).toBe(true);
 
   // a day of Home's strip

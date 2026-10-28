@@ -137,7 +137,7 @@ export const state = reactive({
   nextStepDismissed: readTime(NEXT_STEP_KEY), // Home's next-step card put away (Not now), s
   phone: false, // a phone (a coarse pointer, or a small screen): Home's hero says "Keep Satori open · " while it works
   storage: null, // { persisted, usage, quota }
-  reminder: { supported: false, on: false, minute: null, note: '', busy: false, error: '' }, // the daily reminder (src/pwa/push.js)
+  reminder: { supported: false, on: false, minute: null, note: '', busy: false, error: '', once: null }, // the daily reminder (src/pwa/push.js); once: the Game's Remind me (unix s)
   version: '', // browser-<package version>+<git short sha> (main.js; Settings › This device)
   theme: themeOf(), // Settings → Appearance: 'system' | 'light' | 'dark', this device's (src/ui/theme.js)
   systemDark: globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false, // what 'system' shows (main.js keeps it)

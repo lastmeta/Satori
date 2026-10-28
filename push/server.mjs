@@ -2,13 +2,14 @@
 //   GET  /push/key          → { key }: the VAPID public key, the app's applicationServerKey
 //   POST /push/subscribe    { subscription, player, tz }  (kept by endpoint)
 //   POST /push/unsubscribe  { endpoint }
+//   POST /push/once         { subscription, at }  one push at `at` (unix seconds): the Game's Remind me (one per endpoint)
 // Every minute: each subscription whose local time has reached its own minute of the day (the time the person turned it
 // on: people get theirs at different times, and at a time they are awake) and that has had nothing today is checked on
 // the chain; a player who has not predicted this round gets one push (no payload: the service worker decides what to do).
 // The subscriptions and the VAPID key are one JSON file each in DATA. Env: PORT, DATA, RPC_URL, TOKEN, ENGINE, SUBJECT.
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
-import { checkSubscription, due, newVapid, predictedCounts, publicOf, sendPush, subscribed } from './push.mjs';
+import { checkOnce, checkSubscription, due, newVapid, predictedCounts, publicOf, sendPush, subscribed } from './push.mjs';
 
 const env = process.env;
 const PORT = Number(env.PORT ?? 8080);
@@ -27,6 +28,8 @@ const stored = read('vapid.json', () => { const v = newVapid(); write('vapid.jso
 const vapid = { privateJwk: stored.privateJwk, publicKey: publicOf(stored.privateJwk) };
 const subs = new Map(read('subscriptions.json', () => []).map((s) => [s.endpoint, s]));
 const save = () => write('subscriptions.json', [...subs.values()]);
+const once = new Map(read('once.json', () => []).map((o) => [o.endpoint, o]));
+const saveOnce = () => write('once.json', [...once.values()]);
 
 function body(req) {
   return new Promise((resolve, reject) => {
@@ -54,9 +57,17 @@ createServer(async (req, res) => {
       save();
       return answer(res, 200, { ok: true, minute: kept.minute });
     }
+    if (req.method === 'POST' && req.url === '/push/once') {
+      const o = checkOnce(await body(req), Date.now());
+      if (!once.has(o.endpoint) && once.size >= MAX_SUBS) return answer(res, 503, { error: 'full' });
+      once.set(o.endpoint, o);
+      saveOnce();
+      return answer(res, 200, { ok: true, at: o.at / 1000 });
+    }
     if (req.method === 'POST' && req.url === '/push/unsubscribe') {
       const { endpoint } = await body(req);
       if (subs.delete(String(endpoint))) save();
+      if (once.delete(String(endpoint))) saveOnce();
       return answer(res, 200, { ok: true });
     }
     return answer(res, 404, { error: 'not found' });
@@ -66,11 +77,22 @@ createServer(async (req, res) => {
 }).listen(PORT, () => console.log(`[push] on :${PORT}, ${subs.size} subscriptions`));
 
 let busy = false;
+// The one-off reminders that are due: one push each, no chain read (the time is when the game opens again).
+async function tickOnce(now) {
+  const list = [...once.values()].filter((o) => o.at <= now);
+  for (const o of list) {
+    const r = await sendPush({ endpoint: o.endpoint, vapid, subject: SUBJECT }).catch(() => 'failed');
+    if (r !== 'failed' || now - o.at > 3_600_000) once.delete(o.endpoint); // failing: tried each tick for an hour
+  }
+  if (list.length) { saveOnce(); console.log(`[push] ${list.length} one-off due`); }
+}
+
 async function tick() {
   if (busy) return;
   busy = true;
   try {
     const now = Date.now();
+    await tickOnce(now).catch((err) => console.warn('[push] once', err.message));
     const list = [...subs.values()].map((s) => ({ s, day: due(s, now) })).filter((x) => x.day);
     if (!list.length) return;
     const counts = await predictedCounts({ rpc: env.RPC_URL, token: env.TOKEN, engine: env.ENGINE, players: list.map((x) => x.s.player) });

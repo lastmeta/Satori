@@ -35,7 +35,7 @@ import { relayUuid } from './nostr/satori.js';
 import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend, NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
 import { referrerOf, shareLink, sharedLink } from './neuron/referral.js';
-import { queueOf, stepOf, favoritesIn, played, latestText } from './ui/gameflow.js';
+import { queueOf, stepOf, favoritesIn, played, latestText, opensAgain } from './ui/gameflow.js';
 import { listingOf } from './neuron/market.js';
 import { playerOf, sendsToday } from './neuron/play.js';
 import { watchable } from './neuron/records.js';
@@ -59,7 +59,7 @@ import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
 import { shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
 import { startPwa, registerWorker, applyUpdate, install, storage, keepStorage } from './pwa/index.js';
-import { startReminder, followPlayer, turnReminder, followNotifications } from './pwa/push.js';
+import { startReminder, followPlayer, turnReminder, followNotifications, remindOnce } from './pwa/push.js';
 
 // Settings' defaults: the dev server's (the dev central, the test relay, the local fork, so a dev
 // checkout writes nothing to production) or a build's, each replaceable by a VITE_* variable.
@@ -1343,6 +1343,18 @@ const actions = {
     // nothing to send (all already predicted), or the alias sends: no Unlock (base.playHand decides the same way)
     return playerOf(state.base.wallet.staked) === 'alias' || calls.every((c) => played(c.stream)) ? run() : withWallet('game', run);
   },
+  /** The Sent screen's Remind me: one notification when the game opens again (opensAgain; docs/design/push.md). */
+  async gameRemind() {
+    const g = state.game;
+    if (!g.sent || g.reminding) return;
+    state.game = { ...g, reminding: true, remindError: '' };
+    try {
+      await remindOnce(opensAgain(g.sent, g.streams));
+      state.game = { ...state.game, reminding: false };
+    } catch (err) {
+      state.game = { ...state.game, reminding: false, remindError: errorText(err) };
+    }
+  },
   /** The daily reminder (Settings › This device; docs/design/push.md): on or off. */
   async setReminder(on) {
     state.reminder = { ...state.reminder, busy: true, error: '' };
@@ -1611,7 +1623,8 @@ window.satori = {
     const { by, streams, round, played: last } = await base.gameStreams();
     const favorites = readFavorites(session.walletPublic?.evmAddress);
     const { queue, split } = queueOf(streams, favorites);
-    return { play: state.base.play, by, round, playedToday: last && last.round === round ? last : null, favorites,
+    const today = last && last.round === round ? last : null;
+    return { play: state.base.play, by, round, playedToday: today, opensAt: today ? opensAgain(today, streams) : null, favorites,
       streams: queue.map((s, i) => ({ streamId: s.streamId, gameId: s.gameId, name: s.name, named: s.named, eligible: i < split,
         alreadyPredicted: played(s), latest: latestText(s), display: s.display ?? null, streak: s.streak ?? null, history: s.history })),
       unavailable: streams.filter((s) => !queue.includes(s)).map((s) => ({ streamId: s.streamId, name: s.name, why: s.blocked })) };
@@ -1788,6 +1801,16 @@ window.satori = {
     if (typeof on !== 'boolean') throw new Error('setReminder(true) or setReminder(false).');
     await turnReminder(on, reminderPlayer());
     return this.reminder();
+  },
+  /**
+   * The Game's Remind me: one notification when the game opens again after this round's play (game().opensAt), whether
+   * or not the daily reminder is on. → { at } (unix seconds)
+   */
+  async remindMe() {
+    ready();
+    const g = await this.game();
+    if (!g.opensAt) throw new Error('Not played with the game this round: nothing to remind of.');
+    return { at: await remindOnce(g.opensAt) };
   },
   /** { supported, on, minute, note }: whether this browser can take the daily reminder, whether it is on, its time (minute
    * of the local day: when it was turned on), and why not. */

@@ -105,3 +105,14 @@ describe('sending', () => {
     expect(await sendPush({ endpoint: FCM, vapid: v, subject: 's', fetch: at(500) })).toBe('failed');
   });
 });
+
+describe('a one-off reminder (the Game\'s Remind me)', () => {
+  it('takes a push service endpoint and a time within 2 days, in unix seconds', async () => {
+    const { checkOnce } = await import('./push.mjs');
+    const now = 1_800_000_000_000;
+    expect(checkOnce({ subscription: { endpoint: FCM }, at: 1_800_003_600 }, now)).toEqual({ endpoint: FCM, at: 1_800_003_600_000 });
+    expect(() => checkOnce({ subscription: { endpoint: 'https://evil.example/x' }, at: 1_800_003_600 }, now)).toThrow('not a push service');
+    expect(() => checkOnce({ subscription: { endpoint: FCM }, at: 1_800_000_000 + 3 * 86400 }, now)).toThrow('within 2 days');
+    expect(() => checkOnce({ subscription: { endpoint: FCM }, at: '1' }, now)).toThrow('unix seconds');
+  });
+});

@@ -149,7 +149,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(page.locator('[data-unlock-for=game]')).toBeHidden();
   expect(s.batches).toHaveLength(0);
   // one Sent screen: played today, and Dismiss (no Done); under it the predictions made, scrolling when long
-  await expect(t(page, 'game-tomorrow')).toBeVisible();
+  await expect(t(page, 'game-again-in')).toHaveText(/^You can predict again (in \d+( h \d+)? min|now)\.$/);
+  await expect(t(page, 'game-remind')).toBeHidden(); // the dev server: no push
   const sentCalls = () => t(page, 'game-sent-calls').locator('li').evaluateAll((li) => li.map((x) => `${x.textContent} ${x.querySelector('svg').getAttribute('aria-label')}`));
   await expect.poll(sentCalls).toEqual(['bitcoin up', 'ether down', 'satori up', 'dogecoin down']);
   expect(await t(page, 'game-sent-calls').evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto');

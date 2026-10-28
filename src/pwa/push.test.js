@@ -45,4 +45,20 @@ describe('the reminder switch', () => {
     await startReminder();
     expect(state.reminder.on).toBe(false);
   });
+
+  it("Remind me: one push at a time, set only once the server took it; turning the daily reminder off drops it", async () => {
+    const { remindOnce, turnReminder, startReminder } = await import('./push.js');
+    const { state } = await import('../ui/view.js');
+    answer = { ok: false, status: 503, json: async () => ({}) };
+    await expect(remindOnce(1_800_000_000)).rejects.toThrow('503');
+    expect(sub).toBe(null);
+    answer = { ok: true, status: 200, json: async () => ({ ok: true, minute: 600 }) };
+    await remindOnce(1_800_000_000);
+    await startReminder();
+    expect([state.reminder.once, state.reminder.on]).toEqual([1_800_000_000, false]); // the daily reminder still off
+    await turnReminder(true, '0xabc');
+    await turnReminder(false, '0xabc');
+    await startReminder();
+    expect(state.reminder.once).toBe(null);
+  });
 });

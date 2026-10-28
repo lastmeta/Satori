@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-28 (the Game's countdown and Remind me)
+
+- `game().opensAt`: when the player can predict again after this round's play; the Sent screen counts down to it ("You
+  can predict again in 7 h 12 min."). `remindMe()` (the Sent screen's Remind me): one notification then.
+
 ## Changed 2026-10-28 (Preload's amount, Receive first)
 
 - `base().alias.preload` is half the wallet's ETH, up to 0.1 ETH (it was a month of batches). The Wallet tab opens with
