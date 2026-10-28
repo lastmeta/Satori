@@ -29,13 +29,23 @@ const metadataJson = (m) => JSON.stringify({
   metadata: m.metadata ?? null,
 });
 
-/** A stream announcement (34600) as announce_datastream sends it (client.py:294-356). */
+/** A stream's address (NIP-01's `a`: kind:pubkey:d): its announcement's, `34600:<provider>:<stream>`. */
+export const streamAddress = (provider, stream) => `${KIND.ANNOUNCE}:${provider}:${stream}`;
+
+/**
+ * A stream announcement (34600) as announce_datastream sends it (client.py:294-356). A prediction stream's also names
+ * its source's address as an `a` tag (the owner, 2026-10-28; not Lite's): relays index single-letter tags, so
+ * {"#a": [streamAddress(provider, stream)]} finds a stream's predictions; source_stream and source_pubkey stay, as Lite reads.
+ */
 export function announceEvent(m, now) {
   const tags = [['d', m.stream_name], ['satori', 'datastream'], ...(m.tags ?? []).map((t) => ['t', t]),
     ['stream', `satori:stream:${m.stream_name}`]];
-  if (m.metadata?.source_stream_name) tags.push(['source_stream', m.metadata.source_stream_name]);
-  if (m.metadata?.source_provider_pubkey) tags.push(['source_pubkey', m.metadata.source_provider_pubkey]);
+  const source = m.metadata?.source_stream_name;
+  const provider = m.metadata?.source_provider_pubkey;
+  if (source) tags.push(['source_stream', source]);
+  if (provider) tags.push(['source_pubkey', provider]);
   if (m.approval_required) tags.push(['approval_required', 'true']);
+  if (source && provider) tags.push(['a', streamAddress(provider, source)]);
   return { created_at: now, kind: KIND.ANNOUNCE, tags, content: metadataJson(m) };
 }
 

@@ -35,7 +35,11 @@ describe("the events, as satorilib's client makes them", () => {
   });
   test('_pred announcement (34600), metadata as start.py builds it', () => {
     const meta = predMetadata({ sub, pubkey: fx.pubkeyHex, aliasPubkey: '02' + '11'.repeat(32) });
-    same(sign(announceEvent(meta, now)), fx.events.announce);
+    // Lite's, plus the source's address as NIP-01's indexed `a` tag (the owner, 2026-10-28): a relay answers
+    // {"#a": ["34600:<provider>:<stream>"]} with that stream's predictions; Lite reads source_* and ignores it
+    const e = announceEvent(meta, now);
+    expect(e.tags.at(-1)).toEqual(['a', `34600:${sub.provider_pubkey}:${sub.stream_name}`]);
+    same(sign({ ...e, tags: e.tags.slice(0, -1) }), fx.events.announce);
   });
   test('_pred tombstone (34600, status=deleted)', () => {
     same(sign(tombstoneEvent('btc-usd-price_pred', fx.pubkeyHex, now)), fx.events.tombstone);
