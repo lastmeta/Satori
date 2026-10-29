@@ -65,6 +65,26 @@ if (process.env.ABI_SNAPSHOT === 'channels') {
 }
 const channels = JSON.parse(readFileSync(CHANNELS_SNAPSHOT, 'utf8'));
 
+// SatoriSplitterImmutable (splitterAbi): immutable too, its own snapshot from its build; the tree's top is the token's
+// PLATFORM_FEE_RECIPIENT (docs/design/devfee.md). ABI_SNAPSHOT=splitter (SPLITTER_ARTIFACT=<file>) rewrites it.
+const SPLITTER_SNAPSHOT = new URL('../../test/fixtures/abi-splitter.json', import.meta.url);
+const SPLITTER_ARTIFACT = process.env.SPLITTER_ARTIFACT
+  ?? '/code/Satori/contract/satori/artifacts/contracts/SatoriSplitterImmutable.sol/SatoriSplitterImmutable.json';
+const SPLITTER_TOP = '0x6C5722C65041341C16D892235ea6076F05Cf4238'; // A on Base Sepolia (contract/satori/deployments/splitters-baseSepolia.json)
+if (process.env.ABI_SNAPSHOT === 'splitter') {
+  const all = JSON.parse(readFileSync(SPLITTER_ARTIFACT, 'utf8')).abi;
+  writeFileSync(SPLITTER_SNAPSHOT, `${JSON.stringify({ functions: of(all, 'function').map(sig).sort(),
+    errors: of(all, 'error').map(sig).sort() }, null, 2)}\n`);
+}
+const splitter = JSON.parse(readFileSync(SPLITTER_SNAPSHOT, 'utf8'));
+describe('splitterAbi matches SatoriSplitterImmutable', () => {
+  test('every function as it has it; its own errors are ones it raises', () => {
+    for (const item of of(abi.splitterAbi, 'function')) expect(splitter.functions).toContain(sig(item));
+    const token = ['ERC20InsufficientBalance', 'HookFailedWithoutReason']; // the token's, bubbled up by a withdraw
+    for (const item of of(abi.splitterAbi, 'error').filter((e) => !token.includes(e.name))) expect(splitter.errors).toContain(sig(item));
+  });
+});
+
 describe(`abi.js matches the deployed contracts (${snapshot.deploy})`, () => {
   for (const [name, [c]] of Object.entries(CONTRACTS)) {
     test(`${name}: every function as ${c} has it`, () => {
@@ -123,6 +143,23 @@ describe.skipIf(!online)(`live: the deployed contracts on Base Sepolia (${DEFAUL
       }
     });
   }
+});
+
+describe.skipIf(!online)(`live: the dev fee's top splitter at ${SPLITTER_TOP} on Base Sepolia (read-only)`, () => {
+  const client = createPublicClient({ transport: http(DEFAULTS.rpcUrl, { batch: true }) });
+  test("it is the token's PLATFORM_FEE_RECIPIENT; its code has each selector; its views answer in splitterAbi's shape", { timeout: 60_000 }, async () => {
+    expect(await client.readContract({ address: DEFAULTS.token, abi: abi.tokenAbi, functionName: 'PLATFORM_FEE_RECIPIENT' })).toBe(SPLITTER_TOP);
+    const code = await client.getCode({ address: SPLITTER_TOP });
+    const pushed = (selector) => { const x = selector.slice(2).replace(/^(00)+/, ''); return (0x5f + x.length / 2).toString(16) + x; };
+    for (const f of of(abi.splitterAbi, 'function')) {
+      expect(code.includes(pushed(toFunctionSelector(f))), sig(f)).toBe(true);
+      if (f.stateMutability !== 'view') continue;
+      const call = { abi: abi.splitterAbi, functionName: f.name };
+      const args = f.inputs.map((p) => (p.type === 'address' ? zeroAddress : p.type === 'bytes32' ? zeroHash : 0n));
+      const { data } = await client.call({ to: SPLITTER_TOP, data: encodeFunctionData({ ...call, args }) });
+      expect(encodeFunctionResult({ ...call, result: decodeFunctionResult({ ...call, data }) }), sig(f)).toBe(data);
+    }
+  });
 });
 
 describe.skipIf(!online)(`live: PaymentChannels at ${DEFAULTS.channels} on Base Sepolia (read-only)`, () => {

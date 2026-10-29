@@ -6,13 +6,17 @@
 // (C/next/SatoriToken.sol:816-821), the registry's history page
 // (C/SatoriRegistry.sol:1375-1393), claims (hub, merkle, airdrop).
 // Unit tests (src/chain, src/neuron) and the e2e (/rpc) share it.
-import { zeroAddress } from 'viem';
+import { encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress } from 'viem';
 import * as abi from '../src/chain/abi.js';
 import { DEFAULTS } from '../src/chain/config.js';
 import { INDEFINITE, HISTORY } from '../src/chain/index.js';
 import { fakeRpc, revert, panic } from './fake-rpc.js';
 
 export const E18 = 10n ** 18n;
+export const SPLIT_A = '0x6c5722c65041341c16d892235ea6076f05cf4238';
+export const SPLIT_C = '0x52b7ee858379509f7bdbc239da0f1ff36bead2ed';
+export const SPLIT_B = '0xc082ccc8d827b58bc848d5918ca92eee5c06f5f7';
+const SPLITTERS = { [SPLIT_A]: [SPLIT_C, SPLIT_B], [SPLIT_C]: [`0x${'c1'.repeat(20)}`, `0x${'c2'.repeat(20)}`], [SPLIT_B]: [`0x${'b1'.repeat(20)}`, `0x${'b2'.repeat(20)}`] };
 
 const lc = (a) => a.toLowerCase();
 const ADAPTER = `0x${'ad'.repeat(20)}`; // the adapter whose valueDisplay a stream's `display` answers
@@ -46,6 +50,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     openClaim: false, // the permissionless claim to the owner (contract humble, 2026-10-29); false: as deployed (D7)
     merkle: { drop: {}, minted: {}, available: null }, // drop: addr → { amount, proof }; available: the lane's reserve (null: plenty)
     weights: { 1: E18 }, // gameId → voting weight (the engine pays only games with weight, SatoriEngine.sol:828)
+    splitters: Object.fromEntries(Object.entries(SPLITTERS).map(([a, payees]) => [a, { slots: payees.map((p, i) => ({ payee: lc(p), shares: a === SPLIT_A ? [6000n, 4000n][i] : 5000n })),
+      authority: zeroAddress, pending: zeroAddress, threshold: 9000n, trigger: {}, claimed: {}, withdrawn: 0n, approvals: {}, epoch: {} }])),
     short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
   };
   const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n) - (s.short[a] ?? 0n);
@@ -206,6 +212,7 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       balanceOf: ([a]) => s.balance[lc(a)] ?? 0n,
       transferLockedUntil: ([a]) => s.lock[lc(a)] ?? 0,
       getCurrentRound: (_, ctx) => BigInt(ctx.round),
+      PLATFORM_FEE_RECIPIENT: () => SPLIT_A,
       transfer: ([to, value], ctx) => {
         const l = s.lock[ctx.from] ?? 0;
         if (l !== 0 && l >= ctx.round) revert('Locked');
@@ -258,6 +265,93 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       },
     }),
   };
+  // the dev fee's splitters (C/SatoriSplitterImmutable.sol), Base Sepolia's tree: A 60 % C, 40 % B; C and B 50/50
+  for (const [a, sp] of Object.entries(s.splitters)) contracts[a] = splitter(s, sp, a);
   const rpc = fakeRpc(contracts, { timestamp: round * 86400 + hour * 3600, eth });
   return { s, rpc };
 }
+
+/** One SatoriSplitterImmutable at `me` (SATORI only: its balance is s.balance[me]); `sp` its state in s.splitters. */
+function splitter(s, sp, me) {
+  const slotOf = (a) => { const i = sp.slots.findIndex((x) => x.payee === lc(a)); if (i < 0) revert('NotARecipient'); return i; };
+  const releasable = (i) => {
+    const x = sp.slots[i];
+    if (!x) return 0n;
+    const entitled = (((s.balance[me] ?? 0n) + sp.withdrawn) * x.shares) / 10000n;
+    return entitled > (sp.claimed[i] ?? 0n) ? entitled - (sp.claimed[i] ?? 0n) : 0n;
+  };
+  const id = (parent, to) => keccak256(encodeAbiParameters(parseAbiParameters('address, address, address, uint256'), [me, parent, to, BigInt(sp.epoch[lc(parent)] ?? 0)]));
+  const agreed = (pid) => Object.keys(sp.approvals[pid] ?? {}).reduce((n, i) => n + sp.slots[i].shares, 0n);
+  return { abi: abi.splitterAbi, fns: {
+    slotCount: () => BigInt(sp.slots.length),
+    getSlot: ([i]) => (sp.slots[Number(i)] ? [sp.slots[Number(i)].payee, sp.slots[Number(i)].shares] : revert('UnknownSlot')),
+    releasable: ([, i]) => releasable(Number(i)),
+    withdrawCaller: ([i]) => sp.trigger[Number(i)] ?? zeroAddress,
+    totalShares: () => 10000n,
+    authority: () => sp.authority,
+    pendingAuthority: () => sp.pending,
+    rotationThresholdBps: () => sp.threshold,
+    proposalId: ([p, to]) => id(p, to),
+    approvedShares: ([pid]) => agreed(pid),
+    approved: ([pid, i]) => !!sp.approvals[pid]?.[Number(i)],
+    rotationApproved: ([p, to]) => agreed(id(p, to)) * 10000n >= 10000n * sp.threshold,
+    withdraw: ([, i], ctx) => {
+      const n = Number(i);
+      const x = sp.slots[n] ?? revert('UnknownSlot');
+      const gate = sp.trigger[n];
+      if (gate && gate !== zeroAddress && ctx.from !== gate && ctx.from !== x.payee) revert('NotWithdrawCaller');
+      const owed = releasable(n);
+      if (owed === 0n) revert('NothingToWithdraw');
+      if (ctx.write) {
+        sp.claimed[n] = (sp.claimed[n] ?? 0n) + owed;
+        sp.withdrawn += owed;
+        s.balance[me] -= owed;
+        s.balance[x.payee] = (s.balance[x.payee] ?? 0n) + owed;
+      }
+      return owed;
+    },
+    setWithdrawCaller: ([c], ctx) => { const n = slotOf(ctx.from); if (ctx.write) sp.trigger[n] = lc(c); },
+    rotateRecipient: ([to], ctx) => {
+      if (lc(to) === zeroAddress) revert('ZeroAddress');
+      if (lc(to) === me) revert('PayeeIsSelf');
+      const n = slotOf(ctx.from);
+      if (sp.slots.some((x) => x.payee === lc(to))) revert('AlreadyRecipient');
+      if (ctx.write) { sp.slots[n].payee = lc(to); delete sp.trigger[n]; }
+    },
+    approveRotation: ([p, to], ctx) => {
+      const n = slotOf(ctx.from);
+      const pid = id(p, to);
+      if (sp.approvals[pid]?.[n]) revert('AlreadyApproved');
+      if (ctx.write) sp.approvals[pid] = { ...sp.approvals[pid], [n]: true };
+    },
+    revokeRotation: ([p, to], ctx) => {
+      const n = slotOf(ctx.from);
+      const pid = id(p, to);
+      if (!sp.approvals[pid]?.[n]) revert('NotApproved');
+      if (ctx.write) delete sp.approvals[pid][n];
+    },
+    rotateAt: ([p, to], ctx) => {
+      const byAuthority = sp.authority !== zeroAddress && ctx.from === sp.authority;
+      if (!byAuthority && agreed(id(p, to)) * 10000n < 10000n * sp.threshold) revert('InsufficientConsent');
+      if (ctx.write) {
+        sp.epoch[lc(p)] = (sp.epoch[lc(p)] ?? 0) + 1;
+        const parent = s.splitters[lc(p)];
+        const k = parent.slots.findIndex((x) => x.payee === me);
+        parent.slots[k].payee = lc(to);
+      }
+    },
+    transferAuthority: ([to], ctx) => {
+      if (ctx.from !== sp.authority) revert('NotAuthority');
+      if (ctx.write) sp.pending = lc(to);
+    },
+    acceptAuthority: (_, ctx) => {
+      if (ctx.from !== sp.pending) revert('NotPendingAuthority');
+      if (ctx.write) { sp.authority = ctx.from; sp.pending = zeroAddress; }
+    },
+    renounceAuthority: (_, ctx) => {
+      if (ctx.from !== sp.authority) revert('NotAuthority');
+      if (ctx.write) { sp.authority = zeroAddress; sp.pending = zeroAddress; }
+    },
+  } };
+}
+

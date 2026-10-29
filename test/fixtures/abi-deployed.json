@@ -40,6 +40,7 @@
       "function getTotalClaimableRewards(address) -> (uint256,bool) view"
     ],
     "SatoriToken": [
+      "function PLATFORM_FEE_RECIPIENT() -> (address) view",
       "function balanceOf(address) -> (uint256) view",
       "function getCurrentRound() -> (uint256) view",
       "function transfer(address,uint256) -> (bool) nonpayable",

@@ -99,6 +99,11 @@ export const state = reactive({
     watching: { streams: 0, sources: 0, found: 0, left: 0, at: null, error: null }, market: { selling: [], bought: [], error: null } },
   marketBusy: '', // a paid-stream action in flight: 'sell:<stream>' | 'buy:<pubkey>:<stream>' | 'stop:<pubkey>:<stream>' (docs/design/market.md)
   marketError: '',
+  // the Dev Fee tab (docs/design/devfee.md): shown only to a wallet in the dev fee's splitters; tree: devFeeOf's; did: the
+  // card an action was asked from (its outcome shows there: result, txs, actionError); proposal: Redirect's tally
+  devFee: { shown: false, tree: null, error: '', did: '', result: '', txs: [], actionError: '', proposal: null },
+  devFeeBusy: '', // a Dev Fee action in flight: '<op>:<splitter>'
+  devFeeGiveUp: '', // the splitter whose "Give up the authority" asks first
   catalog: [],
   // the track record (docs/design/track-record.md): records() as last read (while Streams shows), the scan's step at a
   // readable pace, the open stream's key and its record() (with its pairs), the whole list asked for

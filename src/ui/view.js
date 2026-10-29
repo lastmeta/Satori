@@ -13,14 +13,17 @@ import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
 import { walletTab } from './wallet.js';
 import { marketTab } from './market.js';
+import { devFeeTab } from './devfee.js';
 import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'settings'];
+export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'devfee', 'settings'];
+/** Tabs only some see: Dev Fee, a wallet in the dev fee's splitters (docs/design/devfee.md). */
+export const tabShown = (t) => t !== 'devfee' || !!state.devFee.shown;
 const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
-const LABEL = { game: 'Game', market: 'Market', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
+const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
   // a game controller's outline
   game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path></svg>`,
@@ -31,6 +34,8 @@ const ICON = {
   // a shop: its awning over a counter
   market: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9h16M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0M5.5 11.5V20h13v-8.5M10 20v-5h4v5"></path></svg>`,
   wallet: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M16 12h2"></path></svg>`,
+  // one line splitting in two: the dev fee's splitters
+  devfee: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h7c3 0 4-6 8-6h3M10 12c3 0 4 6 8 6h3M18 3l3 3-3 3M18 15l3 3-3 3"></path></svg>`,
   // a gear (three lines is the menu's)
   settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path><circle cx="12" cy="12" r="6.5"></circle></svg>`,
 };
@@ -52,9 +57,9 @@ const goTo = (a, t) => (e) => {
   e.preventDefault();
   a.go(t);
 };
-const navLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`nav-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${LABEL[t]}</a>`;
+const navLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`nav-${t}`}" aria-current="${current(t)}" hidden="${() => !tabShown(t)}" @click="${goTo(a, t)}">${LABEL[t]}</a>`;
 const barLink = (a, t) => html`<a href="${`#${t}`}" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${goTo(a, t)}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
-const menuLink = (a, t) => html`<a href="${`#${t}`}" role="menuitem" data-test="${`tab-${t}`}" aria-current="${current(t)}" @click="${(e) => { state.menuOpen = false; goTo(a, t)(e); }}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
+const menuLink = (a, t) => html`<a href="${`#${t}`}" role="menuitem" data-test="${`tab-${t}`}" aria-current="${current(t)}" hidden="${() => !tabShown(t)}" @click="${(e) => { state.menuOpen = false; goTo(a, t)(e); }}">${ICON[t]()}<span>${LABEL[t]}</span></a>`;
 /** The phone's menu (☰ Menu, the bar's third button): Models, Streams, Market, Wallet, Settings, listed above it. */
 const tabMenu = (a) => html`<div class="tabmenu">
     <button class="menu-btn" data-test="tab-menu" aria-haspopup="menu" aria-expanded="${() => String(!!state.menuOpen)}" data-current="${() => MENU.includes(state.tab)}" @click="${() => { state.menuOpen = !state.menuOpen; }}">${MENU_ICON()}<span>Menu</span></button>
@@ -243,6 +248,7 @@ export function render(root, a) {
       ${streamsTab(a)}
       ${marketTab(a)}
       ${walletTab(a)}
+      ${devFeeTab(a)}
       ${settingsTab(a)}
     </div>
   </main>

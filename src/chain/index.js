@@ -17,7 +17,7 @@ import {
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import {
-  adapterUiAbi, airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, tokenAbi, votingAbi,
+  adapterUiAbi, airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, splitterAbi, tokenAbi, votingAbi,
 } from './abi.js';
 import { serial } from '../util.js';
 
@@ -298,6 +298,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     // through (simulate, the pad, the max fee, one at a time with the rest, the receipt).
     client,
     write,
+    config,
     /** What the RPC says it is (the app refuses a chain other than the config's). */
     chainId: () => client.getChainId(),
 
@@ -584,6 +585,16 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       const max = gas * (2n * base + tip);
       return { gas, about: estimate * (base + tip), max, ...(asset === 'ETH' && { value: await fitted(from, wei, max) }) };
     },
+
+    // the dev fee's splitters (docs/design/devfee.md): the tree's top, the token's immutable; reads of any splitter, many
+    // at once ({ status, result } each: a payee that is no splitter fails its slotCount); the wallet's writes
+    /** The dev fee's top splitter: the token's PLATFORM_FEE_RECIPIENT. */
+    platformFeeRecipient: () => read(token('PLATFORM_FEE_RECIPIENT')),
+    /** [[splitter, functionName, args]] → [{ status: 'success' | 'failure', result }] in one multicall; an RPC error throws. */
+    splitterReads: (calls) => client.multicall({ allowFailure: true,
+      contracts: calls.map(([address, functionName, args = []]) => ({ address, abi: splitterAbi, functionName, args })) }),
+    /** A splitter's function from `key` (the wallet). */
+    splitterWrite: (key, address, functionName, args, opts) => write(key, { address, abi: splitterAbi, functionName, args }, opts),
 
     /** SATORI from the wallet (the token refuses while transfer-locked: the simulate says Locked). */
     sendSatori: (wallet, to, amount, opts) => write(wallet, token('transfer', [to, amount]), opts),

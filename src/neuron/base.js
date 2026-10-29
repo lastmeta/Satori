@@ -4,6 +4,7 @@
 //   · claims (Unlock: hub.claim, merkle, airdrop) · send (Unlock)
 // The batch goes at the first check of each UTC round: 10 s after start (at
 // once when one is due), at the next round's start (chain time) and at least hourly.
+import { devFeeOf, devFeeOps, proposalOf } from './devfee.js';
 import { SKIP } from './skip.js';
 import { playerOf } from './play.js';
 import {
@@ -837,6 +838,22 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
         fee: { gas: Number(fee.gas), about: formatEther(fee.about), max: formatEther(fee.max) } };
     },
 
+    /** The dev fee's splitters and the wallet in them (docs/design/devfee.md): src/neuron/devfee.js's devFeeOf. */
+    async devFee() {
+      const { chain } = await chainNow();
+      return devFeeOf(chain, walletAddress);
+    },
+    /** Where one "redirect `splitter` to `to`" proposal stands (proposalOf). */
+    async devFeeProposal(splitter, to) {
+      const { chain } = await chainNow();
+      return proposalOf(chain, await devFeeOf(chain, walletAddress), splitter, to);
+    },
+    /** A Dev Fee action from the wallet (devFeeOps' `op`, on the tree read just now): → [{ hash, label }] */
+    async devFeeAct(op, ...args) {
+      const v = needWallet();
+      if (!devFeeOps[op]) throw new Error(`No dev fee action ${op}`);
+      return act('devfee', async (chain, step) => devFeeOps[op](chain, v, await devFeeOf(chain, walletAddress), ...args, { step, opts: sent }));
+    },
     /**
      * From the wallet: { asset: 'ETH' | 'SATORI', to, amount } (a decimal string). `key`: the wallet to send with, as the
      * app opens it from the passphrase for each send (keys' withPassphrase); else the unlocked one. → { hash }

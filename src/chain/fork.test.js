@@ -11,9 +11,11 @@ import { DEFAULTS } from './config.js';
 import { createChain, revertName, DOWN, INDEFINITE } from './index.js';
 import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/fork.mjs';
 import { createBase, runBatch } from '../neuron/base.js';
+import { devFeeOf, devFeeOps } from '../neuron/devfee.js';
 import { CentralError } from '../central/index.js';
 
 const RPC = process.env.BASE_FORK;
+const DEFAULTS_TOP = '0x6C5722C65041341C16D892235ea6076F05Cf4238'; // the token's PLATFORM_FEE_RECIPIENT: splitter A
 const E18 = 10n ** 18n;
 const chain = () => createChain({ config: DEFAULTS, transport: http(RPC), pollingInterval: 250, settle: { tries: 5, ms: 500 } });
 const signer = () => {
@@ -233,4 +235,34 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
       expect(r.rewards).toMatchObject({ by: 'alias', hash: expect.stringMatching(/^0x/) });
       expect(await satori(wallet.evmAddress)).toBe(before + 4n * E18);
     });
+
+  // The dev fee's splitters as deployed (docs/design/devfee.md): a payee of C hands its slot to a throwaway wallet
+  // (impersonated, here only), which then reads the tree and claims, what waits in A moved down first.
+  test('the dev fee: a slot in C read from the token down, then claimed through A', { timeout: 120_000 }, async () => {
+    const { test: anvil, pub } = clients(RPC);
+    const sp = parseAbi(['function getSlot(uint256) view returns (address, uint256)', 'function rotateRecipient(address)']);
+    const C = '0x52b7ee858379509F7bDBc239da0F1ff36bEAd2ed';
+    const [payee] = await pub.readContract({ address: C, abi: sp, functionName: 'getSlot', args: [0n] });
+    const w = signer();
+    await anvil.impersonateAccount({ address: payee });
+    await anvil.setBalance({ address: payee, value: 10n ** 17n });
+    const hash = await createWalletClient({ account: payee, chain: baseSepolia, transport: http(RPC) })
+      .writeContract({ address: C, abi: sp, functionName: 'rotateRecipient', args: [w.evmAddress] });
+    await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+    await fund(RPC, [w.evmAddress], { eth: '0.1' });
+
+    const t = await devFeeOf(chain(), w.evmAddress);
+    expect(t.shown).toBe(true);
+    expect(t.nodes.map((n) => n.address)).toEqual([DEFAULTS_TOP, C, '0xc082CCc8D827b58bC848d5918Ca92eEe5C06F5f7']);
+    const mine = t.mine[0];
+    expect(mine).toMatchObject({ node: C, slotId: 0, shares: 5000n, wholeBps: 3000n });
+    const owed = mine.claimable + mine.waiting;
+    expect(owed).toBeGreaterThan(0n); // A holds the dev fee of every round since D8
+    const txs = await devFeeOps.claim(chain(), w, t, C, { step: () => {}, opts: () => ({}) });
+    expect(txs.map((x) => x.label)).toEqual(mine.waiting > 0n ? ['Moved down', 'Claimed'] : ['Claimed']);
+    const got = await pub.readContract({ address: DEFAULTS.token, abi: parseAbi(['function balanceOf(address) view returns (uint256)']), functionName: 'balanceOf', args: [w.evmAddress] });
+    expect(got).toBeGreaterThanOrEqual(owed); // and a little more: rounds the fork's clock moved on add to A
+    const after = (await devFeeOf(chain(), w.evmAddress)).mine[0];
+    expect(after.claimable).toBe(0n);
+  });
 });

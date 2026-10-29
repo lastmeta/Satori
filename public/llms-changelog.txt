@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-29 (Dev Fee)
+
+- The **Dev Fee** tab and `devFee()`, `devFeeClaim`, `devFeeTrigger`, `devFeeMoveSlot`, `devFeeProposal`, `devFeeVote`,
+  `devFeeUnvote`, `devFeeRedirect`, `devFeeOffer`, `devFeeAccept`, `devFeeGiveUp`: only for a wallet in the dev fee's
+  splitters (docs/design/devfee.md).
+
 ## Changed 2026-10-29 (Check in now)
 
 - *Was asleep*: the line no longer says how long Satori was closed ("Catching up in 36 min.", "Caught up just now."),

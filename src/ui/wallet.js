@@ -27,7 +27,7 @@ const BUSY = { stake: 'Staking…', unstake: 'Unstaking…', claim: 'Claiming…
  * node (see streamRow), used as a list item itself: ArrowJS 1.0.6 reuses a rendered chunk for any template of
  * the same text, so a `<li>${…}</li>` wrapping it would take the word list's text slot and print the template.
  */
-const txLink = (hash, label = '', title = '') => {
+export const txLink = (hash, label = '', title = '') => {
   const ex = state.base.explorer;
   const text = `${label ? `${label} ` : ''}${shortHash(hash)}`;
   const hover = `${title ? `${title} · ` : ''}${hash}`;

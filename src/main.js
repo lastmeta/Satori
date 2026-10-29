@@ -20,7 +20,7 @@ import {
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
-import { errorText, UP, DOWN } from './chain/index.js';
+import { errorText, same, UP, DOWN } from './chain/index.js';
 import { createAutoLock } from './keys/autolock.js';
 import { createCentral } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
@@ -40,7 +40,7 @@ import { listingOf } from './neuron/market.js';
 import { playerOf, sendsToday } from './neuron/play.js';
 import { watchable } from './neuron/records.js';
 import { DEFAULT_PRICE } from './ui/market.js';
-import { formatEther } from 'viem';
+import { formatEther, getAddress, isAddress } from 'viem';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
@@ -143,9 +143,27 @@ const refreshRecords = coalesce('records', async () => {
 });
 const refreshBase = coalesce('base status', async () => {
   state.base = await base.status();
+  void refreshDevFee();
   // staked or unstaked, by hand or not: the reminder server's player follows (only when it changed)
   if (state.reminder.on) followPlayer(reminderPlayer()).catch((err) => console.warn('[satori] reminder', err));
 });
+
+/**
+ * The Dev Fee tab (docs/design/devfee.md): the splitters and the wallet in them. Read with the Base card at most every
+ * 15 min, at once when the tab opens and after each of its actions; a read that fails keeps the last answer (the tab is
+ * never hidden by a read that did not come).
+ */
+let devFeeAt = 0;
+const readDevFee = coalesce('dev fee', async () => {
+  try {
+    const tree = await base.devFee();
+    Object.assign(state.devFee, { tree, shown: tree.shown, error: '' }); // in place: an action's outcome and the tally stay
+    devFeeAt = nowS();
+  } catch (err) {
+    state.devFee.error = err?.shortMessage ?? err?.message ?? String(err);
+  }
+});
+const refreshDevFee = (now = false) => (now || nowS() - devFeeAt > 900 ? readDevFee() : undefined);
 
 /** Whom the daily reminder watches on the chain (neuron/play.js sendsToday): its address. */
 const reminderPlayer = () => (sendsToday({ play: state.base.play, staked: state.base.wallet?.staked }) === 'alias' ? state.alias : state.wallet);
@@ -704,6 +722,33 @@ const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => {
   void refreshBase();
 });
 
+const NOT_DEV_FEE = "The Dev Fee tab is only for a wallet in the dev fee's splitters (docs/design/devfee.md).";
+/** What a Dev Fee action did, in its card (docs/design/devfee.md#the-cards). */
+const DEV_FEE_DONE = {
+  claim: (amount) => `Claimed ${amount} SATORI.`,
+  trigger: (caller) => (caller ? `Only ${shortHash(caller)} (and you) can trigger your payout now.` : 'Anyone can trigger your payout again.'),
+  moveSlot: (to) => `Moved: ${shortHash(to)} holds the slot now.`,
+  vote: (to) => `You agreed to redirect it to ${shortHash(to)}.`,
+  unvote: () => 'Your agreement is taken back.',
+  redirect: (to) => `Redirected to ${shortHash(to)}.`,
+  offer: (to) => `Offered to ${shortHash(to)}: it moves when they accept.`,
+  accept: () => 'You hold its authority now.',
+  giveUp: () => "Given up for good: only its payees' agreement can redirect it now.",
+};
+/** A Dev Fee action (needs Unlock), one at a time; the activity log says a claim; then the tab is read again. → [{ hash, label }] */
+function devFeeAction(op, splitter, ...args) {
+  return exclusive(`${op}:${splitter}`, async () => {
+    const mine = state.devFee.tree?.mine.find((m) => same(m.node, splitter));
+    const txs = await base.devFeeAct(op, splitter, ...args);
+    if (op === 'claim' && mine) activity.wallet('claim', `Claimed ${fmtNum(Number(formatEther(mine.claimable + mine.waiting)))} SATORI of the dev fee`);
+    return txs;
+  }, 'devFeeBusy').finally(() => {
+    autoLock.touch();
+    void refreshDevFee(true);
+    void refreshBase();
+  });
+}
+
 /** The wallet's Base actions (Unlock), for the UI and agents alike; the activity log says what each did. */
 const walletOps = {
   async delegate() {
@@ -793,6 +838,7 @@ function showModel(id) {
 function go(where, section) {
   const { tab, model } = routeOf(where);
   if (!tab) throw new Error(`No such tab: ${where}. One of ${TABS.join(', ')}, or models/<id>.`);
+  if (tab === 'devfee' && state.devFee.tree && !state.devFee.shown) throw new Error(NOT_DEV_FEE);
   const hash = model ? modelHref(model) : `#${tab}`;
   if (location.hash !== hash) history.pushState(null, '', hash);
   const changed = state.tab !== tab;
@@ -1211,6 +1257,41 @@ const actions = {
     if (noGas()) return void Object.assign(state, { baseDid: name === 'baseClaim' ? 'claim' : 'stake', baseResult: '', baseTxs: [], baseError: noGas() });
     return withWallet(slot, () => actions[name]());
   },
+  /**
+   * A Dev Fee card's action (docs/design/devfee.md): Unlock first (inline, in that card: `card`) when locked; its
+   * outcome in that card. `typed`: the address typed a second time, for the ones that can't be undone.
+   */
+  devFee(card, op, splitter, arg, typed) {
+    Object.assign(state.devFee, { did: card, result: '', txs: [], actionError: '' });
+    if (typed !== undefined && String(typed).trim().toLowerCase() !== String(arg ?? '').trim().toLowerCase()) {
+      state.devFee.actionError = 'The two addresses do not match.';
+      return undefined;
+    }
+    return withWallet(card, () => actions.devFeeNow(op, splitter, arg));
+  },
+  async devFeeNow(op, splitter, arg) {
+    const mine = state.devFee.tree?.mine.find((m) => same(m.node, splitter));
+    try {
+      const txs = await devFeeAction(op, splitter, ...(arg === undefined ? [] : [arg]));
+      const done = op === 'claim' ? DEV_FEE_DONE.claim(fmtNum(Number(formatEther((mine?.claimable ?? 0n) + (mine?.waiting ?? 0n)))))
+        : DEV_FEE_DONE[op](isAddress(String(arg ?? '').trim()) ? getAddress(String(arg).trim()) : '');
+      Object.assign(state.devFee, { result: done, txs });
+      if (op === 'vote' || op === 'unvote') await actions.devFeeCheck(splitter, arg);
+    } catch (err) {
+      state.devFee.actionError = err?.shortMessage ?? err?.message ?? String(err);
+    }
+  },
+  devFeeRefresh: () => refreshDevFee(true),
+  /** Redirect this splitter: where the proposal to `to` stands (read, no key). */
+  async devFeeCheck(splitter, to) {
+    state.devFee.proposal = null;
+    if (!String(to ?? '').trim()) return;
+    try {
+      state.devFee.proposal = { splitter, ...await base.devFeeProposal(splitter, to) };
+    } catch (err) {
+      state.devFee.proposal = { splitter, error: err?.shortMessage ?? err?.message ?? String(err) };
+    }
+  },
   baseRelink: () => baseUi('link', async () => {
     await relinkWallet();
     return { text: 'Linked: the Satori Service pays this wallet.' };
@@ -1411,6 +1492,18 @@ const actions = {
 /** Central's stream meta: the object its JSON text holds, the text if it is not JSON, or null. */
 function parseMeta(meta) {
   try { return meta == null ? null : JSON.parse(meta); } catch { return meta; }
+}
+
+/** devFee()'s answer: the tree as plain values (SATORI as decimal strings, shares in %). */
+function devFeeView(t) {
+  if (!t) return { shown: false, top: null, splitters: [] };
+  const pct = (bps) => Number(bps) / 100;
+  return { shown: t.shown, top: t.top, splitters: t.nodes.map((n) => {
+    const m = t.mine.find((x) => same(x.node, n.address));
+    return { address: n.address, parent: n.parent, authority: n.authority, pendingAuthority: n.pendingAuthority, thresholdPct: pct(n.thresholdBps),
+      mine: m ? { slotId: m.slotId, pct: pct(m.shares), wholePct: pct(m.wholeBps), claimable: formatEther(m.claimable),
+        waiting: formatEther(m.waiting), trigger: m.trigger } : null };
+  }) };
 }
 
 const ready = () => {
@@ -1780,6 +1873,41 @@ window.satori = {
    * the wallet (needs Unlock then). → { rewards, merkle, airdrop }
    */
   async claim() { ready(); return baseAction('claim', walletOps.claim); },
+  /**
+   * The Dev Fee tab's state, read fresh (docs/design/devfee.md): { shown, top, splitters: [{ address, parent, authority,
+   * pendingAuthority, thresholdPct, mine: { slotId, pct, wholePct, claimable, waiting, trigger } | null }] }; SATORI as
+   * decimal strings.
+   */
+  async devFee() {
+    ready();
+    await readDevFee();
+    if (state.devFee.error) throw new Error(state.devFee.error);
+    return devFeeView(state.devFee.tree);
+  },
+  /** Claim the wallet's dev fee in `splitter` (what waits in the top moved down first). Needs Unlock; gas. → [{ hash, label }] */
+  async devFeeClaim(splitter) { ready(); return devFeeAction('claim', splitter); },
+  /** Who may trigger the wallet's payout in `splitter`: an address, or '' for anyone. Needs Unlock. */
+  async devFeeTrigger(splitter, caller = '') { ready(); return devFeeAction('trigger', splitter, caller); },
+  /** Hand the wallet's slot in `splitter` to `to`, for good. Needs Unlock. */
+  async devFeeMoveSlot(splitter, to) { ready(); return devFeeAction('moveSlot', splitter, to); },
+  /** Where "redirect `splitter` to `to`" stands: { to, agreedPct, thresholdPct, cleared, iAgreed }. No key. */
+  async devFeeProposal(splitter, to) {
+    ready();
+    const p = await base.devFeeProposal(splitter, to);
+    return { to: p.to, agreedPct: Number(p.agreedBps) / 100, thresholdPct: Number(p.thresholdBps) / 100, cleared: p.cleared, iAgreed: p.iAgreed };
+  },
+  /** Agree to redirect `splitter` to `to` (a payee of it). Needs Unlock. */
+  async devFeeVote(splitter, to) { ready(); return devFeeAction('vote', splitter, to); },
+  /** Take that agreement back. Needs Unlock. */
+  async devFeeUnvote(splitter, to) { ready(); return devFeeAction('unvote', splitter, to); },
+  /** Redirect `splitter`'s slot in the top to `to`: its authority alone, or anyone once enough agreed. Needs Unlock. */
+  async devFeeRedirect(splitter, to) { ready(); return devFeeAction('redirect', splitter, to); },
+  /** Offer `splitter`'s authority to `to` (it moves when they accept). Needs Unlock. */
+  async devFeeOffer(splitter, to) { ready(); return devFeeAction('offer', splitter, to); },
+  /** Accept `splitter`'s authority, offered to this wallet. Needs Unlock. */
+  async devFeeAccept(splitter) { ready(); return devFeeAction('accept', splitter); },
+  /** Give up `splitter`'s authority for good. Needs Unlock. */
+  async devFeeGiveUp(splitter) { ready(); return devFeeAction('giveUp', splitter); },
   /** The alias's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
   /** The review before a send, no key needed: { asset, to, amount } → { asset, to, amount, fee: { gas, about, max } } */
@@ -1871,6 +1999,14 @@ watch(lineOf(['watch'], createHold({ show: (v) => { state.watchLine = v.line; } 
 watch(() => {
   void state.nostr.watching;
   if ((state.tab === 'streams' || state.tab === 'market') && state.screen === 'home') refreshRecords();
+});
+/** The Dev Fee tab: read again when it opens; not for this wallet (a #devfee link, or a slot moved away): Home. */
+watch(() => state.tab === 'devfee' && state.screen === 'home', (open) => { if (open) void refreshDevFee(true); });
+watch(() => {
+  if (state.tab === 'devfee' && state.devFee.tree && !state.devFee.shown) {
+    state.tab = 'home';
+    history.replaceState(null, '', '#home');
+  }
 });
 /** The Market tab: what the relays offer, asked for when it opens and nothing is known yet. */
 watch(() => state.tab === 'market' && state.screen === 'home', (open) => {

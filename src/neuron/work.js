@@ -15,9 +15,9 @@
  * record, src/neuron/records.js), shown on the Streams tab's Prediction streams card.
  */
 export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'reward', 'discover', 'subscribe',
-  'watch'];
+  'watch', 'devfee'];
 export const HERO = ORDER.slice(0, 10);
-const WALLET = new Set(['stake', 'unstake', 'claim', 'send', 'keys']);
+const WALLET = new Set(['stake', 'unstake', 'claim', 'send', 'keys', 'devfee']);
 /**
  * Closing now would lose work: predictions being sent, a Base batch or a wallet transaction sent and not yet confirmed,
  * the keys being written.
@@ -53,6 +53,9 @@ const TEXT = {
   'watch:ask': (e) => `Finding prediction streams · asking the relays ${e.done} of ${e.total}`,
   'watch:verify': (e) => `Finding prediction streams · checking signatures ${count(e.done)} of ${count(e.total)}`,
   'keys:save': () => 'Saving your keys…',
+  // the Dev Fee tab's Claim (docs/design/devfee.md): what waits in the top splitter moved down first
+  'devfee:move': (e) => tx(e, 'Moving the dev fee down to your splitter…'),
+  'devfee:claim': (e) => tx(e, 'Claiming your dev fee…'),
   // the reward address saved or cleared (src/neuron/reward.js): signed in first; a read is quiet (Settings' row says it)
   'reward:login': () => 'Signing in to the Satori Service…',
   'reward:save': () => 'Saving the reward address…',

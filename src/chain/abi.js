@@ -72,7 +72,40 @@ export const tokenAbi = abi(
   'function transfer(address to, uint256 value) returns (bool)',
   'function transferLockedUntil(address user) view returns (uint24)',
   'function getCurrentRound() view returns (uint256)',
+  'function PLATFORM_FEE_RECIPIENT() view returns (address)', // the dev fee's splitter tree, its top (docs/design/devfee.md)
 );
+
+/**
+ * SatoriSplitterImmutable: the dev fee's splitters (docs/design/devfee.md). Not upgradeable, so its own snapshot
+ * (test/fixtures/abi-splitter.json, from the contract's build) rather than the deploy's. ETH is the token address(0).
+ */
+export const splitterAbi = parseAbi([
+  'function slotCount() view returns (uint256)',
+  'function getSlot(uint256 slotId) view returns (address payee, uint256 shares)',
+  'function releasable(address token, uint256 slotId) view returns (uint256)',
+  'function withdrawCaller(uint256 slotId) view returns (address)',
+  'function totalShares() view returns (uint256)',
+  'function authority() view returns (address)',
+  'function pendingAuthority() view returns (address)',
+  'function rotationThresholdBps() view returns (uint256)',
+  'function proposalId(address parent, address newPayee) view returns (bytes32)',
+  'function approvedShares(bytes32 proposal) view returns (uint256)',
+  'function approved(bytes32 proposal, uint256 slotId) view returns (bool)',
+  'function rotationApproved(address parent, address newPayee) view returns (bool)',
+  'function withdraw(address token, uint256 slotId) returns (uint256)',
+  'function setWithdrawCaller(address caller)',
+  'function rotateRecipient(address newPayee)',
+  'function approveRotation(address parent, address newPayee)',
+  'function revokeRotation(address parent, address newPayee)',
+  'function rotateAt(address parent, address newPayee)',
+  'function transferAuthority(address newAuthority)',
+  'function acceptAuthority()',
+  'function renounceAuthority()',
+  'error ZeroAddress()', 'error PayeeIsSelf()', 'error AlreadyRecipient()', 'error NotARecipient()', 'error UnknownSlot()',
+  'error NothingToWithdraw()', 'error NotAuthority()', 'error NotPendingAuthority()', 'error NotWithdrawCaller()',
+  'error AlreadyApproved()', 'error NotApproved()', 'error InsufficientConsent()',
+  'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)', 'error HookFailedWithoutReason()',
+]);
 
 export const merkleAbi = abi(
   'function claimMerkle(uint256 lifetimeEntitlement, bytes32[] proof)',

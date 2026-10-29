@@ -883,3 +883,9 @@ a.chan:hover { border-color: var(--muted); }
 /* Setup › Connect a wallet: a phone's choices (docs/design/wallets.md#a-connected-wallet) */
 .connect-choices .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
 .connect-choices .choice .small { font-weight: 400; opacity: 0.8; }
+/* Dev Fee (src/ui/devfee.js): an address form, its button under the fields; a folded part's summary like Details' */
+.devfee-form { display: grid; gap: 8px; justify-items: start; margin: 8px 0 16px; }
+.devfee-form input { width: 100%; box-sizing: border-box; }
+[data-test=devfee-authority] h3 { margin: 16px 0 4px; font-size: 1rem; }
+.devfee-more { margin-top: 12px; }
+.devfee-more > summary { cursor: pointer; color: var(--muted); }
