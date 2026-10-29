@@ -1,6 +1,7 @@
 // The Dev Fee page's picture of the splitters (owner, 2026-10-29: "a representation of the contract"): the top splitter,
-// its branches (each with its authority and what a redirect needs), and every payee as a dot with its share on its line
-// and the SATORI it has not claimed yet. The wallet is green; a line it can change carries a word (move, vote,
+// its branches (each with its authority and what a redirect needs), and their payees as dots with each share on its line
+// and the SATORI not claimed yet; only the line down to the wallet's own splitter and what is under it, unless it is an
+// authority (the top's sees everything, a branch's every branch but not the others' payees). The wallet is green; a line it can change carries a word (move, vote,
 // redirect), explained under the picture. Lines are one SVG path each (no nested templates inside an <svg>); the boxes,
 // dots and words are HTML over it, x in % of the width, y in px.
 import { html } from '@arrow-js/core';
@@ -38,12 +39,17 @@ export function treeLayout(tree) {
   const top = tree?.nodes?.[0];
   if (!top) return null;
   const branchOf = (payee) => tree.nodes.find((n) => n.parent && n.address.toLowerCase() === payee.toLowerCase());
-  // the payees, left to right: a branch's own payees in its place
-  const leaves = top.slots.flatMap((s) => {
+  // what this wallet sees (owner, 2026-10-29): the top's authority or a payee of the top, everything; a branch's
+  // authority, every branch but only its own payees; a payee of a branch, the line down to it and its payees
+  const all = top.isAuthority || top.mySlotId != null;
+  const asAuthority = tree.nodes.some((n) => n.parent && (n.isAuthority || n.isOffered));
+  const shown = top.slots.map((s) => {
     const b = branchOf(s.payee);
-    return b ? b.slots.map((x) => ({ node: b, slot: x, up: s })) : [{ node: top, slot: s, up: null }];
-  });
-  const cols = leaves.length || 1;
+    if (!b) return { s, units: all || asAuthority ? 1 : 0 };
+    const full = all || b.mySlotId != null || b.isAuthority || b.isOffered;
+    return { s, b, full, units: full ? b.slots.length : asAuthority ? 2 : 0 };
+  }).filter((x) => x.units);
+  const cols = shown.reduce((n, x) => n + x.units, 0) || 1;
   const xOf = (i) => ((i + 0.5) * 100) / cols;
   const items = [{ kind: 'box', id: top.address, x: 50, y: 0, w: 100, title: nameOf(top), lines: [{ text: "The token's dev fee goes here" }] }];
   const plain = [];
@@ -60,8 +66,7 @@ export function treeLayout(tree) {
     }
   };
   let i = 0;
-  for (const s of top.slots) {
-    const b = branchOf(s.payee);
+  for (const { s, b, full, units } of shown) {
     if (!b) { // a plain payee of the top
       const me = top.mySlotId === s.slotId;
       const x = xOf(i++);
@@ -71,14 +76,14 @@ export function treeLayout(tree) {
       continue;
     }
     const x0 = i;
-    const x = (xOf(x0) + xOf(x0 + b.slots.length - 1)) / 2;
+    const x = (xOf(x0) + xOf(x0 + units - 1)) / 2;
     const iMember = b.mySlotId != null;
     const word = b.isAuthority ? 'redirect' : iMember ? 'vote' : '';
     const auth = b.isOffered ? { text: 'Authority offered to you', me: true }
       : b.authority === zeroAddress ? { text: 'No authority' }
         : { text: b.isAuthority ? 'Authority: you' : `Authority ${shortHash(b.authority)}`, me: b.isAuthority };
     edge(50, TOP_H, x, BOX_TOP, { pct: pctOf(s.shares, top.totalShares), word, green: !!word });
-    items.push({ kind: 'box', id: b.address, x, y: BOX_TOP, w: (b.slots.length * 100) / cols, title: nameOf(b), mine: b.isAuthority,
+    items.push({ kind: 'box', id: b.address, x, y: BOX_TOP, w: (units * 100) / cols, title: nameOf(b), mine: b.isAuthority,
       lines: [auth, { text: `${pctOf(b.thresholdBps, 10_000n)} must agree to redirect`, muted: true }] });
     const share = pctOf(s.shares, top.totalShares);
     if (b.isAuthority) legend.push({ word: 'redirect', text: `As its authority you can redirect ${nameOf(b)}'s ${share} of the dev fee alone, offer the authority to another address, or give it up.` });
@@ -86,6 +91,7 @@ export function treeLayout(tree) {
       const held = pctOf(b.slots[b.mySlotId].shares, b.totalShares);
       legend.push({ word: 'vote', text: `Redirect ${nameOf(b)}: change where the top splitter sends its ${share}. ${pctOf(b.thresholdBps, 10_000n)} of its shares must agree${b.authority !== zeroAddress ? ', or its authority alone' : ''}; you hold ${held}.` });
     }
+    if (!full) { i += units; continue; }
     for (const t of b.slots) {
       const me = b.mySlotId === t.slotId;
       const tx = xOf(i++);
@@ -95,7 +101,7 @@ export function treeLayout(tree) {
       if (me) legend.push({ word: 'move', text: `Move your slot: hand your ${pctOf(t.shares, b.totalShares)} of ${nameOf(b)} and all its future payments to another address. Only you can, and it can't be undone.` });
     }
   }
-  return { height: HEIGHT, minWidth: leaves.length * COL, plain: plain.join(''), mine: mine.join(''), items, legend };
+  return { height: HEIGHT, minWidth: cols * COL, plain: plain.join(''), mine: mine.join(''), items, legend };
 }
 
 const item = (n) => {

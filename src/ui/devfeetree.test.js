@@ -15,7 +15,7 @@ const read = async (arrange) => {
 };
 const of = (L, kind) => L.items.filter((n) => n.kind === kind);
 
-test('a payee of C: the top, C and B with their authorities, four payees with what they have not claimed; the wallet green, its two lines worded', async () => {
+test('a payee of C: the top, then only C with its authority and its two payees with what they have not claimed; the wallet green, its two lines worded', async () => {
   const L = treeLayout(await read((s) => {
     s.splitters[SPLIT_C].slots[0].payee = V;
     s.balance[SPLIT_A] = 100n * E18;
@@ -23,24 +23,30 @@ test('a payee of C: the top, C and B with their authorities, four payees with wh
   }));
   expect(of(L, 'box').map((b) => [b.title, ...b.lines.map((l) => l.text)])).toEqual([
     ['Top splitter 0x6C57…4238', "The token's dev fee goes here"],
-    ['Splitter 0x52b7…d2ed', expect.stringMatching(/^(Authority 0x|No authority)/), '90% must agree to redirect'],
-    ['Splitter 0xc082…F5f7', expect.stringMatching(/^(Authority 0x|No authority)/), '90% must agree to redirect']]);
-  expect(of(L, 'pct').map((p) => p.text)).toEqual(['60%', '50%', '50%', '40%', '50%', '50%']);
-  // C's payees: 5 each in C plus 30 each waiting in A; B's: 20 each waiting in A
-  expect(of(L, 'dot').map((d) => [d.name, d.amount, d.me])).toEqual([
-    ['You', '35 SATORI', true], [expect.stringMatching(/^0x/), '35 SATORI', false],
-    [expect.stringMatching(/^0x/), '20 SATORI', false], [expect.stringMatching(/^0x/), '20 SATORI', false]]);
+    ['Splitter 0x52b7…d2ed', expect.stringMatching(/^(Authority 0x|No authority)/), '90% must agree to redirect']]);
+  expect(of(L, 'pct').map((p) => p.text)).toEqual(['60%', '50%', '50%']);
+  expect(of(L, 'box')[1].x).toBe(50); // straight down from the top
+  // C's payees: 5 each in C plus 30 each waiting in A
+  expect(of(L, 'dot').map((d) => [d.name, d.amount, d.me])).toEqual([['You', '35 SATORI', true], [expect.stringMatching(/^0x/), '35 SATORI', false]]);
   expect(of(L, 'word').map((w) => w.text)).toEqual(['vote', 'move']);
   expect(L.legend.map((l) => l.word)).toEqual(['vote', 'move']);
   expect(L.legend[0].text).toBe('Redirect Splitter 0x52b7…d2ed: change where the top splitter sends its 60%. 90% of its shares must agree; you hold 50%.');
   expect(L.mine.split('M').length - 1).toBe(2);
-  expect(L.minWidth).toBe(336);
+  expect(L.minWidth).toBe(168);
 });
 
-test("B's authority: its box green, its line worded redirect; no dot is the wallet", async () => {
+test("B's authority: C's box without its payees, B's with them, green, its line worded redirect; no dot is the wallet", async () => {
   const L = treeLayout(await read((s) => { s.splitters[SPLIT_B].authority = V; }));
   expect(of(L, 'box')[2]).toMatchObject({ mine: true, lines: [{ text: 'Authority: you', me: true }, expect.anything()] });
   expect(of(L, 'word').map((w) => w.text)).toEqual(['redirect']);
+  expect(of(L, 'pct').map((p) => p.text)).toEqual(['60%', '40%', '50%', '50%']);
+  expect(of(L, 'dot').map((d) => d.id.split(':')[0].toLowerCase())).toEqual([SPLIT_B, SPLIT_B]);
   expect(of(L, 'dot').some((d) => d.me)).toBe(false);
+});
+
+test("the top's authority: everything", async () => {
+  const L = treeLayout(await read((s) => { s.splitters[SPLIT_A].authority = V; }));
+  expect(of(L, 'box')).toHaveLength(3);
+  expect(of(L, 'dot')).toHaveLength(4);
   expect(treeLayout(null)).toBe(null);
 });

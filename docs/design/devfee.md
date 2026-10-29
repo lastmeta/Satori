@@ -30,7 +30,9 @@ Every action is the wallet's (the inline Unlock in its card; gas from the wallet
   waits in the top). The wallet is green (a dot, or "Authority: you"). A line it can change
   carries a word, explained under the picture: **move** (its own slot), **vote** (redirect
   the branch it is in, with the others' agreement), **redirect** (as the branch's authority,
-  alone). Display only: `devFee()` and the actions below cover it.
+  alone). It shows the line down to the wallet's own splitter and everything under it, not the
+  siblings (the owner, 2026-10-29); the top's authority sees everything, a branch's authority
+  every branch but only its own branch's payees. Display only: `devFee()` and the actions below cover it.
 
 - **Your share**, one per slot: the splitter, "50% of this splitter · 30% of the whole dev
   fee", and what is claimable: the slot's `releasable` plus its part of what still waits
