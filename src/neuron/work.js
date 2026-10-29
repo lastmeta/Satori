@@ -15,9 +15,9 @@
  * record, src/neuron/records.js), shown on the Streams tab's Prediction streams card.
  */
 export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'reward', 'discover', 'subscribe',
-  'watch', 'devfee'];
+  'watch', 'devfee', 'admin'];
 export const HERO = ORDER.slice(0, 10);
-const WALLET = new Set(['stake', 'unstake', 'claim', 'send', 'keys', 'devfee']);
+const WALLET = new Set(['stake', 'unstake', 'claim', 'send', 'keys', 'devfee', 'admin']);
 /**
  * Closing now would lose work: predictions being sent, a Base batch or a wallet transaction sent and not yet confirmed,
  * the keys being written.

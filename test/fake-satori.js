@@ -19,7 +19,8 @@ export const SPLIT_B = '0xc082ccc8d827b58bc848d5918ca92eee5c06f5f7';
 const SPLITTERS = { [SPLIT_A]: [SPLIT_C, SPLIT_B], [SPLIT_C]: [`0x${'c1'.repeat(20)}`, `0x${'c2'.repeat(20)}`], [SPLIT_B]: [`0x${'b1'.repeat(20)}`, `0x${'b2'.repeat(20)}`] };
 
 const lc = (a) => a.toLowerCase();
-const ADAPTER = `0x${'ad'.repeat(20)}`; // the adapter whose valueDisplay a stream's `display` answers
+const ADAPTER = `0x${'ad'.repeat(20)}`;
+export const ADMIN = `0x${'a0'.repeat(20)}`; // SatoriRewards.admin() unless a test names the wallet // the adapter whose valueDisplay a stream's `display` answers
 
 /**
  * @param {{round?: number, hour?: number, eth?: Record<string, bigint>}} [opts]
@@ -52,6 +53,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     weights: { 1: E18 }, // gameId → voting weight (the engine pays only games with weight, SatoriEngine.sol:828)
     splitters: Object.fromEntries(Object.entries(SPLITTERS).map(([a, payees]) => [a, { slots: payees.map((p, i) => ({ payee: lc(p), shares: a === SPLIT_A ? [6000n, 4000n][i] : 5000n })),
       authority: zeroAddress, pending: zeroAddress, threshold: 9000n, trigger: {}, claimed: {}, withdrawn: 0n, approvals: {}, epoch: {} }])),
+    // the admin and its levers (docs/design/admin.md): capability bits as deployed live (0, 1, 5, 7: 0xa3)
+    admin: ADMIN, caps: 0xa3n, relayer: zeroAddress, regFee: 10n ** 15n, reporter: zeroAddress, approved: {}, adapters: [],
     short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
   };
   const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n) - (s.short[a] ?? 0n);
@@ -122,6 +125,13 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
   }
 
   const fns = (a, f) => ({ abi: a, fns: f });
+  const onlyAdmin = (ctx, error = 'Unauthorized') => { if (ctx.from !== s.admin) revert(error); };
+  const register = (kind, impl, name, ctx) => {
+    onlyAdmin(ctx);
+    if (lc(impl) === zeroAddress) revert(kind === 'stream' ? 'InvalidAdapter' : 'InvalidGameAdapter');
+    if (ctx.write) s.adapters.push({ kind, impl: lc(impl), name });
+    return s.adapters.length + 1;
+  };
   const contracts = {
     [DEFAULTS.engine]: fns(abi.engineAbi, {
       predictMultipleWithPayloads: predict,
@@ -134,6 +144,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       streaks: ([a, g]) => BigInt(s.streak[`${lc(a)}:${g}`] ?? 0),
       curveConfig: () => [2n, 3n, 12n, 0n],
       gameStreakState: ([g]) => [s.threshold[g] ?? 0, 0],
+      offchainReporter: () => s.reporter,
+      setOffchainReporter: ([who], ctx) => { onlyAdmin(ctx, 'OnlyAdmin'); if (ctx.write) s.reporter = lc(who); },
     }),
     [DEFAULTS.games]: fns(abi.gamesAbi, { binaryGameByStream: ([id]) => s.streams[id]?.game ?? 0 }),
     [DEFAULTS.registry]: fns(abi.registryAbi, {
@@ -192,8 +204,18 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         }
         return amount;
       },
+      registerAdapter: ([impl, name], ctx) => register('stream', impl, name, ctx),
+      registerGameAdapter: ([impl, name], ctx) => register('game', impl, name, ctx),
     }),
     [DEFAULTS.rewards]: fns(abi.rewardsAbi, {
+      admin: () => s.admin,
+      setAdmin: ([to], ctx) => { onlyAdmin(ctx); if (lc(to) === zeroAddress) revert('BadInput'); if (ctx.write) s.admin = lc(to); },
+      capabilityAllowed: ([bit, who]) => ((s.caps >> BigInt(bit)) & 1n) === 1n || lc(who) === s.admin,
+      setCapabilities: ([bits], ctx) => { onlyAdmin(ctx); if (ctx.write) s.caps = bits; },
+      officialRelayer: () => s.relayer,
+      setOfficialRelayer: ([to], ctx) => { onlyAdmin(ctx); if (ctx.write) s.relayer = lc(to); },
+      registrationFee: () => s.regFee,
+      setRegistrationFee: ([fee], ctx) => { onlyAdmin(ctx); if (fee === 0n) revert('BadInput'); if (ctx.write) s.regFee = fee; },
       setPredictorFee: ([bps], ctx) => {
         if (s.feeStored[ctx.from]) revert('AlreadySet');
         if (ctx.write) s.feeStored[ctx.from] = bps === 0 ? 1000 : bps;
@@ -224,7 +246,16 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         return true;
       },
     }),
-    [DEFAULTS.voting]: fns(abi.votingAbi, { weightOf: ([g]) => s.weights[g] ?? 0n }),
+    [DEFAULTS.voting]: fns(abi.votingAbi, {
+      weightOf: ([g]) => s.weights[g] ?? 0n,
+      gameApproved: ([g]) => !!s.approved[g],
+      setGameApproved: ([g, on], ctx) => {
+        onlyAdmin(ctx, 'NotAdmin');
+        if (!Object.values(s.streams).some((st) => st.game === g)) revert('UnknownGame');
+        if (g === 1) revert('CannotSetDefaultApproval');
+        if (ctx.write) s.approved[g] = on;
+      },
+    }),
     [DEFAULTS.merkle]: fns(abi.merkleAbi, {
       alreadyMintedTo: ([a]) => s.merkle.minted[lc(a)] ?? 0n,
       // claimMerkle(amount, proof) for the sender, or (D8) claimMerkle(account, amount, proof) by anyone, paid to account

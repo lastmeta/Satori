@@ -7,7 +7,9 @@
       "function predictMultipleWithPayloads((uint32,bytes)[]) -> () nonpayable",
       "function predictMultipleWithReferral(address,(uint32,bytes)[]) -> () nonpayable",
       "function predictedStreamsCount(address,uint256) -> (uint256) view",
-      "function streaks(address,uint32) -> (uint256) view"
+      "function streaks(address,uint32) -> (uint256) view",
+      "function offchainReporter() -> (address) view",
+      "function setOffchainReporter(address) -> () nonpayable"
     ],
     "SatoriGames": [
       "function binaryGameByStream(uint32) -> (uint32) view"
@@ -27,14 +29,24 @@
       "function claim(address) -> (uint256) nonpayable",
       "function claimFor(address,address) -> (uint256) nonpayable",
       "function delegatePredictionPower(address) -> () nonpayable",
-      "function setAllowedDelegator(address) -> () nonpayable"
+      "function setAllowedDelegator(address) -> () nonpayable",
+      "function registerAdapter(address,string) -> (uint32) nonpayable",
+      "function registerGameAdapter(address,string) -> (uint32) nonpayable"
     ],
     "SatoriRewards": [
       "function effectivePredictorFee(address) -> (uint16) view",
       "function predictionDelegateInfo(address) -> (address,uint96) view",
       "function referral(address) -> (address) view",
       "function setPredictorFee(uint16) -> () nonpayable",
-      "function setReferral(address) -> () nonpayable"
+      "function setReferral(address) -> () nonpayable",
+      "function admin() -> (address) view",
+      "function setAdmin(address) -> () nonpayable",
+      "function capabilityAllowed(uint8,address) -> (bool) view",
+      "function setCapabilities(uint256) -> () nonpayable",
+      "function officialRelayer() -> (address) view",
+      "function setOfficialRelayer(address) -> () nonpayable",
+      "function registrationFee() -> (uint256) view",
+      "function setRegistrationFee(uint256) -> () nonpayable"
     ],
     "SatoriRewardsLens": [
       "function getTotalClaimableRewards(address) -> (uint256,bool) view"
@@ -57,15 +69,19 @@
       "function claimableAirdrop(address) -> (uint256) view"
     ],
     "SatoriVoting": [
-      "function weightOf(uint32) -> (uint256) view"
+      "function weightOf(uint32) -> (uint256) view",
+      "function gameApproved(uint32) -> (bool) view",
+      "function setGameApproved(uint32,bool) -> () nonpayable"
     ]
   },
   "errors": [
+    "error AdapterIdSpaceExhausted() -> ()",
     "error AlreadyPredicted() -> ()",
     "error AlreadySet() -> ()",
     "error BadDirection() -> ()",
     "error BadInput() -> ()",
     "error BudgetExceeded() -> ()",
+    "error CannotSetDefaultApproval() -> ()",
     "error CapabilityDisabled() -> ()",
     "error ClaimDelegatedAway() -> ()",
     "error DelegateActive() -> ()",
@@ -76,15 +92,21 @@
     "error ERC20InvalidReceiver(address) -> ()",
     "error EmptyBatch() -> ()",
     "error EmptyStream() -> ()",
+    "error GameAdapterIdSpaceExhausted() -> ()",
     "error HookFailedWithoutReason() -> ()",
+    "error InvalidAdapter() -> ()",
+    "error InvalidGameAdapter() -> ()",
     "error InvalidPredictorFee() -> ()",
     "error InvalidProof() -> ()",
     "error InvalidReferral() -> ()",
     "error Locked() -> ()",
+    "error NotAdmin() -> ()",
     "error NothingToClaim() -> ()",
+    "error OnlyAdmin() -> ()",
     "error Reentrancy() -> ()",
     "error StaleValue() -> ()",
     "error Unauthorized() -> ()",
+    "error UnknownGame() -> ()",
     "error UnknownStream() -> ()"
   ]
 }

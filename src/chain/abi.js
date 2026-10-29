@@ -17,6 +17,9 @@ const ERRORS = [
   // a transfer whose hook ran out of gas reverts instead of skipping a staker's sync (contract humble 86e2bdb3, live
   // since D7; docs/issues/token-hook-gas-estimate.md)
   'error HookFailedWithoutReason()',
+  // the admin's calls (docs/design/admin.md): the engine's, the voting contract's, the registry's and the games'
+  'error OnlyAdmin()', 'error NotAdmin()', 'error UnknownGame()', 'error CannotSetDefaultApproval()', 'error InvalidAdapter()',
+  'error AdapterIdSpaceExhausted()', 'error InvalidGameAdapter()', 'error GameAdapterIdSpaceExhausted()',
 ];
 const abi = (...items) => parseAbi([...items, ...ERRORS]);
 
@@ -30,6 +33,9 @@ export const engineAbi = abi(
   'function streaks(address user, uint32 gameId) view returns (uint256)',
   'function curveConfig() view returns (uint256 f, uint256 g, uint256 r, uint256 b)',
   'function gameStreakState(uint32 gameId) view returns (uint16 threshold, uint40 round)',
+  // the admin's (docs/design/admin.md): who may add off-chain predictions to the default stream's count; zero: no one
+  'function offchainReporter() view returns (address)',
+  'function setOffchainReporter(address who)',
 );
 
 export const gamesAbi = abi('function binaryGameByStream(uint32) view returns (uint32)');
@@ -55,6 +61,9 @@ export const hubAbi = abi(
   // anyone may claim the owner's rewards to the owner (D8, contract ce2ce664); elsewhere, only its named claimer.
   // The app's alias claims the wallet's this way.
   'function claimFor(address owner, address recipient) returns (uint256)',
+  // the admin's (docs/design/admin.md): an official stream or game adapter
+  'function registerAdapter(address impl, string name) returns (uint32 id)',
+  'function registerGameAdapter(address impl, string name) returns (uint32 gameTypeId)',
 );
 
 export const rewardsAbi = abi(
@@ -63,6 +72,16 @@ export const rewardsAbi = abi(
   'function predictionDelegateInfo(address) view returns (address delegate, uint96 power)',
   'function referral(address) view returns (address)',
   'function setReferral(address ref)',
+  // the admin and its levers (docs/design/admin.md). The capability bitmap has no getter: read bit by bit with
+  // capabilityAllowed(bit, 0x0) (the admin itself is always allowed).
+  'function admin() view returns (address)',
+  'function setAdmin(address newAdmin)',
+  'function capabilityAllowed(uint8 capId, address caller) view returns (bool)',
+  'function setCapabilities(uint256 bitmap)',
+  'function officialRelayer() view returns (address)',
+  'function setOfficialRelayer(address relayer)',
+  'function registrationFee() view returns (uint256)',
+  'function setRegistrationFee(uint256 fee)',
 );
 
 export const lensAbi = abi('function getTotalClaimableRewards(address user) view returns (uint256 total, bool complete)');
@@ -115,7 +134,11 @@ export const merkleAbi = abi(
 );
 
 /** The engine pays a game only while its voting weight is > 0 (SatoriEngine.sol:828). */
-export const votingAbi = abi('function weightOf(uint32 gameId) view returns (uint256)');
+export const votingAbi = abi('function weightOf(uint32 gameId) view returns (uint256)',
+  // the admin's (docs/design/admin.md): games are born unapproved and earn nothing until approved
+  'function gameApproved(uint32 gameId) view returns (bool)',
+  'function setGameApproved(uint32 gameId, bool approved)',
+);
 
 export const airdropAbi = abi(
   'function claimAirdrop()',

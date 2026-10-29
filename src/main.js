@@ -40,7 +40,7 @@ import { listingOf } from './neuron/market.js';
 import { playerOf, sendsToday } from './neuron/play.js';
 import { watchable } from './neuron/records.js';
 import { DEFAULT_PRICE } from './ui/market.js';
-import { formatEther, getAddress, isAddress } from 'viem';
+import { formatEther, getAddress, isAddress, zeroAddress } from 'viem';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
@@ -144,6 +144,7 @@ const refreshRecords = coalesce('records', async () => {
 const refreshBase = coalesce('base status', async () => {
   state.base = await base.status();
   void refreshDevFee();
+  void refreshAdmin();
   // staked or unstaked, by hand or not: the reminder server's player follows (only when it changed)
   if (state.reminder.on) followPlayer(reminderPlayer()).catch((err) => console.warn('[satori] reminder', err));
 });
@@ -164,6 +165,23 @@ const readDevFee = coalesce('dev fee', async () => {
   }
 });
 const refreshDevFee = (now = false) => (now || nowS() - devFeeAt > 900 ? readDevFee() : undefined);
+
+/**
+ * The Admin tab (docs/design/admin.md): whether the wallet is the admin, then (only then) its levers. Read as the Dev Fee
+ * tab is: with the Base card at most every 15 min, at once when the tab opens and after each action.
+ */
+let adminAt = 0;
+const readAdmin = coalesce('admin', async () => {
+  try {
+    const { admin, isAdmin } = await base.adminRole();
+    const levers = isAdmin ? await base.adminState() : null;
+    Object.assign(state.admin, { address: admin, shown: isAdmin, levers, error: '' }); // in place: an action's outcome stays
+    adminAt = nowS();
+  } catch (err) {
+    state.admin.error = err?.shortMessage ?? err?.message ?? String(err);
+  }
+});
+const refreshAdmin = (now = false) => (now || nowS() - adminAt > 900 ? readAdmin() : undefined);
 
 /** Whom the daily reminder watches on the chain (neuron/play.js sendsToday): its address. */
 const reminderPlayer = () => (sendsToday({ play: state.base.play, staked: state.base.wallet?.staked }) === 'alias' ? state.alias : state.wallet);
@@ -722,6 +740,31 @@ const baseAction = (what, fn) => exclusive(what, fn, 'baseBusy').finally(() => {
   void refreshBase();
 });
 
+const NOT_ADMIN = "The Admin tab is only for the Satori contract's admin (docs/design/admin.md).";
+const fixAddress = (a) => (isAddress(String(a ?? '').trim()) ? getAddress(String(a).trim()) : '');
+/** What an Admin action did, in its card (docs/design/admin.md#the-cards). */
+const ADMIN_DONE = {
+  capabilities: () => 'Saved: the capabilities are as ticked now.',
+  game: (gameId, approved) => {
+    const g = state.admin.levers?.games.find((x) => x.gameId === Number(gameId));
+    const name = g ? `"${g.name}"` : `Game ${gameId}`;
+    return approved ? `${name} is approved: it can earn now.` : `${name} is disapproved: it earns nothing now.`;
+  },
+  relayer: (to) => (fixAddress(to) && fixAddress(to) !== zeroAddress ? `The official relayer is ${shortHash(fixAddress(to))} now.` : 'There is no official relayer now.'),
+  registrationFee: (v) => `The registration fee is ${String(v).trim()} SATORI now.`,
+  reporter: (to) => (fixAddress(to) && fixAddress(to) !== zeroAddress ? `The off-chain reporter is ${shortHash(fixAddress(to))} now.` : 'Off-chain reporting is off.'),
+  registerAdapter: (kind, impl, name) => `Registered the ${kind} adapter "${String(name).trim()}".`,
+  transfer: (to) => `Transferred: ${shortHash(fixAddress(to))} is the admin now.`,
+};
+/** An Admin action (needs Unlock), one at a time; then the tab is read again. → [{ hash, label }] */
+function adminAction(op, ...args) {
+  return exclusive(op, () => base.adminAct(op, ...args), 'adminBusy').finally(() => {
+    autoLock.touch();
+    void refreshAdmin(true);
+    void refreshBase();
+  });
+}
+
 const NOT_DEV_FEE = "The Dev Fee tab is only for a wallet in the dev fee's splitters (docs/design/devfee.md).";
 /** What a Dev Fee action did, in its card (docs/design/devfee.md#the-cards). */
 const DEV_FEE_DONE = {
@@ -839,6 +882,7 @@ function go(where, section) {
   const { tab, model } = routeOf(where);
   if (!tab) throw new Error(`No such tab: ${where}. One of ${TABS.join(', ')}, or models/<id>.`);
   if (tab === 'devfee' && state.devFee.tree && !state.devFee.shown) throw new Error(NOT_DEV_FEE);
+  if (tab === 'admin' && state.admin.address && !state.admin.shown) throw new Error(NOT_ADMIN);
   const hash = model ? modelHref(model) : `#${tab}`;
   if (location.hash !== hash) history.pushState(null, '', hash);
   const changed = state.tab !== tab;
@@ -1282,6 +1326,27 @@ const actions = {
     }
   },
   devFeeRefresh: () => refreshDevFee(true),
+  /**
+   * An Admin card's action (docs/design/admin.md): Unlock first (inline, in that card: `card`) when locked; its outcome
+   * in that card. `typed`: the address typed a second time, for handing the admin on.
+   */
+  admin(card, op, args, typed) {
+    Object.assign(state.admin, { did: card, result: '', txs: [], actionError: '' });
+    if (typed !== undefined && String(typed).trim().toLowerCase() !== String(args[0] ?? '').trim().toLowerCase()) {
+      state.admin.actionError = 'The two addresses do not match.';
+      return undefined;
+    }
+    return withWallet(card, () => actions.adminNow(op, args));
+  },
+  async adminNow(op, args) {
+    try {
+      const txs = await adminAction(op, ...args);
+      Object.assign(state.admin, { result: ADMIN_DONE[op](...args), txs });
+    } catch (err) {
+      state.admin.actionError = err?.shortMessage ?? err?.message ?? String(err);
+    }
+  },
+  adminRefresh: () => refreshAdmin(true),
   /** Redirect this splitter: where the proposal to `to` stands (read, no key). */
   async devFeeCheck(splitter, to) {
     state.devFee.proposal = null;
@@ -1492,6 +1557,14 @@ const actions = {
 /** Central's stream meta: the object its JSON text holds, the text if it is not JSON, or null. */
 function parseMeta(meta) {
   try { return meta == null ? null : JSON.parse(meta); } catch { return meta; }
+}
+
+/** admin()'s answer: the levers as plain values (SATORI as decimal strings). */
+function adminView(a) {
+  if (!a.shown || !a.levers) return { shown: false, admin: a.address || null };
+  const l = a.levers;
+  return { shown: true, admin: l.admin, capabilities: l.capabilities.map(({ bit, name, on }) => ({ bit, name, on })),
+    officialRelayer: l.relayer, registrationFee: formatEther(l.registrationFee), offchainReporter: l.reporter, games: l.games };
 }
 
 /** devFee()'s answer: the tree as plain values (SATORI as decimal strings, shares in %). */
@@ -1908,6 +1981,31 @@ window.satori = {
   async devFeeAccept(splitter) { ready(); return devFeeAction('accept', splitter); },
   /** Give up `splitter`'s authority for good. Needs Unlock. */
   async devFeeGiveUp(splitter) { ready(); return devFeeAction('giveUp', splitter); },
+  /**
+   * The Admin tab's state, read fresh (docs/design/admin.md): { shown: false, admin } for anyone but the admin; for it,
+   * { shown, admin, capabilities: [{ bit, name, on }], officialRelayer, registrationFee, offchainReporter, games:
+   * [{ streamId, gameId, name, approved, isDefault }] }.
+   */
+  async admin() {
+    ready();
+    await readAdmin();
+    if (state.admin.error) throw new Error(state.admin.error);
+    return adminView(state.admin);
+  },
+  /** The capabilities switched on for everyone: `bits`, the whole list (the rest go off). Needs Unlock. → [{ hash, label }] */
+  async adminCapabilities(bits) { ready(); return adminAction('capabilities', bits); },
+  /** Approve (true) or disapprove (false) game `gameId`. Needs Unlock. */
+  async adminGame(gameId, approved) { ready(); return adminAction('game', gameId, approved); },
+  /** The official relayer: an address, or '' for none. Needs Unlock. */
+  async adminRelayer(to = '') { ready(); return adminAction('relayer', to); },
+  /** The adapter registration fee, in SATORI (a decimal string, above 0). Needs Unlock. */
+  async adminRegistrationFee(satori) { ready(); return adminAction('registrationFee', satori); },
+  /** The off-chain prediction reporter: an address, or '' to switch it off. Needs Unlock. */
+  async adminReporter(to = '') { ready(); return adminAction('reporter', to); },
+  /** Register an official adapter: kind 'stream' or 'game', its contract address and name. Needs Unlock. */
+  async adminRegisterAdapter(kind, address, name) { ready(); return adminAction('registerAdapter', kind, address, name); },
+  /** Hand the admin to `to`, at once and for good from this wallet. Needs Unlock. */
+  async adminTransfer(to) { ready(); return adminAction('transfer', to); },
   /** The alias's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
   /** The review before a send, no key needed: { asset, to, amount } → { asset, to, amount, fee: { gas, about, max } } */
@@ -2004,6 +2102,14 @@ watch(() => {
 watch(() => state.tab === 'devfee' && state.screen === 'home', (open) => { if (open) void refreshDevFee(true); });
 watch(() => {
   if (state.tab === 'devfee' && state.devFee.tree && !state.devFee.shown) {
+    state.tab = 'home';
+    history.replaceState(null, '', '#home');
+  }
+});
+/** The Admin tab: read again when it opens; not for this wallet (a #admin link, or the admin handed on): Home. */
+watch(() => state.tab === 'admin' && state.screen === 'home', (open) => { if (open) void refreshAdmin(true); });
+watch(() => {
+  if (state.tab === 'admin' && state.admin.address && !state.admin.shown) {
     state.tab = 'home';
     history.replaceState(null, '', '#home');
   }

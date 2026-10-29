@@ -1079,6 +1079,30 @@ the page's JS context:
   - `await satori.devFeeOffer(splitter, to)`, `await satori.devFeeAccept(splitter)`,
     `await satori.devFeeGiveUp(splitter)`: the authority offered to `to` (it moves when
     they accept), accepted by this wallet, or given up for good.
+- **Admin** (docs/design/admin.md), only for the Satori contract's admin
+  (`SatoriRewards.admin()`). Everyone else: `shown: false`, and
+  `go('admin')` throws. Every action below only on the person's request,
+  needs Unlock and uses the wallet's Base ETH; each → `[{ hash, label }]`.
+  - `await satori.admin()` → `{ shown: false, admin }` for anyone else; for
+    the admin `{ shown, admin, capabilities: [{ bit, name, on }],
+    officialRelayer, registrationFee, offchainReporter, games: [{ streamId,
+    gameId, name, approved, isDefault }] }`, read fresh. The zero address:
+    none; `registrationFee` in SATORI (a decimal string).
+  - `await satori.adminCapabilities(bits)`: the capabilities on for everyone,
+    as the whole list of bits (the rest go off; the admin may always use
+    them all): 0 create streams, 1 author games, 2 register stream adapters,
+    3 register game adapters, 4 bounties, 5 stake with someone, 6 name a
+    claimer, 7 vote.
+  - `await satori.adminGame(gameId, approved)`: approve (true) or disapprove
+    a game; the default game is always approved.
+  - `await satori.adminRelayer(to)`, `await satori.adminReporter(to)`: the
+    official relayer, the off-chain prediction reporter; `''`: none.
+  - `await satori.adminRegistrationFee(satori)`: SATORI burned per community
+    adapter registration (above 0).
+  - `await satori.adminRegisterAdapter(kind, address, name)`: an official
+    adapter, `kind` 'stream' or 'game'.
+  - `await satori.adminTransfer(to)`: the admin to `to`, at once; this wallet
+    can't take it back.
 - `await satori.setBaseRpc(url)` → `base()` (only on the person's request):
   an https URL, a path on this site (such as `/rpc`), or `''` for the
   default. A saved URL replaces the default; a change is noted on Home for
@@ -1295,6 +1319,14 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   enough agree); and "Authority of …" for a splitter the wallet holds or was
   offered (Accept; Redirect it alone; Offer it to another address; Give up
   the authority, asked first). Each card's passphrase prompt and result
+  show in it.
+- **Admin** (in the menu only for the Satori contract's admin): an Admin
+  card (Refresh); Capabilities (a switch for each, Save); Games (each
+  stream's game, Approved / Not approved, Approve or Disapprove; the default
+  game "Always approved"); Official relayer, Registration fee and Off-chain
+  reporter (each: Now, a field, Save); folded: "Register an official
+  adapter" (stream or game, its address and name) and "Hand the admin to
+  another address" (typed twice). Each card's passphrase prompt and result
   show in it.
 - **Settings**, top to bottom: This device, Appearance, Backup, Keys,
   Reward address, Satori contract predictions (Automatic or By hand: the

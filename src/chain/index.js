@@ -182,6 +182,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const airdrop = c('airdrop', airdropAbi);
   const voting = c('voting', votingAbi);
   const mc3 = c('multicall3', multicall3Abi);
+  const roleCall = { rewards, hub, engine, voting, registry, games };
   const read = (call) => client.readContract(call);
   const many = (contracts) => client.multicall({ contracts, allowFailure: false });
   /** A call run from `from` without sending: null when it would pass, else the revert's name; RPC errors throw. */
@@ -595,6 +596,12 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       contracts: calls.map(([address, functionName, args = []]) => ({ address, abi: splitterAbi, functionName, args })) }),
     /** A splitter's function from `key` (the wallet). */
     splitterWrite: (key, address, functionName, args, opts) => write(key, { address, abi: splitterAbi, functionName, args }, opts),
+
+    // the contracts' special keys (docs/design/admin.md): their reads and writes by contract name
+    /** [[contract name, functionName, args]] → results in one multicall (all must answer); an RPC error throws. */
+    roleReads: (calls) => many(calls.map(([name, functionName, args]) => roleCall[name](functionName, args))),
+    /** A role's function on contract `name`, from `key` (the wallet). */
+    roleWrite: (key, name, functionName, args, opts) => write(key, roleCall[name](functionName, args), opts),
 
     /** SATORI from the wallet (the token refuses while transfer-locked: the simulate says Locked). */
     sendSatori: (wallet, to, amount, opts) => write(wallet, token('transfer', [to, amount]), opts),

@@ -104,6 +104,10 @@ export const state = reactive({
   devFee: { shown: false, tree: null, error: '', did: '', result: '', txs: [], actionError: '', proposal: null },
   devFeeBusy: '', // a Dev Fee action in flight: '<op>:<splitter>'
   devFeeGiveUp: '', // the splitter whose "Give up the authority" asks first
+  // the Admin tab (docs/design/admin.md): shown only to the Satori contract's admin; levers: adminState's; did: the card
+  // whose action ran (its outcome shows there)
+  admin: { shown: false, address: '', levers: null, error: '', did: '', result: '', txs: [], actionError: '' },
+  adminBusy: '', // an Admin action in flight: its op
   catalog: [],
   // the track record (docs/design/track-record.md): records() as last read (while Streams shows), the scan's step at a
   // readable pace, the open stream's key and its record() (with its pairs), the whole list asked for

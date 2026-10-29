@@ -5,6 +5,7 @@
 // The batch goes at the first check of each UTC round: 10 s after start (at
 // once when one is due), at the next round's start (chain time) and at least hourly.
 import { devFeeOf, devFeeOps, proposalOf } from './devfee.js';
+import { adminOps, adminRole, adminState } from './admin.js';
 import { SKIP } from './skip.js';
 import { playerOf } from './play.js';
 import {
@@ -853,6 +854,22 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       const v = needWallet();
       if (!devFeeOps[op]) throw new Error(`No dev fee action ${op}`);
       return act('devfee', async (chain, step) => devFeeOps[op](chain, v, await devFeeOf(chain, walletAddress), ...args, { step, opts: sent }));
+    },
+    /** Whether the wallet is the Satori contract's admin (docs/design/admin.md): { admin, isAdmin }. */
+    async adminRole() {
+      const { chain } = await chainNow();
+      return adminRole(chain, walletAddress);
+    },
+    /** The admin's levers as they stand (src/neuron/admin.js's adminState). */
+    async adminState() {
+      const { chain } = await chainNow();
+      return adminState(chain);
+    },
+    /** An Admin action from the wallet (adminOps' `op`): → [{ hash, label }] */
+    async adminAct(op, ...args) {
+      const v = needWallet();
+      if (!adminOps[op]) throw new Error(`No admin action ${op}`);
+      return act('admin', (chain, step) => adminOps[op](chain, v, ...args, { step, opts: sent }));
     },
     /**
      * From the wallet: { asset: 'ETH' | 'SATORI', to, amount } (a decimal string). `key`: the wallet to send with, as the

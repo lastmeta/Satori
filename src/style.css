@@ -889,6 +889,16 @@ a.chan:hover { border-color: var(--muted); }
 [data-test=devfee-authority] h3 { margin: 16px 0 4px; font-size: 1rem; }
 .devfee-more { margin-top: 12px; }
 .devfee-more > summary { cursor: pointer; color: var(--muted); }
+/* Admin (src/ui/admin.js): the capabilities' switches, the games' rows */
+.admin-caps { display: grid; gap: 10px; margin: 10px 0 14px; }
+.admin-cap { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; cursor: pointer; }
+.admin-cap input { margin-top: 3px; }
+.admin-cap > span { display: grid; gap: 2px; }
+.admin-games { display: grid; gap: 10px; margin: 10px 0; }
+.admin-game { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.admin-game-name { display: grid; min-width: 0; }
+.admin-game-do { display: flex; align-items: center; gap: 8px; flex: none; }
+details.card[data-test^=admin] > summary { cursor: pointer; font-weight: 600; }
 /* Dev Fee's picture (src/ui/devfeetree.js): lines in an SVG stretched across, boxes, dots and words placed over it */
 .dft-scroll { overflow-x: auto; margin: 12px -4px 4px; }
 .dft { position: relative; margin: 0 4px; }
