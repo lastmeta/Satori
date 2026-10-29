@@ -12,6 +12,7 @@ import { createChain, revertName, DOWN, INDEFINITE } from './index.js';
 import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/fork.mjs';
 import { createBase, runBatch } from '../neuron/base.js';
 import { devFeeOf, devFeeOps } from '../neuron/devfee.js';
+import { adminOps, adminRole, adminState } from '../neuron/admin.js';
 import { CentralError } from '../central/index.js';
 
 const RPC = process.env.BASE_FORK;
@@ -264,5 +265,36 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     expect(got).toBeGreaterThanOrEqual(owed); // and a little more: rounds the fork's clock moved on add to A
     const after = (await devFeeOf(chain(), w.evmAddress)).mine[0];
     expect(after.claimable).toBe(0n);
+  });
+
+  // The admin as deployed (docs/design/admin.md): the admin (impersonated, here only) hands it to a throwaway wallet,
+  // which reads the levers and pulls each one.
+  test('the admin: handed to a throwaway, which reads and sets the capabilities, the relayer, the fee, the reporter', { timeout: 120_000 }, async () => {
+    const { test: anvil, pub } = clients(RPC);
+    const w = signer();
+    const before = await adminRole(chain(), w.evmAddress);
+    expect(before.isAdmin).toBe(false);
+    await anvil.impersonateAccount({ address: before.admin });
+    await anvil.setBalance({ address: before.admin, value: 10n ** 17n });
+    const hash = await createWalletClient({ account: before.admin, chain: baseSepolia, transport: http(RPC) })
+      .writeContract({ address: DEFAULTS.rewards, abi: parseAbi(['function setAdmin(address)']), functionName: 'setAdmin', args: [w.evmAddress] });
+    await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+    await fund(RPC, [w.evmAddress], { eth: '0.1' });
+    const run = { step: () => {}, opts: () => ({}) };
+
+    expect((await adminRole(chain(), w.evmAddress)).isAdmin).toBe(true);
+    const was = await adminState(chain());
+    expect(was.games[0]).toMatchObject({ streamId: 1, gameId: 1, isDefault: true, approved: true });
+    const on = was.capabilities.filter((c) => c.on).map((c) => c.bit);
+    await adminOps.capabilities(chain(), w, [...on, 6], run);
+    await adminOps.relayer(chain(), w, w.evmAddress, run);
+    await adminOps.registrationFee(chain(), w, '2', run);
+    await adminOps.reporter(chain(), w, w.evmAddress, run);
+    const now = await adminState(chain());
+    expect(now.capabilities.filter((c) => c.on).map((c) => c.bit)).toEqual([...on, 6].sort());
+    expect(now).toMatchObject({ relayer: w.evmAddress, registrationFee: 2n * 10n ** 18n, reporter: w.evmAddress });
+    await expect(adminOps.game(chain(), w, 1, false, run)).rejects.toThrow('always approved');
+    await adminOps.transfer(chain(), w, before.admin, run);
+    expect((await adminRole(chain(), w.evmAddress)).isAdmin).toBe(false);
   });
 });
