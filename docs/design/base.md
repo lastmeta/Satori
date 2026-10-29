@@ -120,7 +120,7 @@ One `aggregate3` call to Multicall3 (`src/chain/index.js`, `status()`), plus
 | `lens.getTotalClaimableRewards(wallet)` | on-chain rewards (`C/SatoriRewardsLens.sol:319-324`) |
 | `airdrop.claimableAirdrop(wallet)` | the vested airdrop (`C/SatoriAirdrop.sol:187-191`) |
 | `rewards.referral(wallet)` | who the wallet's referral is, if set ([Referral](#referral-invite-links)) |
-| `merkle.alreadyMintedTo(wallet)` | the Satori Service's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims-unlock)) |
+| `merkle.alreadyMintedTo(wallet)` | the Satori Service's reward drop paid so far: with central's proof, what is left to claim ([Claims](#claims)) |
 
 Each read may fail on its own (`allowFailure`), so one reverting view does
 not hide the rest.
@@ -544,10 +544,25 @@ Lite instead sends every 24 h from its last submit (START:1256-1274), which
 suits an always-on process; a tab open only part of the day would lose
 whole rounds (sent at 16:00 one day, open 09:00–15:30 the next: nothing).
 
-## Claims (Unlock)
+## Claims
 
-`claim()` runs three independent claims from the wallet; each says what it
-did, why it skipped, or its error.
+`claim()` runs three independent claims; each says what it did (and `by`:
+`'alias'` or `'wallet'`), why it skipped, or its error.
+
+**Who sends each** (the owner, 2026-10-29: no Unlock for what anyone may
+claim to the wallet; `claimPlan`, `src/neuron/base.js`): the alias, with its
+own gas, where the contract lets anyone claim to the wallet; else the wallet.
+Claim asks for Unlock only when a part is the wallet's own, so the wallet's
+gas is checked only then. With the alias short of gas, the wallet sends them all.
+
+- the airdrop: `airdrop.claimAirdropFor(wallet)` (anyone; minted to the
+  wallet, `C/SatoriAirdrop.sol:118-124`);
+- the on-chain rewards: `hub.claimFor(wallet, wallet)` once the contract's
+  permissionless claim to the credited address is live (contract humble,
+  2026-10-29); until then, and while the wallet names a claimer of its own,
+  that reverts `Unauthorized` in a simulate and the wallet sends `hub.claim()`.
+  Read each time, so the app needs no change when the upgrade lands;
+- the merkle drop: the wallet's own until its claim is permissionless too.
 
 1. **On-chain rewards**: `hub.claim()` (`C/next/SatoriHub.sol:802`) when
    `lens.getTotalClaimableRewards(wallet)` > 0, as the dapp
@@ -564,7 +579,7 @@ did, why it skipped, or its error.
    The contract pays what its reserve allows and keeps the rest for a later
    claim (`C/SatoriMerkle.sol:196-201`), so the amount reported is
    `alreadyMintedTo` at the claim's block minus before.
-3. **Airdrop**: `airdrop.claimAirdrop()` when `claimableAirdrop(wallet)` > 0
+3. **Airdrop**: `airdrop.claimAirdropFor(wallet)` by the alias, or the wallet's `claimAirdrop()`, when `claimableAirdrop(wallet)` > 0
    (ROUTES:1394-1440, BC:107-121).
 
 **What can be claimed, before claiming** (2026-10-19; Home said 0 while the
@@ -682,7 +697,7 @@ sends as any Send (the review, the passphrase). Agents: `preloadGas()`.
   SATORI with this app"; until then "Not staked: Stake with this app,
   below"); Transfers ("Staked SATORI can't be sent until you unstake", after
   Unstake "SATORI can be sent from <date> (round N)", then "Free to send");
-  what is claimable (rewards, from the Satori Service, airdrop: [above](#claims-unlock)); the last batch (round, time, each game's direction, what
+  what is claimable (rewards, from the Satori Service, airdrop: [above](#claims)); the last batch (round, time, each game's direction, what
   was left out, the tx); the last check and the next ("Waits until you stake"
   until then); under them, who plays (`base-play`): while staked "Your
   SATORI is staked with this app, so it can't also play Satori Daily by

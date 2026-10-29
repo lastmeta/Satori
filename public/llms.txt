@@ -1020,8 +1020,11 @@ the page's JS context:
   words ('already predicted this round', 'nothing staked with this app',
   'gas above the ceiling: …', 'waiting for the batch already sent (0x…)', …),
   for people.
-- `await satori.claim()` (needs Unlock; only on the person's request) → `{ rewards, merkle, airdrop }`, each
-  `{ hash, amount }`, `{ skipped: why }` or `{ error }`.
+- `await satori.claim()` (only on the person's request) → `{ rewards, merkle, airdrop }`, each
+  `{ hash, amount, by }` (`by`: `'alias'` or `'wallet'`), `{ skipped: why }` or `{ error }`. The alias claims, with
+  its own gas, what anyone may claim to the wallet (the airdrop; the on-chain rewards once the contract allows it);
+  the wallet claims the rest, so it needs Unlock only when something is the wallet's own to claim (the merkle drop,
+  say). Locked with a wallet part to claim: throws `Unlock the wallet first`.
 - `await satori.quoteSend({ asset: 'ETH' | 'SATORI', to: '0x…', amount: '1.5' })`
   → `{ asset, to, amount, fee: { gas, about, max } }`: the review before a
   send, no key needed (`to` checksummed; the fee in ETH, `about` at the

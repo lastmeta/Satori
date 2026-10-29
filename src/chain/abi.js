@@ -52,6 +52,9 @@ export const hubAbi = abi(
   'function setAllowedDelegator(address allowed)',
   'function allowedDelegator(address) view returns (address)',
   'function claim() returns (uint256)',
+  // the owner's rewards claimed by another: today only its named claimer; to the owner itself, by anyone, once the
+  // permissionless claim is live (contract humble, 2026-10-29). The app's alias claims the wallet's this way.
+  'function claimFor(address owner, address recipient) returns (uint256)',
 );
 
 export const rewardsAbi = abi(
@@ -81,6 +84,8 @@ export const votingAbi = abi('function weightOf(uint32 gameId) view returns (uin
 
 export const airdropAbi = abi(
   'function claimAirdrop()',
+  // by anyone, for `user`: minted to `user` only (SatoriAirdrop.sol:118-124)
+  'function claimAirdropFor(address user)',
   'function claimableAirdrop(address user) view returns (uint256)',
 );
 

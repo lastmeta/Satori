@@ -23,8 +23,9 @@
     ],
     "SatoriHub": [
       "function allowedDelegator(address) -> (address) view",
-      "function claim(address) -> (uint256) nonpayable",
       "function claim() -> (uint256) nonpayable",
+      "function claim(address) -> (uint256) nonpayable",
+      "function claimFor(address,address) -> (uint256) nonpayable",
       "function delegatePredictionPower(address) -> () nonpayable",
       "function setAllowedDelegator(address) -> () nonpayable"
     ],
@@ -50,6 +51,7 @@
     ],
     "SatoriAirdrop": [
       "function claimAirdrop() -> () nonpayable",
+      "function claimAirdropFor(address) -> () nonpayable",
       "function claimableAirdrop(address) -> (uint256) view"
     ],
     "SatoriVoting": [

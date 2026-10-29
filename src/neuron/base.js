@@ -563,10 +563,9 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
    * answers a plain Not Found. What was paid is read back at the claim's
    * block: the lane's reserve may pay only part (SatoriMerkle.sol:196-201).
    */
-  async function claimMerkle(chain, v, step) {
-    step('drop');
+  async function merkleDue(chain) {
     const c = central();
-    const p = await askProof(c, v.evmAddress);
+    const p = await askProof(c, walletAddress);
     keepProof(c, p); // asked just now: the card's drop needs no other call
     if (p.state === 'none') return { skipped: `no merkle drop published on ${c.url}` };
     if (p.state === 'not-in') return { skipped: 'this wallet is not in the current drop' };
@@ -574,11 +573,33 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
       if (!p.missing) throw p.error;
       return { skipped: `${c.url} serves no merkle drop (${p.error.detail})` };
     }
-    const before = await chain.alreadyMinted(v.evmAddress);
+    const before = await chain.alreadyMinted(walletAddress);
     if (p.amountWei <= before) return { skipped: 'already claimed: up to date with the drop' };
+    return { p, before };
+  }
+  async function claimMerkle(chain, v, due, step) {
+    step('drop');
+    const { p, before } = due;
     const { hash, receipt } = await chain.claimMerkle(v, { amountWei: p.amountWei.toString(), proof: p.proof }, sent(step));
-    const after = await chain.alreadyMinted(v.evmAddress, receipt.blockNumber);
+    const after = await chain.alreadyMinted(walletAddress, receipt.blockNumber);
     return { hash, amount: formatEther(after - before) };
+  }
+
+  /**
+   * Who sends each part of Claim (docs/design/base.md#claims): the alias, with its own gas and no Unlock, where the
+   * contract lets anyone claim to the wallet (the airdrop; the on-chain rewards once the permissionless claim is live,
+   * read by a simulate); else the wallet. The merkle drop is the wallet's own (until its claim is permissionless too).
+   * → { st, rewards, airdrop: 'alias' | 'wallet' | null (nothing owed), merkle: merkleDue's, or { error }, wallet: bool }
+   */
+  async function claimPlan(chain) {
+    const st = await chain.status({ alias: alias.evmAddress, wallet: walletAddress });
+    const gas = st.gasPrice ? BATCH_GAS * 2n * st.gasPrice : null;
+    const aliasPays = !lowOnGas(st.alias.eth, gas) && st.alias.eth != null;
+    const byAlias = async () => aliasPays && (await chain.canClaimFor(alias.evmAddress, walletAddress).catch(() => 'unread')) === null;
+    const rewards = !(st.claimable.rewards > 0n) ? null : (await byAlias()) ? 'alias' : 'wallet';
+    const airdrop = !(st.claimable.airdrop > 0n) ? null : aliasPays ? 'alias' : 'wallet';
+    const merkle = await merkleDue(chain).catch((err) => ({ error: errorText(err) }));
+    return { st, gas, rewards, airdrop, merkle, wallet: rewards === 'wallet' || airdrop === 'wallet' || !!merkle.p };
   }
 
   return {
@@ -755,26 +776,42 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     },
 
     /** hub.claim() (the lens says > 0), the merkle drop (central's proof), the airdrop; each on its own. */
+    /** Whether Claim needs the wallet (Unlock) now: claimPlan's `wallet`, read without a key. → boolean */
+    async claimNeedsWallet() {
+      const { chain } = await chainNow();
+      return (await claimPlan(chain)).wallet;
+    },
+    /**
+     * Claim each part from whoever claimPlan says: the alias (no Unlock) or the wallet (needs Unlock only then). Each
+     * part on its own: { rewards, merkle, airdrop }, each { hash, amount, by } | { skipped } | { error }.
+     */
     async claim() {
-      const v = needWallet();
+      const v = wallet();
       return act('claim', async (chain, step) => {
-        const st = await chain.status({ alias: alias.evmAddress, wallet: v.evmAddress });
-        if (lowOnGas(st.wallet.eth, st.gasPrice ? BATCH_GAS * 2n * st.gasPrice : null)) throw new Error(NEED_GAS);
+        const plan = await claimPlan(chain);
+        if (plan.wallet) {
+          if (!v) needWallet();
+          if (lowOnGas(plan.st.wallet.eth, plan.gas)) throw new Error(NEED_GAS);
+        }
         const each = async (fn) => {
           try { return await fn(); } catch (err) { return { error: errorText(err) }; }
         };
         const rewards = await each(async () => {
-          const owed = st.claimable.rewards;
-          if (!(owed > 0n)) return { skipped: 'nothing to claim on-chain' };
+          if (!plan.rewards) return { skipped: 'nothing to claim on-chain' };
           step('rewards');
-          return { hash: (await chain.claimRewards(v, sent(step))).hash, amount: formatEther(owed) };
+          const tx = plan.rewards === 'alias' ? chain.claimRewardsFor(alias, walletAddress, sent(step)) : chain.claimRewards(v, sent(step));
+          return { hash: (await tx).hash, amount: formatEther(plan.st.claimable.rewards), by: plan.rewards };
         });
-        const merkle = await each(() => claimMerkle(chain, v, step));
+        const merkle = await each(async () => {
+          if (plan.merkle.error) throw new Error(plan.merkle.error);
+          if (plan.merkle.skipped) return { skipped: plan.merkle.skipped };
+          return { ...(await claimMerkle(chain, v, plan.merkle, step)), by: 'wallet' };
+        });
         const airdrop = await each(async () => {
-          const owed = st.claimable.airdrop;
-          if (!(owed > 0n)) return { skipped: 'no vested airdrop to claim' };
+          if (!plan.airdrop) return { skipped: 'no vested airdrop to claim' };
           step('airdrop');
-          return { hash: (await chain.claimAirdrop(v, sent(step))).hash, amount: formatEther(owed) };
+          const tx = plan.airdrop === 'alias' ? chain.claimAirdropFor(alias, walletAddress, sent(step)) : chain.claimAirdrop(v, sent(step));
+          return { hash: (await tx).hash, amount: formatEther(plan.st.claimable.airdrop), by: plan.airdrop };
         });
         return { rewards, merkle, airdrop };
       });

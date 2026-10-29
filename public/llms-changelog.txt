@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-29 (the alias claims for the wallet)
+
+- `claim()`: each part has `by`. The alias claims the airdrop, and the on-chain rewards once the contract lets anyone
+  claim them to the wallet, with no Unlock; Unlock is needed only for the wallet's own parts (the merkle drop).
+
 ## Changed 2026-10-28 (the Game's countdown and Remind me)
 
 - `game().opensAt`: when the player can predict again after this round's play; the Sent screen counts down to it ("You

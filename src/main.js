@@ -1201,6 +1201,9 @@ const actions = {
   baseRefresh: () => baseAction('refresh', () => base.refresh()).catch(() => {}),
   /** A wallet action from the UI: Unlock first (inline, at `slot`) when the wallet is locked. */
   async walletAction(slot, name) {
+    // Claim: the alias claims what anyone may claim to the wallet (its own gas); Unlock, and the wallet's gas, only when
+    // a part is the wallet's own
+    if (name === 'baseClaim' && !(await base.claimNeedsWallet().catch(() => true))) return actions[name]();
     // Claim and Stake are transactions: no gas is said before trying (and before Unlock), after a fresh read (it may have just come)
     const noGas = () => (name === 'baseClaim' ? state.base.wallet.lowEth && NEED_GAS
       : name === 'baseDelegate' && (state.base.alias.noGas ? NEED_ALIAS_GAS : state.base.wallet.lowEth && NEED_STAKE_GAS));
@@ -1772,7 +1775,10 @@ window.satori = {
   async relink() { ready(); return baseAction('link', relinkWallet); },
   /** Unstake (needs Unlock): the SATORI can be sent once the next round ends. → the same shape */
   async unstake() { ready(); return baseAction('unstake', walletOps.undelegate); },
-  /** hub.claim(), the merkle drop, the airdrop, from the wallet (needs Unlock). → { rewards, merkle, airdrop } */
+  /**
+   * The on-chain rewards, the merkle drop, the airdrop: from the alias where anyone may claim to the wallet, else from
+   * the wallet (needs Unlock then). → { rewards, merkle, airdrop }
+   */
   async claim() { ready(); return baseAction('claim', walletOps.claim); },
   /** The alias's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },

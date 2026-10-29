@@ -42,6 +42,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     balance: {}, // SATORI
     rewards: {}, // what the lens says the address can claim with hub.claim()
     airdrop: {}, // vested and unclaimed
+    claimer: {}, // owner → its named claimer (delegateClaimAbility)
+    openClaim: false, // the permissionless claim to the owner (contract humble, 2026-10-29); false: as deployed (D7)
     merkle: { drop: {}, minted: {}, available: null }, // drop: addr → { amount, proof }; available: the lane's reserve (null: plenty)
     weights: { 1: E18 }, // gameId → voting weight (the engine pays only games with weight, SatoriEngine.sol:828)
     short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
@@ -172,6 +174,19 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         }
         return amount;
       },
+      // SatoriRewards._checkClaimAuth: the named claimer, any recipient; with openClaim, anyone to the owner when none is named
+      claimFor: ([owner, recipient], ctx) => {
+        const o = lc(owner);
+        const named = s.claimer[o];
+        const may = named ? named === ctx.from : s.openClaim && lc(recipient) === o;
+        if (!may) revert('Unauthorized');
+        const amount = s.rewards[o] ?? 0n;
+        if (ctx.write) {
+          s.rewards[o] = 0n;
+          s.balance[lc(recipient)] = (s.balance[lc(recipient)] ?? 0n) + amount;
+        }
+        return amount;
+      },
     }),
     [DEFAULTS.rewards]: fns(abi.rewardsAbi, {
       setPredictorFee: ([bps], ctx) => {
@@ -228,6 +243,15 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         if (ctx.write) {
           s.airdrop[ctx.from] = 0n;
           s.balance[ctx.from] = (s.balance[ctx.from] ?? 0n) + x;
+        }
+      },
+      claimAirdropFor: ([user], ctx) => { // anyone; minted to `user` (SatoriAirdrop.sol:118-124)
+        const u = lc(user);
+        const x = s.airdrop[u] ?? 0n;
+        if (x === 0n) revert('NothingToClaim');
+        if (ctx.write) {
+          s.airdrop[u] = 0n;
+          s.balance[u] = (s.balance[u] ?? 0n) + x;
         }
       },
     }),

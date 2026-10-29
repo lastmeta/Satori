@@ -215,19 +215,27 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await page.evaluate(() => window.satori.base());
   await expect(fact(page, 'preloaded')).not.toHaveText('–');
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  s.rewards[V] = E18; // as deployed, the on-chain rewards are the wallet's own to claim
   await expect(page.evaluate(() => window.satori.claim())).rejects.toThrow('Unlock the wallet first');
   // Claim while locked asks for the passphrase in place, then claims, then the wallet locks again: it was unlocked for that
-  s.airdrop[V] = E18; // something to claim, so Claim shows
   await fact(page, 'refresh').click();
   await fact(page, 'claim').click();
   await page.getByLabel('Wallet passphrase to claim from the Claimable card').fill(PASS);
   await page.locator('[data-unlock-for=wallet-claim]').getByRole('button', { name: 'Unlock' }).click();
-  await expect(fact(page, 'result')).toContainText('Rewards: nothing to claim on-chain', { timeout: 30_000 });
-  await expect(fact(page, 'result')).toContainText('Airdrop: claimed 1 SATORI');
+  await expect(fact(page, 'result')).toContainText('Rewards: claimed 1 SATORI', { timeout: 30_000 });
+  await expect(fact(page, 'result')).toContainText('Airdrop: no vested airdrop to claim');
   await expect(page.getByRole('button', { name: 'Lock', exact: true })).toBeHidden();
   expect(await page.evaluate(async () => (await window.satori.status()).unlocked)).toBe(false);
+  // what anyone may claim to the wallet, the alias claims: no passphrase asked, the wallet stays locked
+  s.airdrop[V] = E18;
+  await fact(page, 'refresh').click();
+  await fact(page, 'claim').click();
+  await expect(fact(page, 'result')).toContainText('Airdrop: claimed 1 SATORI', { timeout: 30_000 });
+  await expect(page.locator('[data-unlock-for=wallet-claim]')).toBeHidden();
+  expect(await page.evaluate(async () => (await window.satori.status()).unlocked)).toBe(false);
+  expect(rpc.sent.at(-1)).toMatchObject({ functionName: 'claimAirdropFor', from: I });
   base = (await page.evaluate(() => window.satori.status())).base;
-  expect(base).toMatchObject({ wallet: { staked: 'none', satori: '115' }, lastBatch: { round: ROUND + 1 } });
+  expect(base).toMatchObject({ wallet: { staked: 'none', satori: '116' }, lastBatch: { round: ROUND + 1 } });
   expect(sent(rpc).filter((f) => f === 'predictMultipleWithPayloads')).toHaveLength(2);
 
   // The agent API: stake() and unstake() (delegate() and undelegate() until 2026-10-18; no aliases).

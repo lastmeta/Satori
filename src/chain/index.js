@@ -552,6 +552,24 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     /** claimMerkle(lifetimeEntitlement, proof) from the wallet (base_claim.py:99-104). */
     claimMerkle: (wallet, { amountWei, proof }, opts) => write(wallet, merkle('claimMerkle', [BigInt(amountWei), proof]), opts),
     claimAirdrop: (wallet, opts) => write(wallet, airdrop('claimAirdrop'), opts),
+    /** The wallet's rewards claimed by the alias, to the wallet: hub.claimFor(wallet, wallet). */
+    claimRewardsFor: (alias, owner, opts) => write(alias, hub('claimFor', [owner, owner]), opts),
+    /** The wallet's vested airdrop claimed by the alias; it is minted to the wallet (claimAirdropFor). */
+    claimAirdropFor: (alias, owner, opts) => write(alias, airdrop('claimAirdropFor', [owner]), opts),
+    /**
+     * Whether the alias may claim the wallet's rewards to the wallet: null when it would pass, else the revert's name
+     * (Unauthorized until the permissionless claim is live, or while the wallet names a claimer). RPC errors throw.
+     */
+    async canClaimFor(alias, owner) {
+      try {
+        await client.simulateContract({ ...hub('claimFor', [owner, owner]), account: addressOf(alias) });
+        return null;
+      } catch (err) {
+        const name = revertName(err);
+        if (name === null) throw err;
+        return name;
+      }
+    },
 
     /**
      * A send's fee before it is sent, from the sender's address (no key): the gas limit it would be sent with (ETH:
