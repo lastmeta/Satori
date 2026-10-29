@@ -4,15 +4,18 @@
 //   BASE_FORK=http://127.0.0.1:8546 npx vitest run src/chain/fork.test.js
 // Fresh throwaway keys each run; the fork's clock moves forward.
 import { describe, expect, test } from 'vitest';
-import { http, zeroAddress } from 'viem';
+import { createWalletClient, encodeAbiParameters, http, keccak256, parseAbi, toHex, zeroAddress } from 'viem';
+import { baseSepolia } from 'viem/chains';
 import { generateSecret, publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
 import { createChain, revertName, DOWN, INDEFINITE } from './index.js';
 import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/fork.mjs';
-import { runBatch } from '../neuron/base.js';
+import { createBase, runBatch } from '../neuron/base.js';
+import { CentralError } from '../central/index.js';
 
 const RPC = process.env.BASE_FORK;
 const E18 = 10n ** 18n;
+const chain = () => createChain({ config: DEFAULTS, transport: http(RPC), pollingInterval: 250, settle: { tries: 5, ms: 500 } });
 const signer = () => {
   const secret = generateSecret();
   return { evmAddress: evmAddress(publicKey(secret)), signDigest: (h) => signDigest(secret, h) };
@@ -143,4 +146,91 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
       await anvil.setIntervalMining({ interval: 2 }); // as fork.mjs starts it
     }
   });
+
+  // The claim rules of contract humble 5a091427 (SatoriEngine#10 / SatoriRewards#15). Skipped until the fork's
+  // SatoriRewards has them (officialRelayer()): upgrade it there first, or fork after the live upgrade.
+  test('claims: anyone to the owner, a named claimer anywhere, nothing elsewhere after predicting; the alias claims with no Unlock',
+    { timeout: 180_000 }, async (ctx) => {
+      const { test: anvil, pub } = clients(RPC);
+      const R = DEFAULTS.rewards;
+      const relayer = await pub.readContract({ address: R, abi: parseAbi(['function officialRelayer() view returns (address)']), functionName: 'officialRelayer' }).catch(() => null);
+      if (!relayer) return ctx.skip();
+      const hub = parseAbi(['function claimFor(address owner, address recipient) returns (uint256)', 'function delegateClaimAbility(address delegate)',
+        'error Unauthorized()', 'error ClaimElsewhereAfterPredicting()', 'error ClaimDelegatedAway()', 'error CapabilityDisabled()']);
+      // Rewards owed, written in (contract storage-layouts/): unclaimedRewards (rewards slot 13), and room to mint them,
+      // which scoring would have reported (the hub's onChainMinted, slot 6, to 0).
+      const owed = async (who, satori) => {
+        await anvil.setStorageAt({ address: R, index: keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [who, 13n])),
+          value: toHex(BigInt(satori) * E18, { size: 32 }) });
+        await anvil.setStorageAt({ address: DEFAULTS.hub, index: toHex(6n, { size: 32 }), value: toHex(0n, { size: 32 }) });
+      };
+      const as = async (from, functionName, args) => {
+        await anvil.impersonateAccount({ address: from });
+        await anvil.setBalance({ address: from, value: 10n ** 17n });
+        try {
+          await pub.simulateContract({ account: from, address: DEFAULTS.hub, abi: hub, functionName, args });
+        } catch (err) { return revertName(err); }
+        const hash = await createWalletClient({ account: from, chain: baseSepolia, transport: http(RPC) })
+          .writeContract({ address: DEFAULTS.hub, abi: hub, functionName, args });
+        return (await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 })).status;
+      };
+      const satori = (a) => pub.readContract({ address: DEFAULTS.token, abi: parseAbi(['function balanceOf(address) view returns (uint256)']), functionName: 'balanceOf', args: [a] });
+      const stranger = signer().evmAddress;
+      const elsewhere = signer().evmAddress;
+      const give = async (who, n) => { // SATORI to spend (fork.mjs's fund takes it from the deployer, empty since 2026-10-28)
+        await fund(RPC, [who], { eth: '0.1' });
+        await owed(who, n);
+        expect(await as(stranger, 'claimFor', [who, who])).toBe('success');
+      };
+
+      // Anyone may claim to the owner, never elsewhere.
+      const V = signer().evmAddress;
+      await owed(V, 3);
+      expect(await as(stranger, 'claimFor', [V, elsewhere])).toBe('Unauthorized');
+      expect(await as(stranger, 'claimFor', [V, V])).toBe('success');
+      expect(await satori(V)).toBe(3n * E18);
+
+      // A named claimer still claims anywhere; then no stranger claims, and the owner names itself to opt out.
+      // Naming one is a capability (6), off on Base Sepolia for all but the admin: switched on here (rewards' _CAP_SLOT).
+      const CAP = '0x27cad01dc4254e9bdafe1f698ebd1d17b1c95ec4178340a9736b0bd1b3f5eb71';
+      const caps = BigInt(await pub.getStorageAt({ address: R, slot: CAP }));
+      await anvil.setStorageAt({ address: R, index: CAP, value: toHex(caps | (1n << 6n), { size: 32 }) });
+      const C = signer().evmAddress;
+      expect(await as(V, 'delegateClaimAbility', [C])).toBe('success');
+      await owed(V, 2);
+      expect(await as(stranger, 'claimFor', [V, V])).toBe('Unauthorized');
+      expect(await as(C, 'claimFor', [V, elsewhere])).toBe('success');
+      expect(await satori(elsewhere)).toBe(2n * E18);
+
+      // After the owner predicts this round, nothing goes elsewhere, by its claimer or itself; to itself still works.
+      const self = signer();
+      const W = self.evmAddress;
+      await give(W, 10);
+      await advance(RPC, 1); // a round the deployer's earlier predictions don't share
+      await chain().sendBatch(self, [{ gameId: 1, direction: DOWN }]);
+      await owed(W, 1);
+      expect(await as(W, 'claimFor', [W, elsewhere])).toBe('ClaimElsewhereAfterPredicting');
+      expect(await as(W, 'delegateClaimAbility', [C])).toBe('success');
+      expect(await as(C, 'claimFor', [W, elsewhere])).toBe('ClaimElsewhereAfterPredicting');
+      expect(await as(C, 'claimFor', [W, W])).toBe('success');
+
+      // The app: a staked wallet's rewards, claimed by its alias, the wallet never unlocked.
+      const alias = signer();
+      const wallet = signer();
+      await fund(RPC, [alias.evmAddress], { eth: '0.1' });
+      await give(wallet.evmAddress, 10);
+      await chain().delegate({ alias, wallet });
+      await owed(wallet.evmAddress, 4);
+      expect(await chain().canClaimFor(alias.evmAddress, wallet.evmAddress)).toBe(null);
+      const m = new Map();
+      const base = createBase({ db: { get: async (k) => m.get(k), set: async (k, v) => void m.set(k, v), checkpoint: async () => {} },
+        alias, walletAddress: wallet.evmAddress, wallet: () => null, transport: http(RPC), setTimeout: () => 0, clearTimeout: () => {},
+        central: () => ({ url: 'https://central2.example', baseConfig: async () => { throw new CentralError(404, 'Not Found'); },
+          merkleProof: async () => { throw new CentralError(404, 'no reward drop has been published yet'); } }) });
+      expect(await base.claimNeedsWallet()).toBe(false);
+      const before = await satori(wallet.evmAddress);
+      const r = await base.claim();
+      expect(r.rewards).toMatchObject({ by: 'alias', hash: expect.stringMatching(/^0x/) });
+      expect(await satori(wallet.evmAddress)).toBe(before + 4n * E18);
+    });
 });
