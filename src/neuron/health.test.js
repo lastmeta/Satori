@@ -300,7 +300,7 @@ describe('warn: predicting, but something needs you', () => {
     const sim = health({ base: staked({ lastCheck: { at: NOW, round: 20742, skip: 'no-pass', skipped: 'no game passes its simulation',
       dropped: [{ streamId: 1, gameId: 1, named: true, error: 'DuplicatePrediction' }, { streamId: 4, gameId: 2, error: 'SomethingNew' }] } }) });
     expect(sim.action).toMatchObject({ id: 'base-skipped', tab: 'wallet', text: 'Satori contract batch skipped: no game passes its '
-      + "simulation (Sentiment stream 1: predicted less than 24 hours ago; stream 4: the contract refused it, SomethingNew). The next check tries again." });
+      + "simulation (Sentiment stream 1: already predicted this round; stream 4: the contract refused it, SomethingNew). The next check tries again." });
     expect(health({ base: staked({ lastCheck: { round: 20742, skip: 'no-games', skipped: 'no streams with a game' } }) }).status).toBe('ok');
     expect(health({ base: staked({ lastCheck: { round: 20741, skip: 'no-pass', skipped: 'no game passes its simulation' } }) }).status).toBe('ok'); // last round's
   });

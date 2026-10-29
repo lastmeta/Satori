@@ -428,7 +428,7 @@ Every method is below; `await satori.status()` shows everything at once.
   below, as the Docker neuron; a tie follows the stream's last move (its
   most recent change, up or down), and only a flat history is DOWN (the
   Docker neuron answers DOWN on every tie). Each game is simulated alone first (the contract's own
-  checks, named games' 24 clock hours included) and only the ones that pass
+  checks: once a round for every game, a new value since the last prediction) and only the ones that pass
   are sent, in one `engine.predictMultipleWithPayloads`, if the max fee per
   gas is within the max fee (`setBaseMaxFee`, 2 gwei by default; above it
   the next check tries again). Its hash is kept at once, so a check never sends
@@ -1059,8 +1059,7 @@ the page's JS context:
 - `await satori.game()` → `{ play, by, round, playedToday, favorites, streams, unavailable }`: the Game tab.
   `by`: who sends (the alias when the wallet is staked with it, else the wallet); `playedToday`: this round's play by
   the game (`{ round, at, count, hash, by, calls: [{ streamId, name, direction }] }`, the Sent screen's list), or null; `opensAt`: when the player can predict again after it (unix seconds: the
-  earliest of its streams, each once a round from 00:00 UTC, a Sentiment stream also 24 hours after the hour it was
-  predicted in; the Sent screen's countdown), or null;
+  next round, at 00:00 UTC: every game takes one prediction a round; the Sent screen's countdown), or null;
   `streams` in the game's order
   (favorites first, the reward eligible before the rest), each `{ streamId, gameId, name, named, eligible,
   alreadyPredicted, latest, display, streak, history }` (`latest`: the newest value in the stream's own units; `display`: `{ decimals, unit, label }` from its adapter, or null; `history`'s values are the chain's integers, `decimals` of them after the point; `streak`: `{ streak, bar }` or null, bar the game's turning point; `alreadyPredicted`: played as usual, not sent); `unavailable`: those that

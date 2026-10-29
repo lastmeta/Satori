@@ -268,7 +268,7 @@ function submit(a) {
 }
 
 // Remind me was set for the time this play opens again
-const reminded = () => !!g().sent && state.reminder.once === opensAgain(g().sent, g().streams);
+const reminded = () => !!g().sent && state.reminder.once === opensAgain(g().sent);
 
 export function gameTab(a) {
   return html`
@@ -282,7 +282,7 @@ export function gameTab(a) {
           <div class="gsent-top">
             <h2>${() => `${g().sent?.count ?? 0} Prediction${g().sent?.count === 1 ? '' : 's'} submitted`}</h2>
             <p class="muted small">${() => (g().sent?.count === 1 ? 'It will be scored in 24 hours.' : 'They will be scored in 24 hours.')}</p>
-            <p class="muted small" data-test="game-again-in">${() => (g().sent ? againText(opensAgain(g().sent, g().streams), state.now) : '')}</p>
+            <p class="muted small" data-test="game-again-in">${() => (g().sent ? againText(opensAgain(g().sent), state.now) : '')}</p>
             <button data-test="game-remind" hidden="${() => !state.reminder.supported}" disabled="${() => g().reminding || reminded()}"
               @click="${a.gameRemind}">${() => (reminded() ? 'Reminder set' : g().reminding ? 'Setting…' : 'Remind me')}</button>
             <p class="error small" role="alert" data-test="game-remind-error" hidden="${() => !g().remindError}">${() => g().remindError}</p>

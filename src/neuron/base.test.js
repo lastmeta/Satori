@@ -212,14 +212,13 @@ describe('the daily batch', () => {
     expect(r.sent.dropped).toEqual([expect.objectContaining({ streamId: 4, gameId: 14, error: 'StaleValue' })]);
   });
 
-  test('a named game under 24 clock hours since our last prediction on it: the simulate drops it (the contract\'s own rule)', async () => {
+  test('a named game predicted late yesterday is played again today: once a round, no 24-hour wait (M22 reverted, live since D8)', async () => {
     await staked();
     s.streams[5] = { game: 15, named: true, cadence: 60, history: [{ hour: H0 + 1, value: 3n }] };
     s.weights[15] = E18;
     s.lastPred[`${I}:15`] = H0 - 2; // 22:00 yesterday; now 09:00
-    const r = await runBatch({ chain: chainOf(), alias, db, forecast: up });
-    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }]]);
-    expect(r.sent.dropped).toEqual([expect.objectContaining({ gameId: 15, named: true, error: 'DuplicatePrediction' })]);
+    await runBatch({ chain: chainOf(), alias, db, forecast: up });
+    expect(batchesSent()).toEqual([[{ gameId: 1, payload: '0x01' }, { gameId: 15, payload: '0x01' }]]);
   });
 
   test('each stream is forecast at its horizon: a daily one in one 24 h step, an hourly one in two 12 h steps; the direction from that value', async () => {

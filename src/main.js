@@ -1352,7 +1352,7 @@ const actions = {
     if (!g.sent || g.reminding) return;
     state.game = { ...g, reminding: true, remindError: '' };
     try {
-      await remindOnce(opensAgain(g.sent, g.streams));
+      await remindOnce(opensAgain(g.sent));
       state.game = { ...state.game, reminding: false };
     } catch (err) {
       state.game = { ...state.game, reminding: false, remindError: errorText(err) };
@@ -1627,7 +1627,7 @@ window.satori = {
     const favorites = readFavorites(session.walletPublic?.evmAddress);
     const { queue, split } = queueOf(streams, favorites);
     const today = last && last.round === round ? last : null;
-    return { play: state.base.play, by, round, playedToday: today, opensAt: today ? opensAgain(today, streams) : null, favorites,
+    return { play: state.base.play, by, round, playedToday: today, opensAt: today ? opensAgain(today) : null, favorites,
       streams: queue.map((s, i) => ({ streamId: s.streamId, gameId: s.gameId, name: s.name, named: s.named, eligible: i < split,
         alreadyPredicted: played(s), latest: latestText(s), display: s.display ?? null, streak: s.streak ?? null, history: s.history })),
       unavailable: streams.filter((s) => !queue.includes(s)).map((s) => ({ streamId: s.streamId, name: s.name, why: s.blocked })) };

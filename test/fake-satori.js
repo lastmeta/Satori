@@ -90,7 +90,6 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       const last = s.lastPred[`${ctx.from}:${r.gameId}`];
       if (last) {
         if (Math.floor(last / 24) === ctx.round) revert('DuplicatePrediction');
-        if (st.named && ctx.hour < last + 24) revert('DuplicatePrediction');
         if (latest <= last) revert('StaleValue');
       }
     }

@@ -290,7 +290,7 @@ export async function runBatch({ chain, alias, db, forecast = engineForecast, ma
       const game = { ...base, ...directionFor(f.value, history), model: f.model, latest: last.toString(),
         forecast: BigInt(Math.round(f.value)).toString(), horizon: f.horizon, step,
         score: f.score ?? null, persist: f.persist ?? null, tests: f.tests ?? null };
-      // The contract's own checks, named games' 24 clock hours included (SatoriEngine.sol:791-810).
+      // The contract's own checks: once a round, a new value since our last prediction (SatoriEngine.sol:762-770).
       const error = await chain.simulateGame(alias, game);
       if (error) dropped.push({ ...game, error });
       else games.push(game);

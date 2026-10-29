@@ -2,10 +2,10 @@
 // shows early, the chart's line and the latest value's words. src/ui/game.js draws it; main.js keeps its state.
 import { fmtNum } from './format.js';
 
-const WAIT = { DuplicatePrediction: 'already predicted in the last 24 hours', AlreadyPredicted: 'already predicted this round' };
+const WAIT = { DuplicatePrediction: 'already predicted this round', AlreadyPredicted: 'already predicted this round' };
 
 /**
- * Already predicted (this round, or in the last 24 hours: the app's own batch, say): played as if nothing were wrong,
+ * Already predicted this round (the app's own batch, say): played as if nothing were wrong,
  * and on Submit not sent, just done (owner, 2026-10-25: it doesn't matter, and must not confuse).
  */
 export const played = (s) => s.blocked in WAIT;
@@ -81,17 +81,10 @@ export function nothingText(streams) {
 }
 
 /**
- * When the player can predict again after a play (unix seconds): the earliest of its calls' streams to open. Each game
- * is once a round (from the next 00:00 UTC); a Sentiment (named) game also waits 24 clock hours from the hour it was
- * predicted in (the deployed engine's DuplicatePrediction: `hour < last + 24`, test/fake-satori.js). No calls: the next round.
+ * When the player can predict again after a play (unix seconds): the next round, at 00:00 UTC. Every daily game,
+ * Sentiment ones included, takes one prediction a round (SatoriEngine.sol:762-769: M22 reverted, live since D8).
  */
-export function opensAgain(sent, streams = []) {
-  const next = (sent.round + 1) * 86_400;
-  const named = (id) => streams.find((s) => s.streamId === id)?.named;
-  const day = (Math.floor(sent.at / 3600) + 24) * 3600;
-  const each = (sent.calls ?? []).map((c) => (named(c.streamId) ? Math.max(next, day) : next));
-  return each.length ? Math.min(...each) : next;
-}
+export const opensAgain = (sent) => (sent.round + 1) * 86_400;
 
 /** The countdown to `at` from `now` (unix seconds): 'You can predict again in 7 h 12 min.' */
 export function againText(at, now) {

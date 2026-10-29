@@ -355,11 +355,11 @@ Port of `submitBasePredictions` (START:1143-1236) and `submit_batch`
    ([issue](../issues/base-batch-one-bad-game-reverts-all.md)): the
    simulate runs the contract's own pull and checks
    (`C/next/SatoriEngine.sol:777-810`), which no off-chain read reproduces,
-   named games' 24 clock hours included (`:807`). Lite's own named-game rule
-   (BP:146-149, 24 h since its last submit) and its resend without named
-   games on `DuplicatePrediction` (BP:157-174) exist because Lite does not
-   simulate; here the simulate already drops such a game, so neither is
-   kept.
+   including once a round for every game, named ones too (no 24-hour wait:
+   M22 reverted, live since D8). Lite's own named-game rule (BP:146-149, 24 h
+   since its last submit) and its resend without named games on
+   `DuplicatePrediction` (BP:157-174) exist because Lite does not simulate;
+   neither is kept.
 7. **The spending ceiling**: the batch's max fee per gas must be at most the
    setting (Settings, `meta.base_max_fee_gwei`, default 2 gwei), as every
    transaction's is; above it the check skips, says why, and the next one
@@ -454,15 +454,13 @@ between the header and the tab bar.
   (`game_last_play`: round, time, count, hash or none, and the calls), and
   while it is the same round the tab opens on its Sent screen: a countdown to
   when the player can predict again ("You can predict again in 7 h 12 min.":
-  the earliest of the played streams, each once a round from 00:00 UTC, a
-  Sentiment stream also 24 clock hours after the hour it was predicted in;
+  the next round, at 00:00 UTC, every game taking one prediction a round;
   `opensAgain`, `src/ui/gameflow.js`), **Remind me** (one notification then,
   [push.md](push.md#remind-me); shown where push works) left of Dismiss,
   and the calls listed under them (scrolling).
   A play noted without its calls (before they were kept) has them read from
   its transaction (`chain.batchOf`).
-- **Already predicted, not with the game** (this round, or in the last 24
-  hours, e.g. the app's own batch): the game plays as usual, and Submit says it was sent
+- **Already predicted, not with the game** (this round, e.g. the app's own batch): the game plays as usual, and Submit says it was sent
   without sending those (owner, 2026-10-25: it doesn't matter, and must not
   confuse). Only the others go in the transaction; none left: nothing sent.
 - Nothing to play otherwise (no games, staked elsewhere, a stream's value
@@ -529,10 +527,8 @@ late) runs within one heartbeat of waking, by the
   So a provider that writes once a day later in hour 0 than our 00:01 batch
   (at 00:30, say) is stale at 00:01 every other round: its 00:30 value has
   the hour of yesterday's 00:01 prediction; the game is dropped that round,
-  passes the next (its last prediction is then two days old), and so on. A
-  named game fails when our last prediction on it is under 24 clock hours
-  old (`:807`), which happens when the batch moves to an earlier hour than
-  the round before. Sending later in the round would catch more games when
+  passes the next (its last prediction is then two days old), and so on.
+  Sending later in the round would catch more games when
   the tab stays open, and lose the whole round when it doesn't; we keep the
   first check. The default stream (id 1) is written by the batch's own
   predict (`flushDefaultStream`, `C/next/SatoriEngine.sol:619-638`), so it

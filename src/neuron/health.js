@@ -39,12 +39,12 @@ const FRESH_LINK = ' Link this wallet: it signs a fresh link, and the Satori Ser
 
 /** The engine's refusals a batch's simulate names (SatoriEngine.sol predictMultipleWithPayloads), in a few words. */
 const REFUSED = {
-  DuplicatePrediction: 'predicted less than 24 hours ago', AlreadyPredicted: 'already predicted this round',
+  DuplicatePrediction: 'already predicted this round', AlreadyPredicted: 'already predicted this round',
   StaleValue: 'no new value since the last prediction', EmptyStream: 'the stream has no values yet',
   StreamPullFailed: "the stream's source did not answer", Delegated: 'the alias has staked its own power elsewhere',
   ZeroBalance: 'no prediction power yet (the stake may not show on the chain yet)', UnknownStream: 'the game has no stream',
 };
-/** A check's skip, with each game left out and why: 'no game passes … (Sentiment stream 1: predicted less than 24 hours ago)'. */
+/** A check's skip, with each game left out and why: 'no game passes … (Sentiment stream 1: already predicted this round)'. */
 export function skipText(check) {
   const why = (check?.dropped ?? []).map((g) => `${g.named ? 'Sentiment stream' : 'stream'} ${g.streamId}: ${
     REFUSED[g.error] ?? (g.error ? `the contract refused it, ${g.error}` : 'refused')}`);
