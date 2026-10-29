@@ -129,6 +129,9 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   rpc.eth[st.alias.address.toLowerCase()] = 10n ** 17n;
   rpc.eth[st.wallet.address.toLowerCase()] = 10n ** 17n;
   await page.evaluate(() => window.satori.base());
+  const how = page.locator('[data-test=how]');
+  await expect(how.locator('summary')).toHaveText('How Satori Works');
+  await expect(how.locator('p').last()).toHaveText('Just open the app every day to predict automatically, or make predictions in the game.');
 
   // A month in: this session's first poll runs at once, central's 8 streams with their history, each forecast
   // (bvar), sent. Predicting.

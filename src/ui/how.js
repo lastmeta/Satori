@@ -1,4 +1,4 @@
-// Home's "How Does This Work?" card (owner, 2026-10-26): folded like Activity; open, "What is Satori?" first, then
+// Home's "How Satori Works" card (owner, 2026-10-26): folded like Activity; open, "What is Satori?" first, then
 // five pictures in the icons' line style, each with the owner's sentence: the app (streams in, a phone, predictions
 // out: the Models icon, big), the network of apps listening to each other's predictions, the contract scoring them and
 // paying, sharing the app, and last what to do each day (2026-10-27: a phone, the Game's pad). The pictures are static
@@ -58,7 +58,7 @@ const SHARING = () => html`<svg class="hw" viewBox="0 0 320 120" role="img" aria
 </svg>`;
 
 /** The phone (the app opened) on the left, the Game's pad (the nav's icon, big) on the right. */
-const DAILY = () => html`<svg class="hw" viewBox="0 0 320 120" role="img" aria-label="Open the app on your phone, or play the game">
+const DAILY = () => html`<svg class="hw" viewBox="0 0 320 120" role="img" aria-label="Open the app on your phone, or make predictions in the game">
   <rect class="dev" x="48" y="14" width="44" height="92" rx="8"></rect>
   <path d="M65 97h10"></path>
   <path class="hnet" d="M60 42l20 10-14 16zM60 42l6 26"></path>
@@ -73,7 +73,7 @@ const DAILY = () => html`<svg class="hw" viewBox="0 0 320 120" role="img" aria-l
 export function howCard() {
   return html`
     <details class="tile how-tile" data-test="how">
-      <summary>How Does This Work?</summary>
+      <summary>How Satori Works</summary>
       <div class="how">
         <h3 class="how-q">What is Satori?</h3>
         <p class="how-a">A network of AI agents incentivized to predict the future for all humanity.</p>
@@ -86,7 +86,7 @@ export function howCard() {
         ${SHARING()}
         <p>Sharing this app with others grows the network and provides more rewards.</p>
         ${DAILY()}
-        <p class="how-a">Just open the app every day to predict automatically, or play the game.</p>
+        <p class="how-a">Just open the app every day to predict automatically, or make predictions in the game.</p>
       </div>
     </details>`;
 }
