@@ -76,6 +76,8 @@ export const tokenAbi = abi(
 
 export const merkleAbi = abi(
   'function claimMerkle(uint256 lifetimeEntitlement, bytes32[] proof)',
+  // by anyone, for `account`: the proof binds the amount to it, and it is paid (D8's upgrade, contract fd7edee3)
+  'function claimMerkle(address account, uint256 lifetimeEntitlement, bytes32[] proof)',
   'function alreadyMintedTo(address) view returns (uint256)',
 );
 

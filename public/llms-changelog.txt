@@ -6,8 +6,8 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-10-29 (the alias claims for the wallet)
 
-- `claim()`: each part has `by`. The alias claims the airdrop, and the on-chain rewards once the contract lets anyone
-  claim them to the wallet, with no Unlock; Unlock is needed only for the wallet's own parts (the merkle drop).
+- `claim()`: each part has `by`. The alias claims the airdrop and the merkle drop, and the on-chain rewards once the
+  contract lets anyone claim them to the wallet, with no Unlock; Unlock is needed only for the wallet's own parts.
 
 ## Changed 2026-10-28 (the Game's countdown and Remind me)
 

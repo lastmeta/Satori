@@ -562,7 +562,10 @@ gas is checked only then. With the alias short of gas, the wallet sends them all
   2026-10-29); until then, and while the wallet names a claimer of its own,
   that reverts `Unauthorized` in a simulate and the wallet sends `hub.claim()`.
   Read each time, so the app needs no change when the upgrade lands;
-- the merkle drop: the wallet's own until its claim is permissionless too.
+- the merkle drop: `merkle.claimMerkle(wallet, amountWei, proof)` (anyone;
+  paid to the wallet, the proof bound to it: D8's upgrade, contract
+  fd7edee3), checked by a dry run too; the wallet's own `claimMerkle(amountWei,
+  proof)` where that is refused.
 
 1. **On-chain rewards**: `hub.claim()` (`C/next/SatoriHub.sol:802`) when
    `lens.getTotalClaimableRewards(wallet)` > 0, as the dapp
@@ -575,7 +578,8 @@ gas is checked only then. With the alias short of gas, the wallet sends them all
    published yet", or "… is not in the current drop"; prod, which lacks the
    route ([issue](../issues/central-prod-missing-base-routes.md)),
    answers a plain "Not Found". Then `merkle.claimMerkle(amountWei, proof)`
-   when `amountWei > alreadyMintedTo(wallet)` (ROUTES:1360-1388, BC:94-104).
+   when `amountWei > alreadyMintedTo(wallet)` (ROUTES:1360-1388, BC:94-104), or
+   from the alias with the wallet's address first (above).
    The contract pays what its reserve allows and keeps the rest for a later
    claim (`C/SatoriMerkle.sol:196-201`), so the amount reported is
    `alreadyMintedTo` at the claim's block minus before.

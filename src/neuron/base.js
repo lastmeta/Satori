@@ -577,29 +577,34 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     if (p.amountWei <= before) return { skipped: 'already claimed: up to date with the drop' };
     return { p, before };
   }
-  async function claimMerkle(chain, v, due, step) {
+  async function claimMerkle(chain, by, v, due, step) {
     step('drop');
     const { p, before } = due;
-    const { hash, receipt } = await chain.claimMerkle(v, { amountWei: p.amountWei.toString(), proof: p.proof }, sent(step));
+    const drop = { amountWei: p.amountWei.toString(), proof: p.proof };
+    const { hash, receipt } = await (by === 'alias' ? chain.claimMerkleFor(alias, walletAddress, drop, sent(step)) : chain.claimMerkle(v, drop, sent(step)));
     const after = await chain.alreadyMinted(walletAddress, receipt.blockNumber);
     return { hash, amount: formatEther(after - before) };
   }
 
   /**
    * Who sends each part of Claim (docs/design/base.md#claims): the alias, with its own gas and no Unlock, where the
-   * contract lets anyone claim to the wallet (the airdrop; the on-chain rewards once the permissionless claim is live,
-   * read by a simulate); else the wallet. The merkle drop is the wallet's own (until its claim is permissionless too).
-   * → { st, rewards, airdrop: 'alias' | 'wallet' | null (nothing owed), merkle: merkleDue's, or { error }, wallet: bool }
+   * contract lets anyone claim to the wallet (the airdrop; the merkle drop, D8; the on-chain rewards once the
+   * permissionless claim is live), read by a dry run where it can be refused; else the wallet.
+   * → { st, gas, rewards, airdrop, merkle: 'alias' | 'wallet' | null (nothing owed), due: merkleDue's or { error },
+   *   wallet: bool }
    */
   async function claimPlan(chain) {
     const st = await chain.status({ alias: alias.evmAddress, wallet: walletAddress });
     const gas = st.gasPrice ? BATCH_GAS * 2n * st.gasPrice : null;
     const aliasPays = !lowOnGas(st.alias.eth, gas) && st.alias.eth != null;
-    const byAlias = async () => aliasPays && (await chain.canClaimFor(alias.evmAddress, walletAddress).catch(() => 'unread')) === null;
-    const rewards = !(st.claimable.rewards > 0n) ? null : (await byAlias()) ? 'alias' : 'wallet';
+    const byAlias = async (dry) => aliasPays && (await dry().catch(() => 'unread')) === null;
+    const rewards = !(st.claimable.rewards > 0n) ? null
+      : (await byAlias(() => chain.canClaimFor(alias.evmAddress, walletAddress))) ? 'alias' : 'wallet';
     const airdrop = !(st.claimable.airdrop > 0n) ? null : aliasPays ? 'alias' : 'wallet';
-    const merkle = await merkleDue(chain).catch((err) => ({ error: errorText(err) }));
-    return { st, gas, rewards, airdrop, merkle, wallet: rewards === 'wallet' || airdrop === 'wallet' || !!merkle.p };
+    const due = await merkleDue(chain).catch((err) => ({ error: errorText(err) }));
+    const merkle = !due.p ? null : (await byAlias(() => chain.canClaimMerkleFor(alias.evmAddress, walletAddress,
+      { amountWei: due.p.amountWei.toString(), proof: due.p.proof }))) ? 'alias' : 'wallet';
+    return { st, gas, rewards, airdrop, merkle, due, wallet: [rewards, airdrop, merkle].includes('wallet') };
   }
 
   return {
@@ -803,9 +808,9 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
           return { hash: (await tx).hash, amount: formatEther(plan.st.claimable.rewards), by: plan.rewards };
         });
         const merkle = await each(async () => {
-          if (plan.merkle.error) throw new Error(plan.merkle.error);
-          if (plan.merkle.skipped) return { skipped: plan.merkle.skipped };
-          return { ...(await claimMerkle(chain, v, plan.merkle, step)), by: 'wallet' };
+          if (plan.due.error) throw new Error(plan.due.error);
+          if (plan.due.skipped) return { skipped: plan.due.skipped };
+          return { ...(await claimMerkle(chain, plan.merkle, v, plan.due, step)), by: plan.merkle };
         });
         const airdrop = await each(async () => {
           if (!plan.airdrop) return { skipped: 'no vested airdrop to claim' };

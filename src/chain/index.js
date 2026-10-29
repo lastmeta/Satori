@@ -184,6 +184,17 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const mc3 = c('multicall3', multicall3Abi);
   const read = (call) => client.readContract(call);
   const many = (contracts) => client.multicall({ contracts, allowFailure: false });
+  /** A call run from `from` without sending: null when it would pass, else the revert's name; RPC errors throw. */
+  const dryRun = async (call, from) => {
+    try {
+      await client.simulateContract({ ...call, account: addressOf(from) });
+      return null;
+    } catch (err) {
+      const name = revertName(err);
+      if (name === null) throw err;
+      return name;
+    }
+  };
 
   // One write at a time, for both keys: the batch and a setup step never race for the alias's nonce.
   const queued = serial();
@@ -510,17 +521,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     },
 
     /** One game alone, from the alias, without sending: null when it would pass, else the revert's name. RPC errors throw. */
-    async simulateGame(alias, { gameId, direction }) {
-      try {
-        await client.simulateContract({ ...engine('predictMultipleWithPayloads', [[{ gameId, payload: payload(direction) }]]),
-          account: addressOf(alias) });
-        return null;
-      } catch (err) {
-        const name = revertName(err);
-        if (name === null) throw err;
-        return name;
-      }
-    },
+    simulateGame: (alias, { gameId, direction }) => dryRun(engine('predictMultipleWithPayloads', [[{ gameId, payload: payload(direction) }]]), alias),
 
     /**
      * The day's batch from the alias (or the wallet's, played by hand: `referrer` sets its referral on the way, as the dapp's
@@ -551,6 +552,10 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     alreadyMinted: (addr, blockNumber) => client.readContract({ ...merkle('alreadyMintedTo', [addr]), ...(blockNumber ? { blockNumber } : {}) }),
     /** claimMerkle(lifetimeEntitlement, proof) from the wallet (base_claim.py:99-104). */
     claimMerkle: (wallet, { amountWei, proof }, opts) => write(wallet, merkle('claimMerkle', [BigInt(amountWei), proof]), opts),
+    /** The wallet's merkle drop claimed by the alias, paid to the wallet: claimMerkle(wallet, amount, proof) (D8). */
+    claimMerkleFor: (alias, owner, { amountWei, proof }, opts) => write(alias, merkle('claimMerkle', [owner, BigInt(amountWei), proof]), opts),
+    /** Whether the alias may claim the wallet's merkle drop: null when it would pass, else the revert's name. */
+    canClaimMerkleFor: (alias, owner, { amountWei, proof }) => dryRun(merkle('claimMerkle', [owner, BigInt(amountWei), proof]), alias),
     claimAirdrop: (wallet, opts) => write(wallet, airdrop('claimAirdrop'), opts),
     /** The wallet's rewards claimed by the alias, to the wallet: hub.claimFor(wallet, wallet). */
     claimRewardsFor: (alias, owner, opts) => write(alias, hub('claimFor', [owner, owner]), opts),
@@ -560,16 +565,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      * Whether the alias may claim the wallet's rewards to the wallet: null when it would pass, else the revert's name
      * (Unauthorized until the permissionless claim is live, or while the wallet names a claimer). RPC errors throw.
      */
-    async canClaimFor(alias, owner) {
-      try {
-        await client.simulateContract({ ...hub('claimFor', [owner, owner]), account: addressOf(alias) });
-        return null;
-      } catch (err) {
-        const name = revertName(err);
-        if (name === null) throw err;
-        return name;
-      }
-    },
+    canClaimFor: (alias, owner) => dryRun(hub('claimFor', [owner, owner]), alias),
 
     /**
      * A send's fee before it is sent, from the sender's address (no key): the gas limit it would be sent with (ETH:

@@ -221,16 +221,19 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     [DEFAULTS.voting]: fns(abi.votingAbi, { weightOf: ([g]) => s.weights[g] ?? 0n }),
     [DEFAULTS.merkle]: fns(abi.merkleAbi, {
       alreadyMintedTo: ([a]) => s.merkle.minted[lc(a)] ?? 0n,
-      claimMerkle: ([amount, proof], ctx) => {
-        const d = s.merkle.drop[ctx.from];
+      // claimMerkle(amount, proof) for the sender, or (D8) claimMerkle(account, amount, proof) by anyone, paid to account
+      claimMerkle: (args, ctx) => {
+        const [who, amount, proof] = args.length === 3 ? [lc(args[0]), args[1], args[2]] : [ctx.from, ...args];
+        if (args.length === 3 && s.merkle.forAccountMissing) revert(); // an implementation before D8's upgrade: no such function
+        const d = s.merkle.drop[who];
         if (!d || d.amount !== amount || JSON.stringify(d.proof) !== JSON.stringify(proof)) revert('InvalidProof');
-        const already = s.merkle.minted[ctx.from] ?? 0n;
+        const already = s.merkle.minted[who] ?? 0n;
         if (amount <= already) revert('NothingToClaim');
         const avail = s.merkle.available;
         const paid = avail != null && avail > 0n && amount - already > avail ? avail : amount - already; // SatoriMerkle.sol:196-201
         if (ctx.write) {
-          s.merkle.minted[ctx.from] = already + paid;
-          s.balance[ctx.from] = (s.balance[ctx.from] ?? 0n) + paid;
+          s.merkle.minted[who] = already + paid;
+          s.balance[who] = (s.balance[who] ?? 0n) + paid;
           if (avail != null) s.merkle.available -= paid;
         }
       },

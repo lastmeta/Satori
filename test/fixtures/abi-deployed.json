@@ -47,6 +47,7 @@
     ],
     "SatoriMerkle": [
       "function alreadyMintedTo(address) -> (uint256) view",
+      "function claimMerkle(address,uint256,bytes32[]) -> () nonpayable",
       "function claimMerkle(uint256,bytes32[]) -> () nonpayable"
     ],
     "SatoriAirdrop": [

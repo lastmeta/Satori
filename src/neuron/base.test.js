@@ -800,13 +800,27 @@ describe('createBase', () => {
       expect(rpc.sent.map((t) => [t.functionName, t.from])).toEqual([['claimFor', I()], ['claimAirdropFor', I()]]);
       expect(s.balance[V]).toBe(110n * E18); // to the wallet
     });
-    test("the wallet still claims: the merkle drop, a named claimer's rewards, and everything when the alias has no gas", async () => {
+    test('the merkle drop too (D8): claimMerkle(wallet, amount, proof) from the alias; the wallet where that is refused', async () => {
+      const proof = ['0x' + 'ab'.repeat(32)];
+      central.root = '0xroot';
+      central.proofs[V] = { amountWei: (5n * E18).toString(), proof };
+      s.merkle.drop[V] = { amount: 5n * E18, proof };
+      s.merkle.forAccountMissing = true; // an implementation before the upgrade
+      expect(await base.claimNeedsWallet()).toBe(true);
+      s.merkle.forAccountMissing = false;
+      expect(await base.claimNeedsWallet()).toBe(false);
+      expect((await base.claim()).merkle).toEqual({ hash: expect.any(String), amount: '5', by: 'alias' }); // locked
+      expect(rpc.sent.map((t) => [t.functionName, t.from, t.args[0].toLowerCase()])).toEqual([['claimMerkle', I(), V]]);
+      expect(s.balance[V]).toBe(105n * E18);
+    });
+    test("the wallet still claims: a part the alias may not, a named claimer's rewards, and everything when the alias has no gas", async () => {
       s.openClaim = true;
       s.rewards[V] = 3n * E18;
       const proof = ['0x' + 'ab'.repeat(32)];
       central.root = '0xroot';
       central.proofs[V] = { amountWei: (5n * E18).toString(), proof };
       s.merkle.drop[V] = { amount: 5n * E18, proof };
+      s.merkle.forAccountMissing = true;
       expect(await base.claimNeedsWallet()).toBe(true);
       await expect(base.claim()).rejects.toThrow('Unlock the wallet first');
       expect(rpc.sent).toHaveLength(0);
@@ -861,8 +875,8 @@ describe('createBase', () => {
     const r = await base.claim();
     expect(r).toEqual({
       rewards: { hash: expect.stringMatching(/^0x/), amount: '3', by: 'wallet' }, // as deployed: the wallet's own
-      merkle: { hash: expect.stringMatching(/^0x/), amount: '5', by: 'wallet' },
-      airdrop: { hash: expect.stringMatching(/^0x/), amount: '7', by: 'alias' }, // anyone may: the alias
+      merkle: { hash: expect.stringMatching(/^0x/), amount: '5', by: 'alias' }, // anyone may (D8): the alias
+      airdrop: { hash: expect.stringMatching(/^0x/), amount: '7', by: 'alias' },
     });
     expect(rpc.sent.map((t) => t.functionName)).toEqual(['claim', 'claimMerkle', 'claimAirdropFor']);
     expect(s.balance[V]).toBe(115n * E18);
@@ -876,7 +890,7 @@ describe('createBase', () => {
     central.proofs[V] = { amountWei: (5n * E18).toString(), proof };
     s.merkle.drop[V] = { amount: 5n * E18, proof };
     s.merkle.available = 2n * E18;
-    expect((await base.claim()).merkle).toEqual({ hash: expect.any(String), amount: '2', by: 'wallet' });
+    expect((await base.claim()).merkle).toEqual({ hash: expect.any(String), amount: '2', by: 'alias' });
   });
 
   test('an RPC on another chain: an error, and no writes or batch', async () => {
