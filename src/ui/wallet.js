@@ -56,11 +56,11 @@ export function walletTab(a) {
   <section class="tab-page" data-test="wallet-tab" hidden="${() => state.tab !== 'wallet'}">
   <details class="card" id="wallet-receive" data-test="wallet-receive-card" open="${receiving}" @toggle="${(e) => { if (e.target.open !== receiving()) a.toggleContractQr(state.wallet); }}">
     <summary data-test="base-receive">Show address and QR code</summary>
-    <div class="fund" data-test="base-receive-panel">
+    <div class="fund receive" data-test="base-receive-panel">
       <p class="muted small">Add Base ETH or SATORI: send it on Base to your wallet's address.</p>
+      <img class="qr" data-test="base-qr" alt="QR code of your wallet's address" src="${() => (receiving() ? qrDataUrl(state.wallet) : '')}">
       <code class="block" data-test="base-receive-address">${() => state.wallet ?? ''}</code>
       <div class="actions"><button class="small-btn" @click="${() => a.copy('base-receive', state.wallet)}">${() => (state.copied === 'base-receive' ? 'Copied' : 'Copy')}</button></div>
-      <img class="qr" data-test="base-qr" alt="QR code of your wallet's address" src="${() => (receiving() ? qrDataUrl(state.wallet) : '')}">
     </div>
   </details>
 

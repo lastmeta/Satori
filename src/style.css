@@ -398,6 +398,11 @@ button.cell:disabled { cursor: default; }
 .with-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .fund { display: grid; gap: 6px; }
 .fund .qr { width: 180px; height: 180px; background: #fff; border-radius: 8px; image-rendering: pixelated; }
+/* the Wallet tab's Receive: the QR code big and centred, the address under it, Copy at the left under that */
+.fund.receive { gap: 12px; }
+.fund.receive .qr { width: min(280px, 100%); height: auto; aspect-ratio: 1; justify-self: center; margin-block: 4px; }
+.fund.receive code.block { text-align: center; }
+.fund.receive .actions { justify-content: flex-start; margin-top: 0; }
 @media (prefers-reduced-motion: reduce) { .contract-panel { transition: none; } }
 .day-panel { display: grid; grid-template-rows: 0fr; opacity: 0; transition: opacity 0.2s ease, grid-template-rows 0.3s ease 0.2s; }
 .day-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 0.3s ease, opacity 0.25s ease; }
