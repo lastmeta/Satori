@@ -553,11 +553,10 @@ gas is checked only then. With the alias short of gas, the wallet sends them all
 
 - the airdrop: `airdrop.claimAirdropFor(wallet)` (anyone; minted to the
   wallet, `C/SatoriAirdrop.sol:118-124`);
-- the on-chain rewards: `hub.claimFor(wallet, wallet)` once the contract's
-  permissionless claim to the credited address is live (contract humble,
-  2026-10-29); until then, and while the wallet names a claimer of its own,
-  that reverts `Unauthorized` in a simulate and the wallet sends `hub.claim()`.
-  Read each time, so the app needs no change when the upgrade lands;
+- the on-chain rewards: `hub.claimFor(wallet, wallet)`: anyone may claim to
+  the credited address (D8's Rewards upgrade, contract ce2ce664, 2026-10-29).
+  While the wallet names a claimer of its own, that reverts `Unauthorized` in
+  the dry run and the wallet sends `hub.claim()`;
 - the merkle drop: `merkle.claimMerkle(wallet, amountWei, proof)` (anyone;
   paid to the wallet, the proof bound to it: D8's upgrade, contract
   fd7edee3), checked by a dry run too; the wallet's own `claimMerkle(amountWei,

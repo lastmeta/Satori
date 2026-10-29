@@ -786,7 +786,7 @@ describe('createBase', () => {
 
   describe('the alias claims what anyone may claim to the wallet (docs/design/base.md#claim)', () => {
     const I = () => alias.evmAddress.toLowerCase();
-    test('the airdrop always; the rewards once the permissionless claim is live; no Unlock, the wallet without gas', async () => {
+    test('the airdrop always; the rewards when anyone may claim to the owner; no Unlock, the wallet without gas', async () => {
       s.rewards[V] = 3n * E18;
       s.airdrop[V] = 7n * E18;
       rpc.eth[V] = 0n;

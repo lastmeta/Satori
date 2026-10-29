@@ -52,8 +52,8 @@ export const hubAbi = abi(
   'function setAllowedDelegator(address allowed)',
   'function allowedDelegator(address) view returns (address)',
   'function claim() returns (uint256)',
-  // the owner's rewards claimed by another: today only its named claimer; to the owner itself, by anyone, once the
-  // permissionless claim is live (contract humble, 2026-10-29). The app's alias claims the wallet's this way.
+  // anyone may claim the owner's rewards to the owner (D8, contract ce2ce664); elsewhere, only its named claimer.
+  // The app's alias claims the wallet's this way.
   'function claimFor(address owner, address recipient) returns (uint256)',
 );
 
