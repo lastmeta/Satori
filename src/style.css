@@ -305,6 +305,11 @@ details.card > summary { color: var(--text); font-weight: 600; }
   --hero-tone: var(--tone); --hero-soft: var(--soft); --hero-ink: var(--ink, var(--tone));
   background: var(--hero-soft); border: 1px solid color-mix(in srgb, var(--hero-tone) 25%, transparent);
   transition: --hero-tone 300ms ease-out, --hero-soft 300ms ease-out, --hero-ink 300ms ease-out; }
+.hero:has(> .hero-act:not([hidden])) { grid-template-columns: auto minmax(0, 1fr) auto; } /* Was asleep, waiting: Check in now on the right */
+.hero-act { white-space: nowrap; }
+@media (max-width: 520px) { /* "Check in now" on two lines on a phone: the title keeps its line */
+  .hero-act { white-space: normal; max-width: 6em; line-height: 1.2; }
+  .hero:has(> .hero-act:not([hidden])) h2 { white-space: nowrap; } }
 .hero[data-tone="idle"] { --hero-rest: 1; transition: --hero-rest 300ms ease-out;
   --hero-tone: color-mix(in srgb, var(--from-tone, var(--tone)), var(--tone) calc(var(--hero-rest) * 100%));
   --hero-soft: color-mix(in srgb, var(--from-soft, var(--soft)), var(--soft) calc(var(--hero-rest) * 100%));

@@ -63,8 +63,8 @@ test('asleep 12 h with the page open: the poll runs within one heartbeat; "Catch
   expect(stub.batches).toHaveLength(2); // the new observations, forecast and sent
   expect(c.nextPoll).toBeGreaterThan(first + 12 * H); // 11 h on from the catch-up, on the skewed clock
   const h = await page.evaluate(() => window.satori.health());
-  expect(h).toMatchObject({ title: expect.stringMatching(/^Predict(ed|ing)$/), line: 'Closed for 12 h. Caught up just now.' });
-  expect(h.feed.map((f) => f.text)).toEqual(expect.arrayContaining(['Satori was closed for 12 h', 'Caught up: sent 4 predictions']));
+  expect(h).toMatchObject({ title: expect.stringMatching(/^Predict(ed|ing)$/), line: 'Caught up just now.', checkIn: false });
+  expect(h.feed.map((f) => f.text)).toEqual(expect.arrayContaining(['Satori was closed', 'Caught up: sent 4 predictions']));
   // "Catching up now…" was said only while central's work ran; before that, never
   for (const s of samples.filter((x) => /Catching up now/.test(`${x.line} ${x.chip}`))) expect(s.work === 'central' || s.polling).toBe(true);
   expect(stub.prod).toEqual([]);

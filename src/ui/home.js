@@ -138,6 +138,8 @@ export function home(a) {
       <div><h2 data-test="health-title">${() => hero().title}</h2><p data-test="health-line">${() => hero().line}</p>
         <p class="stale small" data-test="health-stale" hidden="${() => !cachedNow()}">${() => (cachedNow() ? `From your last visit, ${fmtAgo(Date.now() / 1000 - state.cached.at / 1000)}` : '')}</p>
         <div class="notes" data-test="notices" hidden="${() => !(h().notices ?? []).length}">${() => (h().notices ?? []).map((n) => html`<p class="note small" data-test="notice-line" data-what="${n.what}">${n.text} · ${fmtAgo(state.now - n.at)}</p>`.key(`${n.at}:${n.text}:${fmtAgo(state.now - n.at)}`))}</div></div>
+      <button class="hero-act small-btn" data-test="health-check-in" hidden="${() => cachedNow() || hero().working || !h().checkIn}" disabled="${() => !!state.central.polling}"
+        @click="${a.pollNow}">Check in now</button>
     </section>
 
     <div class="action" data-test="action" data-action="${() => h().action?.id ?? false}" data-tone="${actionTone}" hidden="${() => !h().action}">

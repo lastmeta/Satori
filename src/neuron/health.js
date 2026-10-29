@@ -186,12 +186,12 @@ function centralReasons({ now, rows, sessions, central, work }) {
   const woke = rows.filter((r) => r.kind === 'open' && r.data?.missed).at(-1);
   const after = woke ? cycles.filter((r) => isGood(r) && r.at >= woke.at) : [];
   if (woke && after.length < 2) {
-    const closed = `Closed for ${fmtDur(woke.data.gap ?? 0)}.`;
     const caught = after[0];
     const catching = atOnce ? 'Catching up now…' : `Catching up ${next}`;
+    // not how long it was closed (the owner, 2026-10-29: it read 3 h for a night); waiting, a Check in now on the hero
     out.push(reason('asleep', 'network', {
-      line: caught ? `${closed} Caught up ${fmtAgo(now - caught.at)}.` : `${closed} ${catching}${atOnce ? '' : '.'}`,
-      chip: caught ? null : catching }));
+      line: caught ? `Caught up ${fmtAgo(now - caught.at)}.` : `${catching}${atOnce ? '' : '.'}`,
+      chip: caught ? null : catching, checkIn: !caught && !atOnce }));
   }
   if (!lastGood && !failed && !overdue) {
     out.push(reason('starting', 'network', { line: atOnce ? 'Getting its first predictions…' : `First predictions ${next}.`,
@@ -481,7 +481,7 @@ const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
 function feedText(r) {
   const d = r.data ?? {};
   switch (r.kind) {
-    case 'open': return d.missed ? `Satori was closed for ${fmtDur(d.gap ?? 0, true)}` : null;
+    case 'open': return d.missed ? 'Satori was closed' : null;
     case 'central':
       if (d.local) return `Saving or forecasting failed: ${d.error}`;
       if (d.login) return `The Satori Service refused the login: ${d.error}`;
@@ -583,7 +583,7 @@ export function healthOf({ now, rows = [], central, base, nostr, storage, app, b
   const action = a ? { id: a.id, text: a.text, ...(a.act ? { button: a.button, ...a.act } : {}), ...(a.dismiss ? { dismiss: a.dismiss } : {}) } : null;
   const doing = leading(work);
   return {
-    status, tone, title, line, action,
+    status, tone, title, line, action, checkIn: !!top?.checkIn,
     days,
     channels: chips({ now, next, reasons, lastGood: lg, base, nostr, traffic, work }),
     feed: feedOf(rows),

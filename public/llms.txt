@@ -534,7 +534,9 @@ the page's JS context:
   database; the keys are, as setup checkpoints them). `fatal`: the screen
   shows the error; nothing was deleted, and a reload tries again.
 - `await satori.health()` → Home's answer, read fresh (docs/design/health.md):
-  `{ status, tone, title, line, action, days, channels, feed, reasons, work, notices }`.
+  `{ status, tone, title, line, action, checkIn, days, channels, feed, reasons, work, notices }`.
+  - `checkIn: true`: *Was asleep* and waiting for the next poll ("Catching up in 36 min."); Home shows **Check in
+    now** on its right, `await satori.poll()`.
   - `tone`: `'idle'` (sky green, all good at rest), `'working'`,
     `'critical'` (keep Satori open), `'warn'`, `'bad'`; `'off'` only for a
     channel (below).

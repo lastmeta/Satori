@@ -252,14 +252,15 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   const release = central.hold(); // the catch-up poll runs at once; held here to see it
   await start(page);
   let h = await health(page);
-  expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', action: null, line: 'Closed for 2 days. Catching up now…' });
+  expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', action: null, checkIn: false, line: 'Catching up now…' });
+  await expect(page.locator('[data-test=health-check-in]')).toBeHidden(); // catching up now: nothing to press
   await expect(page.locator('[data-test=health-title]')).toHaveText('Was asleep');
   expect(h.channels.network.text).toBe('Catching up now…');
-  expect(h.feed).toContainEqual(expect.objectContaining({ level: 'idle', text: 'Satori was closed for 2 d' }));
+  expect(h.feed).toContainEqual(expect.objectContaining({ level: 'idle', text: 'Satori was closed' }));
   expect(h.days.slice(-3).map((d) => [d.code, d.ran])).toEqual([['full', true], ['closed', false], ['closed', true]]);
 
   release(); // no Poll now
-  await expect(page.locator('[data-test=health-line]')).toHaveText('Closed for 2 days. Caught up just now.', { timeout: LOAD_TIMEOUT }); // history, bvar
+  await expect(page.locator('[data-test=health-line]')).toHaveText('Caught up just now.', { timeout: LOAD_TIMEOUT }); // history, bvar
   await expect(hero(page)).toHaveAttribute('data-s', 'idle'); // until the next normal cycle
   await expect(page.locator('[data-test=health-title]')).toHaveText(/^Predict(ed|ing)$/); // caught up
   await expect(page.locator('[data-test=chip][data-channel=network]')).toHaveAttribute('data-state', 'ok');
@@ -273,6 +274,26 @@ test('idle: was asleep two days, catches up, and shows it until the next normal 
   await page.evaluate(() => window.satori.poll());
   await expect(hero(page)).toHaveAttribute('data-s', 'ok');
   expect(central.prod).toEqual([]);
+});
+
+test('was asleep, the next poll still ahead: Check in now on the hero\'s right polls now', async ({ context, page }) => {
+  test.setTimeout(240_000);
+  const { central } = await setup(context);
+  const closedAt = dayAt(nowS(), 2, 12);
+  await seed(page, month(nowS(), { closed: [9], until: closedAt, lastGood: closedAt - H }));
+  await page.evaluate((v) => window.probe({ cmd: 'app-meta', key: 'next_poll_at', value: v }), nowS() + 36 * 60 + 30); // retries put it ahead
+  centralAt(central, nowS() - 60);
+  await start(page);
+  await expect(page.locator('[data-test=health-line]')).toHaveText(/^Catching up in 3[67] min\.$/);
+  const button = page.locator('[data-test=health-check-in]');
+  await expect(button).toBeVisible();
+  expect(await health(page)).toMatchObject({ title: 'Was asleep', checkIn: true, action: null });
+  const [b, line] = await Promise.all([button.boundingBox(), page.locator('[data-test=health-line]').boundingBox()]);
+  expect(b.x).toBeGreaterThan(line.x + line.width); // on the right of the words
+  await shots(page, 'asleep-waiting');
+  await button.click();
+  await expect(page.locator('[data-test=health-line]')).toHaveText('Caught up just now.', { timeout: LOAD_TIMEOUT });
+  await expect(button).toBeHidden();
 });
 
 test('a failed send: amber, named, retried in minutes; a second quick failure stays amber, then green, never red; then the login refused is red', async ({ context, page }) => {

@@ -90,15 +90,18 @@ describe('idle: calm, never red for being closed', () => {
     const before = [open(NOW - 3 * D, NOW - 3 * D + 2 * H), good(NOW - 3 * D + H)];
     const woke = open(NOW - 10 * M, NOW - M, { gap: 3 * D - 2 * H - 10 * M, missed: true });
     let h = health({ rows: [...before, woke], central: central({ polling: true }) }); // the overdue poll runs at once
-    expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', line: 'Closed for 3 days. Catching up now…', action: null });
+    expect(h).toMatchObject({ status: 'idle', title: 'Was asleep', line: 'Catching up now…', action: null });
     expect(h.channels.network).toEqual({ state: 'idle', tone: 'idle', text: 'Catching up now…' });
-    expect(health({ rows: [...before, woke], central: central({ nextPoll: NOW + 12 * M }) }).line).toBe('Closed for 3 days. Catching up in 12 min.');
+    const waiting = health({ rows: [...before, woke], central: central({ nextPoll: NOW + 12 * M }) });
+    // not how long it was closed (it read 3 h for a night); waiting, Check in now on the hero, never the card
+    expect(waiting).toMatchObject({ line: 'Catching up in 12 min.', checkIn: true, action: null });
+    expect(h.checkIn).toBe(false); // catching up now: nothing to press
     // "Catching up now…" only while the work runs: a poll due with nothing running (the bug: a device that slept with
     // the page open, its timer not fired) says soon, until the catch-up pass runs it
     const stuck = health({ rows: [...before, woke], central: central({ nextPoll: NOW - H }) });
-    expect([stuck.line, stuck.channels.network.text]).toEqual(['Closed for 3 days. Catching up soon.', 'Catching up soon']);
+    expect([stuck.line, stuck.channels.network.text]).toEqual(['Catching up soon.', 'Catching up soon']);
     const signing = { central: { task: 'central', step: 'register', done: null, total: null, since: 0, critical: false } };
-    expect(health({ rows: [...before, woke], central: central({ nextPoll: null }), work: signing }).line).toBe('Closed for 3 days. Catching up now…');
+    expect(health({ rows: [...before, woke], central: central({ nextPoll: null }), work: signing }).line).toBe('Catching up now…');
     // it never counts the closed time: three days closed is not overdue
     expect(ids(h)).toEqual(['asleep']);
 
@@ -107,11 +110,11 @@ describe('idle: calm, never red for being closed', () => {
     expect(ids(offered)).toEqual(['asleep', 'install']);
     expect(offered.reasons[1]).toMatchObject({ id: 'install', status: 'advice', channel: null });
     expect(offered.action).toEqual({ id: 'install', text: INSTALL_TEXT, button: 'Install', do: 'install', dismiss: 'Not now' });
-    expect(offered).toMatchObject({ status: 'idle', tone: 'idle', title: 'Was asleep', line: 'Closed for 3 days. Catching up now…' });
+    expect(offered).toMatchObject({ status: 'idle', tone: 'idle', title: 'Was asleep', line: 'Catching up now…' });
 
     const caught = good(NOW - 20, 83, { caughtUp: woke.data.gap });
     h = health({ rows: [...before, woke, caught] });
-    expect(h).toMatchObject({ status: 'idle', title: 'Predicted', line: 'Closed for 3 days. Caught up just now.' }); // caught up: predicting
+    expect(h).toMatchObject({ status: 'idle', title: 'Predicted', line: 'Caught up just now.', checkIn: false }); // caught up: predicting
     expect(h.channels.network).toEqual({ state: 'ok', tone: 'idle', text: '83 sent just now' });
 
     // a reload after catching up keeps it; the next normal cycle ends it
@@ -723,7 +726,7 @@ test('the feed: newest first, 20 rows; sessions shown only when they missed work
     ['warn', 'Satori contract batch skipped: gas above the ceiling (×3)'],
     ['ok', 'Caught up: sent 83 predictions'],
     ['ok', 'History loaded for 83 streams'],
-    ['idle', 'Satori was closed for 3 d'],
+    ['idle', 'Satori was closed'],
     ['ok', 'Satori contract batch for round 20739: 2 games'],
     ['ok', 'Sent 83 predictions to the Satori Service'],
   ]);

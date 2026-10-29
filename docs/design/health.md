@@ -99,6 +99,10 @@ of four levels, and the status is the worst `bad`, `warn` or `idle` one:
     good cycle after that session (the title says *Predicted* once it
     caught up). A device that slept with the page open catches up within
     one heartbeat ([the catch-up pass](../plans/runtime.md#catch-up-pass)).
+    The line never says how long it was closed (the owner, 2026-10-29: it
+    read 3 h for a night's sleep). Waiting for the poll ("Catching up in
+    36 min.", or "soon."), the hero has **Check in now** on its right
+    (`checkIn`), a poll now.
   - *Starting*: a new neuron before its first good cycle, within `FIRST_S`:
     "Getting its first predictions…" (it polls at once, after register).
 
@@ -691,7 +695,7 @@ to send), "Caught up: sent 83 predictions" ("Caught up: up to date"), "The
 Satori Service refused the batch: Satori Service 401: Invalid signature",
 "Satori contract batch for round 20742: 1 game", "Satori contract batch
 skipped: gas above the ceiling (×3)", "Published 3 forecasts to the Satori
-Network", "Satori was closed for 2 d", "Staked with this app",
+Network", "Satori was closed", "Staked with this app",
 "Satori Service address changed to https://central.example", "The Satori
 Service's contract addresses differ from the app's (token): the app's are
 used". A session that missed nothing is not shown.
