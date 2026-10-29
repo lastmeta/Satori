@@ -1282,7 +1282,11 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   Its file stays set aside in this browser, never deleted. Enter that wallet's
   passphrase to remove it.", its passphrase, Remove it or Cancel), and Add a wallet.
 - **Dev Fee** (in the menu only for a wallet in the dev fee's splitters):
-  a Dev Fee card (Refresh); a "Your share" card per slot (the splitter, "50%
+  a Dev Fee card (Refresh); "How it splits", a picture of the splitters
+  (each branch's box with its authority and what must agree to redirect it;
+  each payee a dot with its share and what it has not claimed; the wallet
+  in green; its lines worded move, vote or redirect, explained under it);
+  a "Your share" card per slot (the splitter, "50%
   of this splitter · 30% of the whole dev fee", Claimable with Claim, how
   much of it is still in the top splitter; folded: "Who can trigger your
   payout" with Save, and "Move your slot to another address", typed twice);

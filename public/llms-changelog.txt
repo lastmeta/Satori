@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-29 (How it splits)
+
+- Dev Fee: a picture of the splitters at the top, the wallet in green, its lines worded move, vote or redirect.
+  Display only; no new calls.
+
 ## Added 2026-10-29 (Dev Fee)
 
 - The **Dev Fee** tab and `devFee()`, `devFeeClaim`, `devFeeTrigger`, `devFeeMoveSlot`, `devFeeProposal`, `devFeeVote`,

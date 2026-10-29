@@ -23,6 +23,15 @@ Every action is the wallet's (the inline Unlock in its card; gas from the wallet
 
 ## The cards
 
+- **How it splits** (the owner, 2026-10-29: "a representation of the contract"), at the top:
+  the tree as a picture. The top splitter, then each branch as a box (its authority, or
+  none; what share must agree to redirect it), then every payee as a dot with its share on
+  its line and what it has not claimed yet (its `releasable` plus its part of what still
+  waits in the top). The wallet is green (a dot, or "Authority: you"). A line it can change
+  carries a word, explained under the picture: **move** (its own slot), **vote** (redirect
+  the branch it is in, with the others' agreement), **redirect** (as the branch's authority,
+  alone). Display only: `devFee()` and the actions below cover it.
+
 - **Your share**, one per slot: the splitter, "50% of this splitter · 30% of the whole dev
   fee", and what is claimable: the slot's `releasable` plus its part of what still waits
   one level up (the top's `releasable` for this branch × the slot's share). **Claim** moves

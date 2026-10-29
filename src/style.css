@@ -889,3 +889,26 @@ a.chan:hover { border-color: var(--muted); }
 [data-test=devfee-authority] h3 { margin: 16px 0 4px; font-size: 1rem; }
 .devfee-more { margin-top: 12px; }
 .devfee-more > summary { cursor: pointer; color: var(--muted); }
+/* Dev Fee's picture (src/ui/devfeetree.js): lines in an SVG stretched across, boxes, dots and words placed over it */
+.dft-scroll { overflow-x: auto; margin: 12px -4px 4px; }
+.dft { position: relative; margin: 0 4px; }
+.dft svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.dft-line { fill: none; stroke: var(--btn-line); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.dft-line.mine { stroke: var(--ok); stroke-width: 2.5; }
+.dft-box, .dft-dot, .dft-pct, .dft-word { position: absolute; transform: translateX(-50%); box-sizing: border-box; }
+.dft-box { max-width: 230px; display: grid; gap: 1px; padding: 5px 4px; text-align: center; font-size: 10.5px; line-height: 1.35;
+  background: var(--accent-soft); border: 1.5px solid var(--accent); border-radius: 10px; }
+.dft-box b { font-size: 11px; white-space: nowrap; }
+.dft-box.mine { border-color: var(--ok); background: var(--ok-soft); }
+.dft-box span, .dft-dot b, .dft-dot span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dft-box .you, .dft-dot.me b { color: var(--ok); font-weight: 700; }
+.dft-dot { width: 82px; display: grid; justify-items: center; font-size: 10.5px; letter-spacing: -0.01em; line-height: 1.35; }
+.dft-dot i { width: 14px; height: 14px; border-radius: 50%; background: var(--btn-line); margin-bottom: 3px; }
+.dft-dot.me i { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+.dft-dot b { font-weight: 500; max-width: 100%; }
+.dft-dot span { color: var(--muted); max-width: 100%; }
+.dft-pct, .dft-word { transform: translate(-50%, -50%); font-size: 11px; line-height: 1; padding: 2px 4px; border-radius: 6px; background: var(--card); white-space: nowrap; }
+.dft-pct { font-weight: 600; }
+.dft-word { color: var(--ok); background: var(--ok-soft); font-weight: 600; }
+.dft-legend { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; font-size: 0.875rem; }
+.dft-legend .dft-word { position: static; transform: none; display: inline-block; margin-right: 4px; }

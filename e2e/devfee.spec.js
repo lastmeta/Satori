@@ -41,7 +41,16 @@ test('Dev Fee: only for a wallet in the splitters; its share, Claim, the trigger
   await expect(slot.locator('[data-test=devfee-share]')).toHaveText('50% of this splitter · 30% of the whole dev fee');
   await expect(slot.locator('[data-test=devfee-claimable]')).toHaveText('35 SATORI');
   await expect(slot.locator('[data-test=devfee-waiting]')).toHaveText('30 SATORI of it is still in the top splitter: Claim moves it down to yours first (two transactions).');
+  // the picture: three splitters, four payees, the wallet green with what it has not claimed; its lines worded
+  const tree = t(page, 'devfee-tree');
+  await expect(tree.locator('[data-test=devfee-tree-box]')).toHaveCount(3);
+  await expect(tree.locator('[data-test=devfee-tree-member]')).toHaveCount(4);
+  await expect(tree.locator('.dft-dot.me')).toHaveText('You35 SATORI');
+  await expect(tree.locator('[data-test=devfee-tree-word]')).toHaveText(['vote', 'move']);
+  await expect(tree.locator('[data-test=devfee-tree-legend] li')).toHaveCount(2);
   await page.setViewportSize({ width: 390, height: 844 });
+  const box = await tree.boundingBox();
+  expect(box.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('devfee-phone.png'), fullPage: true });
 
   // Claim, locked: the passphrase in the card, then the two transactions
@@ -79,6 +88,8 @@ test('Dev Fee: only for a wallet in the splitters; its share, Claim, the trigger
   s.splitters[SPLIT_B].authority = V;
   await t(page, 'devfee-refresh').click();
   const auth = t(page, 'devfee-authority');
+  await expect(tree.locator('.dft-box.mine')).toHaveText(/Authority: you/);
+  await expect(tree.locator('[data-test=devfee-tree-word]')).toHaveText(['vote', 'move', 'redirect']);
   await expect(auth.locator('h2')).toHaveText('Authority of Splitter 0xc082…F5f7');
   const offer = auth.locator('[data-test=devfee-offer]');
   await offer.getByLabel('Offer it to').fill(NEW);

@@ -7,6 +7,7 @@ import { state } from './state.js';
 import { fact, form, unlockPrompt } from './parts.js';
 import { fmtNum, shortHash } from './format.js';
 import { txLink } from './wallet.js';
+import { devFeeTree } from './devfeetree.js';
 
 const same = (x, y) => !!x && !!y && x.toLowerCase() === y.toLowerCase();
 const d = () => state.devFee;
@@ -140,6 +141,7 @@ export function devFeeTab(a) {
       <p class="error small" role="status" data-test="devfee-read-error" hidden="${() => !d().error}">${() => (d().error ? `The chain did not answer: ${d().error}` : '')}</p>
       <p class="muted small" hidden="${() => !!t()}">Reading the splitters…</p>
     </section>
+    ${devFeeTree()}
     ${() => slots().map((x) => slotCard(a, x).key(`slot:${x}`))}
     ${() => branches().map((x) => redirectCard(a, x).key(`redirect:${x}`))}
     ${() => held().map((x) => authorityCard(a, x).key(`authority:${x}`))}
