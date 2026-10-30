@@ -401,7 +401,7 @@ in `base().play`:
 The Game tab while automatic: the game greyed out under "The app plays for
 you" and **Play by hand**. By hand: the game alone; the way back is
 Settings › Satori contract predictions (Automatic, By hand). The switch
-shows at once and is stored meanwhile (`setPlay`, `src/main.js`). Agents:
+shows at once and is stored meanwhile (`setPlay`, `src/actions.js`). Agents:
 `satori.setPlay('auto' | 'manual')`.
 
 ### The game

@@ -291,7 +291,7 @@ Home: [../screenshots/home.png](../screenshots/home.png).
 
 An unlocked wallet on a phone or a laptop left open is funds anyone at the
 screen can move (the security review, 2026-10-19). So, besides Lock
-(`src/keys/autolock.js`, `src/main.js`):
+(`src/keys/autolock.js`, `src/keyring.js`, `src/main.js`):
 
 - **After an action an inline Unlock was opened for.** Stake, Unstake or
   Claim asked for the passphrase in place because the wallet was locked: once

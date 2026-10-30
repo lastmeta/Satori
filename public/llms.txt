@@ -1567,7 +1567,8 @@ Repository: https://github.com/lastmeta/Satori (this app is the repository
 root; branch `main`). Plain JavaScript ES modules, no
 build step beyond Vite, MIT licensed.
 
-- `src/main.js`: app wiring and `window.satori`; `src/config.js`: Settings'
+- `src/main.js`: app wiring; `src/agent.js`: `window.satori`; `src/actions.js`: the
+  screens' actions; `src/keyring.js`: the open wallet's signer; `src/config.js`: Settings'
   defaults, the dev server's or a build's, each replaced by a `VITE_*`
   variable at build time (`VITE_CENTRAL_URL`, `VITE_NOSTR_RELAYS`,
   `VITE_NOSTR_CENTRAL_WRITE`, `VITE_BASE_RPC`; `VITE_NOSTR_WSS`, the relays'

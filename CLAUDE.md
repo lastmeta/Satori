@@ -45,7 +45,7 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
   instant switch. A fixed height must not leave visible blank space in
   the short states; Home's hero couldn't, so it animates (main.js `smoothHero`).
 - **Every screen action has an agent call** (2026-10-25). Anything a person can
-  do on a screen, an agent can do through `window.satori` (src/main.js), with a
+  do on a screen, an agent can do through `window.satori` (src/agent.js), with a
   stable name, its checks, and its entry in public/llms.txt (and
   llms-changelog.txt). Add the call in the same change as the screen feature,
   never later; test it in e2e (e2e/agent.spec.js). Screen-only exceptions:
