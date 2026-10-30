@@ -190,14 +190,14 @@ export function render(root, a) {
   watch(() => { document.body.dataset.tab = state.tab; });
   const running = () => state.screen !== 'home';
   html`
-  <header class="top">
+  <header class="${() => (state.screen === 'home' && state.unlocked ? 'top unlocked' : 'top')}">
     <h1><a class="brand" href="#home" data-test="brand" @click="${(e) => { e.preventDefault(); if (state.screen === 'home') a.go('home'); }}"><span class="brand-mark" aria-hidden="true"></span>Satori <span class="muted">app</span></a></h1>
     <nav class="topnav" aria-label="Sections" hidden="${running}">${TABS.map((t) => navLink(a, t))}</nav>
-    <div class="app-wallet-row" hidden="${() => state.screen !== 'home' || !appWallet()}"><button class="small-btn app-wallet" data-test="app-wallet" title="${() => state.wallet ?? ''}" @click="${() => a.go('wallet')}">${appWallet}</button></div>
     <div class="top-actions">
       <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
       <span class="muted small lock-in" data-test="lock-in" hidden="${() => state.screen !== 'home' || !state.unlocked}">${() => lockInText(state.lockAt, state.lockNow)}</span>
       <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
+      <a class="app-wallet muted small" href="#wallet" data-test="app-wallet" title="${() => state.wallet ?? ''}" hidden="${() => state.screen !== 'home' || !appWallet()}" @click="${(e) => { e.preventDefault(); a.go('wallet'); }}">${appWallet}</a>
       <button class="small-btn icon-btn bare" data-test="share" aria-label="Share" title="Share your invite link" hidden="${() => state.screen !== 'home' || !state.base.inviteLink}" @click="${a.share}">${() => (state.copied === 'share' ? 'Link copied' : SHARE())}</button>
       <button class="small-btn icon-btn bare" data-test="theme-toggle" aria-label="${() => (isDark() ? 'Light mode' : 'Dark mode')}" title="${() => (isDark() ? 'Light mode' : 'Dark mode')}" @click="${() => a.setTheme(isDark() ? 'light' : 'dark')}">${() => (isDark() ? SUN() : MOON())}</button>
     </div>

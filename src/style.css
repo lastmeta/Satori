@@ -890,14 +890,12 @@ a.chan:hover { border-color: var(--muted); }
 .devfee-more { margin-top: 12px; }
 .devfee-more > summary { cursor: pointer; color: var(--muted); }
 /* the app bar's wallet (its name, else its address) and the Wallets list's names over their addresses */
-.app-wallet { max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.app-wallet-row { margin-left: auto; }
-/* a phone: its own row under the logo, always (a row that came and went with the Lock button would jump the page) */
-@media (max-width: 520px) {
-  .top { display: grid; grid-template-columns: auto auto; justify-content: space-between; row-gap: 0; }
-  .app-wallet-row { order: 3; grid-column: 1 / -1; margin: -6px 0 4px; }
-  .app-wallet { max-width: 100%; padding: 4px 10px; }
-}
+.app-wallet { max-width: 12em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); text-decoration: none; }
+.app-wallet:hover { color: var(--text); }
+.top-actions { min-width: 0; }
+@media (max-width: 520px) { .app-wallet { max-width: 8.5em; flex-shrink: 1; } }
+/* a phone has no room for it beside Lock and its countdown: it comes back when the wallet locks */
+@media (max-width: 440px) { .top.unlocked .app-wallet { display: none; } }
 .wallet-id { display: grid; min-width: 0; flex: 1 1 auto; }
 .wallet-id b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Admin (src/ui/admin.js): the capabilities' switches, the games' rows */

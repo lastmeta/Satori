@@ -284,7 +284,9 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
 - **Names** (the owner, 2026-10-30): the wallet in use can be named (the Wallet tab's
   Name card; `name` on its entry in the list, so this device only). The Wallets list
   shows each name over its address; the app bar shows the one in use by name, else
-  its short address, and a tap opens the Wallet tab. A wallet holding a special key
+  its short address, as muted text left of Share (the owner, 2026-10-30), and a tap
+  opens the Wallet tab. On a phone narrower than 440 px it hides while the wallet is
+  unlocked: Lock and its countdown take its room. A wallet holding a special key
   with no name of its own takes the key's ("Admin"; `nameAuto`), and drops it when it
   no longer holds the key; a name the person saves always wins.
 - **B. Several wallets**: the list, a file each, the switch, Add and Remove (2026-10-23).
