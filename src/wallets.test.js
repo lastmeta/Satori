@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, FIRST_FILE, ALREADY } from './wallets.js';
+import { activeOf, pathOf, withAdded, withAddress, withActive, withName, withoutWallet, walletsView, FIRST_FILE, ALREADY } from './wallets.js';
 
 const A = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';
 const B = '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4';
@@ -8,7 +8,7 @@ describe('the wallets list (docs/design/wallets.md#several-wallets)', () => {
   test('no list: one wallet in the first file', () => {
     expect(activeOf(null)).toEqual({ id: 1, file: FIRST_FILE, address: null });
     expect(pathOf(activeOf(null))).toBe('opfs://satori-mvp.duckdb');
-    expect(walletsView(null, A)).toEqual({ active: 1, wallets: [{ id: 1, address: A, active: true }] });
+    expect(walletsView(null, A)).toEqual({ active: 1, wallets: [{ id: 1, address: A, name: null, nameAuto: false, active: true }] });
   });
 
   test('Add: the first wallet kept with its address, a new one active in a file of its own; ids go on from the highest', () => {
@@ -24,6 +24,17 @@ describe('the wallets list (docs/design/wallets.md#several-wallets)', () => {
     expect(activeOf(l)).toMatchObject({ id: 2, address: B });
     expect(() => withAddress(withAdded(null, A), A.toLowerCase())).toThrow(ALREADY);
     expect(withAddress(l, B).wallets).toEqual(l.wallets); // its own address again: fine
+  });
+
+  test("a name for the wallet in use: a person's, or a special key's (auto); '' clears it; trimmed, at most 40", () => {
+    const l = withAddress(withAdded(null, A), B);
+    const named = withName(l, '  My   main ');
+    expect(activeOf(named)).toMatchObject({ id: 2, name: 'My main' });
+    expect(named.wallets[0]).toEqual(l.wallets[0]); // the others untouched
+    expect(walletsView(withName(named, 'Admin', { auto: true })).wallets[1]).toMatchObject({ name: 'Admin', nameAuto: true });
+    expect(activeOf(withName(named, ''))).toEqual({ id: 2, file: 'satori-2.duckdb', address: B });
+    expect(() => withName(l, 'x'.repeat(41))).toThrow('at most 40');
+    expect(withName(null, 'First', { address: A }).wallets).toEqual([{ id: 1, file: FIRST_FILE, address: A, name: 'First' }]);
   });
 
   test('Switch: only to a wallet in the list', () => {

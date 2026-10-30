@@ -94,6 +94,7 @@ export const state = reactive({
   rewardDone: '',
   rewardError: '',
   walletsError: '', // the Wallets card's Add, Switch or Remove failed
+  walletNameSaid: '', walletNameError: '', // the Name card's outcome (docs/design/wallets.md#names)
   // Nostr (docs/design/nostr.md): the flow's status, the last catalog
   nostr: { pubkey: '', npub: '', maxStreams: 0, centralWrite: false, userRelays: [], relays: [], subscriptions: [],
     watching: { streams: 0, sources: 0, found: 0, left: 0, at: null, error: null }, market: { selling: [], bought: [], error: null } },

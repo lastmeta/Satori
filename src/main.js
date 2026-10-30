@@ -51,7 +51,7 @@ import { subscribe, lastTraffic } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { setTheme, applyTheme } from './ui/theme.js';
 import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, NEXT_STEP_KEY, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
-import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
+import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withName, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
 import { deviceKey } from './keys/atrest.js';
 import { createSession } from './session.js';
 import { HANDOFF, SW_BATCH } from './pwa/handoff.js';
@@ -552,6 +552,14 @@ async function keepWallets(list) {
   wallets = list;
   state.wallets = walletsView(wallets, state.wallet);
 }
+
+/** The wallet in use named (docs/design/wallets.md#names): a person's name, or (`auto`) its special key's; '' clears. */
+async function nameWallet(name, { auto = false } = {}) {
+  if (!state.wallet) throw new Error('Set up a wallet first.');
+  await keepWallets(withName(wallets, name, { auto, address: state.wallet }));
+}
+/** The special key the wallet holds, as its name while it has none of its own. */
+const roleName = () => (state.admin.shown ? 'Admin' : '');
 
 /** Another wallet opens: the keys wiped (Lock), the list's active one set, the last visit's Home dropped, the page reloaded. */
 async function reopenWith(list) {
@@ -1538,6 +1546,16 @@ const actions = {
   readReward: () => void (reward && readRewardNow()),
   /** The Wallets card (docs/design/wallets.md#several-wallets): Add, Switch, and Remove after it asks. */
   addWallet: shownAt('walletsError', () => addWallet()),
+  /** The Name card: the wallet in use named, or '' to clear it (then a special key's name comes back by itself). */
+  async saveWalletName(name) {
+    Object.assign(state, { walletNameSaid: '', walletNameError: '' });
+    try {
+      await nameWallet(name);
+      state.walletNameSaid = String(name ?? '').trim() ? 'Saved.' : 'Cleared.';
+    } catch (err) {
+      state.walletNameError = err?.message ?? String(err);
+    }
+  },
   switchWallet: shownAt('walletsError', (id) => switchWallet(id)),
   askRemoveWallet: shownAt('walletsError', async (id) => {
     Object.assign(state, { walletRemove: id, walletRemoveNeeds: '', walletsError: '' });
@@ -1634,6 +1652,11 @@ window.satori = {
   /** Remove a wallet that is not in use, with that wallet's passphrase (none for a connected one): off the list, its file
    * set aside, never deleted. Only on the person's request, after its words are backed up. → wallets() */
   async removeWallet(id, passphrase) { await removeWallet(id, passphrase); return walletsView(wallets, state.wallet || null); },
+  /**
+   * Name the wallet in use (at most 40 characters; '' clears it, and a special key's name, such as "Admin", comes back by
+   * itself). Shown in the app bar and the Wallets list, on this device only. → wallets()
+   */
+  async nameWallet(name) { ready(); await nameWallet(name); return walletsView(wallets, state.wallet || null); },
   /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
   install() { return install(); },
   /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */
@@ -2105,6 +2128,15 @@ watch(() => {
     state.tab = 'home';
     history.replaceState(null, '', '#home');
   }
+});
+/** A wallet with no name of its own takes its special key's ("Admin"); one that no longer holds it loses that name. */
+watch(() => {
+  const me = state.wallets.wallets.find((w) => w.active);
+  if (!me || !state.wallet || !state.admin.address) return; // the role not read yet
+  if (me.name && !me.nameAuto) return; // the person's own name wins
+  const role = roleName();
+  if (role && me.name !== role) nameWallet(role, { auto: true }).catch((err) => console.warn('[satori] wallet name', err));
+  else if (!role && me.nameAuto) nameWallet('').catch((err) => console.warn('[satori] wallet name', err));
 });
 /** The Admin tab: read again when it opens; not for this wallet (a #admin link, or the admin handed on): Home. */
 watch(() => state.tab === 'admin' && state.screen === 'home', (open) => { if (open) void refreshAdmin(true); });

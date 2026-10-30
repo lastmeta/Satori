@@ -3,7 +3,7 @@
 //   const list = await readWallets()            // null: none written yet
 //   activeOf(list) → { id, file, address }      // the wallet to open
 //   await writeWallets(withAdded(list, address))  // Add a wallet: a new entry, active (the reload opens Setup)
-//   withAddress(list, address) / withActive(list, id) / withoutWallet(list, id)
+//   withAddress(list, address) / withActive(list, id) / withoutWallet(list, id) / withName(list, name, { auto })
 // Each with* returns a new list (or throws, said plainly) and never changes the one given.
 import { setAsideDatabase } from './db/recover.js';
 
@@ -39,6 +39,23 @@ export function withAddress(list, address) {
   return { ...l, wallets: l.wallets.map((w) => (w.id === l.active ? { ...w, address } : w)) };
 }
 
+export const NAME_MAX = 40;
+/**
+ * The active wallet's name, shown in the app bar and the Wallets list: the person's own, or (`auto`) the special key's
+ * the wallet holds ("Admin"), which a person's name always wins over. '' clears it. `address`: the active one's, for a
+ * first wallet with no list yet.
+ */
+export function withName(list, name, { auto = false, address = null } = {}) {
+  const l = listOf(list, address);
+  const n = String(name ?? '').trim().replace(/\s+/g, ' ');
+  if (n.length > NAME_MAX) throw new Error(`A wallet's name is at most ${NAME_MAX} characters.`);
+  return { ...l, wallets: l.wallets.map((w) => {
+    if (w.id !== l.active) return w;
+    const { name: _, nameAuto: __, ...rest } = w;
+    return n ? { ...rest, name: n, ...(auto && { nameAuto: true }) } : rest;
+  }) };
+}
+
 /** Another wallet made active (the switch reloads the page). */
 export function withActive(list, id) {
   const l = listOf(list);
@@ -55,10 +72,11 @@ export function withoutWallet(list, id) {
   return { list: { ...l, wallets: l.wallets.filter((x) => x.id !== id) }, file: w.file };
 }
 
-/** What the UI and agents see: { active, wallets: [{ id, address, active }] }. */
+/** What the UI and agents see: { active, wallets: [{ id, address, name, nameAuto, active }] } (name: null when none). */
 export function walletsView(list, address = null) {
   const l = listOf(list, address);
-  return { active: l.active, wallets: l.wallets.map((w) => ({ id: w.id, address: w.address, active: w.id === l.active })) };
+  return { active: l.active, wallets: l.wallets.map((w) => ({ id: w.id, address: w.address, name: w.name ?? null, nameAuto: !!w.nameAuto,
+    active: w.id === l.active })) };
 }
 
 // ── IndexedDB ──

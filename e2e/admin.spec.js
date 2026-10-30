@@ -24,6 +24,8 @@ test('Admin: only for the admin; capabilities, games, relayer, fee, reporter, an
   // not the admin: no tab, and go('admin') refuses
   expect(await page.evaluate(() => window.satori.admin())).toEqual({ shown: false, admin: expect.stringMatching(/^0xa0a0/i) });
   await expect(t(page, 'nav-admin')).toBeHidden();
+  const short = `${V.slice(0, 6)}…${V.slice(-4)}`;
+  await expect(t(page, 'app-wallet')).toHaveText(new RegExp(`^${short}$`, 'i')); // no name: its short address
   expect(await page.evaluate(() => { try { window.satori.go('admin'); return 'went'; } catch (e) { return e.message; } })).toMatch(/only for the Satori contract's admin/);
 
   s.admin = V;
@@ -31,9 +33,23 @@ test('Admin: only for the admin; capabilities, games, relayer, fee, reporter, an
   expect(await page.evaluate(() => window.satori.admin())).toMatchObject({ shown: true, registrationFee: '0.001',
     games: [{ gameId: 1, isDefault: true, approved: true }, { gameId: 2, name: 'btc', approved: false }] });
   await expect(t(page, 'nav-admin')).toBeVisible();
+  // the admin's wallet named "Admin" by itself; a saved name wins, and clearing it brings "Admin" back
+  await expect(t(page, 'app-wallet')).toHaveText('Admin');
+  expect((await page.evaluate(() => window.satori.wallets())).wallets[0]).toMatchObject({ name: 'Admin', nameAuto: true });
+  await t(page, 'app-wallet').click();
+  await expect(page.locator('body')).toHaveAttribute('data-tab', 'wallet');
+  await expect(t(page, 'wallet-row-name')).toHaveText('Admin');
+  await expect(t(page, 'wallet-name-auto')).toBeVisible();
+  await t(page, 'wallet-name').fill('Ops desk');
+  await t(page, 'wallet-name-save').click();
+  await expect(t(page, 'app-wallet')).toHaveText('Ops desk');
+  await expect(t(page, 'wallet-row-name')).toHaveText('Ops desk');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: test.info().outputPath('wallet-name-phone.png'), fullPage: true });
+  await page.evaluate(() => window.satori.nameWallet(''));
+  await expect(t(page, 'app-wallet')).toHaveText('Admin');
   await page.evaluate(() => window.satori.go('admin'));
   await expect(t(page, 'admin-cap')).toHaveCount(8);
-  await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: test.info().outputPath('admin-phone.png'), fullPage: true });
 
   // a capability switched on (bit 6), locked: the passphrase in the card
@@ -99,4 +115,5 @@ test('Admin: only for the admin; capabilities, games, relayer, fee, reporter, an
   await expect(page.locator('body')).toHaveAttribute('data-tab', 'home', { timeout: 30_000 });
   expect(s.admin).toBe(NEW);
   await expect(t(page, 'nav-admin')).toBeHidden();
+  await expect(t(page, 'app-wallet')).toHaveText(new RegExp(`^${short}$`, 'i')); // no longer the admin: its name goes
 });

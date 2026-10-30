@@ -680,8 +680,13 @@ the page's JS context:
 - Several wallets (docs/design/wallets.md#several-wallets): each has its own
   database (its keys, alias, Nostr key, streams, models, predictions,
   activity, settings); one runs at a time.
-  `await satori.wallets()` → `{ active, wallets: [{ id, address, active }] }`
-  (`address` null: not set up yet). `await satori.addWallet()` and
+  `await satori.wallets()` → `{ active, wallets: [{ id, address, name,
+  nameAuto, active }] }` (`address` null: not set up yet; `name` null: none;
+  `nameAuto`: the name of a special key the wallet holds, "Admin").
+  `await satori.nameWallet(name)` → `wallets()`: the wallet in use named (at
+  most 40 characters; this device only), shown in the app bar and the
+  Wallets list; `''` clears it (a special key's name then comes back by
+  itself). A name a person saves wins over a special key's. `await satori.addWallet()` and
   `await satori.switchWallet(id)` → `{ reloading: true }`: the wallet is
   locked and the page reloads, on Setup for the new one (then `setup()`), or
   with the other wallet. `await satori.removeWallet(id, passphrase)` → `wallets()`:
@@ -1300,7 +1305,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (asset, Amount, "To (0x address)", "Send"), which opens a
   review ("Check before sending": the amount and asset, the recipient in
   full, the fee), then "Wallet passphrase to send" (each time), Send or Back.
-  Then the **Wallets** card: each wallet's address (or "Not set up yet"), the
+  Then the **Name** card ("This wallet's name", Save; "Named for the special
+  key it holds" when it is), then the **Wallets** card: each wallet's name over its address (or "Not set up yet"), the
   one running marked "In use", Switch and Remove on the others (Remove asks:
   "Remove 0x…? It leaves this list, and its 24 words are the way back…
   Its file stays set aside in this browser, never deleted. Enter that wallet's
@@ -1431,7 +1437,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   (the alias's Base address), `wallets` (the Wallets card:
   `wallet-row` with `data-id`, `wallet-address` (a tap copies it), its `.badge` "In use", `wallet-switch`,
   `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
-  `add-wallet`; `wallets-error`), `base-connected` (a connected wallet's note).
+  `add-wallet`; `wallets-error`), `wallet-name-card` (`wallet-name`, `wallet-name-save`, `wallet-name-said`,
+  `wallet-name-auto`), `app-wallet` (the app bar's wallet: its name, else its short address; a tap opens the Wallet tab), `base-connected` (a connected wallet's note).
   Setup: `other-wallets` with `wallet-back` (one per other wallet that was
   set up); `connect-wallet` (Connect a wallet), then `connect-step` with
   `connect-to` (one per wallet found, `data-rdns`) or `no-wallet`. Settings:

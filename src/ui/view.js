@@ -11,7 +11,7 @@ import { home } from './home.js';
 import { gameTab } from './game.js';
 import { streamsTab } from './streams.js';
 import { modelsTab, watchModelWidth } from './models.js';
-import { walletTab } from './wallet.js';
+import { walletLabel, walletTab } from './wallet.js';
 import { marketTab } from './market.js';
 import { devFeeTab } from './devfee.js';
 import { adminTab } from './admin.js';
@@ -25,6 +25,8 @@ export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'd
  * admin (docs/design/admin.md).
  */
 export const tabShown = (t) => (t === 'devfee' ? !!state.devFee.shown : t === 'admin' ? !!state.admin.shown : true);
+/** The app bar's wallet: the one in use, by name, else its short address (docs/design/wallets.md#names). */
+const appWallet = () => walletLabel(state.wallets.wallets.find((w) => w.active) ?? (state.wallet ? { address: state.wallet } : null));
 const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
 const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', admin: 'Admin', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
@@ -191,6 +193,7 @@ export function render(root, a) {
   <header class="top">
     <h1><a class="brand" href="#home" data-test="brand" @click="${(e) => { e.preventDefault(); if (state.screen === 'home') a.go('home'); }}"><span class="brand-mark" aria-hidden="true"></span>Satori <span class="muted">app</span></a></h1>
     <nav class="topnav" aria-label="Sections" hidden="${running}">${TABS.map((t) => navLink(a, t))}</nav>
+    <div class="app-wallet-row" hidden="${() => state.screen !== 'home' || !appWallet()}"><button class="small-btn app-wallet" data-test="app-wallet" title="${() => state.wallet ?? ''}" @click="${() => a.go('wallet')}">${appWallet}</button></div>
     <div class="top-actions">
       <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
       <span class="muted small lock-in" data-test="lock-in" hidden="${() => state.screen !== 'home' || !state.unlocked}">${() => lockInText(state.lockAt, state.lockNow)}</span>

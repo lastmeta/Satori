@@ -205,7 +205,7 @@ else tells the forms apart.
   Setup's four ways on an empty database. Setup then names the other wallets
   to switch back to. A wallet whose address is already in the list is
   refused at setup ("This wallet is already in this app").
-- **For agents**: `wallets()` → `{ active, wallets: [{ id, address, active }] }`,
+- **For agents**: `wallets()` → `{ active, wallets: [{ id, address, name, nameAuto, active }] }`, `nameWallet(name)`,
   `addWallet()`, `switchWallet(id)` (both reload the page), `removeWallet(id)`.
 - **Preferences stay per wallet** (the Satori Service's URL, the Base RPC,
   the max fee, the relays), in each database, as now; the theme and the
@@ -281,6 +281,12 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
 - **A2. The link and the current form**: the Satori Service accepts both
   forms and the link (central `base-upgrade`); the app, satorilib and Satori
   Lite send the current form.
+- **Names** (the owner, 2026-10-30): the wallet in use can be named (the Wallet tab's
+  Name card; `name` on its entry in the list, so this device only). The Wallets list
+  shows each name over its address; the app bar shows the one in use by name, else
+  its short address, and a tap opens the Wallet tab. A wallet holding a special key
+  with no name of its own takes the key's ("Admin"; `nameAuto`), and drops it when it
+  no longer holds the key; a name the person saves always wins.
 - **B. Several wallets**: the list, a file each, the switch, Add and Remove (2026-10-23).
 - **C. A connected wallet**: an injected EIP-1193 provider (EIP-6963 when
   several), the link at connect, the outside wallet asked for each action

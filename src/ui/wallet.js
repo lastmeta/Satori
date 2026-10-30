@@ -146,7 +146,27 @@ export function walletTab(a) {
         <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you earn a residual ${REFERRAL_PCT}% bonus.</p>
       </div>
   </details>
+  ${nameCard(a)}
   ${walletsCard(a)}
+  </section>`;
+}
+
+/** A wallet as the app bar and the Wallets list name it: its name, else its short address. */
+export const walletLabel = (w) => w?.name || (w?.address ? shortHash(w.address) : '');
+const inUse = () => state.wallets.wallets.find((w) => w.active);
+
+/** The Name card (docs/design/wallets.md#names): the wallet in use named, shown in the app bar and the Wallets list. */
+function nameCard(a) {
+  return html`<section class="card" data-test="wallet-name-card">
+    <h2>Name</h2>
+    <p class="muted small">A name for this wallet, shown at the top of the app and in the Wallets list. Only on this device.</p>
+    <form class="devfee-form" @submit="${(e) => a.saveWalletName(form(e).name ?? '')}">
+      <input name="name" data-test="wallet-name" aria-label="This wallet's name" placeholder="This wallet's name" maxlength="40" autocomplete="off" value="${() => inUse()?.name ?? ''}">
+      <button type="submit" data-test="wallet-name-save">Save</button>
+    </form>
+    <p class="muted small" data-test="wallet-name-auto" hidden="${() => !inUse()?.nameAuto}">Named for the special key it holds. A name you save takes its place.</p>
+    <p class="small" role="status" data-test="wallet-name-said" hidden="${() => !state.walletNameSaid}">${() => state.walletNameSaid}</p>
+    <p class="error small" role="alert" hidden="${() => !state.walletNameError}">${() => state.walletNameError}</p>
   </section>`;
 }
 
@@ -157,8 +177,8 @@ export function walletTab(a) {
  */
 function walletsCard(a) {
   const removing = () => state.wallets.wallets.find((w) => w.id === state.walletRemove);
-  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
-    .key(`${w.id}:${w.address}:${w.active}:${state.copied === `wallet-${w.id}`}`); // tap the address: copied
+  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><span class="wallet-id"><b data-test="wallet-row-name" hidden="${!w.name}">${w.name ?? ''}</b><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code></span><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
+    .key(`${w.id}:${w.address}:${w.name}:${w.active}:${state.copied === `wallet-${w.id}`}`); // tap the address: copied
   return html`<section class="card" data-test="wallets">
     <h2>Wallets</h2>
     <p class="muted small">Each wallet keeps its own data in this app. One runs at a time.</p>
