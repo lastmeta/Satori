@@ -154,62 +154,42 @@ const refreshBase = coalesce('base status', async () => {
 });
 
 /**
- * The Dev Fee tab (docs/design/devfee.md): the splitters and the wallet in them. Read with the Base card at most every
- * 15 min, at once when the tab opens and after each of its actions; a read that fails keeps the last answer (the tab is
- * never hidden by a read that did not come).
+ * A special key's tab read (Dev Fee, Admin, the keys, Safe): with the Base card at most every 15 min, at once when the
+ * tab opens and after each of its actions (refresh(true)); one that fails keeps the last answer (the tab is never
+ * hidden by a read that did not come) and says why at state[slot].error. → { read, refresh }
  */
-let devFeeAt = 0;
-const readDevFee = coalesce('dev fee', async () => {
-  try {
-    const tree = await base.devFee();
-    Object.assign(state.devFee, { tree, shown: tree.shown, error: '' }); // in place: an action's outcome and the tally stay
-    devFeeAt = nowS();
-  } catch (err) {
-    state.devFee.error = err?.shortMessage ?? err?.message ?? String(err);
-  }
+function tabRead(name, slot, read) {
+  let at = 0;
+  const run = coalesce(name, async () => {
+    try {
+      await read(); // in place: an action's outcome and the tally stay
+      state[slot].error = '';
+      at = nowS();
+    } catch (err) {
+      state[slot].error = err?.shortMessage ?? err?.message ?? String(err);
+    }
+  });
+  return { read: run, refresh: (now = false) => (now || nowS() - at > 900 ? run() : undefined) };
+}
+/** The Dev Fee tab (docs/design/devfee.md): the splitters and the wallet in them. */
+const { read: readDevFee, refresh: refreshDevFee } = tabRead('dev fee', 'devFee', async () => {
+  const tree = await base.devFee();
+  Object.assign(state.devFee, { tree, shown: tree.shown });
 });
-const refreshDevFee = (now = false) => (now || nowS() - devFeeAt > 900 ? readDevFee() : undefined);
-
-/**
- * The Admin tab (docs/design/admin.md): whether the wallet is the admin, then (only then) its levers. Read as the Dev Fee
- * tab is: with the Base card at most every 15 min, at once when the tab opens and after each action.
- */
-let adminAt = 0;
-const readAdmin = coalesce('admin', async () => {
-  try {
-    const { admin, isAdmin } = await base.adminRole();
-    const levers = isAdmin ? await base.adminState() : null;
-    Object.assign(state.admin, { address: admin, shown: isAdmin, levers, error: '' }); // in place: an action's outcome stays
-    adminAt = nowS();
-  } catch (err) {
-    state.admin.error = err?.shortMessage ?? err?.message ?? String(err);
-  }
+/** The Admin tab (docs/design/admin.md): whether the wallet is the admin, then (only then) its levers. */
+const { read: readAdmin, refresh: refreshAdmin } = tabRead('admin', 'admin', async () => {
+  const { admin, isAdmin } = await base.adminRole();
+  const levers = isAdmin ? await base.adminState() : null;
+  Object.assign(state.admin, { address: admin, shown: isAdmin, levers });
 });
-const refreshAdmin = (now = false) => (now || nowS() - adminAt > 900 ? readAdmin() : undefined);
-
-/** The other special keys' tabs (docs/design/roles.md): which the wallet holds, and their pages. Read as the Admin tab is. */
-let rolesAt = 0;
-const readRoles = coalesce('special keys', async () => {
-  try {
-    state.roles.of = await base.roles();
-    state.roles.error = '';
-    rolesAt = nowS();
-  } catch (err) {
-    state.roles.error = err?.shortMessage ?? err?.message ?? String(err);
-  }
+/** The other special keys' tabs (docs/design/roles.md): which the wallet holds, and their pages. */
+const { read: readRoles, refresh: refreshRoles } = tabRead('special keys', 'roles', async () => {
+  state.roles.of = await base.roles();
 });
-/** The Safe tab (docs/design/safe.md): the Safes the wallet owns, their keys and waiting transactions. As the others. */
-let safeAt = 0;
-const readSafe = coalesce('safe', async () => {
-  try {
-    state.safe.safes = (await base.safes()).safes;
-    state.safe.error = '';
-    safeAt = nowS();
-  } catch (err) {
-    state.safe.error = err?.shortMessage ?? err?.message ?? String(err);
-  }
+/** The Safe tab (docs/design/safe.md): the Safes the wallet owns, their keys and waiting transactions. */
+const { read: readSafe, refresh: refreshSafe } = tabRead('safe', 'safe', async () => {
+  state.safe.safes = (await base.safes()).safes;
 });
-const refreshSafe = (now = false) => (now || nowS() - safeAt > 900 ? readSafe() : undefined);
 const NOT_SAFE = "The Safe tab is only for an owner of the Safe that holds the token's keys (docs/design/safe.md).";
 const theSafe = () => {
   const x = state.safe.safes?.[0];
@@ -225,7 +205,6 @@ function safeAction(name, fn) {
     void refreshBase();
   });
 }
-const refreshRoles = (now = false) => (now || nowS() - rolesAt > 900 ? readRoles() : undefined);
 const notHeld = (id) => {
   const r = roleOf(id);
   return `The ${r.label} tab is only for the wallet that holds the ${r.name.toLowerCase()} key (docs/design/roles.md).`;
