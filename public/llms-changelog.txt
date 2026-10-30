@@ -14,6 +14,11 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 - `safeExecute` and the Safe tab's Execute with no Base ETH for gas say "To execute, this wallet needs a little Base ETH
   for gas…" before trying.
 
+## Changed 2026-10-30 (Game chart flick)
+
+- A fast flick across the Game chart (40 px or more) skips or goes back, like a swipe elsewhere; a slower drag still
+  reads its values.
+
 ## Changed 2026-10-30 (Chart, copy, Update, names)
 
 - The Game chart reads its values under a finger: `game-scrub`, and `game-latest` says that point's value; swipes to

@@ -75,7 +75,10 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   const chart = await t(page, 'game-chart').boundingBox();
   await page.mouse.move(chart.x + 20, chart.y + chart.height / 2);
   await page.mouse.down();
-  await page.mouse.move(chart.x + chart.width * 0.3, chart.y + chart.height / 2, { steps: 4 });
+  for (let i = 1; i <= 4; i++) { // slowly, as a finger reading the chart (a fast flick skips)
+    await page.mouse.move(chart.x + 20 + (chart.width * 0.3 - 20) * (i / 4), chart.y + chart.height / 2);
+    await page.waitForTimeout(120);
+  }
   await expect(t(page, 'game-scrub')).toHaveAttribute('visibility', 'visible');
   await expect(t(page, 'game-latest')).toHaveAttribute('data-scrub', 'true');
   const there = await t(page, 'game-latest').textContent();
@@ -83,6 +86,24 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await page.mouse.up();
   await expect(t(page, 'game-latest')).toHaveText(newest);
   await expect(t(page, 'game-scrub')).toHaveAttribute('visibility', 'hidden');
+  // a fast flick across the chart skips, and back, like a swipe (sent in the page, a frame apart: the test's own steps
+  // come late on a busy machine)
+  const flick = (from, to) => t(page, 'game-chart').evaluate(async (el, [f, e]) => {
+    const r = el.getBoundingClientRect();
+    const y = r.top + r.height / 2;
+    const at = (type, k) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, clientX: r.left + r.width * k, clientY: y }));
+    at('pointerdown', f);
+    for (const k of [1, 2, 3]) {
+      await new Promise((done) => setTimeout(done, 16));
+      at('pointermove', f + ((e - f) * k) / 3);
+    }
+    at('pointerup', e);
+  }, [from, to]);
+  await flick(0.8, 0.2);
+  await expect(name(page)).not.toHaveText('bitcoin');
+  await page.waitForTimeout(500); // the slide done
+  await flick(0.2, 0.8);
+  await expect(name(page)).toHaveText('bitcoin');
   // a stream's value in its own units: the Sentiment stream's 59058240589371161, 18 decimals after the point
   expect((await page.evaluate(() => window.satori.game())).streams.find((x) => x.streamId === 1))
     .toMatchObject({ latest: '0.059058', display: { decimals: 18, unit: 'SATORI', label: 'Net prediction flow' } });

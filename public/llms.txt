@@ -1251,7 +1251,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   line and a dot at the point under it, and `game-latest` says that point's
   value, `data-scrub` "true"; lifted, the latest again), `game-down` and
   `game-up` (a press picks and moves on; a swipe left skips, right goes
-  back, anywhere but on the chart), `game-submit-early` (`data-open`) with
+  back; on the chart only a fast flick, 40 px or more, does), `game-submit-early` (`data-open`) with
   `game-submit`; then `game-submit-screen` with `game-daily` (Satori Daily, a new
   tab), `game-calls` (each li: the name and an arrow, aria-label up or down),
   `game-send` (SUBMIT), `game-send-error`; a swipe right goes back, left on to
