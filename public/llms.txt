@@ -1147,7 +1147,7 @@ the page's JS context:
     (percent, 5 to 25), `accept`, `cancel`. upgrade: `upgrade` (`'hub 0x…'`:
     one of rewards, engine, hub, voting, registry, games, merkle, then the new
     implementation), `renounce` (`'hub'`). freeze: `controller`, `hook`,
-    `bridge`, `fee`. loader: `load` (one "address, amount" a line, SATORI),
+    `bridge`, `fee`. loader: `load` (one row a line: address, SATORI),
     `finalize`.
   - `await satori.safeSign(safeTxHash)`; `await satori.safeExecute(safeTxHash)`
     → `[{ hash, label }]` (the next one, once `enough`).

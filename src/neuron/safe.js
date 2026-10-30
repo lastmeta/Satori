@@ -112,7 +112,7 @@ export const SAFE_KEYS = [
     reads: { loaded: ['airdrop', 'airdropLoadedTotal'], finalized: ['airdrop', 'airdropLoadingFinalized'], cap: ['token', 'AIRDROP_TOTAL_SUPPLY'] },
     facts: (v) => [['Loaded', `${satori(v.loaded)} of ${satori(v.cap)}`], ['Loading', v.finalized ? 'Closed for good' : 'Open']],
     actions: [
-      { id: 'load', title: 'Load a batch', field: { label: 'One "address, amount" a line (SATORI)', kind: batch }, show: (v) => !v.finalized,
+      { id: 'load', title: 'Load a batch', field: { label: 'One row a line: address, SATORI', kind: batch }, show: (v) => !v.finalized,
         text: 'Check it before proposing: a row can be claimed the moment its batch lands, and can\'t be changed.',
         call: ([recipients, amounts]) => ['airdrop', 'loadAirdropBatch', [recipients, amounts]],
         describe: ([recipients, amounts]) => `Load ${recipients.length} airdrop row${recipients.length === 1 ? '' : 's'}, ${satori(amounts.reduce((a, b) => a + b, 0n))} in all` },
