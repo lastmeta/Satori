@@ -17,7 +17,7 @@ import {
   generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, sealBackup, openBackup, passphraseOk, MIN_PASSPHRASE,
   keepRetired, checkWalletPassphrase, IMPORT_MAX, evmAddress, connectedRecord, linkMessage,
 } from './keys/index.js';
-import { findWallets, requestAddress, signText, connectedWallet, showKeysText } from './keys/connect.js';
+import { findWallets, requestAddress, signText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
 import { errorText, same, UP, DOWN } from './chain/index.js';
@@ -55,6 +55,7 @@ import { readPref, writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_K
 import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withName, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
 import { deviceKey } from './keys/atrest.js';
 import { createSession } from './session.js';
+import { createKeyring } from './keyring.js';
 import { HANDOFF, SW_BATCH } from './pwa/handoff.js';
 import { isHttps } from './util.js';
 import { defaultsFrom, DEV_DEFAULTS, BUILD_DEFAULTS, versionOf } from './config.js';
@@ -77,9 +78,7 @@ let dbPath = pathOf(activeOf(null)); // the active wallet's database
 let releaseTab = () => {}; // lets the one-tab lock go (claimTab)
 let dbOpening = null; // the database's open, begun at boot: a first visit's Setup runs meanwhile, and its keys wait for it
 let nostr = null; // the Nostr flow
-let wallet = null; // only while unlocked; a connected wallet's (src/keys/connect.js) while its wallet app is in this browser
 let foundWallets = []; // Setup's Connect: the wallets in this browser, with their providers
-let lockCount = 0; // a Lock during an Unlock in flight wins
 let pending = null; // setup only: { wallet, alias?, nostr? } secrets
 let central = null;
 let registration = null; // this page load's register result
@@ -99,6 +98,8 @@ let restKeyOf;
 const restKey = () => (restKeyOf ??= deviceKey({ get: appGet, put: appPut }));
 /** The keys (src/session.js): the record and everything read from it, kept nowhere else. */
 const session = createSession({ db: { get: (k) => db.get(k), set: (k, v) => db.set(k, v), checkpoint: () => db.checkpoint() }, restKey });
+/** The wallet's signer while it is open (src/keyring.js): held nowhere else. */
+const keyring = createKeyring({ session, projectId: DEFAULTS.walletConnect });
 
 /** status().central: central's state, and the reward address as last read ({ address, at, error, reading }). */
 const centralStatus = async () => ({ ...(await statusOf({ db, central, registration, poller })), reward: reward?.status ?? null });
@@ -421,9 +422,9 @@ async function startNeuron() {
     onChange: refreshNostr, onPublished: () => activity.published(), onError: (err) => activity.error('nostr', err),
     onRecords: refreshRecords, work,
     // paid streams (docs/design/market.md): the alias signs and settles, the wallet is paid and funds a Buy, on Base's chain
-    alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, chain: () => base.channels() });
+    alias, walletAddress: walletPublic.evmAddress, wallet: () => keyring.wallet, chain: () => base.channels() });
   await refreshNostr();
-  base = createBase({ db, alias, walletAddress: walletPublic.evmAddress, wallet: () => wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
+  base = createBase({ db, alias, walletAddress: walletPublic.evmAddress, wallet: () => keyring.wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase, onCheck: (r) => { activity.base(r); if (r.sent) publishContract(r.sent.games, r.sent.at); }, onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work,
     sw: { get: appGet, put: appPut, handoff: leaveHandoff } });
   if (invitedBy) await base.holdReferrer(invitedBy); // the invite link's ?ref=, kept until Stake registers it
@@ -569,41 +570,16 @@ async function saveKeys(r, { backedUp = false } = {}) {
   }
 }
 
-/**
- * A connected wallet, found again in this browser by its EIP-6963 id (docs/design/wallets.md#a-connected-wallet): its
- * signer, or none (another browser, the extension removed): the app still predicts, and wallet actions say so.
- */
+/** A connected wallet's app found again in this browser (src/keyring.js), or not: the app still predicts. */
 async function findConnected() {
-  const { rdns, name } = session.walletPublic.connected;
-  const relay = RELAYS.includes(rdns);
-  const provider = relay ? await relayed(rdns) : (await findWallets()).find((x) => x.rdns === rdns)?.provider;
-  wallet = provider ? connectedWallet({ address: session.walletPublic.evmAddress, name, provider }) : null;
-  state.connected = { name, found: !!provider, relay };
+  state.connected = await keyring.findConnected();
 }
 
-/** A phone path's stored session (src/keys/relay.js), if it is still this wallet's: its provider, else null. Never a prompt. */
-async function relayed(rdns) {
-  try {
-    const r = await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect });
-    const accounts = r ? await r.provider.request({ method: 'eth_accounts' }) : [];
-    return accounts.some((a) => a.toLowerCase() === session.walletPublic.evmAddress.toLowerCase()) ? r.provider : null;
-  } catch (err) {
-    console.warn('[satori] the wallet\'s relay session', err);
-    return null;
-  }
-}
-
-const notHere = () => new Error(state.connected.relay ? `The link to ${state.connected.name} has ended: reconnect it in Settings › Keys.`
-  : `${state.connected.name} isn't in this browser: open the app where it is installed.`);
+const notHere = () => keyring.notHere();
 
 /** Reconnect a phone path whose session ended: the person approves again, and it must be the same account. */
 const reconnect = () => exclusive('reconnect', async () => {
-  const { rdns, name } = session.walletPublic.connected;
-  const { provider } = await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect, connect: true });
-  const address = await requestAddress(provider);
-  if (address !== session.walletPublic.evmAddress) throw new Error(`That is another account: choose ${session.walletPublic.evmAddress} in ${name}.`);
-  wallet = connectedWallet({ address, name, provider });
-  state.connected = { name, found: true, relay: true };
+  state.connected = await keyring.reconnect();
 });
 
 /** The list stored and shown. */
@@ -687,17 +663,14 @@ async function markBackup() {
 }
 
 async function unlock(passphrase) {
-  const count = lockCount;
-  const { wallet: v, linked, rekeyed } = await work.run('keys', () => session.unlock(passphrase)); // an upgrade saved
+  const { linked, rekeyed, opened } = await keyring.unlock(passphrase, (fn) => work.run('keys', fn)); // an upgrade saved
   state.retiredKeys = session.retired;
   if (rekeyed && base) { // the running app is the old alias's: start again with the new one (docs/design/wallets.md#derived-keys)
-    v.lock();
+    keyring.lock();
     return void location.reload();
   }
   if (linked && central) registerWith(central).catch(() => {}); // the Satori Service learns the link at once
-  if (count !== lockCount) return void v.lock();
-  wallet?.lock();
-  wallet = v;
+  if (!opened) return;
   state.unlocked = true;
   state.unlockFor = '';
   autoLock.start();
@@ -705,11 +678,7 @@ async function unlock(passphrase) {
 
 /** Lock: the wallet wiped from memory, and any backup on screen hidden. */
 function lock() {
-  lockCount++;
-  if (!wallet?.connected) { // a connected wallet holds no secret here: nothing to wipe
-    wallet?.lock();
-    wallet = null;
-  }
+  keyring.lock();
   afterUnlock = null;
   autoLock.stop();
   Object.assign(state, { unlocked: false, unlockFor: '', backup: '', backupWords: '', backupKey: '', backupHex: '', backupAsk: '', backupError: '' });
@@ -736,17 +705,9 @@ async function finishUpdate(passphrase) {
  * from the passphrase each time, unlocked or not (keys' backupKeys: ~0.3 s; docs/design/keys.md#backup).
  */
 async function backupOf(which, passphrase) {
-  const b = session.walletPublic.connected ? await connectedBackupOf(which) : await session.backup(which, passphrase);
+  const b = session.walletPublic.connected ? await keyring.connectedBackup(which) : await session.backup(which, passphrase);
   if (which == null || which === 'wallet') markBackup().catch((err) => console.warn('[satori] backup_at', err)); // the wallet's words shown: backed up
   return b;
-}
-
-/** A connected wallet's Backup: the alias's or the Nostr key's, once its wallet app has signed showKeysText (checked). */
-async function connectedBackupOf(which) {
-  if (which === 'wallet') return session.connectedBackup(which); // its words are in its wallet app: said so
-  if (!wallet) throw notHere();
-  await signText(wallet.provider, session.walletPublic.evmAddress, showKeysText(session.walletPublic.evmAddress));
-  return session.connectedBackup(which);
 }
 
 /**
@@ -899,7 +860,7 @@ const walletOps = {
   /** { asset, to, amount, passphrase }: the inputs checked first, then the wallet opened from the passphrase for this send alone. */
   async send(o = {}) {
     const { asset, amount } = checkSend(o);
-    const r = session.walletPublic.connected ? await base.send(o, wallet ?? (() => { throw notHere(); })())
+    const r = session.walletPublic.connected ? await base.send(o, keyring.wallet ?? (() => { throw notHere(); })())
       : await session.withPassphrase(o.passphrase, (v) => base.send(o, v));
     activity.wallet('send', `Sent ${amount} ${asset} from the wallet`);
     return r;
@@ -1006,7 +967,7 @@ function fillSettings() {
 
 /** Run `fn` now if the wallet is open; else open the inline Unlock prompt at `slot`, and run it after Unlock. */
 function withWallet(slot, fn) {
-  if (wallet) return fn();
+  if (keyring.wallet) return fn();
   if (state.connected) return void (state.baseError = notHere().message); // nothing to unlock: its wallet app is elsewhere
   afterUnlock = fn;
   Object.assign(state, { unlockFor: slot, unlockError: '' });
@@ -1044,6 +1005,7 @@ const shownAt = (key, fn) => async (...args) => {
  * keeps the newest link per wallet, so this takes the wallet back from another app's alias (docs/design/wallets.md).
  */
 async function relinkWallet() {
+  const { wallet } = keyring;
   if (!wallet) throw new Error(session.walletPublic.connected ? notHere().message : 'Unlock the wallet first.');
   const issued = Math.floor(nowS()); // whole seconds: the network refuses any other issued line
   let link;
@@ -1276,7 +1238,7 @@ const actions = {
   }),
   hideBackup() {
     Object.assign(state, { backup: '', backupWords: '', backupKey: '', backupHex: '' });
-    if (!wallet) autoLock.stop();
+    if (!keyring.wallet) autoLock.stop();
   },
   async copy(key, text) {
     try {
