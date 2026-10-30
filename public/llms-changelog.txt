@@ -4,6 +4,15 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-30 (Chart, copy, Update, names)
+
+- The Game chart reads its values under a finger: `game-scrub`, and `game-latest` says that point's value; swipes to
+  skip and go back now start anywhere but on the chart.
+- The Wallet tab's Receive: a tap on the address or its QR code copies it; no Copy button. The wallet's name shows
+  under its address there, in Settings › Keys and in the Wallets list.
+- The app bar's update button: a reload icon and "Update".
+- A dev fee payee's wallet is named "Dev fee N" (its place in the dev fee), a splitter's authority's "Splitter authority".
+
 ## Added 2026-10-30 (Safe)
 
 - The **Safe** tab and `safe()`, `safePropose(key, action, value)`, `safeSign(safeTxHash)`, `safeExecute(safeTxHash)`:

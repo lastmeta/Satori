@@ -15,10 +15,11 @@ const name = (page) => t(page, 'game-name');
 /** The submit screen's list: each call as name + arrow. */
 const calls = (page) => t(page, 'game-calls').locator('li').evaluateAll((li) => li.map((x) => `${x.textContent} ${x.querySelector('svg').getAttribute('aria-label')}`));
 
-/** A swipe across the stream: left (skip) or right (back). */
+/** A swipe across the stream, on its name's row (a finger on the chart reads its values): left (skip) or right (back). */
 async function swipe(page, way) {
   const box = await t(page, 'game-chart').boundingBox();
-  const y = box.y + box.height / 2;
+  const head = await page.locator('.ghead').boundingBox();
+  const y = head.y + head.height / 2;
   const [from, to] = way === 'left' ? [box.x + box.width * 0.8, box.x + box.width * 0.2] : [box.x + box.width * 0.2, box.x + box.width * 0.8];
   await page.mouse.move(from, y);
   await page.mouse.down();
@@ -69,6 +70,19 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
     .toEqual(['manual', true]);
   await expect(name(page)).toHaveText('bitcoin', { timeout: 30_000 });
   await expect(t(page, 'game-latest')).toHaveText(/^\d{2},\d{3}\.\d{2}$/);
+  // a finger on the chart: a line and a dot where it is, and the value at the top says that point's; lifted, the latest
+  const newest = await t(page, 'game-latest').textContent();
+  const chart = await t(page, 'game-chart').boundingBox();
+  await page.mouse.move(chart.x + 20, chart.y + chart.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(chart.x + chart.width * 0.3, chart.y + chart.height / 2, { steps: 4 });
+  await expect(t(page, 'game-scrub')).toHaveAttribute('visibility', 'visible');
+  await expect(t(page, 'game-latest')).toHaveAttribute('data-scrub', 'true');
+  const there = await t(page, 'game-latest').textContent();
+  expect(there).not.toBe(newest);
+  await page.mouse.up();
+  await expect(t(page, 'game-latest')).toHaveText(newest);
+  await expect(t(page, 'game-scrub')).toHaveAttribute('visibility', 'hidden');
   // a stream's value in its own units: the Sentiment stream's 59058240589371161, 18 decimals after the point
   expect((await page.evaluate(() => window.satori.game())).streams.find((x) => x.streamId === 1))
     .toMatchObject({ latest: '0.059058', display: { decimals: 18, unit: 'SATORI', label: 'Net prediction flow' } });

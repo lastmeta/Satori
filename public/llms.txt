@@ -682,7 +682,8 @@ the page's JS context:
   activity, settings); one runs at a time.
   `await satori.wallets()` → `{ active, wallets: [{ id, address, name,
   nameAuto, active }] }` (`address` null: not set up yet; `name` null: none;
-  `nameAuto`: the name of a special key the wallet holds, "Admin").
+  `nameAuto`: the name of a special key the wallet holds: "Admin", "Appoint", "Safe owner", "Dev fee 3" (its payee's
+  place in the dev fee, as Dev Fee's picture draws it), "Splitter authority").
   `await satori.nameWallet(name)` → `wallets()`: the wallet in use named (at
   most 40 characters; this device only), shown in the app bar and the
   Wallets list; `''` clears it (a special key's name then comes back by
@@ -1246,8 +1247,11 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   streak on its game, its number; `data-above` "true" at or past the game's turning point, green; else blue) with
   `game-streak-dots` (`data-n`: a dot per prediction), `game-name`
   with `game-star` (`aria-pressed`), `game-latest`,
-  `game-chart`, `game-down` and `game-up` (a press picks and moves on; a
-  swipe left skips, right goes back), `game-submit-early` (`data-open`) with
+  `game-chart` (a finger on it, or a drag across it, draws `game-scrub`, a
+  line and a dot at the point under it, and `game-latest` says that point's
+  value, `data-scrub` "true"; lifted, the latest again), `game-down` and
+  `game-up` (a press picks and moves on; a swipe left skips, right goes
+  back, anywhere but on the chart), `game-submit-early` (`data-open`) with
   `game-submit`; then `game-submit-screen` with `game-daily` (Satori Daily, a new
   tab), `game-calls` (each li: the name and an arrow, aria-label up or down),
   `game-send` (SUBMIT), `game-send-error`; a swipe right goes back, left on to
@@ -1257,7 +1261,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   staked with it, else the wallet (Unlock in place). With
   no route the app opens to the game if it was entered last and not left
   since (kept on this device, `satori-game`: `in`/`out`), else Home. The header has Lock and "Locks in 4 min" while
-  unlocked, and "Update ready, reload" when a new version waits; on Home a
+  unlocked, and Update (a reload icon and the word; `update`) when a new version waits; on Home a
   share icon (`share`: the invite link, "Link copied" without a share
   sheet; shared from the Game tab it ends in `#game`, so it opens the game); everywhere a sun or moon (`theme-toggle`: to Light in dark, to Dark
   in light, as Settings → Appearance).
@@ -1331,7 +1335,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   …. It counts only predictions this app received before the
   outcome.").
 - **Wallet**: a card each (2026-10-28): Receive first, folded ("Show
-  address and QR code": the wallet's address, Copy, its QR code), Base (the
+  address and QR code": the wallet's QR code, its address and, under it, the wallet's name; a tap on the address or the QR code copies the address), Base (the
   balances and Send), Preload gas, Staking (Stake or Unstake), Claimable (Claim), then
   Details (folded) and Wallets. Each action's passphrase prompt and result
   show in its own card. In all: the round, the RPC in plain words, the

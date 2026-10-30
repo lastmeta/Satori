@@ -9,6 +9,9 @@ import { backupPanel, form, idRow } from './parts.js';
 import { storageText, relayText, BLOCKED_NOTE, shortHash, timeOfDay } from './format.js';
 import { ADD_TO } from '../neuron/health.js';
 
+/** The wallet in use's name (docs/design/wallets.md#names), shown under its address. */
+const walletName = () => state.wallets.wallets.find((w) => w.active)?.name ?? '';
+
 /** How Satori runs (docs/intent/ui.md: say it plainly), on Setup and in Settings › This device. */
 export const RUNS_WHILE_OPEN = "Satori works while it's open. Leave it open, or install it, and it predicts on its own.";
 
@@ -28,6 +31,7 @@ function keys(a) {
     <div class="key">
       <h3>Wallet <span class="${() => (state.unlocked || state.connected ? 'badge on' : 'badge')}" data-test="wallet-state">${() => (state.connected ? 'Connected' : state.unlocked ? 'Unlocked' : 'Locked')}</span></h3>
       ${idRow('Address', 'wallet', () => state.wallet, a)}
+      <p class="muted small address-name" data-test="wallet-name-under" hidden="${() => !walletName()}">${walletName}</p>
       <p class="muted small" hidden="${() => !!state.connected}">Holds your funds. Encrypted with your passphrase.</p>
       <p class="muted small" data-test="wallet-connected" hidden="${() => !state.connected}">${() => (!state.connected ? ''
         : state.connected.found ? `Holds your funds, in ${state.connected.name}: it asks you each time the wallet is needed.`

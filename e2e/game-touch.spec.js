@@ -15,10 +15,11 @@ const name = (page) => t(page, 'game-name');
 /** The submit screen's list: each call as name + arrow. */
 const calls = (page) => t(page, 'game-calls').locator('li').evaluateAll((li) => li.map((x) => `${x.textContent} ${x.querySelector('svg').getAttribute('aria-label')}`));
 
-/** A swipe across the stream: left (skip) or right (back). */
+/** A swipe across the stream, on its name's row (a finger on the chart reads its values): left (skip) or right (back). */
 async function swipe(page, way) {
   const box = await t(page, 'game-chart').boundingBox();
-  const y = box.y + box.height / 2;
+  const head = await page.locator('.ghead').boundingBox();
+  const y = head.y + head.height / 2;
   const [from, to] = way === 'left' ? [box.x + box.width * 0.8, box.x + box.width * 0.2] : [box.x + box.width * 0.2, box.x + box.width * 0.8];
   await page.mouse.move(from, y);
   await page.mouse.down();
@@ -58,10 +59,12 @@ test('a finger swipes, flicks fast or slow (touch: the browser never takes the s
     await touch('touchEnd', to, y);
   };
   await page.waitForTimeout(400);
-  await flick(330, 60, 400); // a long fast flick left: on to the next
+  const head = await page.locator('.ghead').boundingBox(); // the name's row: a finger on the chart reads its values
+  const Y = Math.round(head.y + head.height / 2);
+  await flick(330, 60, Y); // a long fast flick left: on to the next
   await expect(name(page)).toHaveText('satori');
   await page.waitForTimeout(500);
-  await flick(150, 200, 400); // a short fast one right (50 px): back
+  await flick(150, 200, Y); // a short fast one right (50 px): back
   await expect(name(page)).toHaveText('bitcoin');
   await page.waitForTimeout(1200); // Chrome takes a tap right on a flick's heels as the flick's end, not a tap
   await t(page, 'game-up').tap();

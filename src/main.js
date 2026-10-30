@@ -621,7 +621,21 @@ async function nameWallet(name, { auto = false } = {}) {
 /** The special key the wallet holds, as its name while it has none of its own: the admin first, then the most powerful. */
 const NAMED = ['appoint', 'wiring', 'schedule', 'split', 'publisher'];
 const roleName = () => (state.admin.shown ? 'Admin' : roleOf(NAMED.find((id) => state.roles.of?.[id]?.isHolder) ?? '')?.name
-  ?? (state.safe.safes?.length ? 'Safe owner' : ''));
+  ?? (state.safe.safes?.length ? 'Safe owner' : devFeeName(state.devFee.tree)));
+/**
+ * A dev fee wallet's name (the owner, 2026-10-30): "Dev fee 3", its payee's place in the tree (the top's slots in order,
+ * a branch's payees in its place, as Dev Fee's picture draws them); else "Splitter authority" for a splitter's authority.
+ */
+function devFeeName(t) {
+  if (!t?.shown) return '';
+  const top = t.nodes[0];
+  const leaves = top.slots.flatMap((s) => {
+    const b = t.nodes.find((n) => n.parent && same(n.address, s.payee));
+    return b ? b.slots.map((x) => b.mySlotId === x.slotId) : [top.mySlotId === s.slotId];
+  });
+  const i = leaves.indexOf(true);
+  return i >= 0 ? `Dev fee ${i + 1}` : 'Splitter authority';
+}
 
 /** Another wallet opens: the keys wiped (Lock), the list's active one set, the last visit's Home dropped, the page reloaded. */
 async function reopenWith(list) {
@@ -2320,7 +2334,7 @@ watch(() => {
 /** A wallet with no name of its own takes its special key's ("Admin"); one that no longer holds it loses that name. */
 watch(() => {
   const me = state.wallets.wallets.find((w) => w.active);
-  if (!me || !state.wallet || !state.admin.address || !state.roles.of || !state.safe.safes) return; // the keys not read yet
+  if (!me || !state.wallet || !state.admin.address || !state.roles.of || !state.safe.safes || !state.devFee.tree) return; // the keys not read yet
   if (me.name && !me.nameAuto) return; // the person's own name wins
   const role = roleName();
   if (role && me.name !== role) nameWallet(role, { auto: true }).catch((err) => console.warn('[satori] wallet name', err));

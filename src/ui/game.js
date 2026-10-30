@@ -7,7 +7,7 @@ import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { unlockPrompt } from './parts.js';
 import { figure } from './format.js';
-import { latestText, linePoints, nothingText, submitEarly, stepOf, opensAgain, againText } from './gameflow.js';
+import { latestText, linePoints, nothingText, pointAt, submitEarly, stepOf, opensAgain, againText } from './gameflow.js';
 import { UP, DOWN } from '../chain/index.js';
 import { SATORI_DAILY_URL } from '../chain/config.js';
 
@@ -201,6 +201,30 @@ function wallet(a) {
   </div>`;
 }
 
+/**
+ * The chart under a finger (the owner, 2026-10-30): a line and a dot at the point it is over, and the value at the top
+ * says that point's; lifted, back to the latest. Its own: the play area's swipe doesn't see it.
+ */
+const scrubbed = (s) => state.gameScrub?.streamId === s.streamId;
+const sx = (s) => (scrubbed(s) ? state.gameScrub.x : 0);
+const sy = (s) => (scrubbed(s) ? state.gameScrub.y : 0);
+const scrub = (s, down = false) => (e) => {
+  e.stopPropagation();
+  if (!down && !scrubbed(s)) return;
+  const el = e.currentTarget;
+  if (down) try { el.setPointerCapture(e.pointerId); } catch { /* gone */ }
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el);
+  const left = r.left + parseFloat(cs.paddingLeft);
+  const width = r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const p = pointAt(s.history, width > 0 ? (e.clientX - left) / width : 1);
+  state.gameScrub = p ? { streamId: s.streamId, ...p } : null;
+};
+const unscrub = (e) => {
+  e.stopPropagation();
+  state.gameScrub = null;
+};
+
 function play(a) {
   const m = moves(a);
   const sw = swipe(m);
@@ -221,9 +245,9 @@ function play(a) {
         <div class="ghead">
           <button class="gstar" data-test="game-star" aria-pressed="${String(starred())}" aria-label="${starred() ? 'Unstar' : 'Star'}" title="Favorite: shown first" @click="${() => a.gameStar(s.streamId)}">${STAR()}</button>
           <b class="gname" data-test="game-name">${s.name}</b>
-          <span class="glatest" data-test="game-latest">${latestText(s)}</span>
+          <span class="glatest" data-test="game-latest" data-scrub="${() => String(scrubbed(s))}">${() => latestText(s, scrubbed(s) ? state.gameScrub.i : null)}</span>
         </div>
-        <svg class="gchart" data-test="game-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${linePoints(s.history)}"></polyline></svg>
+        <svg class="gchart" data-test="game-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" @pointerdown="${scrub(s, true)}" @pointermove="${scrub(s)}" @pointerup="${unscrub}" @pointercancel="${unscrub}"><polyline points="${linePoints(s.history)}"></polyline><line class="gscrub" data-test="game-scrub" x1="${() => sx(s)}" x2="${() => sx(s)}" y1="0" y2="100" visibility="${() => (scrubbed(s) ? 'visible' : 'hidden')}"></line><line class="gscrub-dot" x1="${() => sx(s)}" x2="${() => sx(s)}" y1="${() => sy(s)}" y2="${() => sy(s)}" visibility="${() => (scrubbed(s) ? 'visible' : 'hidden')}"></line></svg>
       </div>`.key(`${s.streamId}:${g().index}:${starred()}`) : ''; // plain values inside: drawn again when one changes (home.js cell)
     }}</div>
     <div class="gbtns-area">

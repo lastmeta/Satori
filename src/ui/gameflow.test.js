@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { queueOf, stepOf, played, favoritesIn, submitEarly, latestText, linePoints, nothingText, opensAgain, againText } from './gameflow.js';
+import { queueOf, stepOf, played, favoritesIn, submitEarly, latestText, linePoints, nothingText, opensAgain, againText, pointAt } from './gameflow.js';
 
 const s = (streamId, weight, o = {}) => ({ streamId, weight: String(weight), blocked: null, named: false, history: [], ...o });
 
@@ -68,4 +68,14 @@ test('when the player can predict again: the next round at 00:00 UTC, a Sentimen
   expect(againText(1000 + 7 * 3600 + 12 * 60, 1000)).toBe('You can predict again in 7 h 12 min.');
   expect(againText(1000 + 59, 1000)).toBe('You can predict again in 1 min.');
   expect(againText(1000, 1000)).toBe('You can predict again now.');
+});
+
+test("pointAt: the point nearest the finger's place across the chart; the value at the top says it", () => {
+  const h = [10, 30, 20, 40].map((value) => ({ value: BigInt(value) }));
+  expect(pointAt(h, 0)).toMatchObject({ i: 0, x: 0 });
+  expect(pointAt(h, 0.4)).toMatchObject({ i: 1, x: 33.33 });
+  expect(pointAt(h, 1.3)).toMatchObject({ i: 3, x: 100, y: 8 }); // past the end: the last, at the top
+  expect(pointAt([], 0.5)).toBe(null);
+  expect(latestText({ history: h }, 1)).toBe('30');
+  expect(latestText({ history: h })).toBe('40');
 });

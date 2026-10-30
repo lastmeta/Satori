@@ -36,6 +36,7 @@ test('Dev Fee: only for a wallet in the splitters; its share, Claim, the trigger
   expect(view.splitters.find((x) => x.mine)).toMatchObject({ address: expect.stringMatching(/^0x52b7/i), parent: expect.stringMatching(/^0x6C57/i),
     thresholdPct: 90, mine: { slotId: 0, pct: 50, wholePct: 30, claimable: '5', waiting: '30' } });
   await expect(t(page, 'nav-devfee')).toBeVisible();
+  await expect(t(page, 'app-wallet')).toHaveText('Dev fee 1'); // named for its place in the dev fee
   await page.evaluate(() => window.satori.go('devfee'));
   const slot = t(page, 'devfee-slot');
   await expect(slot.locator('[data-test=devfee-share]')).toHaveText('50% of this splitter · 30% of the whole dev fee');

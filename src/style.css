@@ -143,6 +143,9 @@ body[data-tab="game"] #app { padding-bottom: calc(4px + var(--bar) + env(safe-ar
 .gstar[aria-pressed="true"] svg { fill: #f5c518; }
 .gchart { width: 100%; height: 100%; min-height: 0; padding: 16px 14px; overflow: visible; } /* inset by more than half the line: its round ends show */
 .gchart polyline { fill: none; stroke: var(--accent); stroke-width: 7.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.gchart { touch-action: none; cursor: crosshair; } /* a finger on it scrubs the line, not the page */
+.gscrub { stroke: var(--muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.gscrub-dot { stroke: var(--accent); stroke-width: 16; stroke-linecap: round; vector-effect: non-scaling-stroke; } /* a zero-length line: a round dot the stretched box can't squash */
 .gbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: none; max-width: 560px; width: 100%; margin: 0 auto; }
 .gbtn { border-radius: 10px; aspect-ratio: 85.6 / 54; padding: 0; display: grid; place-items: center; min-height: 44px; /* a card's shape */
   border: 1px solid; transition: filter 0.1s ease; } /* shaded inside, as a toggle that is on (.segmented): the soft fill, its colour's edge and ink */
@@ -409,6 +412,12 @@ button.cell:disabled { cursor: default; }
 .fund.receive .qr { width: min(280px, 100%); height: auto; aspect-ratio: 1; justify-self: center; margin-block: 4px; }
 .fund.receive code.block { text-align: center; }
 .fund.receive .actions { justify-content: flex-start; margin-top: 0; }
+.tap { cursor: pointer; }
+.fund.receive .address-name { text-align: center; margin-top: -8px; }
+.fund.receive .center { text-align: center; margin: 0; }
+.address-name { margin: 2px 0 0; }
+.update-btn { display: inline-flex; align-items: center; gap: 4px; }
+.update-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 @media (prefers-reduced-motion: reduce) { .contract-panel { transition: none; } }
 .day-panel { display: grid; grid-template-rows: 0fr; opacity: 0; transition: opacity 0.2s ease, grid-template-rows 0.3s ease 0.2s; }
 .day-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 0.3s ease, opacity 0.25s ease; }

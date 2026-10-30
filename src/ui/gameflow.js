@@ -56,9 +56,23 @@ export const submitEarly = ({ index, favorites, picks, split = 0 }) => picks > 0
  * the stream's own units: the chain keeps an integer with the adapter's `decimals` after the point (`display`; a
  * Sentiment stream's 18: 999999228392505300 is 0.999999).
  */
-export function latestText(stream) {
+export function latestText(stream, at = null) {
   const h = stream?.history ?? [];
-  return h.length ? fmtNum(Number(h.at(-1).value) / 10 ** (stream.display?.decimals ?? 0)) : '';
+  const x = at == null ? h.at(-1) : h[at];
+  return x ? fmtNum(Number(x.value) / 10 ** (stream.display?.decimals ?? 0)) : '';
+}
+
+/**
+ * The chart's point under a finger at `frac` (0 left, 1 right) of its width: { i, x, y } in the chart's 100 × 100 box,
+ * the nearest of `history`'s points as linePoints draws them; null with none.
+ */
+export function pointAt(history, frac) {
+  const pts = linePoints(history).split(' ').filter(Boolean).map((p) => p.split(',').map(Number));
+  if (!pts.length) return null;
+  const n = history.length;
+  const i = n === 1 ? 0 : Math.round(Math.min(1, Math.max(0, frac)) * (n - 1));
+  const [x, y] = n === 1 ? [Math.min(1, Math.max(0, frac)) * 100, pts[0][1]] : pts[i];
+  return { i, x, y };
 }
 
 /** The chart's line: SVG points in a w × h box, oldest on the left; flat when every value is the same. */

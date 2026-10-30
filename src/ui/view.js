@@ -57,6 +57,8 @@ const ICON = {
 };
 const MENU_ICON = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>`;
 // the header's icons: share (one dot joined to two), and the theme: the sun in dark mode (to light), the moon in light
+// a circular arrow: reload for the update
+const REFRESH = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"></path></svg>`;
 const SHARE = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.6"></circle><circle cx="18" cy="5.5" r="2.6"></circle><circle cx="18" cy="18.5" r="2.6"></circle><path d="M8.3 10.8l7.4-4.1M8.3 13.2l7.4 4.1"></path></svg>`;
 const SUN = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>`;
 // the moon drawn to its box's right side, as the sun's rays reach: its edge lines up with the page's
@@ -202,7 +204,7 @@ export function render(root, a) {
     <h1><a class="brand" href="#home" data-test="brand" @click="${(e) => { e.preventDefault(); if (state.screen === 'home') a.go('home'); }}"><span class="brand-mark" aria-hidden="true"></span>Satori <span class="muted">app</span></a></h1>
     <nav class="topnav" aria-label="Sections" hidden="${running}">${TABS.map((t) => navLink(a, t))}</nav>
     <div class="top-actions">
-      <button class="small-btn" data-test="update" hidden="${() => !state.app.update}" @click="${a.update}">Update ready, reload</button>
+      <button class="small-btn update-btn" data-test="update" title="Update ready: reload" hidden="${() => !state.app.update}" @click="${a.update}">${REFRESH()}<span>Update</span></button>
       <span class="muted small lock-in" data-test="lock-in" hidden="${() => state.screen !== 'home' || !state.unlocked}">${() => lockInText(state.lockAt, state.lockNow)}</span>
       <button class="small-btn" data-test="lock" hidden="${() => state.screen !== 'home' || !state.unlocked}" @click="${a.lock}">Lock</button>
       <a class="app-wallet muted small" href="#wallet" data-test="app-wallet" title="${() => state.wallet ?? ''}" hidden="${() => state.screen !== 'home' || !appWallet()}" @click="${(e) => { e.preventDefault(); a.go('wallet'); }}">${appWallet}</a>

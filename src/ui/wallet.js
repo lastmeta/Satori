@@ -59,9 +59,10 @@ export function walletTab(a) {
     <summary data-test="base-receive">Show address and QR code</summary>
     <div class="fund receive" data-test="base-receive-panel">
       <p class="muted small">Add Base ETH or SATORI: send it on Base to your wallet's address.</p>
-      <img class="qr" data-test="base-qr" alt="QR code of your wallet's address" src="${() => (receiving() ? qrDataUrl(state.wallet) : '')}">
-      <code class="block" data-test="base-receive-address">${() => state.wallet ?? ''}</code>
-      <div class="actions"><button class="small-btn" @click="${() => a.copy('base-receive', state.wallet)}">${() => (state.copied === 'base-receive' ? 'Copied' : 'Copy')}</button></div>
+      <img class="qr tap" data-test="base-qr" alt="QR code of your wallet's address (tap to copy the address)" title="Tap to copy the address" role="button" tabindex="0" src="${() => (receiving() ? qrDataUrl(state.wallet) : '')}" @click="${() => a.copy('base-receive', state.wallet)}">
+      <code class="block tap" data-test="base-receive-address" title="Tap to copy" role="button" tabindex="0" @click="${() => a.copy('base-receive', state.wallet)}">${() => (state.copied === 'base-receive' ? 'Copied' : state.wallet ?? '')}</code>
+      <p class="muted small address-name" data-test="base-receive-name" hidden="${() => !inUse()?.name}">${() => inUse()?.name ?? ''}</p>
+      <p class="muted small center">Tap the address or the QR code to copy it.</p>
     </div>
   </details>
 
@@ -178,7 +179,7 @@ function nameCard(a) {
  */
 function walletsCard(a) {
   const removing = () => state.wallets.wallets.find((w) => w.id === state.walletRemove);
-  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><span class="wallet-id"><b data-test="wallet-row-name" hidden="${!w.name}">${w.name ?? ''}</b><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code></span><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
+  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><span class="wallet-id"><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code><span class="muted small" data-test="wallet-row-name" hidden="${!w.name}">${w.name ?? ''}</span></span><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
     .key(`${w.id}:${w.address}:${w.name}:${w.active}:${state.copied === `wallet-${w.id}`}`); // tap the address: copied
   return html`<section class="card" data-test="wallets">
     <h2>Wallets</h2>
