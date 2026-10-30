@@ -41,7 +41,10 @@ import { playerOf, sendsToday } from './neuron/play.js';
 import { watchable } from './neuron/records.js';
 import { DEFAULT_PRICE } from './ui/market.js';
 import { formatEther, getAddress, isAddress, zeroAddress } from 'viem';
-import { ROLES, ROLE_IDS, roleOf, doneText, plain } from './neuron/roles.js';
+import { ROLE_IDS, roleOf, doneText, rolesView } from './neuron/roles.js';
+import { devFeeView, payeeName } from './neuron/devfee.js';
+import { adminView } from './neuron/admin.js';
+import { safeView } from './neuron/safe.js';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
@@ -576,22 +579,7 @@ async function nameWallet(name, { auto = false } = {}) {
 /** The special key the wallet holds, as its name while it has none of its own: the admin first, then the most powerful. */
 const NAMED = ['appoint', 'wiring', 'schedule', 'split', 'publisher'];
 const roleName = () => (state.admin.shown ? 'Admin' : roleOf(NAMED.find((id) => state.roles.of?.[id]?.isHolder) ?? '')?.name
-  ?? (state.safe.safes?.length ? 'Safe owner' : devFeeName(state.devFee.tree)));
-/**
- * A dev fee wallet's name (the owner, 2026-10-30): "Dev fee 3", its payee's place in the tree (the top's slots in order,
- * a branch's payees in its place, as Dev Fee's picture draws them); else "Splitter authority" for a splitter's authority.
- */
-function devFeeName(t) {
-  if (!t?.shown) return '';
-  const top = t.nodes[0];
-  const leaves = top.slots.flatMap((s) => {
-    const b = t.nodes.find((n) => n.parent && same(n.address, s.payee));
-    return b ? b.slots.map((x) => b.mySlotId === x.slotId) : [top.mySlotId === s.slotId];
-  });
-  const i = leaves.indexOf(true);
-  return i >= 0 ? `Dev fee ${i + 1}` : 'Splitter authority';
-}
-
+  ?? (state.safe.safes?.length ? 'Safe owner' : payeeName(state.devFee.tree)));
 /** Another wallet opens: the keys wiped (Lock), the list's active one set, the last visit's Home dropped, the page reloaded. */
 async function reopenWith(list) {
   lock();
@@ -1663,40 +1651,6 @@ const actions = {
 /** Central's stream meta: the object its JSON text holds, the text if it is not JSON, or null. */
 function parseMeta(meta) {
   try { return meta == null ? null : JSON.parse(meta); } catch { return meta; }
-}
-
-/** safe()'s answer: the Safes as plain values. */
-const safeView = (safes) => ({ shown: !!safes?.length, safes: (safes ?? []).map((x) => plain({ address: x.address, owners: x.owners,
-  threshold: x.threshold, nonce: x.nonce, keys: x.keys, pending: x.pending.map((t) => ({ safeTxHash: t.safeTxHash, nonce: t.nonce,
-    description: t.description, signatures: t.confirmations.length, signedByMe: t.signedByMe, enough: t.enough, next: t.next })) })) });
-
-/** specialKeys()'s answer: each key, its holder, and (held) its page's values, as plain values. */
-function rolesView(of) {
-  return Object.fromEntries(ROLES.map((r) => {
-    const x = of?.[r.id];
-    return [r.id, { label: r.label, holder: x?.holder ?? null, pending: x?.pending ?? null, held: !!x?.held, isHolder: !!x?.isHolder,
-      isPending: !!x?.isPending, values: x?.values ? plain(x.values) : null, actions: r.actions.map((a) => a.id) }];
-  }));
-}
-
-/** admin()'s answer: the levers as plain values (SATORI as decimal strings). */
-function adminView(a) {
-  if (!a.shown || !a.levers) return { shown: false, admin: a.address || null };
-  const l = a.levers;
-  return { shown: true, admin: l.admin, capabilities: l.capabilities.map(({ bit, name, on }) => ({ bit, name, on })),
-    officialRelayer: l.relayer, registrationFee: formatEther(l.registrationFee), offchainReporter: l.reporter, games: l.games };
-}
-
-/** devFee()'s answer: the tree as plain values (SATORI as decimal strings, shares in %). */
-function devFeeView(t) {
-  if (!t) return { shown: false, top: null, splitters: [] };
-  const pct = (bps) => Number(bps) / 100;
-  return { shown: t.shown, top: t.top, splitters: t.nodes.map((n) => {
-    const m = t.mine.find((x) => same(x.node, n.address));
-    return { address: n.address, parent: n.parent, authority: n.authority, pendingAuthority: n.pendingAuthority, thresholdPct: pct(n.thresholdBps),
-      mine: m ? { slotId: m.slotId, pct: pct(m.shares), wholePct: pct(m.wholeBps), claimable: formatEther(m.claimable),
-        waiting: formatEther(m.waiting), trigger: m.trigger } : null };
-  }) };
 }
 
 const ready = () => {

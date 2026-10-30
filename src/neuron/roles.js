@@ -264,3 +264,12 @@ export const plain = (x) => (typeof x === 'bigint' ? x.toString() : Array.isArra
 /** The field kinds and the ways values are said, for the Safe's keys (src/neuron/safe.js). */
 export const fields = { address, percent, whole, multiplier, hash };
 export const say = { short, who, satori };
+
+/** specialKeys()'s answer: each key, its holder, and (held) its page's values, as plain values. */
+export function rolesView(of) {
+  return Object.fromEntries(ROLES.map((r) => {
+    const x = of?.[r.id];
+    return [r.id, { label: r.label, holder: x?.holder ?? null, pending: x?.pending ?? null, held: !!x?.held, isHolder: !!x?.isHolder,
+      isPending: !!x?.isPending, values: x?.values ? plain(x.values) : null, actions: r.actions.map((a) => a.id) }];
+  }));
+}

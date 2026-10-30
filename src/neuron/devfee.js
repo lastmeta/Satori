@@ -1,7 +1,7 @@
 // The dev fee's splitters (docs/design/devfee.md), as the dapp reads and drives them (contract/satori-ui/src/hooks/useDevFee.ts):
 // the tree walked from the token's PLATFORM_FEE_RECIPIENT (the top, then the splitters among its payees: two deep by
 // design), the wallet's slots in it and what it may do. Every write is the wallet's.
-import { getAddress, isAddress, zeroAddress } from 'viem';
+import { formatEther, getAddress, isAddress, zeroAddress } from 'viem';
 
 const BPS = 10_000n;
 const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -158,4 +158,31 @@ export async function proposalOf(chain, tree, address, to) {
     ...(n.mySlotId == null ? [] : [[n.address, 'approved', [ok(id), BigInt(n.mySlotId)]]])]);
   return { to: t, agreedBps: (ok(r[0]) * BPS) / n.totalShares, thresholdBps: n.thresholdBps, cleared: ok(r[1]),
     iAgreed: n.mySlotId == null ? false : ok(r[2]) };
+}
+
+/** devFee()'s answer: the tree as plain values (SATORI as decimal strings, shares in %). */
+export function devFeeView(t) {
+  if (!t) return { shown: false, top: null, splitters: [] };
+  const pct = (bps) => Number(bps) / 100;
+  return { shown: t.shown, top: t.top, splitters: t.nodes.map((n) => {
+    const m = t.mine.find((x) => same(x.node, n.address));
+    return { address: n.address, parent: n.parent, authority: n.authority, pendingAuthority: n.pendingAuthority, thresholdPct: pct(n.thresholdBps),
+      mine: m ? { slotId: m.slotId, pct: pct(m.shares), wholePct: pct(m.wholeBps), claimable: formatEther(m.claimable),
+        waiting: formatEther(m.waiting), trigger: m.trigger } : null };
+  }) };
+}
+
+/**
+ * A dev fee wallet's name (the owner, 2026-10-30): "Dev fee 3", its payee's place in the tree (the top's slots in order,
+ * a branch's payees in its place, as Dev Fee's picture draws them); else "Splitter authority" for a splitter's authority.
+ */
+export function payeeName(t) {
+  if (!t?.shown) return '';
+  const top = t.nodes[0];
+  const leaves = top.slots.flatMap((s) => {
+    const b = t.nodes.find((n) => n.parent && same(n.address, s.payee));
+    return b ? b.slots.map((x) => b.mySlotId === x.slotId) : [top.mySlotId === s.slotId];
+  });
+  const i = leaves.indexOf(true);
+  return i >= 0 ? `Dev fee ${i + 1}` : 'Splitter authority';
 }

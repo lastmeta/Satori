@@ -3,7 +3,7 @@
 // signature with it), the other owners sign it there, and any of them executes it once enough have. Declared as the
 // other keys are (src/neuron/roles.js): how each key's holder is read, its page's values, its actions.
 import { getAddress, isAddress, parseEther, zeroAddress } from 'viem';
-import { fields, say } from './roles.js';
+import { fields, plain, say } from './roles.js';
 import { UPGRADEABLE } from '../chain/index.js';
 import { execArgs, safeTx, safeTxHash, signSafeTx } from '../chain/safe.js';
 
@@ -210,3 +210,8 @@ export async function executeSafe(chain, key, safe, pending, hash, { step, opts 
   step('send', 1, 1);
   return [{ hash: (await chain.safeExec(key, safe.address, execArgs(tx, t.confirmations.slice(0, Number(safe.threshold))), opts(step))).hash, label: 'Executed' }];
 }
+
+/** safe()'s answer: the Safes as plain values. */
+export const safeView = (safes) => ({ shown: !!safes?.length, safes: (safes ?? []).map((x) => plain({ address: x.address, owners: x.owners,
+  threshold: x.threshold, nonce: x.nonce, keys: x.keys, pending: x.pending.map((t) => ({ safeTxHash: t.safeTxHash, nonce: t.nonce,
+    description: t.description, signatures: t.confirmations.length, signedByMe: t.signedByMe, enough: t.enough, next: t.next })) })) });

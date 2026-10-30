@@ -1,7 +1,7 @@
 // The Satori contract's admin (docs/design/admin.md): SatoriRewards.admin(), and what only it may do, as the dapp's Admin
 // tab drives it (contract/satori-ui/src/components/AdminTab.tsx, hooks/useOwner.ts). The emission split and schedule
 // default to the admin but are their own keys, with their own pages. Every write is the wallet's.
-import { getAddress, isAddress, parseEther, zeroAddress } from 'viem';
+import { formatEther, getAddress, isAddress, parseEther, zeroAddress } from 'viem';
 
 const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 const DEFAULT_GAME = 1; // live by construction: its approval can't be set (SatoriVoting.sol:238)
@@ -90,3 +90,11 @@ export const adminOps = {
   /** Hands the admin to `to` at once (not two-step). */
   transfer: async (chain, key, to, run) => sent(chain, key, 'rewards', 'setAdmin', [addressIn(to)], run, 'Transferred'),
 };
+
+/** admin()'s answer: the levers as plain values (SATORI as decimal strings). */
+export function adminView(a) {
+  if (!a.shown || !a.levers) return { shown: false, admin: a.address || null };
+  const l = a.levers;
+  return { shown: true, admin: l.admin, capabilities: l.capabilities.map(({ bit, name, on }) => ({ bit, name, on })),
+    officialRelayer: l.relayer, registrationFee: formatEther(l.registrationFee), offchainReporter: l.reporter, games: l.games };
+}

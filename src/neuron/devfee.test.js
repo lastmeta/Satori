@@ -5,7 +5,7 @@ import { publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from '../chain/config.js';
 import { createChain, revertName } from '../chain/index.js';
 import { fakeSatori, E18, SPLIT_A, SPLIT_B, SPLIT_C } from '../../test/fake-satori.js';
-import { devFeeOf, devFeeOps, proposalOf } from './devfee.js';
+import { devFeeOf, devFeeOps, proposalOf, payeeName } from './devfee.js';
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
@@ -58,6 +58,15 @@ describe('the tree and the wallet in it', () => {
     expect(t.shown).toBe(true);
     expect(t.nodes.find((n) => lc(n.address) === SPLIT_C)).toMatchObject({ isOffered: true, isAuthority: false });
   });
+});
+
+test("a dev fee wallet's name: its payee's place, as the picture draws them (C's then B's under A); a splitter's authority; none", async () => {
+  setup((x) => { x.splitters[SPLIT_C].slots[1].payee = V; });
+  expect(payeeName(await tree())).toBe('Dev fee 2');
+  setup((x) => { x.splitters[SPLIT_B].authority = V; });
+  expect(payeeName(await tree())).toBe('Splitter authority');
+  setup();
+  expect(payeeName(await tree())).toBe('');
 });
 
 describe('the actions', () => {
