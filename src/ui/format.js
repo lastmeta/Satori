@@ -312,18 +312,6 @@ export function lockInText(lockAt, now) {
   return s < 60 ? 'Locks in under a minute' : `Locks in ${Math.ceil(s / 60)} min`;
 }
 
-/**
- * DuckDB's download ({ bytesLoaded, bytesTotal }, its instantiate progress) in the bytes that cross the network
- * (docs/design/storage.md#the-first-visit): it counts the decoded wasm against the Content-Length, which is the
- * compressed size when the host compresses it (gzip, brotli), so the count is scaled by `raw` (the decoded size).
- * → { loaded, total } (total null: unknown)
- */
-export function transferProgress({ bytesLoaded = 0, bytesTotal = 0 } = {}, raw = null) {
-  if (!(bytesTotal > 0)) return { loaded: bytesLoaded, total: raw };
-  const loaded = raw > bytesTotal ? Math.round((bytesLoaded * bytesTotal) / raw) : bytesLoaded;
-  return { loaded: Math.min(loaded, bytesTotal), total: bytesTotal };
-}
-
 const mb = (n) => (n / 1e6).toFixed(1);
 /** The engine's step while Setup or Home waits for it ({ step: download | start | open | ready, loaded, total }). */
 export function engineText(e) {

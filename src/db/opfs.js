@@ -11,7 +11,7 @@ import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import { openDb } from './index.js';
 import { settleWal, setAsideWal, setAsideDatabase, fileBytes } from './recover.js';
-import { transferProgress } from '../ui/format.js';
+import { transferProgress } from './progress.js';
 
 /* global __DUCKDB_EH_BYTES__ */
 const EH_BYTES = typeof __DUCKDB_EH_BYTES__ === 'number' ? __DUCKDB_EH_BYTES__ : null; // the eh wasm, decoded (vite.config.js)

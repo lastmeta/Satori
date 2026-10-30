@@ -4,7 +4,7 @@
 import { FIXABLE_SKIPS } from './skip.js';
 import { POLL_EVERY_S } from './index.js';
 import { leading, workText, HERO } from './work.js';
-import { nextStep } from '../ui/contractflow.js';
+import { nextStep } from './play.js';
 
 export const CADENCE_S = POLL_EVERY_S; // 11 h, Lite's
 export const GRACE_S = 3600;

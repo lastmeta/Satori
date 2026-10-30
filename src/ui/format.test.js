@@ -3,7 +3,7 @@ import {
   fmtNum, fmtWhen, pickIndexes, registrationText, networkLine, mismatchText, pollText, submitText, modelTitle,
   fmtCadence, shortKey, relayText, relaysText, BLOCKED_NOTE, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText, referralText, referralNote,
-  storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, transferProgress, engineText, openingText,
+  storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, engineText, openingText,
   saleText, boughtText, graceText, buyerText,
 } from './format.js';
 
@@ -270,19 +270,6 @@ test('ethFeeText: a fee in ETH, two significant digits, never an exponent', () =
   expect(ethFeeText('0.0021')).toBe('0.0021 ETH');
   expect(ethFeeText('0')).toBe('0 ETH');
   expect(ethFeeText(null)).toBe('–');
-});
-
-test('transferProgress: DuckDB\'s download in the bytes that cross the network (docs/design/storage.md#the-first-visit)', () => {
-  const RAW = 34_242_586; // duckdb-eh.wasm, decoded
-  // gzip (7.6 MB on the wire): DuckDB counts decoded bytes against the Content-Length, so the count is scaled
-  expect(transferProgress({ bytesLoaded: RAW / 2, bytesTotal: 7_677_553 }, RAW)).toEqual({ loaded: 3_838_777, total: 7_677_553 });
-  expect(transferProgress({ bytesLoaded: RAW, bytesTotal: 5_065_391 }, RAW)).toEqual({ loaded: 5_065_391, total: 5_065_391 }); // brotli, done
-  // not compressed (the dev server): as counted
-  expect(transferProgress({ bytesLoaded: 1_000_000, bytesTotal: RAW }, RAW)).toEqual({ loaded: 1_000_000, total: RAW });
-  // no Content-Length: the decoded count against the decoded size
-  expect(transferProgress({ bytesLoaded: 1_000_000, bytesTotal: 0 }, RAW)).toEqual({ loaded: 1_000_000, total: RAW });
-  expect(transferProgress({ bytesLoaded: 5, bytesTotal: 0 })).toEqual({ loaded: 5, total: null });
-  expect(transferProgress({ bytesLoaded: 50, bytesTotal: 10 })).toEqual({ loaded: 10, total: 10 }); // never past the total
 });
 
 test('engineText: the engine\'s step while Setup or Home waits for it', () => {
