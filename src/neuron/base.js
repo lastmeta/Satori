@@ -123,6 +123,8 @@ const lowOnGas = (eth, gas) => eth != null && (eth === 0n || (gas != null && eth
 export const PROOF_TTL_S = 3600;
 /** A wallet transaction needs Base ETH for gas (Claim says so before it tries). */
 export const NEED_GAS = 'The wallet needs a little Base ETH for gas to claim.';
+/** Execute on the Safe tab with no gas (the owner, 2026-10-30: the RPC's "Missing or invalid parameters" said nothing). */
+export const NEED_SAFE_GAS = 'To execute, this wallet needs a little Base ETH for gas. Add some (Wallet › Show address and QR code), or execute it from another owner\'s wallet that has some. Signing stays free.';
 /** Stake's two alias steps and its wallet step need gas on each (said before trying, as Claim). */
 /** Said with a Preload now button beside it (the owner, 2026-10-30: say what to do, not what is wrong). */
 export const NEED_ALIAS_GAS = 'Before you can stake with this app, you must preload some gas.';
@@ -915,6 +917,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     /** A waiting transaction executed from the wallet, once signed by enough owners (gas). → [{ hash, label }] */
     async safeExecute(safe, hash) {
       const v = needWallet();
+      if ((await refresh()).wallet.lowEth) throw new Error(NEED_SAFE_GAS);
       return act('safe', async (chain, step) => {
         const x = await safeNamed(chain, safe);
         return executeSafe(chain, v, x, x.pending, hash, { step, opts: sent });

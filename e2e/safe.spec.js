@@ -65,6 +65,12 @@ test('Safe: only for an owner; propose, the others sign, execute; an upgrade by 
   await expect(row).toContainText('3 of 3 signed');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: test.info().outputPath('safe-phone.png'), fullPage: true });
+  // no gas: said what to do (not the RPC's "Missing or invalid parameters"); with some, it runs
+  rpc.eth[V.toLowerCase()] = 0n;
+  await row.locator('[data-test=safe-execute]').click();
+  await expect(t(page, 'safe-waiting').locator('[data-test=safe-error]')).toHaveText(/^To execute, this wallet needs a little Base ETH for gas\./);
+  expect(s.safe.nonce).toBe(0n);
+  rpc.eth[V.toLowerCase()] = 10n ** 17n;
   await row.locator('[data-test=safe-execute]').click();
   await expect(t(page, 'safe-waiting').locator('[data-test=safe-result]')).toHaveText('Executed.', { timeout: 30_000 });
   expect(s.devFee.pending).toBe(1200n);

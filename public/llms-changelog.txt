@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-30 (Safe: Execute with no gas)
+
+- `safeExecute` and the Safe tab's Execute with no Base ETH for gas say "To execute, this wallet needs a little Base ETH
+  for gas…" before trying.
+
 ## Changed 2026-10-30 (Chart, copy, Update, names)
 
 - The Game chart reads its values under a finger: `game-scrub`, and `game-latest` says that point's value; swipes to
