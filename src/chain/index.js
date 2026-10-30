@@ -11,13 +11,14 @@
 //   await chain.claimRewards(wallet) / claimMerkle(wallet, proof) / claimAirdrop(wallet) / sendEth / sendSatori
 //   createChannels({ chain, config })              // payment channels on this chain (channels.js)
 import {
-  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, decodeFunctionData, encodePacked, formatGwei, hashTypedData,
+  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, decodeFunctionData, encodeFunctionData, encodePacked, formatGwei, hashTypedData,
   hexToBytes, keccak256, serializeSignature, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import {
-  adapterUiAbi, airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, splitterAbi, tokenAbi, votingAbi,
+  adapterUiAbi, airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, safeAbi, splitterAbi, tokenAbi,
+  uupsAbi, votingAbi,
 } from './abi.js';
 import { serial } from '../util.js';
 
@@ -35,6 +36,8 @@ export const HISTORY = 768; // the registry's ring (SatoriRegistry.sol HISTORY_S
  * not charged.
  */
 export const HOOK_GAS = 500_000n;
+/** The contracts behind upgradeable proxies (SatoriUUPS), as config names. */
+export const UPGRADEABLE = ['rewards', 'engine', 'hub', 'voting', 'registry', 'games', 'merkle'];
 
 export const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
@@ -182,7 +185,9 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const airdrop = c('airdrop', airdropAbi);
   const voting = c('voting', votingAbi);
   const mc3 = c('multicall3', multicall3Abi);
-  const roleCall = { rewards, hub, engine, voting, registry, games, token, merkle, airdrop };
+  const roleCall = { rewards, hub, engine, voting, registry, games, token, merkle, airdrop,
+    // the upgradeable ones' upgrade calls (docs/design/safe.md): 'uups.hub' and so on
+    ...Object.fromEntries(UPGRADEABLE.map((n) => [`uups.${n}`, c(n, uupsAbi)])) };
   const read = (call) => client.readContract(call);
   const many = (contracts) => client.multicall({ contracts, allowFailure: false });
   /** A call run from `from` without sending: null when it would pass, else the revert's name; RPC errors throw. */
@@ -602,6 +607,29 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     roleReads: (calls) => many(calls.map(([name, functionName, args]) => roleCall[name](functionName, args))),
     /** A role's function on contract `name`, from `key` (the wallet). */
     roleWrite: (key, name, functionName, args, opts) => write(key, roleCall[name](functionName, args), opts),
+    /** A role's call as a Safe transaction's: { to, data }. */
+    roleEncode(name, functionName, args) {
+      const x = roleCall[name](functionName, args);
+      return { to: x.address, data: encodeFunctionData(x) };
+    },
+    /** A Safe transaction's call as a role's: { name, functionName, args }, or null when it is none of ours. */
+    roleDecode(to, data) {
+      for (const [name, f] of Object.entries(roleCall)) {
+        const { address, abi } = f('');
+        if (!same(address, to)) continue;
+        try { return { name, ...decodeFunctionData({ abi, data }) }; } catch { /* another contract at the address: the next ABI */ }
+      }
+      return null;
+    },
+    /** A Safe's owners, threshold and nonce, for each address (null: no Safe). */
+    safeReads: async (addresses) => {
+      const r = await client.multicall({ allowFailure: true, contracts: addresses.flatMap((address) => ['getOwners', 'getThreshold', 'nonce']
+        .map((functionName) => ({ address, abi: safeAbi, functionName }))) });
+      return addresses.map((address, i) => (r.slice(3 * i, 3 * i + 3).every((x) => x.status === 'success')
+        ? { address, owners: r[3 * i].result, threshold: r[3 * i + 1].result, nonce: r[3 * i + 2].result } : null));
+    },
+    /** A Safe transaction executed from `key` (anyone may, once enough owners signed): execTransaction(...args). */
+    safeExec: (key, safe, args, opts) => write(key, { address: safe, abi: safeAbi, functionName: 'execTransaction', args }, opts),
 
     /** SATORI from the wallet (the token refuses while transfer-locked: the simulate says Locked). */
     sendSatori: (wallet, to, amount, opts) => write(wallet, token('transfer', [to, amount]), opts),

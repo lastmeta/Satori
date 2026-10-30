@@ -898,6 +898,13 @@ a.chan:hover { border-color: var(--muted); }
 @media (max-width: 440px) { .top.unlocked .app-wallet { display: none; } }
 .wallet-id { display: grid; min-width: 0; flex: 1 1 auto; }
 .wallet-id b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the Safe tab (src/ui/safe.js): its waiting transactions, a row each */
+.safe-txs { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 10px; }
+.safe-tx { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.safe-tx-what { display: grid; min-width: 0; }
+.safe-tx-do { display: flex; gap: 6px; flex: none; }
+.safe-key-head { margin-top: 22px; }
+[data-test=safe-tab] textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); }
 /* Admin (src/ui/admin.js): the capabilities' switches, the games' rows */
 .admin-caps { display: grid; gap: 10px; margin: 10px 0 14px; }
 .admin-cap { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; cursor: pointer; }

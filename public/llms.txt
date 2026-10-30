@@ -1131,6 +1131,26 @@ the page's JS context:
     (percent below 100). wiring: `controller`, `hook` (`''`: none),
     `airdrop`, `bridge` (`''`: none), `voteLock` (`''`: none),
     `freezeVoteLock` (for good). A frozen lever throws.
+- **Safe** (docs/design/safe.md), a tab only for an owner of the Safe that
+  holds the token's root, fee, upgrade and freeze keys and the airdrop
+  loader (the governor Safe). A change is proposed to the Safe through
+  Safe's transaction service with the wallet's signature (no gas); the other
+  owners sign; any owner executes it once enough have (gas). The same queue
+  app.safe.global shows. Only on the person's request; needs Unlock.
+  - `await satori.safe()` → `{ shown, safes: [{ address, owners, threshold,
+    nonce, keys: { root, fee, upgrade, freeze, loader }, pending: [{
+    safeTxHash, nonce, description, signatures, signedByMe, enough, next }]
+    }] }`, read fresh (bigints as strings).
+  - `await satori.safePropose(key, action, value)` → `{ safeTxHash, nonce }`:
+    root: `fee`, `upgrade`, `wiring`, `appoint`, `freeze` (an address; `''`:
+    no one, for good), `offer` (`''` cancels), `renounce`. fee: `propose`
+    (percent, 5 to 25), `accept`, `cancel`. upgrade: `upgrade` (`'hub 0x…'`:
+    one of rewards, engine, hub, voting, registry, games, merkle, then the new
+    implementation), `renounce` (`'hub'`). freeze: `controller`, `hook`,
+    `bridge`, `fee`. loader: `load` (one "address, amount" a line, SATORI),
+    `finalize`.
+  - `await satori.safeSign(safeTxHash)`; `await satori.safeExecute(safeTxHash)`
+    → `[{ hash, label }]` (the next one, once `enough`).
 - `await satori.setBaseRpc(url)` → `base()` (only on the person's request):
   an https URL, a path on this site (such as `/rpc`), or `''` for the
   default. A saved URL replaces the default; a change is noted on Home for
@@ -1355,6 +1375,14 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   action (its value Now, a field and Save; typed twice where it can't be
   taken back; Freeze asks first; Accept for an offered job). A frozen lever
   says Frozen. Each card's passphrase prompt and result show in it.
+- **Safe** (in the menu only for an owner of the Safe holding the token's
+  keys): the Safe (its address, "3 of 5 owners"); Waiting (each transaction
+  said in words, "2 of 3 signed", Sign, Execute when enough signed and it is
+  next); then each key (Root authority, Fee authority, Upgrade authority,
+  Freeze authority, Airdrop loader) with its values and a card per action:
+  Propose (typed twice where it can't be taken back; the ones for good ask
+  first; Upgrade picks the contract). Each card's passphrase prompt and
+  result show in it.
 - **Admin** (in the menu only for the Satori contract's admin): an Admin
   card (Refresh); Capabilities (a switch for each, Save); Games (each
   stream's game, Approved / Not approved, Approve or Disapprove; the default

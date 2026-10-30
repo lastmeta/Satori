@@ -113,6 +113,10 @@ export const state = reactive({
   // held, values } }); did: the card ('<role>:<action>') whose action ran; ask: the card asking before it acts
   roles: { of: null, error: '', did: '', result: '', txs: [], actionError: '', ask: '' },
   rolesBusy: '', // a special key's action in flight: '<role>:<action>'
+  // the Safe tab (docs/design/safe.md): safes: base.safes()'s (null: not read); did: the card whose action ran; ask: the
+  // card asking before it proposes
+  safe: { safes: null, error: '', did: '', result: '', txs: [], actionError: '', ask: '' },
+  safeBusy: '', // a Safe action in flight
   catalog: [],
   // the track record (docs/design/track-record.md): records() as last read (while Streams shows), the scan's step at a
   // readable pace, the open stream's key and its record() (with its pairs), the whole list asked for

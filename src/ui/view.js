@@ -16,23 +16,24 @@ import { marketTab } from './market.js';
 import { devFeeTab } from './devfee.js';
 import { adminTab } from './admin.js';
 import { rolesTabs } from './roles.js';
+import { safeTab } from './safe.js';
 import { ROLES, ROLE_IDS } from '../neuron/roles.js';
 import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'devfee', 'admin', ...ROLE_IDS, 'settings'];
+export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'devfee', 'admin', ...ROLE_IDS, 'safe', 'settings'];
 /**
  * Tabs only some see: Dev Fee, a wallet in the dev fee's splitters (docs/design/devfee.md); Admin, the Satori contract's
  * admin (docs/design/admin.md).
  */
 export const tabShown = (t) => (t === 'devfee' ? !!state.devFee.shown : t === 'admin' ? !!state.admin.shown
-  : ROLE_IDS.includes(t) ? !!state.roles.of?.[t]?.held : true); // the other special keys (docs/design/roles.md)
+  : ROLE_IDS.includes(t) ? !!state.roles.of?.[t]?.held : t === 'safe' ? !!state.safe.safes?.length : true); // the other special keys (docs/design/roles.md), the Safe (safe.md)
 /** The app bar's wallet: the one in use, by name, else its short address (docs/design/wallets.md#names). */
 const appWallet = () => walletLabel(state.wallets.wallets.find((w) => w.active) ?? (state.wallet ? { address: state.wallet } : null));
 const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
-const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', admin: 'Admin', ...Object.fromEntries(ROLES.map((r) => [r.id, r.label])), home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
+const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', admin: 'Admin', ...Object.fromEntries(ROLES.map((r) => [r.id, r.label])), safe: 'Safe', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
 const ICON = {
   // a game controller's outline
   game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path></svg>`,
@@ -49,6 +50,8 @@ const ICON = {
   admin: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6z"></path><path d="M8.5 12l2.5 2.5 4.5-5"></path></svg>`,
   // a key: the other special keys (docs/design/roles.md), each with its word beside it
   ...Object.fromEntries(ROLE_IDS.map((id) => [id, () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"></circle><path d="M12 12h9M18 12v3M21 12v2"></path></svg>`])),
+  // a vault's door: the Safe
+  safe: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="12" cy="12" r="3.5"></circle><path d="M12 8.5v-1M15.5 12h1M7 20v1.5M17 20v1.5"></path></svg>`,
   // a gear (three lines is the menu's)
   settings: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path><circle cx="12" cy="12" r="6.5"></circle></svg>`,
 };
@@ -265,6 +268,7 @@ export function render(root, a) {
       ${devFeeTab(a)}
       ${adminTab(a)}
       ${rolesTabs(a)}
+      ${safeTab(a)}
       ${settingsTab(a)}
     </div>
   </main>

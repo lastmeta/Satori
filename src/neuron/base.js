@@ -7,6 +7,8 @@
 import { devFeeOf, devFeeOps, proposalOf } from './devfee.js';
 import { adminOps, adminRole, adminState } from './admin.js';
 import { roleAct, rolesOf } from './roles.js';
+import { executeSafe, pendingOf, proposeSafe, safesOf, signSafe } from './safe.js';
+import { safeService } from '../chain/safe.js';
 import { SKIP } from './skip.js';
 import { playerOf } from './play.js';
 import {
@@ -558,6 +560,15 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     const lock = (await chain.status({ alias: alias.evmAddress, wallet: walletAddress })).wallet.lock;
     if (lock?.locked) throw new Error(`${lockText(lock)}.`);
   }
+  /** Safe's transaction service (docs/design/safe.md). */
+  const safeSvc = safeService();
+  /** The Safe at `address` the wallet owns, read now with its waiting transactions. */
+  async function safeNamed(chain, address) {
+    const x = (await safesOf(chain, walletAddress)).safes.find((s) => s.address.toLowerCase() === String(address).toLowerCase());
+    if (!x) throw new Error('This wallet is not an owner of that Safe.');
+    x.pending = await pendingOf(chain, safeSvc, x, walletAddress);
+    return x;
+  }
   /** A wallet write's options: the step 'confirm' once it is sent. */
   const sent = (step) => ({ onSent: () => step('confirm') });
 
@@ -876,6 +887,38 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     async roleAct(role, action, typed) {
       const v = needWallet();
       return act('roles', async (chain, step) => roleAct(chain, v, await rolesOf(chain, walletAddress), role, action, typed, { step, opts: sent }));
+    },
+    /**
+     * The Safes the wallet owns among the Safe keys' holders (docs/design/safe.md), each with its keys' values and its
+     * waiting transactions: { safes: [{ address, owners, threshold, nonce, keys, pending }] }.
+     */
+    async safes() {
+      const { chain } = await chainNow();
+      const { safes } = await safesOf(chain, walletAddress);
+      for (const x of safes) x.pending = await pendingOf(chain, safeSvc, x, walletAddress);
+      return { safes };
+    },
+    /** A Safe key's action proposed to the Safe at `safe`, signed by the wallet (no gas). → { safeTxHash, nonce } */
+    async safePropose(safe, keyId, action, typed) {
+      const v = needWallet();
+      const { chain } = await chainNow();
+      const x = await safeNamed(chain, safe);
+      return work.run('safe', (step) => { step('sign', 1, 1); return proposeSafe(chain, safeSvc, v, x, x.pending, keyId, action, typed); });
+    },
+    /** The wallet's signature on a waiting transaction (no gas). */
+    async safeSign(safe, hash) {
+      const v = needWallet();
+      const { chain } = await chainNow();
+      const x = await safeNamed(chain, safe);
+      return work.run('safe', (step) => { step('sign', 1, 1); return signSafe(chain, safeSvc, v, x, x.pending, hash); });
+    },
+    /** A waiting transaction executed from the wallet, once signed by enough owners (gas). → [{ hash, label }] */
+    async safeExecute(safe, hash) {
+      const v = needWallet();
+      return act('safe', async (chain, step) => {
+        const x = await safeNamed(chain, safe);
+        return executeSafe(chain, v, x, x.pending, hash, { step, opts: sent });
+      });
     },
     /** An Admin action from the wallet (adminOps' `op`): → [{ hash, label }] */
     async adminAct(op, ...args) {

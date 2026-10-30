@@ -9,6 +9,18 @@
 import { encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress } from 'viem';
 import * as abi from '../src/chain/abi.js';
 import { DEFAULTS } from '../src/chain/config.js';
+import { UPGRADEABLE } from '../src/chain/index.js';
+import { safeTxHash } from '../src/chain/safe.js';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { keccak_256 } from '@noble/hashes/sha3';
+import { bytesToHex } from '@noble/hashes/utils';
+
+/** The owner whose 65-byte signature (r, s, v) `sig` (hex, no 0x) is of `hash`: lowercase. */
+function recoverOwner(hash, sig) {
+  const pub = secp256k1.Signature.fromCompact(sig.slice(0, 128)).addRecoveryBit(parseInt(sig.slice(128, 130), 16) - 27)
+    .recoverPublicKey(hash.slice(2)).toRawBytes(false);
+  return `0x${bytesToHex(keccak_256(pub.slice(1))).slice(-40)}`;
+}
 import { INDEFINITE, HISTORY } from '../src/chain/index.js';
 import { fakeRpc, revert, panic } from './fake-rpc.js';
 
@@ -20,7 +32,10 @@ const SPLITTERS = { [SPLIT_A]: [SPLIT_C, SPLIT_B], [SPLIT_C]: [`0x${'c1'.repeat(
 
 const lc = (a) => a.toLowerCase();
 const ADAPTER = `0x${'ad'.repeat(20)}`;
-export const ADMIN = `0x${'a0'.repeat(20)}`; // SatoriRewards.admin() unless a test names the wallet // the adapter whose valueDisplay a stream's `display` answers
+export const ADMIN = `0x${'a0'.repeat(20)}`;
+/** The governor Safe (docs/design/safe.md): root, fee, upgrade and freeze on the token, and the airdrop loader. */
+export const SAFE = `0x${'5a'.repeat(20)}`;
+export const SAFE_OWNERS = [1, 2, 3, 4, 5].map((i) => `0x${`0${i}`.repeat(20)}`); // SatoriRewards.admin() unless a test names the wallet // the adapter whose valueDisplay a stream's `display` answers
 
 /**
  * @param {{round?: number, hour?: number, eth?: Record<string, bigint>}} [opts]
@@ -59,9 +74,14 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     // schedule left at zero (the admin's)
     splitSet: zeroAddress, share: 5000n, scheduleSet: zeroAddress, appoint: ADMIN, wiring: ADMIN,
     emission: { issued: 2116n * E18, nextStepAt: 2962n * E18, rate: 846n * E18, prevRate: 847n * E18, from: 20756n, ratioWad: 999708061412966511n, stepsTaken: 1 },
-    publisher: ADMIN, pendingPublisher: zeroAddress, root: `0x${'12'.repeat(32)}`, loader: `0x${'61'.repeat(20)}`, operator: zeroAddress,
+    publisher: ADMIN, pendingPublisher: zeroAddress, root: `0x${'12'.repeat(32)}`, loader: SAFE, operator: zeroAddress,
     curve: [2n, 3n, 12n, 0n], target: 5000n, controller: DEFAULTS.hub.toLowerCase(), hook: DEFAULTS.hub.toLowerCase(), airdropAt: DEFAULTS.airdrop.toLowerCase(),
     bridge: zeroAddress, frozen: { controller: false, hook: false, bridge: false, voteLock: false }, voteLock: `0x${'bd'.repeat(20)}`,
+    // the Safe and its keys (docs/design/safe.md): 3 of 5; execTransaction checks the signatures as the Safe does
+    safe: { owners: [...SAFE_OWNERS], threshold: 3n, nonce: 0n, executed: [] },
+    rootKey: SAFE, pendingRoot: zeroAddress, feeKey: SAFE, upgradeKey: SAFE, freezeKey: SAFE,
+    devFee: { bps: 1500n, pending: 0n, frozen: false, last: 20700n }, airdropLoaded: 0n, airdropFinalized: false, airdropRows: {},
+    impl: Object.fromEntries(UPGRADEABLE.map((n, i) => [n, `0x${`${i + 1}0`.repeat(20)}`])), renounced: {},
     short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
   };
   const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n) - (s.short[a] ?? 0n);
@@ -281,6 +301,35 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       transferLockedUntil: ([a]) => s.lock[lc(a)] ?? 0,
       getCurrentRound: (_, ctx) => BigInt(ctx.round),
       PLATFORM_FEE_RECIPIENT: () => SPLIT_A,
+      rootAuthority: () => s.rootKey,
+      pendingRootAuthority: () => s.pendingRoot,
+      feeAuthority: () => s.feeKey,
+      upgradeAuthority: () => s.upgradeKey,
+      freezeAuthority: () => s.freezeKey,
+      setFeeAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.feeKey = lc(a); },
+      setUpgradeAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.upgradeKey = lc(a); },
+      setWiringAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.wiring = lc(a); },
+      setAppointAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.appoint = lc(a); },
+      setFreezeAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.freezeKey = lc(a); },
+      setRootAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.pendingRoot = lc(a); },
+      renounceRootAuthority: (_, ctx) => { only(ctx, s.rootKey); if (ctx.write) { s.rootKey = zeroAddress; s.pendingRoot = zeroAddress; } },
+      devFeeBps: () => s.devFee.bps,
+      pendingDevFeeBps: () => s.devFee.pending,
+      devFeeBpsFrozen: () => s.devFee.frozen,
+      lastDevFeeChangeRound: () => s.devFee.last,
+      proposeDevFeeBps: ([bps], ctx) => { only(ctx, s.feeKey); if (s.devFee.frozen) revert('Frozen'); if (bps < 500n || bps > 2500n) revert('BadInput'); if (ctx.write) s.devFee.pending = bps; },
+      cancelDevFeeBps: (_, ctx) => { only(ctx, s.feeKey); if (!s.devFee.pending) revert('BadInput'); if (ctx.write) s.devFee.pending = 0n; },
+      acceptDevFeeBps: (_, ctx) => {
+        only(ctx, s.feeKey);
+        if (!s.devFee.pending) revert('BadInput');
+        if (BigInt(ctx.round) < s.devFee.last + 30n) revert('DevFeeChangeTooSoon');
+        if (ctx.write) Object.assign(s.devFee, { bps: s.devFee.pending, pending: 0n, last: BigInt(ctx.round) });
+      },
+      freezeController: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) s.frozen.controller = true; },
+      freezeHook: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) s.frozen.hook = true; },
+      freezeBridgeAuthority: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) s.frozen.bridge = true; },
+      freezeDevFeeBps: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) { s.devFee.frozen = true; s.devFee.pending = 0n; } },
+      AIRDROP_TOTAL_SUPPLY: () => 1_100_000n * E18,
       appointAuthority: () => s.appoint,
       wiringAuthority: () => s.wiring,
       controller: () => s.controller,
@@ -343,6 +392,16 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     [DEFAULTS.airdrop]: fns(abi.airdropAbi, {
       claimableAirdrop: ([a]) => s.airdrop[lc(a)] ?? 0n,
       airdropAuthority: () => s.loader,
+      airdropLoadedTotal: () => s.airdropLoaded,
+      airdropLoadingFinalized: () => s.airdropFinalized,
+      loadAirdropBatch: ([to, amounts], ctx) => {
+        only(ctx, s.loader);
+        if (s.airdropFinalized) revert('AirdropLoadingClosed');
+        if (to.length !== amounts.length) revert('LengthMismatch');
+        if (to.some((a) => s.airdropRows[lc(a)])) revert('DuplicateRecipient');
+        if (ctx.write) to.forEach((a, i) => { s.airdropRows[lc(a)] = amounts[i]; s.airdropLoaded += amounts[i]; });
+      },
+      finalizeAirdropLoading: (_, ctx) => { only(ctx, s.loader); if (s.airdropFinalized) revert('AlreadySet'); if (ctx.write) s.airdropFinalized = true; },
       setAirdropAuthority: ([a], ctx) => { only(ctx, s.loader, s.appoint); if (ctx.write) s.loader = lc(a); },
       claimAirdrop: (_, ctx) => {
         const x = s.airdrop[ctx.from] ?? 0n;
@@ -365,6 +424,39 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
   };
   // the dev fee's splitters (C/SatoriSplitterImmutable.sol), Base Sepolia's tree: A 60 % C, 40 % B; C and B 50/50
   for (const [a, sp] of Object.entries(s.splitters)) contracts[a] = splitter(s, sp, a);
+  // the upgradeable ones answer the upgrade calls too (SatoriUUPS), at their own addresses
+  for (const n of UPGRADEABLE) {
+    const c = contracts[DEFAULTS[n]];
+    c.abi = [...c.abi, ...abi.uupsAbi.filter((i) => i.type === 'function')];
+    Object.assign(c.fns, {
+      implementation: () => s.impl[n],
+      upgradesRenounced: () => !!s.renounced[n],
+      upgradeTo: ([impl], ctx) => { only(ctx, s.upgradeKey); if (s.renounced[n]) revert('UpgradeUnauthorized'); if (ctx.write) s.impl[n] = lc(impl); },
+      renounceUpgrade: (_, ctx) => { only(ctx, s.upgradeKey); if (ctx.write) s.renounced[n] = true; },
+    });
+  }
+  contracts[SAFE] = fns(abi.safeAbi, {
+    getOwners: () => s.safe.owners,
+    getThreshold: () => s.safe.threshold,
+    nonce: () => s.safe.nonce,
+    // as the Safe: the hash at its nonce, `threshold` signatures by distinct owners in rising order, then the call as it
+    execTransaction: ([to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, sigs], ctx) => {
+      const hash = safeTxHash(84532, { safe: SAFE, to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce: s.safe.nonce });
+      const signers = [];
+      for (let i = 0; i < Number(s.safe.threshold); i++) {
+        const sig = sigs.slice(2 + 130 * i, 2 + 130 * (i + 1));
+        if (sig.length < 130) revert('GS020');
+        signers.push(recoverOwner(hash, sig));
+      }
+      if (signers.some((a, i) => !s.safe.owners.some((o) => lc(o) === a) || (i && BigInt(a) <= BigInt(signers[i - 1])))) revert('GS026');
+      if (ctx.write) {
+        s.safe.nonce += 1n;
+        s.safe.executed.push({ to: lc(to), data });
+      }
+      ctx.exec(to, data, SAFE);
+      return true;
+    },
+  });
   const rpc = fakeRpc(contracts, { timestamp: round * 86400 + hour * 3600, eth });
   return { s, rpc };
 }

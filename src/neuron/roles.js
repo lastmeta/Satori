@@ -260,3 +260,7 @@ export const doneText = (role, action, typed, values) => {
 /** A key's page as plain values (agents: specialKeys()): bigints as strings. */
 export const plain = (x) => (typeof x === 'bigint' ? x.toString() : Array.isArray(x) ? x.map(plain)
   : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, plain(v)])) : x);
+
+/** The field kinds and the ways values are said, for the Safe's keys (src/neuron/safe.js). */
+export const fields = { address, percent, whole, multiplier, hash };
+export const say = { short, who, satori };

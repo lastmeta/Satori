@@ -14,6 +14,11 @@ import { createBase, runBatch } from '../neuron/base.js';
 import { devFeeOf, devFeeOps } from '../neuron/devfee.js';
 import { adminOps, adminRole, adminState } from '../neuron/admin.js';
 import { roleAct, rolesOf } from '../neuron/roles.js';
+import { executeSafe, pendingOf, proposeSafe, safesOf, signSafe } from '../neuron/safe.js';
+import { safeService } from './safe.js';
+import { privateKeyToAccount } from 'viem/accounts';
+import { fakeSafeService } from '../../test/fake-safe-service.js';
+import { existsSync, readFileSync } from 'node:fs';
 import { CentralError } from '../central/index.js';
 
 const RPC = process.env.BASE_FORK;
@@ -339,5 +344,37 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     expect(r.schedule.values.e[5]).toBe(10n ** 18n);
     expect(r.appoint.values.curve[0]).toBe(3n);
     await expect(act('appoint', 'bottom', '1')).rejects.toThrow("can't be below the top gradient");
+  });
+
+  // The governor Safe as deployed (docs/design/safe.md), its owners' keys from the contract repo's wallets file (local
+  // only; skipped without it): a dev fee proposed by one owner, signed by two more, executed by the first. The service
+  // is faked; the Safe is the real one, so its hash, the signatures and their order are checked as it checks them.
+  const WALLETS = '/code/Satori/contract/.wallets.env';
+  test.skipIf(!existsSync(WALLETS))('the Safe: a dev fee proposed, signed by three owners, executed by the real Safe', { timeout: 180_000 }, async () => {
+    const { pub } = clients(RPC);
+    const env = Object.fromEntries(readFileSync(WALLETS, 'utf8').split('\n').map((l) => l.split('=')).filter((x) => x.length === 2));
+    const owners = ['01', '02', '03'].map((n) => privateKeyToAccount(env[`WALLET_${n}_PRIVATE_KEY`].trim()));
+    await fund(RPC, owners.map((o) => o.address), { eth: '0.1' });
+    const svc = fakeSafeService();
+    const service = safeService({ fetch: svc.fetch });
+    const at = async (o) => {
+      const x = (await safesOf(chain(), o.address)).safes[0];
+      x.pending = await pendingOf(chain(), service, x, o.address);
+      return x;
+    };
+    const first = await at(owners[0]);
+    expect(first.threshold).toBe(3n);
+    const before = await pub.readContract({ address: DEFAULTS.token, abi: parseAbi(['function pendingDevFeeBps() view returns (uint256)']), functionName: 'pendingDevFeeBps' });
+    const want = before === 1200n ? '13' : '12';
+    const { safeTxHash } = await proposeSafe(chain(), service, owners[0], first, first.pending, 'fee', 'propose', want);
+    for (const o of owners.slice(1)) {
+      const x = await at(o);
+      await signSafe(chain(), service, o, x, x.pending, safeTxHash);
+    }
+    const ready = await at(owners[0]);
+    expect(ready.pending[0]).toMatchObject({ enough: true, next: true, description: `Propose a dev fee of ${want}%` });
+    await executeSafe(chain(), owners[0], ready, ready.pending, safeTxHash, { step: () => {}, opts: () => ({}) });
+    const after = await pub.readContract({ address: DEFAULTS.token, abi: parseAbi(['function pendingDevFeeBps() view returns (uint256)']), functionName: 'pendingDevFeeBps' });
+    expect(after).toBe(BigInt(Number(want) * 100));
   });
 });

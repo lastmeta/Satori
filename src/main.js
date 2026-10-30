@@ -147,6 +147,7 @@ const refreshBase = coalesce('base status', async () => {
   void refreshDevFee();
   void refreshAdmin();
   void refreshRoles();
+  void refreshSafe();
   // staked or unstaked, by hand or not: the reminder server's player follows (only when it changed)
   if (state.reminder.on) followPlayer(reminderPlayer()).catch((err) => console.warn('[satori] reminder', err));
 });
@@ -196,6 +197,33 @@ const readRoles = coalesce('special keys', async () => {
     state.roles.error = err?.shortMessage ?? err?.message ?? String(err);
   }
 });
+/** The Safe tab (docs/design/safe.md): the Safes the wallet owns, their keys and waiting transactions. As the others. */
+let safeAt = 0;
+const readSafe = coalesce('safe', async () => {
+  try {
+    state.safe.safes = (await base.safes()).safes;
+    state.safe.error = '';
+    safeAt = nowS();
+  } catch (err) {
+    state.safe.error = err?.shortMessage ?? err?.message ?? String(err);
+  }
+});
+const refreshSafe = (now = false) => (now || nowS() - safeAt > 900 ? readSafe() : undefined);
+const NOT_SAFE = "The Safe tab is only for an owner of the Safe that holds the token's keys (docs/design/safe.md).";
+const theSafe = () => {
+  const x = state.safe.safes?.[0];
+  if (!x) throw new Error(NOT_SAFE);
+  return x.address;
+};
+/** A Safe action (propose and sign need Unlock; execute, gas too), one at a time; then the Safe is read again. */
+function safeAction(name, fn) {
+  return exclusive(name, fn, 'safeBusy').finally(() => {
+    autoLock.touch();
+    void refreshSafe(true);
+    void refreshRoles(true);
+    void refreshBase();
+  });
+}
 const refreshRoles = (now = false) => (now || nowS() - rolesAt > 900 ? readRoles() : undefined);
 const notHeld = (id) => {
   const r = roleOf(id);
@@ -592,7 +620,8 @@ async function nameWallet(name, { auto = false } = {}) {
 }
 /** The special key the wallet holds, as its name while it has none of its own: the admin first, then the most powerful. */
 const NAMED = ['appoint', 'wiring', 'schedule', 'split', 'publisher'];
-const roleName = () => (state.admin.shown ? 'Admin' : roleOf(NAMED.find((id) => state.roles.of?.[id]?.isHolder) ?? '')?.name ?? '');
+const roleName = () => (state.admin.shown ? 'Admin' : roleOf(NAMED.find((id) => state.roles.of?.[id]?.isHolder) ?? '')?.name
+  ?? (state.safe.safes?.length ? 'Safe owner' : ''));
 
 /** Another wallet opens: the keys wiped (Lock), the list's active one set, the last visit's Home dropped, the page reloaded. */
 async function reopenWith(list) {
@@ -925,6 +954,7 @@ function go(where, section) {
   if (tab === 'devfee' && state.devFee.tree && !state.devFee.shown) throw new Error(NOT_DEV_FEE);
   if (tab === 'admin' && state.admin.address && !state.admin.shown) throw new Error(NOT_ADMIN);
   if (ROLE_IDS.includes(tab) && state.roles.of && !state.roles.of[tab].held) throw new Error(notHeld(tab));
+  if (tab === 'safe' && state.safe.safes && !state.safe.safes.length) throw new Error(NOT_SAFE);
   const hash = model ? modelHref(model) : `#${tab}`;
   if (location.hash !== hash) history.pushState(null, '', hash);
   const changed = state.tab !== tab;
@@ -1413,6 +1443,45 @@ const actions = {
   /** A card that asks first (a freeze): ask, or (`''`) stop asking. */
   roleAsk(card) { state.roles.ask = card; },
   rolesRefresh: () => refreshRoles(true),
+  /**
+   * A Safe key's card (docs/design/safe.md): proposed to the Safe, signed by the wallet (Unlock first, in the card).
+   * `again`: the value typed a second time.
+   */
+  safe(keyId, action, typed, again) {
+    const card = `${keyId}:${action}`;
+    Object.assign(state.safe, { did: card, result: '', txs: [], actionError: '', ask: '' });
+    if (again !== undefined && String(again).trim().toLowerCase() !== String(typed ?? '').trim().toLowerCase()) {
+      state.safe.actionError = 'The two entries do not match.';
+      return undefined;
+    }
+    return withWallet(`safe-${card}`, async () => {
+      try {
+        const { nonce } = await safeAction(card, () => base.safePropose(theSafe(), keyId, action, typed));
+        state.safe.result = `Proposed as the Safe's transaction ${nonce}, with your signature. It waits for the other owners, under Waiting.`;
+      } catch (err) {
+        state.safe.actionError = err?.shortMessage ?? err?.message ?? String(err);
+      }
+    });
+  },
+  safeAsk(card) { state.safe.ask = card; },
+  /** Sign, or Execute, a waiting transaction (its outcome under Waiting). */
+  safeWaiting(op, hash) {
+    Object.assign(state.safe, { did: 'waiting', result: '', txs: [], actionError: '' });
+    return withWallet('safe-waiting', async () => {
+      try {
+        if (op === 'sign') {
+          await safeAction(`sign:${hash}`, () => base.safeSign(theSafe(), hash));
+          state.safe.result = 'Signed.';
+        } else {
+          state.safe.txs = await safeAction(`execute:${hash}`, () => base.safeExecute(theSafe(), hash));
+          state.safe.result = 'Executed.';
+        }
+      } catch (err) {
+        state.safe.actionError = err?.shortMessage ?? err?.message ?? String(err);
+      }
+    });
+  },
+  safeRefresh: () => refreshSafe(true),
   /** Redirect this splitter: where the proposal to `to` stands (read, no key). */
   async devFeeCheck(splitter, to) {
     state.devFee.proposal = null;
@@ -1640,6 +1709,11 @@ const actions = {
 function parseMeta(meta) {
   try { return meta == null ? null : JSON.parse(meta); } catch { return meta; }
 }
+
+/** safe()'s answer: the Safes as plain values. */
+const safeView = (safes) => ({ shown: !!safes?.length, safes: (safes ?? []).map((x) => plain({ address: x.address, owners: x.owners,
+  threshold: x.threshold, nonce: x.nonce, keys: x.keys, pending: x.pending.map((t) => ({ safeTxHash: t.safeTxHash, nonce: t.nonce,
+    description: t.description, signatures: t.confirmations.length, signedByMe: t.signedByMe, enough: t.enough, next: t.next })) })) });
 
 /** specialKeys()'s answer: each key, its holder, and (held) its page's values, as plain values. */
 function rolesView(of) {
@@ -2121,6 +2195,28 @@ window.satori = {
     await readRoles();
     return (await roleAction(role, action, value)).txs;
   },
+  /**
+   * The Safe tab, read fresh (docs/design/safe.md): { shown, safes: [{ address, owners, threshold, nonce, keys: { root,
+   * fee, upgrade, freeze, loader: values }, pending: [{ safeTxHash, nonce, description, signatures, signedByMe, enough,
+   * next }] }] }.
+   */
+  async safe() {
+    ready();
+    await readSafe();
+    if (state.safe.error) throw new Error(state.safe.error);
+    return safeView(state.safe.safes);
+  },
+  /** Propose a Safe key's action (`key`, `action`, `value` as on its card), signed by the wallet. Needs Unlock; no gas. → { safeTxHash, nonce } */
+  async safePropose(key, action, value) {
+    ready();
+    await readSafe();
+    const r = await safeAction(`${key}:${action}`, () => base.safePropose(theSafe(), key, action, value));
+    return { safeTxHash: r.safeTxHash, nonce: r.nonce.toString() };
+  },
+  /** Sign a waiting Safe transaction. Needs Unlock; no gas. */
+  async safeSign(safeTxHash) { ready(); await readSafe(); await safeAction(`sign:${safeTxHash}`, () => base.safeSign(theSafe(), safeTxHash)); return { signed: true }; },
+  /** Execute a waiting Safe transaction signed by enough owners (the next one). Needs Unlock; gas. → [{ hash, label }] */
+  async safeExecute(safeTxHash) { ready(); await readSafe(); return safeAction(`execute:${safeTxHash}`, () => base.safeExecute(theSafe(), safeTxHash)); },
   /** The alias's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
   /** The review before a send, no key needed: { asset, to, amount } → { asset, to, amount, fee: { gas, about, max } } */
@@ -2224,7 +2320,7 @@ watch(() => {
 /** A wallet with no name of its own takes its special key's ("Admin"); one that no longer holds it loses that name. */
 watch(() => {
   const me = state.wallets.wallets.find((w) => w.active);
-  if (!me || !state.wallet || !state.admin.address || !state.roles.of) return; // the keys not read yet
+  if (!me || !state.wallet || !state.admin.address || !state.roles.of || !state.safe.safes) return; // the keys not read yet
   if (me.name && !me.nameAuto) return; // the person's own name wins
   const role = roleName();
   if (role && me.name !== role) nameWallet(role, { auto: true }).catch((err) => console.warn('[satori] wallet name', err));
@@ -2234,6 +2330,14 @@ watch(() => {
 watch(() => ROLE_IDS.includes(state.tab) && state.screen === 'home', (open) => { if (open) void refreshRoles(true); });
 watch(() => {
   if (ROLE_IDS.includes(state.tab) && state.roles.of && !state.roles.of[state.tab]?.held) {
+    state.tab = 'home';
+    history.replaceState(null, '', '#home');
+  }
+});
+/** The Safe tab: read again when it opens; no Safe of this wallet's: Home. */
+watch(() => state.tab === 'safe' && state.screen === 'home', (open) => { if (open) void refreshSafe(true); });
+watch(() => {
+  if (state.tab === 'safe' && state.safe.safes && !state.safe.safes.length) {
     state.tab = 'home';
     history.replaceState(null, '', '#home');
   }

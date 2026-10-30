@@ -91,7 +91,31 @@
       "function setController(address) -> () nonpayable",
       "function setHook(address) -> () nonpayable",
       "function setAirdrop(address) -> () nonpayable",
-      "function setBridgeAuthority(address) -> () nonpayable"
+      "function setBridgeAuthority(address) -> () nonpayable",
+      "function rootAuthority() -> (address) view",
+      "function pendingRootAuthority() -> (address) view",
+      "function feeAuthority() -> (address) view",
+      "function upgradeAuthority() -> (address) view",
+      "function freezeAuthority() -> (address) view",
+      "function setFeeAuthority(address) -> () nonpayable",
+      "function setUpgradeAuthority(address) -> () nonpayable",
+      "function setWiringAuthority(address) -> () nonpayable",
+      "function setAppointAuthority(address) -> () nonpayable",
+      "function setFreezeAuthority(address) -> () nonpayable",
+      "function setRootAuthority(address) -> () nonpayable",
+      "function renounceRootAuthority() -> () nonpayable",
+      "function devFeeBps() -> (uint256) view",
+      "function pendingDevFeeBps() -> (uint256) view",
+      "function devFeeBpsFrozen() -> (bool) view",
+      "function lastDevFeeChangeRound() -> (uint256) view",
+      "function proposeDevFeeBps(uint256) -> () nonpayable",
+      "function cancelDevFeeBps() -> () nonpayable",
+      "function acceptDevFeeBps() -> () nonpayable",
+      "function freezeController() -> () nonpayable",
+      "function freezeHook() -> () nonpayable",
+      "function freezeBridgeAuthority() -> () nonpayable",
+      "function freezeDevFeeBps() -> () nonpayable",
+      "function AIRDROP_TOTAL_SUPPLY() -> (uint256) view"
     ],
     "SatoriMerkle": [
       "function alreadyMintedTo(address) -> (uint256) view",
@@ -109,7 +133,11 @@
       "function claimAirdropFor(address) -> () nonpayable",
       "function claimableAirdrop(address) -> (uint256) view",
       "function airdropAuthority() -> (address) view",
-      "function setAirdropAuthority(address) -> () nonpayable"
+      "function setAirdropAuthority(address) -> () nonpayable",
+      "function airdropLoadedTotal() -> (uint256) view",
+      "function airdropLoadingFinalized() -> (bool) view",
+      "function loadAirdropBatch(address[],uint256[]) -> () nonpayable",
+      "function finalizeAirdropLoading() -> () nonpayable"
     ],
     "SatoriVoting": [
       "function weightOf(uint32) -> (uint256) view",
@@ -119,6 +147,7 @@
   },
   "errors": [
     "error AdapterIdSpaceExhausted() -> ()",
+    "error AirdropLoadingClosed() -> ()",
     "error AlreadyPredicted() -> ()",
     "error AlreadySet() -> ()",
     "error BadDirection() -> ()",
@@ -127,10 +156,13 @@
     "error CannotSetDefaultApproval() -> ()",
     "error CapabilityDisabled() -> ()",
     "error ClaimDelegatedAway() -> ()",
+    "error ControllerNotSet() -> ()",
     "error DelegateActive() -> ()",
     "error Delegated() -> ()",
     "error DelegatorNotAllowed() -> ()",
+    "error DevFeeChangeTooSoon() -> ()",
     "error DuplicatePrediction() -> ()",
+    "error DuplicateRecipient() -> ()",
     "error ERC20InsufficientBalance(address,uint256,uint256) -> ()",
     "error ERC20InvalidReceiver(address) -> ()",
     "error EmptyBatch() -> ()",
@@ -143,6 +175,7 @@
     "error InvalidPredictorFee() -> ()",
     "error InvalidProof() -> ()",
     "error InvalidReferral() -> ()",
+    "error LengthMismatch() -> ()",
     "error Locked() -> ()",
     "error NotAdmin() -> ()",
     "error NotCurveOperator() -> ()",
@@ -153,6 +186,8 @@
     "error StaleValue() -> ()",
     "error Unauthorized() -> ()",
     "error UnknownGame() -> ()",
-    "error UnknownStream() -> ()"
+    "error UnknownStream() -> ()",
+    "error UpgradeBadImplementation() -> ()",
+    "error UpgradeUnauthorized() -> ()"
   ]
 }

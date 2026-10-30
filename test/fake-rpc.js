@@ -86,7 +86,8 @@ export function fakeRpc(contracts, { timestamp = 20741 * 86400 + 3600, eth = {},
     const { functionName, args = [] } = decodeFunctionData({ abi: c.abi, data });
     const fn = c.fns[functionName];
     if (!fn) throw new Error(`fakeRpc: ${functionName} not faked`);
-    const result = fn(args, ctx);
+    // ctx.exec: another contract called from this one (a Safe's execTransaction), as `from`
+    const result = fn(args, { ...ctx, exec: (t, d, from) => exec(t, d, { ...ctx, from: from.toLowerCase() }) });
     const item = c.abi.find((i) => i.type === 'function' && i.name === functionName && i.inputs.length === args.length);
     return item.outputs.length ? encodeFunctionResult({ abi: c.abi, functionName, result }) : '0x';
   }

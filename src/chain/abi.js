@@ -22,6 +22,9 @@ const ERRORS = [
   'error AdapterIdSpaceExhausted()', 'error InvalidGameAdapter()', 'error GameAdapterIdSpaceExhausted()',
   // the other special keys' calls (docs/design/roles.md): the engine's curve, the token's wiring
   'error NotCurveOperator()', 'error Frozen()', 'error NotHomeChain()',
+  // the Safe's keys' calls (docs/design/safe.md): the token's fee and root, the upgrades, the airdrop's loading
+  'error DevFeeChangeTooSoon()', 'error ControllerNotSet()', 'error UpgradeUnauthorized()', 'error UpgradeBadImplementation()',
+  'error AirdropLoadingClosed()', 'error LengthMismatch()', 'error DuplicateRecipient()',
 ];
 const abi = (...items) => parseAbi([...items, ...ERRORS]);
 
@@ -134,6 +137,31 @@ export const tokenAbi = abi(
   'function setHook(address newHook)',
   'function setAirdrop(address newAirdrop)',
   'function setBridgeAuthority(address newAuthority)',
+  // the Safe's keys on the token (docs/design/safe.md): root, fee, upgrade, freeze
+  'function rootAuthority() view returns (address)',
+  'function pendingRootAuthority() view returns (address)',
+  'function feeAuthority() view returns (address)',
+  'function upgradeAuthority() view returns (address)',
+  'function freezeAuthority() view returns (address)',
+  'function setFeeAuthority(address who)',
+  'function setUpgradeAuthority(address who)',
+  'function setWiringAuthority(address who)',
+  'function setAppointAuthority(address who)',
+  'function setFreezeAuthority(address who)',
+  'function setRootAuthority(address newRoot)',
+  'function renounceRootAuthority()',
+  'function devFeeBps() view returns (uint256)',
+  'function pendingDevFeeBps() view returns (uint256)',
+  'function devFeeBpsFrozen() view returns (bool)',
+  'function lastDevFeeChangeRound() view returns (uint256)',
+  'function proposeDevFeeBps(uint256 newBps)',
+  'function cancelDevFeeBps()',
+  'function acceptDevFeeBps()',
+  'function freezeController()',
+  'function freezeHook()',
+  'function freezeBridgeAuthority()',
+  'function freezeDevFeeBps()',
+  'function AIRDROP_TOTAL_SUPPLY() view returns (uint256)',
 );
 
 /**
@@ -197,7 +225,29 @@ export const airdropAbi = abi(
   // the airdrop loader, which the appoint authority may replace (docs/design/roles.md)
   'function airdropAuthority() view returns (address)',
   'function setAirdropAuthority(address who)',
+  // the airdrop loader's (docs/design/safe.md)
+  'function airdropLoadedTotal() view returns (uint256)',
+  'function airdropLoadingFinalized() view returns (bool)',
+  'function loadAirdropBatch(address[] recipients, uint256[] amounts)',
+  'function finalizeAirdropLoading()',
 );
+
+/** Every upgradeable contract's (SatoriUUPS.sol): the upgrade authority's (docs/design/safe.md). */
+export const uupsAbi = abi(
+  'function implementation() view returns (address)',
+  'function upgradesRenounced() view returns (bool)',
+  'function upgradeTo(address newImplementation)',
+  'function renounceUpgrade()',
+);
+
+/** A Safe (1.4.1), the governor's (docs/design/safe.md). Not Satori's: its own fixed ABI. */
+export const safeAbi = parseAbi([
+  'function getOwners() view returns (address[])',
+  'function getThreshold() view returns (uint256)',
+  'function nonce() view returns (uint256)',
+  'function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool success)',
+  'error GS013()', 'error GS020()', 'error GS025()', 'error GS026()',
+]);
 
 // Multicall3 (the same address on every chain): ETH balances and chain time join the status multicall.
 export const multicall3Abi = parseAbi([

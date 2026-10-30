@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-30 (Safe)
+
+- The **Safe** tab and `safe()`, `safePropose(key, action, value)`, `safeSign(safeTxHash)`, `safeExecute(safeTxHash)`:
+  for an owner of the governor Safe; proposals go through Safe's transaction service (docs/design/safe.md). A Safe owner
+  holding no other key is named "Safe owner".
+
 ## Changed 2026-10-30 (Preload now)
 
 - Stake with the alias out of gas now says "Before you can stake with this app, you must preload some gas." with a
