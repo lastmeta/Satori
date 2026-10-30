@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   createPublicClient, createTestClient, createWalletClient, encodeAbiParameters, http, keccak256, concat,
-  parseAbi, parseEther, encodePacked,
+  parseAbi, parseEther, formatEther, encodePacked,
 } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { DEFAULTS } from '../src/chain/config.js';
@@ -26,7 +26,7 @@ A local anvil fork of Base Sepolia; the dev server's /rpc goes to 127.0.0.1:8545
   stop                           stop it
   fund <0x…> [<0x…> …] [--eth 0.1] [--satori N]
                                  set each address's ETH (0.1 by default); with --satori, also send each N SATORI
-                                 from the deployer (none without it; the deployer holds ~519)
+                                 minted by a Merkle claim (none without it)
   airdrop <0x…> <SATORI>         load an airdrop allocation for the address
   merkle <0x…> <SATORI>          set a merkle root with the address; prints the proof JSON a (stub) central serves
   advance [days]                 move chain time forward (1 day by default) and mine a block
@@ -50,6 +50,9 @@ const abi = parseAbi([
   'error Locked()', 'error Unauthorized()', 'error DuplicateRecipient()', 'error AlreadyPredicted()',
   'function loadAirdropBatch(address[] recipients, uint256[] amounts)',
   'function setMerkleRoot(bytes32 newRoot)',
+  'function claimMerkle(address account, uint256 lifetimeEntitlement, bytes32[] proof)',
+  'function alreadyMintedTo(address) view returns (uint256)',
+  'function airdropAuthority() view returns (address)',
   'struct Request { uint32 gameId; bytes payload; }',
   'function predictMultipleWithPayloads(Request[] requests)',
   'function approve(address spender, uint256 value) returns (bool)',
@@ -68,29 +71,38 @@ export function clients(rpc) {
   };
 }
 
-async function asDeployer(rpc, address, functionName, args) {
-  const { test, pub, deployer } = clients(rpc);
-  await test.impersonateAccount({ address: DEPLOYER });
-  await test.setBalance({ address: DEPLOYER, value: parseEther('10') }); // anvil's default gas limit is the block's (1.2e9)
-  const { request } = await pub.simulateContract({ account: DEPLOYER, address, abi, functionName, args }); // a revert says why
-  const gas = await pub.estimateContractGas({ account: DEPLOYER, address, abi, functionName, args });
-  const hash = await deployer.writeContract({ ...request, gas: gas + HOOK_GAS }); // SATORI to a staked wallet: the hook needs it
+/** A call as `from` (the deployer unless said), impersonated on the fork. */
+async function asDeployer(rpc, address, functionName, args, from = DEPLOYER) {
+  const { test, pub } = clients(rpc);
+  await test.impersonateAccount({ address: from });
+  await test.setBalance({ address: from, value: parseEther('10') }); // anvil's default gas limit is the block's (1.2e9)
+  const { request } = await pub.simulateContract({ account: from, address, abi, functionName, args }); // a revert says why
+  const gas = await pub.estimateContractGas({ account: from, address, abi, functionName, args });
+  const signer = createWalletClient({ account: from, chain: baseSepolia, transport: http(rpc) });
+  const hash = await signer.writeContract({ ...request, gas: gas + HOOK_GAS }); // SATORI to a staked wallet: the hook needs it
   const r = await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
   if (r.status !== 'success') throw new Error(`${functionName} failed (${hash})`);
   return hash;
 }
 
-/** ETH (anvil_setBalance) and SATORI (from the deployer) to each address. */
+/**
+ * ETH (anvil_setBalance) and SATORI to each address. The SATORI is minted to it by a Merkle claim (a root over it, set
+ * as the root publisher, the deployer): on Base Sepolia the test wallets' SATORI is all staked (Locked()) and the
+ * deployer holds none (2026-10-30), so none is taken from anyone.
+ */
 export async function fund(rpc, addresses, { eth = '0.1', satori = '0' } = {}) {
   const { test } = clients(rpc);
   for (const address of addresses) {
     await test.setBalance({ address, value: parseEther(String(eth)) });
-    if (Number(satori) > 0) await asDeployer(rpc, DEFAULTS.token, 'transfer', [address, parseEther(String(satori))]);
+    if (Number(satori) > 0) await mint(rpc, address, satori);
   }
 }
 
-export const airdrop = (rpc, address, satori) =>
-  asDeployer(rpc, DEFAULTS.airdrop, 'loadAirdropBatch', [[address], [parseEther(String(satori))]]);
+/** An airdrop allocation for `address`, loaded as the airdrop loader (the governor Safe on Base Sepolia now). */
+export async function airdrop(rpc, address, satori) {
+  const loader = await clients(rpc).pub.readContract({ address: DEFAULTS.airdrop, abi, functionName: 'airdropAuthority' });
+  return asDeployer(rpc, DEFAULTS.airdrop, 'loadAirdropBatch', [[address], [parseEther(String(satori))]], loader);
+}
 
 // SatoriMerkle's leaf: keccak256(keccak256(abi.encode(account, amount))) (SatoriMerkle.sol:185-188);
 // pairs hashed sorted, as OpenZeppelin's MerkleProof (contract/satori/scripts/merkle-drop.js).
@@ -106,6 +118,14 @@ export async function merkle(rpc, address, satori) {
   const root = pair(mine, other);
   await asDeployer(rpc, DEFAULTS.merkle, 'setMerkleRoot', [root]);
   return { root, address, amountWei: amountWei.toString(), amount: Number(satori), proof: [other] };
+}
+
+/** SATORI minted to `address` by a Merkle claim: its lifetime entitlement raised by `satori` (a root over it, set as the root publisher). */
+async function mint(rpc, address, satori) {
+  const { pub } = clients(rpc);
+  const already = await pub.readContract({ address: DEFAULTS.merkle, abi, functionName: 'alreadyMintedTo', args: [address] });
+  const m = await merkle(rpc, address, formatEther(already + parseEther(String(satori))));
+  await asDeployer(rpc, DEFAULTS.merkle, 'claimMerkle', [address, BigInt(m.amountWei), m.proof]);
 }
 
 /** Chain time forward by `days`, then a block. */
@@ -143,6 +163,7 @@ const CHILD_SYNC_FAILED = keccak256(new TextEncoder().encode('ChildSyncFailed(ad
 
 /** A new stream from the deployer (hub.createSimpleDataStream burns 0.001 SATORI) with one value. → { streamId, gameId } */
 export async function stream(rpc, name) {
+  await mint(rpc, DEPLOYER, '0.01'); // the burn: the deployer holds none on Base Sepolia now
   await asDeployer(rpc, DEFAULTS.token, 'approve', [DEFAULTS.hub, parseEther('1')]);
   await asDeployer(rpc, DEFAULTS.hub, 'createSimpleDataStream', [name, DEPLOYER, 60]);
   const { pub } = clients(rpc);

@@ -53,7 +53,7 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     const junk = await stream(RPC, `junk-${Date.now()}`); // anyone's stream: a game, but no voting weight
     expect(junk.gameId).toBeGreaterThan(0);
     const streams = await chain.streams();
-    expect(streams.find((g) => g.streamId === 1)).toMatchObject({ gameId: 1, named: false, cadenceMinutes: 1440 });
+    expect(streams.find((g) => g.streamId === 1)).toMatchObject({ gameId: 1, named: true, cadenceMinutes: 60 });
     expect(streams.find((g) => g.streamId === junk.streamId)).toBeUndefined();
     expect((await chain.history(1)).length).toBeGreaterThan(1);
     expect(await chain.batchState(I)).toMatchObject({ round: on.round, power: 100n * E18, predicted: 0 });
@@ -65,14 +65,15 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
 
     // Claims a round later: the airdrop (loaded now), the merkle drop (the reserve accrues per round).
     await airdrop(RPC, V, 600);
-    const proof = await merkle(RPC, V, 5);
+    const funded = await chain.alreadyMinted(V); // fund()'s SATORI came by a Merkle claim too: 5 more on top
+    const proof = await merkle(RPC, V, Number(funded / E18) + 5);
     await advance(RPC, 1);
     const later = await st();
     expect(later.claimable.airdrop).toBeGreaterThan(0n);
     await chain.claimAirdrop(wallet);
-    expect(await chain.alreadyMinted(V)).toBe(0n);
+    expect(await chain.alreadyMinted(V)).toBe(funded);
     await chain.claimMerkle(wallet, proof);
-    expect(await chain.alreadyMinted(V)).toBe(5n * E18);
+    expect(await chain.alreadyMinted(V)).toBe(funded + 5n * E18);
     const claimed = await st();
     expect(claimed.wallet.satori).toBeGreaterThan(105n * E18);
     // The token's hook kept the alias's power in step with the wallet's new balance (HOOK_GAS):
@@ -292,12 +293,13 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     const was = await adminState(chain());
     expect(was.games[0]).toMatchObject({ streamId: 1, gameId: 1, isDefault: true, approved: true });
     const on = was.capabilities.filter((c) => c.on).map((c) => c.bit);
-    await adminOps.capabilities(chain(), w, [...on, 6], run);
+    const off = was.capabilities.find((c) => !c.on).bit; // one the live chain has off now (6 was, until it was turned on)
+    await adminOps.capabilities(chain(), w, [...on, off], run);
     await adminOps.relayer(chain(), w, w.evmAddress, run);
     await adminOps.registrationFee(chain(), w, '2', run);
     await adminOps.reporter(chain(), w, w.evmAddress, run);
     const now = await adminState(chain());
-    expect(now.capabilities.filter((c) => c.on).map((c) => c.bit)).toEqual([...on, 6].sort());
+    expect(now.capabilities.filter((c) => c.on).map((c) => c.bit)).toEqual([...on, off].sort((a, b) => a - b));
     expect(now).toMatchObject({ relayer: w.evmAddress, registrationFee: 2n * 10n ** 18n, reporter: w.evmAddress });
     await expect(adminOps.game(chain(), w, 1, false, run)).rejects.toThrow('always approved');
     await adminOps.transfer(chain(), w, before.admin, run);

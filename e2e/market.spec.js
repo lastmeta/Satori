@@ -140,7 +140,10 @@ test('sell and buy a prediction stream: a channel on the Satori contract, encryp
     await expect(s.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
     await expect.poll(async () => (await read()).settled, { timeout: 60_000 }).toBe(paid);
     expect(await chain.readContract({ address: DEFAULTS.token, abi: tokenAbi, functionName: 'balanceOf', args: [seller.wallet] })).toBe(paid);
-    await expect.poll(async () => (await market(s)).selling[0].buyers, { timeout: 30_000 }).toEqual([]);
+    // the sale goes once all it delivered is paid; one delivered as Stop came, never paid, keeps it (closing) until the
+    // channel closes (src/neuron/market.js collect)
+    await expect.poll(async () => (await market(s)).selling[0].buyers.filter((x) => !(x.closing && x.delivered * 0.001 > Number(x.settled) + 1e-9)),
+      { timeout: 30_000 }).toEqual([]);
 
     // after the grace period: stopped, the rest in the channel; Take back part of it to another address (Unlock in place)
     await advance(FORK, 8);
