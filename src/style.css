@@ -885,6 +885,16 @@ a.chan:hover { border-color: var(--muted); }
 .wallet-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .wallet-row:first-child { border-top: 0; }
 .wallet-row code { flex: 1 1 auto; min-width: 0; }
+.wallet-row { flex-wrap: nowrap; }
+.wallet-trash { min-width: 40px; min-height: 40px; margin-left: -10px; display: inline-flex; align-items: center; justify-content: center; }
+.wallet-trash svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wallet-trash:hover { color: var(--bad); }
+/* the radio: an empty ring to switch to the wallet, a filled one for the wallet in use */
+.wallet-radio { flex: none; width: 44px; height: 44px; margin-right: -10px; padding: 0; border: 0; background: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.wallet-radio i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--btn-line); box-sizing: border-box; display: grid; place-items: center; }
+.wallet-radio[aria-checked=true] { cursor: default; }
+.wallet-radio[aria-checked=true] i { border-color: var(--accent); }
+.wallet-radio[aria-checked=true] i::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
 .wallet-row code[role=button] { cursor: pointer; }
 .confirm { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--warn-soft); }
 .confirm .actions { margin-top: 10px; }

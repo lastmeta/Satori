@@ -1353,8 +1353,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   review ("Check before sending": the amount and asset, the recipient in
   full, the fee), then "Wallet passphrase to send" (each time), Send or Back.
   Then the **Name** card ("This wallet's name", Save; "Named for the special
-  key it holds" when it is), then the **Wallets** card: each wallet's name over its address (or "Not set up yet"), the
-  one running marked "In use", Switch and Remove on the others (Remove asks:
+  key it holds" when it is), then the **Wallets** card: each wallet's address with its name under it (or "Not set up yet"), the
+  one running marked by a filled radio on the right ("In use"); on the others an empty radio switches to it, and a trash
+  can on the left removes it (Remove asks:
   "Remove 0x…? It leaves this list, and its 24 words are the way back…
   Its file stays set aside in this browser, never deleted. Enter that wallet's
   passphrase to remove it.", its passphrase, Remove it or Cancel), and Add a wallet.
@@ -1496,7 +1497,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `base-last-batch`, `base-check`, `base-rpc`, `alias`, `base-invite`),
   `send-review` (with `review-amount`, `review-to`, `review-fee`), `alias`
   (the alias's Base address), `wallets` (the Wallets card:
-  `wallet-row` with `data-id`, `wallet-address` (a tap copies it), its `.badge` "In use", `wallet-switch`,
+  `wallet-row` with `data-id`, `wallet-address` (a tap copies it), `wallet-in-use` (the filled radio), `wallet-switch` (an empty radio),
   `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
   `add-wallet`; `wallets-error`), `wallet-name-card` (`wallet-name`, `wallet-name-save`, `wallet-name-said`,
   `wallet-name-auto`), `app-wallet` (the app bar's wallet: its name, else its short address; a tap opens the Wallet tab), `base-connected` (a connected wallet's note).

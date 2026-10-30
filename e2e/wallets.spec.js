@@ -60,7 +60,7 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   await page.evaluate(() => { location.hash = '#wallet'; });
   const rows = page.locator('[data-test=wallet-row]');
   await expect(rows).toHaveCount(3);
-  await expect(rows.nth(0).locator('.badge')).toBeVisible();
+  await expect(rows.nth(0).locator('[data-test=wallet-in-use]')).toBeVisible();
   await expect(rows.nth(2)).toContainText('Not set up yet');
   if (SHOTS) {
     const size = page.viewportSize();
@@ -68,6 +68,8 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
     await page.locator('[data-test=wallets]').screenshot({ path: `${SHOTS}/wallets-phone.png` });
     await page.setViewportSize(size);
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-test=wallets]').screenshot({ path: test.info().outputPath('wallets-card.png') });
   expect(await reloading(page, () => rows.nth(1).locator('[data-test=wallet-switch]').click())).toBe('home');
   const b = await status(page);
   expect([b.wallet, b.alias, b.unlocked]).toEqual([B.ethAddress, aliasB, false]);

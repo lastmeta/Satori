@@ -153,6 +153,9 @@ export function walletTab(a) {
   </section>`;
 }
 
+// a trash can: Remove, on the left of a wallet's row; the radio on the right switches to it (the owner, 2026-10-30)
+const TRASH = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"></path></svg>`;
+
 /** A wallet as the app bar and the Wallets list name it: its name, else its short address. */
 export const walletLabel = (w) => w?.name || (w?.address ? shortHash(w.address) : '');
 const inUse = () => state.wallets.wallets.find((w) => w.active);
@@ -179,7 +182,7 @@ function nameCard(a) {
  */
 function walletsCard(a) {
   const removing = () => state.wallets.wallets.find((w) => w.id === state.walletRemove);
-  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><span class="wallet-id"><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code><span class="muted small" data-test="wallet-row-name" hidden="${!w.name}">${w.name ?? ''}</span></span><span class="badge on" hidden="${!w.active}">In use</span><button class="small-btn" data-test="wallet-switch" hidden="${w.active}" @click="${() => a.switchWallet(w.id)}">Switch</button><button class="small-btn" data-test="wallet-remove" hidden="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">Remove</button></li>`
+  const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><button class="icon-btn bare wallet-trash" data-test="wallet-remove" aria-label="Remove this wallet" title="Remove" style="${w.active ? 'visibility:hidden' : ''}" disabled="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">${TRASH()}</button><span class="wallet-id"><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code><span class="muted small" data-test="wallet-row-name" hidden="${!w.name}">${w.name ?? ''}</span></span><button class="wallet-radio" data-test="${w.active ? 'wallet-in-use' : 'wallet-switch'}" role="radio" aria-checked="${String(w.active)}" aria-label="${w.active ? 'In use' : 'Switch to this wallet'}" title="${w.active ? 'In use' : 'Switch to this wallet'}" @click="${() => !w.active && a.switchWallet(w.id)}"><i></i></button></li>`
     .key(`${w.id}:${w.address}:${w.name}:${w.active}:${state.copied === `wallet-${w.id}`}`); // tap the address: copied
   return html`<section class="card" data-test="wallets">
     <h2>Wallets</h2>
