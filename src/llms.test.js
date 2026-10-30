@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const llms = read('../public/llms.txt');
-const main = read('./main.js');
-const api = main.slice(main.indexOf('window.satori = {'), main.indexOf('\n};', main.indexOf('window.satori = {')));
-const methods = [...api.matchAll(/^ {2}(?:async )?(\w+)\(/gm)].map((m) => m[1]);
+const agent = read('./agent.js'); // window.satori (src/agent.js's createAgent)
+const api = agent.slice(agent.indexOf('const satori = {'), agent.indexOf('\n  };', agent.indexOf('const satori = {')));
+const methods = [...api.matchAll(/^ {4}(?:async )?(\w+)\(/gm)].map((m) => m[1]);
 
 test('every window.satori method is documented', () => {
   expect(methods.length).toBeGreaterThan(30);
