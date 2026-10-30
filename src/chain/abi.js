@@ -20,6 +20,8 @@ const ERRORS = [
   // the admin's calls (docs/design/admin.md): the engine's, the voting contract's, the registry's and the games'
   'error OnlyAdmin()', 'error NotAdmin()', 'error UnknownGame()', 'error CannotSetDefaultApproval()', 'error InvalidAdapter()',
   'error AdapterIdSpaceExhausted()', 'error InvalidGameAdapter()', 'error GameAdapterIdSpaceExhausted()',
+  // the other special keys' calls (docs/design/roles.md): the engine's curve, the token's wiring
+  'error NotCurveOperator()', 'error Frozen()', 'error NotHomeChain()',
 ];
 const abi = (...items) => parseAbi([...items, ...ERRORS]);
 
@@ -36,6 +38,15 @@ export const engineAbi = abi(
   // the admin's (docs/design/admin.md): who may add off-chain predictions to the default stream's count; zero: no one
   'function offchainReporter() view returns (address)',
   'function setOffchainReporter(address who)',
+  // the appoint authority's (docs/design/roles.md): the curve's dials (f, g, r, b; curveConfig above), its setpoint, its operator
+  'function curveOperator() view returns (address)',
+  'function setCurveOperator(address who)',
+  'function dustTargetBps() view returns (uint256)',
+  'function setDustFloor(uint16 newFloor)',
+  'function setTopGradient(uint16 newGradient)',
+  'function setBottomGradient(uint16 newGradient)',
+  'function setTopShift(uint16 newShift)',
+  'function setDustTarget(uint16 newTargetBps)',
 );
 
 export const gamesAbi = abi('function binaryGameByStream(uint32) view returns (uint32)');
@@ -64,6 +75,18 @@ export const hubAbi = abi(
   // the admin's (docs/design/admin.md): an official stream or game adapter
   'function registerAdapter(address impl, string name) returns (uint32 id)',
   'function registerGameAdapter(address impl, string name) returns (uint32 gameTypeId)',
+  // the emission schedule's (docs/design/roles.md): its holder (the admin unless set), its state, the step multiplier
+  'function emissionHolder() view returns (address)',
+  'function emissionAuthority() view returns (address)',
+  'function emission() view returns (uint128 issued, uint128 nextStepAt, uint128 rate, uint128 prevRate, uint64 from, uint64 ratioWad, uint32 stepsTaken, uint256 banked)',
+  'function emissionRateNow() view returns (uint256)',
+  'function setEmissionRatio(uint256 ratioWad)',
+  'function setEmissionAuthority(address who)',
+  // the wiring authority's on the hub: the vote-lock contract, settable until frozen
+  'function voteLockGovernor() view returns (address)',
+  'function voteLockGovernorFrozen() view returns (bool)',
+  'function setVoteLockGovernor(address g)',
+  'function freezeVoteLockGovernor()',
 );
 
 export const rewardsAbi = abi(
@@ -82,6 +105,11 @@ export const rewardsAbi = abi(
   'function setOfficialRelayer(address relayer)',
   'function registrationFee() view returns (uint256)',
   'function setRegistrationFee(uint256 fee)',
+  // the emission split's (docs/design/roles.md): its holder (zero: the admin), the off-chain share
+  'function emissionSplitAuthority() view returns (address)',
+  'function setEmissionSplitAuthority(address who)',
+  'function offchainShareBps() view returns (uint256)',
+  'function setOffchainShareBps(uint256 bps)',
 );
 
 export const lensAbi = abi('function getTotalClaimableRewards(address user) view returns (uint256 total, bool complete)');
@@ -92,6 +120,20 @@ export const tokenAbi = abi(
   'function transferLockedUntil(address user) view returns (uint24)',
   'function getCurrentRound() view returns (uint256)',
   'function PLATFORM_FEE_RECIPIENT() view returns (address)', // the dev fee's splitter tree, its top (docs/design/devfee.md)
+  // the token's keys and its wiring (docs/design/roles.md)
+  'function appointAuthority() view returns (address)',
+  'function wiringAuthority() view returns (address)',
+  'function controller() view returns (address)',
+  'function hook() view returns (address)',
+  'function airdrop() view returns (address)',
+  'function bridgeAuthority() view returns (address)',
+  'function controllerFrozen() view returns (bool)',
+  'function hookFrozen() view returns (bool)',
+  'function bridgeAuthorityFrozen() view returns (bool)',
+  'function setController(address newController)',
+  'function setHook(address newHook)',
+  'function setAirdrop(address newAirdrop)',
+  'function setBridgeAuthority(address newAuthority)',
 );
 
 /**
@@ -131,6 +173,13 @@ export const merkleAbi = abi(
   // by anyone, for `account`: the proof binds the amount to it, and it is paid (D8's upgrade, contract fd7edee3)
   'function claimMerkle(address account, uint256 lifetimeEntitlement, bytes32[] proof)',
   'function alreadyMintedTo(address) view returns (uint256)',
+  // the root publisher's (docs/design/roles.md): the root, handed on in two steps
+  'function rootPublisher() view returns (address)',
+  'function pendingRootPublisher() view returns (address)',
+  'function merkleRoot() view returns (bytes32)',
+  'function setMerkleRoot(bytes32 newRoot)',
+  'function setRootPublisher(address newPublisher)',
+  'function acceptRootPublisher()',
 );
 
 /** The engine pays a game only while its voting weight is > 0 (SatoriEngine.sol:828). */
@@ -145,6 +194,9 @@ export const airdropAbi = abi(
   // by anyone, for `user`: minted to `user` only (SatoriAirdrop.sol:118-124)
   'function claimAirdropFor(address user)',
   'function claimableAirdrop(address user) view returns (uint256)',
+  // the airdrop loader, which the appoint authority may replace (docs/design/roles.md)
+  'function airdropAuthority() view returns (address)',
+  'function setAirdropAuthority(address who)',
 );
 
 // Multicall3 (the same address on every chain): ETH balances and chain time join the status multicall.

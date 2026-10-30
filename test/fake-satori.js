@@ -55,6 +55,13 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       authority: zeroAddress, pending: zeroAddress, threshold: 9000n, trigger: {}, claimed: {}, withdrawn: 0n, approvals: {}, epoch: {} }])),
     // the admin and its levers (docs/design/admin.md): capability bits as deployed live (0, 1, 5, 7: 0xa3)
     admin: ADMIN, caps: 0xa3n, relayer: zeroAddress, regFee: 10n ** 15n, reporter: zeroAddress, approved: {}, adapters: [],
+    // the other special keys (docs/design/roles.md), held by the admin's address as deployed live, but split and
+    // schedule left at zero (the admin's)
+    splitSet: zeroAddress, share: 5000n, scheduleSet: zeroAddress, appoint: ADMIN, wiring: ADMIN,
+    emission: { issued: 2116n * E18, nextStepAt: 2962n * E18, rate: 846n * E18, prevRate: 847n * E18, from: 20756n, ratioWad: 999708061412966511n, stepsTaken: 1 },
+    publisher: ADMIN, pendingPublisher: zeroAddress, root: `0x${'12'.repeat(32)}`, loader: `0x${'61'.repeat(20)}`, operator: zeroAddress,
+    curve: [2n, 3n, 12n, 0n], target: 5000n, controller: DEFAULTS.hub.toLowerCase(), hook: DEFAULTS.hub.toLowerCase(), airdropAt: DEFAULTS.airdrop.toLowerCase(),
+    bridge: zeroAddress, frozen: { controller: false, hook: false, bridge: false, voteLock: false }, voteLock: `0x${'bd'.repeat(20)}`,
     short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
   };
   const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n) - (s.short[a] ?? 0n);
@@ -126,6 +133,19 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
 
   const fns = (a, f) => ({ abi: a, fns: f });
   const onlyAdmin = (ctx, error = 'Unauthorized') => { if (ctx.from !== s.admin) revert(error); };
+  const only = (ctx, ...who) => { if (!who.includes(ctx.from)) revert('Unauthorized'); };
+  const tuner = (ctx) => { if (ctx.from !== s.appoint && (s.operator === zeroAddress || ctx.from !== s.operator)) revert('NotCurveOperator'); };
+  const curve = (ctx, i, n, min, max, ok = () => true) => {
+    tuner(ctx);
+    if (n < min || n > max || !ok()) revert('BadInput');
+    if (ctx.write) s.curve[i] = BigInt(n);
+  };
+  const wire = (ctx, field, a, { frozen, zero }) => {
+    only(ctx, s.wiring);
+    if (frozen && s.frozen[frozen]) revert('Frozen');
+    if (!zero && lc(a) === zeroAddress) revert('BadInput');
+    if (ctx.write) s[field] = lc(a);
+  };
   const register = (kind, impl, name, ctx) => {
     onlyAdmin(ctx);
     if (lc(impl) === zeroAddress) revert(kind === 'stream' ? 'InvalidAdapter' : 'InvalidGameAdapter');
@@ -142,9 +162,17 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       },
       predictedStreamsCount: ([a, r]) => BigInt(s.predicted[`${lc(a)}:${r}`] ?? 0),
       streaks: ([a, g]) => BigInt(s.streak[`${lc(a)}:${g}`] ?? 0),
-      curveConfig: () => [2n, 3n, 12n, 0n],
       gameStreakState: ([g]) => [s.threshold[g] ?? 0, 0],
       offchainReporter: () => s.reporter,
+      curveOperator: () => s.operator,
+      setCurveOperator: ([a], ctx) => { only(ctx, s.appoint); if (ctx.write) s.operator = lc(a); },
+      curveConfig: () => s.curve,
+      dustTargetBps: () => s.target,
+      setDustFloor: ([n], ctx) => curve(ctx, 0, n, 1, 64),
+      setTopGradient: ([n], ctx) => curve(ctx, 1, n, 1, 8, () => BigInt(n) <= s.curve[2]),
+      setBottomGradient: ([n], ctx) => curve(ctx, 2, n, 1, 64, () => BigInt(n) >= s.curve[1]),
+      setTopShift: ([n], ctx) => curve(ctx, 3, n, 0, 64),
+      setDustTarget: ([n], ctx) => { tuner(ctx); if (n > 9999) revert('BadInput'); if (ctx.write) s.target = BigInt(n); },
       setOffchainReporter: ([who], ctx) => { onlyAdmin(ctx, 'OnlyAdmin'); if (ctx.write) s.reporter = lc(who); },
     }),
     [DEFAULTS.games]: fns(abi.gamesAbi, { binaryGameByStream: ([id]) => s.streams[id]?.game ?? 0 }),
@@ -204,12 +232,30 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
         }
         return amount;
       },
+      emissionHolder: () => (s.scheduleSet === zeroAddress ? s.admin : s.scheduleSet),
+      emissionAuthority: () => s.scheduleSet,
+      emission: () => { const e = s.emission; return [e.issued, e.nextStepAt, e.rate, e.prevRate, e.from, e.ratioWad, e.stepsTaken, 0n]; },
+      emissionRateNow: () => s.emission.prevRate,
+      setEmissionRatio: ([wad], ctx) => {
+        only(ctx, s.scheduleSet === zeroAddress ? s.admin : s.scheduleSet);
+        if (wad < 10n ** 15n) revert('BadInput');
+        if (ctx.write) s.emission.ratioWad = wad;
+      },
+      setEmissionAuthority: ([a], ctx) => { only(ctx, s.scheduleSet === zeroAddress ? s.admin : s.scheduleSet, s.appoint); if (ctx.write) s.scheduleSet = lc(a); },
+      voteLockGovernor: () => s.voteLock,
+      voteLockGovernorFrozen: () => s.frozen.voteLock,
+      setVoteLockGovernor: ([a], ctx) => { only(ctx, s.wiring); if (s.frozen.voteLock) revert('AlreadySet'); if (ctx.write) s.voteLock = lc(a); },
+      freezeVoteLockGovernor: (_, ctx) => { only(ctx, s.wiring); if (ctx.write) s.frozen.voteLock = true; },
       registerAdapter: ([impl, name], ctx) => register('stream', impl, name, ctx),
       registerGameAdapter: ([impl, name], ctx) => register('game', impl, name, ctx),
     }),
     [DEFAULTS.rewards]: fns(abi.rewardsAbi, {
       admin: () => s.admin,
-      setAdmin: ([to], ctx) => { onlyAdmin(ctx); if (lc(to) === zeroAddress) revert('BadInput'); if (ctx.write) s.admin = lc(to); },
+      emissionSplitAuthority: () => s.splitSet,
+      setEmissionSplitAuthority: ([a], ctx) => { only(ctx, s.splitSet === zeroAddress ? s.admin : s.splitSet, s.appoint); if (ctx.write) s.splitSet = lc(a); },
+      offchainShareBps: () => s.share,
+      setOffchainShareBps: ([bps], ctx) => { only(ctx, s.splitSet === zeroAddress ? s.admin : s.splitSet); if (bps >= 10000n) revert('BadInput'); if (ctx.write) s.share = bps; },
+      setAdmin: ([to], ctx) => { only(ctx, s.admin, s.appoint); if (lc(to) === zeroAddress) revert('BadInput'); if (ctx.write) s.admin = lc(to); },
       capabilityAllowed: ([bit, who]) => ((s.caps >> BigInt(bit)) & 1n) === 1n || lc(who) === s.admin,
       setCapabilities: ([bits], ctx) => { onlyAdmin(ctx); if (ctx.write) s.caps = bits; },
       officialRelayer: () => s.relayer,
@@ -235,6 +281,19 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       transferLockedUntil: ([a]) => s.lock[lc(a)] ?? 0,
       getCurrentRound: (_, ctx) => BigInt(ctx.round),
       PLATFORM_FEE_RECIPIENT: () => SPLIT_A,
+      appointAuthority: () => s.appoint,
+      wiringAuthority: () => s.wiring,
+      controller: () => s.controller,
+      hook: () => s.hook,
+      airdrop: () => s.airdropAt,
+      bridgeAuthority: () => s.bridge,
+      controllerFrozen: () => s.frozen.controller,
+      hookFrozen: () => s.frozen.hook,
+      bridgeAuthorityFrozen: () => s.frozen.bridge,
+      setController: ([a], ctx) => wire(ctx, 'controller', a, { frozen: 'controller', zero: false }),
+      setHook: ([a], ctx) => wire(ctx, 'hook', a, { frozen: 'hook', zero: true }),
+      setAirdrop: ([a], ctx) => wire(ctx, 'airdropAt', a, { zero: false }),
+      setBridgeAuthority: ([a], ctx) => wire(ctx, 'bridge', a, { frozen: 'bridge', zero: true }),
       transfer: ([to, value], ctx) => {
         const l = s.lock[ctx.from] ?? 0;
         if (l !== 0 && l >= ctx.round) revert('Locked');
@@ -258,6 +317,12 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     }),
     [DEFAULTS.merkle]: fns(abi.merkleAbi, {
       alreadyMintedTo: ([a]) => s.merkle.minted[lc(a)] ?? 0n,
+      rootPublisher: () => s.publisher,
+      pendingRootPublisher: () => s.pendingPublisher,
+      merkleRoot: () => s.root,
+      setMerkleRoot: ([h], ctx) => { only(ctx, s.publisher); if (ctx.write) s.root = h; },
+      setRootPublisher: ([a], ctx) => { only(ctx, s.publisher); if (ctx.write) s.pendingPublisher = lc(a); },
+      acceptRootPublisher: (_, ctx) => { only(ctx, s.pendingPublisher); if (ctx.write) { s.publisher = s.pendingPublisher; s.pendingPublisher = zeroAddress; } },
       // claimMerkle(amount, proof) for the sender, or (D8) claimMerkle(account, amount, proof) by anyone, paid to account
       claimMerkle: (args, ctx) => {
         const [who, amount, proof] = args.length === 3 ? [lc(args[0]), args[1], args[2]] : [ctx.from, ...args];
@@ -277,6 +342,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     }),
     [DEFAULTS.airdrop]: fns(abi.airdropAbi, {
       claimableAirdrop: ([a]) => s.airdrop[lc(a)] ?? 0n,
+      airdropAuthority: () => s.loader,
+      setAirdropAuthority: ([a], ctx) => { only(ctx, s.loader, s.appoint); if (ctx.write) s.loader = lc(a); },
       claimAirdrop: (_, ctx) => {
         const x = s.airdrop[ctx.from] ?? 0n;
         if (x === 0n) revert('NothingToClaim');

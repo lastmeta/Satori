@@ -1108,6 +1108,29 @@ the page's JS context:
     adapter, `kind` 'stream' or 'game'.
   - `await satori.adminTransfer(to)`: the admin to `to`, at once; this wallet
     can't take it back.
+- **The other special keys** (docs/design/roles.md), a tab each, only for the
+  wallet that holds the key (or, for the root publisher, was offered it):
+  `split` (Emission Split: the off-chain share), `schedule` (Emission
+  Schedule: the step multiplier), `publisher` (Root Publisher: the Merkle
+  root), `appoint` (Appoint: replaces the admin and the job holders; the
+  scoring curve), `wiring` (Wiring: what the token trusts). `go(id)` throws
+  for a key the wallet doesn't hold. Every action only on the person's
+  request, needs Unlock and uses the wallet's Base ETH.
+  - `await satori.specialKeys()` → `{ split, schedule, publisher, appoint,
+    wiring }`, each `{ label, holder, pending, held, isHolder, isPending,
+    values, actions }`, read fresh. `values`: its page's (bigints as
+    strings), only when held; `actions`: its action ids.
+  - `await satori.specialKey(role, action, value)` → `[{ hash, label }]`:
+    `value` as typed on the card (none for a button). split: `share`
+    (percent below 100), `hand` (address; `''`: the admin). schedule:
+    `ratio` (multiplier, at least 0.001; 1 stops the steps), `hand`.
+    publisher: `accept`, `root` (0x + 64 hex), `offer` (address; `''`
+    cancels). appoint: `admin`, `split`, `schedule` (`''`: the admin),
+    `loader`, `operator` (`''`: none), `floor` (1-64), `top` (1-8, at most
+    the bottom), `bottom` (1-64, at least the top), `shift` (0-64), `target`
+    (percent below 100). wiring: `controller`, `hook` (`''`: none),
+    `airdrop`, `bridge` (`''`: none), `voteLock` (`''`: none),
+    `freezeVoteLock` (for good). A frozen lever throws.
 - `await satori.setBaseRpc(url)` → `base()` (only on the person's request):
   an https URL, a path on this site (such as `/rpc`), or `''` for the
   default. A saved URL replaces the default; a change is noted on Home for
@@ -1326,6 +1349,12 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   offered (Accept; Redirect it alone; Offer it to another address; Give up
   the authority, asked first). Each card's passphrase prompt and result
   show in it.
+- **The other special keys' tabs** (Emission Split, Emission Schedule, Root
+  Publisher, Appoint, Wiring; each in the menu only for its key's holder):
+  a card saying what the key is, with its values and Refresh; then a card per
+  action (its value Now, a field and Save; typed twice where it can't be
+  taken back; Freeze asks first; Accept for an offered job). A frozen lever
+  says Frozen. Each card's passphrase prompt and result show in it.
 - **Admin** (in the menu only for the Satori contract's admin): an Admin
   card (Refresh); Capabilities (a switch for each, Save); Games (each
   stream's game, Approved / Not approved, Approve or Disapprove; the default

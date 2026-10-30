@@ -41,6 +41,7 @@ import { playerOf, sendsToday } from './neuron/play.js';
 import { watchable } from './neuron/records.js';
 import { DEFAULT_PRICE } from './ui/market.js';
 import { formatEther, getAddress, isAddress, zeroAddress } from 'viem';
+import { ROLES, ROLE_IDS, roleOf, doneText, plain } from './neuron/roles.js';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './ui/contractflow.js';
 import { createReward } from './neuron/reward.js';
 import { createActivity } from './neuron/activity.js';
@@ -145,6 +146,7 @@ const refreshBase = coalesce('base status', async () => {
   state.base = await base.status();
   void refreshDevFee();
   void refreshAdmin();
+  void refreshRoles();
   // staked or unstaked, by hand or not: the reminder server's player follows (only when it changed)
   if (state.reminder.on) followPlayer(reminderPlayer()).catch((err) => console.warn('[satori] reminder', err));
 });
@@ -182,6 +184,36 @@ const readAdmin = coalesce('admin', async () => {
   }
 });
 const refreshAdmin = (now = false) => (now || nowS() - adminAt > 900 ? readAdmin() : undefined);
+
+/** The other special keys' tabs (docs/design/roles.md): which the wallet holds, and their pages. Read as the Admin tab is. */
+let rolesAt = 0;
+const readRoles = coalesce('special keys', async () => {
+  try {
+    state.roles.of = await base.roles();
+    state.roles.error = '';
+    rolesAt = nowS();
+  } catch (err) {
+    state.roles.error = err?.shortMessage ?? err?.message ?? String(err);
+  }
+});
+const refreshRoles = (now = false) => (now || nowS() - rolesAt > 900 ? readRoles() : undefined);
+const notHeld = (id) => {
+  const r = roleOf(id);
+  return `The ${r.label} tab is only for the wallet that holds the ${r.name.toLowerCase()} key (docs/design/roles.md).`;
+};
+/** A special key's action (needs Unlock), one at a time; then the keys are read again. → [{ hash, label }] */
+function roleAction(role, action, typed) {
+  const values = state.roles.of?.[role]?.values;
+  return exclusive(`${role}:${action}`, async () => {
+    const txs = await base.roleAct(role, action, typed);
+    return { txs, said: doneText(role, action, typed, values) };
+  }, 'rolesBusy').finally(() => {
+    autoLock.touch();
+    void refreshRoles(true);
+    void refreshAdmin(true);
+    void refreshBase();
+  });
+}
 
 /** Whom the daily reminder watches on the chain (neuron/play.js sendsToday): its address. */
 const reminderPlayer = () => (sendsToday({ play: state.base.play, staked: state.base.wallet?.staked }) === 'alias' ? state.alias : state.wallet);
@@ -558,8 +590,9 @@ async function nameWallet(name, { auto = false } = {}) {
   if (!state.wallet) throw new Error('Set up a wallet first.');
   await keepWallets(withName(wallets, name, { auto, address: state.wallet }));
 }
-/** The special key the wallet holds, as its name while it has none of its own. */
-const roleName = () => (state.admin.shown ? 'Admin' : '');
+/** The special key the wallet holds, as its name while it has none of its own: the admin first, then the most powerful. */
+const NAMED = ['appoint', 'wiring', 'schedule', 'split', 'publisher'];
+const roleName = () => (state.admin.shown ? 'Admin' : roleOf(NAMED.find((id) => state.roles.of?.[id]?.isHolder) ?? '')?.name ?? '');
 
 /** Another wallet opens: the keys wiped (Lock), the list's active one set, the last visit's Home dropped, the page reloaded. */
 async function reopenWith(list) {
@@ -891,6 +924,7 @@ function go(where, section) {
   if (!tab) throw new Error(`No such tab: ${where}. One of ${TABS.join(', ')}, or models/<id>.`);
   if (tab === 'devfee' && state.devFee.tree && !state.devFee.shown) throw new Error(NOT_DEV_FEE);
   if (tab === 'admin' && state.admin.address && !state.admin.shown) throw new Error(NOT_ADMIN);
+  if (ROLE_IDS.includes(tab) && state.roles.of && !state.roles.of[tab].held) throw new Error(notHeld(tab));
   const hash = model ? modelHref(model) : `#${tab}`;
   if (location.hash !== hash) history.pushState(null, '', hash);
   const changed = state.tab !== tab;
@@ -1355,6 +1389,30 @@ const actions = {
     }
   },
   adminRefresh: () => refreshAdmin(true),
+  /**
+   * A special key's card (docs/design/roles.md): Unlock first (inline, in that card) when locked; its outcome in that
+   * card. `again`: the value typed a second time, for the ones typed twice.
+   */
+  role(role, action, typed, again) {
+    const card = `${role}:${action}`;
+    Object.assign(state.roles, { did: card, result: '', txs: [], actionError: '', ask: '' });
+    if (again !== undefined && String(again).trim().toLowerCase() !== String(typed ?? '').trim().toLowerCase()) {
+      state.roles.actionError = 'The two entries do not match.';
+      return undefined;
+    }
+    return withWallet(card, () => actions.roleNow(role, action, typed));
+  },
+  async roleNow(role, action, typed) {
+    try {
+      const { txs, said } = await roleAction(role, action, typed);
+      Object.assign(state.roles, { result: said, txs });
+    } catch (err) {
+      state.roles.actionError = err?.shortMessage ?? err?.message ?? String(err);
+    }
+  },
+  /** A card that asks first (a freeze): ask, or (`''`) stop asking. */
+  roleAsk(card) { state.roles.ask = card; },
+  rolesRefresh: () => refreshRoles(true),
   /** Redirect this splitter: where the proposal to `to` stands (read, no key). */
   async devFeeCheck(splitter, to) {
     state.devFee.proposal = null;
@@ -1575,6 +1633,15 @@ const actions = {
 /** Central's stream meta: the object its JSON text holds, the text if it is not JSON, or null. */
 function parseMeta(meta) {
   try { return meta == null ? null : JSON.parse(meta); } catch { return meta; }
+}
+
+/** specialKeys()'s answer: each key, its holder, and (held) its page's values, as plain values. */
+function rolesView(of) {
+  return Object.fromEntries(ROLES.map((r) => {
+    const x = of?.[r.id];
+    return [r.id, { label: r.label, holder: x?.holder ?? null, pending: x?.pending ?? null, held: !!x?.held, isHolder: !!x?.isHolder,
+      isPending: !!x?.isPending, values: x?.values ? plain(x.values) : null, actions: r.actions.map((a) => a.id) }];
+  }));
 }
 
 /** admin()'s answer: the levers as plain values (SATORI as decimal strings). */
@@ -2029,6 +2096,25 @@ window.satori = {
   async adminRegisterAdapter(kind, address, name) { ready(); return adminAction('registerAdapter', kind, address, name); },
   /** Hand the admin to `to`, at once and for good from this wallet. Needs Unlock. */
   async adminTransfer(to) { ready(); return adminAction('transfer', to); },
+  /**
+   * The other special keys (docs/design/roles.md), read fresh: { split, schedule, publisher, appoint, wiring }, each
+   * { label, holder, pending, held, isHolder, isPending, values (its page's, when held), actions }.
+   */
+  async specialKeys() {
+    ready();
+    await readRoles();
+    if (state.roles.error) throw new Error(state.roles.error);
+    return rolesView(state.roles.of);
+  },
+  /**
+   * One special key's action (`role`, `action`: specialKeys()'s ids), with `value` as typed on its card (none for a
+   * button). Needs Unlock; gas. → [{ hash, label }]
+   */
+  async specialKey(role, action, value) {
+    ready();
+    await readRoles();
+    return (await roleAction(role, action, value)).txs;
+  },
   /** The alias's daily batch now, if this round has none yet. → the check's result */
   async predictBase() { ready(); const r = await base.predict(); await refreshBase(); return r; },
   /** The review before a send, no key needed: { asset, to, amount } → { asset, to, amount, fee: { gas, about, max } } */
@@ -2132,11 +2218,19 @@ watch(() => {
 /** A wallet with no name of its own takes its special key's ("Admin"); one that no longer holds it loses that name. */
 watch(() => {
   const me = state.wallets.wallets.find((w) => w.active);
-  if (!me || !state.wallet || !state.admin.address) return; // the role not read yet
+  if (!me || !state.wallet || !state.admin.address || !state.roles.of) return; // the keys not read yet
   if (me.name && !me.nameAuto) return; // the person's own name wins
   const role = roleName();
   if (role && me.name !== role) nameWallet(role, { auto: true }).catch((err) => console.warn('[satori] wallet name', err));
   else if (!role && me.nameAuto) nameWallet('').catch((err) => console.warn('[satori] wallet name', err));
+});
+/** A special key's tab: read again when it opens; not held (a link, or handed on): Home. */
+watch(() => ROLE_IDS.includes(state.tab) && state.screen === 'home', (open) => { if (open) void refreshRoles(true); });
+watch(() => {
+  if (ROLE_IDS.includes(state.tab) && state.roles.of && !state.roles.of[state.tab]?.held) {
+    state.tab = 'home';
+    history.replaceState(null, '', '#home');
+  }
 });
 /** The Admin tab: read again when it opens; not for this wallet (a #admin link, or the admin handed on): Home. */
 watch(() => state.tab === 'admin' && state.screen === 'home', (open) => { if (open) void refreshAdmin(true); });

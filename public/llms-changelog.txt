@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-30 (Special keys)
+
+- Tabs for the emission split, the emission schedule, the root publisher, the appoint authority and the wiring
+  authority, each only for its key's holder; `specialKeys()` and `specialKey(role, action, value)`
+  (docs/design/roles.md). A wallet holding one of these keys (and not the admin) is named for it.
+
 ## Added 2026-10-30 (Wallet names)
 
 - `nameWallet(name)`; `wallets()` gives each wallet's `name` and `nameAuto`. The app bar shows the wallet in use by

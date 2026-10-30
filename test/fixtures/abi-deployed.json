@@ -9,7 +9,15 @@
       "function predictedStreamsCount(address,uint256) -> (uint256) view",
       "function streaks(address,uint32) -> (uint256) view",
       "function offchainReporter() -> (address) view",
-      "function setOffchainReporter(address) -> () nonpayable"
+      "function setOffchainReporter(address) -> () nonpayable",
+      "function curveOperator() -> (address) view",
+      "function setCurveOperator(address) -> () nonpayable",
+      "function dustTargetBps() -> (uint256) view",
+      "function setDustFloor(uint16) -> () nonpayable",
+      "function setTopGradient(uint16) -> () nonpayable",
+      "function setBottomGradient(uint16) -> () nonpayable",
+      "function setTopShift(uint16) -> () nonpayable",
+      "function setDustTarget(uint16) -> () nonpayable"
     ],
     "SatoriGames": [
       "function binaryGameByStream(uint32) -> (uint32) view"
@@ -31,7 +39,17 @@
       "function delegatePredictionPower(address) -> () nonpayable",
       "function setAllowedDelegator(address) -> () nonpayable",
       "function registerAdapter(address,string) -> (uint32) nonpayable",
-      "function registerGameAdapter(address,string) -> (uint32) nonpayable"
+      "function registerGameAdapter(address,string) -> (uint32) nonpayable",
+      "function emissionHolder() -> (address) view",
+      "function emissionAuthority() -> (address) view",
+      "function emission() -> (uint128,uint128,uint128,uint128,uint64,uint64,uint32,uint256) view",
+      "function emissionRateNow() -> (uint256) view",
+      "function setEmissionRatio(uint256) -> () nonpayable",
+      "function setEmissionAuthority(address) -> () nonpayable",
+      "function voteLockGovernor() -> (address) view",
+      "function voteLockGovernorFrozen() -> (bool) view",
+      "function setVoteLockGovernor(address) -> () nonpayable",
+      "function freezeVoteLockGovernor() -> () nonpayable"
     ],
     "SatoriRewards": [
       "function effectivePredictorFee(address) -> (uint16) view",
@@ -46,7 +64,11 @@
       "function officialRelayer() -> (address) view",
       "function setOfficialRelayer(address) -> () nonpayable",
       "function registrationFee() -> (uint256) view",
-      "function setRegistrationFee(uint256) -> () nonpayable"
+      "function setRegistrationFee(uint256) -> () nonpayable",
+      "function emissionSplitAuthority() -> (address) view",
+      "function setEmissionSplitAuthority(address) -> () nonpayable",
+      "function offchainShareBps() -> (uint256) view",
+      "function setOffchainShareBps(uint256) -> () nonpayable"
     ],
     "SatoriRewardsLens": [
       "function getTotalClaimableRewards(address) -> (uint256,bool) view"
@@ -56,17 +78,38 @@
       "function balanceOf(address) -> (uint256) view",
       "function getCurrentRound() -> (uint256) view",
       "function transfer(address,uint256) -> (bool) nonpayable",
-      "function transferLockedUntil(address) -> (uint24) view"
+      "function transferLockedUntil(address) -> (uint24) view",
+      "function appointAuthority() -> (address) view",
+      "function wiringAuthority() -> (address) view",
+      "function controller() -> (address) view",
+      "function hook() -> (address) view",
+      "function airdrop() -> (address) view",
+      "function bridgeAuthority() -> (address) view",
+      "function controllerFrozen() -> (bool) view",
+      "function hookFrozen() -> (bool) view",
+      "function bridgeAuthorityFrozen() -> (bool) view",
+      "function setController(address) -> () nonpayable",
+      "function setHook(address) -> () nonpayable",
+      "function setAirdrop(address) -> () nonpayable",
+      "function setBridgeAuthority(address) -> () nonpayable"
     ],
     "SatoriMerkle": [
       "function alreadyMintedTo(address) -> (uint256) view",
       "function claimMerkle(address,uint256,bytes32[]) -> () nonpayable",
-      "function claimMerkle(uint256,bytes32[]) -> () nonpayable"
+      "function claimMerkle(uint256,bytes32[]) -> () nonpayable",
+      "function rootPublisher() -> (address) view",
+      "function pendingRootPublisher() -> (address) view",
+      "function merkleRoot() -> (bytes32) view",
+      "function setMerkleRoot(bytes32) -> () nonpayable",
+      "function setRootPublisher(address) -> () nonpayable",
+      "function acceptRootPublisher() -> () nonpayable"
     ],
     "SatoriAirdrop": [
       "function claimAirdrop() -> () nonpayable",
       "function claimAirdropFor(address) -> () nonpayable",
-      "function claimableAirdrop(address) -> (uint256) view"
+      "function claimableAirdrop(address) -> (uint256) view",
+      "function airdropAuthority() -> (address) view",
+      "function setAirdropAuthority(address) -> () nonpayable"
     ],
     "SatoriVoting": [
       "function weightOf(uint32) -> (uint256) view",
@@ -92,6 +135,7 @@
     "error ERC20InvalidReceiver(address) -> ()",
     "error EmptyBatch() -> ()",
     "error EmptyStream() -> ()",
+    "error Frozen() -> ()",
     "error GameAdapterIdSpaceExhausted() -> ()",
     "error HookFailedWithoutReason() -> ()",
     "error InvalidAdapter() -> ()",
@@ -101,6 +145,8 @@
     "error InvalidReferral() -> ()",
     "error Locked() -> ()",
     "error NotAdmin() -> ()",
+    "error NotCurveOperator() -> ()",
+    "error NotHomeChain() -> ()",
     "error NothingToClaim() -> ()",
     "error OnlyAdmin() -> ()",
     "error Reentrancy() -> ()",

@@ -6,6 +6,7 @@
 // once when one is due), at the next round's start (chain time) and at least hourly.
 import { devFeeOf, devFeeOps, proposalOf } from './devfee.js';
 import { adminOps, adminRole, adminState } from './admin.js';
+import { roleAct, rolesOf } from './roles.js';
 import { SKIP } from './skip.js';
 import { playerOf } from './play.js';
 import {
@@ -864,6 +865,16 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     async adminState() {
       const { chain } = await chainNow();
       return adminState(chain);
+    },
+    /** The other special keys the wallet holds (docs/design/roles.md): src/neuron/roles.js's rolesOf. */
+    async roles() {
+      const { chain } = await chainNow();
+      return rolesOf(chain, walletAddress);
+    },
+    /** A special key's action from the wallet, on the keys read just now: → [{ hash, label }] */
+    async roleAct(role, action, typed) {
+      const v = needWallet();
+      return act('roles', async (chain, step) => roleAct(chain, v, await rolesOf(chain, walletAddress), role, action, typed, { step, opts: sent }));
     },
     /** An Admin action from the wallet (adminOps' `op`): → [{ hash, label }] */
     async adminAct(op, ...args) {

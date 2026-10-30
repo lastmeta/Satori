@@ -182,7 +182,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const airdrop = c('airdrop', airdropAbi);
   const voting = c('voting', votingAbi);
   const mc3 = c('multicall3', multicall3Abi);
-  const roleCall = { rewards, hub, engine, voting, registry, games };
+  const roleCall = { rewards, hub, engine, voting, registry, games, token, merkle, airdrop };
   const read = (call) => client.readContract(call);
   const many = (contracts) => client.multicall({ contracts, allowFailure: false });
   /** A call run from `from` without sending: null when it would pass, else the revert's name; RPC errors throw. */
