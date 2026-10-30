@@ -21,6 +21,7 @@ import { createMarket, listingOf, amountOf, priceOf } from './market.js';
 import { AHEAD_S } from '../db/index.js';
 import { explainForecast as engineForecast } from '../engine/index.js';
 import { createWork } from './work.js';
+import { createOutbox } from './outbox.js';
 import { createWatch, followFilters, watchable, WATCH_SCAN_S, WATCH_CAP } from './records.js';
 import { isRelayUrl, serial } from '../util.js';
 import { EPOCH } from '../central/index.js';
@@ -34,7 +35,6 @@ export const MARKET_ID = 'satori-market'; // 34602 and 34603 addressed to us (Li
 const PAGE = 500; // strfry's maxFilterLimit (client.py:72-75)
 const MAX_FILTERS = 200; // strfry's maxReqFilterSize
 const MAX_PAGES = 100;
-const OUTBOX_MAX = 100; // events waiting for each relay (unsubscribes, tombstones, vouchers)
 const VERIFY_SLICE = 20; // catalog events checked between yields (~4 ms each): the page stays responsive
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -196,39 +196,12 @@ export function createNostr({ db, key, aliasPubkey, central, defaults, makeRelay
     await db.checkpoint(); // OPFS keeps what is checkpointed: a reload must not send it again
   })().finally(() => { listing = null; }));
 
-  // The outbox (meta.nostr_outbox): unsubscribes and tombstones for relays we
-  // write to that were not open or did not answer; sent when they open.
-  const outbox = serial();
-  const editOutbox = (fn) => outbox(async () => {
-    await db.set('nostr_outbox', capEach(fn((await db.get('nostr_outbox')) ?? [])));
-    await db.checkpoint();
-  });
-  /** The newest OUTBOX_MAX for each relay: one that never opens can't push out what waits for another. */
-  const capEach = (box) => {
-    const left = new Map();
-    return box.toReversed().filter((x) => {
-      const n = left.get(x.url) ?? 0;
-      left.set(x.url, n + 1);
-      return n < OUTBOX_MAX;
-    }).reverse();
-  };
-  /**
-   * The relay is done with it: OK, or a refusal that sending again won't change (NIP-01: duplicate, invalid, blocked,
-   * pow, restricted). No answer, a lost connection, `rate-limited:` and `error:` are tried again.
-   */
-  const answered = (r) => r.ok || !(['not connected', 'timeout', 'disconnected'].includes(r.message) || /^(rate-limited|error):/.test(r.message ?? ''));
-  async function flushOutbox(e) {
-    await outbox.idle();
-    const mine = ((await db.get('nostr_outbox')) ?? []).filter((x) => x.url === e.url);
-    if (!mine.length || e.relay?.state !== 'open' || !writes(e)) return;
-    const results = await Promise.all(mine.map((x) => e.relay.publish(x.event)));
-    const done = new Set(mine.filter((x, i) => answered(results[i])).map((x) => x.event.id));
-    await editOutbox((box) => box.filter((x) => !(x.url === e.url && done.has(x.event.id))));
-  }
+  const outbox = createOutbox({ db, writes }); // src/neuron/outbox.js
+  const flushOutbox = (e) => outbox.flush(e);
   /** Keep events for every relay we write to, then send them where it is open. */
   async function sendKept(events) {
     const targets = [...relays.values()].filter((e) => e.relay && writes(e));
-    await editOutbox((box) => [...box, ...targets.flatMap((e) => events.map((event) => ({ url: e.url, event })))]);
+    await outbox.keep(events, targets);
     for (const e of targets) background(flushOutbox(e));
   }
 
