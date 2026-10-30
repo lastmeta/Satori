@@ -347,10 +347,11 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
   });
 
   // The governor Safe as deployed (docs/design/safe.md), its owners' keys from the contract repo's wallets file (local
-  // only; skipped without it): a dev fee proposed by one owner, signed by two more, executed by the first. The service
-  // is faked; the Safe is the real one, so its hash, the signatures and their order are checked as it checks them.
+  // only; skipped without it): the root offered to a throwaway, proposed by one owner, signed by two more, executed by
+  // the first. The service is faked; the Safe is the real one, so its hash, the signatures and their order are checked
+  // as it checks them.
   const WALLETS = '/code/Satori/contract/.wallets.env';
-  test.skipIf(!existsSync(WALLETS))('the Safe: a dev fee proposed, signed by three owners, executed by the real Safe', { timeout: 180_000 }, async () => {
+  test.skipIf(!existsSync(WALLETS))('the Safe: the root offered, signed by three owners, executed by the real Safe', { timeout: 180_000 }, async () => {
     const { pub } = clients(RPC);
     const env = Object.fromEntries(readFileSync(WALLETS, 'utf8').split('\n').map((l) => l.split('=')).filter((x) => x.length === 2));
     const owners = ['01', '02', '03'].map((n) => privateKeyToAccount(env[`WALLET_${n}_PRIVATE_KEY`].trim()));
@@ -364,17 +365,16 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     };
     const first = await at(owners[0]);
     expect(first.threshold).toBe(3n);
-    const before = await pub.readContract({ address: DEFAULTS.token, abi: parseAbi(['function pendingDevFeeBps() view returns (uint256)']), functionName: 'pendingDevFeeBps' });
-    const want = before === 1200n ? '13' : '12';
-    const { safeTxHash } = await proposeSafe(chain(), service, owners[0], first, first.pending, 'fee', 'propose', want);
+    const to = signer().evmAddress;
+    const { safeTxHash } = await proposeSafe(chain(), service, owners[0], first, first.pending, 'root', 'offer', to);
     for (const o of owners.slice(1)) {
       const x = await at(o);
       await signSafe(chain(), service, o, x, x.pending, safeTxHash);
     }
     const ready = await at(owners[0]);
-    expect(ready.pending[0]).toMatchObject({ enough: true, next: true, description: `Propose a dev fee of ${want}%` });
+    expect(ready.pending[0]).toMatchObject({ enough: true, next: true });
     await executeSafe(chain(), owners[0], ready, ready.pending, safeTxHash, { step: () => {}, opts: () => ({}) });
-    const after = await pub.readContract({ address: DEFAULTS.token, abi: parseAbi(['function pendingDevFeeBps() view returns (uint256)']), functionName: 'pendingDevFeeBps' });
-    expect(after).toBe(BigInt(Number(want) * 100));
+    const after = await pub.readContract({ address: DEFAULTS.token, abi: parseAbi(['function pendingRootAuthority() view returns (address)']), functionName: 'pendingRootAuthority' });
+    expect(after).toBe(to);
   });
 });

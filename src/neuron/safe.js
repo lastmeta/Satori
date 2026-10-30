@@ -1,5 +1,5 @@
-// The governor Safe's keys (docs/design/safe.md): root, fee, upgrade, freeze and the airdrop loader, held by a Safe
-// whose owners sign in this app. An owner proposes one of these keys' actions to Safe's transaction service (its own
+// The governor Safe's keys (docs/design/safe.md): root, upgrade, freeze and the airdrop loader (the dev fee is 15% for
+// good: no fee key, contract 2bd52e03), held by a Safe whose owners sign in this app. An owner proposes one of these keys' actions to Safe's transaction service (its own
 // signature with it), the other owners sign it there, and any of them executes it once enough have. Declared as the
 // other keys are (src/neuron/roles.js): how each key's holder is read, its page's values, its actions.
 import { getAddress, isAddress, parseEther, zeroAddress } from 'viem';
@@ -7,12 +7,11 @@ import { fields, say } from './roles.js';
 import { UPGRADEABLE } from '../chain/index.js';
 import { execArgs, safeTx, safeTxHash, signSafeTx } from '../chain/safe.js';
 
-const { address, percent } = fields;
+const { address } = fields;
 const { short, who, satori } = say;
 const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 const NAMES = { rewards: 'Rewards', engine: 'Engine', hub: 'Hub', voting: 'Voting', registry: 'Registry', games: 'Games', merkle: 'Merkle' };
 const CONTRACTS = UPGRADEABLE.map((n) => [n, NAMES[n]]);
-const pct = (bps) => `${Number(bps) / 100}%`;
 
 /** One of the upgradeable contracts, and (with `then`) what follows it: "hub 0x…" → { target, value }. */
 const choice = (then) => ({
@@ -52,35 +51,19 @@ export const SAFE_KEYS = [
   {
     id: 'root', name: 'Root authority', intro: 'Appoints every other key of the token, and can hand itself on (two steps) or give itself up.',
     holder: ['token', 'rootAuthority'],
-    reads: { fee: ['token', 'feeAuthority'], upgrade: ['token', 'upgradeAuthority'], wiring: ['token', 'wiringAuthority'], appoint: ['token', 'appointAuthority'],
+    reads: { upgrade: ['token', 'upgradeAuthority'], wiring: ['token', 'wiringAuthority'], appoint: ['token', 'appointAuthority'],
       freeze: ['token', 'freezeAuthority'], pending: ['token', 'pendingRootAuthority'] },
     facts: (v) => (v.pending !== zeroAddress ? [['Offered to', short(v.pending)]] : []),
     actions: [
-      authority('fee', 'Fee authority', 'setFeeAuthority', 'it changes the dev fee, within 5% to 25%.'),
       authority('upgrade', 'Upgrade authority', 'setUpgradeAuthority', 'it upgrades the contracts, or gives that up for each.'),
       authority('wiring', 'Wiring authority', 'setWiringAuthority', 'it points the token at the contracts it trusts.'),
       authority('appoint', 'Appoint authority', 'setAppointAuthority', 'it replaces the admin and the job holders, and sets the scoring curve.'),
-      authority('freeze', 'Freeze authority', 'setFreezeAuthority', 'it freezes the wiring and the dev fee, for good.'),
+      authority('freeze', 'Freeze authority', 'setFreezeAuthority', 'it freezes the wiring, for good.'),
       { id: 'offer', title: 'Offer the root to another address', folded: true, twice: true, field: { label: 'Offer it to (empty: cancel an offer)', kind: address(true) },
         text: 'It moves when they accept, so a mistyped address never takes it.', call: (a) => ['token', 'setRootAuthority', [a]],
         describe: ([a]) => (a === zeroAddress ? 'Cancel the root offer' : `Offer the root to ${short(a)}`) },
       { id: 'renounce', title: 'Give up the root', folded: true, asks: 'Give up the root authority for good? No one can appoint the token\'s keys again.',
         text: "For good: the token's keys stay where they are, forever.", call: () => ['token', 'renounceRootAuthority', []], describe: () => 'Give up the root, for good' },
-    ],
-  },
-  {
-    id: 'fee', name: 'Fee authority', intro: 'Sets the dev fee: the share of every round paid to the dev fee splitters, within 5% to 25%. Two steps: propose, then accept in a later transaction, at most once every 30 rounds.',
-    holder: ['token', 'feeAuthority'],
-    reads: { bps: ['token', 'devFeeBps'], pending: ['token', 'pendingDevFeeBps'], frozen: ['token', 'devFeeBpsFrozen'], last: ['token', 'lastDevFeeChangeRound'] },
-    facts: (v) => [['Dev fee', `${pct(v.bps)}${v.frozen ? ' (frozen)' : ''}`], ...(v.pending ? [['Proposed', pct(v.pending)]] : []), ['Last changed', `round ${v.last}`]],
-    actions: [
-      { id: 'propose', title: 'Propose a dev fee', field: { label: 'Percent, 5 to 25', kind: percent }, show: (v) => !v.frozen,
-        check: (bps) => { if (bps < 500n || bps > 2500n) throw new Error('The dev fee must be from 5% to 25%.'); },
-        text: 'Then accept it in a later transaction to make it the fee.', call: (bps) => ['token', 'proposeDevFeeBps', [bps]], describe: ([bps]) => `Propose a dev fee of ${pct(bps)}` },
-      { id: 'accept', title: 'Accept the proposed fee', show: (v) => !v.frozen && v.pending > 0n, text: 'Makes the proposed fee the dev fee.',
-        call: () => ['token', 'acceptDevFeeBps', []], describe: () => 'Accept the proposed dev fee' },
-      { id: 'cancel', title: 'Cancel the proposed fee', show: (v) => v.pending > 0n, text: 'Drops the proposal; the fee stays.',
-        call: () => ['token', 'cancelDevFeeBps', []], describe: () => 'Cancel the proposed dev fee' },
     ],
   },
   {
@@ -98,11 +81,11 @@ export const SAFE_KEYS = [
     ],
   },
   {
-    id: 'freeze', name: 'Freeze authority', intro: "Freezes the token's wiring and the dev fee, each for good: no one can change it after.",
+    id: 'freeze', name: 'Freeze authority', intro: "Freezes the token's wiring, each part for good: no one can change it after.",
     holder: ['token', 'freezeAuthority'],
-    reads: { controller: ['token', 'controllerFrozen'], hook: ['token', 'hookFrozen'], bridge: ['token', 'bridgeAuthorityFrozen'], fee: ['token', 'devFeeBpsFrozen'] },
-    facts: (v) => [['Controller', v.controller ? 'Frozen' : 'Open'], ['Transfer hook', v.hook ? 'Frozen' : 'Open'], ['Bridge authority', v.bridge ? 'Frozen' : 'Open'], ['Dev fee', v.fee ? 'Frozen' : 'Open']],
-    actions: [['controller', 'Controller', 'freezeController'], ['hook', 'Transfer hook', 'freezeHook'], ['bridge', 'Bridge authority', 'freezeBridgeAuthority'], ['fee', 'Dev fee', 'freezeDevFeeBps']]
+    reads: { controller: ['token', 'controllerFrozen'], hook: ['token', 'hookFrozen'], bridge: ['token', 'bridgeAuthorityFrozen'] },
+    facts: (v) => [['Controller', v.controller ? 'Frozen' : 'Open'], ['Transfer hook', v.hook ? 'Frozen' : 'Open'], ['Bridge authority', v.bridge ? 'Frozen' : 'Open']],
+    actions: [['controller', 'Controller', 'freezeController'], ['hook', 'Transfer hook', 'freezeHook'], ['bridge', 'Bridge authority', 'freezeBridgeAuthority']]
       .map(([id, label, fn]) => ({ id, title: `Freeze the ${label.toLowerCase()}`, show: (v) => !v[id], asks: `Freeze the ${label.toLowerCase()} for good? No one can change it again.`,
         text: 'For good.', call: () => ['token', fn, []], describe: () => `Freeze the ${label.toLowerCase()}, for good` })),
   },
@@ -163,7 +146,6 @@ function sample(a) {
   const k = a.field.kind;
   if (k.choose) return { target: UPGRADEABLE[0], value: zeroAddress };
   if (k.lines) return [[], []];
-  if (k === percent) return 1000n;
   return zeroAddress;
 }
 

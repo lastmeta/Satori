@@ -1133,22 +1133,22 @@ the page's JS context:
     `airdrop`, `bridge` (`''`: none), `voteLock` (`''`: none),
     `freezeVoteLock` (for good). A frozen lever throws.
 - **Safe** (docs/design/safe.md), a tab only for an owner of the Safe that
-  holds the token's root, fee, upgrade and freeze keys and the airdrop
-  loader (the governor Safe). A change is proposed to the Safe through
+  holds the token's root, upgrade and freeze keys and the airdrop loader
+  (the governor Safe; the dev fee is 15% for good, so there is no fee
+  key). A change is proposed to the Safe through
   Safe's transaction service with the wallet's signature (no gas); the other
   owners sign; any owner executes it once enough have (gas). The same queue
   app.safe.global shows. Only on the person's request; needs Unlock.
   - `await satori.safe()` → `{ shown, safes: [{ address, owners, threshold,
-    nonce, keys: { root, fee, upgrade, freeze, loader }, pending: [{
+    nonce, keys: { root, upgrade, freeze, loader }, pending: [{
     safeTxHash, nonce, description, signatures, signedByMe, enough, next }]
     }] }`, read fresh (bigints as strings).
   - `await satori.safePropose(key, action, value)` → `{ safeTxHash, nonce }`:
-    root: `fee`, `upgrade`, `wiring`, `appoint`, `freeze` (an address; `''`:
-    no one, for good), `offer` (`''` cancels), `renounce`. fee: `propose`
-    (percent, 5 to 25), `accept`, `cancel`. upgrade: `upgrade` (`'hub 0x…'`:
+    root: `upgrade`, `wiring`, `appoint`, `freeze` (an address; `''`: no
+    one, for good), `offer` (`''` cancels), `renounce`. upgrade: `upgrade` (`'hub 0x…'`:
     one of rewards, engine, hub, voting, registry, games, merkle, then the new
     implementation), `renounce` (`'hub'`). freeze: `controller`, `hook`,
-    `bridge`, `fee`. loader: `load` (one row a line: address, SATORI),
+    `bridge`. loader: `load` (one row a line: address, SATORI),
     `finalize`.
   - `await satori.safeSign(safeTxHash)`; `await satori.safeExecute(safeTxHash)`
     → `[{ hash, label }]` (the next one, once `enough`).
@@ -1383,8 +1383,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
 - **Safe** (in the menu only for an owner of the Safe holding the token's
   keys): the Safe (its address, "3 of 5 owners"); Waiting (each transaction
   said in words, "2 of 3 signed", Sign, Execute when enough signed and it is
-  next); then each key (Root authority, Fee authority, Upgrade authority,
-  Freeze authority, Airdrop loader) with its values and a card per action:
+  next); then each key (Root authority, Upgrade authority, Freeze
+  authority, Airdrop loader) with its values and a card per action:
   Propose (typed twice where it can't be taken back; the ones for good ask
   first; Upgrade picks the contract). Each card's passphrase prompt and
   result show in it.

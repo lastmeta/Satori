@@ -31,16 +31,16 @@ const pending = async (who = me) => pendingOf(chain, service, await safe(who), w
 test('an owner sees the Safe, its keys and their values; anyone else none', async () => {
   const x = await safe();
   expect(x).toMatchObject({ threshold: 3n, nonce: 0n });
-  expect(Object.keys(x.keys)).toEqual(['root', 'fee', 'upgrade', 'freeze', 'loader']);
-  expect(x.keys.fee).toMatchObject({ bps: 1500n, pending: 0n, frozen: false });
+  expect(Object.keys(x.keys)).toEqual(['root', 'upgrade', 'freeze', 'loader']);
+  expect(x.keys.freeze).toMatchObject({ controller: false, hook: false, bridge: false });
   expect((await safesOf(chain, NEW)).safes).toEqual([]);
 });
 
-test('proposed by one owner, signed by two more, executed: the dev fee proposed through the Safe', async () => {
-  const { safeTxHash, nonce } = await proposeSafe(chain, service, me, await safe(), [], 'fee', 'propose', '12');
+test('proposed by one owner, signed by two more, executed: the appoint authority appointed through the Safe', async () => {
+  const { safeTxHash, nonce } = await proposeSafe(chain, service, me, await safe(), [], 'root', 'appoint', NEW);
   expect(nonce).toBe(0n);
   let p = await pending();
-  expect(p).toEqual([expect.objectContaining({ safeTxHash, description: 'Propose a dev fee of 12%', signedByMe: true, enough: false, next: true })]);
+  expect(p).toEqual([expect.objectContaining({ safeTxHash, description: expect.stringMatching(/^Appoint 0xabab…abab the appoint authority$/i), signedByMe: true, enough: false, next: true })]);
   await expect(signSafe(chain, service, me, await safe(), p, safeTxHash)).rejects.toThrow('signed it already');
   await expect(executeSafe(chain, me, await safe(), p, safeTxHash, run)).rejects.toThrow('needs 3 signatures; it has 1');
   await signSafe(chain, service, two, await safe(two), await pending(two), safeTxHash);
@@ -48,7 +48,7 @@ test('proposed by one owner, signed by two more, executed: the dev fee proposed 
   p = await pending();
   expect(p[0]).toMatchObject({ enough: true });
   await executeSafe(chain, me, await safe(), p, safeTxHash, run);
-  expect(s.devFee.pending).toBe(1200n);
+  expect(s.appoint).toBe(NEW);
   expect(s.safe.nonce).toBe(1n);
 });
 
@@ -62,8 +62,10 @@ test('a second proposal takes the next nonce; it waits for the first', async () 
 });
 
 test("the checks the contracts make, before anything is signed", async () => {
-  await expect(proposeSafe(chain, service, me, await safe(), [], 'fee', 'propose', '30')).rejects.toThrow('from 5% to 25%');
-  await expect(proposeSafe(chain, service, me, await safe(), [], 'fee', 'accept')).rejects.toThrow('not now');
+  await expect(proposeSafe(chain, service, me, await safe(), [], 'root', 'appoint', 'nope')).rejects.toThrow('not a valid address');
+  s.frozen.hook = true;
+  await expect(proposeSafe(chain, service, me, await safe(), [], 'freeze', 'hook')).rejects.toThrow('not now');
+  await expect(proposeSafe(chain, service, me, await safe(), [], 'fee', 'propose', '12')).rejects.toThrow('No action propose for fee');
   await expect(proposeSafe(chain, service, me, await safe(), [], 'upgrade', 'upgrade', `token ${NEW}`)).rejects.toThrow('Pick a contract');
   await expect(proposeSafe(chain, service, me, await safe(), [], 'loader', 'load', `${NEW}, 5\n${NEW}, 6`)).rejects.toThrow('in the batch twice');
   expect(svc.txs).toEqual([]);

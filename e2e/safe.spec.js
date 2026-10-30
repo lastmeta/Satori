@@ -1,5 +1,5 @@
 // The Safe tab (docs/design/safe.md) against test/fake-satori.js's Safe (3 of 5) and a faked Safe service behind its
-// URL: hidden for a wallet that owns no Safe; for an owner, a dev fee proposed with the inline Unlock, two more owners'
+// URL: hidden for a wallet that owns no Safe; for an owner, the appoint authority appointed with the inline Unlock, two more owners'
 // signatures, Execute; an upgrade proposed by the agent call; a freeze that asks first.
 import { expect, test } from '@playwright/test';
 import { fakeSatori } from '../test/fake-satori.js';
@@ -35,22 +35,25 @@ test('Safe: only for an owner; propose, the others sign, execute; an upgrade by 
   s.safe.owners.splice(0, 3, V, ...others.map((o) => o.evmAddress));
   rpc.eth[V.toLowerCase()] = 10n ** 17n;
   const view = await page.evaluate(() => window.satori.safe());
-  expect(view.safes[0]).toMatchObject({ threshold: '3', nonce: '0', keys: { fee: { bps: '1500' } }, pending: [] });
+  expect(view.safes[0]).toMatchObject({ threshold: '3', nonce: '0', keys: { freeze: { hook: false } }, pending: [] });
+  expect(Object.keys(view.safes[0].keys)).toEqual(['root', 'upgrade', 'freeze', 'loader']); // no fee key: 15% for good
   await expect(t(page, 'nav-safe')).toBeVisible();
   await expect(t(page, 'app-wallet')).toHaveText('Safe owner');
   await page.evaluate(() => window.satori.go('safe'));
   await expect(t(page, 'safe-threshold')).toHaveText('3 of 5 owners');
 
-  // a dev fee proposed, locked: the passphrase in the card
-  const fee = page.locator('[data-test=safe-card][data-key=fee][data-action=propose]');
+  // the appoint authority appointed, locked: the passphrase in the card
+  const NEW = `0x${'cd'.repeat(20)}`;
+  const fee = page.locator('[data-test=safe-card][data-key=root][data-action=appoint]');
   await fee.locator('summary').click();
-  await fee.locator('[data-test=safe-input]').fill('12');
+  await fee.locator('[data-test=safe-input]').fill(NEW);
+  await fee.locator('[data-test=safe-again]').fill(NEW);
   await fee.locator('[data-test=safe-propose]').click();
   await fee.getByLabel('Wallet passphrase to sign the proposal').fill(PASS);
   await fee.getByRole('button', { name: 'Unlock' }).click();
   await expect(fee.locator('[data-test=safe-result]')).toHaveText(/^Proposed as the Safe's transaction 0/, { timeout: 30_000 });
   const row = page.locator('[data-test=safe-tx][data-nonce="0"]');
-  await expect(row).toContainText('Propose a dev fee of 12%');
+  await expect(row).toContainText(/Appoint 0xcdcd…cdcd the appoint authority/i);
   await expect(row).toContainText('1 of 3 signed, you too');
   await expect(row.locator('[data-test=safe-execute]')).toBeHidden();
 
@@ -73,10 +76,10 @@ test('Safe: only for an owner; propose, the others sign, execute; an upgrade by 
   rpc.eth[V.toLowerCase()] = 10n ** 17n;
   await row.locator('[data-test=safe-execute]').click();
   await expect(t(page, 'safe-waiting').locator('[data-test=safe-result]')).toHaveText('Executed.', { timeout: 30_000 });
-  expect(s.devFee.pending).toBe(1200n);
+  expect(s.appoint).toBe(NEW);
   expect(s.safe.nonce).toBe(1n);
   await expect(page.locator('[data-test=safe-tx]')).toHaveCount(0);
-  await expect(page.locator('[data-test=safe-card][data-key=fee][data-action=accept]')).toBeVisible();
+  await expect(page.locator('[data-test=safe-now-appoint]')).toHaveText(/^0xcdcd…cdcd$/i);
 
   // an upgrade by the agent call; a freeze that asks first
   const up = await page.evaluate(() => window.satori.safePropose('upgrade', 'upgrade', `hub 0x${'ab'.repeat(20)}`));

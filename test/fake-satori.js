@@ -77,10 +77,10 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     publisher: ADMIN, pendingPublisher: zeroAddress, root: `0x${'12'.repeat(32)}`, loader: SAFE, operator: zeroAddress,
     curve: [2n, 3n, 12n, 0n], target: 5000n, controller: DEFAULTS.hub.toLowerCase(), hook: DEFAULTS.hub.toLowerCase(), airdropAt: DEFAULTS.airdrop.toLowerCase(),
     bridge: zeroAddress, frozen: { controller: false, hook: false, bridge: false, voteLock: false }, voteLock: `0x${'bd'.repeat(20)}`,
-    // the Safe and its keys (docs/design/safe.md): 3 of 5; execTransaction checks the signatures as the Safe does
+    // the Safe and its keys (docs/design/safe.md; no fee key: the dev fee is 15% for good): 3 of 5; execTransaction checks the signatures as the Safe does
     safe: { owners: [...SAFE_OWNERS], threshold: 3n, nonce: 0n, executed: [] },
-    rootKey: SAFE, pendingRoot: zeroAddress, feeKey: SAFE, upgradeKey: SAFE, freezeKey: SAFE,
-    devFee: { bps: 1500n, pending: 0n, frozen: false, last: 20700n }, airdropLoaded: 0n, airdropFinalized: false, airdropRows: {},
+    rootKey: SAFE, pendingRoot: zeroAddress, upgradeKey: SAFE, freezeKey: SAFE,
+    airdropLoaded: 0n, airdropFinalized: false, airdropRows: {},
     impl: Object.fromEntries(UPGRADEABLE.map((n, i) => [n, `0x${`${i + 1}0`.repeat(20)}`])), renounced: {},
     short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
   };
@@ -303,32 +303,17 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       PLATFORM_FEE_RECIPIENT: () => SPLIT_A,
       rootAuthority: () => s.rootKey,
       pendingRootAuthority: () => s.pendingRoot,
-      feeAuthority: () => s.feeKey,
       upgradeAuthority: () => s.upgradeKey,
       freezeAuthority: () => s.freezeKey,
-      setFeeAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.feeKey = lc(a); },
       setUpgradeAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.upgradeKey = lc(a); },
       setWiringAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.wiring = lc(a); },
       setAppointAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.appoint = lc(a); },
       setFreezeAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.freezeKey = lc(a); },
       setRootAuthority: ([a], ctx) => { only(ctx, s.rootKey); if (ctx.write) s.pendingRoot = lc(a); },
       renounceRootAuthority: (_, ctx) => { only(ctx, s.rootKey); if (ctx.write) { s.rootKey = zeroAddress; s.pendingRoot = zeroAddress; } },
-      devFeeBps: () => s.devFee.bps,
-      pendingDevFeeBps: () => s.devFee.pending,
-      devFeeBpsFrozen: () => s.devFee.frozen,
-      lastDevFeeChangeRound: () => s.devFee.last,
-      proposeDevFeeBps: ([bps], ctx) => { only(ctx, s.feeKey); if (s.devFee.frozen) revert('Frozen'); if (bps < 500n || bps > 2500n) revert('BadInput'); if (ctx.write) s.devFee.pending = bps; },
-      cancelDevFeeBps: (_, ctx) => { only(ctx, s.feeKey); if (!s.devFee.pending) revert('BadInput'); if (ctx.write) s.devFee.pending = 0n; },
-      acceptDevFeeBps: (_, ctx) => {
-        only(ctx, s.feeKey);
-        if (!s.devFee.pending) revert('BadInput');
-        if (BigInt(ctx.round) < s.devFee.last + 30n) revert('DevFeeChangeTooSoon');
-        if (ctx.write) Object.assign(s.devFee, { bps: s.devFee.pending, pending: 0n, last: BigInt(ctx.round) });
-      },
       freezeController: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) s.frozen.controller = true; },
       freezeHook: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) s.frozen.hook = true; },
       freezeBridgeAuthority: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) s.frozen.bridge = true; },
-      freezeDevFeeBps: (_, ctx) => { only(ctx, s.freezeKey); if (ctx.write) { s.devFee.frozen = true; s.devFee.pending = 0n; } },
       AIRDROP_TOTAL_SUPPLY: () => 1_100_000n * E18,
       appointAuthority: () => s.appoint,
       wiringAuthority: () => s.wiring,

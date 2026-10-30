@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Removed 2026-10-30 (the dev fee dial)
+
+- The Safe tab and `safePropose` no longer have a fee key (propose, accept, cancel a dev fee), "Appoint the fee
+  authority", or "Freeze the dev fee": the contract fixes the dev fee at 15% for good (contract 2bd52e03).
+
 ## Changed 2026-10-30 (Safe: Execute with no gas)
 
 - `safeExecute` and the Safe tab's Execute with no Base ETH for gas say "To execute, this wallet needs a little Base ETH
