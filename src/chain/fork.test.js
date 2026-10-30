@@ -13,6 +13,7 @@ import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/f
 import { createBase, runBatch } from '../neuron/base.js';
 import { devFeeOf, devFeeOps } from '../neuron/devfee.js';
 import { adminOps, adminRole, adminState } from '../neuron/admin.js';
+import { roleAct, rolesOf } from '../neuron/roles.js';
 import { CentralError } from '../central/index.js';
 
 const RPC = process.env.BASE_FORK;
@@ -296,5 +297,47 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     await expect(adminOps.game(chain(), w, 1, false, run)).rejects.toThrow('always approved');
     await adminOps.transfer(chain(), w, before.admin, run);
     expect((await adminRole(chain(), w.evmAddress)).isAdmin).toBe(false);
+  });
+
+  // The other special keys as deployed (docs/design/roles.md): each handed to a throwaway wallet by its holder
+  // (impersonated, here only: the Safe for appoint and wiring, the deployer for the rest), which reads them all and
+  // pulls a lever of each.
+  test('the special keys: handed to a throwaway, which reads each page and acts on it', { timeout: 180_000 }, async () => {
+    const { test: anvil, pub } = clients(RPC);
+    const w = signer();
+    const as = async (from, address, sig, args) => {
+      await anvil.impersonateAccount({ address: from });
+      await anvil.setBalance({ address: from, value: 10n ** 17n });
+      const hash = await createWalletClient({ account: from, chain: baseSepolia, transport: http(RPC) })
+        .writeContract({ address, abi: parseAbi([`function ${sig}`]), functionName: sig.split('(')[0], args });
+      await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+    };
+    const read = (address, sig) => pub.readContract({ address, abi: parseAbi([`function ${sig}`]), functionName: sig.split('(')[0] });
+    const root = await read(DEFAULTS.token, 'rootAuthority() view returns (address)');
+    const admin = await read(DEFAULTS.rewards, 'admin() view returns (address)');
+    const publisher = await read(DEFAULTS.merkle, 'rootPublisher() view returns (address)');
+    await as(root, DEFAULTS.token, 'setAppointAuthority(address)', [w.evmAddress]);
+    await as(root, DEFAULTS.token, 'setWiringAuthority(address)', [w.evmAddress]);
+    await as(admin, DEFAULTS.rewards, 'setEmissionSplitAuthority(address)', [w.evmAddress]);
+    await as(admin, DEFAULTS.hub, 'setEmissionAuthority(address)', [w.evmAddress]);
+    await as(publisher, DEFAULTS.merkle, 'setRootPublisher(address)', [w.evmAddress]);
+    await fund(RPC, [w.evmAddress], { eth: '0.1' });
+    const run = { step: () => {}, opts: () => ({}) };
+    const act = async (role, action, typed) => roleAct(chain(), w, await rolesOf(chain(), w.evmAddress), role, action, typed, run);
+
+    let r = await rolesOf(chain(), w.evmAddress);
+    expect(Object.fromEntries(Object.entries(r).map(([k, v]) => [k, [v.isHolder, v.isPending]]))).toEqual({
+      split: [true, false], schedule: [true, false], publisher: [false, true], appoint: [true, false], wiring: [true, false] });
+    await act('publisher', 'accept');
+    await act('split', 'share', '40');
+    await act('schedule', 'ratio', '1');
+    await act('appoint', 'floor', '3');
+    await act('wiring', 'voteLock', r.wiring.values.voteLock);
+    r = await rolesOf(chain(), w.evmAddress);
+    expect(r.publisher.isHolder).toBe(true);
+    expect(r.split.values.share).toBe(4000n);
+    expect(r.schedule.values.e[5]).toBe(10n ** 18n);
+    expect(r.appoint.values.curve[0]).toBe(3n);
+    await expect(act('appoint', 'bottom', '1')).rejects.toThrow("can't be below the top gradient");
   });
 });
