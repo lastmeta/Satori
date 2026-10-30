@@ -65,10 +65,11 @@ test('an encrypted backup, restored in a fresh browser; the game by call; a day 
   await page.locator('[data-test=base-receive]').click();
   await expect(page.locator('[data-test=base-receive-address]')).toHaveText(V);
   await expect(page.locator('[data-test=base-qr]')).toHaveAttribute('src', /^data:image\/svg\+xml/);
-  // the QR code first, big; the address under it; Copy at the left under that
+  // the QR code first, big; the address under it, which a tap copies (no Copy button: the owner, 2026-10-30)
   const box = async (sel) => page.locator(`[data-test=wallet-receive-card] ${sel}`).first().boundingBox();
-  const [qr, addr, copy] = [await box('[data-test=base-qr]'), await box('[data-test=base-receive-address]'), await box('.actions button')];
-  expect(qr.y < addr.y && addr.y < copy.y && copy.x <= addr.x + 1 && qr.width >= 240).toBe(true);
+  const [qr, addr] = [await box('[data-test=base-qr]'), await box('[data-test=base-receive-address]')];
+  expect(qr.y < addr.y && qr.width >= 240).toBe(true);
+  await expect(page.locator('[data-test=wallet-receive-card] button')).toHaveCount(0);
   await page.locator('[data-test=wallet-receive-card]').screenshot({ path: test.info().outputPath('receive.png') });
 
   // a fresh browser (its storage wiped): the backup restores the same wallet

@@ -886,7 +886,7 @@ a.chan:hover { border-color: var(--muted); }
 .wallet-row:first-child { border-top: 0; }
 .wallet-row code { flex: 1 1 auto; min-width: 0; }
 .wallet-row { flex-wrap: nowrap; }
-.wallet-trash { min-width: 40px; min-height: 40px; margin-left: -10px; display: inline-flex; align-items: center; justify-content: center; }
+.wallet-trash { min-width: 44px; min-height: 44px; margin-left: -12px; display: inline-flex; align-items: center; justify-content: center; }
 .wallet-trash svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .wallet-trash:hover { color: var(--bad); }
 /* the radio: an empty ring to switch to the wallet, a filled one for the wallet in use */
