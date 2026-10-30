@@ -1,6 +1,7 @@
 // Pieces the screens share.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
+import { NEED_ALIAS_GAS } from '../neuron/base.js';
 
 /** A submitted form's fields, the default prevented. */
 export const form = (e) => {
@@ -31,6 +32,12 @@ export function unlockPrompt(a, slot, verb) {
 }
 
 /** A health state's mark: a colored disc with its icon (the shape from the state, in CSS). */
+/**
+ * Preload now, beside "you must preload some gas" (staking with the alias out of gas): the Wallet tab's Preload gas, from
+ * wherever it was said.
+ */
+export const preloadNow = (a) => html`<div class="actions" hidden="${() => state.baseError !== NEED_ALIAS_GAS}"><button class="primary" data-test="preload-now" @click="${a.preloadNow}">Preload now</button></div>`;
+
 export const mark = (s) => html`<span class="state" data-s="${s}"><i class="ico"></i></span>`;
 
 export { sparkPath } from './format.js'; // a trend line (pure, so the views that draw one are tested without a page)

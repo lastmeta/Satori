@@ -4,7 +4,7 @@
 // activity feed, as a dashboard.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
-import { mark, sparkPath, unlockPrompt } from './parts.js';
+import { mark, preloadNow, sparkPath, unlockPrompt } from './parts.js';
 import { fmtNum, figure, modelText, amountText, daysText, claimParts, claimableText, openingText } from './format.js';
 import { fmtAgo } from '../neuron/health.js';
 import { chipCard } from './contract.js';
@@ -148,6 +148,7 @@ export function home(a) {
       <button data-test="action-dismiss" hidden="${() => !h().action?.dismiss}" @click="${() => a.dismissAdvice(h().action?.id)}">${() => h().action?.dismiss ?? ''}</button>
       ${unlockPrompt(a, 'card', () => (h().action?.do === 'relink' ? 'link' : 'stake'))}
       <p class="error small" role="alert" hidden="${() => !(['stake', 'link'].includes(state.baseDid) && state.baseError)}">${() => state.baseError}</p>
+      ${preloadNow(a)}
     </div>
 
     <section class="tile days-tile">
@@ -180,6 +181,7 @@ export function home(a) {
         </div>
         ${unlockPrompt(a, 'home-stake', 'stake from the Wallet card')}
         <p class="small" role="status" data-test="home-stake-result" hidden="${() => !(state.baseDid === 'stake' && (state.baseResult || state.baseError))}">${() => state.baseResult || state.baseError}</p>
+        ${preloadNow(a)}
         <div class="line desk-only"><span>Gas for the Satori contract</span><span data-test="home-gas">${gasLine}</span></div>
       </section>
       <section class="tile wallet-tile" data-test="claimable">

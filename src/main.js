@@ -1454,6 +1454,12 @@ const actions = {
     }
     requestAnimationFrame(() => document.querySelector('[data-test=send-review] input')?.focus());
   }),
+  /** Preload now (beside "you must preload some gas"): the Wallet tab's Preload gas, the form filled in, from anywhere. */
+  preloadNow() {
+    state.baseError = '';
+    go('wallet', 'preload');
+    requestAnimationFrame(actions.preloadForm);
+  },
   /** Preload gas: the Send form filled in, Base ETH to this app's alias, a month of daily batches; the person checks and sends. */
   preloadForm() {
     const f = document.querySelector('form.send');

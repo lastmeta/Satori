@@ -841,7 +841,7 @@ describe('createBase', () => {
     const I = alias.evmAddress.toLowerCase();
     rpc.eth[I] = 0n;
     expect((await base.refresh()).alias.noGas).toBe(true);
-    await expect(base.delegate()).rejects.toThrow("The alias needs a little Base ETH for gas: send some from the wallet to the alias's address, then stake.");
+    await expect(base.delegate()).rejects.toThrow('Before you can stake with this app, you must preload some gas.');
     rpc.eth[I] = 10n ** 16n;
     rpc.eth[V] = 0n;
     await expect(base.delegate()).rejects.toThrow('The wallet needs a little Base ETH for gas to stake.');

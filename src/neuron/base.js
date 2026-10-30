@@ -122,7 +122,8 @@ export const PROOF_TTL_S = 3600;
 /** A wallet transaction needs Base ETH for gas (Claim says so before it tries). */
 export const NEED_GAS = 'The wallet needs a little Base ETH for gas to claim.';
 /** Stake's two alias steps and its wallet step need gas on each (said before trying, as Claim). */
-export const NEED_ALIAS_GAS = "The alias needs a little Base ETH for gas: send some from the wallet to the alias's address, then stake.";
+/** Said with a Preload now button beside it (the owner, 2026-10-30: say what to do, not what is wrong). */
+export const NEED_ALIAS_GAS = 'Before you can stake with this app, you must preload some gas.';
 export const NEED_STAKE_GAS = 'The wallet needs a little Base ETH for gas to stake.';
 export const ZERO_ADDRESS = 'The zero address (0x000…000) burns what is sent to it: refused.';
 

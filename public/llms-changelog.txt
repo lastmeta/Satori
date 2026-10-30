@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-30 (Preload now)
+
+- Stake with the alias out of gas now says "Before you can stake with this app, you must preload some gas." with a
+  **Preload now** button (`preload-now`), which opens the Wallet tab's Preload gas with the form filled in.
+
 ## Added 2026-10-30 (Special keys)
 
 - Tabs for the emission split, the emission schedule, the root publisher, the appoint authority and the wiring

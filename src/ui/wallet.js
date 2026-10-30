@@ -5,7 +5,7 @@
 // wallet's actions ask for the passphrase in place (the inline Unlock), in their card, when it is locked.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
-import { fact, form, idRow, unlockPrompt } from './parts.js';
+import { fact, form, idRow, preloadNow, unlockPrompt } from './parts.js';
 import {
   amountText, figure, claimParts, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
   referralText, referralNote, REFERRAL_PCT,
@@ -51,6 +51,7 @@ export function walletTab(a) {
     <p class="small" role="status" data-test="${() => (resultIn() === card ? 'base-result' : false)}" hidden="${() => resultIn() !== card || !(state.actionLine || state.baseResult)}">${() => state.actionLine || state.baseResult}</p>
     <div class="txs" data-test="${() => (resultIn() === card ? 'base-txs' : false)}" hidden="${() => resultIn() !== card || !state.baseTxs.length}">${() => (resultIn() === card ? state.baseTxs.map((t) => txLink(t.hash, t.label, t.title).key(t.hash)) : '')}</div>
     <p class="error small" role="alert" data-test="${() => (resultIn() === card ? 'base-action-error' : false)}" hidden="${() => resultIn() !== card || !state.baseError}">${() => state.baseError}</p>
+    ${card === 'stake' ? preloadNow(a) : ''}
   </div>`;
   return html`
   <section class="tab-page" data-test="wallet-tab" hidden="${() => state.tab !== 'wallet'}">
