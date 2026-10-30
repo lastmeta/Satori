@@ -32,7 +32,7 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   const stub = await stubCentral(context);
   expect(await openApp(page)).toBe('setup');
   expect((await setupWith(page, A.words)).wallet).toBe(A.ethAddress);
-  expect(await wallets(page)).toEqual({ active: 1, wallets: [{ id: 1, address: A.ethAddress, active: true }] }); // no list yet: one wallet
+  expect(await wallets(page)).toEqual({ active: 1, wallets: [{ id: 1, address: A.ethAddress, name: null, nameAuto: false, active: true }] }); // no list yet: one wallet
 
   // Add a wallet (the Wallet tab): Setup on an empty database, the first wallet offered as the way back
   await page.evaluate(() => { location.hash = '#wallet'; });
@@ -42,7 +42,7 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   const second = await setupWith(page, B.words);
   expect([second.screen, second.wallet]).toEqual(['home', B.ethAddress]);
   const aliasB = second.alias;
-  expect(await wallets(page)).toEqual({ active: 2, wallets: [{ id: 1, address: A.ethAddress, active: false }, { id: 2, address: B.ethAddress, active: true }] });
+  expect(await wallets(page)).toEqual({ active: 2, wallets: [{ id: 1, address: A.ethAddress, name: null, nameAuto: false, active: false }, { id: 2, address: B.ethAddress, name: null, nameAuto: false, active: true }] });
   expect(await opfsFiles(page)).toEqual(['satori-2.duckdb', 'satori-mvp.duckdb']);
   await expect.poll(() => stub.registered.length).toBe(2); // each wallet registers its own alias
   expect(stub.registered[1]['alias-pubkey']).not.toBe(stub.registered[0]['alias-pubkey']);
@@ -92,7 +92,7 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   await pass.fill(PASS);
   await page.locator('[data-test=wallet-remove-yes]').click();
   await expect(rows).toHaveCount(2);
-  expect(await page.evaluate(() => window.satori.removeWallet(3))).toEqual({ active: 2, wallets: [{ id: 2, address: B.ethAddress, active: true }] });
+  expect(await page.evaluate(() => window.satori.removeWallet(3))).toEqual({ active: 2, wallets: [{ id: 2, address: B.ethAddress, name: null, nameAuto: false, active: true }] });
   // the first wallet's file set aside, never deleted (its keys may be ones its words can't bring back); the unfinished one had none
   expect(await opfsFiles(page)).toEqual(['satori-2.duckdb']);
   const all = await page.evaluate(async () => { const n = []; for await (const [k] of (await navigator.storage.getDirectory()).entries()) n.push(k); return n; });
