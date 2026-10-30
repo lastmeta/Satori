@@ -240,7 +240,7 @@ export async function centralStatus({ db, central, registration, poller }) {
 /**
  * The one tab that runs the neuron (docs/design/pwa.md#one-neuron): a Web Lock, held for the life of the page, so only
  * one tab opens the database. The request is queued (no ifAvailable): a second tab waits (onWait, once it has not got the
- * lock within waitMs) and becomes the neuron as soon as the first closes. → once this tab holds it: release(), which lets
+ * lock within waitMs and another holds it) and becomes the neuron as soon as the first closes. → once this tab holds it: release(), which lets
  * it go while the page stays (a reload for another wallet: a browser may keep the old page's lock past the reload).
  */
 export async function claimTab(name = 'satori-neuron', locks = globalThis.navigator?.locks, { onWait = () => {}, waitMs = 300 } = {}) {
@@ -255,7 +255,8 @@ export async function claimTab(name = 'satori-neuron', locks = globalThis.naviga
     });
   });
   await Promise.race([got, new Promise((r) => setTimeout(r, waitMs))]);
-  if (!held) onWait();
+  // slow to come: another tab's, or only a busy device (then nothing to say; the lock is on its way)
+  if (!held && (!locks.query || (await locks.query()).held?.some((l) => l.name === name)) && !held) onWait();
   await got;
   return () => release();
 }

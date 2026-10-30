@@ -622,15 +622,20 @@ test('centralStatus: the URL, the register result, the last poll and submission,
 
 /** navigator.locks, as far as claimTab uses it: requests queue per name; close(name) is the holder's tab going, as is
  * the end of the promise its callback returned. */
-function fakeLocks() {
+function fakeLocks({ grantMs = 0 } = {}) {
   const holders = new Set();
   const queues = new Map();
   let locks;
   const grant = (name, cb) => {
-    holders.add(name);
-    setTimeout(() => Promise.resolve(cb({ name })).then(() => locks.close(name)), 1);
+    const now = () => {
+      holders.add(name);
+      setTimeout(() => Promise.resolve(cb({ name })).then(() => locks.close(name)), 1);
+    };
+    if (grantMs) setTimeout(now, grantMs); // a busy browser, slow to grant a lock no one holds
+    else now();
   };
   return locks = {
+    query: async () => ({ held: [...holders].map((name) => ({ name })) }),
     request(name, a, b) {
       const [opts, cb] = typeof a === 'function' ? [{}, a] : [a, b];
       if (opts.ifAvailable) throw new Error('claimTab queues its request: no ifAvailable');
@@ -666,5 +671,12 @@ test('claimTab: its release lets the lock go while the page stays (a reload for 
   const waits = [];
   release(); // the old page, just before location.reload()
   await claimTab('x', locks, { onWait: () => waits.push('next'), waitMs: 50 });
+  expect(waits).toEqual([]);
+});
+
+test('claimTab: a lock no other tab holds but slow to come (a busy device) is no "open in another tab"', async () => {
+  const locks = fakeLocks({ grantMs: 150 });
+  const waits = [];
+  await claimTab('x', locks, { onWait: () => waits.push('first'), waitMs: 50 });
   expect(waits).toEqual([]);
 });
