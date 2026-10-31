@@ -10,7 +10,7 @@ export const MAINNET = {
   safeService: 'https://api.safe.global/tx-service/base',
   token: '0xd0a5bFF2789230b0fb1Bd989fc7CE7084c947E17',
   merkle: '0x8d2EcABbDd72C427A62ECe45E30a75B41Eb71E9B',
-  airdrop: '0x4Ec6F7a801A3A39Ca5E77C6c0A397C93067Bafa1',
+  airdrop: '0xD08c6BB90b3Fc96484E51E4BA9a373E15C83C28E',
   rewards: '0x965bcCAF7ac896ba5a8FD57d5E9Dc1F044792Be4',
   engine: '0x433aBc7877F37560c50238a09F8F3CA207664e12',
   games: '0xda8f3D153bb620EF676a10EF331B9B3Db4348f81',
