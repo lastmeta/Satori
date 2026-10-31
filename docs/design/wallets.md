@@ -101,6 +101,7 @@ importing the wallet brings them back with nothing else to keep.
   So they are random, made at Connect, and the wallet signs only the link. A
   new device gets a new alias and Nostr key: Stake again there, or keep
   Backup's copies.
+  [Restoring](#restoring-a-connected-wallets-keys) puts backed-up ones back.
 - **The record says where they came from**: `from: 'wallet' | 'random'`. Settings › Backup shows every key: the wallet's
   words, the alias's and the Nostr key's private keys (derived: "no need to
   back them up, but you can see them here"; random: "back them up too").
@@ -123,6 +124,19 @@ backup file and comes back with it, and **Settings › Backup › Earlier keys**
 (shown when there are any) gives each earlier alias's address and private
 key and its Nostr key, so whatever was sent to one can be moved. Any later
 change of keys (an upgrade, a rotation) gets this for free.
+
+## Restoring a connected wallet's keys
+
+(The owner, 2026-10-31.) Rare, so not on Setup: **Settings › Restore keys**, a
+card shown only for a connected wallet (an in-app wallet's keys come from its
+words). It names the wallet in use, one only, and takes the alias's private
+key or 24 words and the Nostr key's nsec or hex; one left empty is kept.
+The wallet app signs the new link, which is the confirmation, so nothing
+changes if it says no or isn't in this browser. The keys replaced go to
+[`retired`](#keys-are-never-lost), and the app starts again with the restored
+ones (the alias's stake, its streams). An agent:
+`restoreKeys({ alias, nostr })`, or `restoreKeys({ backup, passphrase })` with
+this wallet's `exportBackup()` file, which brings its earlier keys too.
 
 ## The Satori Service: register, login and the link
 

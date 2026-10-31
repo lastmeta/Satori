@@ -94,6 +94,7 @@ export const state = reactive({
   rewardLine: '',
   rewardDone: '',
   rewardError: '',
+  restoreError: '', // Settings › Restore keys failed
   walletsError: '', // the Wallets card's Add, Switch or Remove failed
   walletNameSaid: '', walletNameError: '', // the Name card's outcome (docs/design/wallets.md#names)
   // Nostr (docs/design/nostr.md): the flow's status, the last catalog

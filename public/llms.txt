@@ -1154,6 +1154,10 @@ the page's JS context:
   an https URL, a path on this site (such as `/rpc`), or `''` for the
   default. A saved URL replaces the default; a change is noted on Home for
   24 h.
+- `await satori.restoreKeys({ alias, nostr })` or `restoreKeys({ backup, passphrase })`: a connected wallet's alias
+  (private key or 24 words) and Nostr key (nsec or hex), either left out to keep it, or both from this wallet's
+  `exportBackup()` file. Its wallet app signs the new link; the keys replaced stay as earlier keys; the page reloads.
+  Only on the person's request. An in-app wallet's come from its words: refused.
 - `await satori.exportBackup(passphrase)` → `{ kind: 'satori-backup', v: 1, address, at, sealed }`: every key
   sealed with the passphrase (a connected wallet's own words stay in its wallet app). Wrong passphrase: throws
   `Wrong passphrase`. `setup({ passphrase, backup })` restores it.
@@ -1394,7 +1398,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   adapter" (stream or game, its address and name) and "Hand the admin to
   another address" (typed twice). Each card's passphrase prompt and result
   show in it.
-- **Settings**, top to bottom: This device, Appearance, Backup, Keys,
+- **Settings**, top to bottom: This device, Appearance, Backup, Restore keys (a connected wallet only), Keys,
   Reward address, Satori contract predictions (Automatic or By hand: the
   Game tab), Advanced. **Keys** (each key with Copy: the wallet's Base address with
   its Locked/Unlocked badge, "Wallet passphrase" and Unlock, or "Lock the
@@ -1503,7 +1507,8 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   set up); `connect-wallet` (Connect a wallet), then `connect-step` with
   `connect-to` (one per wallet found, `data-rdns`) or `no-wallet`. Settings:
   `wallet-connected` (a connected wallet's note).
-  Settings: `wallet` (the Base address), `wallet-state`, Backup's `alias-key`, `nostr-key`, `keys-note` (derived, or random),
+  Settings: `restore-card` with `restore-wallet`, `restore-alias`, `restore-nostr`, `restore-keys`, `restore-error`;
+  `wallet` (the Base address), `wallet-state`, Backup's `alias-key`, `nostr-key`, `keys-note` (derived, or random),
   `nostr-pubkey`, `unlock`, `lock-wallet`, `backup-prompt`, `backup-key` (a
   private key, or the nsec), `backup-hex`, `reward-address` (the address
   shortened; `title` the whole one), `reward-whose` ("your wallet", "your

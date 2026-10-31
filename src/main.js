@@ -12,7 +12,7 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
-import { checkWalletPassphrase, evmAddress, connectedRecord, linkMessage } from './keys/index.js';
+import { checkWalletPassphrase, evmAddress, connectedRecord, restoredRecord, linkMessage } from './keys/index.js';
 import { requestAddress, signText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
@@ -953,12 +953,27 @@ async function relinkWallet() {
   return registration;
 }
 
+/**
+ * A connected wallet's alias and Nostr key put back from a backup (docs/design/wallets.md#restoring-a-connected-wallets-keys):
+ * its wallet app signs the new link, the keys they replace are kept, and the app starts again with these.
+ */
+const restoreKeys = (keys) => baseAction('restore', async () => {
+  const { wallet } = keyring;
+  const address = session.walletPublic.evmAddress;
+  await storeKeys(await restoredRecord(session.record, keys, (message) => {
+    if (!wallet) throw notHere();
+    return signText(wallet.provider, address, message);
+  }));
+  await Promise.all([appPut(HANDOFF, null), appPut(SW_BATCH, null)]).catch(() => {}); // the push's wake is the old alias's
+  setTimeout(() => location.reload(), 50); // after an agent's call has its answer
+});
+
 // ── UI actions (src/actions.js) ──────────────────────────────────────────────
 const actions = createActions({
   ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
   devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow,
   readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
-  refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, retiredText, roleAction, safeAction, session,
+  refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
   setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
   withWallet,
   get afterUnlock() { return afterUnlock; },
@@ -1225,7 +1240,7 @@ window.satori = createAgent({
   DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
   dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
   nowS, playCalls, pollNow, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
-  relinkWallet, reminderPlayer, removeWallet, retrainOf, roleAction, safeAction, session, setAsideDb,
+  relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
   setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
   work,
   get activity() { return activity; },

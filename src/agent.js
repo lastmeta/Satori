@@ -30,7 +30,7 @@ export function createAgent(app) {
     DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
     dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
     nowS, playCalls, pollNow, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
-    relinkWallet, reminderPlayer, removeWallet, retrainOf, roleAction, safeAction, session, setAsideDb,
+    relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
     setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
     work,
   } = app;
@@ -114,7 +114,7 @@ export function createAgent(app) {
       let retired = [];
       if (backup) { // exportBackup()'s file, opened with its passphrase
         const b = await openBackup(backup, passphrase);
-        if (!b.walletWords) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()).");
+        if (!b.walletWords) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()), then restoreKeys({ backup, passphrase }).");
         ({ walletWords, retired } = b);
       }
       await setup(async () => {
@@ -235,6 +235,18 @@ export function createAgent(app) {
       ready();
       const keys = await backupOf(undefined, passphrase);
       return sealBackup({ address: session.walletPublic.evmAddress, keys, passphrase });
+    },
+    /**
+     * A connected wallet's alias and Nostr key put back: `alias` (private key or 24 words) and `nostr` (nsec or hex),
+     * either left out to keep the one it has, or `backup`, exportBackup()'s file of this wallet, with its `passphrase`.
+     * Its wallet app signs the new link; the keys replaced are kept; the page reloads with these.
+     */
+    async restoreKeys({ alias, nostr, backup, passphrase } = {}) {
+      ready();
+      if (!backup) return restoreKeys({ alias, nostr });
+      const b = await openBackup(backup, passphrase);
+      if (b.address !== session.walletPublic.evmAddress) throw new Error(`This backup is another wallet's: ${b.address}.`);
+      return restoreKeys({ alias: b.aliasWords, nostr: b.nostrKey, retired: b.retired });
     },
     /** Import a Docker (Lite) install: its { wallet } file's text, its `password`, and `passphrase` for this app (default: the password). */
     async importDocker({ wallet: walletText, password = '', passphrase = password } = {}) {

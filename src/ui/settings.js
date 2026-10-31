@@ -71,6 +71,27 @@ function backup(a) {
   </section>`;
 }
 
+/** A connected wallet's own keys back from a backup (docs/design/wallets.md#restoring-a-connected-wallets-keys). */
+function restoreCard(a) {
+  const busy = () => state.baseBusy === 'restore';
+  return html`
+  <section class="card settings-section" id="settings-restore" data-test="restore-card" hidden="${() => !state.connected}">
+    <form class="fields" @submit="${(e) => a.restoreKeys(form(e))}">
+      <h2>Restore keys</h2>
+      <p class="muted small">Replace this wallet's alias and Nostr key with ones you backed up. Leave one empty to keep it. The ones replaced stay under Backup's Earlier keys.</p>
+      <div class="id"><span class="label">Wallet</span><code data-test="restore-wallet" title="${() => state.wallet}">${() => shortHash(state.wallet)}</code></div>
+      <label>Alias key
+        <input name="alias" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Private key or 24 words" data-test="restore-alias">
+      </label>
+      <label>Nostr key
+        <input name="nostr" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="nsec or hex" data-test="restore-nostr">
+      </label>
+      <p class="error small" role="alert" data-test="restore-error" hidden="${() => !state.restoreError}">${() => state.restoreError}</p>
+      <div class="actions"><button class="primary" type="submit" data-test="restore-keys" disabled="${busy}">${() => (busy() ? 'Restoring…' : 'Restore')}</button></div>
+    </form>
+  </section>`;
+}
+
 /**
  * The reward address (docs/design/central.md#the-reward-address): where the Satori Service sends this neuron's rewards
  * instead of the wallet. Read when Settings opens; saved or cleared signed in by the alias (no passphrase, no gas).
@@ -229,6 +250,7 @@ export function settingsTab(a) {
     ${device(a)}
     ${appearance(a)}
     ${backup(a)}
+    ${restoreCard(a)}
     ${keys(a)}
     ${rewardCard(a)}
     ${predictions(a)}

@@ -26,7 +26,7 @@ export function createActions(app) {
     ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
     devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow,
     readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
-    refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, retiredText, roleAction, safeAction,
+    refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction,
     session, setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
     walletOps, withWallet,
   } = app;
@@ -501,6 +501,8 @@ export function createActions(app) {
         state.devFee.proposal = { splitter, error: err?.shortMessage ?? err?.message ?? String(err) };
       }
     },
+    /** Settings › Restore keys: a connected wallet's own, from what the person backed up. */
+    restoreKeys: shownAt('restoreError', (f) => restoreKeys({ alias: f.alias, nostr: f.nostr })),
     baseRelink: () => baseUi('link', async () => {
       await relinkWallet();
       return { text: 'Linked: the Satori Service pays this wallet.' };

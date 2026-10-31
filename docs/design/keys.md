@@ -331,8 +331,9 @@ unencrypted, but they are private keys). It shows:
 - **Alias words**, **Wallet words**: the 24 words (Import
   brings the key back, as does the private key) and the private key in `0x` hex, which imports into a
   Base wallet (the words don't, [above](#one-key-one-secret)).
-- **Nostr key**: its `nsec` (NIP-19) and its hex secret. It is random, so the
-  words don't bring it back; Import takes either form.
+- **Nostr key**: its `nsec` (NIP-19) and its hex secret. An in-app wallet's
+  words bring it back; a connected wallet's is restored in
+  [Settings › Restore keys](wallets.md#restoring-a-connected-wallets-keys).
 - **Earlier keys** (only when the record has some,
   [wallets.md](wallets.md#keys-are-never-lost)): each earlier alias's address
   and private key, and its Nostr key's npub and nsec.

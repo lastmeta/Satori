@@ -15,6 +15,7 @@
 //   const record = await newKeys({ wallet }, passphrase)   // create, restore, import: the alias and Nostr key derived
 //   const { wallet } = await readDockerFiles({ walletText, password })  // import: translate
 //   const record = await recordFromRows({ aliasYaml, walletYaml, nostrYaml? })  // migration 7: earlier rows
+//   const next = await restoredRecord(record, { alias, nostr }, signLink)   // a connected wallet's keys from a backup
 //   const record = connectedRecord({ address, rdns, name, signLink })   // Connect: the wallet stays in its app
 //   const { alias, nostr, wallet } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress, connected }
 //   const { wallet, record } = await unlockWallet(record, passphrase)   // record: store it (an upgrade), or null
@@ -26,7 +27,7 @@
 export { generateSecret, secretFromWords, secretFromText, wordsOf, publicKey, evmAddress } from './keys.js';
 export { MIN_PASSPHRASE, passphraseOk } from './wallet.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-import { checkKey, generateSecret, publicKey, wordsOf, evmAddress, signDigest, privateKeyHex } from './keys.js';
+import { checkKey, generateSecret, secretFromText, publicKey, wordsOf, evmAddress, signDigest, privateKeyHex } from './keys.js';
 import { sealSecret, openSecret, checkNewPassphrase } from './wallet.js';
 import { readKeyFile, readNostrYaml, secrecy, walletPubkey } from './docker.js';
 import { loginSignature } from '../central/login.js';
@@ -255,6 +256,34 @@ export async function unlockWallet(record, passphrase) {
     throw new Error('Re-encrypting the wallet failed; it was kept as it was.');
   }
   return { wallet: signer(secret), record: withLink(withDerived({ ...r, wallet: { pubkey, ...sealed } }, secret), secret) };
+}
+
+/**
+ * A connected wallet's record with its alias, its Nostr key or both put back from a backup (docs/design/wallets.md#restoring-a-connected-wallets-keys):
+ * `alias` its private key or 24 words, `nostr` its nsec or hex, either left empty to keep the one it has; `retired` a
+ * backup file's earlier keys. The wallet signs the new link: `signLink(message)` → the signature.
+ */
+export async function restoredRecord(record, { alias, nostr, retired = [] }, signLink) {
+  const r = checkRecord(record);
+  if (r.wallet.kind !== 'connected') throw new Error("This wallet's alias and Nostr key come from its words: nothing to restore.");
+  const [aliasText, nostrText] = [alias, nostr].map((x) => String(x ?? '').trim());
+  if (!aliasText && !nostrText) throw new Error('Give the alias key, the Nostr key, or both.');
+  let secret;
+  try {
+    secret = aliasText ? secretFromText(aliasText) : hexToBytes(r.alias);
+  } catch {
+    throw new Error('The alias key: not 24 backup words or a private key.');
+  }
+  try {
+    const keys = { alias: bytesToHex(secret), nostr: nostrText ? nostrSecretOf(nostrText) : r.nostr };
+    if (keys.alias === r.alias && keys.nostr === r.nostr) throw new Error('Those are the keys this app has now.');
+    const aliasAddress = evmAddress(publicKey(secret));
+    if (aliasAddress === r.wallet.address) throw new Error('The alias and the wallet must not be the same key.');
+    const message = linkMessage({ alias: aliasAddress, wallet: r.wallet.address, issued: Math.floor(Date.now() / 1000) });
+    return { ...r, ...keys, retired: [...(r.retired ?? []), ...retired], link: { message, signature: await signLink(message) } };
+  } finally {
+    secret.fill(0);
+  }
 }
 
 /**

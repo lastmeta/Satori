@@ -187,6 +187,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   expect(evmAddress(publicKey(hex((await key.textContent()).slice(2))))).toBe(walletAddress);
   // the alias's and the Nostr key's too, derived from the wallet (docs/design/wallets.md#derived-keys)
   await expect(page.locator('[data-test=keys-note]')).toHaveText(/derived from your wallet: no need to back them up/);
+  await expect(page.locator('[data-test=restore-card]')).toBeHidden(); // a connected wallet's alone: these come from the words
   const walletKey = await key.textContent();
   await showBackup('Alias key');
   const aliasKey = key;

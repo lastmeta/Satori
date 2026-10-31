@@ -3,7 +3,10 @@
 // account, the link it signs; no passphrase), then Stake, Send and the Nostr key's backup each asked of the wallet app,
 // a "no" said plainly, and the app still predicting when the wallet app isn't in the browser.
 import { expect, test } from '@playwright/test';
+import { randomBytes } from 'node:crypto';
 import { recoverMessageAddress } from 'viem';
+import { privateKeyToAddress } from 'viem/accounts';
+import { nostrPubkey } from '../src/nostr/event.js';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { fakeWallet } from '../test/fake-wallet.js';
 import { loaded, openApp, LOAD_TIMEOUT } from './load.js';
@@ -133,6 +136,44 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await go(page, 'wallet');
   await page.getByRole('button', { name: 'Unstake' }).click();
   await expect(fact(page, 'action-error')).toHaveText("TestWallet isn't in this browser: open the app where it is installed.");
+
+  // Settings › Restore keys: backed-up keys replace the generated ones, the wallet app signing the new link; the old stay
+  await go(page, 'settings');
+  await page.locator('[data-test=restore-alias]').fill('0x' + 'ab'.repeat(32));
+  await page.locator('[data-test=restore-keys]').click();
+  await expect(page.locator('[data-test=restore-error]')).toHaveText("TestWallet isn't in this browser: open the app where it is installed.");
+  await page.evaluate(() => localStorage.removeItem('noWallet'));
+  await page.reload();
+  expect(await loaded(page)).toBe('home');
+  await go(page, 'settings');
+  await expect(page.locator('[data-test=restore-wallet]')).toBeVisible();
+  const was = await status(page);
+  const [put, nostrPut] = [randomBytes(32).toString('hex'), randomBytes(32).toString('hex')];
+  await page.locator('[data-test=restore-alias]').fill('not a key');
+  await page.locator('[data-test=restore-keys]').click();
+  await expect(page.locator('[data-test=restore-error]')).toHaveText('The alias key: not 24 backup words or a private key.');
+  await page.locator('[data-test=restore-alias]').fill(`0x${put}`);
+  await page.locator('[data-test=restore-nostr]').fill(nostrPut);
+  await Promise.all([page.waitForEvent('load', { timeout: LOAD_TIMEOUT }), page.locator('[data-test=restore-keys]').click()]);
+  expect(await loaded(page)).toBe('home');
+  expect((await status(page)).alias).toBe(privateKeyToAddress(`0x${put}`));
+  expect((await status(page)).wallet).toBe(was.wallet);
+  expect((await page.evaluate(() => window.satori.nostr())).pubkey).toBe(nostrPubkey(nostrPut));
+  await go(page, 'settings');
+  await expect(page.locator('[data-test=retired-keys]')).toBeVisible();
+  await expect.poll(() => central.registered.at(-1)['wallet-link'] && Buffer.from(central.registered.at(-1)['wallet-link'], 'base64').toString('utf8')).toContain(`alias: ${privateKeyToAddress(`0x${put}`)}\n`);
+
+  // An agent: this wallet's backup file puts them back, through its wallet app; another wallet's file is refused
+  const PASS = 'a backup passphrase';
+  const file = await page.evaluate((p) => window.satori.exportBackup(p), PASS);
+  const other = { ...file, address: `0x${'11'.repeat(20)}` };
+  await expect(page.evaluate((a) => window.satori.restoreKeys(a), { backup: other, passphrase: PASS })).rejects.toThrow("This backup is another wallet's");
+  await Promise.all([page.waitForEvent('load', { timeout: LOAD_TIMEOUT }), page.evaluate((a) => window.satori.restoreKeys({ alias: a }), `0x${'cd'.repeat(32)}`)]);
+  expect(await loaded(page)).toBe('home');
+  expect((await status(page)).alias).toBe(privateKeyToAddress(`0x${'cd'.repeat(32)}`));
+  await Promise.all([page.waitForEvent('load', { timeout: LOAD_TIMEOUT }), page.evaluate((a) => window.satori.restoreKeys(a), { backup: file, passphrase: PASS })]);
+  expect(await loaded(page)).toBe('home');
+  expect((await status(page)).alias).toBe(privateKeyToAddress(`0x${put}`));
 });
 
 test('no wallet in this browser (a phone): Connect offers MetaMask and Other wallet (WalletConnect), as the dapp', async ({ page }) => {

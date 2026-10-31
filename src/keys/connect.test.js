@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { recoverMessageAddress } from 'viem';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText, INJECTED } from './connect.js';
-import { connectedRecord, loadKeys, unlockWallet, backupKeys, connectedBackup, CONNECTED, linkMessage } from './index.js';
-import { publicKey, evmAddress } from './keys.js';
+import { connectedRecord, restoredRecord, keepRetired, loadKeys, unlockWallet, backupKeys, connectedBackup, CONNECTED, linkMessage } from './index.js';
+import { publicKey, evmAddress, wordsOf } from './keys.js';
+import { nsec } from '../nostr/event.js';
 import { fakeWallet } from '../../test/fake-wallet.js';
 
 const noChain = { request: async () => { throw new Error('no chain here'); } };
@@ -88,6 +89,26 @@ describe('a connected wallet\'s record (docs/design/wallets.md#a-connected-walle
     expect(signed).toEqual([a.link.message, b.link.message]);
     expect(a.alias).not.toBe(b.alias);
     expect(a.nostr).not.toBe(b.nostr);
+  });
+  test('restoredRecord: its alias, its Nostr key or both from a backup, a new link for them; refused otherwise', async () => {
+    const app = appOf('34');
+    const sign = (m) => signText(app.provider, app.address, m);
+    const r = await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet', signLink: sign });
+    const held = await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet', signLink: sign }); // the backed-up ones
+    const both = await restoredRecord(r, { alias: `0x${held.alias}`, nostr: nsec(held.nostr) }, sign);
+    expect([both.alias, both.nostr, both.from, both.wallet]).toEqual([held.alias, held.nostr, 'random', r.wallet]);
+    expect(both.link.message).toContain(`alias: ${loadKeys(held).alias.evmAddress}\nwallet: ${app.address}\n`);
+    expect(await recoverMessageAddress({ message: both.link.message, signature: both.link.signature })).toBe(app.address);
+    expect(keepRetired(r, both).retired).toEqual([{ alias: r.alias, nostr: r.nostr, at: expect.any(Number) }]); // storing keeps the old
+    const words = await restoredRecord(r, { alias: wordsOf(Uint8Array.from(held.alias.match(/../g), (b) => parseInt(b, 16))), nostr: '' }, sign);
+    expect([words.alias, words.nostr]).toEqual([held.alias, r.nostr]); // an empty one is kept
+    expect((await restoredRecord(r, { nostr: held.nostr }, sign))).toMatchObject({ alias: r.alias, nostr: held.nostr });
+    const never = () => { throw new Error('signed'); };
+    await expect(restoredRecord(r, { alias: ' ', nostr: '' }, never)).rejects.toThrow('Give the alias key, the Nostr key, or both.');
+    await expect(restoredRecord(r, { alias: 'nonsense' }, never)).rejects.toThrow('The alias key: not 24 backup words or a private key.');
+    await expect(restoredRecord(r, { nostr: 'nonsense' }, never)).rejects.toThrow('Not a Nostr key');
+    await expect(restoredRecord(r, { alias: r.alias, nostr: r.nostr }, never)).rejects.toThrow('Those are the keys this app has now.');
+    await expect(restoredRecord(r, { alias: '34'.repeat(32) }, never)).rejects.toThrow('The alias and the wallet must not be the same key.'); // appOf's key
   });
   test('the text a connected wallet signs to show the app\'s keys', () => {
     expect(showKeysText('0x' + 'ab'.repeat(20), 1792000000)).toBe(`Satori: show this app's keys\nwallet: 0xABaBaBaBABabABabAbAbABAbABabababaBaBABaB\nissued: 1792000000`);
