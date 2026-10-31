@@ -111,14 +111,14 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   expect(rpc.sent.length).toBe(before);
   app.state.reject = false;
 
-  // The app's keys came from the wallet's signature (the same each time, docs/design/wallets.md#derived-keys): not in
-  // Backup, each confirmed by a signature in the wallet app
-  expect((await page.evaluate(() => window.satori.status())).keysFrom).toBe('signature');
+  // The app's keys are random, never from a signature (docs/design/wallets.md#derived-keys): in Backup, each confirmed
+  // by a signature in the wallet app
+  expect((await page.evaluate(() => window.satori.status())).keysFrom).toBe('random');
   await go(page, 'settings');
   await page.getByRole('button', { name: 'Nostr key' }).click();
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
   await expect(page.locator('[data-test=backup-key]')).toHaveText(/^nsec1/);
-  expect(app.calls.filter((m) => m === 'personal_sign')).toHaveLength(4); // the keys' text twice, the link, then this
+  expect(app.calls.filter((m) => m === 'personal_sign')).toHaveLength(2); // the link, then this
   await page.getByRole('button', { name: 'Alias key' }).click();
   await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Confirm in TestWallet' }).click();
   await expect(page.locator('[data-test=backup-key]')).toHaveText(/^0x[0-9a-f]{64}$/);

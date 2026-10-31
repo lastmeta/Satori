@@ -3,8 +3,6 @@ import { recoverMessageAddress } from 'viem';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText, INJECTED } from './connect.js';
 import { connectedRecord, loadKeys, unlockWallet, backupKeys, connectedBackup, CONNECTED, linkMessage } from './index.js';
 import { publicKey, evmAddress } from './keys.js';
-import { keysFromSignature, keysText } from './derive.js';
-import { bytesToHex } from '@noble/hashes/utils';
 import { fakeWallet } from '../../test/fake-wallet.js';
 
 const noChain = { request: async () => { throw new Error('no chain here'); } };
@@ -57,13 +55,11 @@ describe('the wallet app: its account, its checked signatures', () => {
 });
 
 describe('a connected wallet\'s record (docs/design/wallets.md#a-connected-wallet)', () => {
-  test('its alias and Nostr key from its signature of a fixed text, the wallet\'s address and how to find it again, its link signed by the wallet', async () => {
+  test('its alias and Nostr key random, the wallet\'s address and how to find it again, its link signed by the wallet', async () => {
     const app = appOf('31');
     const sign = (message) => signText(app.provider, app.address, message);
-    const r = await connectedRecord({ address: app.address, rdns: 'io.metamask', name: 'MetaMask', signLink: sign, signKeys: sign });
-    expect(r).toMatchObject({ v: 1, from: 'signature', wallet: { kind: 'connected', address: app.address, rdns: 'io.metamask', name: 'MetaMask' } });
-    const dk = keysFromSignature(await sign(keysText(app.address))); // the same wallet signs it the same way (RFC 6979): the same keys
-    expect([r.alias, r.nostr]).toEqual([bytesToHex(dk.alias), dk.nostr]);
+    const r = await connectedRecord({ address: app.address, rdns: 'io.metamask', name: 'MetaMask', signLink: sign });
+    expect(r).toMatchObject({ v: 1, from: 'random', wallet: { kind: 'connected', address: app.address, rdns: 'io.metamask', name: 'MetaMask' } });
     const aliasAddress = evmAddress(publicKey(Uint8Array.from(r.alias.match(/../g), (b) => parseInt(b, 16))));
     expect(r.link.message).toBe(linkMessage({ alias: aliasAddress, wallet: app.address, issued: r.created }));
     expect(await recoverMessageAddress({ message: r.link.message, signature: r.link.signature })).toBe(app.address);
@@ -75,7 +71,7 @@ describe('a connected wallet\'s record (docs/design/wallets.md#a-connected-walle
   test('no Unlock and no passphrase; Backup: the alias\'s and the Nostr key\'s, never the wallet\'s words', async () => {
     const app = appOf('32');
     const sign = (m) => signText(app.provider, app.address, m);
-    const r = await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet', signLink: sign, signKeys: sign });
+    const r = await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet', signLink: sign });
     await expect(unlockWallet(r, 'anything')).rejects.toThrow(CONNECTED);
     await expect(backupKeys(r, 'alias', 'anything')).rejects.toThrow(CONNECTED);
     expect(connectedBackup(r, 'alias')).toEqual({ words: expect.any(String), privateKey: `0x${r.alias}` });
@@ -83,15 +79,15 @@ describe('a connected wallet\'s record (docs/design/wallets.md#a-connected-walle
     expect(Object.keys(connectedBackup(r))).toEqual(['alias', 'nostr', 'retired']);
     expect(() => connectedBackup(r, 'wallet')).toThrow("This wallet's words are in Browser wallet: back it up there.");
   });
-  test('a wallet whose signatures differ each time (or a smart-contract wallet\'s): random keys, said in `from`', async () => {
+  test('no signature makes its keys (the audit, 2026-10-31): the wallet signs only the link, and the same wallet connected again gets other keys', async () => {
     const app = appOf('33');
-    let n = 0;
-    const r = await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet',
-      signLink: (m) => signText(app.provider, app.address, m), signKeys: async () => `0x${String(++n).padStart(130, '0')}` });
-    expect(r.from).toBe('random');
-    const once = await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet',
-      signLink: (m) => signText(app.provider, app.address, m), signKeys: async () => `0x${'ab'.repeat(200)}` }); // the same, not 65 bytes
-    expect(once.from).toBe('random');
+    const signed = [];
+    const signLink = (m) => { signed.push(m); return signText(app.provider, app.address, m); };
+    const [a, b] = [await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet', signLink }),
+      await connectedRecord({ address: app.address, rdns: INJECTED, name: 'Browser wallet', signLink })];
+    expect(signed).toEqual([a.link.message, b.link.message]);
+    expect(a.alias).not.toBe(b.alias);
+    expect(a.nostr).not.toBe(b.nostr);
   });
   test('the text a connected wallet signs to show the app\'s keys', () => {
     expect(showKeysText('0x' + 'ab'.repeat(20), 1792000000)).toBe(`Satori: show this app's keys\nwallet: 0xABaBaBaBABabABabAbAbABAbABabababaBaBABaB\nissued: 1792000000`);

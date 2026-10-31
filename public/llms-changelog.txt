@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-31 (a connected wallet's keys)
+
+- A connected wallet's alias and Nostr key are random now, never from a signature: `connect()` no longer asks it to
+  sign "Satori: make this app's keys", only the link, and `status().keysFrom` is `'wallet'` or `'random'`, not
+  `'signature'`. A new device gets a new alias and Nostr key: back them up.
+
 ## Changed 2026-10-31 (Game: after CLAIM)
 
 - `game-claimable` drops to 0 as `game-balance` rises by the amount claimed (one read); it used to keep the amount

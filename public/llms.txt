@@ -174,11 +174,11 @@ Every method is below; `await satori.status()` shows everything at once.
   memory; **Lock** wipes it. The neuron does not need the wallet to run; its
   public key is stored in clear, so its address shows while locked.
 - The keys are one record of this app's own (`meta.keys`,
-  docs/design/keys.md). The alias and the Nostr key are derived from the
-  wallet (docs/design/wallets.md#derived-keys: BIP-32 from its 24 words'
-  seed, the alias at m/44'/60'/1'/0'/0', the Nostr key NIP-06; a connected
-  wallet: from its signature of a fixed text, else random), so the wallet's
-  words bring all three back. Stored, the alias and the Nostr key are sealed
+  docs/design/keys.md). The alias and the Nostr key are derived from a
+  wallet in the app (docs/design/wallets.md#derived-keys: BIP-32 from its 24
+  words' seed, the alias at m/44'/60'/1'/0'/0', the Nostr key NIP-06), so the
+  wallet's words bring all three back. A connected wallet's are random: back
+  them up. Stored, the alias and the Nostr key are sealed
   with this browser's own non-extractable key (IndexedDB) where the browser
   keeps one, else in hex (docs/design/keys.md#at-rest). A Docker install's wallet file is imported
   (read and translated), never written. An earlier version's stored keys
@@ -298,11 +298,10 @@ Every method is below; `await satori.status()` shows everything at once.
   the specs and the last poll/submission/history (another central has other
   stream uuids); the list refills with the next poll.
 
-- Nostr key: a third key, random (not derived from the alias or the
-  wallet, so not in the 24 words), stored unencrypted like the alias. It
-  signs the neuron's Nostr events; its 64-hex pubkey is sent to central on
-  register (`nostr-pubkey`). Backup shows it as `nsec` and hex; Restore from
-  words takes either back.
+- Nostr key: a third key, stored like the alias: from a wallet in the app's
+  words, random for a connected wallet. It signs the neuron's Nostr events;
+  its 64-hex pubkey is sent to central on register (`nostr-pubkey`). Backup
+  shows it as `nsec` and hex.
 - Relays: central's list (`GET /api/v1/peer/relays`, today
   `ws://satorian.satorinet.io:7777`) plus the user's (Settings or
   `setRelays`). On the dev server central's relays are read only (requests,
@@ -666,9 +665,8 @@ the page's JS context:
   `await satori.connectWallets()` → `[{ rdns, name }]` (`metamask-connect`
   and `walletconnect` when no wallet is in the browser), then
   `await satori.connect(rdns)` → status (the wallet app asks the person for
-  the account, then to sign the keys' text twice and the link). Then
-  `status().keysFrom` is `'signature'` (derived from it) or `'random'` (its
-  signatures differ: back them up), and `status().walletKind` is
+  the account, then to sign the link). Then `status().keysFrom` is `'random'`
+  (back them up), and `status().walletKind` is
   `'connected'` and `status().connected` `{ name, found, relay }` (found: its
   wallet app is in this browser, or its relay session is still on; relay:
   MetaMask Connect or WalletConnect, whose ended session the person

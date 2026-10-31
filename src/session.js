@@ -31,7 +31,7 @@ export function createSession({ db, restKey }) {
     get walletPublic() { return keys?.wallet ?? { pubkey: null, evmAddress: null, connected: null }; },
     /** How many earlier keys the record keeps (Backup's "Earlier keys"). */
     get retired() { return record?.retired?.length ?? 0; },
-    /** Where the alias and the Nostr key came from: 'wallet' | 'signature' | 'random'. */
+    /** Where the alias and the Nostr key came from: 'wallet' | 'random'. */
     get from() { return record?.from ?? 'random'; },
 
     /** The stored record, opened (its alias and Nostr key unsealed); one still in hex is sealed now. → the record or null */

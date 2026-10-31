@@ -838,8 +838,7 @@ const connectTo = (rdns) => setup(async () => {
     const { provider, name } = relay ? await openRelay(rdns, { config: CHAIN, projectId: DEFAULTS.walletConnect, connect: true }) : w;
     state.connecting = name;
     const address = await requestAddress(provider);
-    const sign = (m) => signText(provider, address, m);
-    return await connectedRecord({ address, rdns, name, signLink: sign, signKeys: sign });
+    return await connectedRecord({ address, rdns, name, signLink: (m) => signText(provider, address, m) });
   } finally {
     state.connecting = '';
   }

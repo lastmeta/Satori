@@ -3,8 +3,7 @@
 // alias  — not behind the passphrase on purpose: the app signs on its own (central's login, the Base batch);
 // nostr  — the same: it signs the Nostr events on its own;
 // from   — where those two came from (docs/design/wallets.md#derived-keys): 'wallet' (derived from the wallet in the
-//          app), 'signature' (from a connected wallet's signature of keysText), 'random' (a connected wallet whose
-//          signatures differ; an earlier record, until its next Unlock);
+//          app), 'random' (a connected wallet, never from a signature; an earlier record, until its next Unlock);
 // wallet — sealed with the passphrase (wallet.js), holds the funds; its public key in clear,
 //          so its Base address shows while locked;
 // link   — the wallet's EIP-191 signature of its link to the alias (linkMessage), sent with every register;
@@ -16,7 +15,7 @@
 //   const record = await newKeys({ wallet }, passphrase)   // create, restore, import: the alias and Nostr key derived
 //   const { wallet } = await readDockerFiles({ walletText, password })  // import: translate
 //   const record = await recordFromRows({ aliasYaml, walletYaml, nostrYaml? })  // migration 7: earlier rows
-//   const record = connectedRecord({ address, rdns, name, signLink, signKeys })   // Connect: the wallet stays in its app
+//   const record = connectedRecord({ address, rdns, name, signLink })   // Connect: the wallet stays in its app
 //   const { alias, nostr, wallet } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress, connected }
 //   const { wallet, record } = await unlockWallet(record, passphrase)   // record: store it (an upgrade), or null
 //   await withPassphrase(record, passphrase, (wallet) => …)   // the wallet for one use (Send), wiped after it
@@ -32,7 +31,7 @@ import { sealSecret, openSecret, checkNewPassphrase } from './wallet.js';
 import { readKeyFile, readNostrYaml, secrecy, walletPubkey } from './docker.js';
 import { loginSignature } from '../central/login.js';
 import { generateNostrSecret, nostrPubkey, nsec, npub, nostrSecretOf } from '../nostr/event.js';
-import { keysFromWallet, keysFromSignature, keysText } from './derive.js';
+import { keysFromWallet } from './derive.js';
 
 export const RECORD_VERSION = 1;
 /** The largest Dockerized Neuron file read (bytes): satorilib's are under 2 KB; a bigger one is refused before parsing. */
@@ -115,28 +114,19 @@ export async function newKeys({ wallet }, passphrase) {
 }
 
 /**
- * A connected wallet's keys: its signature of keysText, asked twice; the same 65 bytes both times → derived from it,
- * else random (its signatures differ, or it is a smart-contract wallet's). `signKeys(text)` → a signature.
+ * A connected wallet's record (docs/design/wallets.md#a-connected-wallet): its alias and Nostr key, random (no secret
+ * can come from a signature: any site can ask for the same one), the wallet's address and how to find it again (its
+ * EIP-6963 rdns and name), and the link the wallet signs now: `signLink(message)` → the signature (the wallet app asks
+ * the person; src/keys/connect.js signText checks it).
  */
-async function connectedKeys(address, signKeys) {
-  const text = keysText(address);
-  const [a, b] = [await signKeys(text), await signKeys(text)];
-  const k = a.toLowerCase() === b.toLowerCase() ? keysFromSignature(a) : null;
-  return k ? { ...k, from: 'signature' } : { alias: generateSecret(), nostr: generateNostrSecret(), from: 'random' };
-}
-
-/**
- * A connected wallet's record (docs/design/wallets.md#a-connected-wallet): its alias and Nostr key (connectedKeys:
- * `signKeys`), the wallet's address and how to find it again (its EIP-6963 rdns and name), and the link the wallet signs
- * now: `signLink(message)` → the signature (the wallet app asks the person; src/keys/connect.js signText checks it).
- */
-export async function connectedRecord({ address, rdns, name, signLink, signKeys }) {
-  const { alias, nostr, from } = await connectedKeys(address, signKeys);
+export async function connectedRecord({ address, rdns, name, signLink }) {
+  const alias = generateSecret();
+  const nostr = generateNostrSecret();
   try {
     const created = Math.floor(Date.now() / 1000);
     const message = linkMessage({ alias: evmAddress(publicKey(alias)), wallet: address, issued: created });
     const signature = await signLink(message);
-    return { v: RECORD_VERSION, created, alias: bytesToHex(alias), nostr, from,
+    return { v: RECORD_VERSION, created, alias: bytesToHex(alias), nostr, from: 'random',
       wallet: { kind: 'connected', address, rdns, name }, link: { message, signature } };
   } finally {
     alias.fill(0);

@@ -4,7 +4,7 @@
 
 The browser neuron holds Satori's two keys, made and used as the Docker
 neuron (Satori Lite, `../neuron`) and satorilib (`../satorilib`) make and use
-them, and a random Nostr key. It stores them in a record of its own. The
+them, and a Nostr key. It stores them in a record of its own. The
 owner's direction (2026-10-16), **migrate in, never back**: what a user
 brings from the Dockerized Neuron is imported and translated into this app's
 own way; nothing is kept in Docker's formats, limits or files only so it
@@ -15,7 +15,7 @@ could move back. This app is about Base: each key's address is its **Base
 |---|---|---|---|
 | **alias** | its 32-byte secret, hex | no, on purpose | everything the neuron does on its own: central's register and login ([central.md](central.md)); its pubkey is the `alias_pubkey` of our Nostr announcements; the daily Base batch ([base.md](base.md)) |
 | **wallet** | its secret sealed with the passphrase; its public key in clear | yes | holds the funds: stake, claims and sends on Base. Only while unlocked. |
-| Nostr key | its secret, hex | no, on purpose | signs the neuron's Nostr events ([nostr.md](nostr.md)); random, not one of the two keys above, as in Docker |
+| Nostr key | its secret, hex | no, on purpose | signs the neuron's Nostr events ([nostr.md](nostr.md)); not one of the two keys above; derived from a wallet in the app, random for a connected one ([wallets.md](wallets.md#derived-keys)) |
 
 The alias and the Nostr key are unencrypted on purpose: the neuron must
 run after a page load with nobody there to type a passphrase. The wallet holds
@@ -89,7 +89,7 @@ nothing):
 - The alias and the Nostr key are their secrets, in hex or sealed with this
   device's key ([at rest](#at-rest)); everything else about them (public
   keys, addresses) is worked out at load. `from` is where they came from
-  (`wallet`, `signature`, `random`: [wallets.md](wallets.md#derived-keys)).
+  (`wallet`, `random`: [wallets.md](wallets.md#derived-keys)).
 - The wallet's public key is in clear: its Base address shows while locked.
   At Unlock the decrypted secret must give the same public key.
 - A **connected** wallet (its wallet app holds it,

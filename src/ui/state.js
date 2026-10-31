@@ -24,7 +24,7 @@ export const state = reactive({
   // the keys
   alias: '', // the alias's Base address
   retiredKeys: 0, // the earlier aliases and Nostr keys the record keeps (keepRetired): Backup's "Earlier keys"
-  keysFrom: '', // where the alias and the Nostr key came from: 'wallet' | 'signature' (derived) | 'random' (docs/design/wallets.md#derived-keys)
+  keysFrom: '', // where the alias and the Nostr key came from: 'wallet' (derived) | 'random' (docs/design/wallets.md#derived-keys)
   wallet: '', // the wallet's Base address (shown while locked)
   connected: null, // a connected wallet (docs/design/wallets.md#a-connected-wallet): { name, found }, else null
   connectFound: null, // Setup's Connect: [{ rdns, name }] found in this browser; null while looking

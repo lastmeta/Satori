@@ -11,8 +11,8 @@ and sealed.
 | Word | What it is |
 |---|---|
 | **wallet** | The person's key: their identity, and it holds the funds. Either **in the app**, sealed with their passphrase, or **connected**: kept in an outside wallet (MetaMask or another) that the app asks. |
-| **alias** | The wallet's automated signing key. Derived from the wallet ([derived keys](#derived-keys)), kept on this device and used freely, so the app works with nobody present. It acts for the wallet with the Satori Service, on the relays and in the daily Base batch. App-level: people meet it only on the Wallet tab (its gas, and its private key for the rare case funds were sent to it). |
-| **Nostr key** | The third key: derived from the wallet like the alias, signs the app's Nostr events ([nostr.md](nostr.md)). |
+| **alias** | The wallet's automated signing key. Derived from a wallet in the app, random for a connected one ([derived keys](#derived-keys)), kept on this device and used freely, so the app works with nobody present. It acts for the wallet with the Satori Service, on the relays and in the daily Base batch. App-level: people meet it only on the Wallet tab (its gas, and its private key for the rare case funds were sent to it). |
+| **Nostr key** | The third key: made like the alias, signs the app's Nostr events ([nostr.md](nostr.md)). |
 
 These are the only names, in the UI, the code, the stored record,
 `window.satori`, the Satori Service's protocol and the docs. A wallet in the
@@ -22,7 +22,7 @@ app's list comes with its alias, its Nostr key and its own data.
 
 ```
 app ── 1…n wallets ── exactly 1 active at a time
-wallet ──── 1 alias (derived from the wallet)
+wallet ──── 1 alias (derived from a wallet in the app)
        + Nostr key
        + its own database
 wallet = sealed in the app (passphrase; Unlock / Lock)
@@ -37,7 +37,7 @@ wallet = sealed in the app (passphrase; Unlock / Lock)
   alias's fee to 0, has it accept only this wallet, and stakes the wallet
   with it (`hub.delegatePredictionPower(alias)`, [base.md](base.md)); with
   the Satori Service, the wallet signs a **link** to its alias (below).
-- **The alias and the Nostr key are derived from the wallet** ([derived
+- **The alias and the Nostr key are derived from a wallet in the app** ([derived
   keys](#derived-keys)): the wallet brought back from its words, on any
   device, gives the same alias (still staked with) and the same Nostr key
   (the same streams). They are kept for good; they are replaced only when the
@@ -94,28 +94,20 @@ importing the wallet brings them back with nothing else to keep.
   - the Nostr key: `m/44'/1237'/i'/0/0` (NIP-06: a Nostr app given these
     words finds the same key).
   `i` is 0; another index is another alias or Nostr key, when one is wanted.
-- **From a connected wallet**: it never shows its words, so it signs a fixed
-  text (`personal_sign`, no time in it) twice:
-
-  ```
-  Satori: make this app's keys
-  wallet: 0x<the wallet's address, EIP-55>
-  ```
-
-  Both signatures the same 65 bytes (RFC 6979: MetaMask and most wallet
-  apps) → HKDF-SHA256 of the signature (salt `satori`, info `satori keys v1`,
-  64 bytes) is the BIP-32 master, the same paths. Different, or not 65 bytes
-  (a smart-contract wallet) → random keys, as before. Anyone who gets this
-  signature has the alias and the Nostr key (they predict, they can't move
-  the wallet's funds).
-- **The record says where they came from**: `from: 'wallet' | 'signature' |
-  'random'`. Settings › Backup shows every key: the wallet's
+- **A connected wallet: random keys** (the owner, 2026-10-31, after the
+  external audit). It never shows its words, and a signature is no secret: a
+  wallet signs the same text the same way on any site, so another site could
+  ask for it and make the same keys (they were derived that way until then).
+  So they are random, made at Connect, and the wallet signs only the link. A
+  new device gets a new alias and Nostr key: Stake again there, or keep
+  Backup's copies.
+- **The record says where they came from**: `from: 'wallet' | 'random'`. Settings › Backup shows every key: the wallet's
   words, the alias's and the Nostr key's private keys (derived: "no need to
   back them up, but you can see them here"; random: "back them up too").
 - **Earlier records** (random keys): an in-app wallet's next Unlock derives
   its keys and replaces them, with a new link. The old ones are kept as the
   record's `retired` keys ([keys are never lost](#keys-are-never-lost)). The wallet then shows as staked elsewhere until Stake (one
-  transaction). A connected wallet's stay random until it is connected again.
+  transaction). A connected wallet's stay random.
 - **Import takes the wallet only**: the alias, Nostr and Docker alias files
   are no longer asked for (the owner: no keeping old keys).
 
@@ -243,8 +235,7 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
 - **Connect** (Setup's fourth way, `src/keys/connect.js`, `src/keys/relay.js`):
   one button per wallet found in the browser ("Connect MetaMask"); with none
   found, as the dapp: "MetaMask" (opens the app to approve) and "Other
-  wallet" (WalletConnect). Connecting makes the alias and the Nostr key (from the
-  wallet's signature of the keys' text, asked twice: [derived
+  wallet" (WalletConnect). Connecting makes the alias and the Nostr key (random: [derived
   keys](#derived-keys)), and the wallet signs the link to the alias once
   (`personal_sign`, checked: it must recover to the wallet's address). Nothing is encrypted and there is no
   passphrase.
@@ -295,7 +286,7 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
   several), the link at connect, the outside wallet asked for each action
   (2026-10-23); on a phone, MetaMask Connect and WalletConnect, as the dapp
   (2026-10-24).
-- **D. Derived keys** (2026-10-26): the alias and the Nostr key from the
-  wallet; the keys at rest sealed with this device's key where the browser
+- **D. Derived keys** (2026-10-26): the alias and the Nostr key from a
+  wallet in the app; the keys at rest sealed with this device's key where the browser
   keeps one ([keys.md](keys.md#at-rest)).
 - **Later**: shared preferences.

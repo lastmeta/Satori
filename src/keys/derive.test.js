@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { bytesToHex } from '@noble/hashes/utils';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { keysFromWallet, keysFromWords, keysFromSignature, keysText, aliasPath, nostrPath } from './derive.js';
+import { keysFromWallet, keysFromWords, aliasPath, nostrPath } from './derive.js';
 import { generateSecret, secretFromWords, wordsOf } from './keys.js';
 
 describe('derived keys', () => {
@@ -28,17 +28,5 @@ describe('derived keys', () => {
     expect(a.alias).toHaveLength(32);
     expect(bytesToHex(a.alias)).not.toBe(bytesToHex(w));
     expect(a.nostr).not.toBe(bytesToHex(a.alias));
-  });
-
-  test('a connected wallet: its signature of the fixed text; the same signature the same keys; not 65 bytes, none', async () => {
-    const account = privateKeyToAccount(generatePrivateKey());
-    const text = keysText(account.address);
-    expect(text).toBe(`Satori: make this app's keys\nwallet: ${account.address}`);
-    const [s1, s2] = [await account.signMessage({ message: text }), await account.signMessage({ message: text })];
-    expect(s1).toBe(s2); // RFC 6979
-    const k = keysFromSignature(s1);
-    expect(bytesToHex(keysFromSignature(s2).alias)).toBe(bytesToHex(k.alias));
-    expect(k.nostr).toMatch(/^[0-9a-f]{64}$/);
-    expect(keysFromSignature(`0x${'ab'.repeat(100)}`)).toBe(null);
   });
 });
