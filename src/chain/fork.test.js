@@ -293,7 +293,7 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
     const was = await adminState(chain());
     expect(was.games[0]).toMatchObject({ streamId: 1, gameId: 1, isDefault: true, approved: true });
     const on = was.capabilities.filter((c) => c.on).map((c) => c.bit);
-    const off = was.capabilities.find((c) => !c.on).bit; // one the live chain has off now (6 was, until it was turned on)
+    const off = was.capabilities.find((c) => !c.on).bit; // one that's off here: the claim test above switched 6 on in this fork
     await adminOps.capabilities(chain(), w, [...on, off], run);
     await adminOps.relayer(chain(), w, w.evmAddress, run);
     await adminOps.registrationFee(chain(), w, '2', run);
