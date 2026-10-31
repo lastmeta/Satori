@@ -1,4 +1,4 @@
-// Base config (docs/design/base.md#config): the bundled D8 addresses (Base Sepolia, 2026-10-26). Central's
+// Base config (docs/design/base.md#config): the bundled addresses (D8 on Base Sepolia, 2026-10-26; mainnet.js). Central's
 // /api/v1/base/config is read, cached 1 h, as Satori Lite's base_config.py:16-36,66-88,
 // but its contract addresses are taken only when they equal the bundled ones (one
 // that differs is said, and the bundle's kept: a central must not move the app's
@@ -8,18 +8,22 @@
 // then publicnode) or the dev server's local fork; else central's rpcUrl, then publicnode,
 // as the dapp lists them.
 import { isHttps } from '../util.js';
+import { MAINNET } from './mainnet.js';
 
-const CHAIN_ID = 84532; // Base Sepolia
 /**
  * PaymentChannels (contract/satori/contracts/channels/PaymentChannels.sol; docs/design/market.md), deployed by CREATE2:
  * the same address on every chain (contract/satori/deployments/payment-channels.json). Not central's to say.
  */
 export const PAYMENT_CHANNELS = '0xa6DCa52936EAb8DD1EC9f8AD98e75D1Afb0DC16c';
 
-export const DEFAULTS = Object.freeze({
-  chainId: CHAIN_ID,
+const TESTNET = {
+  chainId: 84532,
+  chainName: 'Base Sepolia',
   rpcUrl: 'https://sepolia.base.org',
   explorerUrl: 'https://sepolia.basescan.org',
+  fallbackRpc: 'https://base-sepolia-rpc.publicnode.com',
+  dailyUrl: 'https://test-games.satorinet.io',
+  safeService: 'https://api.safe.global/tx-service/basesep',
   token: '0xe6A4b12Eae75795E4D427706dc67c1392f75D54A',
   merkle: '0xeCc7f1d5Df7aCBD7D1b0615490A88d14CA2B1F1c',
   airdrop: '0x5BF17B223D623CdbD37E3497b95c911e954a3E65',
@@ -30,13 +34,19 @@ export const DEFAULTS = Object.freeze({
   hub: '0x97D53d240e3dcfC6569d7B4001b03062681f4818',
   lens: '0x5404db175634ef5e83B23B6f9BD1836b040A47Dd',
   voting: '0xb2679d77D96be59E2FA3F1e8BB575f669d5150DE', // SatoriEngine.satoriVoting() on D8
+};
+
+// One chain per build: VITE_CHAIN_ID=8453 is Base mainnet (deploy/build.env), else Base Sepolia.
+export const DEFAULTS = Object.freeze({
+  ...(Number(import.meta.env?.VITE_CHAIN_ID) === MAINNET.chainId ? MAINNET : TESTNET),
   multicall3: '0xcA11bde05977b3631167028862bE2a173976CA11',
   channels: PAYMENT_CHANNELS,
 });
+const CHAIN_ID = DEFAULTS.chainId;
 
-export const FALLBACK_RPC = 'https://base-sepolia-rpc.publicnode.com';
+export const FALLBACK_RPC = DEFAULTS.fallbackRpc;
 // Satori Daily, the dapp (contract/satori-ui), where a wallet plays by hand; the neuron plays only automatically.
-export const SATORI_DAILY_URL = 'https://games.satorinet.io';
+export const SATORI_DAILY_URL = DEFAULTS.dailyUrl;
 const CONFIG_TTL_S = 3600;
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -45,7 +55,7 @@ const https = (v) => typeof v === 'string' && /^https:\/\/[^\s"'<>]+$/.test(v);
 
 /**
  * The config, from a cache of the same central (`url`) younger than 1 h, or a fresh fetch (`fresh`). `fetchCentral`
- * returns central's JSON or throws (prod's 404, central down): the bundle then. Only a config for chain 84532 is read.
+ * returns central's JSON or throws (prod's 404, central down): the bundle then. Only a config for this build's chain is read.
  * Central's contract addresses are never used: `differs` lists the ones that are addresses and not the bundle's
  * (case aside). Its rpcUrl and explorerUrl (https only) are used unless `pinned` (the build or the dev server fixed
  * the RPC: rpcUrls).

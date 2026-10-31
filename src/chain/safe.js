@@ -8,11 +8,12 @@
 //   execArgs(tx, confirmations)                         // execTransaction's arguments, the signatures sorted by owner
 import { concat, getAddress, hashTypedData, zeroAddress } from 'viem';
 import { toAccount } from './index.js';
+import { DEFAULTS } from './config.js';
 
 export { safeAbi } from './abi.js';
 
-/** Safe's transaction service for Base Sepolia (no key needed; CORS open). */
-export const SAFE_SERVICE = 'https://api.safe.global/tx-service/basesep';
+/** Safe's transaction service for this build's chain (no key needed; CORS open). */
+export const SAFE_SERVICE = DEFAULTS.safeService;
 
 
 const TYPES = {

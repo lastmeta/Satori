@@ -150,7 +150,7 @@ function baseForm(a) {
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>
-      <p class="muted small" title="The default: the build's RPC (sepolia.base.org), then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
+      <p class="muted small" title="The default: the build's RPC, then publicnode; on the dev server, /rpc, a local fork of Base Sepolia on 127.0.0.1:8545 (node scripts/fork.mjs start).">
         An https:// URL, or a path on this site. Empty: the default (on the dev server, the local test chain).</p>
       <label>Max fee (gwei)
         <input name="maxFee" inputmode="decimal" autocomplete="off" placeholder="2">

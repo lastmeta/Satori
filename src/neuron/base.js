@@ -421,7 +421,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     made.fromCentral = !!cache.remote; // central2 serves the bundle's own values: the same chain, another source
     made.chainId ??= await made.chain.chainId(); // an RPC that does not answer is asked again next time
     if (made.chainId !== loaded.config.chainId) {
-      throw new Error(`The RPC is on chain ${made.chainId}, not Base Sepolia (${loaded.config.chainId}): nothing is read or sent.`);
+      throw new Error(`The RPC is on chain ${made.chainId}, not ${loaded.config.chainName} (${loaded.config.chainId}): nothing is read or sent.`);
     }
     return made;
   }

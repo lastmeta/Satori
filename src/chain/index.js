@@ -15,7 +15,7 @@ import {
   hexToBytes, keccak256, serializeSignature, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
-import { baseSepolia } from 'viem/chains';
+import { base as baseMainnet, baseSepolia } from 'viem/chains';
 import {
   adapterUiAbi, airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, safeAbi, splitterAbi, tokenAbi,
   uupsAbi, votingAbi,
@@ -170,7 +170,8 @@ export const NO_FUNDS = 'Not enough Base ETH for this and its fee.';
  *   maxFee: the ceiling on every transaction's max fee per gas, in wei (Settings), asked at each write (none: no check)
  */
 export function createChain({ config, transport, pollingInterval = 1000, settle = { tries: 5, ms: 1000 }, maxFee = async () => null }) {
-  const chain = { ...baseSepolia, contracts: { ...baseSepolia.contracts, multicall3: { address: config.multicall3 } } };
+  const known = config.chainId === baseMainnet.id ? baseMainnet : baseSepolia;
+  const chain = { ...known, contracts: { ...known.contracts, multicall3: { address: config.multicall3 } } };
   // ccipRead off: a contract's revert must never make the page fetch a URL it names (EIP-3668 off-chain lookups)
   const client = createPublicClient({ chain, transport, pollingInterval, ccipRead: false });
   const c = (name, abi) => (functionName, args = []) => ({ address: config[name], abi, functionName, args });
