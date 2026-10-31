@@ -15,6 +15,7 @@ import { stubCentral } from './stub.js';
 import { CSP } from '../csp.js';
 import { BUILD_DEFAULTS, defaultsFrom } from '../src/config.js';
 import { FALLBACK_RPC } from '../src/chain/config.js';
+import { MAINNET } from '../src/chain/mainnet.js';
 
 const APP = `${(process.env.DEPLOY_URL ?? 'http://localhost:8090').replace(/\/+$/, '')}/`;
 // deploy/build.env, a variable set in the environment winning (one not in the file too), as scripts/deploy-image.sh reads it
@@ -22,6 +23,8 @@ const ENV = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => 
   ...Object.fromEntries(readFileSync(new URL('../deploy/build.env', import.meta.url), 'utf8').split('\n')
     .map((line) => /^(VITE_\w+)=(.*)$/.exec(line)).filter(Boolean).map(([, k, v]) => [k, process.env[k] ?? v])) };
 const WANT = defaultsFrom(ENV, BUILD_DEFAULTS);
+// this runner's FALLBACK_RPC is the default build's; the deployed build's follows its chain
+const FALLBACK = Number(ENV.VITE_CHAIN_ID) === MAINNET.chainId ? MAINNET.fallbackRpc : FALLBACK_RPC;
 const SATORIAN = 'ws://satorian.satorinet.io:7777'; // what central lists; a build can't open ws://
 const STAND_IN = WANT.wss[SATORIAN]; // the build's wss stand-in for it (src/config.js), or none: then it is blocked
 const href = (u) => new URL(u).href;
@@ -133,7 +136,7 @@ test("the app in a browser profile: the CSP, DuckDB, the service worker, the man
     expect(s.central.url).toBe(WANT.central);
     expect([s.nostr.userRelays, s.nostr.centralWrite]).toEqual([WANT.relays, WANT.centralWrite]);
     // the Base RPC the build pins (VITE_BASE_RPC), publicnode after it; never central's (docs/design/base.md#config)
-    expect(s.base.rpc).toEqual(WANT.rpc ? [WANT.rpc, FALLBACK_RPC] : expect.any(Array));
+    expect(s.base.rpc).toEqual(WANT.rpc ? [WANT.rpc, FALLBACK] : expect.any(Array));
     expect(s.version).toMatch(/^browser-\d+\.\d+\.\d+\+[0-9a-f]{7,}$/); // the build's version, stamped with its commit
     expect(stub.registered[0]['neuron-version']).toBe(s.version);
     await expect.poll(() => [...new Set(opened)].sort()).toEqual([...reachable].sort());
