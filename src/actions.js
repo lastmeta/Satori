@@ -601,7 +601,7 @@ export function createActions(app) {
     gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
     toggleChip(key) { state.chipOpen = state.chipOpen === key ? '' : key; },
     toggleContractQr(address) { state.contractQr = state.contractQr === address ? '' : address; },
-    /** The game's CLAIM: Home's Claim (Unlock in place); the amount kept to show beside CLAIMED. */
+    /** The game's CLAIM: Home's Claim (Unlock in place); the amount kept to tell CLAIMED's 0 and the read still to come from a new amount. */
     gameClaim() {
       state.game = { ...state.game, claimAmount: Number(state.base.claimable?.total ?? 0) };
       return actions.walletAction('game-claim', 'baseClaim');

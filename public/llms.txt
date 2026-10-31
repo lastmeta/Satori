@@ -1242,7 +1242,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `play-switch` with **Play by hand** (`play-manual`); back to automatic in
   Settings › Satori contract predictions (`play-setting`, with
   `play-setting-auto` and `play-setting-manual`). The game (`game-board`): on top, while
-  something is claimable, `game-claim-row` with `game-claimable` and `game-claim` (CLAIM, then CLAIMED); then one stream at a
+  something is claimable, `game-claim-row` with `game-claimable` and `game-claim` (CLAIM, then CLAIMED, `game-claimable` 0 as `game-balance` rises by it); then one stream at a
   time, `game-balance` (the wallet's SATORI) above the star and `game-streak` above the value (the player's
   streak on its game, its number; `data-above` "true" at or past the game's turning point, green; else blue) with
   `game-streak-dots` (`data-n`: a dot per prediction), `game-name`

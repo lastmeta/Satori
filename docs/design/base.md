@@ -420,7 +420,7 @@ between the header and the tab bar.
   kept on this device per wallet (`satori-favorites-<address>`, the dapp's key).
 - **The wallet, on top**: while something can be claimed, the amount in bold on the left and
   a big green CLAIM, shaded inside like a toggle that is on, (the size of the buttons below) on the right:
-  Home's Claim (Unlock in place), then CLAIMED. The chart gives way to it.
+  Home's Claim (Unlock in place), then CLAIMED, the amount at 0 as the balance rises by it. The chart gives way to it.
 - **A stream**: on top, the left half a card, "Balance:" on its left and the
   wallet's SATORI right aligned, above the star; the right half the player's
   streak on this stream's game, above the value (no label, no card): a dot

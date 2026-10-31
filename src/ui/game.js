@@ -186,14 +186,15 @@ const callWord = (d) => (d === UP ? 'up' : 'down');
 
 // ── the wallet on top: its SATORI, always; what can be claimed, with CLAIM (Home's Claim), while there is some ──
 const claimable = () => Number(state.base.claimable?.total ?? 0);
-const claimed = () => state.baseDid === 'claim' && !!state.baseResult && !state.baseError;
+// the claim done; a new amount after it (the next rewards, or a part that failed) can be claimed again
+const claimed = () => state.baseDid === 'claim' && !!state.baseResult && !state.baseError && [0, g().claimAmount].includes(claimable());
 const claimShown = () => claimable() > 0 || (claimed() && g().claimAmount > 0);
 
 function wallet(a) {
   return html`
   <div class="gwallet">
     <div class="gclaim" data-test="game-claim-row" hidden="${() => !claimShown()}">
-      <b class="gclaimable" data-test="game-claimable">${() => figure(claimed() ? g().claimAmount : claimable())}</b>
+      <b class="gclaimable" data-test="game-claimable">${() => figure(claimable())}</b>
       <button class="gbtn claim" data-test="game-claim" aria-label="${() => (claimed() ? 'Claimed' : 'Claim')}" disabled="${() => claimed() || !!state.baseBusy}" @click="${a.gameClaim}"><span class="glabel">${() => (claimed() ? 'CLAIMED' : state.baseBusy === 'claim' ? 'CLAIMING…' : 'CLAIM')}</span></button>
     </div>
     ${unlockPrompt(a, 'game-claim', 'claim')}

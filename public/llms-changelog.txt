@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-10-31 (Game: after CLAIM)
+
+- `game-claimable` drops to 0 as `game-balance` rises by the amount claimed (one read); it used to keep the amount
+  beside CLAIMED. A new amount after that puts CLAIM back.
+
 ## Removed 2026-10-30 (the dev fee dial)
 
 - The Safe tab and `safePropose` no longer have a fee key (propose, accept, cancel a dev fee), "Appoint the fee

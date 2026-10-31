@@ -140,7 +140,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await claimPrompt.locator('input').fill(PASS);
   await claimPrompt.getByRole('button', { name: 'Unlock' }).click();
   await expect(t(page, 'game-claim')).toHaveText('CLAIMED', { timeout: 30_000 });
-  await expect(t(page, 'game-claimable')).toHaveText('1');
+  await expect(t(page, 'game-claimable')).toHaveText('0'); // the claimed amount leaves as it reaches the balance
   await expect(t(page, 'game-balance')).toHaveText('Balance: 1');
 
   await t(page, 'game-up').click(); // bitcoin up
