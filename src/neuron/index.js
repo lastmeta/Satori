@@ -27,6 +27,9 @@ export function nextPollAfter(failures, at) {
 /** A cycle that failed: its poll or submission had an error (a local one too), or central took none of the batch. */
 export const failedCycle = (r) => !!(r?.poll?.error || r?.submit?.error || (r?.submit && !(r.submit.successful > 0)));
 
+/** Meta: predictions to the Satori Service are paused (docs/design/central.md#pausing): no poll, no models for it, nothing sent. */
+export const SERVICE_PAUSED = 'central_paused';
+
 const nowS = () => Date.now() / 1000;
 const errorText = (err) => String(err?.message ?? err);
 /** Central was not reached at all (a network error or a timeout: CentralError status 0), as Home names it. */
@@ -123,7 +126,7 @@ async function pollAndSubmit({ db, central, engine, now, at, seed, backfill, rep
     poll.predicted = made.length;
   }
   await db.set('central_last_poll', poll);
-  const sent = await submit(db, central, now, report);
+  const sent = (await db.get(SERVICE_PAUSED)) ? null : await submit(db, central, now, report); // paused during this poll
   await db.checkpoint();
   return { poll, submit: sent };
 }
@@ -234,7 +237,7 @@ export async function centralStatus({ db, central, registration, poller }) {
   // central's history (history.js): the last backfill, and how many streams still have none
   const history = { ...((await db.get('central_history')) ?? {}), needed: (await db.needHistory()).length };
   return { url: central?.url ?? null, registration, lastPoll, nextPoll: poller?.next ?? null, polling: !!poller?.running,
-    failures: poller?.failures ?? 0, lastSubmit, pending, history };
+    failures: poller?.failures ?? 0, lastSubmit, pending, history, paused: !!(await db.get(SERVICE_PAUSED)) };
 }
 
 /**

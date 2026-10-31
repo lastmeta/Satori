@@ -86,7 +86,7 @@ Read this before calling anything.
   what it says, and carry on with what they asked.
 - **Only on the human's explicit request** (they asked for this action, in
   their own words, for this app, now): `send`, `backup`, `unlock`,
-  `stake`, `unstake`, `claim`, `playGame` (it predicts, and costs gas), `setPlay`, `setReminder`, `remindMe`, `importDocker`,
+  `stake`, `unstake`, `claim`, `playGame` (it predicts, and costs gas), `setPlay`, `setServicePaused`, `setReminder`, `remindMe`, `importDocker`,
   `setCentral`, `setBaseRpc`, `setRelays`,
   `setRewardAddress` (it decides where the rewards go), `retrain`, and the
   paid streams: `buy` (it spends the wallet's SATORI and gas), `stop`, `sell`
@@ -1192,6 +1192,10 @@ the page's JS context:
   batch is still worked out but never sent (`lastCheck.skipped`: "played by
   hand: the batch is not sent", with its `games`); `'auto'` (the default)
   sends it again. Nothing else changes. `base().play` says which.
+- `await satori.setServicePaused(on)` → `status().central` (only on the person's request): `true` pauses predictions
+  to the Satori Service: no polls, no models for its streams, nothing sent, and `poll()` answers `{ paused: true }`;
+  `false` resumes, with a poll at once. The Satori contract and the relays carry on. `status().central.paused` says
+  which. Screen: `service-pause` (Settings), `network-pause` (Home's Service card).
 - `await satori.setReminder(on)` → `reminder()` (only on the person's request; `true` asks the browser for notification
   permission): the daily reminder (Settings › This device). On, once a day at the time of day it was turned on (the device's time zone), if today's
   predictions aren't on the Satori contract, the app's service worker sends the day's batch from the alias (automatic,

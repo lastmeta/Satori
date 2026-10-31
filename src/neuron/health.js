@@ -30,7 +30,7 @@ export const LEVEL = {
   'stake-out-of-sync': 'bad', 'relays-down': 'bad',
   'central-failed': 'warn', 'wallet-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
   'base-stuck': 'warn', 'base-unreachable': 'warn',
-  asleep: 'idle', starting: 'idle',
+  'central-paused': 'idle', asleep: 'idle', starting: 'idle',
   backup: 'advice', 'next-step': 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
   'base-unused-unreachable': 'note',
 };
@@ -140,6 +140,11 @@ function centralReasons({ now, rows, sessions, central, work }) {
   const since = lastGood?.at ?? sessions[0]?.at;
   const ran = since == null ? 0 : openTime(sessions, since, now);
   const overdue = ran > (lastGood ? WINDOW_S : FIRST_S);
+
+  // the person's choice: nothing about the Satori Service is wrong or late while it lasts
+  if (central?.paused) {
+    return { out: [reason('central-paused', 'network', { line: 'Predictions to the Satori Service are paused.', chip: 'Paused' })], lastGood, title: 'Service paused' };
+  }
 
   if (failed) {
     const d = last.data;
@@ -374,7 +379,7 @@ function chips({ now, next, reasons, lastGood, base, nostr, traffic, work = {} }
   // the chip: no next time, just up to date (the hero's line says when)
   const sent = !lastGood ? '–' : lastGood.data.accepted > 0 ? sentText(lastGood, now, next) : 'Up to date';
   const c = top('network');
-  const central = c ? { state: c.status, text: c.chip } : { state: lastGood ? 'ok' : 'idle', text: sent };
+  const central = c ? { state: c.status, text: c.chip, off: c.id === 'central-paused' } : { state: lastGood ? 'ok' : 'idle', text: sent };
 
   const b = top('contract');
   let baseChip;

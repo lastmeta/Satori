@@ -5,7 +5,7 @@
 // Home's action card scrolls to, opening Advanced when the section is in it.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
-import { backupPanel, form, idRow } from './parts.js';
+import { backupPanel, form, idRow, servicePause } from './parts.js';
 import { storageText, relayText, BLOCKED_NOTE, shortHash, timeOfDay } from './format.js';
 import { ADD_TO } from '../neuron/health.js';
 
@@ -223,6 +223,17 @@ function reminder(a) {
 }
 
 /** The settings few people change, folded at the bottom; Home's action card opens it when it points inside (go()). */
+/** Predictions to the Satori Service: on, or paused (docs/design/central.md#pausing). */
+function servicePredictions(a) {
+  return html`
+  <section class="card settings-section" id="settings-service" data-test="service-setting">
+    <h2>Satori Service predictions</h2>
+    <p class="muted small">${() => (state.central.paused ? "Paused: the app doesn't read the Satori Service's streams, predict them or send it anything. The Satori contract and the Satori Network carry on."
+      : 'The app reads the Satori Service\'s streams, predicts them and sends the predictions back.')}</p>
+    ${servicePause(a, 'service-pause')}
+  </section>`;
+}
+
 /** Who sends the Satori contract predictions (docs/design/base.md#played-by-hand): this app, or the person in the Game tab. */
 function predictions(a) {
   return html`
@@ -253,6 +264,7 @@ export function settingsTab(a) {
     ${restoreCard(a)}
     ${keys(a)}
     ${rewardCard(a)}
+    ${servicePredictions(a)}
     ${predictions(a)}
     ${advanced(a)}
   </section>`;

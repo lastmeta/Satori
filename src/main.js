@@ -19,7 +19,7 @@ import { DEFAULTS as CHAIN } from './chain/config.js';
 import { same, UP, DOWN } from './chain/index.js';
 import { createAutoLock } from './keys/autolock.js';
 import { createCentral } from './central/index.js';
-import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt } from './neuron/index.js';
+import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt, SERVICE_PAUSED } from './neuron/index.js';
 import { catchUpAll } from './neuron/schedule.js';
 import { modelsOf, modelDetail, DESTS } from './neuron/models.js';
 import { createTrainer } from './neuron/train.js';
@@ -307,6 +307,7 @@ const backfill = coalesce('history', () => work.run('central', async (step) => {
 
 /** A poll (createPoller's run): its steps are central's work on Home, which ends once the next poll is armed. */
 async function runCycle(report) {
+  if (await db.get(SERVICE_PAUSED)) return { paused: true };
   // the last register failed: again before each poll until it succeeds (Lite registers on every start, and restarts daily)
   if (!registration?.ok) {
     report('register');
@@ -447,6 +448,14 @@ function wakeUps() {
 
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
 const pollNow = () => poller.poll();
+
+/** Pause predictions to the Satori Service, or resume them with a poll at once (docs/design/central.md#pausing). */
+async function setServicePaused(on) {
+  const paused = !!on;
+  state.central = { ...state.central, paused }; // at once; stored meanwhile
+  await db.set(SERVICE_PAUSED, paused);
+  if (!paused) void pollNow().catch((err) => console.error('[satori] poll', err));
+}
 
 /**
  * Save the central URL ('' = the default) and register there at once. Another
@@ -971,7 +980,7 @@ const restoreKeys = (keys) => baseAction('restore', async () => {
 // ── UI actions (src/actions.js) ──────────────────────────────────────────────
 const actions = createActions({
   ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
-  devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow,
+  devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow, setServicePaused,
   readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
   setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
@@ -1239,7 +1248,7 @@ async function boot() {
 window.satori = createAgent({
   DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
   dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
-  nowS, playCalls, pollNow, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
+  nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
   setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
   work,

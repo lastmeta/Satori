@@ -72,7 +72,7 @@ export const state = reactive({
   retrainRev: 0, // Retrain's statuses changed (they live in src/ui/models.js's box.retrains, out of the reactive state)
   retrainError: '', // why the open model's Retrain could not start
   // central
-  central: { url: '', registration: null, lastPoll: null, nextPoll: null, polling: false, lastSubmit: null, pending: 0 },
+  central: { url: '', registration: null, lastPoll: null, nextPoll: null, polling: false, lastSubmit: null, pending: 0, paused: false },
   centralDefault: '',
   streams: [],
   sparks: {}, // uuid → its last observations (trend lines)

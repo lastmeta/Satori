@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-10-31 (pausing the Satori Service; WIF keys)
+
+- `setServicePaused(on)` and `status().central.paused`; Settings › Satori Service predictions (`service-pause`) and
+  Home's Service card (`network-pause`). While paused, `poll()` answers `{ paused: true }`.
+- A private key may be given as a WIF wherever one is taken (`setup`, `restoreKeys`, the Restore screen).
+
 ## Added 2026-10-31 (restore a connected wallet's keys)
 
 - `restoreKeys({ alias, nostr })` or `restoreKeys({ backup, passphrase })`, and Settings › Restore keys (`restore-card`,

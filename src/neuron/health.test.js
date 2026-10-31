@@ -70,6 +70,13 @@ describe('ok: predicting', () => {
 });
 
 describe('idle: calm, never red for being closed', () => {
+  test('paused: the person chose it, so nothing is failing or overdue; the chip is grey', () => {
+    const h = health({ rows: [open(NOW - 3 * D, NOW - 2 * M), failed(NOW - 2 * D)], central: central({ paused: true }) });
+    expect(h).toMatchObject({ status: 'idle', title: 'Service paused', line: 'Predictions to the Satori Service are paused.', action: null });
+    expect(h.channels.network).toMatchObject({ text: 'Paused', tone: 'off' });
+    expect(health({ rows: [open(NOW - M)], central: central({ paused: true }) }).title).toBe('Service paused'); // never a good cycle
+  });
+
   test('starting: a new neuron before its first good cycle, getting its first predictions at once', () => {
     const register = { central: { task: 'central', step: 'register', done: null, total: null, since: 0, critical: false } };
     for (const [c, work] of [[central({ polling: true }), {}], [central({ nextPoll: null }), register]]) { // polling; registering first
@@ -410,7 +417,7 @@ test('each reason\'s level (docs/design/health.md): bad, warn, idle (a calm stat
     'stake-out-of-sync': 'bad', 'relays-down': 'bad',
     'central-failed': 'warn', 'wallet-mismatch': 'warn', 'not-registered': 'warn', 'gas-low': 'warn', 'base-skipped': 'warn',
     'base-stuck': 'warn', 'base-unreachable': 'warn',
-    asleep: 'idle', starting: 'idle',
+    'central-paused': 'idle', asleep: 'idle', starting: 'idle',
     backup: 'advice', 'next-step': 'advice', stake: 'advice', 'staked-elsewhere': 'advice', install: 'advice', 'relay-down': 'advice',
     'base-unused-unreachable': 'note',
   });
@@ -534,6 +541,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'base-skipped': (i) => ({ ...i, base: staked({ lastCheck: { at: NOW, round: 20742, skip: 'gas-ceiling', skipped: 'gas above the ceiling: 3 gwei > 2 gwei' } }) }),
     'base-stuck': (i) => ({ ...i, base: staked({ pendingBatch: { round: 20742, hash: '0xab', sentAt: NOW - M, stuck: { at: NOW, replaced: 1, fee: '0.02' } } }) }),
     'base-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null, lastBatch: { round: 20741 } }) }),
+    'central-paused': (i) => ({ ...i, central: { ...i.central, paused: true } }),
     asleep: (i) => i,
     starting: (i) => i,
     backup: (i) => ({ ...i, storage: { persisted: false }, backedUp: false }),
@@ -545,7 +553,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'relay-down': (i) => ({ ...i, nostr: nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed', downSince: 0 }] }) }),
     'base-unused-unreachable': (i) => ({ ...i, base: base({ error: 'HTTP request failed', config: null }) }),
   };
-  const TITLE = { S: 'Starting', A: 'Was asleep', P: 'Predicting', B: 'Partly predicting', N: 'Not predicting' };
+  const TITLE = { Z: 'Service paused', S: 'Starting', A: 'Was asleep', P: 'Predicting', B: 'Partly predicting', N: 'Not predicting' };
   const X = '(cannot meet)';
   // One row per reason, in PRIORITY order; one cell per state: "title status action" (the card's reason, – for none).
   // The title: a bad central reason is "predictions failing" (N); a red Base while it is staked is "partly" (B) once
@@ -569,6 +577,7 @@ describe("the title: is my neuron predicting, on the channels that pay (central,
     'base-skipped':     fixable('base-skipped'),
     'base-stuck':       fixable('base-stuck'),
     'base-unreachable': fixable('base-unreachable'),
+    'central-paused':   ['Z idle –',              'Z idle –',              'Z idle –',              'Z idle –',              'Z idle –',              'Z idle –'],
     asleep:             [X,                       'A idle –',              'P idle –',              X,                       X,                       X],
     starting:           ['S idle –',              X,                       X,                       X,                       X,                       X],
     backup:             ['S idle backup',         'A idle backup',         'P idle backup',         'P ok backup',           'P warn central-failed', 'N bad central-failing'],

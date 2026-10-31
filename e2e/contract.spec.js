@@ -67,6 +67,22 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   await expect(t(page, 'contract-card')).toBeHidden();
   await expect.poll(() => checks(page)).toEqual(['register:ok', expect.stringMatching(/^sent:/)]);
   await expect(t(page, 'network-arrow')).toHaveAttribute('data-on', /true|false/);
+  // the pause, here and in Settings: one toggle; the agent's the same
+  await t(page, 'network-pause').click();
+  await expect(t(page, 'network-pause')).toHaveText('Resume predictions to the Satori Service');
+  await expect(t(page, 'health-title')).toHaveText('Service paused');
+  await expect(page.locator('[data-test=chip][data-channel=network] [data-test=chip-text]')).toHaveText('Paused');
+  await expect(t(page, 'network-arrow')).toHaveAttribute('data-on', 'false');
+  expect(await page.evaluate(() => window.satori.poll())).toEqual({ paused: true });
+  expect(await page.evaluate(async () => (await window.satori.status()).central.paused)).toBe(true);
+  await page.reload();
+  await expect(t(page, 'health-title')).toHaveText('Service paused', { timeout: LOAD_TIMEOUT }); // it stays
+  await page.evaluate(() => window.satori.go('settings'));
+  await t(page, 'service-pause').click();
+  await expect(t(page, 'service-pause')).toHaveText('Pause predictions to the Satori Service');
+  await expect(t(page, 'health-title')).not.toHaveText('Service paused');
+  await page.evaluate(() => window.satori.go('home'));
+  await page.locator('[data-test=chip][data-channel=network]').click();
   await page.locator('[data-test=chip][data-channel=relays]').click();
   await expect(t(page, 'relays-card')).toBeVisible();
   await expect.poll(() => checks(page)).toEqual([expect.stringMatching(/^connected:/), expect.stringMatching(/^watching:/), expect.stringMatching(/^own:/), 'publishing:wait']);

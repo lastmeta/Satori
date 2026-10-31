@@ -6,7 +6,7 @@
 import { html } from '@arrow-js/core';
 import qrcode from 'qrcode-generator';
 import { state } from './state.js';
-import { unlockPrompt } from './parts.js';
+import { servicePause, unlockPrompt } from './parts.js';
 import { contractChecks, predictedToday, networkChecks, networkSent, relayChecks, relaysOn } from './contractflow.js';
 
 const b = () => state.base;
@@ -64,9 +64,10 @@ const checkList = (a, list) => html`<ul class="checks" data-test="chip-checks">$
 const nowS = () => Date.now() / 1000;
 
 const network = (a) => html`<div class="card contract-card" data-test="network-card">
-  ${flow('network', () => networkSent(state.central, nowS()), 'This app', () => (networkSent(state.central, nowS()) ? 'Sent today' : 'Nothing sent lately'), SERVER, 'Satori Service')}
+  ${flow('network', () => networkSent(state.central, nowS()), 'This app', () => (state.central.paused ? 'Paused' : networkSent(state.central, nowS()) ? 'Sent today' : 'Nothing sent lately'), SERVER, 'Satori Service')}
   <p class="muted small">The app reads each data stream's latest values from the network, predicts the next ones with its own models, and sends the predictions back. Doing so costs no gas, those predictions are scored off-chain and rewards are provided on-chain.</p>
   ${checkList(a, () => networkChecks(state.central, nowS()))}
+  ${servicePause(a, 'network-pause')}
 </div>`;
 
 const relays = (a) => html`<div class="card contract-card" data-test="relays-card">

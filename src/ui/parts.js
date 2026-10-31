@@ -23,6 +23,9 @@ export function idRow(kind, test, value, a, title = () => '') {
   return html`<div class="id"><span class="label">${kind}</span><code data-test="${test}" title="${title}">${value}</code><button class="small-btn" @click="${() => a.copy(test, value())}">${() => (state.copied === test ? 'Copied' : 'Copy')}</button></div>`;
 }
 
+/** The toggle for predictions to the Satori Service: Settings and Home's Service card (docs/design/central.md#pausing). */
+export const servicePause = (a, test) => html`<div class="actions"><button class="small-btn" data-test="${test}" disabled="${() => state.screen !== 'home'}" aria-pressed="${() => String(!!state.central.paused)}" @click="${() => a.setServicePaused(!state.central.paused)}">${() => (state.central.paused ? 'Resume predictions to the Satori Service' : 'Pause predictions to the Satori Service')}</button></div>`;
+
 /**
  * The inline Unlock prompt (docs/design/health.md): shown at `slot` when an action that needs the wallet was asked
  * for while it is locked; Unlock, then the action.

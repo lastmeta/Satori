@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { memoryDb } from '../../test/memory-db.js';
 import { CentralError, predictionItem } from '../central/index.js';
 import {
-  cycle, register, firstPollAt, createPoller, centralStatus, claimTab, POLL_EVERY_S, BATCH_LIMIT, RETRY_S, nextPollAfter, failedCycle,
+  cycle, register, firstPollAt, createPoller, centralStatus, claimTab, POLL_EVERY_S, BATCH_LIMIT, RETRY_S, nextPollAfter, failedCycle, SERVICE_PAUSED,
 } from './index.js';
 import { createWork, leading, HERO } from './work.js';
 import { lacking } from './train.js';
@@ -179,6 +179,16 @@ describe('cycle: poll → store → forecast new rows → submit', () => {
     expect(central.sent.map((s) => s.length)).toEqual([1, 2, 2, 3]);
     expect(central.sent[3].map((i) => i.t1_value)).toEqual(['1', '2', '3']); // naive: the last value
     expect(r.submit.successful).toBe(3);
+    expect(await db.pendingCount()).toBe(0);
+  });
+
+  test('paused during the poll: predicted, kept, not sent; sent by the next one after resuming', async () => {
+    central.batch = [entry('u-a', 'a', T, 1)];
+    await db.set(SERVICE_PAUSED, true);
+    expect((await run()).submit).toBeNull();
+    expect(await db.pendingCount()).toBe(1);
+    await db.set(SERVICE_PAUSED, false);
+    expect((await run()).submit).toMatchObject({ successful: 1 });
     expect(await db.pendingCount()).toBe(0);
   });
 
@@ -613,7 +623,7 @@ test('centralStatus: the URL, the register result, the last poll and submission,
   const r = await run();
   const registration = { at: T, ok: true, peer_id: 7 };
   expect(await centralStatus({ db, central, registration, poller: { next: T + 60, running: false, failures: 0 } })).toEqual({
-    url: 'https://central2.example', registration, lastPoll: r.poll, nextPoll: T + 60, polling: false, failures: 0, lastSubmit: r.submit, pending: 1,
+    url: 'https://central2.example', registration, lastPoll: r.poll, nextPoll: T + 60, polling: false, failures: 0, lastSubmit: r.submit, pending: 1, paused: false,
     history: { at: clock, url: 'https://central2.example', streams: 0, rows: 0, left: 1, error: 'Satori Service 404: Not Found',
       retryAt: clock + 86_400, needed: 1 },
   });

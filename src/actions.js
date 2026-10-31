@@ -24,7 +24,7 @@ import { turnReminder, remindOnce } from './pwa/push.js';
 export function createActions(app) {
   const {
     ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
-    devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow,
+    devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow, setServicePaused,
     readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
     refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction,
     session, setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
@@ -667,6 +667,8 @@ export function createActions(app) {
         state.reminder = { ...state.reminder, busy: false };
       }
     },
+    /** Pause or resume predictions to the Satori Service (docs/design/central.md#pausing). */
+    setServicePaused: (on) => setServicePaused(on).catch((err) => console.warn('[satori] pause', err)),
     /** The Game tab's switch: 'manual' (play by hand: the daily batch is not sent) or 'auto' (docs/design/base.md#played-by-hand). */
     async setPlay(mode) {
       const was = state.base.play;

@@ -39,7 +39,7 @@ function streamsCard(a) {
     <summary>Service Streams</summary>
     <div class="nhead">
       <p data-test="network-line" class="${() => (failing() ? 'error' : '')}">${() => networkLine(c())}</p>
-      <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling}">${() => (state.central.polling ? 'Refreshing…' : 'Refresh')}</button>
+      <button class="small-btn" data-test="poll-now" @click="${a.pollNow}" disabled="${() => state.central.polling || state.central.paused}">${() => (state.central.polling ? 'Refreshing…' : 'Refresh')}</button>
     </div>
     <p class="error small" role="status" data-test="mismatch" hidden="${() => !mismatchText(c().registration)}">${() => mismatchText(c().registration)}</p>
     <details class="mdetails" data-test="network-details">

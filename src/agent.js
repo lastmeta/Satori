@@ -29,7 +29,7 @@ export function createAgent(app) {
   const {
     DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
     dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
-    nowS, playCalls, pollNow, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
+    nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
     setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
     work,
@@ -146,8 +146,10 @@ export function createAgent(app) {
     go(tab) { return go(String(tab ?? '').replace(/^#/, '')); },
     /** Settings → Appearance: 'system' (the default: the device's light or dark), 'light' or 'dark'; kept on this device. → it */
     setTheme(theme) { state.theme = setTheme(theme); return state.theme; },
-    /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit } */
+    /** Poll central now: store, forecast new rows, send what is pending. → { poll, submit }, or { paused: true } */
     async poll() { ready(); return pollNow(); },
+    /** Pause (true) or resume (false) predictions to the Satori Service; resuming polls at once. → status().central */
+    async setServicePaused(on) { ready(); await setServicePaused(on); return state.central; },
     /** Central's streams with the latest observation, our latest prediction and the stream's spec. */
     async streams() { ready(); return (await app.db.streams()).map((r) => ({ ...r, meta: parseMeta(r.meta), spec: parseMeta(r.spec) })); },
     /**

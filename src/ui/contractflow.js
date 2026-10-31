@@ -51,7 +51,7 @@ const ago = (s) => (s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min 
 /** The Satori Service: predictions went out in the last day (central took some). */
 export function networkSent(c, now) {
   const s = c?.lastSubmit;
-  return !!s && !s.error && s.successful > 0 && now - s.at < DAY_S;
+  return !c?.paused && !!s && !s.error && s.successful > 0 && now - s.at < DAY_S;
 }
 
 /** The Network card's checks: registered, predictions sent (fix: 'poll'). (A wallet the Satori Service won't pay: Home's card.) */
@@ -63,9 +63,10 @@ export function networkChecks(c, now) {
     !reg ? { id: 'register', state: 'wait', text: 'Registering with the Satori Service…' }
       : reg.ok ? { id: 'register', state: 'ok', text: 'Registered with the Satori Service.' }
         : { id: 'register', state: 'bad', text: `Not registered: ${reg.error}.`, fix: 'poll' },
-    networkSent(c, now) ? { id: 'sent', state: 'ok', text: `Sent ${s.successful} predictions ${ago(now - s.at)}.` }
-      : s?.error ? { id: 'sent', state: 'bad', text: `The last send failed: ${s.error}.`, fix: 'poll' }
-        : { id: 'sent', state: 'wait', text: s ? 'Nothing sent in the last day.' : 'The first predictions go out soon.', fix: s ? 'poll' : undefined },
+    c.paused ? { id: 'sent', state: 'wait', text: 'Paused: nothing goes to the Satori Service until you resume.' }
+      : networkSent(c, now) ? { id: 'sent', state: 'ok', text: `Sent ${s.successful} predictions ${ago(now - s.at)}.` }
+        : s?.error ? { id: 'sent', state: 'bad', text: `The last send failed: ${s.error}.`, fix: 'poll' }
+          : { id: 'sent', state: 'wait', text: s ? 'Nothing sent in the last day.' : 'The first predictions go out soon.', fix: s ? 'poll' : undefined },
   ];
 }
 

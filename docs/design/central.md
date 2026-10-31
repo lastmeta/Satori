@@ -333,6 +333,22 @@ depends on it.
 
 Nostr's part of the audit is in [nostr.md](nostr.md#the-protocol-audit).
 
+## Pausing
+
+Settings › Satori Service predictions and the bottom of Home's Service card
+hold one toggle (owner, 2026-10-31), `central_paused` in the database and
+`status().central.paused`. Paused, a poll does nothing: no observations, no
+models for the Satori Service's streams, nothing sent, so their `_pred`
+streams stop too. Register still runs when the app starts or the address
+changes. A pause during a poll stops its send. What is pending keeps the usual
+rule: sent on resuming if under 2 × 11 h old. Resuming polls at once.
+
+The Satori contract's batch reads its streams from the chain and runs its own
+models, so it carries on, as do the relays and claims. Home says "Service
+paused" (`central-paused`), its chip "Paused", grey, and nothing about the
+Satori Service counts as failing or overdue. Agents:
+`satori.setServicePaused(on)`.
+
 ## Settings
 
 `meta.central_url`, set under **Settings** or by
