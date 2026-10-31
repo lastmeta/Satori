@@ -43,6 +43,10 @@ describe('Import: the 24 words or the private key', () => {
   test('refuses what is neither, and a key out of range', () => {
     expect(() => secretFromText(`0x${'ab'.repeat(31)}`)).toThrow();
     expect(() => secretFromText('not words')).toThrow();
+    // a WIF, compressed and not: the secret 1
+    const one = Uint8Array.from({ length: 32 }, (_, i) => (i === 31 ? 1 : 0));
+    for (const t of ['KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn', '5HpHagT65TZzG1PH3CSu63k8DbpvD8s5ip4nEB3kEsreAnchuDf']) expect(secretFromText(` ${t}\n`)).toEqual(one);
+    expect(() => secretFromText('KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWo')).toThrow(); // its checksum
     expect(() => secretFromText(`0x${'00'.repeat(32)}`)).toThrow(/range/);
   });
 });

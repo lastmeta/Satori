@@ -447,7 +447,7 @@ accept it). The network rows' evidence is in
 | The wallet sealed as satorilib does (PBKDF2-SHA1, AES-CBC per field) | local | **Our encryption** ([above](#the-wallet-encryption)); Docker's read only at import and migration |
 | Passphrases Latin-1 only, at least 4 | local | **Any Unicode, at least 8** for new ones ([above](#passphrases)) |
 | Backup downloads of the three files; `window.satori.file()` | local | **Gone**: words, `0x` private keys, `nsec` |
-| The WIF in Backup | local | **`0x` hex**: Base's form |
+| The WIF in Backup | local | **`0x` hex**: Base's form. A WIF pasted as a private key is read as its 32 bytes |
 | Evrmore addresses in the UI and the API (`status().alias`, register's addresses) | local | **Base addresses only** |
 | Evrmore address, WIF and scripthash derivations | local | **Gone**; register's wallet check compares Base addresses (`wallet_address`, [central.md](central.md#the-wallets-link)) |
 | Lite's relay model uuid as the relay streams' row id | local | Kept: never sent, as good an id as any ([nostr.md](nostr.md#the-protocol-audit)) |

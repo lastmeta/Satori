@@ -5,7 +5,9 @@
 // address and transaction signatures. Design: docs/design/keys.md
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { keccak_256 } from '@noble/hashes/sha3';
+import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
+import { createBase58check } from '@scure/base';
 import { entropyToMnemonic, mnemonicToEntropy } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 
@@ -44,7 +46,17 @@ export function secretFromWords(words) {
 export function secretFromText(text) {
   const t = String(text).trim();
   const h = /^(0x)?([0-9a-fA-F]{64})$/.exec(t);
-  return h ? checkKey(Uint8Array.from(h[2].match(/../g), (b) => parseInt(b, 16))) : secretFromWords(t);
+  if (h) return checkKey(Uint8Array.from(h[2].match(/../g), (b) => parseInt(b, 16)));
+  return WIF.test(t) ? secretFromWif(t) : secretFromWords(t);
+}
+
+/** A WIF (52 characters, K or L; 51, 5): the same 32 bytes in base58check, as a Dockerized Neuron's files give them. */
+const WIF = /^[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$/;
+const wif = createBase58check(sha256);
+function secretFromWif(text) {
+  const b = wif.decode(text); // throws on a bad checksum
+  if (b[0] !== 0x80 || !(b.length === 33 || (b.length === 34 && b[33] === 1))) throw new Error('Not a private key.');
+  return checkKey(b.slice(1, 33));
 }
 
 /** The compressed public key, hex (66). */
