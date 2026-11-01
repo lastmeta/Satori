@@ -8,10 +8,12 @@ import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
 import { createBase58check } from '@scure/base';
-import { entropyToMnemonic, mnemonicToEntropy } from '@scure/bip39';
+import { HDKey } from '@scure/bip32';
+import { entropyToMnemonic, mnemonicToEntropy, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 
 const N = secp256k1.CURVE.n;
+const STANDARD_PATH = "m/44'/60'/0'/0/0"; // MetaMask's first account
 const toBig = (b) => BigInt('0x' + (bytesToHex(b) || '0'));
 
 /** A valid secret (32 bytes, 1 ≤ k < n), or a throw. */
@@ -42,12 +44,25 @@ export function secretFromWords(words) {
   return checkKey(e);
 }
 
-/** What Import takes: the 24 words, or the private key (64 hex, 0x optional, as a Base wallet exports it). → the secret */
+/** What Import takes: 24 words (the secret itself), 12 words (a standard wallet's, secretFrom12), or the private key (64 hex, 0x optional, as a Base wallet exports it; or a WIF). → the secret */
 export function secretFromText(text) {
   const t = String(text).trim();
   const h = /^(0x)?([0-9a-fA-F]{64})$/.exec(t);
   if (h) return checkKey(Uint8Array.from(h[2].match(/../g), (b) => parseInt(b, 16)));
-  return WIF.test(t) ? secretFromWif(t) : secretFromWords(t);
+  if (WIF.test(t)) return secretFromWif(t);
+  const words = t.toLowerCase().split(/\s+/);
+  return words.length === 12 ? secretFrom12(words.join(' ')) : secretFromWords(t);
+}
+
+/** 12 words are too few to be a secret: the first account a standard wallet opens from them. */
+function secretFrom12(words) {
+  if (!validateMnemonic(words, wordlist)) throw new Error('Not valid BIP39 words.');
+  const seed = mnemonicToSeedSync(words);
+  try {
+    return checkKey(HDKey.fromMasterSeed(seed).derive(STANDARD_PATH).privateKey);
+  } finally {
+    seed.fill(0);
+  }
 }
 
 /** A WIF (52 characters, K or L; 51, 5): the same 32 bytes in base58check, as a Dockerized Neuron's files give them. */

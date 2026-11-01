@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Added 2026-11-01 (12 words)
+
+- Import and `setup` take a standard wallet's 12 words: its first account, `m/44'/60'/0'/0/0`. `backup` then gives
+  that key's own 24 words. 24 words read as before.
+
 ## Added 2026-10-31 (pausing the Satori Service; WIF keys)
 
 - `setServicePaused(on)` and `status().central.paused`; Settings › Satori Service predictions (`service-pause`) and

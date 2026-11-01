@@ -137,7 +137,7 @@ function setup(a) {
 
     <form hidden="${showStep('restore')}" @submit="${(e) => a.restoreWords(form(e), e.target)}">
       <h2>Import a wallet</h2>
-      <label>Wallet: its 24 words or its private key
+      <label>Wallet: its 12 or 24 words or its private key
         <textarea name="wallet" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
       </label>
       ${errorLine()}

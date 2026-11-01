@@ -555,11 +555,11 @@ test('import: the wallet by its private key; its alias and Nostr key derived fro
   const d = keysFromWallet(hex(v.entropyHex));
   await openApp(page);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await page.getByLabel(/^Wallet: its 24 words or its private key/).fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
+  await page.getByLabel(/^Wallet: its 12 or 24 words or its private key/).fill('abandon '.repeat(23) + 'art'); // valid words, but key 0
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'The wallet: not 24 backup words or a private key.' })).toBeVisible();
-  await expect(page.getByLabel(/^Alias/)).toHaveCount(0); // only the wallet is asked for
-  await page.getByLabel(/^Wallet: its 24 words or its private key/).fill(`0x${v.entropyHex}`); // the private key, as a Base wallet exports it
+  await expect(page.getByRole('alert').filter({ hasText: 'The wallet: not 12 or 24 words or a private key.' })).toBeVisible();
+  await expect(page.getByLabel(/^Alias/).filter({ visible: true })).toHaveCount(0); // only the wallet is asked for
+  await page.getByLabel(/^Wallet: its 12 or 24 words or its private key/).fill(`0x${v.entropyHex}`); // the private key, as a Base wallet exports it
   await page.getByRole('button', { name: 'Continue' }).click();
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
   await page.getByLabel('Repeat passphrase').fill(PASS);
@@ -567,6 +567,22 @@ test('import: the wallet by its private key; its alias and Nostr key derived fro
   await expect(page.locator('[data-test=wallet]')).toHaveText(v.ethAddress, { timeout: LOAD_TIMEOUT });
   await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(publicKey(d.alias)));
   await expect(page.locator('[data-test=nostr-pubkey]')).toHaveText(nostrPubkey(d.nostr));
+});
+
+test("import: a standard wallet's 12 words open the address MetaMask shows; Backup's 24 words reopen it", async ({ context, page }) => {
+  await stubCentral(context);
+  await openApp(page);
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.getByLabel(/^Wallet: its 12 or 24 words or its private key/).fill('test test test test test test test test test test test junk');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
+  await page.getByLabel('Repeat passphrase').fill(PASS);
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(page.locator('[data-test=wallet]')).toHaveText('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', { timeout: LOAD_TIMEOUT });
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  const { words } = await page.evaluate((x) => window.satori.backup('wallet', x), PASS);
+  expect(words.split(' ')).toHaveLength(24);
+  expect(evmAddress(publicKey(secretFromWords(words)))).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
 });
 
 test('setup: one at a time, and it leaves rows it does not own', async ({ context, page }) => {

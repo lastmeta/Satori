@@ -36,6 +36,12 @@ describe('one secret: its words, public key and Base address, as satorilib makes
 });
 
 describe('Import: the 24 words or the private key', () => {
+  test("12 words open a standard wallet's first account, the same one MetaMask shows", () => {
+    const words = 'test test test test test test test test test test test junk'; // the public test phrase: its address is well known
+    expect(evmAddress(publicKey(secretFromText(`  ${words.toUpperCase().replace(/ /g, ' \n')} `)))).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+    expect(() => secretFromText('test test test test test test test test test test test test')).toThrow(); // its checksum
+    expect(() => secretFromText('test test test test test test test test test test test')).toThrow(); // 11
+  });
   test('either form gives the same secret; the key with or without 0x, any case, spaces around', () => {
     const v = fx.vectors[0];
     for (const t of [v.words, `0x${v.entropyHex}`, ` ${v.entropyHex.toUpperCase()} \n`]) expect(secretFromText(t)).toEqual(hex(v.entropyHex));

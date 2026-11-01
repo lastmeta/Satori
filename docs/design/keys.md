@@ -41,7 +41,14 @@ and as the BIP39 entropy of its 24 words: satorilib's scheme, kept so a
 neuron's words give the same keys and the same Base addresses here as in
 Docker. No HD path, no `mnemonicToSeed`, so the words do not open the same
 account in a standard wallet; whether new neurons should use BIP32 paths is
-an owner decision ([QUESTIONS](../inbox/QUESTIONS.md)). `src/keys/keys.js`:
+an owner decision ([QUESTIONS](../inbox/QUESTIONS.md)).
+
+12 words (owner, 2026-11-01) are too few to be a secret, so Import reads them
+the standard way, BIP39 seed then `m/44'/60'/0'/0/0`: the first account
+MetaMask or any Ethereum wallet shows. The word count picks the rule, so 24
+words are untouched. The result is one 32-byte secret like any other, so
+Backup shows that secret's own 24 words, which reopen the wallet here; the
+original 12 keep working. `src/keys/keys.js`:
 
 | Output | Rule | Evidence |
 |---|---|---|

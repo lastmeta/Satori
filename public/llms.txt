@@ -650,7 +650,8 @@ the page's JS context:
 - `await satori.setup({ passphrase, walletWords?, backup? })` → status. `backup`:
   `exportBackup()`'s file, opened with `passphrase` (its wallet's words).
   Creates the neuron on a fresh browser (a new wallet unless `walletWords`
-  is given: the 24 words or the private key, `0x` and 64 hex; the alias and
+  is given: 24 words, a standard wallet's 12 words (its first account, m/44'/60'/0'/0/0),
+  or the private key, `0x` and 64 hex, or a WIF; the alias and
   the Nostr key are derived from it). Passphrase: any Unicode, at least 8
   characters (code points after NFC). The wallet starts locked. One setup runs at
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,

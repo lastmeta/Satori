@@ -86,7 +86,7 @@ export function createActions(app) {
     restoreWords(f, el) {
       wipePending();
       const secret = (text, which) => {
-        try { return secretFromText(text); } catch { throw new Error(`The ${which}: not 24 backup words or a private key.`); }
+        try { return secretFromText(text); } catch { throw new Error(`The ${which}: not 12 or 24 words or a private key.`); }
       };
       try {
         app.pending = { wallet: secret(f.wallet, 'wallet') }; // the alias and the Nostr key are derived from it
