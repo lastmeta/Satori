@@ -415,12 +415,12 @@ export async function openDb(conn, closeDb = async () => conn.close()) {
      * pred_created_at and pred_seq. (meta and unsubscribed_at, from migration
      * 4, are no longer written: nothing read them.)
      */
-    subscribeRelay: inOrder(async ({ uuid, stream_name, provider_pubkey, name, cadence_seconds, now, predict = false }) => {
+    subscribeRelay: inOrder(async ({ uuid, stream_name, provider_pubkey, name, cadence_seconds, now, predict = false, pred_created_at = now, pred_seq = 0 }) => {
       await run(`INSERT INTO relay_streams (uuid, stream_name, provider_pubkey, name, cadence_seconds, active,
-          subscribed_at, pred_created_at, pred_seq, predict) VALUES (?, ?, ?, ?, ?, true, ?, ?, 0, ? = 1)
+          subscribed_at, pred_created_at, pred_seq, predict) VALUES (?, ?, ?, ?, ?, true, ?, ?, ?, ? = 1)
         ON CONFLICT (uuid) DO UPDATE SET name = excluded.name, cadence_seconds = excluded.cadence_seconds,
           active = true, subscribed_at = excluded.subscribed_at, predict = excluded.predict`,
-      uuid, stream_name, provider_pubkey, name ?? '', cadence_seconds ?? null, now, now, predict ? 1 : 0); // a boolean is bound as 1 or 0
+      uuid, stream_name, provider_pubkey, name ?? '', cadence_seconds ?? null, now, pred_created_at, pred_seq, predict ? 1 : 0); // pred_*: a backup's, so its `_pred` goes on; a boolean is bound as 1 or 0
       return (await rows('SELECT * FROM relay_streams WHERE uuid = ?', uuid))[0];
     }),
     unsubscribeRelay: inOrder((uuid) => run('UPDATE relay_streams SET active = false WHERE uuid = ?', uuid)),

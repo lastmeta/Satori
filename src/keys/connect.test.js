@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { recoverMessageAddress } from 'viem';
 import { findWallets, requestAddress, signText, connectedWallet, showKeysText, INJECTED } from './connect.js';
-import { connectedRecord, restoredRecord, keepRetired, loadKeys, unlockWallet, backupKeys, connectedBackup, CONNECTED, linkMessage } from './index.js';
+import { connectedRecord, recordFromBackup, restoredRecord, keepRetired, loadKeys, unlockWallet, backupKeys, connectedBackup, CONNECTED, linkMessage } from './index.js';
 import { publicKey, evmAddress, wordsOf } from './keys.js';
 import { nsec } from '../nostr/event.js';
 import { fakeWallet } from '../../test/fake-wallet.js';
@@ -100,6 +100,10 @@ describe('a connected wallet\'s record (docs/design/wallets.md#a-connected-walle
     expect(both.link.message).toContain(`alias: ${loadKeys(held).alias.evmAddress}\nwallet: ${app.address}\n`);
     expect(await recoverMessageAddress({ message: both.link.message, signature: both.link.signature })).toBe(app.address);
     expect(keepRetired(r, both).retired).toEqual([{ alias: r.alias, nostr: r.nostr, at: expect.any(Number) }]); // storing keeps the old
+    // a backup alone (no wallet app, no signature): the same keys and the link it already signed
+    const back = recordFromBackup({ address: app.address, aliasWords: `0x${both.alias}`, nostrKey: nsec(both.nostr), retired: [], connected: { rdns: INJECTED, name: 'Browser wallet', link: both.link } });
+    expect([back.alias, back.nostr, back.from, back.link, back.wallet]).toEqual([both.alias, both.nostr, 'random', both.link, both.wallet]);
+    expect(loadKeys(back).wallet.evmAddress).toBe(app.address);
     const words = await restoredRecord(r, { alias: wordsOf(Uint8Array.from(held.alias.match(/../g), (b) => parseInt(b, 16))), nostr: '' }, sign);
     expect([words.alias, words.nostr]).toEqual([held.alias, r.nostr]); // an empty one is kept
     expect((await restoredRecord(r, { nostr: held.nostr }, sign))).toMatchObject({ alias: r.alias, nostr: held.nostr });

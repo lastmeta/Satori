@@ -12,7 +12,7 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
-import { checkWalletPassphrase, evmAddress, connectedRecord, restoredRecord, linkMessage } from './keys/index.js';
+import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup } from './keys/index.js';
 import { requestAddress, signText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
@@ -29,6 +29,7 @@ import { backfillHistory } from './neuron/history.js';
 import { createNostr } from './neuron/nostr.js';
 import { callResult, dayOf, dayRange, networkMark } from './neuron/day.js';
 import { createBase, checkSend } from './neuron/base.js';
+import { dataOf, modelsFile, putData, putModels } from './neuron/transfer.js';
 import { referrerOf } from './neuron/referral.js';
 import { played } from './ui/gameflow.js';
 import { sendsToday } from './neuron/play.js';
@@ -43,7 +44,7 @@ import { createHold } from './ui/hold.js';
 import { subscribe } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { applyTheme } from './ui/theme.js';
-import { readPref, writePref, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot } from './ui/prefs.js';
+import { readPref, writePref, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot, readFavorites, writeFavorites } from './ui/prefs.js';
 import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withName, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
 import { deviceKey } from './keys/atrest.js';
 import { createSession } from './session.js';
@@ -449,6 +450,14 @@ function wakeUps() {
 /** A cycle now (the UI's Poll now, agents' poll()); one at a time. */
 const pollNow = () => poller.poll();
 
+/** The models alone, for an agent to keep between visits (src/neuron/transfer.js). */
+const exportModels = () => modelsFile(db, central.url);
+const importModels = async (file) => {
+  const n = await putModels(db, file, central.url);
+  await refreshModels();
+  return n;
+};
+
 /** Pause predictions to the Satori Service, or resume them with a poll at once (docs/design/central.md#pausing). */
 async function setServicePaused(on) {
   const paused = !!on;
@@ -538,7 +547,7 @@ const storeKeys = (next) => work.run('keys', async (step) => {
  * The keys, then the neuron; backedUp: the wallet's words were confirmed, given or brought (docs/design/health.md). On a
  * first visit the database may still be loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
  */
-async function saveKeys(r, { backedUp = false } = {}) {
+async function saveKeys(r, { backedUp = false, data = null } = {}) {
   const listed = wallets && withAddress(wallets, r.wallet.address ?? evmAddress(r.wallet.pubkey)); // throws: already in this app
   state.setupWaiting = true; // until Home: the engine's step, then "saving your keys…"
   try {
@@ -546,9 +555,20 @@ async function saveKeys(r, { backedUp = false } = {}) {
     await storeKeys(r);
     if (listed) await keepWallets(listed);
     if (backedUp) await markBackup();
+    if (data) await restoreData(data, r);
     await startNeuron();
   } finally {
     state.setupWaiting = false;
+  }
+}
+
+/** A whole backup's models, settings and subscriptions, before the neuron starts. The keys are in: a bad file doesn't stop them. */
+async function restoreData(data, r) {
+  try {
+    if (!await putData(db, data, { chain: CHAIN.chainId, defaultService: DEFAULT_CENTRAL })) return console.warn('[satori] a backup from another chain: only its keys were restored');
+    writeFavorites(r.wallet.address ?? evmAddress(r.wallet.pubkey), data.favorites ?? []);
+  } catch (err) {
+    console.warn('[satori] restoring the backup\'s data', err);
   }
 }
 
@@ -675,6 +695,19 @@ async function backupOf(which, passphrase) {
   const b = session.walletPublic.connected ? await keyring.connectedBackup(which) : await session.backup(which, passphrase);
   if (which == null || which === 'wallet') markBackup().catch((err) => console.warn('[satori] backup_at', err)); // the wallet's words shown: backed up
   return b;
+}
+
+/**
+ * The whole backup: every key, the models, the settings, sealed with `passphrase`. A connected wallet's keys are sealed
+ * without asking its wallet app, which an agent may not have: nothing is shown, and they sit in this app in clear.
+ */
+async function backupFile(passphrase) {
+  const { record, walletPublic } = session;
+  const address = walletPublic.evmAddress;
+  const { rdns, name } = record.wallet;
+  const keys = walletPublic.connected ? connectedBackup(record) : await backupOf(undefined, passphrase);
+  const data = await dataOf(db, { chain: CHAIN.chainId, service: central.url, favorites: readFavorites(address) });
+  return sealBackup({ address, keys, passphrase, data, connected: walletPublic.connected ? { rdns, name, link: record.link } : null });
 }
 
 /**
@@ -857,10 +890,10 @@ const connectTo = (rdns) => setup(async () => {
  * Setup, from the UI or an agent: one at a time, and only on the Setup screen. `makeRecord` → the keys, or null (not
  * yet). backedUp: the wallet's words were confirmed (Create), given (Restore) or brought (a Dockerized Neuron's files).
  */
-const setup = (makeRecord, { backedUp = false } = {}) => exclusive('setup', async () => {
+const setup = (makeRecord, { backedUp = false, data = null } = {}) => exclusive('setup', async () => {
   if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
   const r = await makeRecord();
-  if (r) await saveKeys(r, { backedUp });
+  if (r) await saveKeys(r, { backedUp, data });
 });
 
 // ── tabs (hash routes) and the inline Unlock ──
@@ -1248,7 +1281,7 @@ async function boot() {
 window.satori = createAgent({
   DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
   dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
-  nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
+  backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
   setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
   work,

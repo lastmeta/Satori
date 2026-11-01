@@ -17,6 +17,7 @@
 //   const record = await recordFromRows({ aliasYaml, walletYaml, nostrYaml? })  // migration 7: earlier rows
 //   const next = await restoredRecord(record, { alias, nostr }, signLink)   // a connected wallet's keys from a backup
 //   const record = connectedRecord({ address, rdns, name, signLink })   // Connect: the wallet stays in its app
+//   const record = recordFromBackup(await openBackup(file, passphrase))   // that wallet's keys and link, with no wallet app
 //   const { alias, nostr, wallet } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress, connected }
 //   const { wallet, record } = await unlockWallet(record, passphrase)   // record: store it (an upgrade), or null
 //   await withPassphrase(record, passphrase, (wallet) => …)   // the wallet for one use (Send), wiped after it
@@ -129,6 +130,20 @@ export async function connectedRecord({ address, rdns, name, signLink }) {
     const signature = await signLink(message);
     return { v: RECORD_VERSION, created, alias: bytesToHex(alias), nostr, from: 'random',
       wallet: { kind: 'connected', address, rdns, name }, link: { message, signature } };
+  } finally {
+    alias.fill(0);
+  }
+}
+
+/**
+ * A connected wallet's record from its backup (openBackup): its alias, Nostr key and the link its wallet app signed, so
+ * neither the wallet app nor a new signature is needed: an agent's browser wiped between visits comes back whole.
+ */
+export function recordFromBackup({ address, aliasWords, nostrKey, connected: { rdns, name, link }, retired }) {
+  const alias = secretFromText(aliasWords);
+  try {
+    return keepRetired(null, { v: RECORD_VERSION, created: Math.floor(Date.now() / 1000), alias: bytesToHex(alias), nostr: nostrSecretOf(nostrKey), from: 'random',
+      wallet: { kind: 'connected', address, rdns, name }, link, retired });
   } finally {
     alias.fill(0);
   }
@@ -414,10 +429,10 @@ export const BACKUP_FILE = 'satori-backup';
  * stored here (PBKDF2, AES-GCM): one JSON object, safe to store and useless without the passphrase. A connected
  * wallet's own words are in its wallet app: `wallet` null. → { kind: 'satori-backup', v: 1, address, at, sealed }
  */
-export async function sealBackup({ address, keys, passphrase, at = new Date().toISOString() }) {
+export async function sealBackup({ address, keys, passphrase, connected = null, data = null, at = new Date().toISOString() }) {
   checkNewPassphrase(passphrase);
   const plain = new TextEncoder().encode(JSON.stringify({ wallet: keys.wallet?.words ?? null, alias: keys.alias.words, nostr: keys.nostr.nsec,
-    retired: (keys.retired ?? []).map((k) => ({ alias: k.privateKey, nostr: k.nsec, at: k.at })) }));
+    retired: (keys.retired ?? []).map((k) => ({ alias: k.privateKey, nostr: k.nsec, at: k.at })), connected, data }));
   try {
     return { kind: BACKUP_FILE, v: 1, address, at, sealed: await sealSecret(plain, passphrase) };
   } finally {
@@ -431,14 +446,15 @@ function retiredFromBackup(list) {
     nostr: nostrSecretOf(k.nostr), at: k.at ?? null })).filter((k) => HEX64.test(k.alias) && HEX64.test(k.nostr));
 }
 
-/** A backup file opened with its passphrase: { walletWords (null: a connected wallet's), aliasWords, nostrKey, address }. */
+/** A backup file opened with its passphrase: { walletWords (null: a connected wallet's), aliasWords, nostrKey, address, connected, data }. */
 export async function openBackup(backup, passphrase) {
   const b = typeof backup === 'string' ? JSON.parse(backup) : backup;
   if (b?.kind !== BACKUP_FILE || b.v !== 1) throw new Error('Not a Satori backup file.');
   const plain = await openSecret(b.sealed, passphrase);
   try {
     const k = JSON.parse(new TextDecoder().decode(plain));
-    return { walletWords: k.wallet, aliasWords: k.alias, nostrKey: k.nostr, address: b.address, retired: retiredFromBackup(k.retired) };
+    return { walletWords: k.wallet, aliasWords: k.alias, nostrKey: k.nostr, address: b.address, retired: retiredFromBackup(k.retired),
+      connected: k.connected ?? null, data: k.data ?? null };
   } finally {
     plain.fill(0);
   }

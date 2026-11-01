@@ -365,6 +365,8 @@ wallet's own words stay in its wallet app (`wallet` null). `setup({ passphrase,
 backup })` opens it (`openBackup`) and sets up from the three. public/llms.txt
 tells agents to make it right after setup, keep it where the person keeps
 secrets, and say where.
+Since 2026-11-01 it also carries the models and settings, and a connected
+wallet's link: [wallets.md](wallets.md#a-whole-backup).
 
 ## Secrets in memory
 

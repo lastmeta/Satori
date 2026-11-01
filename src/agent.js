@@ -2,7 +2,7 @@
 // here, with its checks; the running app's parts come from src/main.js (createAgent), its changing ones read when used.
 //   window.satori = createAgent({ actions, exclusive, …, get db() { return db; }, … })
 import { state } from './ui/view.js';
-import { generateSecret, secretFromText, newKeys, readDockerFiles, sealBackup, openBackup, keepRetired } from './keys/index.js';
+import { generateSecret, secretFromText, newKeys, readDockerFiles, recordFromBackup, openBackup, keepRetired } from './keys/index.js';
 import { findWallets } from './keys/connect.js';
 import { RELAYS } from './keys/relay.js';
 import { UP, DOWN } from './chain/index.js';
@@ -29,7 +29,7 @@ export function createAgent(app) {
   const {
     DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
     dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
-    nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
+    backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
     setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
     work,
@@ -112,12 +112,16 @@ export function createAgent(app) {
     /** Create a wallet (a new one unless its words or private key are given; its alias and Nostr key derived). Stays locked. */
     async setup({ passphrase, walletWords, backup } = {}) {
       let retired = [];
+      let data = null;
+      let record = null;
       if (backup) { // exportBackup()'s file, opened with its passphrase
         const b = await openBackup(backup, passphrase);
-        if (!b.walletWords) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()), then restoreKeys({ backup, passphrase }).");
-        ({ walletWords, retired } = b);
+        if (!b.walletWords && !b.connected) throw new Error("This backup is a connected wallet's: its words are in its wallet app. Connect it (connect()), then restoreKeys({ backup, passphrase }).");
+        ({ walletWords, retired, data } = b);
+        if (b.connected) record = recordFromBackup(b);
       }
       await setup(async () => {
+        if (record) return record;
         const keys = {};
         try {
           keys.wallet = walletWords ? secretFromText(walletWords) : generateSecret();
@@ -126,7 +130,7 @@ export function createAgent(app) {
         } finally {
           keys.wallet?.fill(0);
         }
-      }, { backedUp: !!walletWords }); // given words are a backup; random ones are not until backup() shows them
+      }, { backedUp: !!walletWords || !!record, data }); // given words are a backup; random ones are not until backup() shows them
       return window.satori.status();
     },
     /**
@@ -229,15 +233,15 @@ export function createAgent(app) {
      */
     async backup(which, passphrase) { ready(); return backupOf(which, passphrase); },
     /**
-     * Every key, sealed with `passphrase` (the wallet's; a connected wallet's own words are in its wallet app) in one
-     * JSON file to keep where the person keeps secrets: setup({ passphrase, backup }) restores it on a fresh browser.
-     * → { kind: 'satori-backup', v: 1, address, at, sealed }
+     * Everything a wiped browser can't get back, sealed with `passphrase` (the wallet's; a connected wallet's own words are
+     * in its wallet app) in one JSON file: every key, the models, settings, subscriptions. setup({ passphrase, backup })
+     * restores it all on a fresh browser. → { kind: 'satori-backup', v: 1, address, at, sealed }
      */
-    async exportBackup(passphrase) {
-      ready();
-      const keys = await backupOf(undefined, passphrase);
-      return sealBackup({ address: session.walletPublic.evmAddress, keys, passphrase });
-    },
+    async exportBackup(passphrase) { ready(); return backupFile(passphrase); },
+    /** The models alone, not secret: { kind: 'satori-models', v: 1, at, service, models }. */
+    async exportModels() { ready(); return exportModels(); },
+    /** exportModels()'s file: each stream's model replaced by the file's. → how many */
+    async importModels(file) { ready(); return importModels(file); },
     /**
      * A connected wallet's alias and Nostr key put back: `alias` (private key or 24 words) and `nostr` (nsec or hex),
      * either left out to keep the one it has, or `backup`, exportBackup()'s file of this wallet, with its `passphrase`.

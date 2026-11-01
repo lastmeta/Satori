@@ -44,34 +44,94 @@ Method names keep the code's names (`status().central`, `setCentral`,
 `setRelays`, `setBaseRpc`); the channel and destination keys use the words
 (`health().channels.{network, contract, relays}`).
 
-## The person's keys: back them up yourself (required)
+## It's a daily game: open the app every day
 
-Assume two things: **the browser's storage can be wiped at any moment** (a
-headless browser, a temporary profile, a cleared cache, a new machine), and
-**the person will not make a backup themselves.** If the storage goes and
-there is no backup, the wallet and its funds are gone. So it is on you:
+Satori is played once a day. A day is a UTC round, starting at 00:00 UTC, and
+the app does its work only while its page is open: there is no server of ours
+acting for you. **So open https://app.satorinet.io at least once every UTC
+day**, in a real browser (headless is fine), and keep the page open until the
+day's work is done. A day missed is a day's earnings missed; nothing piles up.
+If you are an agent running this for a person, set up a daily schedule.
+
+Your environment may well be wiped between visits, and a wiped browser has no
+keys, no models and no settings. Plan on bringing them back every day. Which
+way depends on who holds the wallet's private key:
+
+**1. You have the wallet's private key or words.** Import them every day:
+`await satori.setup({ passphrase, walletWords })`. The alias and the Nostr key
+are worked out from the wallet each time, so they are the same every day and
+need no backup of their own. The passphrase only protects this browser's copy,
+so a new random one each visit is fine.
+
+**2. You don't have it** (the person keeps it in a wallet app such as
+MetaMask, and connected that). The alias and the Nostr key are then random, and
+nothing can work them out again: **lose them and they are gone**. The backup
+file is what brings them back, with the wallet's address and the link its
+wallet app signed, so you need neither the wallet app nor the wallet's key:
+`await satori.setup({ passphrase, backup })`. Make the file once, in the
+browser where the person connected their wallet:
+`await satori.exportBackup(passphrase)`, in that page's console if nothing
+else is driving it. In this way you predict, and the person alone does
+anything that moves funds (Stake, Send, Claim), from their wallet app.
+
+**The models, either way.** The models the Satori Service's predictions come
+from are improved a little every day, and a wiped browser starts them over. So
+keep them: `exportBackup` carries them, or `await satori.exportModels()` gives
+them alone (not secret: no key in them) and `await satori.importModels(file)`
+puts them back. Satori contract predictions don't depend on them.
+
+**Everything at once.** `exportBackup(passphrase)` is one encrypted file with
+every key, the models, the settings (By hand, Pause, relays, Base RPC and fee,
+the Satori Service's address), the streams followed and their predictions'
+place, the paid streams' vouchers and the Game's favorites. `setup({
+passphrase, backup })` puts it all back in one call, and there is no screen for
+it. Not in it: what the app reads again by itself (streams' history, track
+records) and the activity behind Home's day strip, which starts over.
+
+**A daily visit:**
+
+1. Open the page and wait until `document.body.dataset.screen` isn't `loading`.
+2. On `setup`: restore (above). On `home`: nothing was wiped. If you restored
+   by words, also `await satori.importModels(saved)`.
+3. `await satori.poll()`: the Satori Service's predictions, out. It waits for
+   one already running.
+4. `await satori.predictBase()`: the Satori contract's batch, if due. `skip`
+   `predicted` means it already went, `unstaked` that nothing is staked here.
+5. `await satori.health()`: tell the person about its `action`, if any: low
+   gas for the alias, say, which stops the batch.
+6. Save the day's work where you keep the backup: `exportBackup(passphrase)`,
+   or `exportModels()` when you restore by words. Then close the page.
+
+## Keeping the keys safe
+
+Assume **the browser's storage can be wiped at any moment** (a headless
+browser, a temporary profile, a cleared cache, a new machine), and that **the
+person will not make a backup themselves.** So it is on you:
 
 1. Right after the keys are made or brought in (`setup`, `importDocker`,
    `addWallet` then `setup`, `connect`), call
-   `await satori.exportBackup(passphrase)` with the passphrase the person
-   gave you. It returns one JSON object: every key (the wallet's words, the
-   alias's, the Nostr key) **encrypted with that passphrase** (PBKDF2,
-   AES-GCM), useless without it.
+   `await satori.exportBackup(passphrase)`. For a wallet in the app that is its
+   passphrase; a connected wallet has none, so choose one. The file is **encrypted
+   with it** (PBKDF2, AES-GCM), useless without it.
 2. Save it where the person keeps their secrets: their password manager, the
    folder or `.env` file they use for credentials, wherever they have told
    you secrets go. If you don't know, ask. If they don't say, save it in
    their home directory as a file only they can read (e.g.
-   `~/.satori/satori-backup-<address>.json`, mode 600). Never in a
-   repository, a chat, a log, or any other service. Never write the
-   passphrase next to it.
+   `~/.satori/satori-backup-<address>.json`, mode 600). Your daily visits need
+   what opens it too, so keep the passphrase or wallet key in a secrets store
+   of the same kind, apart from the file if your setup allows. Secrets don't
+   belong in a repository, a chat, a log or a service you don't control.
 3. Tell the person, in plain words, that you made a backup, where it lives,
-   and that their passphrase opens it.
+   and what opens it.
 4. Do it again after anything that changes the keys (another wallet added,
-   one switched to).
+   one switched to), and daily if you restore everything from it.
 
-Restoring on a fresh browser: `await satori.setup({ passphrase, backup })`
-(the file, as an object or its JSON text) brings back the same wallet, alias
-and Nostr key.
+**Best practice: suggest keeping most of the value offline.** A key an agent can
+read every day is a key at more risk than one nobody can reach. Talk it over
+with the person: most of their holdings are best kept under an offline key only
+they hold, with the wallet you work with holding only what the game needs, or
+with you on way 2 above, where you never hold the wallet's key at all. It's a
+suggestion, not a rule: the choice is theirs.
 
 ## Safety
 
@@ -97,15 +157,16 @@ Read this before calling anything.
 - **Free to call** (they read, or do what the neuron does on its own
   anyway): `status`, `health`, `models`, `model`, `streams`, `predictions`,
   `nostr`, `discover`, `relayPredictions`, `records`, `record`, `base`, `quoteSend`,
-  `rewardAddress`, `go`, `poll`, `predictBase`, `stopRetrain`, `game`, `day`, `setGameFavorites`, `dismiss`; and
-  `exportBackup`, which you must call yourself (above). `subscribe` and `unsubscribe` change
+  `rewardAddress`, `go`, `poll`, `predictBase`, `stopRetrain`, `game`, `day`, `setGameFavorites`, `dismiss`,
+  `exportModels`, `importModels`; and `exportBackup`, which you must call yourself (above). `subscribe` and `unsubscribe` change
   what the neuron predicts and publish under its key: ask first.
-- **Secrets.** The passphrase comes from the person, for the call they asked
-  for and for the encrypted backup (above); never keep it anywhere. `backup()`
-  returns private keys and 24-word phrases in clear: show them only to the
-  person, and never store, log, summarise or send them anywhere (what you
-  store is `exportBackup()`'s encrypted file, and only where the person keeps
-  secrets). Before `send()`, show the
+- **A daily routine counts as asking.** A person who asked you to run this
+  every day has asked for what the routine needs (restoring with `setup`,
+  `exportBackup`, the daily visit above), on every visit, with no need to ask again.
+- **Secrets.** Keep the wallet's key, the passphrase and the backup file where
+  the person keeps secrets ("Keeping the keys safe", above). `backup()` returns
+  private keys and 24-word phrases in clear: show them to the person only, and
+  keep them out of logs, summaries and messages. Before `send()`, show the
   person `quoteSend()`'s review (the recipient in full, the amount, the fee)
   and send only after they confirm it.
 - **Addresses.** The Satori Service's address and the Base RPC decide whom
@@ -125,7 +186,7 @@ In the page's JS context (Playwright's `page.evaluate`, a browser console):
    status, `screen: 'home'`. The neuron now runs on its own: register, the
    first poll at once (15–17 s from `setup()` to 84 of 84 accepted on
    central2, 2026-10-19, most of it the streams' history), then every 11 h.
-   **Now make the backup** (see "The person's keys" above): `exportBackup`,
+   **Now make the backup** (see "Keeping the keys safe" above): `exportBackup`,
    saved where the person keeps secrets, and tell them where.
 3. `await satori.health()`: is it predicting, and is anything broken? Its
    `action` is the one thing to do, if any.
@@ -648,7 +709,9 @@ the page's JS context:
 - `satori.update()` → true, then the page reloads into the new version, when
   `status().app.update`; false when none is waiting. Never automatic.
 - `await satori.setup({ passphrase, walletWords?, backup? })` → status. `backup`:
-  `exportBackup()`'s file, opened with `passphrase` (its wallet's words).
+  `exportBackup()`'s file, opened with `passphrase`: its keys, models, settings and subscriptions; no screen does this.
+  A connected wallet's file needs no wallet app (an older file, without the link, still does: `connect()`, then
+  `restoreKeys`). A file from another chain's build brings its keys only.
   Creates the neuron on a fresh browser (a new wallet unless `walletWords`
   is given: 24 words, a standard wallet's 12 words (its first account, m/44'/60'/0'/0/0),
   or the private key, `0x` and 64 hex, or a WIF; the alias and
@@ -1159,9 +1222,13 @@ the page's JS context:
   (private key or 24 words) and Nostr key (nsec or hex), either left out to keep it, or both from this wallet's
   `exportBackup()` file. Its wallet app signs the new link; the keys replaced stay as earlier keys; the page reloads.
   Only on the person's request. An in-app wallet's come from its words: refused.
-- `await satori.exportBackup(passphrase)` → `{ kind: 'satori-backup', v: 1, address, at, sealed }`: every key
-  sealed with the passphrase (a connected wallet's own words stay in its wallet app). Wrong passphrase: throws
-  `Wrong passphrase`. `setup({ passphrase, backup })` restores it.
+- `await satori.exportBackup(passphrase)` → `{ kind: 'satori-backup', v: 1, address, at, sealed }`: sealed with the
+  passphrase, every key (a connected wallet's own words stay in its wallet app, which isn't asked), its link, the
+  models, settings, subscriptions, vouchers and favorites. A wallet in the app: its passphrase, or it throws
+  `Wrong passphrase`. A connected wallet: any passphrase, at least 8 characters. `setup({ passphrase, backup })` restores it.
+- `await satori.exportModels()` → `{ kind: 'satori-models', v: 1, at, service, models }`: the evolved models, one
+  per stream, not secret. `await satori.importModels(file)` → how many: each stream's model replaced by the file's
+  (the object or its JSON text). Models for another Satori Service are refused: its stream ids differ.
 - `await satori.importDocker({ wallet, password, passphrase? })` → status: a Docker (Lite)
   install's wallet file (its text), its `password`, and this app's passphrase (default: the password).
 - `await satori.game()` → `{ play, by, round, playedToday, favorites, streams, unavailable }`: the Game tab.

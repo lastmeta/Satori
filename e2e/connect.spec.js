@@ -51,7 +51,7 @@ async function installWallet(context, app) {
   });
 }
 
-test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wallet app; a no; the app without it', async ({ context, page }) => {
+test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wallet app; a no; the app without it', async ({ browser, context, page }) => {
   test.setTimeout(240_000);
   const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
   const central = await stubCentral(context, { rpc });
@@ -174,6 +174,25 @@ test('Connect a wallet: the link it signs; Stake, Send, Backup asked of its wall
   await Promise.all([page.waitForEvent('load', { timeout: LOAD_TIMEOUT }), page.evaluate((a) => window.satori.restoreKeys(a), { backup: file, passphrase: PASS })]);
   expect(await loaded(page)).toBe('home');
   expect((await status(page)).alias).toBe(privateKeyToAddress(`0x${put}`));
+
+  // A wiped browser with no wallet app (an agent's): the backup alone brings it back, the link and all; no signature
+  await page.evaluate(() => localStorage.setItem('noWallet', '1'));
+  await page.reload();
+  expect(await loaded(page)).toBe('home');
+  const whole = await page.evaluate((p) => window.satori.exportBackup(p), PASS); // no wallet app asked
+  const fresh = await browser.newContext();
+  try {
+    const seen = await stubCentral(fresh, { rpc });
+    const p2 = await fresh.newPage();
+    expect(await openApp(p2)).toBe('setup');
+    const after = await p2.evaluate(([b, p]) => window.satori.setup({ backup: b, passphrase: p }), [whole, PASS]);
+    expect(after).toMatchObject({ screen: 'home', alias: privateKeyToAddress(`0x${put}`), wallet: was.wallet });
+    expect((await p2.evaluate(() => window.satori.nostr())).pubkey).toBe(nostrPubkey(nostrPut));
+    await expect.poll(() => seen.registered.at(-1)?.['wallet-signature']).toBe(central.registered.at(-1)['wallet-signature']);
+    await p2.evaluate((p) => window.satori.exportBackup(p), PASS); // and again tomorrow
+  } finally {
+    await fresh.close();
+  }
 });
 
 test('no wallet in this browser (a phone): Connect offers MetaMask and Other wallet (WalletConnect), as the dapp', async ({ page }) => {

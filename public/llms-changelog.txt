@@ -4,6 +4,16 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-01 (a daily visit; a whole backup)
+
+- New: "It's a daily game". What to do each UTC day, and how to come back when the browser is wiped.
+- `exportBackup` also carries the models, settings, subscriptions, vouchers, favorites and a connected wallet's link,
+  and no longer asks a connected wallet's app. `setup({ passphrase, backup })` restores all of it, for a connected
+  wallet too, with no wallet app. Older files still open.
+- New: `exportModels()`, `importModels(file)`.
+- The safety rules: the passphrase may be kept, where the person keeps secrets; a daily routine counts as asking for
+  what it needs; a suggestion to keep most holdings under an offline key.
+
 ## Added 2026-11-01 (12 words)
 
 - Import and `setup` take a standard wallet's 12 words: its first account, `m/44'/60'/0'/0/0`. `backup` then gives

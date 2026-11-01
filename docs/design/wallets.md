@@ -138,6 +138,24 @@ ones (the alias's stake, its streams). An agent:
 `restoreKeys({ alias, nostr })`, or `restoreKeys({ backup, passphrase })` with
 this wallet's `exportBackup()` file, which brings its earlier keys too.
 
+## A whole backup
+
+For an agent whose browser is wiped between visits (owner, 2026-11-01:
+Satori is a daily game, public/llms.txt "It's a daily game"), `exportBackup`
+seals everything a wiped browser can't get back, and `setup({ passphrase,
+backup })` restores it before the neuron starts (`src/neuron/transfer.js`):
+the keys, the Service's models (`model_specs`), the settings in `KEPT`, the
+streams followed with their `_pred` place, and the Game's favorites. Agents
+only: no screen has it. A file from another chain's build brings its keys
+only. Models for another Satori Service stay out: its uuids differ.
+
+A connected wallet's file also has its address and link, so `recordFromBackup`
+makes the record with no wallet app and no new signature, and the app predicts
+as it does when that app isn't in the browser. `exportBackup` doesn't ask the
+wallet app either, unlike Settings › Backup: nothing is shown, and an agent
+may not have one. The models also go alone (`exportModels`, `importModels`),
+not secret, for an agent that restores by the wallet's key.
+
 ## The Satori Service: register, login and the link
 
 A request in the **current form** carries `alias-pubkey`. One without it is

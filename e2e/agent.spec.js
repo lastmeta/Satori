@@ -72,17 +72,32 @@ test('an encrypted backup, restored in a fresh browser; the game by call; a day 
   await expect(page.locator('[data-test=wallet-receive-card] button')).toHaveCount(0);
   await page.locator('[data-test=wallet-receive-card]').screenshot({ path: test.info().outputPath('receive.png') });
 
-  // a fresh browser (its storage wiped): the backup restores the same wallet
+  // a fresh browser (its storage wiped): the backup restores the same wallet, and all that goes with it
+  await call(page, 'poll');
+  await call(page, 'setServicePaused', true);
+  const none = await call(page, 'exportModels');
+  expect(none).toMatchObject({ kind: 'satori-models', v: 1, service: expect.any(String), models: [] }); // this stub's Service has no streams
+  const row = { uuid: 'u-a', spec: { companions: [], lambda1: 0.2, lambda2: 0.5 }, score: 0.5, persist: null, influence: null, generation: 2, accepted: 1, fit_key: null };
+  expect(await call(page, 'importModels', { ...none, models: [row] })).toBe(1);
+  const models = await call(page, 'exportModels');
+  expect(models.models).toEqual([row]);
+  const whole = await call(page, 'exportBackup', PASS);
   const fresh = await browser.newContext();
   try {
     await stubCentral(fresh, { rpc });
     const p2 = await fresh.newPage();
     await openApp(p2);
     await expect(call(p2, 'setup', { passphrase: 'wrong passphrase', backup: file })).rejects.toThrow('Wrong passphrase');
-    await call(p2, 'setup', { passphrase: PASS, backup: JSON.stringify(file) });
+    await call(p2, 'setup', { passphrase: PASS, backup: JSON.stringify(whole) });
     await expect(p2.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
     expect((await call(p2, 'base')).wallet.address).toBe(V);
     expect((await call(p2, 'backup', 'wallet', PASS)).words).toBe(words);
+    expect((await call(p2, 'status')).central.paused).toBe(true);
+    expect((await call(p2, 'base')).play).toBe('manual');
+    expect((await call(p2, 'game')).favorites).toEqual([1]);
+    expect((await call(p2, 'exportModels')).models).toEqual(models.models);
+    expect(await call(p2, 'importModels', models)).toBe(models.models.length);
+    await expect(call(p2, 'importModels', { ...models, service: 'https://other.example' })).rejects.toThrow('another Satori Service');
   } finally {
     await fresh.close();
   }
