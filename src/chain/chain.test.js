@@ -221,6 +221,24 @@ describe('fees, receipts, the chain id', () => {
     await chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }], { fees: { maxFeePerGas: 99n, maxPriorityFeePerGas: 9n } });
     expect(rpc.sent[0]).toMatchObject({ maxFeePerGas: 99n, maxPriorityFeePerGas: 9n });
   });
+  test('a block the RPC does not show yet: read again; the mined batch is never an error', async () => {
+    const lagging = (misses) => {
+      const seen = { n: 0 };
+      const transport = custom({ request: async (q) => {
+        if (q.method === 'eth_getBlockByNumber' && q.params[0] !== 'latest' && seen.n++ < misses) return null;
+        return rpc.request(q);
+      } });
+      return { seen, chain: createChain({ config: DEFAULTS, transport, pollingInterval: 1, settle: { tries: 5, ms: 1 } }) };
+    };
+    const behind = lagging(2); // the receipt's node ahead of the one asked for its block (a load-balanced RPC)
+    const r = await behind.chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }]);
+    expect(r).toEqual({ hash: rpc.sent[0].hash, at: ROUND * 86400 + 9 * 3600, blockNumber: 1 });
+    expect(await behind.chain.receipt(r.hash)).toMatchObject({ status: 'success', at: ROUND * 86400 + 9 * 3600 });
+    vi.setSystemTime(new Date(1_800_000_000_000)); // never shown: the moment stands in for the block's time
+    const never = await lagging(Infinity).chain.receipt(r.hash);
+    vi.useRealTimers();
+    expect(never).toMatchObject({ status: 'success', at: 1_800_000_000, blockNumber: 1 });
+  });
   test('receipt: the status and the block time of a sent tx; null while it is not mined', async () => {
     const { hash } = await chain.sendBatch(alias, [{ gameId: 1, direction: DOWN }]);
     expect(await chain.receipt(hash)).toEqual({ status: 'success', at: ROUND * 86400 + 9 * 3600, blockNumber: 1, hash });

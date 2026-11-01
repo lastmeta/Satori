@@ -294,10 +294,14 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   }
 
   const delegateOf = async (addr) => (await read(rewards('predictionDelegateInfo', [addr])))[0];
-  const minedOf = async (r) => {
-    const block = await client.getBlock({ blockNumber: r.blockNumber });
-    return { status: r.status, at: Number(block.timestamp), blockNumber: Number(r.blockNumber), hash: r.transactionHash };
+  /** A mined block's time. The node asked may be behind the one with the receipt: read again, and the transaction
+   *  being mined is never lost to it: failing that, now, within seconds of the block. */
+  const blockTime = async (blockNumber) => {
+    let at = null;
+    await settled(async () => { at = Number((await client.getBlock({ blockNumber })).timestamp); return true; });
+    return at ?? Math.floor(Date.now() / 1000);
   };
+  const minedOf = async (r) => ({ status: r.status, at: await blockTime(r.blockNumber), blockNumber: Number(r.blockNumber), hash: r.transactionHash });
 
   return {
     fees,
@@ -539,8 +543,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
      */
     async sendBatch(alias, list, opts = {}) {
       const { hash, receipt } = await write(alias, batchCall(list, opts.referrer), opts);
-      const block = await client.getBlock({ blockNumber: receipt.blockNumber });
-      return { hash, at: Number(block.timestamp), blockNumber: Number(receipt.blockNumber) };
+      return { hash, at: await blockTime(receipt.blockNumber), blockNumber: Number(receipt.blockNumber) };
     },
 
     /**
