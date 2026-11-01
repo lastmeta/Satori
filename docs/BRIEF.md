@@ -42,7 +42,7 @@ The short version; owner rulings are in `CLAUDE.md` and `/code/Satori/CLAUDE.md`
 - **Scope.** For the MVP the neuron predicts everything it sees. Record long-term ideas, but don't turn them into next steps. Propose whole-setup reviews instead of new features.
 - **Recommend on the merits,** and restate the owner's goal before judging it. Never raise legal concerns. Ask one topic at a time, not barrages.
 - **Local chains are disposable.** Don't report their resets.
-- **Older repos** (central, neuron (Satori Lite), satorilib): work only on the existing `base-upgrade` branch, which the owner calls "base migration". Never create new branches. Never touch `main`.
+- **Older repos** (central, neuron (Satori Lite), satorilib, …): branch `main`. `base-upgrade` was merged and is retired (owner, 2026-11-01): never commit to it. Mainnet and Base Sepolia live together on `main`; central2 picks Sepolia in its `.env`.
 
 ## Working method that worked
 - **Build with background agents.** Use `general-purpose` agents, one task area at a time, so two agents never edit the same files at once.
@@ -96,7 +96,7 @@ curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" ht
 ## Other machines and repos
 - **Dev central (central2):**
   - ssh: `ssh -i ~/.ssh/id_ed25519 -p 1983 root@88.99.70.153` (hostname `central-dev`).
-  - Code is in `~/central-lite` on `base-upgrade`.
+  - Code is in `~/central-lite` on `main`.
   - Deploy: `cd ~/central-lite && ./devbox/deploy-devbox.sh` (it refuses if prod secrets are present).
   - DB: `docker exec -i satori-db psql -U satori -d satori`.
   - The owner allows deploying here.
