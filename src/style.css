@@ -957,3 +957,15 @@ details.card[data-test^=admin] > summary { cursor: pointer; font-weight: 600; }
 .dft-word { color: var(--ok); background: var(--ok-soft); font-weight: 600; }
 .dft-legend { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; font-size: 0.875rem; }
 .dft-legend .dft-word { position: static; transform: none; display: inline-block; margin-right: 4px; }
+
+/* A chevron on the right of everything that opens in place: down when closed, up when open. */
+summary, .chan, .srow, .rrow { position: relative; }
+summary, .srow, .rrow, .rrow.head { padding-right: 22px; }
+.chan .sub { padding-right: 14px; }
+summary::marker { content: ""; }
+summary::-webkit-details-marker { display: none; }
+summary::after, .chan::before, button.sname::after, button.rrow::after { content: ""; position: absolute; top: 50%; right: 4px; width: 8px; height: 8px; margin-top: -5px; box-sizing: border-box;
+  border: solid var(--muted); border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); transition: transform 180ms ease; pointer-events: none; }
+.chan::before { top: auto; bottom: 14px; right: 11px; margin-top: 0; }
+details[open] > summary::after, .chan[aria-expanded="true"]::before, button.sname[aria-expanded="true"]::after, button.rrow[aria-expanded="true"]::after { transform: translateY(2px) rotate(225deg); }
+@media (prefers-reduced-motion: reduce) { summary::after, .chan::before, button.sname::after, button.rrow::after { transition: none; } }
