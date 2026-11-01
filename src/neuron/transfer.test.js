@@ -13,7 +13,8 @@ const seed = async () => {
   await db.saveSpecs(new Map([['u-a', { spec, score: 0.9, persist: 0.1, influence: null, generation: 7, accepted: 3, fit_key: 'k' }]]), 1000);
   await db.set('base_play', 'manual');
   await db.set('central_paused', true);
-  await db.subscribeRelay({ uuid: 'r1', stream_name: 's', provider_pubkey: 'p'.repeat(64), name: 'S', cadence_seconds: 600, now: 50, predict: true, pred_created_at: 40, pred_seq: 12 });
+  await db.subscribeRelay({ uuid: 'r1', stream_name: 's', provider_pubkey: 'p'.repeat(64), name: 'S', cadence_seconds: 600, now: 50, predict: true });
+  await db.setRelayPredPlace('r1', 40, 12);
 };
 
 describe('the models on their own', () => {

@@ -573,7 +573,9 @@ test("import: a standard wallet's 12 words open the address MetaMask shows; Back
   await stubCentral(context);
   await openApp(page);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await page.getByLabel(/^Wallet: its 12 or 24 words or its private key/).fill('test test test test test test test test test test test junk');
+  const field = page.locator('[data-test=import-wallet]');
+  await field.fill('Test, test test test test test test test test test test junk.'); // as a phone types it, or a paste
+  await expect(field).toHaveValue('test  test test test test test test test test test test junk ');
   await page.getByRole('button', { name: 'Continue' }).click();
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
   await page.getByLabel('Repeat passphrase').fill(PASS);

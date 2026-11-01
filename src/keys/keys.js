@@ -44,9 +44,18 @@ export function secretFromWords(words) {
   return checkKey(e);
 }
 
+/**
+ * A wallet's words or key as typed or pasted: no punctuation, which neither has, and words in lower case with any list
+ * numbers gone (a phone capitalizes and adds full stops). One word alone may be a key, whose case counts: kept as it is.
+ */
+export function cleanKeyText(text) {
+  const t = String(text).replace(/[^0-9a-zA-Z\s]/g, ' ');
+  return /\s/.test(t.trim()) ? t.toLowerCase().replace(/[^a-z\s]/g, ' ') : t;
+}
+
 /** What Import takes: 24 words (the secret itself), 12 words (a standard wallet's, secretFrom12), or the private key (64 hex, 0x optional, as a Base wallet exports it; or a WIF). → the secret */
 export function secretFromText(text) {
-  const t = String(text).trim();
+  const t = cleanKeyText(text).trim();
   const h = /^(0x)?([0-9a-fA-F]{64})$/.exec(t);
   if (h) return checkKey(Uint8Array.from(h[2].match(/../g), (b) => parseInt(b, 16)));
   if (WIF.test(t)) return secretFromWif(t);

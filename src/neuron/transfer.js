@@ -46,7 +46,10 @@ export async function dataOf(db, { chain, service, favorites = [] }) {
 export async function putData(db, data, { chain, defaultService }) {
   if (data?.chain !== chain) return false;
   for (const key of KEPT) if (data.settings?.[key] != null) await db.set(key, data.settings[key]);
-  for (const s of data.subscriptions ?? []) await db.subscribeRelay(s);
+  for (const s of data.subscriptions ?? []) {
+    await db.subscribeRelay(s);
+    if (Number.isFinite(s.pred_created_at) && Number.isFinite(s.pred_seq)) await db.setRelayPredPlace(s.uuid, s.pred_created_at, s.pred_seq);
+  }
   const service = (await db.get('central_url')) || defaultService;
   if (data.models?.service === service) await putModels(db, data.models, service);
   return true;

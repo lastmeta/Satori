@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { privateKeyToAccount, sign } from 'viem/accounts';
 import {
-  generateSecret, secretFromWords, secretFromText, wordsOf, publicKey, evmAddress, signDigest, privateKeyHex,
+  generateSecret, cleanKeyText, secretFromWords, secretFromText, wordsOf, publicKey, evmAddress, signDigest, privateKeyHex,
 } from './keys.js';
 
 vi.setConfig({ testTimeout: 60_000 }); // shared box; noble builds tables on first use
@@ -36,6 +36,15 @@ describe('one secret: its words, public key and Base address, as satorilib makes
 });
 
 describe('Import: the 24 words or the private key', () => {
+  test('what is typed or pasted: words lower case, no punctuation or list numbers; a key keeps its case', () => {
+    expect(cleanKeyText('Test, test. "TEST"')).toBe('test  test   test ');
+    expect(cleanKeyText('1. apple\n2) Banana').split(/\s+/).filter(Boolean)).toEqual(['apple', 'banana']);
+    expect(cleanKeyText('apple,banana').trim().split(/\s+/)).toEqual(['apple', 'banana']);
+    expect(cleanKeyText('Kxf5UwBV').trim()).toBe('Kxf5UwBV');
+    expect(cleanKeyText('"0xAB12."').trim()).toBe('0xAB12');
+    const words = 'test test test test test test test test test test test junk';
+    expect(evmAddress(publicKey(secretFromText('Test, test, test, test, test, test, test, test, test, test, test, Junk.')))).toBe(evmAddress(publicKey(secretFromText(words))));
+  });
   test("12 words open a standard wallet's first account, the same one MetaMask shows", () => {
     const words = 'test test test test test test test test test test test junk'; // the public test phrase: its address is well known
     expect(evmAddress(publicKey(secretFromText(`  ${words.toUpperCase().replace(/ /g, ' \n')} `)))).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');

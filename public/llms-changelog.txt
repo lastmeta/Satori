@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-01 (Import's field)
+
+- The Import field cleans what is typed or pasted (`import-wallet`): no punctuation, and words in lower case. `setup`'s
+  `walletWords` is read the same way.
+
 ## Changed 2026-11-01 (a daily visit; a whole backup)
 
 - New: "It's a daily game". What to do each UTC day, and how to come back when the browser is wiped.

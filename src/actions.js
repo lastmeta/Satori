@@ -3,7 +3,7 @@
 //   const actions = createActions({ exclusive, go, …, get db() { return db; }, … })
 import { state } from './ui/view.js';
 import {
-  generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, passphraseOk, MIN_PASSPHRASE, IMPORT_MAX,
+  cleanKeyText, generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, passphraseOk, MIN_PASSPHRASE, IMPORT_MAX,
 } from './keys/index.js';
 import { findWallets } from './keys/connect.js';
 import { errorText, same } from './chain/index.js';
@@ -82,6 +82,14 @@ export function createActions(app) {
       if (!ok) return void (state.error = 'Those words do not match. Check your list.');
       el.reset();
       goStep('passphrase');
+    },
+    /** Import's field, as typed or pasted: only what words or a key can hold. */
+    cleanImport({ target: t }) {
+      const clean = cleanKeyText(t.value);
+      if (clean === t.value) return;
+      const at = t.selectionStart;
+      t.value = clean;
+      t.setSelectionRange(at, at); // the same length: the caret stays
     },
     restoreWords(f, el) {
       wipePending();
