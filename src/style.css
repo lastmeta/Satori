@@ -71,6 +71,13 @@ body { margin: 0; background: var(--bg); overflow-x: hidden; }
   padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(32px + var(--bar) + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
 }
 main > section, main > div { min-width: 0; }
+/* The logo's rounded face (the branding kit's Zen Maru Gothic), Latin only, served from public/fonts (OFL there):
+   the CSP allows fonts from 'self' alone. Headings only; body text stays the system face. */
+@font-face { font-family: "Zen Maru Gothic"; font-style: normal; font-weight: 400 500; font-display: swap;
+  src: url(/fonts/zen-maru-gothic-500-latin.woff2) format("woff2"); }
+@font-face { font-family: "Zen Maru Gothic"; font-style: normal; font-weight: 600 900; font-display: swap;
+  src: url(/fonts/zen-maru-gothic-700-latin.woff2) format("woff2"); }
+h1, h2, .how-q { font-family: "Zen Maru Gothic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 h1 { font-size: 1.15rem; margin: 0; font-weight: 700; letter-spacing: 0.01em; }
 h2 { font-size: 1.15rem; margin: 0 0 8px; }
 h3 { font-size: 1rem; margin: 0; }
