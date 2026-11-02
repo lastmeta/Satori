@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Satori Ecosystem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one narrow reading column; every figure is an SVG scaled to the column, so nothing is wider than a phone. */
+:root {
+  --bg: #f4f5f9;
+  --card: #ffffff;
+  --text: #1c2430;
+  --muted: #5f6b7c;
+  --line: #dde2ea;
+  --accent: #5863a2;
+  --accent-soft: #eceefb;
+  --on-accent: #ffffff;
+  --ok: #1f8a4c; --ok-soft: #e4f4ea;
+  --bad: #b42318; --bad-soft: #fbe6e4;
+  --warn: #b26a00;
+  --game: #3d84d6;
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --card: #1d232d; --text: #e6e9ee; --muted: #9aa4b3; --line: #343c49;
+    --accent: #9cb1ff; --accent-soft: #263463; --on-accent: #10131a;
+    --ok: #5fd08f; --ok-soft: #173325; --bad: #ff8a80; --bad-soft: #3d1c1a; --warn: #f0b45a; --game: #7db4f2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151b; --card: #1d232d; --text: #e6e9ee; --muted: #9aa4b3; --line: #343c49;
+  --accent: #9cb1ff; --accent-soft: #263463; --on-accent: #10131a;
+  --ok: #5fd08f; --ok-soft: #173325; --bad: #ff8a80; --bad-soft: #3d1c1a; --warn: #f0b45a; --game: #7db4f2;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 17px/1.6 var(--body); overflow-x: hidden; }
+main { max-width: 680px; margin: 0 auto; padding: 0 20px 64px; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 650; text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.2rem, 9vw, 3.2rem); letter-spacing: -0.01em; }
+h2 { font-size: clamp(1.55rem, 6vw, 2rem); }
+h3 { font-size: 1.2rem; font-weight: 500; }
+p { margin: 0; }
+
+.hero { display: grid; gap: 18px; padding: 44px 0 28px; }
+.hero .mark { width: 76px; height: 76px; color: var(--accent); }
+.hero .lede { font-size: 1.2rem; color: var(--text); max-width: 34ch; }
+.cta { display: inline-flex; align-items: center; gap: 8px; justify-self: start; background: var(--accent); color: var(--on-accent);
+  font-weight: 600; text-decoration: none; padding: 12px 20px; border-radius: 999px; }
+
+section { display: grid; gap: 14px; padding: 34px 0 6px; border-top: 1px solid var(--line); margin-top: 26px; }
+.kicker { font: 600 0.78rem/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.muted { color: var(--muted); }
+
+figure { margin: 6px 0 0; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 14px 14px; }
+figure svg { display: block; width: 100%; height: auto; max-width: 100%; }
+figcaption { margin-top: 10px; font-size: 0.92rem; color: var(--muted); line-height: 1.5; }
+
+/* SVG roles, styled from the page so both themes work */
+svg text { font-family: var(--body); fill: var(--text); }
+svg .t-b { font-weight: 600; }
+svg .t-m { fill: var(--muted); }
+svg .t-a { fill: var(--accent); font-weight: 600; }
+svg .t-on { fill: var(--on-accent); font-weight: 600; }
+svg .t-ok { fill: var(--ok); font-weight: 600; }
+svg .t-warn { fill: var(--warn); font-weight: 600; }
+svg .box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+svg .box-a { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .box-net { fill: var(--bg); stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 4; }
+svg .ln { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+svg .ln-a { stroke: var(--accent); stroke-width: 2; fill: none; }
+svg .ln-d { stroke: var(--muted); stroke-width: 1.6; fill: none; stroke-dasharray: 4 4; }
+svg .ah { fill: var(--muted); }
+svg .ah-a { fill: var(--accent); }
+svg .fill-a { fill: var(--accent); }
+svg .fill-game { fill: var(--game); }
+svg .fill-m { fill: var(--muted); opacity: 0.55; }
+svg .fill-ok { fill: var(--ok); }
+svg .fill-bad { fill: var(--bad); }
+svg .lock { stroke: var(--warn); stroke-width: 6; stroke-linecap: round; }
+svg .free { stroke: var(--ok); stroke-width: 6; stroke-linecap: round; }
+svg .axis { stroke: var(--line); stroke-width: 1.5; }
+svg .curve { stroke: var(--game); stroke-width: 3; fill: none; stroke-linecap: round; }
+svg .base { stroke: var(--line); stroke-width: 1.5; }
+
+.ways { display: grid; gap: 12px; }
+.way { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; display: grid; gap: 6px; }
+.way .tag { font: 600 0.75rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.way h3 { color: var(--text); }
+.need { font-size: 0.93rem; color: var(--muted); }
+.need b { color: var(--text); font-weight: 600; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.steps li::before { content: counter(s); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); font: 650 1.1rem/1 var(--display); }
+.steps b { display: block; font-weight: 600; }
+
+.note { background: var(--accent-soft); border-radius: 16px; padding: 16px 18px; display: grid; gap: 6px; }
+.note b { font-weight: 600; }
+
+.facts { display: grid; gap: 10px; margin: 0; }
+.fact { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; display: grid; gap: 2px; }
+.fact dt { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+.fact dd { margin: 0; }
+.addr { font: 500 0.9rem/1.45 var(--mono); overflow-wrap: anywhere; word-break: break-all; }
+.copy { justify-self: start; margin-top: 6px; font: 600 0.85rem/1 var(--body); color: var(--accent); background: transparent;
+  border: 1.5px solid var(--accent); border-radius: 999px; padding: 8px 14px; cursor: pointer; }
+
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
+.links a { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; text-decoration: none; font-weight: 500; }
+footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .cta, .copy { transition: transform .15s ease; } .cta:active, .copy:active { transform: scale(0.97); } }
+</style>
+</head>
+<body>
+<main>
+
+<header class="hero">
+  <svg class="mark" viewBox="0 0 128 128" role="img" aria-label="The Satori mark: a seated figure inside an ensō circle"><path fill="currentColor" d="M 126.35601,49.668784 C 124.42138,41.251091 120.89574,33.463552 115.87724,26.523075 111.03012,19.819524 105.0014,14.184054 97.958601,9.7737925 90.91608,5.3632603 83.214061,2.3997803 75.066982,0.96588641 66.631972,-0.5190095 58.086726,-0.29086294 49.668717,1.6437553 41.250709,3.578363 33.463406,7.1039959 26.522895,12.122477 c -6.703584,4.847365 -12.339081,10.87579 -16.7493632,17.91855 -2.6947607,4.303041 -4.8484848,8.85288 -6.444168,13.599331 -1.19286,3.386328 -2.0456906,6.891941 -2.56231605,10.444719 -0.0323364,0.218553 -0.0628072,0.437379 -0.0926562,0.656479 -1.15172438,7.846222 -0.8278735,15.77279 0.96854715,23.589396 1.9346213,8.417967 5.4602692,16.205231 10.4787713,23.145708 4.847114,6.70355 10.875843,12.33902 17.918364,16.74927 7.04252,4.41054 14.74454,7.37402 22.891619,8.80818 8.435285,1.4849 16.98053,1.25675 25.398265,-0.67787 3.886521,-0.89312 7.658967,-2.14109 11.275656,-3.7173 1.039568,-0.40448 1.977401,-0.8147 2.789916,-1.22082 0.25283,-0.13957 0.512517,-0.26764 0.77522,-0.39241 0.246249,-0.14012 0.495241,-0.26818 0.748895,-0.39487 0.433542,-0.24734 0.874213,-0.48373 1.313239,-0.72586 1.042585,-0.58025 2.052538,-1.21918 3.056458,-1.86551 0.138207,-0.0902 0.275317,-0.18181 0.412426,-0.27367 3.319982,-2.1411 6.444712,-4.5918 9.328152,-7.33014 3.8972,-4.15551 -1.76928,-7.76615 -6.63339,-4.07627 -0.2479,-2.71311 -0.50457,-5.46215 -0.77577,-5.93436 -1.441574,-2.508277 -4.215036,-3.938877 -7.092153,-3.635317 -0.522938,0.05512 -2.027583,0.304657 -3.183696,0.416538 -0.148901,0.01426 -0.296706,0.01316 -0.443962,0.0047 -3.64274,7.438179 -12.001517,5.202759 -12.001517,5.202759 9.038021,-1.79422 9.7573,-6.370108 9.7573,-6.370108 0.01892,-5.222496 -0.23007,-16.927524 -0.818822,-21.10415 -0.386101,-2.739171 -2.096686,-5.348363 -4.702874,-6.42001 -2.998597,-1.337913 -6.463368,-0.991849 -9.425493,-2.426287 -1.069185,-0.483722 -1.74212,-1.435261 -2.250798,-2.455081 -0.227055,-0.455203 -0.435462,-0.950991 -0.571475,-1.441568 -0.265171,-0.958394 0.01453,-1.920628 0.270107,-2.852423 0.441769,0.762602 0.55557,2.569703 1.005016,3.328741 0.08309,0.140126 0.23391,0.225682 0.396797,0.225408 h 0.008 c 0.249814,0 0.455205,-0.205116 0.459044,-0.455203 0.02496,-1.697963 -0.14753,-3.418137 0.387473,-5.059611 0.629062,-1.950243 1.52768,-3.7908 2.309756,-5.677973 0.186469,-0.388568 0.262977,-1.038466 0.300545,-1.649151 0.03373,-0.545971 -0.538019,-0.921376 -1.023663,-0.669917 -0.214166,0.110784 -0.428332,0.197711 -0.641401,0.188936 -0.0532,-1.364512 0.129706,-2.759189 -0.106672,-4.106974 -0.942494,-2.872441 -3.720344,-4.418487 -5.401587,-6.779236 -0.331258,-0.465075 -0.501275,-1.026675 -0.480708,-1.597324 0.02769,-0.769732 0.03236,-1.5444 -0.271752,-2.263951 -0.04114,-0.131076 -0.09488,-0.253926 -0.158499,-0.370469 -0.59396,-1.087003 -1.769542,-1.671912 -2.940462,-1.620633 -1.17092,-0.05128 -2.346502,0.533904 -2.940462,1.620633 -0.06362,0.116543 -0.117367,0.239667 -0.158499,0.370469 -0.30411,0.719551 -0.299723,1.494219 -0.271752,2.263951 0.02056,0.570374 -0.14945,1.132249 -0.480434,1.597324 -1.681244,2.360475 -4.459093,3.906795 -5.401588,6.779236 -0.236378,1.34806 -0.0532,2.742462 -0.106672,4.106974 -0.213343,0.0088 -0.427235,-0.07816 -0.6414,-0.188936 -0.485644,-0.251459 -1.057392,0.123946 -1.023664,0.669917 0.03784,0.610685 0.114351,1.260583 0.300546,1.649151 0.782075,1.887173 1.680695,3.72773 2.309755,5.677973 0.535004,1.641474 0.362519,3.361374 0.387473,5.059611 0.0035,0.249813 0.208956,0.454654 0.459045,0.455203 h 0.008 c 0.162886,2.74e-4 0.313707,-0.08501 0.396796,-0.225408 0.449447,-0.759038 0.563248,-2.565865 1.005017,-3.328741 0.255572,0.931795 0.535277,1.894303 0.270106,2.852423 -0.135738,0.490852 -0.344146,0.986365 -0.571474,1.441568 -0.508953,1.01982 -1.18189,1.971634 -2.250799,2.455081 -2.962125,1.434438 -6.426897,1.088374 -9.425494,2.426287 -2.606187,1.071647 -4.316771,3.681113 -4.702874,6.42001 -0.58875,4.176626 -0.837742,15.881928 -0.818821,21.10415 0,0 0.71928,4.575888 9.7573,6.370108 0,0 -8.358778,2.23569 -12.001517,-5.202759 -0.147257,0.0085 -0.295336,0.0096 -0.443963,-0.0047 -1.156111,-0.111881 -2.660757,-0.36142 -3.183694,-0.416538 -2.666243,-0.281348 -5.24254,0.927408 -6.753494,3.102237 -3.772719,-3.845918 -6.971223,-8.265228 -9.455931,-13.037457 -0.39186,-0.781798 -0.754379,-1.576758 -1.164887,-2.347586 -0.299997,-0.708582 -0.574765,-1.429502 -0.930977,-2.112308 -0.72778,-1.899787 -1.410589,-3.816302 -2.015517,-5.759417 -0.438205,-1.897868 -0.88107,-3.796558 -1.307208,-5.697168 -0.404749,-2.64676 -0.669646,-5.319022 -0.729426,-8.001978 0.01563,-0.34195 0.01151,-0.686095 0.008,-1.027772 0.01673,-0.579973 0.02962,-1.157203 0.02304,-1.736078 0.263251,-5.415548 1.310771,-10.812172 3.300787,-15.864379 2.234894,-5.821664 5.645369,-11.161526 9.874665,-15.734124 1.58417,-1.709206 3.288997,-3.304884 5.073895,-4.803216 2.968159,-2.445208 6.17242,-4.599471 9.565345,-6.407396 0.252831,-0.139577 0.51334,-0.263523 0.771107,-0.391309 0.513889,-0.2808 1.031891,-0.552003 1.574024,-0.775217 5.953592,-2.70462 11.226296,-3.869501 18.278414,-4.417116 0.408314,-0.03181 0.822386,-0.08419 1.236184,-0.04634 0.298352,-0.02578 0.601365,-0.06746 0.903555,-0.02989 0.625222,-0.01947 1.250444,-0.03044 1.874295,0.01919 0.514711,-0.0068 1.028599,0.02056 1.54331,0.06088 0.227603,0.01179 0.455206,0.02386 0.683357,0.03784 1.894038,0.104477 3.774914,0.366356 5.643998,0.688564 1.197245,0.204567 2.379408,0.491948 3.563216,0.75986 0.297254,0.08172 0.594509,0.16316 0.894232,0.237748 4.668597,1.300345 9.130158,3.312563 13.289528,5.779434 1.408669,0.704468 2.633884,1.701528 3.959738,2.540637 3.123093,2.227479 5.985675,4.812814 8.528245,7.68361 0.93893,1.009399 1.77887,2.108193 2.68763,3.142821 0.54241,0.617541 1.52494,-0.03126 1.16983,-0.772474 l -0.0107,-0.02221 c -2.0199,-3.382762 -4.98285,-6.060508 -7.845163,-8.718785 -0.143691,-0.137933 -0.290947,-0.272026 -0.440397,-0.403924 -0.456302,-0.403102 0.03976,-1.127313 0.58217,-0.850627 0.170565,0.0872 0.340855,0.17358 0.511146,0.25612 2.665144,1.651619 4.850954,3.957526 6.792704,6.394508 2.91003,3.76091 5.33249,7.888999 7.31839,12.204928 1.02914,2.166877 1.8082,4.438231 2.66706,6.67421 0.43409,1.963132 1.02175,3.905699 1.19258,5.916544 0.32715,1.591292 0.36252,3.217684 0.60438,4.819943 0.34909,6.011699 0.47989,12.144327 -0.94331,18.040854 -0.20813,0.934811 -0.73162,1.908562 -0.75603,2.872441 -0.0167,0.654559 0.77166,1.008576 1.26471,0.577778 0.91891,-0.802364 1.37357,-2.109839 1.75582,-3.244556 0.76536,-2.579302 1.09003,-5.267194 1.25621,-7.946585 0.0445,-0.794138 0.085,-1.587453 0.0951,-2.382413 0.0132,-0.28793 0.0135,-0.575036 0.019,-0.859128 0.0104,-0.291494 0.0104,-0.580794 0.0167,-0.869273 0.015,-0.344144 -0.0104,-0.687466 -0.0332,-1.029143 0.0867,-2.680214 -0.26517,-5.347814 -0.40311,-8.017059 -0.3244,-1.868253 -0.38664,-3.779557 -0.8476,-5.627244 -0.13246,-1.97465 -0.8106,-3.834401 -1.33573,-5.718558 0.13245,-0.150546 0.26517,-0.300818 0.40009,-0.449718 0.37458,0.278057 0.64523,0.655108 0.88024,1.053 0.29204,0.646059 0.5457,1.311862 0.88409,1.936532 0.16672,0.67924 0.42339,1.329413 0.68582,1.977941 0.34388,1.34751 0.62742,2.7112 0.94935,4.065841 0.32879,1.160493 0.29753,2.375832 0.56023,3.547019 0.0357,1.264149 0.36609,2.525007 0.25174,3.789155 l 0.0438,0.01344 c 0.0343,0.195518 0.10281,0.586828 0.13711,0.782621 l -0.22322,-0.05786 c 0.17193,0.273121 0.16152,0.609862 0.19059,0.922198 0.0475,1.353543 0.0143,2.708458 0.051,4.062276 -0.29177,7.855545 -1.44185,15.824616 -4.70616,23.039586 -1.11005,2.234335 -2.35693,4.536675 -2.41616,7.092669 0.0398,0.715162 0.29643,1.243307 0.62385,1.63023 0.64798,0.765893 1.86031,0.67211 2.38078,-0.185646 4.09987,-6.755653 6.88347,-14.106362 8.27953,-21.870591 1.53042,-8.509557 1.31626,-17.132366 -0.63647,-25.629035 z"/></svg>
+  <h1>The Satori ecosystem</h1>
+  <p class="lede">Satori is an open network that pays people, and the machines they run, for predicting the future well.</p>
+  <a class="cta" href="https://app.satorinet.io">Open the Satori app</a>
+</header>
+
+<section aria-labelledby="s-what">
+  <span class="kicker">The idea</span>
+  <h2 id="s-what">Predict, get scored, get paid</h2>
+  <p>The world publishes numbers all day: prices, exchange rates, measurements. Satori turns each of them into a <b>data stream</b>. Predictors look at a stream and say where it goes next. When the real value arrives, every prediction is scored, and the good ones earn <b>SATORI</b>, the network's token.</p>
+  <figure>
+    <svg viewBox="0 0 340 300" role="img" aria-label="The Satori loop: a data stream is published, you predict up or down, the real value arrives, and good predictions are paid in SATORI, every day.">
+      <defs><marker id="m1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-a" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect class="box" x="100" y="12" width="140" height="50" rx="12"/>
+      <text x="170" y="34" text-anchor="middle" font-size="13" class="t-b">A data stream</text>
+      <text x="170" y="52" text-anchor="middle" font-size="11.5" class="t-m">a price, a rate…</text>
+      <rect class="box" x="214" y="125" width="122" height="50" rx="12"/>
+      <text x="275" y="147" text-anchor="middle" font-size="13" class="t-b">You predict</text>
+      <text x="275" y="165" text-anchor="middle" font-size="11" class="t-m">where it goes next</text>
+      <rect class="box" x="100" y="238" width="140" height="50" rx="12"/>
+      <text x="170" y="260" text-anchor="middle" font-size="13" class="t-b">Reality arrives</text>
+      <text x="170" y="278" text-anchor="middle" font-size="11.5" class="t-m">the next value lands</text>
+      <rect class="box-a" x="4" y="125" width="122" height="50" rx="12"/>
+      <text x="65" y="147" text-anchor="middle" font-size="13" class="t-b">Scored and paid</text>
+      <text x="65" y="165" text-anchor="middle" font-size="11.5" class="t-a">in SATORI</text>
+      <path class="ln-a" d="M242,38 Q294,44 282,121" marker-end="url(#m1)"/>
+      <path class="ln-a" d="M282,179 Q294,252 246,262" marker-end="url(#m1)"/>
+      <path class="ln-a" d="M98,262 Q46,252 58,179" marker-end="url(#m1)"/>
+      <path class="ln-a" d="M58,121 Q46,44 96,38" marker-end="url(#m1)"/>
+      <text x="170" y="146" text-anchor="middle" font-size="12" class="t-m">repeats</text>
+      <text x="170" y="163" text-anchor="middle" font-size="12" class="t-m">every day</text>
+    </svg>
+    <figcaption>The whole of Satori is this loop, running every day on many data streams at once.</figcaption>
+  </figure>
+  <p>Good predictions are worth something: a crowd of predictors that keeps being scored becomes a forecast anyone can read. Satori pays for that forecast, and anyone can take part, by hand or with software that predicts for them.</p>
+</section>
+
+<section aria-labelledby="s-map">
+  <span class="kicker">The pieces</span>
+  <h2 id="s-map">What the ecosystem is made of</h2>
+  <figure>
+    <svg viewBox="0 0 340 470" role="img" aria-label="Map of the ecosystem: the Satori Network's relays carry data streams to the Satori app and Satori Lite; they send predictions to the Satori Service and the Satori contract; both pay out SATORI on Base; the Satori Association governs.">
+      <defs>
+        <marker id="m2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="m2a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-a" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect class="box-net" x="14" y="8" width="312" height="52" rx="14"/>
+      <text x="170" y="30" text-anchor="middle" font-size="13" class="t-b">Satori Network</text>
+      <text x="170" y="48" text-anchor="middle" font-size="11.5" class="t-m">relays that carry the data streams</text>
+      <path class="ln-d" d="M90,62 L90,92" marker-end="url(#m2)"/>
+      <path class="ln-d" d="M250,62 L250,92" marker-end="url(#m2)"/>
+      <text x="170" y="82" text-anchor="middle" font-size="11.5" class="t-m">data</text>
+      <rect class="box" x="14" y="96" width="152" height="52" rx="12"/>
+      <text x="90" y="118" text-anchor="middle" font-size="13" class="t-b">Satori app</text>
+      <text x="90" y="136" text-anchor="middle" font-size="11.5" class="t-m">in your browser</text>
+      <rect class="box" x="174" y="96" width="152" height="52" rx="12"/>
+      <text x="250" y="118" text-anchor="middle" font-size="13" class="t-b">Satori Lite</text>
+      <text x="250" y="136" text-anchor="middle" font-size="11.5" class="t-m">on your own computer</text>
+      <path class="ln" d="M90,148 L90,162 L250,162 L250,148"/>
+      <path class="ln" d="M170,162 L100,206" marker-end="url(#m2)"/>
+      <path class="ln" d="M170,162 L240,206" marker-end="url(#m2)"/>
+      <text x="170" y="196" text-anchor="middle" font-size="11.5" class="t-m">predictions</text>
+      <rect class="box" x="14" y="210" width="152" height="58" rx="12"/>
+      <text x="90" y="234" text-anchor="middle" font-size="13" class="t-b">Satori Service</text>
+      <text x="90" y="253" text-anchor="middle" font-size="11.5" class="t-m">scores off-chain</text>
+      <rect class="box" x="174" y="210" width="152" height="58" rx="12"/>
+      <text x="250" y="234" text-anchor="middle" font-size="13" class="t-b">Satori contract</text>
+      <text x="250" y="253" text-anchor="middle" font-size="11.5" class="t-m">runs the on-chain game</text>
+      <path class="ln-a" d="M100,270 L142,316" marker-end="url(#m2a)"/>
+      <path class="ln-a" d="M240,270 L198,316" marker-end="url(#m2a)"/>
+      <text x="96" y="302" text-anchor="end" font-size="11.5" class="t-a">daily rewards</text>
+      <text x="244" y="302" text-anchor="start" font-size="11.5" class="t-a">winnings</text>
+      <rect class="box-a" x="70" y="320" width="200" height="58" rx="14"/>
+      <text x="170" y="345" text-anchor="middle" font-size="15" class="t-b">SATORI</text>
+      <text x="170" y="365" text-anchor="middle" font-size="11.5" class="t-a">the token, on Base</text>
+      <path class="ln-d" d="M170,420 L170,382" marker-end="url(#m2)"/>
+      <text x="178" y="405" font-size="11.5" class="t-m">governs</text>
+      <rect class="box" x="70" y="422" width="200" height="44" rx="12"/>
+      <text x="170" y="441" text-anchor="middle" font-size="13" class="t-b">Satori Association</text>
+      <text x="170" y="457" text-anchor="middle" font-size="11" class="t-m">holds the admin keys, as a multisig</text>
+    </svg>
+    <figcaption>Data flows down from the relays to your software, predictions go to the two scorers, and both pay out in SATORI.</figcaption>
+  </figure>
+  <dl class="facts">
+    <div class="fact"><dt>Satori app</dt><dd>The easiest way in. It runs in your browser at <a href="https://app.satorinet.io">app.satorinet.io</a>, predicts for you automatically, and holds your wallet.</dd></div>
+    <div class="fact"><dt>Satori Lite</dt><dd>The same job as a Docker program you run on your own computer or server, for people who want to run Satori around the clock.</dd></div>
+    <div class="fact"><dt>Satori Network</dt><dd>A set of Nostr relays that carry the data streams between everyone. Anyone can run one.</dd></div>
+    <div class="fact"><dt>Satori Service</dt><dd>Scores predictions off-chain, the way Satori always has, and publishes the day's rewards on Base.</dd></div>
+    <div class="fact"><dt>Satori contract</dt><dd>A smart contract on Base. It issues SATORI on a fixed schedule and runs a prediction game that scores and pays without any server in the middle.</dd></div>
+    <div class="fact"><dt>Satori Association</dt><dd>The members' association behind the project. It holds the contract's admin keys in a multisig.</dd></div>
+  </dl>
+</section>
+
+<section aria-labelledby="s-flow">
+  <span class="kicker">The money</span>
+  <h2 id="s-flow">Where each day's new SATORI goes</h2>
+  <p>The contract issues new SATORI every day. A development fee comes off the top, and the rest is split evenly between the two ways of scoring.</p>
+  <figure>
+    <svg viewBox="0 0 340 120" role="img" aria-label="Each day's new SATORI: 15 percent development fee, 42.5 percent off-chain through the Satori Service, 42.5 percent on-chain through the Satori contract.">
+      <rect class="fill-m" x="10" y="14" width="48" height="40" rx="6"/>
+      <rect class="fill-a" x="60" y="14" width="134" height="40" rx="6"/>
+      <rect class="fill-game" x="196" y="14" width="134" height="40" rx="6"/>
+      <text x="34" y="39" text-anchor="middle" font-size="12" class="t-b">15%</text>
+      <text x="127" y="39" text-anchor="middle" font-size="13" class="t-on">42.5%</text>
+      <text x="263" y="39" text-anchor="middle" font-size="13" class="t-on">42.5%</text>
+      <text x="34" y="78" text-anchor="middle" font-size="12" class="t-b">Dev fee</text>
+      <text x="127" y="78" text-anchor="middle" font-size="12" class="t-b">Off-chain</text>
+      <text x="263" y="78" text-anchor="middle" font-size="12" class="t-b">On-chain</text>
+      <text x="34" y="96" text-anchor="middle" font-size="11" class="t-m">developers</text>
+      <text x="127" y="96" text-anchor="middle" font-size="11" class="t-m">Satori Service</text>
+      <text x="263" y="96" text-anchor="middle" font-size="11" class="t-m">Satori contract</text>
+    </svg>
+    <figcaption>Out of the off-chain half, 0.1% goes to the people running relays. Out of every on-chain reward, 5% goes to whoever invited the earner, or to Satori's marketing wallet if nobody did.</figcaption>
+  </figure>
+  <p class="muted">The daily amount shrinks a little as more SATORI is issued. On the current setting, the total supply approaches about 4 million SATORI.</p>
+</section>
+
+<section aria-labelledby="s-earn">
+  <span class="kicker">Taking part</span>
+  <h2 id="s-earn">Four ways to earn</h2>
+  <figure>
+    <svg viewBox="0 0 340 226" role="img" aria-label="Ways to earn: off-chain through the Satori Service, by predicting or running a relay; on-chain through the Satori contract, by playing the game or referring friends.">
+      <rect class="box-a" x="110" y="6" width="120" height="38" rx="12"/>
+      <text x="170" y="30" text-anchor="middle" font-size="14" class="t-b">SATORI</text>
+      <path class="ln" d="M170,44 L90,80"/><path class="ln" d="M170,44 L250,80"/>
+      <rect class="box" x="22" y="80" width="136" height="48" rx="12"/>
+      <text x="90" y="100" text-anchor="middle" font-size="13" class="t-b">Off-chain</text>
+      <text x="90" y="118" text-anchor="middle" font-size="11.5" class="t-m">Satori Service</text>
+      <rect class="box" x="182" y="80" width="136" height="48" rx="12"/>
+      <text x="250" y="100" text-anchor="middle" font-size="13" class="t-b">On-chain</text>
+      <text x="250" y="118" text-anchor="middle" font-size="11.5" class="t-m">Satori contract</text>
+      <path class="ln" d="M90,128 L46,164"/><path class="ln" d="M90,128 L128,164"/>
+      <path class="ln" d="M250,128 L212,164"/><path class="ln" d="M250,128 L294,164"/>
+      <rect class="box" x="7" y="164" width="78" height="56" rx="10"/>
+      <text x="46" y="188" text-anchor="middle" font-size="12" class="t-b">Predict</text>
+      <text x="46" y="206" text-anchor="middle" font-size="10.5" class="t-m">250 SATORI</text>
+      <rect class="box" x="89" y="164" width="78" height="56" rx="10"/>
+      <text x="128" y="188" text-anchor="middle" font-size="12" class="t-b">Run a relay</text>
+      <text x="128" y="206" text-anchor="middle" font-size="10.5" class="t-m">20 h a day</text>
+      <rect class="box" x="173" y="164" width="78" height="56" rx="10"/>
+      <text x="212" y="188" text-anchor="middle" font-size="12" class="t-b">The game</text>
+      <text x="212" y="206" text-anchor="middle" font-size="10.5" class="t-m">any amount</text>
+      <rect class="box" x="255" y="164" width="78" height="56" rx="10"/>
+      <text x="294" y="188" text-anchor="middle" font-size="12" class="t-b">Refer</text>
+      <text x="294" y="206" text-anchor="middle" font-size="10.5" class="t-m">5% of theirs</text>
+    </svg>
+    <figcaption>Two scorers, two ways to earn from each. You can do any of them, or all four.</figcaption>
+  </figure>
+  <div class="ways">
+    <div class="way"><span class="tag">Off-chain</span><h3>Predict for the Satori Service</h3>
+      <p>The Satori app or Satori Lite predicts many data streams for you. The Satori Service scores the predictions and publishes each day's rewards on Base, and you claim them in the app.</p>
+      <p class="need">You need: <b>250 SATORI on Base</b> for your predictions to earn. You can also lend your stake to a pool, or run a pool yourself.</p></div>
+    <div class="way"><span class="tag">Off-chain</span><h3>Run a relay</h3>
+      <p>Host a Nostr relay for the Satori Network. Relays connected at least 20 hours a day share a slice of the off-chain rewards.</p>
+      <p class="need">You need: <b>a server that stays online</b>.</p></div>
+    <div class="way"><span class="tag">On-chain</span><h3>Play the prediction game</h3>
+      <p>Call data streams up or down, directly on the Satori contract, and build streaks of correct calls. Play by hand in the app's Game page, or let the app play for you.</p>
+      <p class="need">You need: <b>any amount of SATORI</b> (at least 1 for your streak to grow), and <b>a little ETH on Base</b> for transaction fees.</p></div>
+    <div class="way"><span class="tag">On-chain</span><h3>Refer friends</h3>
+      <p>Share the invite link on your Wallet page. Everyone who joins through it is your referral for good, and you receive 5% of the on-chain rewards they earn. It costs them nothing extra.</p>
+      <p class="need">You need: <b>a wallet in the Satori app</b>.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s-game">
+  <span class="kicker">The on-chain game</span>
+  <h2 id="s-game">Streaks are what pay</h2>
+  <p>Every day you call each data stream <b>up</b> or <b>down</b>. Correct calls in a row build a streak. Each day's on-chain rewards are shared among the correct calls, weighted by two things: how much SATORI stands behind the call, and how long its streak is.</p>
+  <figure>
+    <svg viewBox="0 0 340 206" role="img" aria-label="An example week on one stream: three correct calls earn more each day, a miss resets the streak, and the first correct call after the miss earns nothing.">
+      <line class="base" x1="8" y1="168" x2="332" y2="168"/>
+      <g>
+        <circle class="fill-ok" cx="35" cy="22" r="14"/><text x="35" y="27" text-anchor="middle" font-size="14" class="t-on">✓</text>
+        <text x="35" y="56" text-anchor="middle" font-size="11" class="t-m">day 1</text>
+        <rect class="fill-game" x="20" y="154" width="30" height="14" rx="4"/>
+        <text x="35" y="186" text-anchor="middle" font-size="11" class="t-m">streak 1</text>
+      </g>
+      <g>
+        <circle class="fill-ok" cx="89" cy="22" r="14"/><text x="89" y="27" text-anchor="middle" font-size="14" class="t-on">✓</text>
+        <text x="89" y="56" text-anchor="middle" font-size="11" class="t-m">day 2</text>
+        <rect class="fill-game" x="74" y="140" width="30" height="28" rx="4"/>
+        <text x="89" y="186" text-anchor="middle" font-size="11" class="t-m">streak 2</text>
+      </g>
+      <g>
+        <circle class="fill-ok" cx="143" cy="22" r="14"/><text x="143" y="27" text-anchor="middle" font-size="14" class="t-on">✓</text>
+        <text x="143" y="56" text-anchor="middle" font-size="11" class="t-m">day 3</text>
+        <rect class="fill-game" x="128" y="96" width="30" height="72" rx="4"/>
+        <text x="143" y="186" text-anchor="middle" font-size="11" class="t-m">streak 3</text>
+      </g>
+      <g>
+        <circle class="fill-bad" cx="197" cy="22" r="14"/><text x="197" y="27" text-anchor="middle" font-size="14" class="t-on">✕</text>
+        <text x="197" y="56" text-anchor="middle" font-size="11" class="t-m">day 4</text>
+        <text x="197" y="160" text-anchor="middle" font-size="12" class="t-m">0</text>
+        <text x="197" y="186" text-anchor="middle" font-size="11" class="t-m">streak 0</text>
+      </g>
+      <g>
+        <circle class="fill-ok" cx="251" cy="22" r="14"/><text x="251" y="27" text-anchor="middle" font-size="14" class="t-on">✓</text>
+        <text x="251" y="56" text-anchor="middle" font-size="11" class="t-m">day 5</text>
+        <text x="251" y="160" text-anchor="middle" font-size="12" class="t-m">0</text>
+        <text x="251" y="186" text-anchor="middle" font-size="11" class="t-m">streak 1</text>
+      </g>
+      <g>
+        <circle class="fill-ok" cx="305" cy="22" r="14"/><text x="305" y="27" text-anchor="middle" font-size="14" class="t-on">✓</text>
+        <text x="305" y="56" text-anchor="middle" font-size="11" class="t-m">day 6</text>
+        <rect class="fill-game" x="290" y="154" width="30" height="14" rx="4"/>
+        <text x="305" y="186" text-anchor="middle" font-size="11" class="t-m">streak 2</text>
+      </g>
+    </svg>
+    <figcaption>An illustration of one stream over six days. Each correct call in a row earns more. A miss resets the streak, and the first correct call after a miss earns nothing.</figcaption>
+  </figure>
+  <figure>
+    <svg viewBox="0 0 340 176" role="img" aria-label="How a streak's weight grows: almost nothing for short streaks, a fast rise once the streak passes a bar, then it levels off.">
+      <line class="axis" x1="40" y1="146" x2="326" y2="146"/>
+      <line class="axis" x1="40" y1="146" x2="40" y2="14"/>
+      <path class="curve" d="M40,143 C90,143 112,140 130,126 C152,108 168,54 200,42 C236,30 286,27 324,26"/>
+      <text x="326" y="166" text-anchor="end" font-size="11.5" class="t-m">longer streak →</text>
+      <text x="14" y="80" font-size="11.5" class="t-m" transform="rotate(-90 14 80)" text-anchor="middle">weight</text>
+      <text x="56" y="132" font-size="11.5" class="t-m">a little</text>
+      <text x="168" y="96" font-size="11.5" class="t-b">rises fast</text>
+      <text x="324" y="18" text-anchor="end" font-size="11.5" class="t-m">levels off</text>
+    </svg>
+    <figcaption>The shape of the streak reward. Short streaks earn very little, so lucky guesses are worth almost nothing, and steady accuracy is what pays. With under 1 SATORI behind your calls, a correct call still pays but your streak does not grow.</figcaption>
+  </figure>
+</section>
+
+<section aria-labelledby="s-wallet">
+  <span class="kicker">Your keys</span>
+  <h2 id="s-wallet">Your wallet, and the app's alias</h2>
+  <p>The Satori app keeps two keys. Your <b>wallet</b> is yours: it holds your SATORI and is protected by your 24 words. The app's <b>alias</b> is a second key the app makes for itself, so it can sign predictions every day without asking you each time.</p>
+  <figure>
+    <svg viewBox="0 0 340 236" role="img" aria-label="Your wallet stakes with the app's alias. The alias sends predictions to the Satori contract. Rewards go back to your wallet. Your SATORI never leaves the wallet.">
+      <defs><marker id="m3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-a" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect class="box-a" x="6" y="10" width="136" height="80" rx="14"/>
+      <text x="74" y="36" text-anchor="middle" font-size="13.5" class="t-b">Your wallet</text>
+      <text x="74" y="56" text-anchor="middle" font-size="11.5" class="t-m">holds your SATORI</text>
+      <text x="74" y="74" text-anchor="middle" font-size="11.5" class="t-m">your 24 words</text>
+      <rect class="box" x="198" y="10" width="136" height="80" rx="14"/>
+      <text x="266" y="36" text-anchor="middle" font-size="13.5" class="t-b">The app's alias</text>
+      <text x="266" y="56" text-anchor="middle" font-size="11.5" class="t-m">predicts every day</text>
+      <text x="266" y="74" text-anchor="middle" font-size="11.5" class="t-m">needs a little ETH</text>
+      <path class="ln-a" d="M144,50 L194,50" marker-end="url(#m3)"/>
+      <text x="170" y="42" text-anchor="middle" font-size="11" class="t-a">stake</text>
+      <rect class="box" x="95" y="176" width="150" height="50" rx="12"/>
+      <text x="170" y="198" text-anchor="middle" font-size="13" class="t-b">Satori contract</text>
+      <text x="170" y="216" text-anchor="middle" font-size="11.5" class="t-m">on Base</text>
+      <path class="ln-a" d="M262,92 L214,172" marker-end="url(#m3)"/>
+      <text x="246" y="140" font-size="11.5" class="t-a">predictions</text>
+      <path class="ln-a" d="M126,172 L78,94" marker-end="url(#m3)"/>
+      <text x="94" y="140" text-anchor="end" font-size="11.5" class="t-a">rewards</text>
+    </svg>
+    <figcaption>"Stake with this app" lends the alias your prediction power. Your SATORI stays in your wallet the whole time, locked while it is staked.</figcaption>
+  </figure>
+  <p>You can unstake whenever you like. To stop the same SATORI being used twice in one day, it stays locked until the second midnight UTC after you unstake.</p>
+  <figure>
+    <svg viewBox="0 0 340 104" role="img" aria-label="After you unstake, your SATORI stays locked through the next full day and can be moved after the second midnight UTC, between 24 and 48 hours later.">
+      <line class="lock" x1="40" y1="52" x2="250" y2="52"/>
+      <line class="free" x1="250" y1="52" x2="324" y2="52"/>
+      <circle class="fill-a" cx="40" cy="52" r="8"/>
+      <line class="axis" x1="146" y1="40" x2="146" y2="64"/>
+      <line class="axis" x1="250" y1="40" x2="250" y2="64"/>
+      <text x="40" y="30" text-anchor="middle" font-size="11.5" class="t-b">you unstake</text>
+      <text x="146" y="30" text-anchor="middle" font-size="11.5" class="t-warn">still locked</text>
+      <text x="288" y="30" text-anchor="middle" font-size="11.5" class="t-ok">free to move</text>
+      <text x="146" y="84" text-anchor="middle" font-size="11" class="t-m">midnight UTC</text>
+      <text x="250" y="84" text-anchor="middle" font-size="11" class="t-m">midnight UTC</text>
+    </svg>
+    <figcaption>Unstaking frees your SATORI 24 to 48 hours later, depending on the time of day you do it.</figcaption>
+  </figure>
+</section>
+
+<section aria-labelledby="s-start">
+  <span class="kicker">Start here</span>
+  <h2 id="s-start">Get started in five steps</h2>
+  <ol class="steps">
+    <li><span><b>Open the Satori app</b>Go to <a href="https://app.satorinet.io">app.satorinet.io</a>. Nothing to install.</span></li>
+    <li><span><b>Create your wallet</b>Write down your 24 words and keep them somewhere safe. They are the only way back into your wallet.</span></li>
+    <li><span><b>Add a little ETH on Base</b>It pays the network's fees, a few cents at a time.</span></li>
+    <li><span><b>Get some SATORI</b>Buy it on an exchange that lists SATORI on Base, such as NeoxEX. Any amount lets you play the game, and 250 lets your off-chain predictions earn too.</span></li>
+    <li><span><b>Stake with this app</b>The app then predicts for you every day. Visit the Game page whenever you want to play by hand.</span></li>
+  </ol>
+  <div class="note">
+    <b>Held SATORIEVR on Evrmore?</b>
+    <p>Your SATORI on Base is already waiting, one for one. Your Evrmore private key is also your Base key, so import it into the Satori app and press Claim.</p>
+  </div>
+</section>
+
+<section aria-labelledby="s-facts">
+  <span class="kicker">Reference</span>
+  <h2 id="s-facts">The token</h2>
+  <dl class="facts">
+    <div class="fact"><dt>Name</dt><dd>SATORI</dd></div>
+    <div class="fact"><dt>Network</dt><dd>Base, a low-cost network built on Ethereum</dd></div>
+    <div class="fact"><dt>Contract</dt><dd class="addr" id="addr">0xd0a5bFF2789230b0fb1Bd989fc7CE7084c947E17</dd>
+      <button class="copy" id="copy" type="button">Copy address</button></div>
+    <div class="fact"><dt>Decimals</dt><dd>18</dd></div>
+  </dl>
+  <p class="muted">Only trust this contract address. Any other token called SATORI is not ours, and nobody from Satori will ever ask for your words or private key.</p>
+</section>
+
+<section aria-labelledby="s-links">
+  <span class="kicker">Links</span>
+  <h2 id="s-links">Find Satori</h2>
+  <div class="links">
+    <a href="https://app.satorinet.io">The Satori app</a>
+    <a href="https://satorinet.io">satorinet.io</a>
+    <a href="https://basescan.org/token/0xd0a5bFF2789230b0fb1Bd989fc7CE7084c947E17">SATORI on BaseScan</a>
+    <a href="https://x.com/SatoriAssoc">Satori on X</a>
+  </div>
+</section>
+
+<footer>Satori is run by the Satori Association. The contract's rules are public on Base for anyone to read.</footer>
+</main>
+<script>
+document.getElementById('copy').addEventListener('click', async (e) => {
+  const b = e.currentTarget;
+  try { await navigator.clipboard.writeText(document.getElementById('addr').textContent.trim()); b.textContent = 'Copied'; }
+  catch { b.textContent = 'Select the address to copy it'; }
+  setTimeout(() => { b.textContent = 'Copy address'; }, 2500);
+});
+</script>
+</body>
+</html>

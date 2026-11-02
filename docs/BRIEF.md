@@ -93,6 +93,9 @@ curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" ht
 - TLS: one certificate for both names, renewed by certbot's timer.
 - DNS is in Cloudflare. The token is in `/code/Satori/contract/.env` (`CLOUDFLARE_*`).
 
+## explain.satorinet.io (the ecosystem overview)
+A static page, separate from the app: edit `explain/index.html`, run `./explain/deploy.sh`. How it is served: `explain/README.md`.
+
 ## Other machines and repos
 - **Dev central (central2):**
   - ssh: `ssh -i ~/.ssh/id_ed25519 -p 1983 root@88.99.70.153` (hostname `central-dev`).
