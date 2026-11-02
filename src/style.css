@@ -78,8 +78,8 @@ main > section, main > div { min-width: 0; }
 @font-face { font-family: "Zen Maru Gothic"; font-style: normal; font-weight: 600 900; font-display: swap;
   src: url(/fonts/zen-maru-gothic-900-latin.woff2) format("woff2"); }
 h1, h2, .how-q { font-family: "Zen Maru Gothic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 900; }
-h1 { font-size: 1.15rem; margin: 0; letter-spacing: 0.01em; }
-h2 { font-size: 1.15rem; margin: 0 0 8px; }
+h1 { font-size: calc(1.15rem + 4pt); margin: 0; letter-spacing: 0.01em; } /* the app bar's name */
+h2 { font-size: calc(1.15rem + 2pt); margin: 0 0 8px; }
 h3 { font-size: 1rem; margin: 0; }
 .muted { color: var(--muted); font-weight: 400; }
 .small { font-size: 0.85rem; }
@@ -347,7 +347,7 @@ details.card > summary { color: var(--text); font-weight: 600; }
   .hero[data-work] .ring::after { content: none; animation: none; }
   .hero[data-work] .ring .ico { --i: var(--i-dots); }
 }
-.hero h2 { margin: 0; font-size: 1.35rem; line-height: 1.15; color: var(--hero-ink); }
+.hero h2 { margin: 0; font-size: calc(1.35rem + 2pt); line-height: 1.15; color: var(--hero-ink); }
 .hero p { margin: 3px 0 0; font-size: 0.92rem; overflow-wrap: anywhere; }
 /* fits its text; a change of height eases instead of snapping the page under it (main.js smoothHero,
    docs/design/health.md#the-hero) */
@@ -509,7 +509,7 @@ details.tile[open] > summary { margin-bottom: 0; }
 .hw .hnet { stroke: var(--accent); stroke-width: 1.5; }
 .hw .hblock { fill: var(--card); }
 .hw .hcoin { fill: var(--sky); stroke: var(--sky-ink); stroke-width: 1.5; }
-.how-q { margin: 14px 0 10px; font-size: 1.6rem; }
+.how-q { margin: 14px 0 10px; font-size: calc(1.6rem + 2pt); }
 .how-a { font-size: 1.1rem; font-weight: 550; margin-bottom: 8px; }
 
 /* ── the inline Unlock prompt ── */
@@ -727,7 +727,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 /* the drill-in's head: the name, then what the model is (always shown) and where the stream comes from; top right its
    quality and Retrain under it; under them all, Retrain's line (its progress, then its result) and a muted note */
 .drill-h { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 0 12px; margin: 2px 0 12px; }
-.drill-h h2 { margin: 0; font-size: 1.45rem; overflow-wrap: anywhere; }
+.drill-h h2 { margin: 0; font-size: calc(1.45rem + 2pt); overflow-wrap: anywhere; }
 .drill-h > p { margin: 2px 0 0; grid-column: 1; }
 .drill-a { grid-column: 2; grid-row: 1 / span 3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .rbtn { padding: 8px 18px; }
