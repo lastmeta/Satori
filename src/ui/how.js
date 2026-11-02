@@ -70,6 +70,9 @@ const DAILY = () => html`<svg class="hw" viewBox="0 0 320 120" role="img" aria-l
   </g>
 </svg>`;
 
+/** The whole picture, in its own site (the owner, 2026-11-02): "Go on…" at the card's end, in a new tab. */
+const EXPLAIN_URL = 'https://explain.satorinet.io';
+
 export function howCard() {
   return html`
     <details class="tile how-tile" data-test="how">
@@ -87,6 +90,7 @@ export function howCard() {
         <p>Sharing this app with others grows the network and provides more rewards.</p>
         ${DAILY()}
         <p class="how-a">Just open the app every day to predict automatically, or make predictions in the game.</p>
+        <p class="how-more"><a class="ext-btn" data-test="how-more" href="${EXPLAIN_URL}" target="_blank" rel="noopener">Go on…<span aria-hidden="true">↗</span></a></p>
       </div>
     </details>`;
 }

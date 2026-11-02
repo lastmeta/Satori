@@ -473,6 +473,8 @@ a.ext-btn { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9p
   background: var(--card); color: var(--text); font-weight: 600; text-decoration: none; white-space: nowrap; }
 a.ext-btn:hover { border-color: var(--accent); color: var(--accent); }
 a.ext-btn span { font-size: 0.85em; }
+.how-more { margin: 18px 0 6px; }
+.how-more a.ext-btn { padding: 8px 20px; font-size: 1rem; font-weight: 600; }
 .balance { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 4px 0 12px; }
 .wallet-tile .line { display: flex; justify-content: space-between; gap: 12px; font-size: 0.88rem; }
 .wallet-tile .line span:first-child { color: var(--muted); }
