@@ -36,6 +36,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   test.setTimeout(180_000);
   const { s, rpc } = fakeSatori({ round: ROUND, hour: 9 });
   await stubCentral(context, { rpc });
+  s.streams[1].named = true; // as on mainnet
   s.streams[2] = { game: 2, named: false, cadence: 60, name: 'bitcoin', history: hourly(72, (i) => 80000 + 900 * Math.sin(i / 6) + i * 20) };
   s.streams[3] = { game: 3, named: false, cadence: 60, name: 'ether', history: hourly(72, (i) => 3000 - 40 * Math.cos(i / 5)) };
   s.weights[2] = 3n * E18;
@@ -150,7 +151,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await t(page, 'game-star').click(); // a favorite: shown first next time
   await expect(t(page, 'game-star')).toHaveAttribute('aria-pressed', 'true');
   await swipe(page, 'left'); // skip ether
-  await expect(name(page)).toHaveText('satori');
+  await expect(name(page)).toHaveText('Satori Sentiment');
   await t(page, 'game-star').click();
   await swipe(page, 'right'); // back to ether
   await expect(name(page)).toHaveText('ether');
@@ -158,8 +159,8 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'false'); // no favorites when read: Submit at the end
   await t(page, 'game-up').click(); // satori up: the last eligible, so the submit screen
   await expect(t(page, 'game-submit-screen')).toBeVisible();
-  await expect.poll(() => calls(page)).toEqual(['bitcoin up', 'ether down', 'satori up']);
-  await expect(t(page, 'game-daily')).toHaveAttribute('href', 'https://games.satorinet.io');
+  await expect.poll(() => calls(page)).toEqual(['bitcoin up', 'ether down', 'Satori Sentiment up']);
+  await expect(t(page, 'game-daily')).toHaveAttribute('href', 'https://test-games.satorinet.io');
   await expect(t(page, 'game-daily')).toHaveAttribute('target', '_blank');
   await shot(page, 'game-submit.png');
   // a swipe left goes on to the streams that aren't reward eligible, then the submit screen again
@@ -174,7 +175,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'true'); // past the submit screen: Submit shows
   await t(page, 'game-down').click();
   await expect(t(page, 'game-submit-screen')).toBeVisible();
-  await expect.poll(() => calls(page)).toEqual(['bitcoin up', 'ether down', 'satori up', 'dogecoin down']);
+  await expect.poll(() => calls(page)).toEqual(['bitcoin up', 'ether down', 'Satori Sentiment up', 'dogecoin down']);
   expect(await page.evaluate((v) => localStorage.getItem(`satori-favorites-${v}`), V)).toBe('[3,1]');
 
   // already predicted this round, not by the game: played as usual, and Submit is done without sending or Unlock
@@ -187,7 +188,7 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await expect(t(page, 'game-again-in')).toHaveText(/^You can predict again (in \d+( h \d+)? min|now)\.$/);
   await expect(t(page, 'game-remind')).toBeHidden(); // the dev server: no push
   const sentCalls = () => t(page, 'game-sent-calls').locator('li').evaluateAll((li) => li.map((x) => `${x.textContent} ${x.querySelector('svg').getAttribute('aria-label')}`));
-  await expect.poll(sentCalls).toEqual(['bitcoin up', 'ether down', 'satori up', 'dogecoin down']);
+  await expect.poll(sentCalls).toEqual(['bitcoin up', 'ether down', 'Satori Sentiment up', 'dogecoin down']);
   expect(await t(page, 'game-sent-calls').evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto');
   // as much room above the predictions (under Remind me) as under them (above Dismiss)
   const [above, sent, below] = await Promise.all([page.locator('.gsent-top').boundingBox(), t(page, 'game-sent-calls').boundingBox(), t(page, 'game-dismiss').boundingBox()]);
@@ -210,14 +211,14 @@ test('the Game tab: greyed out while automatic; by hand, pick, skip, back, submi
   await page.evaluate(() => window.satori.go('game')); // read again on the way in, after a Submit
   await expect(name(page)).toHaveText('ether', { timeout: 30_000 });
   await t(page, 'game-up').click();
-  await expect(name(page)).toHaveText('satori');
+  await expect(name(page)).toHaveText('Satori Sentiment');
   await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'false');
   await t(page, 'game-down').click();
   await expect(name(page)).toHaveText('bitcoin');
   await expect(t(page, 'game-submit-early')).toHaveAttribute('data-open', 'true');
   await shot(page, 'game-submit-early.png');
   await t(page, 'game-submit').click();
-  await expect.poll(() => calls(page)).toEqual(['ether up', 'satori down']);
+  await expect.poll(() => calls(page)).toEqual(['ether up', 'Satori Sentiment down']);
   await t(page, 'game-send').click();
   const prompt = page.locator('[data-unlock-for=game]');
   await expect.poll(async () => (await prompt.isVisible()) || (await t(page, 'game-sent').isVisible()), { timeout: 30_000 }).toBe(true);

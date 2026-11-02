@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-02 (a Sentiment stream's name)
+
+- A Sentiment stream's `name` in the Game's streams is now its display name: `satori` reads `Satori Sentiment`. `named`
+  still says it is one; use `streamId` to tell streams apart.
+
 ## Changed 2026-11-01 (Import's field)
 
 - The Import field cleans what is typed or pasted (`import-wallet`): no punctuation, and words in lower case. `setup`'s

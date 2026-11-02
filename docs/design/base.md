@@ -466,8 +466,8 @@ between the header and the tab bar.
 - Nothing to play otherwise (no games, staked elsewhere, a stream's value
   too old): why, calmly, and Check again.
 - Not ported from the dapp: the soft limit of 5 and Continue Predicting, a
-  Uniswap stream's price orientation (only the Sentiment stream "satori" is
-  live), payouts, streaks, the countdown.
+  Uniswap stream's price orientation (only the Sentiment stream "satori", shown
+  as "Satori Sentiment", is live), payouts, streaks, the countdown.
 
 ### A batch that never mines
 

@@ -14,7 +14,7 @@ import {
   PLAYED_BY_HAND,
   createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, proofState, dropClaimable,
   checkSend, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS, STUCK_S,
-} from './base.js';
+  streamTitle } from './base.js';
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
@@ -604,6 +604,12 @@ describe('createBase', () => {
     rpc.sent.length = 0;
     await expect(base.playHand([{ gameId: 1, direction: UP }])).rejects.toThrow(/Unlock/);
     expect(rpc.sent).toHaveLength(0); // nothing sent from the alias
+  });
+
+  test("a stream's name as shown: a Sentiment stream's capitalized and said to be one", () => {
+    expect(streamTitle('satori', true)).toBe('Satori Sentiment');
+    expect(streamTitle('Bitcoin sentiment', true)).toBe('Bitcoin sentiment'); // not said twice
+    expect(streamTitle('bitcoin', false)).toBe('bitcoin');
   });
 
   test("a play noted without its calls (an earlier version's): the Game tab reads them from its transaction", async () => {

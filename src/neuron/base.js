@@ -348,6 +348,13 @@ export function nextCheckAt({ now, chainTime, pendingAt = null }) {
   return pendingAt == null ? next : Math.min(next, Math.max(now + 60, pendingAt + STUCK_S));
 }
 
+/** A stream's name as shown: the registry's, and a Sentiment stream's capitalized and said to be one ('satori': 'Satori Sentiment'). */
+export function streamTitle(name, named) {
+  if (!named) return name;
+  const title = name[0].toUpperCase() + name.slice(1);
+  return /sentiment$/i.test(title) ? title : `${title} Sentiment`;
+}
+
 /**
  * A play noted without its calls (before the Sent screen listed them): read from its transaction, named from the streams.
  * Nothing sent (no hash), or the read fails: as noted.
@@ -678,7 +685,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
         chain.streamDisplays(ids).catch(() => ids.map(() => null))]);
       const streams = await Promise.all(list.map(async (g, i) => {
         const [history, blocked] = await Promise.all([chain.history(g.streamId), chain.simulateGame(player, { gameId: g.gameId, direction: UP })]);
-        return { streamId: g.streamId, gameId: g.gameId, name: names[i] || `Stream ${g.streamId}`, named: g.named,
+        return { streamId: g.streamId, gameId: g.gameId, name: names[i] ? streamTitle(names[i], g.named) : `Stream ${g.streamId}`, named: g.named,
           cadenceMinutes: g.cadenceMinutes, weight: String(g.weight), blocked, streak: streaks[i], // { streak, bar } or null
           display: displays[i], // { decimals, unit, label }: how its values read; null: plain numbers
           history: history.map((h) => ({ hour: h.hour, value: String(h.value) })) };
