@@ -24,7 +24,7 @@ import { turnReminder, remindOnce } from './pwa/push.js';
 export function createActions(app) {
   const {
     ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
-    devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow, setServicePaused,
+    devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
     readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
     refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction,
     session, setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
@@ -711,6 +711,19 @@ export function createActions(app) {
       }
     },
     switchWallet: shownAt('walletsError', (id) => switchWallet(id)),
+    /** A row dragged to a new place: the list in that order (each wallet's id once), kept for the next visit. */
+    orderWallets: shownAt('walletsError', async (ids) => {
+      // shown in the new order at once (the drop's row stays where it was let go), then kept; a failed save puts it back
+      const before = state.wallets;
+      const by = new Map(before.wallets.map((w) => [w.id, w]));
+      if (ids.every((id) => by.has(id))) state.wallets = { ...before, wallets: ids.map((id) => by.get(id)) };
+      try {
+        await orderWallets(ids);
+      } catch (err) {
+        state.wallets = before;
+        throw err;
+      }
+    }),
     askRemoveWallet: shownAt('walletsError', async (id) => {
       Object.assign(state, { walletRemove: id, walletRemoveNeeds: '', walletsError: '' });
       const needs = await removeNeeds(id);

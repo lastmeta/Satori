@@ -978,3 +978,8 @@ summary::after, .chan::before, button.sname::after, button.rrow::after { content
 .chan::before { top: auto; bottom: 14px; right: 11px; margin-top: 0; }
 details[open] > summary::after, .chan[aria-expanded="true"]::before, button.sname[aria-expanded="true"]::after, button.rrow[aria-expanded="true"]::after { transform: translateY(2px) rotate(225deg); }
 @media (prefers-reduced-motion: reduce) { summary::after, .chan::before, button.sname::after, button.rrow::after { transition: none; } }
+/* The Wallets list reordered by dragging a row (src/ui/drag.js): the row lifts, the others make room. */
+.wallet-list { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.wallet-list.sorting .wallet-row { transition: transform 150ms ease; }
+.wallet-list .wallet-row.dragging { position: relative; z-index: 1; transition: none; background: var(--card); border-radius: 10px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.22); cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) { .wallet-list.sorting .wallet-row { transition: none; } }

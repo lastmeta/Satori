@@ -28,7 +28,7 @@ import { turnReminder, remindOnce } from './pwa/push.js';
 export function createAgent(app) {
   const {
     DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
-    dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
+    dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
     backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
     setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
@@ -100,6 +100,8 @@ export function createAgent(app) {
      * itself). Shown in the app bar and the Wallets list, on this device only. → wallets()
      */
     async nameWallet(name) { ready(); await nameWallet(name); return walletsView(app.wallets, state.wallet || null); },
+    /** The Wallets list's order, as a person drags it: every wallet's id once, in the new order; kept for the next visit. → wallets() */
+    async orderWallets(ids) { await orderWallets(ids); return walletsView(app.wallets, state.wallet || null); },
     /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
     install() { return install(); },
     /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */

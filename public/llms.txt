@@ -749,7 +749,10 @@ the page's JS context:
   `await satori.nameWallet(name)` → `wallets()`: the wallet in use named (at
   most 40 characters; this device only), shown in the app bar and the
   Wallets list; `''` clears it (a special key's name then comes back by
-  itself). A name a person saves wins over a special key's. `await satori.addWallet()` and
+  itself). A name a person saves wins over a special key's.
+  `await satori.orderWallets(ids)` → `wallets()`: the list's order (every
+  wallet's id once, in the new order; anything else throws), kept for the
+  next visit; a person drags a row up or down. `await satori.addWallet()` and
   `await satori.switchWallet(id)` → `{ reloading: true }`: the wallet is
   locked and the page reloads, on Setup for the new one (then `setup()`), or
   with the other wallet. `await satori.removeWallet(id, passphrase)` → `wallets()`:

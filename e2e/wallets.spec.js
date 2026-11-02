@@ -25,6 +25,24 @@ const opfsFiles = (page) => page.evaluate(async () => {
   for await (const [name] of (await navigator.storage.getDirectory()).entries()) names.push(name);
   return names.filter((n) => n.endsWith('.duckdb')).sort();
 });
+/** A finger on the Wallets list (synthetic touches): row `from` pressed, held `hold` ms, moved past row `to`'s middle, let go. */
+const touchDrag = (page, from, to, hold) => page.evaluate(async ([from, to, hold]) => {
+  const rows = [...document.querySelectorAll('[data-test=wallet-row]')];
+  const a = rows[from].getBoundingClientRect();
+  const b = rows[to].getBoundingClientRect();
+  const x = a.left + a.width / 2;
+  const [y0, y1] = [a.top + a.height / 2, b.top + b.height * (to > from ? 0.75 : 0.25)];
+  const target = document.elementFromPoint(x, y0);
+  const fire = (type, y) => {
+    const t = new Touch({ identifier: 1, target, clientX: x, clientY: y });
+    target.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true, touches: type === 'touchend' ? [] : [t], changedTouches: [t] }));
+  };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  fire('touchstart', y0);
+  await wait(hold);
+  for (let i = 1; i <= 8; i++) { fire('touchmove', y0 + ((y1 - y0) * i) / 8); await wait(16); }
+  fire('touchend', y1);
+}, [from, to, hold]);
 const setupWith = (page, words) => page.evaluate(([p, w]) => window.satori.setup({ passphrase: p, walletWords: w }), [PASS, words]);
 
 test('two wallets: Add, a wallet already in the app refused with a way back, Switch, Remove; each its own database', async ({ context, page }) => {
@@ -70,6 +88,34 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('[data-test=wallets]').screenshot({ path: test.info().outputPath('wallets-card.png') });
+
+  // Reorder (the owner, 2026-11-02): a row dragged up or down, the order kept for the next visit
+  const order = async () => (await wallets(page)).wallets.map((w) => w.id);
+  await expect(page.locator('[data-test=wallet-order-hint]')).toBeVisible();
+  const [top, third] = [await rows.nth(0).boundingBox(), await rows.nth(2).boundingBox()];
+  await page.mouse.move(third.x + third.width / 2, third.y + third.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(third.x + third.width / 2, (top.y + third.y) / 2 + 10, { steps: 4 });
+  await page.locator('[data-test=wallets]').screenshot({ path: test.info().outputPath('wallets-dragging.png') });
+  await page.mouse.move(third.x + third.width / 2, top.y + 4, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(order).toEqual([3, 1, 2]);
+  await expect(rows.nth(0)).toContainText('Not set up yet');
+  expect((await status(page)).wallet).toBe(A.ethAddress); // the drop pressed nothing: no switch
+  await touchDrag(page, 0, 1, 0); // a swipe: the page's scroll, no reorder
+  await page.waitForTimeout(500);
+  expect(await order()).toEqual([3, 1, 2]);
+  await touchDrag(page, 0, 1, 450); // pressed and held, then dragged
+  await expect.poll(order).toEqual([1, 3, 2]);
+  await page.reload();
+  expect(await loaded(page)).toBe('home');
+  await page.evaluate(() => { location.hash = '#wallet'; });
+  await expect(rows.nth(1)).toContainText('Not set up yet');
+  expect(await order()).toEqual([1, 3, 2]);
+  await expect(page.evaluate(() => window.satori.orderWallets([1, 2]))).rejects.toThrow("each of this app's wallets once");
+  expect((await page.evaluate(() => window.satori.orderWallets([1, 2, 3]))).wallets.map((w) => w.id)).toEqual([1, 2, 3]);
+  await expect(rows.nth(2)).toContainText('Not set up yet');
+
   expect(await reloading(page, () => rows.nth(1).locator('[data-test=wallet-switch]').click())).toBe('home');
   const b = await status(page);
   expect([b.wallet, b.alias, b.unlocked]).toEqual([B.ethAddress, aliasB, false]);

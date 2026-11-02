@@ -45,7 +45,7 @@ import { subscribe } from './traffic.js';
 import { createGlow } from './ui/glow.js';
 import { applyTheme } from './ui/theme.js';
 import { readPref, writePref, GAME_KEY, snapshotOf, readSnapshot, writeSnapshot, dropSnapshot, readFavorites, writeFavorites } from './ui/prefs.js';
-import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withName, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
+import { readWallets, writeWallets, setAsideWalletFile, activeOf, pathOf, withAdded, withAddress, withActive, withName, withOrder, withoutWallet, walletsView, appGet, appPut } from './wallets.js';
 import { deviceKey } from './keys/atrest.js';
 import { createSession } from './session.js';
 import { createKeyring } from './keyring.js';
@@ -596,6 +596,8 @@ async function nameWallet(name, { auto = false } = {}) {
   if (!state.wallet) throw new Error('Set up a wallet first.');
   await keepWallets(withName(wallets, name, { auto, address: state.wallet }));
 }
+/** The Wallets card's order (each wallet's id once), kept for the next visit. No list yet: one wallet, no order to keep. */
+const orderWallets = async (ids) => { if (wallets) await keepWallets(withOrder(wallets, ids)); };
 /** The special key the wallet holds, as its name while it has none of its own: the admin first, then the most powerful. */
 const NAMED = ['appoint', 'wiring', 'schedule', 'split', 'publisher'];
 const roleName = () => (state.admin.shown ? 'Admin' : roleOf(NAMED.find((id) => state.roles.of?.[id]?.isHolder) ?? '')?.name
@@ -1013,7 +1015,7 @@ const restoreKeys = (keys) => baseAction('restore', async () => {
 // ── UI actions (src/actions.js) ──────────────────────────────────────────────
 const actions = createActions({
   ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
-  devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, playCalls, pollNow, setServicePaused,
+  devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
   readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
   setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
@@ -1280,7 +1282,7 @@ async function boot() {
 /** window.satori (src/agent.js): the same app for agents (see /llms.txt). */
 window.satori = createAgent({
   DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
-  dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet,
+  dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
   backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
   setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,

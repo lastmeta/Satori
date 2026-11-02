@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-02 (the wallets' order)
+
+- New: `orderWallets(ids)` → `wallets()`: the Wallets list in the order given (every wallet's id once), kept for the
+  next visit. A person drags a row up or down on the Wallet tab.
+
 ## Changed 2026-11-02 (a Sentiment stream's name)
 
 - A Sentiment stream's `name` in the Game's streams is now its display name: `satori` reads `Satori Sentiment`. `named`

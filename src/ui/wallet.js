@@ -14,6 +14,7 @@ import { SATORI_DAILY_URL } from '../chain/config.js';
 import { qrDataUrl } from './contract.js';
 import { workText } from '../neuron/work.js';
 import { OUT_OF_SYNC } from '../neuron/base.js';
+import { dragToOrder } from './drag.js';
 
 // Claimable, one line each (rewards, from the Satori Service, airdrop); Claim beside them when any is above 0
 const CLAIM_LINES = [0, 1, 2];
@@ -177,17 +178,19 @@ function nameCard(a) {
 
 /**
  * The Wallets card (docs/design/wallets.md#several-wallets): this app's wallets, the one in use marked; Switch and
- * Remove on the others (Remove asks first); Add a wallet. Tapping an address copies it. One row template, its parts shown or hidden by its values:
+ * Remove on the others (Remove asks first); Add a wallet; a row dragged up or down reorders the list (src/ui/drag.js). Tapping an address copies it. One row template, its parts shown or hidden by its values:
  * ArrowJS 1.0.6 reuses a rendered chunk for any template of the same text (see txLink).
  */
 function walletsCard(a) {
   const removing = () => state.wallets.wallets.find((w) => w.id === state.walletRemove);
+  const drag = dragToOrder('.wallet-row', (ids) => a.orderWallets(ids)); // a row dragged up or down: that order, kept
   const row = (w) => html`<li class="wallet-row" data-test="wallet-row" data-id="${w.id}"><button class="icon-btn bare wallet-trash" data-test="wallet-remove" aria-label="Remove this wallet" title="Remove" style="${w.active ? 'visibility:hidden' : ''}" disabled="${w.active}" @click="${() => a.askRemoveWallet(w.id)}">${TRASH()}</button><span class="wallet-id"><code title="${w.address ?? ''}" data-test="wallet-address" role="${w.address ? 'button' : false}" tabindex="${w.address ? '0' : false}" @click="${() => w.address && a.copy(`wallet-${w.id}`, w.address)}">${!w.address ? 'Not set up yet' : state.copied === `wallet-${w.id}` ? 'Copied' : shortHash(w.address)}</code><span class="muted small" data-test="wallet-row-name" hidden="${!w.name}">${w.name ?? ''}</span></span><button class="wallet-radio" data-test="${w.active ? 'wallet-in-use' : 'wallet-switch'}" role="radio" aria-checked="${String(w.active)}" aria-label="${w.active ? 'In use' : 'Switch to this wallet'}" title="${w.active ? 'In use' : 'Switch to this wallet'}" @click="${() => !w.active && a.switchWallet(w.id)}"><i></i></button></li>`
     .key(`${w.id}:${w.address}:${w.name}:${w.active}:${state.copied === `wallet-${w.id}`}`); // tap the address: copied
   return html`<section class="card" data-test="wallets">
     <h2>Wallets</h2>
     <p class="muted small">Each wallet keeps its own data in this app. One runs at a time.</p>
-    <ul class="wallet-list">${() => state.wallets.wallets.map(row)}</ul>
+    <p class="muted small" data-test="wallet-order-hint" hidden="${() => state.wallets.wallets.length < 2}">To reorder, press and hold a wallet, then drag it up or down.</p>
+    <ul class="wallet-list" data-test="wallet-list" @pointerdown="${drag.pointerdown}" @touchstart="${drag.touchstart}" @touchmove="${drag.touchmove}" @touchend="${drag.touchend}" @touchcancel="${drag.touchcancel}" @contextmenu="${drag.contextmenu}">${() => state.wallets.wallets.map(row)}</ul>
     <div class="confirm" data-test="wallet-remove-confirm" hidden="${() => !removing()}">
       <p class="small">${() => (removing() ? `Remove ${removing().address ? shortHash(removing().address) : 'this wallet'}? It leaves this list, and its 24 words are the way back: back them up first (switch to it, then Settings › Backup). Its file stays set aside in this browser, never deleted.${state.walletRemoveNeeds === 'passphrase' ? " Enter that wallet's passphrase to remove it." : ''}` : '')}</p>
       <form class="unlock" @submit="${(e) => a.removeWallet(form(e), e.target)}"><input name="pass" type="password" data-test="wallet-remove-pass" aria-label="That wallet's passphrase to remove it" placeholder="Its wallet passphrase" autocomplete="off" required hidden="${() => state.walletRemoveNeeds !== 'passphrase'}" disabled="${() => state.walletRemoveNeeds !== 'passphrase'}"><button class="primary" type="submit" data-test="wallet-remove-yes" disabled="${() => !state.walletRemoveNeeds}">Remove it</button><button type="button" @click="${a.cancelRemoveWallet}">Cancel</button></form>

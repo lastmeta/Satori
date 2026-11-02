@@ -4,6 +4,7 @@
 //   activeOf(list) → { id, file, address }      // the wallet to open
 //   await writeWallets(withAdded(list, address))  // Add a wallet: a new entry, active (the reload opens Setup)
 //   withAddress(list, address) / withActive(list, id) / withoutWallet(list, id) / withName(list, name, { auto })
+//   withOrder(list, ids)                         // the Wallets card's order, as the person dragged it
 // Each with* returns a new list (or throws, said plainly) and never changes the one given.
 import { setAsideDatabase } from './db/recover.js';
 
@@ -54,6 +55,16 @@ export function withName(list, name, { auto = false, address = null } = {}) {
     const { name: _, nameAuto: __, ...rest } = w;
     return n ? { ...rest, name: n, ...(auto && { nameAuto: true }) } : rest;
   }) };
+}
+
+/** The list in the order of `ids`: every wallet's id once (the Wallets card's drag; kept for the next visit). */
+export function withOrder(list, ids) {
+  const l = listOf(list);
+  const by = new Map(l.wallets.map((w) => [w.id, w]));
+  if (ids.length !== by.size || new Set(ids).size !== ids.length || !ids.every((id) => by.has(id))) {
+    throw new Error(`The order must name each of this app's wallets once: ${l.wallets.map((w) => w.id).join(', ')}.`);
+  }
+  return { ...l, wallets: ids.map((id) => by.get(id)) };
 }
 
 /** Another wallet made active (the switch reloads the page). */

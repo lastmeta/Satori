@@ -229,7 +229,11 @@ else tells the forms apart.
   Setup's four ways on an empty database. Setup then names the other wallets
   to switch back to. A wallet whose address is already in the list is
   refused at setup ("This wallet is already in this app").
-- **For agents**: `wallets()` → `{ active, wallets: [{ id, address, name, nameAuto, active }] }`, `nameWallet(name)`,
+- **The order is the person's** (the owner, 2026-11-02): a row dragged up or
+  down reorders the Wallets card (a mouse drags at once; a finger presses and
+  holds first, so a swipe still scrolls), and the list keeps that order for
+  the next visit. A new wallet goes last. `src/ui/drag.js`, `withOrder`.
+- **For agents**: `wallets()` → `{ active, wallets: [{ id, address, name, nameAuto, active }] }`, `nameWallet(name)`, `orderWallets(ids)`,
   `addWallet()`, `switchWallet(id)` (both reload the page), `removeWallet(id)`.
 - **Preferences stay per wallet** (the Satori Service's URL, the Base RPC,
   the max fee, the relays), in each database, as now; the theme and the

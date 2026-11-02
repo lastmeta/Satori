@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { activeOf, pathOf, withAdded, withAddress, withActive, withName, withoutWallet, walletsView, FIRST_FILE, ALREADY } from './wallets.js';
+import { activeOf, pathOf, withAdded, withAddress, withActive, withName, withOrder, withoutWallet, walletsView, FIRST_FILE, ALREADY } from './wallets.js';
 
 const A = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';
 const B = '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4';
@@ -43,6 +43,18 @@ describe('the wallets list (docs/design/wallets.md#several-wallets)', () => {
     expect(() => withActive(l, 9)).toThrow('No wallet 9 in this app.');
   });
 
+  test('the order, as dragged: each wallet once; Add puts a new one last', () => {
+    const l = withAddress(withAdded(withAdded(null, A)), B);
+    const o = withOrder(l, [3, 1, 2]);
+    expect(o.wallets.map((w) => w.id)).toEqual([3, 1, 2]);
+    expect(o.active).toBe(3);
+    expect(withAdded(o).wallets.map((w) => w.id)).toEqual([3, 1, 2, 4]);
+    expect(() => withOrder(l, [1, 2])).toThrow("each of this app's wallets once: 1, 2, 3");
+    expect(() => withOrder(l, [1, 1, 2])).toThrow('once');
+    expect(() => withOrder(l, [1, 2, 9])).toThrow('once');
+    expect(withOrder(null, [1]).wallets).toEqual([{ id: 1, file: FIRST_FILE, address: null }]);
+  });
+
   test('Remove: never the wallet in use; another goes with its file named', () => {
     const l = withAddress(withAdded(null, A), B);
     expect(() => withoutWallet(l, 2)).toThrow(/switch to another first/);
@@ -57,6 +69,7 @@ describe('the wallets list (docs/design/wallets.md#several-wallets)', () => {
     withActive(l, 1);
     withoutWallet(l, 1);
     withAdded(l);
+    withOrder(l, [2, 1]);
     expect(JSON.stringify(l)).toBe(before);
   });
 });
