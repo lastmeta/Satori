@@ -226,6 +226,8 @@ button.soft { background: var(--accent-soft); border-color: transparent; color: 
 button:disabled { opacity: 0.6; cursor: default; }
 button.link { border: 0; background: none; padding: 0 4px; color: var(--muted); font-size: 0.85rem; }
 button.link:hover { color: var(--bad); }
+/* No grey flash on a tap (a phone draws it on the inner box or square past the card's round corners); a keyboard still gets the outline below. */
+* { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .small-btn { padding: 6px 12px; font-size: 0.85rem; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
