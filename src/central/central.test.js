@@ -127,15 +127,6 @@ test("relays and relay-config: central's GETs, no token (peer.py:123-173)", asyn
   expect(calls.map((c) => c.headers)).toEqual([{}, {}]);
 });
 
-test('wallet-link: where a wallet is linked, as an alias sees it; a GET with no keys or token (central 56a3f57)', async () => {
-  const W = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';
-  const A = '0xB1cE5D8F769492D60d253eE90f99f8CE48cbdEaC';
-  const { fetch, calls } = mockFetch({ [`GET /api/v1/peer/wallet-link?wallet=${W}&alias=${A}`]: json(200, { linked: 'other' }) });
-  expect(await createCentral({ url: BASE, fetch, version: 'v' }).walletLink(W, A)).toEqual({ linked: 'other' });
-  expect(calls.map((c) => c.headers)).toEqual([{}]);
-  await expect(createCentral({ url: BASE, fetch, version: 'v' }).walletLink(A, W)).rejects.toMatchObject({ status: 404 }); // a central without the route
-});
-
 test("Base: the config and the merkle proof, central's GETs; both 404 kinds keep their detail (merkle.py:45-58)", async () => {
   const proof = { root: '0xr', address: '0xV', amountWei: '5000000000000000000', amount: 5, proof: ['0xp'] };
   const { fetch, calls } = mockFetch({

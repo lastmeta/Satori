@@ -7,7 +7,6 @@
 //   await c.submitPredictions(items)         // login (alias) → POST /predictions/batch; one retry on 401
 //   await c.rewardAddress() / c.setRewardAddress(address | null)   // login → GET / POST /peer/reward-address
 //   await c.baseConfig() / c.merkleProof(address)   // Base (docs/design/base.md); 404 is a CentralError
-//   await c.walletLink(wallet, alias)        // GET /peer/wallet-link: { linked: 'this' | 'other' | 'none' } (no keys needed)
 // Errors are CentralError: status 0 for a timeout or a network failure. A
 // network error, a timeout or a 5xx is resent once.
 import { sha256 } from '@noble/hashes/sha2';
@@ -157,12 +156,6 @@ export function createCentral({ url, alias, version, fetch: fetchFn = globalThis
       if (link) Object.assign(headers, { 'wallet-link': base64.encode(utf8ToBytes(link.message)), 'wallet-signature': link.signature });
       return call('POST', '/api/v1/peer/register', headers);
     },
-
-    /**
-     * Where the Satori Service has `wallet` linked, as `alias` sees it: { linked: 'this' | 'other' | 'none' } ('other':
-     * another app or neuron runs it). Asked before Import's link (docs/design/wallets.md#running-elsewhere). No keys.
-     */
-    walletLink: (wallet, alias) => call('GET', `/api/v1/peer/wallet-link?wallet=${encodeURIComponent(wallet)}&alias=${encodeURIComponent(alias)}`),
 
     /** Central's relays, [{relay_url, nostr_pubkey, …}] (peer.py:123-163). */
     relays: () => call('GET', '/api/v1/peer/relays'),

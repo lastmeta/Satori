@@ -986,5 +986,3 @@ details[open] > summary::after, .chan[aria-expanded="true"]::before, button.snam
 .wallet-list.sorting .wallet-row { transition: transform 150ms ease; }
 .wallet-list .wallet-row.dragging { position: relative; z-index: 1; transition: none; background: var(--card); border-radius: 10px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.22); cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .wallet-list.sorting .wallet-row { transition: none; } }
-/* Setup's passphrase step: the wallet being brought in runs elsewhere, and setting it up here moves it (said first). */
-.note-warn { margin: 8px 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--text); }

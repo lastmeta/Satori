@@ -12,10 +12,9 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
-import { checkWalletPassphrase, connectedBackup, evmAddress, publicKey, connectedRecord, restoredRecord, linkMessage, sealBackup } from './keys/index.js';
+import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup } from './keys/index.js';
 import { requestAddress, signText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
-import { keysFromWallet } from './keys/derive.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
 import { same, UP, DOWN } from './chain/index.js';
 import { createAutoLock } from './keys/autolock.js';
@@ -283,24 +282,6 @@ async function connect() {
   central = createCentral({ url, alias: session.alias, version: VERSION });
   registration = null;
   return central;
-}
-
-/**
- * Where the Satori Service has a wallet linked, seen from the alias this app derives for it (docs/design/wallets.md#running-elsewhere):
- * 'this', 'other' (another app or neuron runs it: setting it up here moves it here), 'none', or null when it can't
- * say (offline, or a Satori Service without the route). `secret`: the wallet's key, left as it is.
- */
-async function walletLinkOf(secret) {
-  const { alias } = keysFromWallet(secret);
-  try {
-    const url = (db && await db.get('central_url').catch(() => null)) || DEFAULT_CENTRAL; // a first visit: still opening
-    const r = await createCentral({ url, version: VERSION }).walletLink(evmAddress(publicKey(secret)), evmAddress(publicKey(alias)));
-    return ['this', 'other', 'none'].includes(r?.linked) ? r.linked : null;
-  } catch {
-    return null;
-  } finally {
-    alias.fill(0);
-  }
 }
 
 /** Register, as Lite does on every start; the result is shown, never thrown. */
@@ -1034,7 +1015,7 @@ const restoreKeys = (keys) => baseAction('restore', async () => {
 // ── UI actions (src/actions.js) ──────────────────────────────────────────────
 const actions = createActions({
   ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
-  devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, walletLinkOf, pollNow, setServicePaused,
+  devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
   readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
   setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
@@ -1304,7 +1285,7 @@ window.satori = createAgent({
   dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
   backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-  setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletLinkOf, walletOps,
+  setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
   work,
   get activity() { return activity; },
   get base() { return base; },

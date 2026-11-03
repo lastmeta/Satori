@@ -21,7 +21,6 @@ export const state = reactive({
   words: [],
   confirmAt: [],
   passNote: '', // the passphrase step's note (an import whose password can't be reused)
-  movingWallet: false, // the wallet being brought in runs in another app or neuron (the Satori Service's link): said first
   // the keys
   alias: '', // the alias's Base address
   retiredKeys: 0, // the earlier aliases and Nostr keys the record keeps (keepRetired): Backup's "Earlier keys"
