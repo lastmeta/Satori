@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-03 (no gas)
+
+- The Dev Fee calls (`devFeeClaim`, …), the special keys' and the Admin's, with a wallet that has too little Base ETH, throw 'This wallet needs a little
+  Base ETH for gas…' before anything is sent (was the RPC's "Missing or invalid parameters").
+
 ## Changed 2026-11-02 (the wallets' order)
 
 - New: `orderWallets(ids)` → `wallets()`: the Wallets list in the order given (every wallet's id once), kept for the

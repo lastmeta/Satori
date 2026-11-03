@@ -54,6 +54,15 @@ test('Dev Fee: only for a wallet in the splitters; its share, Claim, the trigger
   expect(box.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('devfee-phone.png'), fullPage: true });
 
+  // no gas: said what to do (the owner, 2026-11-03: not the RPC's "Missing or invalid parameters"); nothing sent
+  rpc.eth[V] = 0n;
+  await slot.getByRole('button', { name: 'Claim' }).click();
+  await slot.getByLabel('Wallet passphrase to claim or change your dev fee slot').fill(PASS);
+  await slot.getByRole('button', { name: 'Unlock' }).click();
+  await expect(t(page, 'devfee-error')).toHaveText(/^This wallet needs a little Base ETH for gas\. Add some/, { timeout: 30_000 });
+  expect(rpc.sent.filter((x) => x.functionName === 'withdraw')).toHaveLength(0);
+  rpc.eth[V] = 10n ** 17n;
+
   // Claim, locked: the passphrase in the card, then the two transactions
   await slot.getByRole('button', { name: 'Claim' }).click();
   await slot.getByLabel('Wallet passphrase to claim or change your dev fee slot').fill(PASS);

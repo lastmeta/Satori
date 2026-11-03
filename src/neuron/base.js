@@ -125,6 +125,8 @@ export const PROOF_TTL_S = 3600;
 export const NEED_GAS = 'The wallet needs a little Base ETH for gas to claim.';
 /** Execute on the Safe tab with no gas (the owner, 2026-10-30: the RPC's "Missing or invalid parameters" said nothing). */
 export const NEED_SAFE_GAS = 'To execute, this wallet needs a little Base ETH for gas. Add some (Wallet › Show address and QR code), or execute it from another owner\'s wallet that has some. Signing stays free.';
+/** The Dev Fee, special keys' and Admin actions with no gas (the owner, 2026-11-03: the RPC's "Missing or invalid parameters" again). */
+export const NEED_WALLET_GAS = 'This wallet needs a little Base ETH for gas. Add some (Wallet › Show address and QR code), then try again.';
 /** Stake's two alias steps and its wallet step need gas on each (said before trying, as Claim). */
 /** Said with a Preload now button beside it (the owner, 2026-10-30: say what to do, not what is wrong). */
 export const NEED_ALIAS_GAS = 'Before you can stake with this app, you must preload some gas.';
@@ -875,6 +877,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     async devFeeAct(op, ...args) {
       const v = needWallet();
       if (!devFeeOps[op]) throw new Error(`No dev fee action ${op}`);
+      if ((await refresh()).wallet.lowEth) throw new Error(NEED_WALLET_GAS);
       return act('devfee', async (chain, step) => devFeeOps[op](chain, v, await devFeeOf(chain, walletAddress), ...args, { step, opts: sent }));
     },
     /** Whether the wallet is the Satori contract's admin (docs/design/admin.md): { admin, isAdmin }. */
@@ -895,6 +898,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     /** A special key's action from the wallet, on the keys read just now: → [{ hash, label }] */
     async roleAct(role, action, typed) {
       const v = needWallet();
+      if ((await refresh()).wallet.lowEth) throw new Error(NEED_WALLET_GAS);
       return act('roles', async (chain, step) => roleAct(chain, v, await rolesOf(chain, walletAddress), role, action, typed, { step, opts: sent }));
     },
     /**
@@ -934,6 +938,7 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
     async adminAct(op, ...args) {
       const v = needWallet();
       if (!adminOps[op]) throw new Error(`No admin action ${op}`);
+      if ((await refresh()).wallet.lowEth) throw new Error(NEED_WALLET_GAS);
       return act('admin', (chain, step) => adminOps[op](chain, v, ...args, { step, opts: sent }));
     },
     /**
