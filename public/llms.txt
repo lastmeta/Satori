@@ -62,6 +62,11 @@ way depends on who holds the wallet's private key:
 are worked out from the wallet each time, so they are the same every day and
 need no backup of their own. The passphrase only protects this browser's copy,
 so a new random one each visit is fine.
+Before the first import, `await satori.walletLink(walletWords)` →
+`'this' | 'other' | 'none' | null` says where the Satori Service has the wallet
+linked: `'other'` means another Satori app or neuron runs it, and setting it up
+here moves it here (that one stops earning for it). Tell the person first.
+`'this'` or `'none'`: nothing elsewhere changes; `null`: it can't say.
 
 **2. You don't have it** (the person keeps it in a wallet app such as
 MetaMask, and connected that). The alias and the Nostr key are then random, and

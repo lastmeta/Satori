@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-03 (running elsewhere)
+
+- New: `walletLink(walletWords)` → `'this' | 'other' | 'none' | null`: before an import, whether another Satori app or
+  neuron runs the wallet (`'other'`: setting it up here moves it here). Satori Lite now derives the same alias as this
+  app, so the two no longer take the wallet from each other.
+
 ## Changed 2026-11-03 (no gas)
 
 - The Dev Fee calls (`devFeeClaim`, …), the special keys' and the Admin's, with a wallet that has too little Base ETH, throw 'This wallet needs a little

@@ -181,6 +181,7 @@ function setup(a) {
 
     <form hidden="${showStep('passphrase')}" @submit="${(e) => a.createKeys(form(e), e.target)}">
       <h2>Choose a passphrase</h2>
+      <p class="note-warn" data-test="moving-note" hidden="${() => !state.movingWallet}">This wallet is already running in another Satori app or neuron. Setting it up here moves it here, and that one stops earning for it.</p>
       <p class="muted" data-test="pass-note" hidden="${() => !state.passNote}">${() => state.passNote}</p>
       <p class="muted">It encrypts the wallet in this browser. At least ${MIN_PASSPHRASE} characters, in any
         language or script; a longer phrase is stronger.</p>

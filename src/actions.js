@@ -24,7 +24,7 @@ import { turnReminder, remindOnce } from './pwa/push.js';
 export function createActions(app) {
   const {
     ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
-    devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
+    devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, walletLinkOf, pollNow, setServicePaused,
     readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
     refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction,
     session, setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
@@ -36,6 +36,13 @@ export function createActions(app) {
     app.pending = null;
     state.words = [];
     state.passNote = '';
+    state.movingWallet = false;
+  }
+  /** Whether the wallet being brought in runs in another app or neuron (said on the passphrase step); in the background. */
+  function checkRunsElsewhere() {
+    const asked = app.pending?.wallet;
+    if (!asked) return;
+    walletLinkOf(asked).then((l) => { if (app.pending?.wallet === asked) state.movingWallet = l === 'other'; });
   }
 
   function goStep(step) {
@@ -104,6 +111,7 @@ export function createActions(app) {
       }
       el.reset();
       goStep('passphrase');
+      checkRunsElsewhere();
     },
     createKeys: shownAt('error', async (f, el) => {
       if (f.pass1 !== f.pass2) throw new Error('The passphrases differ.');
@@ -137,7 +145,9 @@ export function createActions(app) {
         const reuse = f.get('reuse') === 'on';
         const secrets = await readDockerFiles({ walletText: await f.get('wallet').text(), password });
         el.reset();
-        if (reuse && passphraseOk(password)) {
+        // running elsewhere: the passphrase step says so first (its password again, or a new passphrase)
+        const elsewhere = reuse && passphraseOk(password) && (await walletLinkOf(secrets.wallet)) === 'other';
+        if (reuse && passphraseOk(password) && !elsewhere) {
           try {
             return await newKeys(secrets, password);
           } finally {
@@ -146,10 +156,12 @@ export function createActions(app) {
         }
         wipePending();
         app.pending = secrets;
-        state.passNote = reuse
-          ? `The Docker install's wallet password is shorter than ${MIN_PASSPHRASE} characters. Choose a new passphrase for this app.`
-          : 'Choose a passphrase for this app.';
+        state.passNote = elsewhere ? "Enter the Docker install's wallet password again, or choose a new passphrase for this app."
+          : reuse ? `The Docker install's wallet password is shorter than ${MIN_PASSPHRASE} characters. Choose a new passphrase for this app.`
+            : 'Choose a passphrase for this app.';
         goStep('passphrase');
+        if (elsewhere) state.movingWallet = true;
+        else checkRunsElsewhere();
         return null;
       }, { backedUp: true });
     }),

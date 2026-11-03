@@ -549,8 +549,7 @@ test('import: a Docker wallet password under 8 characters asks for a new passphr
   expect((await page.evaluate((x) => window.satori.backup('wallet', x), NEW)).words).toBe(wordsOf(hex(p.expect.wallet)));
 });
 
-test('import: the wallet by its private key; its alias and Nostr key derived from it', async ({ context, page }) => {
-  await stubCentral(context);
+test('import: the wallet by its private key; its alias and Nostr key derived from it; running elsewhere is said first', async ({ context, page }) => {
   const v = fx.vectors[0];
   const d = keysFromWallet(hex(v.entropyHex));
   await openApp(page);
@@ -559,8 +558,16 @@ test('import: the wallet by its private key; its alias and Nostr key derived fro
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'The wallet: not 12 or 24 words or a private key.' })).toBeVisible();
   await expect(page.getByLabel(/^Alias/).filter({ visible: true })).toHaveCount(0); // only the wallet is asked for
+  // the wallet runs in another app or neuron (the Satori Service links it to another alias): said before it moves here
+  const stub = await stubCentral(context);
+  stub.walletLinks[v.ethAddress.toLowerCase()] = 'other';
   await page.getByLabel(/^Wallet: its 12 or 24 words or its private key/).fill(`0x${v.entropyHex}`); // the private key, as a Base wallet exports it
   await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.locator('[data-test=moving-note]')).toHaveText(/^This wallet is already running in another Satori app or neuron\. Setting it up here moves it here/);
+  expect(stub.walletLinkCalls.at(-1)).toEqual({ wallet: v.ethAddress, alias: evmAddress(publicKey(d.alias)) }); // the alias it derives
+  expect(await page.evaluate((w) => window.satori.walletLink(w), v.entropyHex)).toBe('other');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: test.info().outputPath('moving-note.png') });
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
   await page.getByLabel('Repeat passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
@@ -570,7 +577,7 @@ test('import: the wallet by its private key; its alias and Nostr key derived fro
 });
 
 test("import: a standard wallet's 12 words open the address MetaMask shows; Backup's 24 words reopen it", async ({ context, page }) => {
-  await stubCentral(context);
+  const stub = await stubCentral(context);
   await openApp(page);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   const field = page.locator('[data-test=import-wallet]');
@@ -578,6 +585,8 @@ test("import: a standard wallet's 12 words open the address MetaMask shows; Back
   await expect(field).toHaveValue('test  test test test test test test test test test test junk ');
   await page.getByRole('button', { name: 'Continue' }).click();
   await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
+  await expect.poll(() => stub.walletLinkCalls.length).toBe(1);
+  await expect(page.locator('[data-test=moving-note]')).toBeHidden(); // linked nowhere else: nothing to say
   await page.getByLabel('Repeat passphrase').fill(PASS);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page.locator('[data-test=wallet]')).toHaveText('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', { timeout: LOAD_TIMEOUT });

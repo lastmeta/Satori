@@ -200,6 +200,24 @@ else tells the forms apart.
   passphrase, or the wallet app's approval), kept with the keys and sent with
   a register at once (`satori.relink()`).
 
+### Running elsewhere
+
+(The owner, 2026-11-03.) A wallet is linked to one alias at a time, so a wallet
+running in Satori Lite under another alias and imported here moves here when
+this app links it, and the other stops earning for it. Lite now derives its
+alias the same way ([derived keys](#derived-keys); neuron
+`satorineuron/init/derived_alias.py`, at the wallet's next unlock), so the two
+are one alias. For an install that hasn't switched yet (or another connected
+app's random alias), Import asks the Satori Service first,
+`GET /api/v1/peer/wallet-link?wallet=…&alias=…` (the alias this app would
+derive) → `{ linked: 'this' | 'other' | 'none' }`, never naming the other
+alias. On 'other', the passphrase step says so before Create: "This wallet is
+already running in another Satori app or neuron. Setting it up here moves it
+here, and that one stops earning for it." Docker files with a reusable
+password then go through the passphrase step too, so it is read first. No
+answer (offline, an older Satori Service) says nothing. Agents:
+`walletLink(walletWords)`.
+
 ## Several wallets
 
 - **A database each.** The first wallet keeps the first file

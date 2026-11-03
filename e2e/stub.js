@@ -63,19 +63,20 @@ async function linkOf(h, heldIssued = 0) {
  * @returns the stub: set `batch`, `otherWallet` (register's `wallet_address` whatever the link: central pays another
  *   address), `noWalletAddress` (no such field: a central that does not say), `fail` (statuses for the next
  *   predictions batches), `failRegister` (how many registers answer 503: each register() is resent once on a 5xx), `refuseLogin` (every login is a 401, as for a signature central does not take), `delayMs` (the observations batch), `root` and `proofs` (address → central's proof),
+ *   `walletLinks` (wallet, lower case → 'this' | 'other': where /peer/wallet-link says it is linked; else 'none'),
  *   `history` (stream uuid → its rows, oldest first; null: the route 404s), `reward` (the reward address central keeps:
  *   null or a 0x address, as central answers it since 8dcc016), `rewardHold` (a promise the reward-address calls wait
  *   for), `rewardRefuse` (the detail every POST is refused with, a 400, e.g. 'Invalid Base address'), `historyDelayMs` (the n-th history call answers
  *   after n × that: the streams come in one by one); hold(what) keeps the observations batch
  *   (what 'batch', the default: a poll, seen while it runs), register's answer ('register': nothing the neuron does
  *   after it, the poll schedule's write included) or the predictions batch ('submit') until the function it returns is called; read `registered`, `polls` (per observations
- *   batch: how many registers came before it), `logins`, `batches`, `merkleCalls`, `historyCalls`, `rewardCalls` ({ method, body,
+ *   batch: how many registers came before it), `logins`, `batches`, `merkleCalls`, `historyCalls`, `walletLinkCalls`, `rewardCalls` ({ method, body,
  *   authorization }), `prod`, `blocked`.
  */
 export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = null } = {}) {
   const held = { batch: null, register: null, submit: null };
   const stub = { batch: [], otherWallet: null, noWalletAddress: false, fail: [], failRegister: 0, refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
-    historyDelayMs: 0, reward: null, rewardHold: null, rewardRefuse: null,
+    historyDelayMs: 0, reward: null, rewardHold: null, rewardRefuse: null, walletLinks: {}, walletLinkCalls: [],
     registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], rewardCalls: [], prod: [], blocked: [],
     hold(what = 'batch') {
       let release;
@@ -113,6 +114,11 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       if (!stub.history) return reply(route, 404, { detail: 'Not Found' });
       const since = Number(q.since ?? -Infinity);
       return reply(route, 200, (stub.history[q.stream_uuid] ?? []).filter((o) => Number(o.observed_at) > since).slice(-Number(q.limit ?? 500)));
+    }
+    if (req.method() === 'GET' && pathname === '/api/v1/peer/wallet-link') { // where a wallet is linked, as an alias sees it
+      const q = Object.fromEntries(new URL(req.url()).searchParams);
+      stub.walletLinkCalls.push(q);
+      return reply(route, 200, { linked: stub.walletLinks[q.wallet.toLowerCase()] ?? 'none' });
     }
     if (pathname === '/api/v1/peer/reward-address' && ['GET', 'POST'].includes(req.method())) {
       const body = req.postData();

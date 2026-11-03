@@ -31,7 +31,7 @@ export function createAgent(app) {
     dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
     backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-    setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
+    setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletLinkOf, walletOps,
     work,
   } = app;
 
@@ -85,6 +85,16 @@ export function createAgent(app) {
     async connect(rdns) {
       await connectTo(rdns);
       return window.satori.status();
+    },
+    /**
+     * Before setup() imports a wallet (its words or private key, as setup's walletWords): where the Satori Service has
+     * it linked, seen from the alias this app derives for it. 'this' or 'none': nothing changes elsewhere; 'other':
+     * another app or neuron runs it, and setting it up here moves it here (that one stops earning for it); null: it
+     * can't say. Nothing is kept. → 'this' | 'other' | 'none' | null
+     */
+    async walletLink(walletWords) {
+      const secret = secretFromText(walletWords);
+      try { return await walletLinkOf(secret); } finally { secret.fill(0); }
     },
     /** This app's wallets (docs/design/wallets.md#several-wallets) → { active, wallets: [{ id, address, active }] }. */
     wallets: async () => walletsView(app.wallets, state.wallet || null),
