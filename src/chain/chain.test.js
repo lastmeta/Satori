@@ -285,6 +285,20 @@ describe('claims and sends (the wallet)', () => {
     expect(sentBy()).toEqual([['wallet', 'claimMerkle', [5n * E18, proof]]]);
     expect(await chain.alreadyMinted(wallet.evmAddress)).toBe(5n * E18);
   });
+  test("what the merkle lane paid, at a claim's block the RPC does not show yet: read again, else now", async () => {
+    s.merkle.drop[V] = { amount: 5n * E18, proof: ['0x' + 'ab'.repeat(32)] };
+    const { receipt } = await chain.claimMerkle(wallet, { amountWei: '5000000000000000000', proof: s.merkle.drop[V].proof });
+    const lagging = (misses) => {
+      let n = 0;
+      const transport = custom({ request: async (q) => {
+        if (q.method === 'eth_call' && q.params[1] !== 'latest' && n++ < misses) throw Object.assign(new Error('header not found'), { code: -32000 });
+        return rpc.request(q);
+      } });
+      return createChain({ config: DEFAULTS, transport, pollingInterval: 1, settle: { tries: 5, ms: 1 } });
+    };
+    expect(await lagging(2).alreadyMinted(wallet.evmAddress, receipt.blockNumber)).toBe(5n * E18);
+    expect(await lagging(Infinity).alreadyMinted(wallet.evmAddress, receipt.blockNumber)).toBe(5n * E18);
+  });
   test('claimAirdrop', async () => {
     s.airdrop[V] = 7n * E18;
     await chain.claimAirdrop(wallet);

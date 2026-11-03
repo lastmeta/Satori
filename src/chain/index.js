@@ -559,8 +559,15 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
     // the wallet's writes below: opts.onSent(hash) once sent, before the receipt (Home's "Waiting for Base to confirm…")
     /** On-chain rewards: hub.claim() from the wallet (the dapp, useDashboard.ts:288-311). */
     claimRewards: (wallet, opts) => write(wallet, hub('claim'), opts),
-    /** What the merkle lane has paid `addr` (at `blockNumber`, else now). */
-    alreadyMinted: (addr, blockNumber) => client.readContract({ ...merkle('alreadyMintedTo', [addr]), ...(blockNumber ? { blockNumber } : {}) }),
+    /** What the merkle lane has paid `addr` (at `blockNumber`, read again while the node lags behind it; else now). */
+    alreadyMinted: async (addr, blockNumber) => {
+      const at = (b) => client.readContract({ ...merkle('alreadyMintedTo', [addr]), ...(b ? { blockNumber: b } : {}) });
+      if (!blockNumber) return at();
+      // at a claim's block: the node asked may not have it yet ("header not found"), so read again; failing that, now
+      let v = null;
+      await settled(async () => { v = await at(blockNumber); return true; });
+      return v ?? at();
+    },
     /** claimMerkle(lifetimeEntitlement, proof) from the wallet (base_claim.py:99-104). */
     claimMerkle: (wallet, { amountWei, proof }, opts) => write(wallet, merkle('claimMerkle', [BigInt(amountWei), proof]), opts),
     /** The wallet's merkle drop claimed by the alias, paid to the wallet: claimMerkle(wallet, amount, proof) (D8). */
