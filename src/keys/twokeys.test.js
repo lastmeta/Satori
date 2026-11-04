@@ -121,7 +121,7 @@ describe('the passphrase each time: Backup and Send (docs/design/keys.md#backup)
     const nostr = await backupKeys(r, 'nostr', PASS);
     expect(nostr).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: d.nostr });
     expect(await backupKeys(r, null, PASS)).toEqual({ alias: { words: dAlias.words, privateKey: `0x${dAlias.hex}` },
-      wallet: { words: b.words, privateKey: `0x${b.entropyHex}` }, nostr, retired: [] });
+      wallet: { words: b.words, privateKey: `0x${b.entropyHex}` }, nostr, retired: [], offchain: null });
     expect(await backupKeys(r, undefined, PASS)).toHaveProperty('wallet');
   });
 });
