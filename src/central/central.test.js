@@ -101,14 +101,15 @@ describe('register', () => {
     const link = { message: 'Satori: link this alias to my wallet\nalias: 0xA\nwallet: 0xW\nissued: 1', signature: '0xsig' };
     expect(await client(fetch).register({ link })).toEqual(res);
     expect(paths(calls)).toEqual(['POST /api/v1/peer/register']);
-    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'neuron-version': 'browser-0.1.0+3f11d8c',
-      'wallet-link': Buffer.from(link.message).toString('base64'), 'wallet-signature': '0xsig' });
+    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
+      'neuron-version': 'browser-0.1.0+3f11d8c', 'wallet-link': Buffer.from(link.message).toString('base64'), 'wallet-signature': '0xsig' });
     expect(calls[0].body).toBeUndefined();
   });
   test('the Nostr pubkey as nostr-pubkey, when there is one; no link headers without a link', async () => {
     const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, {}) });
     await client(fetch).register({ nostrPubkey: 'ee'.repeat(32) });
-    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'nostr-pubkey': 'ee'.repeat(32), 'neuron-version': 'browser-0.1.0+3f11d8c' });
+    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
+      'nostr-pubkey': 'ee'.repeat(32), 'neuron-version': 'browser-0.1.0+3f11d8c' });
   });
   test('a refusal is a CentralError with the status and detail', async () => {
     const { fetch } = mockFetch({ 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });

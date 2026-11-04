@@ -14,6 +14,9 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import { base64 } from '@scure/base';
 import { emit } from '../traffic.js';
 
+/** What the app reports its alias is for, and that the app reports it (central's alias_reports): one key, used for
+ * off-chain scoring (predictions to the Satori Service) and on-chain (the alias's daily batch on the Satori contract). */
+export const ALIAS_REPORT = Object.freeze({ 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app' });
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)
 
 /**
@@ -147,11 +150,12 @@ export function createCentral({ url, alias, version, fetch: fetchFn = globalThis
     url: base,
 
     /**
-     * POST /peer/register, headers only, no token: the alias, the Nostr key, this version (browser-0.1.0+3f11d8c) and the
-     * wallet's link to the alias (base64 of its text, a header being one line; docs/design/wallets.md).
+     * POST /peer/register, headers only, no token: the alias, what this app uses it for (the Satori Service and the
+     * Satori contract both: ALIAS_REPORT), the Nostr key, this version (browser-0.1.0+3f11d8c) and the wallet's link to
+     * the alias (base64 of its text, a header being one line; docs/design/wallets.md).
      */
     async register({ link, nostrPubkey }) {
-      const headers = { 'alias-pubkey': alias.pubkey, 'neuron-version': version };
+      const headers = { 'alias-pubkey': alias.pubkey, ...ALIAS_REPORT, 'neuron-version': version };
       if (nostrPubkey) headers['nostr-pubkey'] = nostrPubkey;
       if (link) Object.assign(headers, { 'wallet-link': base64.encode(utf8ToBytes(link.message)), 'wallet-signature': link.signature });
       return call('POST', '/api/v1/peer/register', headers);
