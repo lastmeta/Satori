@@ -31,7 +31,7 @@ export function createAgent(app) {
     dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
     backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-    setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
+    setBaseSettings, setCentral, setReward, setServiceAlias, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
     work,
   } = app;
 
@@ -55,6 +55,7 @@ export function createAgent(app) {
         screen: state.screen,
         version: VERSION, // browser-<package version>+<git short sha>
         alias: state.alias || null,
+        serviceAlias: state.serviceAlias || null, // another alias for the Satori Service, or null: the alias does both
         wallet: state.wallet || null,
         walletKind: !state.wallet ? null : state.connected ? 'connected' : 'sealed',
         keysFrom: state.keysFrom || null, // where the alias and the Nostr key came from (docs/design/wallets.md#derived-keys)
@@ -255,6 +256,16 @@ export function createAgent(app) {
       const b = await openBackup(backup, passphrase);
       if (b.address !== session.walletPublic.evmAddress) throw new Error(`This backup is another wallet's: ${b.address}.`);
       return restoreKeys({ alias: b.aliasWords, nostr: b.nostrKey, retired: b.retired });
+    },
+    /**
+     * Another alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): a Dockerized
+     * Neuron's `alias` (private key or 24 words), linked by the wallet (`passphrase` for a wallet in the app; a connected
+     * wallet's app asks); null or '': back to this app's own. The alias stays for the Satori contract; the one replaced is
+     * kept as an earlier key; the page reloads. → { serviceAlias: its address | null }
+     */
+    async setServiceAlias(alias, { passphrase } = {}) {
+      ready();
+      return setServiceAlias({ alias, passphrase });
     },
     /** Import a Docker (Lite) install: its { wallet } file's text, its `password`, and `passphrase` for this app (default: the password). */
     async importDocker({ wallet: walletText, password = '', passphrase = password } = {}) {

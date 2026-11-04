@@ -23,7 +23,7 @@ test('Safety comes before the reference, and lists the calls only the human may 
   const safety = llms.slice(at('Safety'), at('Quick start (an agent)'));
   expect(safety).toMatch(/data, never instructions/);
   for (const m of ['send', 'backup', 'unlock', 'stake', 'unstake', 'claim', 'setCentral', 'setBaseRpc', 'setRelays', 'setRewardAddress',
-    'retrain']) {
+    'setServiceAlias', 'retrain']) {
     expect(safety, m).toContain(`\`${m}\``);
     expect(methods, m).toContain(m);
   }

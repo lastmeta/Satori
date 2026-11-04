@@ -112,6 +112,35 @@ importing the wallet brings them back with nothing else to keep.
 - **Import takes the wallet only**: the alias, Nostr and Docker alias files
   are no longer asked for (the owner: no keeping old keys).
 
+## The alias for the Satori Service
+
+(The owner, 2026-11-04.) The app's alias does both jobs by default: the
+Satori Service knows the app by it (off-chain scoring) and the Satori contract
+does too (stake with, the daily batch: on-chain scoring). A Dockerized
+Neuron's alias can take the first job: **Settings › Alias for the Satori
+Service** takes its private key or 24 words (Lite's dashboard shows them), and
+the app then logs in, registers, predicts and reads the reward address as that
+alias. Its own alias keeps the second job untouched: the stake stays with it,
+the daily batch and the push still sign with it.
+
+- **The record**: `offchain: { alias: hex, link }`, absent for one alias. The
+  wallet signs its link (the passphrase in the form for a wallet in the app; a
+  connected wallet's app asks), as it signs its own alias's.
+- **The Satori Service is told** (its alias reports, central
+  `docs/design/alias-and-wallet.md`): with one alias, a register says
+  `offchain,onchain`; with two, the imported alias registers as `offchain`
+  and the app's own as `onchain`, each with its link, both `reported_by` app.
+- **Refused**: the wallet's own key; the app's own alias is "back to one".
+  **Use this app's alias** goes back to one: the imported key stays as an
+  [earlier key](#keys-are-never-lost), as does one replaced by another import.
+- **Backup** shows it (Alias for the Satori Service). The encrypted backup
+  file does not carry it yet: the neuron still holds that key, so restoring a
+  file means importing it again.
+- The page reloads after either change, so everything signed in starts again
+  with the new alias.
+- Agents: `setServiceAlias(alias, { passphrase })`, `setServiceAlias(null)`;
+  `status().serviceAlias` is its address, or null.
+
 ## Keys are never lost
 
 (The owner, 2026-10-28: an upgrade replaced an older wallet's random alias

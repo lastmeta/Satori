@@ -42,10 +42,10 @@ const reach = (err) => (err?.status === 0 ? { unreachable: true } : {});
  * (the same address, in any letter case), 'other' (a different one), 'none' (null: no wallet linked) or null (unknown:
  * a central without the field).
  */
-export async function register({ central, wallet, link = null, nostrPubkey, now = nowS }) {
+export async function register({ central, wallet, link = null, nostrPubkey, alias, scoring, now = nowS }) {
   const at = now();
   try {
-    const r = await central.register({ link, nostrPubkey });
+    const r = await central.register({ link, nostrPubkey, alias, scoring }); // alias, scoring: central.register's
     const known = r != null && Object.hasOwn(r, 'wallet_address');
     const theirs = known ? r.wallet_address ?? null : null;
     const walletMismatch = !known ? null : theirs == null ? 'none' : String(theirs).toLowerCase() === wallet.toLowerCase() ? false : 'other';

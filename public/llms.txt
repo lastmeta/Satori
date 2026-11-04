@@ -148,7 +148,7 @@ Read this before calling anything.
   their own words, for this app, now): `send`, `backup`, `unlock`,
   `stake`, `unstake`, `claim`, `playGame` (it predicts, and costs gas), `setPlay`, `setServicePaused`, `setReminder`, `remindMe`, `importDocker`,
   `setCentral`, `setBaseRpc`, `setRelays`,
-  `setRewardAddress` (it decides where the rewards go), `retrain`, and the
+  `setRewardAddress` (it decides where the rewards go), `setServiceAlias` (who the Satori Service pays it as), `retrain`, and the
   paid streams: `buy` (it spends the wallet's SATORI and gas), `stop`, `sell`
   and `unsell` (they set a price on the person's predictions). The same for `setAside` (the damaged-database screen: their keys
   are in that file) and `setBaseMaxFee` (it raises what any transaction may
@@ -540,11 +540,12 @@ Open the app and wait until `document.body.dataset.screen` is not `loading`
 (synchronous, kept current; `await satori.status()` says the same). Then, in
 the page's JS context:
 
-- `await satori.status()` → `{ screen, version, alias, wallet, walletKind, connected, unlocked, lockAt, central, nostr, base, storage, app,
+- `await satori.status()` → `{ screen, version, alias, serviceAlias, wallet, walletKind, connected, unlocked, lockAt, central, nostr, base, storage, app,
   recovered, setAside, train }` (`version`: `browser-<package version>+<git short sha>`, the build's, as register
   sends it; `train`: the last training pass, `{ central, nostr, base, stopped, ms }`, or null; `lockAt`: when the
   unlocked wallet locks on its own, ms, or null; `setAside`: the name a damaged database file was set aside under at
-  this page load, or null).
+  this page load, or null; `serviceAlias`: the alias the Satori Service knows this app by when it is not `alias`,
+  see `setServiceAlias`, else null).
   `screen` is `setup` (no keys yet), `home` (running), `finish` (an earlier
   version's wallet whose public key was not in clear: `unlock(passphrase)`
   once, then it runs), `elsewhere` (another tab runs the neuron; this one
@@ -905,8 +906,9 @@ the page's JS context:
   `backup('nostr', passphrase)` → `{ nsec, secret }`; `backup('retired',
   passphrase)` → `[{ address, privateKey, npub, nsec, at }]`, the earlier
   aliases and Nostr keys the app keeps (never dropped; Settings › Backup ›
-  Earlier keys), newest first; `backup(undefined,
-  passphrase)` → `{ alias, wallet, nostr, retired }`. The passphrase each time,
+  Earlier keys), newest first; `backup('offchain', passphrase)` → `{ words, privateKey }` of the alias for the
+  Satori Service (`setServiceAlias`), or null; `backup(undefined,
+  passphrase)` → `{ alias, wallet, nostr, retired, offchain }`. The passphrase each time,
   unlocked or not (~0.3 s); any other name throws, before the passphrase is
   checked. The alias and the Nostr key need it too, although they are
   stored unencrypted: they are private keys. Show them to the person; don't
@@ -1225,6 +1227,14 @@ the page's JS context:
   (private key or 24 words) and Nostr key (nsec or hex), either left out to keep it, or both from this wallet's
   `exportBackup()` file. Its wallet app signs the new link; the keys replaced stay as earlier keys; the page reloads.
   Only on the person's request. An in-app wallet's come from its words: refused.
+- `await satori.setServiceAlias(alias, { passphrase })` → `{ serviceAlias }` (only on the person's request): the
+  Satori Service then knows this app by another alias, a Docker install's (`alias`: its private key or 24 words), so
+  the app predicts for the Satori Service as that install. This app's own alias (`status().alias`) keeps the stake and
+  the daily batch on the Satori contract. The wallet signs the link: `passphrase` for a wallet in the app; a connected
+  wallet's app asks. `setServiceAlias(null)` goes back to the one alias (no passphrase). The wallet's own key, the
+  one in use already or a key that is no key is refused; a replaced one stays as an earlier key (`backup('retired')`).
+  The page reloads. The encrypted backup file doesn't carry it: set it again after restoring one. Settings › Alias for
+  the Satori Service.
 - `await satori.exportBackup(passphrase)` → `{ kind: 'satori-backup', v: 1, address, at, sealed }`: sealed with the
   passphrase, every key (a connected wallet's own words stay in its wallet app, which isn't asked), its link, the
   models, settings, subscriptions, vouchers and favorites. A wallet in the app: its passphrase, or it throws

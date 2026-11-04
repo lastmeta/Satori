@@ -115,7 +115,7 @@ describe('the passphrase each time: Backup and Send (docs/design/keys.md#backup)
     await expect(backupKeys(r, 'wallet')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'alias', '')).rejects.toThrow(PASSPHRASE_NEEDED);
     await expect(backupKeys(r, 'nostr', 'not it at all')).rejects.toThrow(/^Wrong passphrase$/);
-    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet', 'nostr' or 'retired'/); // the name first, before 0.3 s
+    await expect(backupKeys(r, 'purse', PASS)).rejects.toThrow(/'alias', 'wallet', 'nostr', 'retired' or 'offchain'/); // the name first, before 0.3 s
     expect(await backupKeys(r, 'wallet', PASS)).toEqual({ words: b.words, privateKey: `0x${b.entropyHex}` });
     expect(await backupKeys(r, 'alias', PASS)).toEqual({ words: dAlias.words, privateKey: `0x${dAlias.hex}` });
     const nostr = await backupKeys(r, 'nostr', PASS);

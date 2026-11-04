@@ -1,6 +1,7 @@
 // Central's API as Satori Lite uses it (docs/design/central.md):
 //   const c = createCentral({ url, alias, version })
 //   await c.register({ link, nostrPubkey })   // POST /peer/register (its wallet_address: neuron register())
+//   await c.register({ link, nostrPubkey, alias, scoring })   // another alias (the app's own, ONCHAIN) or one job only
 //   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
 //   await c.history(uuid, { limit, since })  // GET /observations/history: one stream's past (beyond Lite; may 404)
@@ -17,6 +18,9 @@ import { emit } from '../traffic.js';
 /** What the app reports its alias is for, and that the app reports it (central's alias_reports): one key, used for
  * off-chain scoring (predictions to the Satori Service) and on-chain (the alias's daily batch on the Satori contract). */
 export const ALIAS_REPORT = Object.freeze({ 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app' });
+/** With an alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): each its own job. */
+export const OFFCHAIN = 'offchain';
+export const ONCHAIN = 'onchain';
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)
 
 /**
@@ -152,10 +156,12 @@ export function createCentral({ url, alias, version, fetch: fetchFn = globalThis
     /**
      * POST /peer/register, headers only, no token: the alias, what this app uses it for (the Satori Service and the
      * Satori contract both: ALIAS_REPORT), the Nostr key, this version (browser-0.1.0+3f11d8c) and the wallet's link to
-     * the alias (base64 of its text, a header being one line; docs/design/wallets.md).
+     * the alias (base64 of its text, a header being one line; docs/design/wallets.md). `as`: another alias than the one
+     * this client signs in with (the app's own, beside an alias for the Satori Service); `scoring`: OFFCHAIN or ONCHAIN
+     * for an alias with one job.
      */
-    async register({ link, nostrPubkey }) {
-      const headers = { 'alias-pubkey': alias.pubkey, ...ALIAS_REPORT, 'neuron-version': version };
+    async register({ link, nostrPubkey, alias: as = alias, scoring = ALIAS_REPORT['alias-scoring'] }) {
+      const headers = { 'alias-pubkey': as.pubkey, ...ALIAS_REPORT, 'alias-scoring': scoring, 'neuron-version': version };
       if (nostrPubkey) headers['nostr-pubkey'] = nostrPubkey;
       if (link) Object.assign(headers, { 'wallet-link': base64.encode(utf8ToBytes(link.message)), 'wallet-signature': link.signature });
       return call('POST', '/api/v1/peer/register', headers);

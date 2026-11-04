@@ -12,13 +12,13 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
-import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup } from './keys/index.js';
+import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup, withOffchainAlias } from './keys/index.js';
 import { requestAddress, signText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
 import { same, UP, DOWN } from './chain/index.js';
 import { createAutoLock } from './keys/autolock.js';
-import { createCentral } from './central/index.js';
+import { createCentral, OFFCHAIN, ONCHAIN } from './central/index.js';
 import { cycle, register, createPoller, centralStatus as statusOf, claimTab, firstPollAt, SERVICE_PAUSED } from './neuron/index.js';
 import { catchUpAll } from './neuron/schedule.js';
 import { modelsOf, modelDetail, DESTS } from './neuron/models.js';
@@ -279,14 +279,21 @@ let fromList = false; // the open model was opened from the list: its back link 
 /** The stored (or default) central; a new client means a new register result. */
 async function connect() {
   const url = (await db.get('central_url')) || DEFAULT_CENTRAL;
-  central = createCentral({ url, alias: session.alias, version: VERSION });
+  central = createCentral({ url, alias: session.serviceAlias, version: VERSION });
   registration = null;
   return central;
 }
 
-/** Register, as Lite does on every start; the result is shown, never thrown. */
+/**
+ * Register, as Lite does on every start; the result is shown, never thrown. With an alias for the Satori Service, it
+ * registers for off-chain scoring and the app's own alias for on-chain, each with its link (`onchain`: the second's
+ * result; docs/design/wallets.md#the-alias-for-the-satori-service).
+ */
 async function registerWith(c) {
-  const r = await register({ central: c, wallet: session.walletPublic.evmAddress, link: session.record.link, nostrPubkey: session.nostr.pubkey });
+  const { offchain, walletPublic, nostr } = session;
+  const at = { central: c, wallet: walletPublic.evmAddress, nostrPubkey: nostr.pubkey };
+  const r = await register({ ...at, link: (offchain ?? session.record).link, scoring: offchain ? OFFCHAIN : undefined });
+  if (offchain) r.onchain = await register({ ...at, alias: session.alias, link: session.record.link, scoring: ONCHAIN });
   if (c !== central) return; // the URL changed meanwhile
   registration = r;
   console[r.ok && !r.walletMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
@@ -354,6 +361,7 @@ function publishContract(games, at) {
 async function startNeuron() {
   const { alias, walletPublic } = session;
   state.alias = alias.evmAddress;
+  state.serviceAlias = session.offchain?.alias.evmAddress ?? ''; // docs/design/wallets.md#the-alias-for-the-satori-service
   state.wallet = walletPublic.evmAddress;
   state.keysFrom = session.from; // docs/design/wallets.md#derived-keys: derived keys need no backup of their own
   if (walletPublic.connected) await findConnected();
@@ -983,19 +991,50 @@ function withWallet(slot, fn) {
 async function relinkWallet() {
   const { wallet } = keyring;
   if (!wallet) throw new Error(session.walletPublic.connected ? notHere().message : 'Unlock the wallet first.');
-  const issued = Math.floor(nowS()); // whole seconds: the network refuses any other issued line
-  let link;
-  if (session.walletPublic.connected) {
-    const message = linkMessage({ alias: session.alias.evmAddress, wallet: session.walletPublic.evmAddress, issued });
-    link = { message, signature: await signText(wallet.provider, session.walletPublic.evmAddress, message) };
-  } else link = wallet.signLink(session.alias.evmAddress, issued);
-  await storeKeys({ ...session.record, link });
+  const linkTo = linker(wallet);
+  const { record } = session;
+  const link = await linkTo(session.alias.evmAddress);
+  const offchain = record.offchain && { ...record.offchain, link: await linkTo(session.offchain.alias.evmAddress) };
+  await storeKeys({ ...record, link, ...(offchain && { offchain }) });
   await registerWith(central);
   if (registration?.ok && registration.walletMismatch) {
     throw new Error(`The Satori Service did not take the link${registration.walletLinkError ? `: ${registration.walletLinkError}` : ''}.`);
   }
   return registration;
 }
+
+/**
+ * The wallet's link to an alias, issued now: `linker(wallet)(aliasAddress)` → { message, signature }. A wallet in the
+ * app signs it; a connected one's wallet app asks the person.
+ */
+function linker(wallet) {
+  const issued = Math.floor(nowS()); // whole seconds: the network refuses any other issued line
+  const address = session.walletPublic.evmAddress;
+  if (!session.walletPublic.connected) return async (alias) => wallet.signLink(alias, issued);
+  return async (alias) => {
+    const message = linkMessage({ alias, wallet: address, issued });
+    return { message, signature: await signText(wallet.provider, address, message) };
+  };
+}
+
+/**
+ * Another alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): `alias` a Dockerized
+ * Neuron's private key or 24 words, linked by the wallet (`passphrase` for a wallet in the app; a connected wallet's app
+ * asks); '' or null: back to the app's own. The one it replaces is kept; the page reloads with the new one.
+ */
+const setServiceAlias = ({ alias, passphrase } = {}) => baseAction('serviceAlias', async () => {
+  const sign = async (fn) => {
+    if (!session.walletPublic.connected) return session.withPassphrase(passphrase, (wallet) => fn(linker(wallet)));
+    if (!keyring.wallet) throw notHere();
+    return fn(linker(keyring.wallet));
+  };
+  const one = !String(alias ?? '').trim();
+  // back to one needs no new link: the app's own alias keeps its link
+  const next = one ? await withOffchainAlias(session.record, '', null) : await sign((linkTo) => withOffchainAlias(session.record, alias, linkTo));
+  await storeKeys(next);
+  setTimeout(() => location.reload(), 50); // after an agent's call has its answer: everything signed in starts again
+  return { serviceAlias: session.offchain?.alias.evmAddress ?? null };
+});
 
 /**
  * A connected wallet's alias and Nostr key put back from a backup (docs/design/wallets.md#restoring-a-connected-wallets-keys):
@@ -1018,7 +1057,7 @@ const actions = createActions({
   devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
   readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
-  setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
+  setAsideDb, setBaseSettings, setCentral, setReward, setServiceAlias, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
   withWallet,
   get afterUnlock() { return afterUnlock; },
   set afterUnlock(v) { afterUnlock = v; },
@@ -1285,7 +1324,7 @@ window.satori = createAgent({
   dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
   backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-  setBaseSettings, setCentral, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
+  setBaseSettings, setCentral, setReward, setServiceAlias, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
   work,
   get activity() { return activity; },
   get base() { return base; },

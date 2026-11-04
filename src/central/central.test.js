@@ -1,7 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import {
-  predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS,
+  predictionItem, normalizeObservation, createCentral, CentralError, TIMEOUT_MS, OFFCHAIN, ONCHAIN,
 } from './index.js';
 
 describe('predictionItem', () => {
@@ -110,6 +110,14 @@ describe('register', () => {
     await client(fetch).register({ nostrPubkey: 'ee'.repeat(32) });
     expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
       'nostr-pubkey': 'ee'.repeat(32), 'neuron-version': 'browser-0.1.0+3f11d8c' });
+  });
+  test('two aliases: each registers for its own job (docs/design/wallets.md#the-alias-for-the-satori-service)', async () => {
+    const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': () => json(200, {}) });
+    const c = client(fetch);
+    await c.register({ scoring: OFFCHAIN });
+    await c.register({ alias: { pubkey: '03cd' }, scoring: ONCHAIN });
+    expect(calls.map((x) => [x.headers['alias-pubkey'], x.headers['alias-scoring'], x.headers['alias-reported-by']]))
+      .toEqual([['02ab', 'offchain', 'app'], ['03cd', 'onchain', 'app']]);
   });
   test('a refusal is a CentralError with the status and detail', async () => {
     const { fetch } = mockFetch({ 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });

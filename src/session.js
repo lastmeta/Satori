@@ -25,6 +25,13 @@ export function createSession({ db, restKey }) {
     get record() { return record; },
     /** The alias's signer (signDigest, evmAddress, pubkey, signCentralLogin). */
     get alias() { return keys?.alias ?? null; },
+    /**
+     * The alias for the Satori Service, when the app has one beside its own (docs/design/wallets.md#the-alias-for-the-satori-service):
+     * { alias: its signer, link }, else null (the alias does both jobs).
+     */
+    get offchain() { return keys?.offchain ?? null; },
+    /** The alias the Satori Service knows this app by: the one for it, else the app's own. */
+    get serviceAlias() { return keys?.offchain?.alias ?? keys?.alias ?? null; },
     /** The Nostr key: { secret, pubkey }. */
     get nostr() { return keys?.nostr ?? null; },
     /** The wallet as known while locked: { pubkey, evmAddress, connected: { rdns, name } | null }. */

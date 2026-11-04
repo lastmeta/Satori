@@ -54,7 +54,7 @@ export function backupPanel(a, keys, test = 'backup', label = 'Wallet passphrase
   return html`<form class="inline-unlock" data-test="${`${test}-prompt`}" hidden="${() => !mine(state.backupAsk)}" @submit="${(e) => a.showBackup(form(e), e.target)}"><input name="pass" type="password" aria-label="${label}" placeholder="Wallet passphrase" autocomplete="current-password" required hidden="${() => !!state.connected}" disabled="${() => !!state.connected}"><button class="primary" type="submit" disabled="${() => state.revealing}">${() => (state.revealing ? 'Checking…' : state.connected ? `Confirm in ${state.connected.name}` : 'Show')}</button><button type="button" @click="${a.cancelBackup}">Cancel</button><p class="error small" role="alert" hidden="${() => !state.backupError}">${() => state.backupError}</p></form>
     <div class="backup" hidden="${() => !mine(state.backup)}">
       <div hidden="${() => state.backup === 'nostr' || state.backup === 'retired'}">
-        <h3>${() => (state.backup === 'alias' ? 'Alias' : 'Wallet')} words</h3>
+        <h3>${() => ({ alias: 'Alias', offchain: 'Satori Service alias' }[state.backup] ?? 'Wallet')} words</h3>
         ${wordList(() => state.backupWords.split(' ').filter(Boolean))}
         <div class="label">Private key (imports into a Base wallet)</div>
       </div>

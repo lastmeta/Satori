@@ -113,3 +113,38 @@ test('a Docker (Lite) install imported by call', async ({ context, page }) => {
   await expect(page.locator('[data-test=alias]')).toHaveText(evmAddress(publicKey(derived)), { timeout: 30_000 });
   expect((await call(page, 'base')).wallet.address).toBe(fx.vectors[fx.wallets.current.vector].ethAddress);
 });
+
+test('an alias for the Satori Service by call: a Docker install\'s alias predicts off-chain, the app\'s own stays on-chain', async ({ context, page }) => {
+  test.setTimeout(180_000);
+  const stub = await stubCentral(context);
+  const neuron = fx.vectors[0]; // a Docker install's alias (any key not this wallet's)
+  await openApp(page);
+  await call(page, 'setup', { passphrase: PASS });
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  const own = (await call(page, 'status')).alias;
+  expect((await call(page, 'status')).serviceAlias).toBe(null);
+  await expect(call(page, 'setServiceAlias', neuron.entropyHex, { passphrase: 'wrong passphrase' })).rejects.toThrow('Wrong passphrase');
+
+  const before = stub.registered.length;
+  let loaded = page.waitForEvent('load');
+  expect(await call(page, 'setServiceAlias', neuron.entropyHex, { passphrase: PASS })).toEqual({ serviceAlias: neuron.ethAddress });
+  await loaded;
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  await expect.poll(() => stub.registered.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(before + 2);
+  const s = await call(page, 'status');
+  expect([s.alias, s.serviceAlias]).toEqual([own, neuron.ethAddress]);
+  // after the reload: the neuron's alias registers for off-chain scoring, the app's own for on-chain, each with its link
+  const regs = stub.registered.slice(before).map((h) => [h['alias-pubkey'], h['alias-scoring'], h['alias-reported-by'], !!h['wallet-link']]);
+  expect(regs.slice(0, 2)).toEqual([[neuron.pubkey, 'offchain', 'app', true], [expect.not.stringMatching(neuron.pubkey), 'onchain', 'app', true]]);
+  expect((await call(page, 'backup', 'offchain', PASS)).privateKey).toBe(`0x${neuron.entropyHex}`);
+
+  // Settings shows both; back to one alias, the neuron's kept as an earlier key
+  await call(page, 'go', 'settings');
+  await expect(page.locator('[data-test=service-alias]')).toHaveAttribute('title', neuron.ethAddress);
+  loaded = page.waitForEvent('load');
+  expect(await call(page, 'setServiceAlias', null)).toEqual({ serviceAlias: null });
+  await loaded;
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  expect((await call(page, 'status')).serviceAlias).toBe(null);
+  expect((await call(page, 'backup', 'retired', PASS)).map((k) => k.address)).toContain(neuron.ethAddress);
+});

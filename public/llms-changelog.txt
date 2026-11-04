@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-04 (an alias for the Satori Service)
+
+- New: `setServiceAlias(alias, { passphrase })` → `{ serviceAlias }`: the Satori Service knows this app by a Docker
+  install's alias, while the app's own alias keeps the Satori contract; `setServiceAlias(null)` goes back to one.
+  `status().serviceAlias` (its address, or null) and `backup('offchain', passphrase)` are new too.
+
 ## Changed 2026-11-03 (no gas)
 
 - The Dev Fee calls (`devFeeClaim`, …), the special keys' and the Admin's, with a wallet that has too little Base ETH, throw 'This wallet needs a little
