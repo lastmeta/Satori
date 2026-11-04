@@ -140,8 +140,9 @@ export function walletTab(a) {
         ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
       </dl>
       <div class="alias">
-        ${idRow('Alias', 'alias', () => state.alias, a)}
-        <p class="muted small">The app's own signing address; the daily batch's gas is paid from it.</p>
+        ${idRow('Alias', 'alias', () => state.contractAlias, a)}
+        <p class="muted small">${() => (state.contractAlias && state.contractAlias !== state.alias ? 'The alias you set for the Satori contract (Settings › Aliases); the daily batch\'s gas is paid from it.'
+          : "The app's own signing address; the daily batch's gas is paid from it.")}</p>
         <p class="muted small">Its private key: Settings › Backup.</p>
       </div>
       <div hidden="${() => !b().inviteLink}">

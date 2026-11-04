@@ -26,7 +26,7 @@ export function createActions(app) {
     ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
     devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
     readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
-    refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, setServiceAlias,
+    refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, setAliasFor,
     session, setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
     walletOps, withWallet,
   } = app;
@@ -509,8 +509,8 @@ export function createActions(app) {
         state.devFee.proposal = { splitter, error: err?.shortMessage ?? err?.message ?? String(err) };
       }
     },
-    /** Settings › Alias for the Satori Service: a neuron's alias, or back to this app's own (docs/design/wallets.md). */
-    setServiceAlias: shownAt('serviceAliasError', (f) => setServiceAlias({ alias: f?.alias ?? '', passphrase: f?.passphrase })),
+    /** Settings › Aliases: another alias for a job ('offchain' | 'onchain'), or back to this app's own (docs/design/wallets.md). */
+    setAliasFor: (job, f) => shownAt(`aliasError_${job}`, () => setAliasFor(job, { alias: f?.alias ?? '', passphrase: f?.passphrase }))(),
     /** Settings › Restore keys: a connected wallet's own, from what the person backed up. */
     restoreKeys: shownAt('restoreError', (f) => restoreKeys({ alias: f.alias, nostr: f.nostr })),
     baseRelink: () => baseUi('link', async () => {

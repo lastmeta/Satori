@@ -112,34 +112,38 @@ importing the wallet brings them back with nothing else to keep.
 - **Import takes the wallet only**: the alias, Nostr and Docker alias files
   are no longer asked for (the owner: no keeping old keys).
 
-## The alias for the Satori Service
+## An alias for each job
 
-(The owner, 2026-11-04.) The app's alias does both jobs by default: the
-Satori Service knows the app by it (off-chain scoring) and the Satori contract
-does too (stake with, the daily batch: on-chain scoring). A Dockerized
-Neuron's alias can take the first job: **Settings › Alias for the Satori
-Service** takes its private key or 24 words (Lite's dashboard shows them), and
-the app then logs in, registers, predicts and reads the reward address as that
-alias. Its own alias keeps the second job untouched: the stake stays with it,
-the daily batch and the push still sign with it.
+(The owner, 2026-11-04.) An alias does two jobs: the Satori Service knows the
+app by it (off-chain scoring: log in, register, predictions, the reward
+address), and the Satori contract does too (on-chain scoring: the wallet
+stakes with it, it sends the daily batch and the push's, paying their gas).
+The app's own alias does both by default. **Settings › Aliases** gives either
+job another alias, imported by its private key or 24 words: a Docker
+install's (Lite's dashboard shows its alias key), or another app's. The same
+key may do both jobs; the app's own then does neither.
 
-- **The record**: `offchain: { alias: hex, link }`, absent for one alias. The
-  wallet signs its link (the passphrase in the form for a wallet in the app; a
-  connected wallet's app asks), as it signs its own alias's.
+- **The record**: `offchain: { alias: hex, link }` and `onchain: { alias:
+  hex, link }`, each absent while the app's own alias does that job. The
+  wallet signs each one's link (the passphrase in the form for a wallet in the
+  app; a connected wallet's app asks), as it signs its own alias's.
 - **The Satori Service is told** (its alias reports, central
-  `docs/design/alias-and-wallet.md`): with one alias, a register says
-  `offchain,onchain`; with two, the imported alias registers as `offchain`
-  and the app's own as `onchain`, each with its link, both `reported_by` app.
-- **Refused**: the wallet's own key; the app's own alias is "back to one".
-  **Use this app's alias** goes back to one: the imported key stays as an
-  [earlier key](#keys-are-never-lost), as does one replaced by another import.
-- **Backup** shows it (Alias for the Satori Service). The encrypted backup
-  file does not carry it yet: the neuron still holds that key, so restoring a
-  file means importing it again.
-- The page reloads after either change, so everything signed in starts again
-  with the new alias.
-- Agents: `setServiceAlias(alias, { passphrase })`, `setServiceAlias(null)`;
-  `status().serviceAlias` is its address, or null.
+  `docs/design/alias-and-wallet.md`): one alias for both jobs registers once,
+  `offchain,onchain`; two register each for its job, `offchain` and
+  `onchain`, each with its link, both `reported_by` app.
+- **The Satori contract's alias changed**: the stake is still with the old
+  one, so the Wallet tab asks to stake again (one transaction), and the new
+  one needs Base ETH for its gas. The push's handoff is dropped until the app
+  leaves the new one's.
+- **Refused**: the wallet's own key, and the alias the job has now. Giving the
+  app's own alias, or **Use this app's alias**, hands the job back. A key that
+  stops doing a job stays as an [earlier key](#keys-are-never-lost).
+- **Backup** shows each imported one. The encrypted backup file does not carry
+  them yet: restoring a file means importing them again.
+- The page reloads after a change, so everything starts again with it.
+- Agents: `setServiceAlias(alias, { passphrase })`, `setContractAlias(alias,
+  { passphrase })`, either with null for the app's own;
+  `status().serviceAlias` and `status().contractAlias` are their addresses.
 
 ## Keys are never lost
 

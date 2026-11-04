@@ -1,11 +1,11 @@
-// The alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): a Dockerized Neuron's
+// The alias for the Satori Service (docs/design/wallets.md#an-alias-for-each-job): a Dockerized Neuron's
 // alias, imported, signs for the Satori Service; the app's own alias stays for the Satori contract.
 import { recoverMessageAddress, verifyMessage } from 'viem';
 import { bytesToHex } from '@noble/hashes/utils';
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  newKeys, connectedRecord, loadKeys, withOffchainAlias, keepRetired, backupKeys, connectedBackup, linkMessage, publicKey, evmAddress,
+  newKeys, connectedRecord, loadKeys, withOffchainAlias, withAliasFor, keepRetired, backupKeys, connectedBackup, linkMessage, publicKey, evmAddress,
   wordsOf, generateSecret,
 } from './index.js';
 import { deviceKey, toRest, fromRest } from './atrest.js';
@@ -105,5 +105,41 @@ describe('kept like the other keys', () => {
     expect(JSON.stringify(stored)).not.toContain(NEURON.hex);
     expect(stored.offchain).toBeUndefined();
     expect(await fromRest(stored, key)).toEqual(two);
+  });
+});
+
+describe('withAliasFor: an alias for each job (docs/design/wallets.md#an-alias-for-each-job)', () => {
+  test("the Satori contract's: imported, linked, loaded; the Satori Service's left alone, and the same key may do both", async () => {
+    const r = await newKeys({ wallet: WALLET }, PASS);
+    const on = await withAliasFor(r, 'onchain', NEURON.hex, walletLink);
+    expect(on).toEqual({ ...r, onchain: { alias: NEURON.hex, link: walletLink(NEURON.address) } });
+    const k = loadKeys(on);
+    expect([k.onchain.alias.evmAddress, k.offchain]).toEqual([NEURON.address, null]);
+    expect(k.onchain.alias.signDigest(new Uint8Array(32).fill(1))).toMatchObject({ yParity: expect.any(Number) }); // it signs Base transactions
+    const both = await withAliasFor(on, 'offchain', NEURON.hex, walletLink);
+    expect([both.offchain.alias, both.onchain.alias]).toEqual([NEURON.hex, NEURON.hex]);
+    expect(keepRetired(on, both)).toBe(both);
+    const other = generateSecret();
+    const split = await withAliasFor(both, 'onchain', bytesToHex(other), walletLink);
+    expect(keepRetired(both, split)).toBe(split); // the neuron's still does the Satori Service's job: nothing retired
+    expect((await backupKeys(split, 'onchain', PASS)).privateKey).toBe(`0x${bytesToHex(other)}`);
+  });
+  test("back to the app's own for the Satori contract keeps the imported one; a job that is no job is refused", async () => {
+    const r = await newKeys({ wallet: WALLET }, PASS);
+    const on = await withAliasFor(r, 'onchain', NEURON.hex, walletLink);
+    const own = await withAliasFor(on, 'onchain', '', null);
+    expect(own.onchain).toBeUndefined();
+    expect(keepRetired(on, own, 5).retired).toEqual([{ alias: NEURON.hex, nostr: r.nostr, at: 5 }]);
+    await expect(withAliasFor(r, 'onchain', '', null)).rejects.toThrow(/already uses its own alias for the Satori contract/);
+    await expect(withAliasFor(r, 'chain', NEURON.hex, walletLink)).rejects.toThrow(/'offchain'.*'onchain'/);
+    await expect(withAliasFor(on, 'onchain', NEURON.hex, walletLink)).rejects.toThrow(/uses for the Satori contract now/);
+  });
+  test('sealed at rest too', async () => {
+    const store = new Map();
+    const key = await deviceKey({ get: async (k) => store.get(k), put: async (k, v) => store.set(k, v) });
+    const on = await withAliasFor(await newKeys({ wallet: WALLET }, PASS), 'onchain', NEURON.hex, walletLink);
+    const stored = await toRest(on, key);
+    expect(JSON.stringify(stored)).not.toContain(NEURON.hex);
+    expect(await fromRest(stored, key)).toEqual(on);
   });
 });

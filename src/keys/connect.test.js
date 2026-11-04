@@ -77,7 +77,7 @@ describe('a connected wallet\'s record (docs/design/wallets.md#a-connected-walle
     await expect(backupKeys(r, 'alias', 'anything')).rejects.toThrow(CONNECTED);
     expect(connectedBackup(r, 'alias')).toEqual({ words: expect.any(String), privateKey: `0x${r.alias}` });
     expect(connectedBackup(r, 'nostr')).toEqual({ nsec: expect.stringMatching(/^nsec1/), secret: r.nostr });
-    expect(Object.keys(connectedBackup(r))).toEqual(['alias', 'nostr', 'retired', 'offchain']);
+    expect(Object.keys(connectedBackup(r))).toEqual(['alias', 'nostr', 'retired', 'offchain', 'onchain']);
     expect(() => connectedBackup(r, 'wallet')).toThrow("This wallet's words are in Browser wallet: back it up there.");
   });
   test('no signature makes its keys (the audit, 2026-10-31): the wallet signs only the link, and the same wallet connected again gets other keys', async () => {

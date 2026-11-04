@@ -65,10 +65,11 @@ function backup(a) {
       <button class="small-btn" hidden="${() => !!state.connected}" @click="${() => a.askBackup('wallet')}">Wallet words</button>
       <button class="small-btn" data-test="alias-key" @click="${() => a.askBackup('alias')}">Alias key</button>
       <button class="small-btn" data-test="nostr-key" @click="${() => a.askBackup('nostr')}">Nostr key</button>
-      <button class="small-btn" data-test="service-alias-backup" hidden="${() => !state.serviceAlias}" @click="${() => a.askBackup('offchain')}">Satori Service alias key</button>
+      <button class="small-btn" data-test="service-alias-backup" hidden="${() => !state.serviceAlias || state.serviceAlias === state.alias}" @click="${() => a.askBackup('offchain')}">Satori Service alias key</button>
+      <button class="small-btn" data-test="contract-alias-backup" hidden="${() => !state.contractAlias || state.contractAlias === state.alias}" @click="${() => a.askBackup('onchain')}">Satori contract alias key</button>
       <button class="small-btn" data-test="retired-keys" hidden="${() => !state.retiredKeys}" @click="${() => a.askBackup('retired')}">Earlier keys</button>
     </div>
-    ${backupPanel(a, ['wallet', 'alias', 'nostr', 'offchain', 'retired'])}
+    ${backupPanel(a, ['wallet', 'alias', 'nostr', 'offchain', 'onchain', 'retired'])}
   </section>`;
 }
 
@@ -93,34 +94,41 @@ function restoreCard(a) {
   </section>`;
 }
 
-/**
- * Another alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): a Docker install's,
- * so this app predicts for the Satori Service as it; the app's own alias stays for the Satori contract.
- */
-function serviceAliasCard(a) {
-  const busy = () => state.baseBusy === 'serviceAlias';
-  const two = () => !!state.serviceAlias;
+/** One job's alias (docs/design/wallets.md#an-alias-for-each-job): the app's own, or one imported for it. */
+function aliasForm(a, job, who, use) {
+  const busy = () => state.baseBusy === `alias-${job}`;
+  const address = () => (job === 'offchain' ? state.serviceAlias : state.contractAlias);
+  const other = () => !!address() && address() !== state.alias;
   return html`
-  <section class="card settings-section" id="settings-service-alias" data-test="service-alias-card">
-    <form class="fields" @submit="${(e) => a.setServiceAlias(form(e))}">
-      <h2>Alias for the Satori Service</h2>
-      <p class="muted small" data-test="service-alias-note">${() => (two()
-        ? "The Satori Service knows this app by your Docker install's alias. This app's own alias still holds the stake and plays on the Satori contract."
-        : "To predict for the Satori Service as your Docker install, give its alias key here. This app's own alias keeps the stake and its daily predictions on the Satori contract.")}</p>
-      <div class="id" hidden="${() => !two()}"><span class="label">Satori Service</span><code data-test="service-alias" title="${() => state.serviceAlias}">${() => shortHash(state.serviceAlias)}</code></div>
-      <div class="id"><span class="label">${() => (two() ? 'Satori contract' : 'Satori Service and contract')}</span><code data-test="service-alias-own" title="${() => state.alias}">${() => shortHash(state.alias)}</code></div>
-      <label>${() => (two() ? 'Another alias key' : "The Docker install's alias key")}
-        <input name="alias" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="Private key or 24 words" data-test="service-alias-key">
+    <form class="fields" data-test="${`alias-${job}`}" @submit="${(e) => a.setAliasFor(job, form(e))}">
+      <h3>${who}</h3>
+      <div class="id"><span class="label">${() => (other() ? 'Imported alias' : "This app's alias")}</span><code data-test="${`alias-${job}-address`}" title="${address}">${() => shortHash(address())}</code></div>
+      <p class="muted small">${use}</p>
+      <label>Another alias key
+        <input name="alias" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="Private key or 24 words" data-test="${`alias-${job}-key`}">
       </label>
       <label hidden="${() => !!state.connected}">Wallet passphrase (it signs the link)
-        <input name="passphrase" type="password" autocomplete="current-password" disabled="${() => !!state.connected}" data-test="service-alias-pass">
+        <input name="passphrase" type="password" autocomplete="current-password" disabled="${() => !!state.connected}" data-test="${`alias-${job}-pass`}">
       </label>
-      <p class="error small" role="alert" data-test="service-alias-error" hidden="${() => !state.serviceAliasError}">${() => state.serviceAliasError}</p>
+      <p class="error small" role="alert" data-test="${`alias-${job}-error`}" hidden="${() => !state[`aliasError_${job}`]}">${() => state[`aliasError_${job}`]}</p>
       <div class="actions">
-        <button class="primary" type="submit" data-test="service-alias-use" disabled="${busy}">${() => (busy() ? 'Saving…' : 'Use this alias')}</button>
-        <button type="button" data-test="service-alias-back" hidden="${() => !two()}" disabled="${busy}" @click="${() => a.setServiceAlias(null)}">Use this app's alias</button>
+        <button class="primary" type="submit" data-test="${`alias-${job}-use`}" disabled="${busy}">${() => (busy() ? 'Saving…' : 'Use this alias')}</button>
+        <button type="button" data-test="${`alias-${job}-back`}" hidden="${() => !other()}" disabled="${busy}" @click="${() => a.setAliasFor(job, null)}">Use this app's alias</button>
       </div>
-    </form>
+    </form>`;
+}
+
+/**
+ * Settings › Aliases (docs/design/wallets.md#an-alias-for-each-job): the app's alias does both jobs unless another is
+ * imported for one, such as a Docker install's for the Satori Service.
+ */
+function aliasesCard(a) {
+  return html`
+  <section class="card settings-section" id="settings-aliases" data-test="aliases-card">
+    <h2>Aliases</h2>
+    <p class="muted small">This app's alias predicts for the Satori Service and on the Satori contract. You can give either job another alias, such as your Docker install's.</p>
+    ${aliasForm(a, 'offchain', 'Satori Service', 'Signs in and sends the predictions the Satori Service scores.')}
+    ${aliasForm(a, 'onchain', 'Satori contract', 'Your wallet stakes with it and it sends the daily batch, paying its gas. After a change, stake with it again.')}
   </section>`;
 }
 
@@ -294,7 +302,7 @@ export function settingsTab(a) {
     ${appearance(a)}
     ${backup(a)}
     ${restoreCard(a)}
-    ${serviceAliasCard(a)}
+    ${aliasesCard(a)}
     ${keys(a)}
     ${rewardCard(a)}
     ${servicePredictions(a)}

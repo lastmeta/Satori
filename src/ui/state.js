@@ -23,8 +23,10 @@ export const state = reactive({
   passNote: '', // the passphrase step's note (an import whose password can't be reused)
   // the keys
   alias: '', // the alias's Base address
-  serviceAlias: '', // another alias for the Satori Service, its Base address; '' when the alias does both (docs/design/wallets.md)
-  serviceAliasError: '',
+  serviceAlias: '', // the alias the Satori Service knows this app by (docs/design/wallets.md#an-alias-for-each-job)
+  contractAlias: '', // the alias on the Satori contract: stake with, the daily batch
+  aliasError_offchain: '',
+  aliasError_onchain: '',
   retiredKeys: 0, // the earlier aliases and Nostr keys the record keeps (keepRetired): Backup's "Earlier keys"
   keysFrom: '', // where the alias and the Nostr key came from: 'wallet' (derived) | 'random' (docs/design/wallets.md#derived-keys)
   wallet: '', // the wallet's Base address (shown while locked)

@@ -8,8 +8,8 @@
 //          so its Base address shows while locked;
 // link   — the wallet's EIP-191 signature of its link to the alias (linkMessage), sent with every register;
 //          made whenever the wallet is in hand (newKeys, an Unlock without one).
-// offchain — another alias for the Satori Service, absent for one (docs/design/wallets.md#the-alias-for-the-satori-service):
-//          { alias: hex, link }, a Dockerized Neuron's, imported; the alias above stays for the Satori contract.
+// offchain, onchain — another alias for one job, absent when the alias above does it (docs/design/wallets.md#an-alias-for-each-job):
+//          { alias: hex, link }, imported: `offchain` for the Satori Service, `onchain` for the Satori contract.
 // retired — the alias and Nostr keys this record held before, never dropped (keepRetired): [{ alias, nostr, at }].
 //          Funds sent to an earlier alias stay reachable (Backup's "Earlier keys").
 // An earlier version's wallet, until its next Unlock: wallet: { pubkey | null, yaml } (Docker's text).
@@ -17,12 +17,12 @@
 //   const record = await newKeys({ wallet }, passphrase)   // create, restore, import: the alias and Nostr key derived
 //   const { wallet } = await readDockerFiles({ walletText, password })  // import: translate
 //   const record = await recordFromRows({ aliasYaml, walletYaml, nostrYaml? })  // migration 7: earlier rows
-//   const next = await withOffchainAlias(record, text, link)   // another alias for the Satori Service; '' → back to one
+//   const next = await withAliasFor(record, job, text, link)   // job 'offchain' | 'onchain': another alias for it; '' → the app's own
 //   const next = await restoredRecord(record, { alias, nostr }, signLink)   // a connected wallet's keys from a backup
 //   const record = connectedRecord({ address, rdns, name, signLink })   // Connect: the wallet stays in its app
 //   const record = recordFromBackup(await openBackup(file, passphrase))   // that wallet's keys and link, with no wallet app
-//   const { alias, nostr, wallet, offchain } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress, connected };
-//                                                                 // offchain: { alias: a signer, link } | null
+//   const { alias, nostr, wallet, offchain, onchain } = loadKeys(record)   // alias: a signer; wallet: { pubkey, evmAddress,
+//                                                                 // connected }; offchain, onchain: { alias: a signer, link } | null
 //   const { wallet, record } = await unlockWallet(record, passphrase)   // record: store it (an upgrade), or null
 //   await withPassphrase(record, passphrase, (wallet) => …)   // the wallet for one use (Send), wiped after it
 //   await backupKeys(record, which, passphrase)   // Backup: the passphrase each time, unlocked or not
@@ -203,9 +203,11 @@ function checkRecord(r) {
   const connected = v.kind === 'connected' && ADDRESS.test(v.address ?? '') && typeof v.rdns === 'string';
   if (!sealed && !legacy && !connected) throw new Error('The stored wallet is not readable.');
   if (r.link != null && !(typeof r.link.message === 'string' && typeof r.link.signature === 'string')) throw new Error('The stored link is not readable.');
-  const o = r.offchain;
-  if (o != null && !(HEX64.test(o.alias) && typeof o.link?.message === 'string' && typeof o.link?.signature === 'string')) {
-    throw new Error('The stored alias for the Satori Service is not readable.');
+  for (const job of JOBS) {
+    const o = r[job];
+    if (o != null && !(HEX64.test(o.alias) && typeof o.link?.message === 'string' && typeof o.link?.signature === 'string')) {
+      throw new Error(`The stored alias for the ${FOR[job]} is not readable.`);
+    }
   }
   if (r.retired != null && !(Array.isArray(r.retired) && r.retired.every((k) => HEX64.test(k?.alias) && HEX64.test(k?.nostr)))) {
     throw new Error('The stored earlier keys are not readable.');
@@ -218,9 +220,9 @@ function checkRecord(r) {
  * (the owner, 2026-10-28: an upgrade dropped an alias that held ETH). Keys are only ever added, never lost.
  */
 export function keepRetired(old, next, now = Math.floor(Date.now() / 1000)) {
-  const held = (r) => (r ? [{ alias: r.alias, nostr: r.nostr }, ...(r.offchain ? [{ alias: r.offchain.alias, nostr: r.nostr }] : []),
-    ...(r.retired ?? [])] : []);
-  const current = new Set([next.alias, next.nostr, ...(next.offchain ? [next.offchain.alias] : [])]);
+  const jobs = (r) => JOBS.filter((j) => r[j]).map((j) => r[j].alias);
+  const held = (r) => (r ? [{ alias: r.alias, nostr: r.nostr }, ...jobs(r).map((alias) => ({ alias, nostr: r.nostr })), ...(r.retired ?? [])] : []);
+  const current = new Set([next.alias, next.nostr, ...jobs(next)]);
   const seen = new Set();
   const retired = [...(next.retired ?? []), ...held(old)].filter((k) => {
     const id = `${k.alias}:${k.nostr}`;
@@ -242,18 +244,29 @@ export function loadKeys(record) {
     nostr: nostrOf(r.nostr),
     wallet: { pubkey, evmAddress: connected ? r.wallet.address : pubkey && evmAddress(pubkey), connected },
     link: r.link ?? null,
-    offchain: r.offchain ? { alias: signer(checkKey(hexToBytes(r.offchain.alias)), { login: true }), link: r.offchain.link } : null,
+    offchain: jobKeys(r.offchain),
+    onchain: jobKeys(r.onchain),
   };
 }
 
+/** The two jobs an alias does (central's alias reports), and who each is for, in words. */
+export const JOBS = ['offchain', 'onchain'];
+const FOR = { offchain: 'Satori Service', onchain: 'Satori contract' };
+const jobKeys = (o) => (o ? { alias: signer(checkKey(hexToBytes(o.alias)), { login: true }), link: o.link } : null);
+
+/** withAliasFor(record, 'offchain', …): the alias for the Satori Service (docs/design/wallets.md#an-alias-for-each-job). */
+export const withOffchainAlias = (record, text, link) => withAliasFor(record, 'offchain', text, link);
+
 /**
- * The record with another alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): `text`
- * its private key or 24 words, linked by the wallet: `link(aliasAddress)` → { message, signature } (the wallet in the
- * app, or a connected wallet's app). Nothing, or this app's own alias: back to one alias (the one it had is kept as an
- * earlier key by keepRetired). The wallet's own key is refused.
+ * The record with another alias for a job (docs/design/wallets.md#an-alias-for-each-job): 'offchain' (the Satori
+ * Service) or 'onchain' (the Satori contract); `text` its private key or 24 words, linked by the wallet:
+ * `link(aliasAddress)` → { message, signature } (the wallet in the app, or a connected wallet's app). Nothing, or this
+ * app's own alias: the app's own does the job again (the one it had is kept as an earlier key by keepRetired). The
+ * wallet's own key is refused.
  */
-export async function withOffchainAlias(record, text, link) {
+export async function withAliasFor(record, job, text, link) {
   const r = checkRecord(record);
+  if (!JOBS.includes(job)) throw new Error("The job is 'offchain' (the Satori Service) or 'onchain' (the Satori contract).");
   const t = String(text ?? '').trim();
   let secret = null;
   if (t) {
@@ -266,14 +279,14 @@ export async function withOffchainAlias(record, text, link) {
   try {
     const key = secret && bytesToHex(secret);
     if (!key || key === r.alias) {
-      if (!r.offchain) throw new Error('This app already uses its own alias for the Satori Service.');
-      const { offchain: _gone, ...one } = r;
-      return one;
+      if (!r[job]) throw new Error(`This app already uses its own alias for the ${FOR[job]}.`);
+      const { [job]: _gone, ...own } = r;
+      return own;
     }
     const address = evmAddress(publicKey(secret));
     if (publicKey(secret) === r.wallet.pubkey || address === r.wallet.address) throw new Error("That is the wallet's own key: give an alias's.");
-    if (key === r.offchain?.alias) throw new Error('That is the alias this app uses for the Satori Service now.');
-    return { ...r, offchain: { alias: key, link: await link(address) } };
+    if (key === r[job]?.alias) throw new Error(`That is the alias this app uses for the ${FOR[job]} now.`);
+    return { ...r, [job]: { alias: key, link: await link(address) } };
   } finally {
     secret?.fill(0);
   }
@@ -408,12 +421,12 @@ export async function checkWalletPassphrase(stored, passphrase) {
   return 'checked';
 }
 
-const BACKUP_KEYS = ['alias', 'wallet', 'nostr', 'retired', 'offchain'];
+const BACKUP_KEYS = ['alias', 'wallet', 'nostr', 'retired', 'offchain', 'onchain'];
 
-/** The alias for the Satori Service's backup, or null when the app uses its own. */
-function offchainBackup(r) {
-  if (!r.offchain) return null;
-  const s = signer(checkKey(hexToBytes(r.offchain.alias)));
+/** A job's own alias's backup (offchain, onchain), or null when the app's alias does it. */
+function jobBackup(o) {
+  if (!o) return null;
+  const s = signer(checkKey(hexToBytes(o.alias)));
   try {
     return s.backup();
   } finally {
@@ -441,13 +454,13 @@ function retiredBackup(r) {
  */
 export async function backupKeys(record, which, passphrase) {
   if (which != null && !BACKUP_KEYS.includes(which)) {
-    throw new Error("Name the key: 'alias', 'wallet', 'nostr', 'retired' or 'offchain' (or nothing, for all of them).");
+    throw new Error("Name the key: 'alias', 'wallet', 'nostr', 'retired', 'offchain' or 'onchain' (or nothing, for all of them).");
   }
   return withPassphrase(record, passphrase, (wallet) => {
     const { alias, nostr } = loadKeys(record);
     try {
       const all = { alias: alias.backup(), wallet: wallet.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret },
-        retired: retiredBackup(record), offchain: offchainBackup(record) };
+        retired: retiredBackup(record), offchain: jobBackup(record.offchain), onchain: jobBackup(record.onchain) };
       return which == null ? all : all[which];
     } finally {
       alias.lock();
@@ -463,11 +476,11 @@ export function connectedBackup(record, which) {
   const r = checkRecord(record);
   if (r.wallet.kind !== 'connected') throw new Error('Not a connected wallet.');
   if (which === 'wallet') throw new Error(`This wallet's words are in ${r.wallet.name}: back it up there.`);
-  if (which != null && !BACKUP_KEYS.includes(which)) throw new Error("Name the key: 'alias', 'nostr', 'retired' or 'offchain' (or nothing, for all of them).");
+  if (which != null && !BACKUP_KEYS.includes(which)) throw new Error("Name the key: 'alias', 'nostr', 'retired', 'offchain' or 'onchain' (or nothing, for all of them).");
   const { alias, nostr } = loadKeys(r);
   try {
     const all = { alias: alias.backup(), nostr: { nsec: nsec(nostr.secret), secret: nostr.secret }, retired: retiredBackup(r),
-      offchain: offchainBackup(r) };
+      offchain: jobBackup(r.offchain), onchain: jobBackup(r.onchain) };
     return which == null ? all : all[which];
   } finally {
     alias.lock();

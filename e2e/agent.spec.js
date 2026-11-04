@@ -114,37 +114,55 @@ test('a Docker (Lite) install imported by call', async ({ context, page }) => {
   expect((await call(page, 'base')).wallet.address).toBe(fx.vectors[fx.wallets.current.vector].ethAddress);
 });
 
-test('an alias for the Satori Service by call: a Docker install\'s alias predicts off-chain, the app\'s own stays on-chain', async ({ context, page }) => {
-  test.setTimeout(180_000);
+test('an alias for each job by call: a Docker install\'s for the Satori Service, another for the Satori contract', async ({ context, page }) => {
+  test.setTimeout(240_000);
   const stub = await stubCentral(context);
-  const neuron = fx.vectors[0]; // a Docker install's alias (any key not this wallet's)
+  const [neuron, chain] = fx.vectors; // a Docker install's alias, and another (any keys not this wallet's)
+  const reload = async (fn, ...args) => {
+    const loaded = page.waitForEvent('load');
+    const r = await call(page, fn, ...args);
+    await loaded;
+    await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+    return r;
+  };
+  const regsAfter = async (n, count) => {
+    await expect.poll(() => stub.registered.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(n + count);
+    return stub.registered.slice(n, n + count).map((h) => [h['alias-pubkey'], h['alias-scoring'], h['alias-reported-by'], !!h['wallet-link']]);
+  };
   await openApp(page);
   await call(page, 'setup', { passphrase: PASS });
   await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
-  const own = (await call(page, 'status')).alias;
-  expect((await call(page, 'status')).serviceAlias).toBe(null);
+  let s = await call(page, 'status');
+  const own = s.alias;
+  expect([s.serviceAlias, s.contractAlias]).toEqual([own, own]);
+  const ownPubkey = stub.registered.at(-1)['alias-pubkey'];
+  expect(stub.registered.at(-1)['alias-scoring']).toBe('offchain,onchain');
   await expect(call(page, 'setServiceAlias', neuron.entropyHex, { passphrase: 'wrong passphrase' })).rejects.toThrow('Wrong passphrase');
 
-  const before = stub.registered.length;
-  let loaded = page.waitForEvent('load');
-  expect(await call(page, 'setServiceAlias', neuron.entropyHex, { passphrase: PASS })).toEqual({ serviceAlias: neuron.ethAddress });
-  await loaded;
-  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
-  await expect.poll(() => stub.registered.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(before + 2);
-  const s = await call(page, 'status');
-  expect([s.alias, s.serviceAlias]).toEqual([own, neuron.ethAddress]);
-  // after the reload: the neuron's alias registers for off-chain scoring, the app's own for on-chain, each with its link
-  const regs = stub.registered.slice(before).map((h) => [h['alias-pubkey'], h['alias-scoring'], h['alias-reported-by'], !!h['wallet-link']]);
-  expect(regs.slice(0, 2)).toEqual([[neuron.pubkey, 'offchain', 'app', true], [expect.not.stringMatching(neuron.pubkey), 'onchain', 'app', true]]);
+  // the Satori Service's: the neuron's alias registers for off-chain scoring, the app's own for on-chain
+  let n = stub.registered.length;
+  expect(await reload('setServiceAlias', neuron.entropyHex, { passphrase: PASS })).toEqual({ serviceAlias: neuron.ethAddress, contractAlias: own });
+  expect(await regsAfter(n, 2)).toEqual([[neuron.pubkey, 'offchain', 'app', true], [ownPubkey, 'onchain', 'app', true]]);
   expect((await call(page, 'backup', 'offchain', PASS)).privateKey).toBe(`0x${neuron.entropyHex}`);
 
-  // Settings shows both; back to one alias, the neuron's kept as an earlier key
+  // the Satori contract's too: the app's own does neither job; the Wallet tab's alias is the contract's
+  n = stub.registered.length;
+  expect(await reload('setContractAlias', chain.entropyHex, { passphrase: PASS })).toEqual({ serviceAlias: neuron.ethAddress, contractAlias: chain.ethAddress });
+  expect(await regsAfter(n, 2)).toEqual([[neuron.pubkey, 'offchain', 'app', true], [chain.pubkey, 'onchain', 'app', true]]);
+  expect((await call(page, 'base')).alias.address).toBe(chain.ethAddress);
   await call(page, 'go', 'settings');
-  await expect(page.locator('[data-test=service-alias]')).toHaveAttribute('title', neuron.ethAddress);
-  loaded = page.waitForEvent('load');
-  expect(await call(page, 'setServiceAlias', null)).toEqual({ serviceAlias: null });
-  await loaded;
-  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
-  expect((await call(page, 'status')).serviceAlias).toBe(null);
-  expect((await call(page, 'backup', 'retired', PASS)).map((k) => k.address)).toContain(neuron.ethAddress);
+  await expect(page.locator('[data-test=alias-offchain-address]')).toHaveAttribute('title', neuron.ethAddress);
+  await expect(page.locator('[data-test=alias-onchain-address]')).toHaveAttribute('title', chain.ethAddress);
+
+  // one key for both jobs: one register, both jobs
+  n = stub.registered.length;
+  await reload('setContractAlias', neuron.entropyHex, { passphrase: PASS });
+  expect(await regsAfter(n, 1)).toEqual([[neuron.pubkey, 'offchain,onchain', 'app', true]]);
+
+  // both handed back: one alias again; the imported ones kept as earlier keys
+  await reload('setContractAlias', null);
+  await reload('setServiceAlias', null);
+  s = await call(page, 'status');
+  expect([s.serviceAlias, s.contractAlias]).toEqual([own, own]);
+  expect((await call(page, 'backup', 'retired', PASS)).map((k) => k.address)).toEqual(expect.arrayContaining([neuron.ethAddress, chain.ethAddress]));
 });

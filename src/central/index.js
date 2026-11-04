@@ -18,7 +18,7 @@ import { emit } from '../traffic.js';
 /** What the app reports its alias is for, and that the app reports it (central's alias_reports): one key, used for
  * off-chain scoring (predictions to the Satori Service) and on-chain (the alias's daily batch on the Satori contract). */
 export const ALIAS_REPORT = Object.freeze({ 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app' });
-/** With an alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): each its own job. */
+/** With an alias for the Satori Service (docs/design/wallets.md#an-alias-for-each-job): each its own job. */
 export const OFFCHAIN = 'offchain';
 export const ONCHAIN = 'onchain';
 export const TIMEOUT_MS = 15_000; // satorilib: 10 s register, 15 s login and calls (server.py:106,207,405)

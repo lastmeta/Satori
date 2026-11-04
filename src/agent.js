@@ -31,7 +31,7 @@ export function createAgent(app) {
     dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
     backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-    setBaseSettings, setCentral, setReward, setServiceAlias, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
+    setBaseSettings, setCentral, setAliasFor, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
     work,
   } = app;
 
@@ -55,7 +55,8 @@ export function createAgent(app) {
         screen: state.screen,
         version: VERSION, // browser-<package version>+<git short sha>
         alias: state.alias || null,
-        serviceAlias: state.serviceAlias || null, // another alias for the Satori Service, or null: the alias does both
+        serviceAlias: state.serviceAlias || null, // the alias the Satori Service knows this app by (docs/design/wallets.md)
+        contractAlias: state.contractAlias || null, // the alias on the Satori contract: stake with, the daily batch
         wallet: state.wallet || null,
         walletKind: !state.wallet ? null : state.connected ? 'connected' : 'sealed',
         keysFrom: state.keysFrom || null, // where the alias and the Nostr key came from (docs/design/wallets.md#derived-keys)
@@ -258,14 +259,19 @@ export function createAgent(app) {
       return restoreKeys({ alias: b.aliasWords, nostr: b.nostrKey, retired: b.retired });
     },
     /**
-     * Another alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): a Dockerized
-     * Neuron's `alias` (private key or 24 words), linked by the wallet (`passphrase` for a wallet in the app; a connected
-     * wallet's app asks); null or '': back to this app's own. The alias stays for the Satori contract; the one replaced is
-     * kept as an earlier key; the page reloads. → { serviceAlias: its address | null }
+     * Another alias for one job (docs/design/wallets.md#an-alias-for-each-job): `alias` (private key or 24 words, a Docker
+     * install's or another app's), linked by the wallet (`passphrase` for a wallet in the app; a connected wallet's app
+     * asks); null or '': back to this app's own. setServiceAlias: the Satori Service (off-chain); setContractAlias: the
+     * Satori contract (on-chain: stake with it again). The one replaced is kept as an earlier key; the page reloads.
+     * → { serviceAlias, contractAlias }
      */
     async setServiceAlias(alias, { passphrase } = {}) {
       ready();
-      return setServiceAlias({ alias, passphrase });
+      return setAliasFor('offchain', { alias, passphrase });
+    },
+    async setContractAlias(alias, { passphrase } = {}) {
+      ready();
+      return setAliasFor('onchain', { alias, passphrase });
     },
     /** Import a Docker (Lite) install: its { wallet } file's text, its `password`, and `passphrase` for this app (default: the password). */
     async importDocker({ wallet: walletText, password = '', passphrase = password } = {}) {

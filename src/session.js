@@ -26,12 +26,16 @@ export function createSession({ db, restKey }) {
     /** The alias's signer (signDigest, evmAddress, pubkey, signCentralLogin). */
     get alias() { return keys?.alias ?? null; },
     /**
-     * The alias for the Satori Service, when the app has one beside its own (docs/design/wallets.md#the-alias-for-the-satori-service):
-     * { alias: its signer, link }, else null (the alias does both jobs).
+     * Another alias for a job, when the app has one beside its own (docs/design/wallets.md#an-alias-for-each-job):
+     * { alias: its signer, link }, else null (the app's own alias does it). offchain: the Satori Service; onchain: the
+     * Satori contract.
      */
     get offchain() { return keys?.offchain ?? null; },
+    get onchain() { return keys?.onchain ?? null; },
     /** The alias the Satori Service knows this app by: the one for it, else the app's own. */
     get serviceAlias() { return keys?.offchain?.alias ?? keys?.alias ?? null; },
+    /** The alias on the Satori contract (stake with, the daily batch, the push): the one for it, else the app's own. */
+    get contractAlias() { return keys?.onchain?.alias ?? keys?.alias ?? null; },
     /** The Nostr key: { secret, pubkey }. */
     get nostr() { return keys?.nostr ?? null; },
     /** The wallet as known while locked: { pubkey, evmAddress, connected: { rdns, name } | null }. */
@@ -76,10 +80,11 @@ export function createSession({ db, restKey }) {
     /** Backup's keys from the passphrase (backupKeys), or a connected wallet's (connectedBackup: its app has signed). */
     backup: (which, passphrase) => backupKeys(record, which, passphrase),
     connectedBackup: (which) => connectedBackup(record, which),
-    /** The alias for the push's handoff: sealed with this browser's key as in the record, else in hex. */
+    /** The alias on the Satori contract for the push's handoff: sealed with this browser's key as in the record, else in hex. */
     async handoffAlias() {
-      const { sealed } = await toRest({ alias: record.alias, nostr: null }, await restKey());
-      return sealed ? { sealed } : { alias: record.alias };
+      const alias = record.onchain?.alias ?? record.alias;
+      const { sealed } = await toRest({ alias, nostr: null }, await restKey());
+      return sealed ? { sealed } : { alias };
     },
   };
 }

@@ -12,7 +12,7 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
-import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup, withOffchainAlias } from './keys/index.js';
+import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup, withAliasFor, JOBS } from './keys/index.js';
 import { requestAddress, signText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
@@ -219,7 +219,7 @@ function roleAction(role, action, typed) {
 }
 
 /** Whom the daily reminder watches on the chain (neuron/play.js sendsToday): its address. */
-const reminderPlayer = () => (sendsToday({ play: state.base.play, staked: state.base.wallet?.staked }) === 'alias' ? state.alias : state.wallet);
+const reminderPlayer = () => (sendsToday({ play: state.base.play, staked: state.base.wallet?.staked }) === 'alias' ? state.contractAlias : state.wallet);
 
 
 // ── the Models tab (docs/design/models.md) ──
@@ -285,15 +285,18 @@ async function connect() {
 }
 
 /**
- * Register, as Lite does on every start; the result is shown, never thrown. With an alias for the Satori Service, it
- * registers for off-chain scoring and the app's own alias for on-chain, each with its link (`onchain`: the second's
- * result; docs/design/wallets.md#the-alias-for-the-satori-service).
+ * Register, as Lite does on every start; the result is shown, never thrown. One alias for both jobs: one register.
+ * Otherwise the Satori Service's alias registers for off-chain scoring and the Satori contract's for on-chain, each with
+ * its link (`onchain`: the second's result; docs/design/wallets.md#an-alias-for-each-job).
  */
 async function registerWith(c) {
-  const { offchain, walletPublic, nostr } = session;
+  const { walletPublic, nostr, record } = session;
   const at = { central: c, wallet: walletPublic.evmAddress, nostrPubkey: nostr.pubkey };
-  const r = await register({ ...at, link: (offchain ?? session.record).link, scoring: offchain ? OFFCHAIN : undefined });
-  if (offchain) r.onchain = await register({ ...at, alias: session.alias, link: session.record.link, scoring: ONCHAIN });
+  const off = { alias: session.serviceAlias, link: (session.offchain ?? record).link };
+  const on = { alias: session.contractAlias, link: (session.onchain ?? record).link };
+  const one = off.alias.pubkey === on.alias.pubkey;
+  const r = await register({ ...at, ...off, scoring: one ? undefined : OFFCHAIN });
+  if (!one) r.onchain = await register({ ...at, ...on, scoring: ONCHAIN });
   if (c !== central) return; // the URL changed meanwhile
   registration = r;
   console[r.ok && !r.walletMismatch ? 'info' : 'warn']('[satori] central register', c.url, r);
@@ -361,7 +364,9 @@ function publishContract(games, at) {
 async function startNeuron() {
   const { alias, walletPublic } = session;
   state.alias = alias.evmAddress;
-  state.serviceAlias = session.offchain?.alias.evmAddress ?? ''; // docs/design/wallets.md#the-alias-for-the-satori-service
+  // what each job's alias is: the app's own unless another was imported for it (docs/design/wallets.md#an-alias-for-each-job)
+  state.serviceAlias = session.serviceAlias.evmAddress;
+  state.contractAlias = session.contractAlias.evmAddress;
   state.wallet = walletPublic.evmAddress;
   state.keysFrom = session.from; // docs/design/wallets.md#derived-keys: derived keys need no backup of their own
   if (walletPublic.connected) await findConnected();
@@ -407,7 +412,7 @@ async function startNeuron() {
     // paid streams (docs/design/market.md): the alias signs and settles, the wallet is paid and funds a Buy, on Base's chain
     alias, walletAddress: walletPublic.evmAddress, wallet: () => keyring.wallet, chain: () => base.channels() });
   await refreshNostr();
-  base = createBase({ db, alias, walletAddress: walletPublic.evmAddress, wallet: () => keyring.wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
+  base = createBase({ db, alias: session.contractAlias, walletAddress: walletPublic.evmAddress, wallet: () => keyring.wallet, central: () => central, defaultRpc: DEFAULTS.rpc,
     onChange: refreshBase, onCheck: (r) => { activity.base(r); if (r.sent) publishContract(r.sent.games, r.sent.at); }, onConfigDiffers: (keys, url) => activity.configDiffers(keys, url), work,
     sw: { get: appGet, put: appPut, handoff: leaveHandoff } });
   if (invitedBy) await base.holdReferrer(invitedBy); // the invite link's ?ref=, kept until Stake registers it
@@ -993,9 +998,9 @@ async function relinkWallet() {
   if (!wallet) throw new Error(session.walletPublic.connected ? notHere().message : 'Unlock the wallet first.');
   const linkTo = linker(wallet);
   const { record } = session;
-  const link = await linkTo(session.alias.evmAddress);
-  const offchain = record.offchain && { ...record.offchain, link: await linkTo(session.offchain.alias.evmAddress) };
-  await storeKeys({ ...record, link, ...(offchain && { offchain }) });
+  const next = { ...record, link: await linkTo(session.alias.evmAddress) };
+  for (const job of JOBS) if (record[job]) next[job] = { ...record[job], link: await linkTo(session[job].alias.evmAddress) };
+  await storeKeys(next);
   await registerWith(central);
   if (registration?.ok && registration.walletMismatch) {
     throw new Error(`The Satori Service did not take the link${registration.walletLinkError ? `: ${registration.walletLinkError}` : ''}.`);
@@ -1018,11 +1023,12 @@ function linker(wallet) {
 }
 
 /**
- * Another alias for the Satori Service (docs/design/wallets.md#the-alias-for-the-satori-service): `alias` a Dockerized
- * Neuron's private key or 24 words, linked by the wallet (`passphrase` for a wallet in the app; a connected wallet's app
- * asks); '' or null: back to the app's own. The one it replaces is kept; the page reloads with the new one.
+ * Another alias for a job (docs/design/wallets.md#an-alias-for-each-job): 'offchain' (the Satori Service) or 'onchain'
+ * (the Satori contract); `alias` its private key or 24 words (a Docker install's, another app's), linked by the wallet
+ * (`passphrase` for a wallet in the app; a connected wallet's app asks); '' or null: back to the app's own. The one it
+ * replaces is kept; the page reloads with the new one. → { serviceAlias, contractAlias }
  */
-const setServiceAlias = ({ alias, passphrase } = {}) => baseAction('serviceAlias', async () => {
+const setAliasFor = (job, { alias, passphrase } = {}) => baseAction(`alias-${job}`, async () => {
   const sign = async (fn) => {
     if (!session.walletPublic.connected) return session.withPassphrase(passphrase, (wallet) => fn(linker(wallet)));
     if (!keyring.wallet) throw notHere();
@@ -1030,10 +1036,11 @@ const setServiceAlias = ({ alias, passphrase } = {}) => baseAction('serviceAlias
   };
   const one = !String(alias ?? '').trim();
   // back to one needs no new link: the app's own alias keeps its link
-  const next = one ? await withOffchainAlias(session.record, '', null) : await sign((linkTo) => withOffchainAlias(session.record, alias, linkTo));
+  const next = one ? await withAliasFor(session.record, job, '', null) : await sign((linkTo) => withAliasFor(session.record, job, alias, linkTo));
   await storeKeys(next);
+  if (job === 'onchain') await Promise.all([appPut(HANDOFF, null), appPut(SW_BATCH, null)]).catch(() => {}); // the push's wake is the old alias's
   setTimeout(() => location.reload(), 50); // after an agent's call has its answer: everything signed in starts again
-  return { serviceAlias: session.offchain?.alias.evmAddress ?? null };
+  return { serviceAlias: session.serviceAlias.evmAddress, contractAlias: session.contractAlias.evmAddress };
 });
 
 /**
@@ -1057,7 +1064,7 @@ const actions = createActions({
   devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
   readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
-  setAsideDb, setBaseSettings, setCentral, setReward, setServiceAlias, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
+  setAsideDb, setBaseSettings, setCentral, setAliasFor, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
   withWallet,
   get afterUnlock() { return afterUnlock; },
   set afterUnlock(v) { afterUnlock = v; },
@@ -1324,7 +1331,7 @@ window.satori = createAgent({
   dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
   backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-  setBaseSettings, setCentral, setReward, setServiceAlias, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
+  setBaseSettings, setCentral, setAliasFor, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
   work,
   get activity() { return activity; },
   get base() { return base; },

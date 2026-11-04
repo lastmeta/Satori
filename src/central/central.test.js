@@ -111,7 +111,7 @@ describe('register', () => {
     expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
       'nostr-pubkey': 'ee'.repeat(32), 'neuron-version': 'browser-0.1.0+3f11d8c' });
   });
-  test('two aliases: each registers for its own job (docs/design/wallets.md#the-alias-for-the-satori-service)', async () => {
+  test('two aliases: each registers for its own job (docs/design/wallets.md#an-alias-for-each-job)', async () => {
     const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': () => json(200, {}) });
     const c = client(fetch);
     await c.register({ scoring: OFFCHAIN });
