@@ -42,9 +42,9 @@ async function stubCentral(context, url) {
 const visible = (loc) => loc.filter({ visible: true });
 const status = (page) => page.evaluate(() => window.satori.status());
 /** Show a tab (Home · Streams · Wallet · Settings), as the nav does. */
-/** Show a tab; on Streams, its Streams card opened (folded by default). */
+/** Show a tab; 'streams': the Service Streams card, on the Service page, opened (folded by default). */
 const go = async (page, tab) => {
-  await page.evaluate((t) => window.satori.go(t), tab);
+  await page.evaluate((t) => window.satori.go(t), tab === 'streams' ? 'service' : tab);
   if (tab === 'streams') await page.evaluate(() => { document.querySelector('[data-test=streams]').open = true; });
 };
 /** A stream's row by its name (another row's Model column may name it as a companion). */
@@ -108,7 +108,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   // The first poll runs at once, right after register (no 5–30 min wait, no Poll now): two streams stored,
   // forecast, sent after an alias-signed login.
   await go(page, 'streams');
-  await expect(page).toHaveURL(/#streams$/);
+  await expect(page).toHaveURL(/#service$/);
   await expect(page.locator('[data-test=last-submit]')).toContainText('2 of 2 accepted');
   expect(stub.polls).toEqual([1]); // one poll, after the register
   await expect(page.locator('[data-test=last-poll]')).toContainText('2 streams, 2 new, 2 predicted');
@@ -120,7 +120,8 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(btc.locator('[data-test=t1]')).toHaveText('67,000.50');
   await expect(btc.locator('[data-test=t2]')).toHaveText('67,000.50');
   await expect(btc.locator('[data-test=status]')).toHaveText('Sent');
-  expect(stub.logins).toHaveLength(1);
+  // the poll's, and the reward address's read (the Service page reads it when it opens)
+  await expect.poll(() => stub.logins.length).toBe(2);
   expect(stub.logins[0]).toMatchObject({ ok: true, message: 'c-0', 'alias-pubkey': reg['alias-pubkey'] });
   expect(stub.logins[0].signature).toMatch(/^0x[0-9a-f]{128}1[bc]$/); // EIP-191: r ‖ s ‖ v, v 27/28
   expect(await verifyMessage({ address: alias, message: 'c-0', signature: stub.logins[0].signature })).toBe(true);
@@ -143,7 +144,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
 
   // Reload: running at once with no passphrase; registered again; the schedule and the data are kept; the tab too.
   await reloadApp(page);
-  await expect(page.locator('[data-test=streams-tab]')).toBeVisible();
+  await expect(page.locator('[data-test=service-tab]')).toBeVisible();
   await expect(idAddr).toHaveText(alias);
   await expect(page.locator('[data-test=registered]')).toHaveText('Yes · peer 7');
   expect(stub.registered).toHaveLength(2);
@@ -400,7 +401,7 @@ test('agent API: poll, dedupe, a kept queue resent, the central URL setting', as
   await expect(page.evaluate(() => window.satori.backup('wallet'))).rejects.toThrow(/passphrase is needed/); // unlocked: still asked
   expect(await page.evaluate(() => window.satori.backup('wallet', 'pass phrase'))).toEqual({ words: v.words, privateKey: `0x${v.entropyHex}` });
   const all = await page.evaluate(() => window.satori.backup(undefined, 'pass phrase'));
-  expect(Object.keys(all)).toEqual(['alias', 'wallet', 'nostr', 'retired']);
+  expect(Object.keys(all)).toEqual(['alias', 'wallet', 'nostr', 'retired', 'offchain', 'onchain']);
   expect(all.retired).toEqual([]); // a new wallet's: no earlier keys (Settings › Backup › Earlier keys hidden)
   await expect(page.locator('[data-test=retired-keys]')).toBeHidden();
   expect(evmAddress(publicKey(hex(all.alias.privateKey.slice(2))))).toBe(s0.alias);
@@ -495,24 +496,24 @@ test("import Docker files; central pays this wallet's rewards to another Base ad
     text: expect.stringContaining(`a different Base address, ${stub.otherWallet}, not this wallet's ${wallet.ethAddress}.`) });
 
   // Settings: https only; an unreachable central is shown, not thrown.
-  await go(page, 'settings');
-  await page.locator('#settings-advanced > summary').click(); // folded under Advanced
+  await go(page, 'service');
   const url = page.getByLabel('Satori Service address');
   await url.fill('http://central.test');
-  await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
+  await page.locator('#service-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.getByRole('alert').filter({ hasText: 'https://' })).toBeVisible();
   await context.route('https://down.test/**', (route) => route.abort());
   await url.fill('https://down.test');
-  await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
+  await page.locator('#service-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.locator('[data-test=central-url]')).toHaveText('https://down.test');
   await expect(page.locator('[data-test=registered]')).toHaveText(/^No: Satori Service unreachable: /);
   await go(page, 'streams');
   await page.locator('[data-test=poll-now]').click();
   await expect(page.locator('[data-test=last-poll]')).toContainText('failed: Satori Service unreachable');
-  await go(page, 'settings');
+  await go(page, 'service');
   await url.fill('');
-  await page.locator('#settings-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
+  await page.locator('#service-central').getByRole('button', { name: 'Save', exact: true }).click(); // the reward address has its own
   await expect(page.locator('[data-test=central-url]')).toHaveText(CENTRAL);
+  await go(page, 'settings');
 
   // The imported wallet unlocks with the Docker password (reused: 8 characters or more) and shows the same words.
   await page.getByLabel('Wallet passphrase', { exact: true }).fill(fx.wallets.password);

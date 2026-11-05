@@ -1,4 +1,4 @@
-// The reward address (docs/design/central.md#the-reward-address) against the stub central: not read at load; Settings
+// The reward address (docs/design/central.md#the-reward-address) against the stub central: not read at load; the Service page
 // reads it when it opens (its moving mark and words meanwhile), Save checks the address before any call (this
 // neuron's alias refused), saves it signed in by the alias with its steps said and the mark turning, shows it
 // shortened with Copy, and Home notes it; Clear; this app's wallet and alias named; the agent API; a refusal; another
@@ -27,7 +27,7 @@ const hold = (stub) => {
 
 async function shots(page, name) {
   const dir = process.env.SHOTS ? 'docs/screenshots' : test.info().outputPath();
-  const top = (block) => page.evaluate((b) => document.getElementById('settings-reward').scrollIntoView({ block: b }), block);
+  const top = (block) => page.evaluate((b) => document.getElementById('service-reward').scrollIntoView({ block: b }), block);
   for (const scheme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -42,7 +42,7 @@ async function shots(page, name) {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
-test('reward address: read when Settings opens, checked, saved with its steps, shown, noted on Home, cleared; the agent API', async ({ context, page }) => {
+test('reward address: read when the Service page opens, checked, saved with its steps, shown, noted on Home, cleared; the agent API', async ({ context, page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const stub = await stubCentral(context);
@@ -53,10 +53,10 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   expect(stub.rewardCalls).toEqual([]); // not read at load: only when it is shown or asked for
   expect((await status(page)).central.reward).toEqual({ address: null, whose: null, at: null, error: null, reading: false });
 
-  // Settings opens: read, signed in; its moving mark and words while the Satori Service answers; then not set.
-  const card = page.locator('#settings-reward');
+  // The Service page opens: read, signed in; its moving mark and words while the Satori Service answers; then not set.
+  const card = page.locator('#service-reward');
   let release = hold(stub);
-  await go(page, 'settings');
+  await go(page, 'service');
   await expect(card.locator('[data-test=reward-none]')).toHaveText('Reading it from the Satori Service…');
   await expect(card.locator('[data-test=reward-reading]')).toBeVisible();
   expect(await animations(page)).toEqual(['spin::after']); // the one moving thing on the screen
@@ -70,7 +70,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   expect(stub.rewardCalls).toEqual([{ method: 'GET', body: null, authorization: expect.stringMatching(/^Bearer jwt-\d+$/) }]);
   expect((await status(page)).central.reward).toMatchObject({ address: null, whose: null, error: null });
   await go(page, 'home');
-  await go(page, 'settings');
+  await go(page, 'service');
   expect(stub.rewardCalls).toHaveLength(1); // once per page load
   await shots(page, 'none');
 
@@ -99,7 +99,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await expect(card.locator('[data-test=reward-saving]')).toBeVisible();
   expect(await animations(page)).toEqual(['spin::after']);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.evaluate(() => document.getElementById('settings-reward').scrollIntoView({ block: 'start' }));
+  await page.evaluate(() => document.getElementById('service-reward').scrollIntoView({ block: 'start' }));
   await page.screenshot({ path: process.env.SHOTS ? 'docs/screenshots/reward-saving-phone-light.png' : test.info().outputPath('reward-saving.png') });
   expect((await page.evaluate(() => window.satori.health())).work).toMatchObject({ task: 'reward', step: 'save', critical: false });
   release();
@@ -155,7 +155,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   expect(await page.evaluate(() => window.satori.setRewardAddress(''))).toMatchObject({ address: null });
 
   // Central holds this app's own address (an old value reads as the same key's Base address: central 8dcc016): named.
-  await go(page, 'settings');
+  await go(page, 'service');
   stub.reward = wallet.toLowerCase();
   expect(await page.evaluate(() => window.satori.rewardAddress())).toMatchObject({ address: wallet, whose: 'wallet' });
   await expect(card.locator('[data-test=reward-whose]')).toHaveText('your wallet');
@@ -180,7 +180,7 @@ test('reward address: read when Settings opens, checked, saved with its steps, s
   await expect(page.evaluate((a) => window.satori.setRewardAddress(a), POOL)).rejects.toThrow('Satori Service 400: Invalid Base address');
   stub.rewardRefuse = null;
 
-  // Another Satori Service: the last one's words go; its reward address is read (Settings is open).
+  // Another Satori Service: the last one's words go; its reward address is read (the Service page is open).
   await card.locator('[data-test=reward-clear]').click();
   await expect(card.locator('[data-test=reward-line]')).toHaveText('Cleared: rewards go to your wallet.');
   await input.fill('0x123');
