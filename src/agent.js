@@ -29,9 +29,9 @@ export function createAgent(app) {
   const {
     DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
     dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
-    backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
+    backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readPoolNow, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-    setBaseSettings, setCentral, setAliasFor, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
+    setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
     work,
   } = app;
 
@@ -220,6 +220,35 @@ export function createAgent(app) {
      * alias; free. → { address, whose, at }
      */
     async setRewardAddress(address) { ready(); const st = await setReward(address); return { address: st.address, whose: st.whose, at: st.at }; },
+    /**
+     * The pool this wallet stakes with for off-chain scoring (docs/design/central.md#the-pool), read from the Satori
+     * Service now: { address (null: none), name, commission, isPool (this wallet runs a pool), at }.
+     */
+    async pool() {
+      ready();
+      const st = await readPoolNow();
+      if (st.error) throw new Error(st.error);
+      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, at: st.at };
+    },
+    /** The pools open to stake with, lowest fee first: [{ address, name, commission }]. */
+    async openPools() {
+      ready();
+      const st = await readPoolNow();
+      if (st.error) throw new Error(st.error);
+      return st.open;
+    },
+    /** Stake with the pool at `address` (another replaces the one it had), signed in by the alias; free. → pool()'s answer */
+    async stakeWithPool(address) {
+      ready();
+      const st = await setPool(String(address ?? ''));
+      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, at: st.at };
+    },
+    /** Stop staking with the pool. → pool()'s answer */
+    async unstakeFromPool() {
+      ready();
+      const st = await setPool(null);
+      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, at: st.at };
+    },
     /** Unlock (on the 'finish' screen it also finishes an earlier version's update, then the neuron starts). */
     async unlock(passphrase) {
       if (state.screen === 'finish') {

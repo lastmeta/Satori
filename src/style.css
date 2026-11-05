@@ -989,3 +989,7 @@ details[open] > summary::after, .chan[aria-expanded="true"]::before, button.snam
 
 /* Settings › Aliases: one form per job (docs/design/wallets.md#an-alias-for-each-job) */
 #settings-aliases form.fields + form.fields { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* Settings › Pool: the open pools, picked by a tap (docs/design/central.md#the-pool) */
+#settings-pool .pool-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#settings-pool .pool-list .label { width: 100%; }

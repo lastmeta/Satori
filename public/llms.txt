@@ -148,7 +148,7 @@ Read this before calling anything.
   their own words, for this app, now): `send`, `backup`, `unlock`,
   `stake`, `unstake`, `claim`, `playGame` (it predicts, and costs gas), `setPlay`, `setServicePaused`, `setReminder`, `remindMe`, `importDocker`,
   `setCentral`, `setBaseRpc`, `setRelays`,
-  `setRewardAddress` (it decides where the rewards go), `setServiceAlias`, `setContractAlias` (which alias the Satori Service and the contract know it by), `retrain`, and the
+  `setRewardAddress` (it decides where the rewards go), `setServiceAlias`, `setContractAlias` (which alias the Satori Service and the contract know it by), `stakeWithPool`, `unstakeFromPool` (where its stake counts), `retrain`, and the
   paid streams: `buy` (it spends the wallet's SATORI and gas), `stop`, `sell`
   and `unsell` (they set a price on the person's predictions). The same for `setAside` (the damaged-database screen: their keys
   are in that file) and `setBaseMaxFee` (it raises what any transaction may
@@ -889,6 +889,19 @@ the page's JS context:
   Service's refusal ("Satori Service 400: Invalid Base address"). Sent checksummed; one at a time (another while one runs
   throws `Busy (save)…`). A change is noted on Home for 24 h. It does not
   change staking.
+- `await satori.pool()` → `{ address, name, commission, isPool, at }`: the pool
+  this wallet stakes with for the Satori Service's off-chain scoring (`address`
+  null: none), read now; `isPool`: this wallet runs a pool itself, so it can't
+  stake with one. `await satori.openPools()` → `[{ address, name, commission }]`,
+  the pools open to stake with, lowest fee first.
+- `await satori.stakeWithPool(address)` and `await satori.unstakeFromPool()` →
+  `pool()`'s answer (only on the person's request): the Satori Service counts
+  this wallet's stake toward that pool and shares the pool's rewards with it;
+  one pool at a time, so another replaces it. Free: the alias signs it, no
+  Unlock, no gas, nothing on chain. Throws "A pool address is a Base address:
+  0x and 40 hex characters.", "That is this app's own address, not a pool.",
+  or the Satori Service's refusal in its words (such as "Pool not found",
+  "Pool is not accepting new lenders"). Settings › Pool.
 - `await satori.setAside()` → status, only on the `damaged` screen and only
   on the person's request: the database file that won't open is renamed
   `satori-mvp.duckdb.corrupt-<time>` (never deleted; their keys are in it),

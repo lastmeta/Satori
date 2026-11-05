@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-05 (a pool)
+
+- New: `pool()`, `openPools()`, `stakeWithPool(address)`, `unstakeFromPool()`: stake with a pool for the Satori
+  Service's off-chain scoring, as Satori Lite's Stake page does. Settings › Pool.
+
 ## Changed 2026-11-04 (an alias for each job)
 
 - New: `setContractAlias(alias, { passphrase })`: another alias for the Satori contract (stake with it, the daily

@@ -37,6 +37,7 @@ import { formatEther, getAddress, isAddress, zeroAddress } from 'viem';
 import { ROLE_IDS, roleOf, doneText } from './neuron/roles.js';
 import { payeeName } from './neuron/devfee.js';
 import { createReward } from './neuron/reward.js';
+import { createPool } from './neuron/pool.js';
 import { createActivity } from './neuron/activity.js';
 import { healthOf, toneOf, CHIP_OF } from './neuron/health.js';
 import { createWork, workText, leading, HERO } from './neuron/work.js';
@@ -80,6 +81,7 @@ let registration = null; // this page load's register result
 let poller = null;
 let base = null; // the Base flow
 const invitedBy = referrerOf(location.search); // an invite link's ?ref= (docs/design/base.md#referral-invite-links), read once at load
+let pool = null; // the pool this wallet stakes with (src/neuron/pool.js): read when Settings opens
 let reward = null; // the reward address, as the Satori Service keeps it (src/neuron/reward.js): read when Settings opens
 let activity = null; // the activity log Home's health reads (docs/design/health.md)
 let trainer = null; // the training pass (src/neuron/train.js): every model's current fit, from stored history
@@ -400,6 +402,8 @@ async function startNeuron() {
   const c = await connect();
   reward = createReward({ central: () => central, work, alias: alias.evmAddress, wallet: walletPublic.evmAddress,
     onChange: (st) => { state.reward = st; } });
+  pool = createPool({ central: () => central, wallet: walletPublic.evmAddress, alias: session.serviceAlias.evmAddress,
+    onChange: (st) => { state.pool = st; } });
   poller = createPoller(runCycle, { db, work, onChange: ({ next, running }) => {
     state.now = nowS(); // Home's "next try in 2 min" from now, not from the last 30 s tick (it read 3 min)
     state.central = { ...state.central, nextPoll: next, polling: running };
@@ -493,7 +497,8 @@ async function setCentral(raw) {
     await poller.idle(); // its rows are the old central's
     await db.resetCentral();
     reward.reset(); // that one's reward address is not known yet, and the last one's words go with it
-    Object.assign(state, { rewardDone: '', rewardError: '' });
+    pool.reset();
+    Object.assign(state, { rewardDone: '', rewardError: '', poolDone: '', poolError: '' });
   }
   await db.set('central_url', url);
   if (moved) await activity.setting('central', url, url ? undefined : DEFAULT_CENTRAL); // Home notes it for 24 h
@@ -515,7 +520,28 @@ function readRewardNow() {
 /** The reward address, read from the Satori Service once Settings shows it: once per page load and central, again after a failed read. */
 function readReward() {
   if (state.tab === 'settings' && reward && !reward.known && !reward.status.reading) void readRewardNow();
+  if (state.tab === 'settings' && pool && !pool.known && !pool.status.reading) void readPoolNow();
 }
+
+/** The pool this wallet stakes with and the open ones, read now (docs/design/central.md#the-pool). */
+function readPoolNow() {
+  state.poolDone = '';
+  return pool.read();
+}
+
+/**
+ * Stake with a pool (its 0x address) or unstake (null or ''), from Settings or an agent (docs/design/central.md#the-pool):
+ * signed in by the alias, no wallet, no gas; one at a time. → its status
+ */
+const setPool = (address) => exclusive(address == null || !String(address).trim() ? 'unstake' : 'stake', async () => {
+  state.poolDone = '';
+  const unstake = address == null || !String(address).trim();
+  const st = unstake ? await pool.unstake() : await pool.stake(address);
+  if (st.error) throw new Error(st.error);
+  state.poolDone = unstake ? 'Unstaked: this wallet no longer stakes with a pool.'
+    : `Staked with ${st.name ? `${st.name} (${st.address})` : st.address}.`;
+  return st;
+}, 'poolBusy');
 
 /**
  * Set the reward address (a 0x address) or clear it (null or ''), from Settings or an agent (docs/design/central.md#the-reward-address):
@@ -1062,9 +1088,9 @@ const restoreKeys = (keys) => baseAction('restore', async () => {
 const actions = createActions({
   ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
   devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
-  readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
+  readPoolNow, readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
-  setAsideDb, setBaseSettings, setCentral, setAliasFor, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
+  setAsideDb, setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
   withWallet,
   get afterUnlock() { return afterUnlock; },
   set afterUnlock(v) { afterUnlock = v; },
@@ -1329,9 +1355,9 @@ async function boot() {
 window.satori = createAgent({
   DEFAULTS, VERSION, actions, addWallet, adminAction, backupOf, baseAction, centralStatus, centralUuid, connectTo,
   dayDetail, detailOf, devFeeAction, exclusive, finishUpdate, go, listModels, lock, marketAction, nameWallet, orderWallets,
-  backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
+  backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readPoolNow, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
-  setBaseSettings, setCentral, setAliasFor, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
+  setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
   work,
   get activity() { return activity; },
   get base() { return base; },

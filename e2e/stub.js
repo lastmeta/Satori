@@ -76,7 +76,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
   const held = { batch: null, register: null, submit: null };
   const stub = { batch: [], otherWallet: null, noWalletAddress: false, fail: [], failRegister: 0, refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
     historyDelayMs: 0, reward: null, rewardHold: null, rewardRefuse: null,
-    registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], rewardCalls: [], prod: [], blocked: [],
+    pools: [], lending: null, poolCalls: [], registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], rewardCalls: [], prod: [], blocked: [],
     hold(what = 'batch') {
       let release;
       held[what] = new Promise((r) => { release = r; });
@@ -113,6 +113,26 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       if (!stub.history) return reply(route, 404, { detail: 'Not Found' });
       const since = Number(q.since ?? -Infinity);
       return reply(route, 200, (stub.history[q.stream_uuid] ?? []).filter((o) => Number(o.observed_at) > since).slice(-Number(q.limit ?? 500)));
+    }
+    // the pool (docs/design/central.md#the-pool): `pools` open ({ address, pool_name, commission }), `lending` the one
+    // staked with (or null); `poolCalls` each lend / unlend
+    if (req.method() === 'GET' && pathname === '/api/v1/lender/status') {
+      return reply(route, 200, { pool_address: stub.lending, pool_wallet_address: stub.lending, pool_id: stub.lending ? 9 : null, is_pool: false });
+    }
+    if (req.method() === 'GET' && pathname === '/api/v1/pool/open') return reply(route, 200, { pools: stub.pools });
+    if (pathname === '/api/v1/lender/lend' && ['POST', 'DELETE'].includes(req.method())) {
+      const body = req.postData();
+      stub.poolCalls.push({ method: req.method(), body: body ? JSON.parse(body) : null });
+      if (!signedIn(h)) return reply(route, 401, { detail: 'bad token' });
+      if (req.method() === 'DELETE') {
+        if (!stub.lending) return reply(route, 404, { detail: 'No lending relationship found' });
+        stub.lending = null;
+        return reply(route, 200, { message: 'Lending relationship removed successfully' });
+      }
+      const a = JSON.parse(body).pool_address;
+      if (!stub.pools.some((x) => x.address.toLowerCase() === a.toLowerCase())) return reply(route, 404, { detail: 'Pool not found' });
+      stub.lending = a;
+      return reply(route, 200, { id: 1, lender_id: 7, pool_id: 9, ts: new Date().toISOString() });
     }
     if (pathname === '/api/v1/peer/reward-address' && ['GET', 'POST'].includes(req.method())) {
       const body = req.postData();

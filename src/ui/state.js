@@ -94,6 +94,12 @@ export const state = reactive({
   // the reward address (src/neuron/reward.js; Settings): { address, at, error, reading } as last read, what runs ('' | 'save' |
   // 'clear'), its step at Home's pace, the last result's words and error
   reward: { address: null, at: null, error: null, reading: false },
+  // the pool this wallet stakes with (src/neuron/pool.js; Settings › Pool): as last read, what runs ('' | 'stake' |
+  // 'unstake'), the last result's words and error
+  pool: { address: null, name: null, commission: null, isPool: false, open: [], at: null, error: null, reading: false },
+  poolBusy: '',
+  poolDone: '',
+  poolError: '',
   rewardBusy: '',
   rewardLine: '',
   rewardDone: '',

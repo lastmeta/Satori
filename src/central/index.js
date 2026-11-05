@@ -7,6 +7,8 @@
 //   await c.history(uuid, { limit, since })  // GET /observations/history: one stream's past (beyond Lite; may 404)
 //   await c.submitPredictions(items)         // login (alias) → POST /predictions/batch; one retry on 401
 //   await c.rewardAddress() / c.setRewardAddress(address | null)   // login → GET / POST /peer/reward-address
+//   await c.lenderStatus(wallet) / c.openPools()   // GET /lender/status, /pool/open: the pool this wallet stakes with, the open ones
+//   await c.stakeWithPool(address) / c.unstakeFromPool()   // login → POST / DELETE /lender/lend (docs/design/central.md#the-pool)
 //   await c.baseConfig() / c.merkleProof(address)   // Base (docs/design/base.md); 404 is a CentralError
 // Errors are CentralError: status 0 for a timeout or a network failure. A
 // network error, a timeout or a 5xx is resent once.
@@ -185,6 +187,16 @@ export function createCentral({ url, alias, version, fetch: fetchFn = globalThis
     baseConfig: () => call('GET', '/api/v1/base/config'),
     /** { root, address, amountWei, amount, proof }; 404 = not in the drop, or none published (merkle.py:45-58). */
     merkleProof: (address) => call('GET', `/api/v1/merkle/proof/${encodeURIComponent(address)}`),
+
+    /** The pool this wallet stakes with (docs/design/central.md#the-pool): { pool_address, pool_wallet_address, pool_id, is_pool }. */
+    lenderStatus: (wallet) => call('GET', `/api/v1/lender/status?wallet_address=${encodeURIComponent(wallet)}`),
+    /** The pools open to stake with: { pools: [{ address, pool_name, commission }] }. */
+    openPools: () => call('GET', '/api/v1/pool/open'),
+    /** Stake with a pool by its address (one at a time: another replaces it), signed in by the alias. */
+    stakeWithPool: (address) => signedIn((token) => call('POST', '/api/v1/lender/lend', json(token),
+      JSON.stringify({ pool_address: address })), 'save'),
+    /** Stop staking with the pool. */
+    unstakeFromPool: () => signedIn((token) => call('DELETE', '/api/v1/lender/lend', bearer(token)), 'clear'),
 
     /** Log in, POST the batch; on a 401 log in again and retry once (server.py:210). */
     submitPredictions(predictions) {

@@ -178,6 +178,28 @@ wallet's own Base address, case-insensitively. The result carries both,
 The `'other'` text on a phone: [Home](../screenshots/wallet-mismatch-phone.png),
 [the Central card](../screenshots/wallet-mismatch-central-phone.png).
 
+## The pool
+
+(The owner, 2026-11-05.) Satori Lite's Stake page lets a neuron stake with a
+pool by its address, for off-chain scoring: the Satori Service counts its
+stake toward that pool (a **lender** in central's words) and shares the pool's
+rewards with it. The app does the same in **Settings › Pool**:
+
+- **Now**: `GET /api/v1/lender/status?wallet_address=<the wallet>` →
+  `{pool_address, pool_wallet_address, pool_id, is_pool}` (no token): the
+  pool this wallet stakes with, or none.
+- **Open pools**: `GET /api/v1/pool/open` → `{pools: [{address, pool_name,
+  commission}]}` (no token), listed by fee, lowest first; pick one or paste
+  an address.
+- **Stake with pool**: `POST /api/v1/lender/lend` `{"pool_address": "0x…"}`,
+  signed in by the alias (Bearer): one pool at a time, so another replaces it.
+  **Unstake**: `DELETE /api/v1/lender/lend`. Central's refusals are shown as
+  it words them (`Pool not found`, `Pool is not accepting new lenders`, a
+  pool or a worker can't also stake with a pool).
+- No wallet, no gas, nothing on chain: it is the Satori Service's record, as
+  Lite's is. Agents: `pool()`, `openPools()`, `stakeWithPool(address)`,
+  `unstakeFromPool()`.
+
 ## The reward address
 
 The owner (2026-10-19, [../intent/INTENT.md](../intent/INTENT.md)): "We need

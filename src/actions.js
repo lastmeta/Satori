@@ -25,9 +25,9 @@ export function createActions(app) {
   const {
     ADMIN_DONE, DEFAULTS, DEV_FEE_DONE, addWallet, adminAction, autoLock, backupOf, baseAction, connectTo, dayDetail,
     devFeeAction, exclusive, finishUpdate, go, keyring, lock, marketAction, nameWallet, nowS, orderWallets, playCalls, pollNow, setServicePaused,
-    readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
+    readPoolNow, readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
     refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, setAliasFor,
-    session, setAsideDb, setBaseSettings, setCentral, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
+    session, setAsideDb, setBaseSettings, setCentral, setPool, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
     walletOps, withWallet,
   } = app;
 
@@ -699,6 +699,17 @@ export function createActions(app) {
       el.reset();
     }),
     clearReward: shownAt('rewardError', () => setReward(null)),
+    /** Settings › Pool: Stake with pool (the address typed or picked), Unstake, and Try again after a failed read. */
+    stakeWithPool: shownAt('poolError', async (f, el) => {
+      await setPool(f.address);
+      el?.reset();
+    }),
+    unstakeFromPool: shownAt('poolError', () => setPool(null)),
+    pickPool(address) {
+      const input = document.querySelector('[data-test=pool-input]');
+      if (input) input.value = address;
+    },
+    readPool: () => void readPoolNow(),
     readReward: () => void (app.reward && readRewardNow()),
     /** The Wallets card (docs/design/wallets.md#several-wallets): Add, Switch, and Remove after it asks. */
     addWallet: shownAt('walletsError', () => addWallet()),

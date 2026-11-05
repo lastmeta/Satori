@@ -216,6 +216,31 @@ describe('submitPredictions', () => {
   });
 });
 
+describe('the pool (docs/design/central.md#the-pool)', () => {
+  const POOL = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';
+  const WALLET = '0x00000000000000000000000000000000000000aB';
+  test('status and the open pools: plain GETs, no token', async () => {
+    const status = { pool_address: POOL, pool_wallet_address: POOL, pool_id: 9, is_pool: false };
+    const open = { pools: [{ address: POOL, pool_name: 'p', commission: 10 }] };
+    const { fetch, calls } = mockFetch({ [`GET /api/v1/lender/status?wallet_address=${WALLET}`]: json(200, status),
+      'GET /api/v1/pool/open': json(200, open) });
+    expect(await client(fetch).lenderStatus(WALLET)).toEqual(status);
+    expect(await client(fetch).openPools()).toEqual(open);
+    expect(calls.map((c) => c.headers)).toEqual([{}, {}]);
+  });
+  test('stake with one: signed in, POST { pool_address }; unstake: DELETE; refusals keep their words', async () => {
+    const { fetch, calls } = mockFetch({ ...login(), 'POST /api/v1/lender/lend': () => json(200, { id: 1, lender_id: 2, pool_id: 9 }),
+      'DELETE /api/v1/lender/lend': () => json(200, { message: 'Lending relationship removed successfully' }) });
+    await client(fetch).stakeWithPool(POOL);
+    expect(calls[2]).toMatchObject({ method: 'POST', path: '/api/v1/lender/lend', headers: { authorization: 'Bearer jwt', 'content-type': 'application/json' } });
+    expect(JSON.parse(calls[2].body)).toEqual({ pool_address: POOL });
+    await client(fetch).unstakeFromPool();
+    expect(calls[5]).toMatchObject({ method: 'DELETE', path: '/api/v1/lender/lend', headers: { authorization: 'Bearer jwt' } });
+    const bad = mockFetch({ ...login(), 'POST /api/v1/lender/lend': () => json(400, { detail: 'Pool is not accepting new lenders' }) });
+    await expect(client(bad.fetch).stakeWithPool(POOL)).rejects.toThrow('Satori Service 400: Pool is not accepting new lenders');
+  });
+});
+
 describe('the reward address (peer.py:26-120): signed in, as the predictions batch', () => {
   const PATH = '/api/v1/peer/reward-address';
   const ADDR = '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7';

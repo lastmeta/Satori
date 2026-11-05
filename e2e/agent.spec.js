@@ -166,3 +166,34 @@ test('an alias for each job by call: a Docker install\'s for the Satori Service,
   expect([s.serviceAlias, s.contractAlias]).toEqual([own, own]);
   expect((await call(page, 'backup', 'retired', PASS)).map((k) => k.address)).toEqual(expect.arrayContaining([neuron.ethAddress, chain.ethAddress]));
 });
+
+test('a pool by call and on Settings: the open pools, stake with one, unstake (docs/design/central.md#the-pool)', async ({ context, page }) => {
+  test.setTimeout(180_000);
+  const stub = await stubCentral(context);
+  const [big, cheap] = fx.vectors.map((v) => v.ethAddress);
+  stub.pools = [{ address: big, pool_name: 'big pool', commission: 40 }, { address: cheap, pool_name: '', commission: 5 }];
+  await openApp(page);
+  await call(page, 'setup', { passphrase: PASS });
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  expect(await call(page, 'pool')).toMatchObject({ address: null, isPool: false });
+  expect(await call(page, 'openPools')).toEqual([{ address: cheap, name: null, commission: 5 }, { address: big, name: 'big pool', commission: 40 }]);
+  await expect(call(page, 'stakeWithPool', '0x123')).rejects.toThrow('A pool address is a Base address');
+  expect(await call(page, 'stakeWithPool', cheap.toLowerCase())).toMatchObject({ address: cheap, commission: 5 });
+  expect(stub.poolCalls.at(-1)).toEqual({ method: 'POST', body: { pool_address: cheap } });
+
+  // on Settings: what it stakes with now; pick another from the list; unstake
+  await call(page, 'go', 'settings');
+  await expect(page.locator('[data-test=pool-now]')).toContainText('5% fee');
+  await page.locator('[data-test=pool-pick]', { hasText: 'big pool' }).click();
+  await expect(page.locator('[data-test=pool-input]')).toHaveValue(big);
+  await page.click('[data-test=pool-stake]');
+  await expect(page.locator('[data-test=pool-now]')).toContainText('big pool');
+  await expect(page.locator('[data-test=pool-done]')).toContainText('Staked with big pool');
+  expect(stub.lending).toBe(big);
+  await page.fill('[data-test=pool-input]', `0x${'ab'.repeat(20)}`);
+  await page.click('[data-test=pool-stake]');
+  await expect(page.locator('[data-test=pool-error]')).toContainText('Pool not found');
+  await page.click('[data-test=pool-unstake]');
+  await expect(page.locator('[data-test=pool-now]')).toHaveText('No pool');
+  expect(await call(page, 'pool')).toMatchObject({ address: null });
+});

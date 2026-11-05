@@ -169,6 +169,40 @@ function rewardCard(a) {
   </section>`;
 }
 
+/**
+ * The pool this wallet stakes with for off-chain scoring (docs/design/central.md#the-pool), as Satori Lite's Stake page:
+ * one of the open pools picked, or an address pasted. Read when Settings opens; signed in by the alias (no wallet, no gas).
+ */
+function poolCard(a) {
+  const p = () => state.pool;
+  const busy = () => !!state.poolBusy;
+  const fee = (x) => (x.commission == null ? '' : `${x.commission}% fee`);
+  return html`
+  <section class="card settings-section" id="settings-pool" data-test="pool-card">
+    <form class="fields pool-form" @submit="${(e) => a.stakeWithPool(form(e), e.target)}">
+      <h2>Pool</h2>
+      <p class="muted small">Stake with a pool for the Satori Service: it counts your stake toward the pool and shares the pool's rewards with you. Nothing moves on chain.</p>
+      <div class="id"><span class="label">Now</span><span data-test="pool-now">${() => (p().reading && !p().at ? 'Reading…'
+        : p().address ? `${p().name ? `${p().name} · ` : ''}${shortHash(p().address)}${p().commission != null ? ` · ${fee(p())}` : ''}` : 'No pool')}</span></div>
+      <p class="muted small" data-test="pool-is-pool" hidden="${() => !p().isPool}">This wallet runs a pool, so it can't stake with another.</p>
+      <p class="error small" role="alert" data-test="pool-read-error" hidden="${() => !p().error}">${() => p().error ?? ''} <button class="small-btn" type="button" disabled="${() => p().reading}" @click="${a.readPool}">Try again</button></p>
+      <div class="pool-list" data-test="pool-open" hidden="${() => !p().open.length}">
+        <span class="label">Open pools</span>
+        ${() => p().open.map((x) => html`<button type="button" class="small-btn pool-pick" data-test="pool-pick" title="${x.address}" @click="${() => a.pickPool(x.address)}">${x.name || shortHash(x.address)} · ${fee(x)}</button>`.key(x.address))}
+      </div>
+      <label>Pool address
+        <input name="address" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="0x… or pick one above" required data-test="pool-input">
+      </label>
+      <p class="small" role="status" data-test="pool-done" hidden="${() => !state.poolDone}">${() => state.poolDone}</p>
+      <p class="error small" role="alert" data-test="pool-error" hidden="${() => !state.poolError}">${() => state.poolError}</p>
+      <div class="actions">
+        <button class="primary" type="submit" data-test="pool-stake" disabled="${busy}">${() => (state.poolBusy === 'stake' ? 'Staking…' : 'Stake with pool')}</button>
+        <button type="button" data-test="pool-unstake" hidden="${() => !p().address}" disabled="${busy}" @click="${a.unstakeFromPool}">${() => (state.poolBusy === 'unstake' ? 'Unstaking…' : 'Unstake')}</button>
+      </div>
+    </form>
+  </section>`;
+}
+
 function centralForm(a) {
   return html`
   <section class="adv" id="settings-central">
@@ -305,6 +339,7 @@ export function settingsTab(a) {
     ${aliasesCard(a)}
     ${keys(a)}
     ${rewardCard(a)}
+    ${poolCard(a)}
     ${servicePredictions(a)}
     ${predictions(a)}
     ${advanced(a)}
