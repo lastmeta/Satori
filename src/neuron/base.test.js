@@ -498,7 +498,7 @@ describe('createBase', () => {
     wallet = walletKey;
     await base.setSettings({ maxFee: '2' });
     rpc.state.tip = 3n * 10n ** 9n;
-    await expect(base.delegate()).rejects.toThrow('Gas is above the max fee: 3.000000002 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Satori contract.');
+    await expect(base.delegate()).rejects.toThrow('Gas is above the max fee: 3.000000002 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Advanced › Base.');
     await expect(base.quoteSend({ asset: 'ETH', to: '0x' + '44'.repeat(20), amount: '0.01' })).rejects.toThrow(/above the max fee/);
     expect(rpc.sent).toHaveLength(0);
     rpc.state.tip = 10n ** 6n;

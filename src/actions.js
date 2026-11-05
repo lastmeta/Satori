@@ -509,7 +509,7 @@ export function createActions(app) {
         state.devFee.proposal = { splitter, error: err?.shortMessage ?? err?.message ?? String(err) };
       }
     },
-    /** Settings › Aliases: another alias for a job ('offchain' | 'onchain'), or back to this app's own (docs/design/wallets.md). */
+    /** Aliases (Service and Contract pages): another alias for a job ('offchain' | 'onchain'), or back to this app's own (docs/design/wallets.md). */
     setAliasFor: (job, f) => shownAt(`aliasError_${job}`, () => setAliasFor(job, { alias: f?.alias ?? '', passphrase: f?.passphrase }))(),
     /** Settings › Restore keys: a connected wallet's own, from what the person backed up. */
     restoreKeys: shownAt('restoreError', (f) => restoreKeys({ alias: f.alias, nostr: f.nostr })),
@@ -693,13 +693,13 @@ export function createActions(app) {
       await setCentral(f.url);
       el.reset();
     }),
-    /** Settings › Reward address: Save (the address typed), Clear, and Try again after a failed read. */
+    /** Service › Reward address: Save (the address typed), Clear, and Try again after a failed read. */
     saveReward: shownAt('rewardError', async (f, el) => {
       await setReward(f.address);
       el.reset();
     }),
     clearReward: shownAt('rewardError', () => setReward(null)),
-    /** Settings › Pool: Stake with pool (the address typed or picked), Unstake, and Try again after a failed read. */
+    /** Service › Pool: Stake with pool (the address typed or picked), Unstake, and Try again after a failed read. */
     stakeWithPool: shownAt('poolError', async (f, el) => {
       await setPool(f.address);
       el?.reset();

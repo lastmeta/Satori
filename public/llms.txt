@@ -699,8 +699,9 @@ the page's JS context:
   device's light or dark), `'light'` or `'dark'`, as Settings → Appearance;
   kept on this device (localStorage, read before the first paint) and set as
   `<html data-theme>` (none for System). Anything else throws.
-- `satori.go(tab)` → the tab: shows `home`, `models`, `streams`, `wallet` or
-  `settings` (a leading `#` is fine), as the nav does; `go('models/<id>')`
+- `satori.go(tab)` → the tab: shows `home`, `models`, `streams`, `wallet`,
+  `service` (the Satori Service: off-chain scoring), `contract` (the Satori
+  contract: on-chain scoring) or `settings` (a leading `#` is fine), as the nav does; `go('models/<id>')`
   opens a model's drill-in (→ `'models/<id>'`). Anything else throws.
 - `await satori.install()` → `'accepted' | 'dismissed' | 'unavailable'`: the
   browser's install prompt when `status().app.canInstall` (Chromium only; it
@@ -901,7 +902,7 @@ the page's JS context:
   Unlock, no gas, nothing on chain. Throws "A pool address is a Base address:
   0x and 40 hex characters.", "That is this app's own address, not a pool.",
   or the Satori Service's refusal in its words (such as "Pool not found",
-  "Pool is not accepting new lenders"). Settings › Pool.
+  "Pool is not accepting new lenders"). Service › Pool.
 - `await satori.setAside()` → status, only on the `damaged` screen and only
   on the person's request: the database file that won't open is renamed
   `satori-mvp.duckdb.corrupt-<time>` (never deleted; their keys are in it),
@@ -1099,7 +1100,7 @@ the page's JS context:
   register's answer; refused links are said (`wallet_link_error`).
 - `await satori.stake()` (needs Unlock; only on the person's request): stake with this app → `{ steps: [{ step, by:
   'alias' | 'wallet', hash }], settled }`. `steps` is empty when everything was in place. Every transaction throws
-  "Gas is above the max fee: 3 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Satori contract."
+  "Gas is above the max fee: 3 gwei > 2 gwei. Try again later, or raise the max fee in Settings › Advanced › Base."
   when the RPC quotes more than the max fee.
 - `await satori.unstake()` (needs Unlock; only on the person's request) → the same shape.
 - `await satori.predictBase()` → the batch now, if due: `{ at, round, sent: { round, at, hash, games, dropped } }`
@@ -1249,7 +1250,7 @@ the page's JS context:
   The wallet signs the link: `passphrase` for a wallet in the app; a connected wallet's app asks. `null` hands the job
   back to this app's alias (no passphrase). The wallet's own key, the job's alias now, or a key that is no key is
   refused; a key that stops doing a job stays as an earlier key (`backup('retired')`). The page reloads. The encrypted
-  backup file doesn't carry them: set them again after restoring one. Settings › Aliases.
+  backup file doesn't carry them: set them again after restoring one. The Alias cards of the Service and Contract pages.
 - `await satori.exportBackup(passphrase)` → `{ kind: 'satori-backup', v: 1, address, at, sealed }`: sealed with the
   passphrase, every key (a connected wallet's own words stay in its wallet app, which isn't asked), its link, the
   models, settings, subscriptions, vouchers and favorites. A wallet in the app: its passphrase, or it throws
@@ -1342,7 +1343,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   or a reload keeps the tab). **Game** (`game-tab`, `data-play`: auto or manual):
   while the app plays automatically the game is greyed out under
   `play-switch` with **Play by hand** (`play-manual`); back to automatic in
-  Settings › Satori contract predictions (`play-setting`, with
+  Contract › Satori contract predictions (`play-setting`, with
   `play-setting-auto` and `play-setting-manual`). The game (`game-board`): on top, while
   something is claimable, `game-claim-row` with `game-claimable` and `game-claim` (CLAIM, then CLAIMED, `game-claimable` 0 as `game-balance` rises by it); then one stream at a
   time, `game-balance` (the wallet's SATORI) above the star and `game-streak` above the value (the player's

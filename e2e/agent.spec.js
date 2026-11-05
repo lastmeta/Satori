@@ -150,8 +150,9 @@ test('an alias for each job by call: a Docker install\'s for the Satori Service,
   expect(await reload('setContractAlias', chain.entropyHex, { passphrase: PASS })).toEqual({ serviceAlias: neuron.ethAddress, contractAlias: chain.ethAddress });
   expect(await regsAfter(n, 2)).toEqual([[neuron.pubkey, 'offchain', 'app', true], [chain.pubkey, 'onchain', 'app', true]]);
   expect((await call(page, 'base')).alias.address).toBe(chain.ethAddress);
-  await call(page, 'go', 'settings');
+  await call(page, 'go', 'service');
   await expect(page.locator('[data-test=alias-offchain-address]')).toHaveAttribute('title', neuron.ethAddress);
+  await call(page, 'go', 'contract');
   await expect(page.locator('[data-test=alias-onchain-address]')).toHaveAttribute('title', chain.ethAddress);
 
   // one key for both jobs: one register, both jobs
@@ -181,8 +182,8 @@ test('a pool by call and on Settings: the open pools, stake with one, unstake (d
   expect(await call(page, 'stakeWithPool', cheap.toLowerCase())).toMatchObject({ address: cheap, commission: 5 });
   expect(stub.poolCalls.at(-1)).toEqual({ method: 'POST', body: { pool_address: cheap } });
 
-  // on Settings: what it stakes with now; pick another from the list; unstake
-  await call(page, 'go', 'settings');
+  // on the Satori Service page: what it stakes with now; pick another from the list; unstake
+  await call(page, 'go', 'service');
   await expect(page.locator('[data-test=pool-now]')).toContainText('5% fee');
   await page.locator('[data-test=pool-pick]', { hasText: 'big pool' }).click();
   await expect(page.locator('[data-test=pool-input]')).toHaveValue(big);

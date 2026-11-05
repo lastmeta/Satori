@@ -36,6 +36,52 @@ export const txLink = (hash, label = '', title = '') => {
     : html`<code title="${hover}">${text}</code>`;
 };
 
+/**
+ * The Satori contract page's cards from Wallet's Details (the owner, 2026-11-05): the daily batch (its gas, the last one,
+ * the next check), the alias that sends it, the referral and the invite link.
+ */
+export function batchCard() {
+  const b = () => state.base;
+  const staked = () => b().wallet.staked === 'alias';
+  const notStaked = () => b().wallet.staked === 'none';
+  const lowEth = () => b().alias.lowEth && staked();
+  return html`
+  <section class="card settings-section" id="contract-batch" data-test="contract-batch-card">
+    <h2>Daily batch</h2>
+    <p class="muted small">Each day the app sends its predictions to the Satori contract in one batch, from its alias, which pays the gas.</p>
+    <dl class="facts">
+      ${fact('Daily batch gas', 'base-alias', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().alias) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
+      ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
+      ${fact('Contract batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
+    : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
+    </dl>
+  </section>`;
+}
+
+/** The referral: who referred this wallet, and its invite link. */
+export function referralCard(a) {
+  const b = () => state.base;
+  return html`
+  <section class="card settings-section" id="contract-referral" data-test="contract-referral-card">
+    <h2>Referral</h2>
+    <dl class="facts">${fact('Referral', 'base-referral', () => referralText(b()))}</dl>
+    <div hidden="${() => !b().inviteLink}">
+      ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
+      <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you earn a residual ${REFERRAL_PCT}% bonus.</p>
+    </div>
+  </section>`;
+}
+
+/** The alias that sends the daily batch, with Copy. */
+export function contractAliasRow(a) {
+  return html`      <div class="alias">
+        ${idRow('Alias', 'alias', () => state.contractAlias, a)}
+        <p class="muted small">${() => (state.contractAlias && state.contractAlias !== state.alias ? 'An alias you gave this job (below), not this app\'s own. Its private key: Settings › Backup.'
+          : "This app's own alias. Its private key: Settings › Backup.")}</p>
+      </div>
+`;
+}
+
 export function walletTab(a) {
   const b = () => state.base;
   const staked = () => b().wallet.staked === 'alias';
@@ -131,24 +177,9 @@ export function walletTab(a) {
       <summary>Details</summary>
       <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Service\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Service serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
       <dl class="facts">
-        ${fact('Referral', 'base-referral', () => referralText(b()))}
         ${fact('Transfers', 'base-lock', () => lockText(b().wallet.lock))}
-        ${fact('Daily batch gas', 'base-alias', html`<span class="${() => (lowEth() ? 'error' : '')}">${() => gasText(b().alias) + (lowEth() ? ': low, send it a little Base ETH for the Satori contract\'s daily batch' : '')}</span>`)}
-        ${fact('Last contract batch', 'base-last-batch', html`<span>${() => batchText(b().lastBatch)}</span> <span>${() => (b().lastBatch ? txLink(b().lastBatch.hash) : '')}</span>`)}
-        ${fact('Contract batch check', 'base-check', () => (b().checking ? workText(state.work.base) || 'Checking…'
-      : notStaked() ? `Waits until you stake · ${checkText(null, b().nextCheck)}` : checkText(b().lastCheck, b().nextCheck)))}
         ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
       </dl>
-      <div class="alias">
-        ${idRow('Alias', 'alias', () => state.contractAlias, a)}
-        <p class="muted small">${() => (state.contractAlias && state.contractAlias !== state.alias ? 'The alias you set for the Satori contract (Settings › Aliases); the daily batch\'s gas is paid from it.'
-          : "The app's own signing address; the daily batch's gas is paid from it.")}</p>
-        <p class="muted small">Its private key: Settings › Backup.</p>
-      </div>
-      <div hidden="${() => !b().inviteLink}">
-        ${idRow('Invite link', 'base-invite', () => b().inviteLink, a)}
-        <p class="muted small">Whoever opens it and stakes with their own app becomes your referral: you earn a residual ${REFERRAL_PCT}% bonus.</p>
-      </div>
   </details>
   ${nameCard(a)}
   ${walletsCard(a)}

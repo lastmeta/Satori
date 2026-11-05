@@ -95,14 +95,14 @@ function restoreCard(a) {
 }
 
 /** One job's alias (docs/design/wallets.md#an-alias-for-each-job): the app's own, or one imported for it. */
-function aliasForm(a, job, who, use) {
+export function aliasForm(a, job, who, use, { address: showAddress = true } = {}) {
   const busy = () => state.baseBusy === `alias-${job}`;
   const address = () => (job === 'offchain' ? state.serviceAlias : state.contractAlias);
   const other = () => !!address() && address() !== state.alias;
   return html`
     <form class="fields" data-test="${`alias-${job}`}" @submit="${(e) => a.setAliasFor(job, form(e))}">
-      <h3>${who}</h3>
-      <div class="id"><span class="label">${() => (other() ? 'Imported alias' : "This app's alias")}</span><code data-test="${`alias-${job}-address`}" title="${address}">${() => shortHash(address())}</code></div>
+      ${who ? html`<h3>${who}</h3>` : ''}
+      <div class="id" hidden="${!showAddress}"><span class="label">${() => (other() ? 'Imported alias' : "This app's alias")}</span><code data-test="${`alias-${job}-address`}" title="${address}">${() => shortHash(address())}</code></div>
       <p class="muted small">${use}</p>
       <label>Another alias key
         <input name="alias" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="Private key or 24 words" data-test="${`alias-${job}-key`}">
@@ -118,19 +118,6 @@ function aliasForm(a, job, who, use) {
     </form>`;
 }
 
-/**
- * Settings › Aliases (docs/design/wallets.md#an-alias-for-each-job): the app's alias does both jobs unless another is
- * imported for one, such as a Docker install's for the Satori Service.
- */
-function aliasesCard(a) {
-  return html`
-  <section class="card settings-section" id="settings-aliases" data-test="aliases-card">
-    <h2>Aliases</h2>
-    <p class="muted small">This app's alias predicts for the Satori Service and on the Satori contract. You can give either job another alias, such as your Docker install's.</p>
-    ${aliasForm(a, 'offchain', 'Satori Service', 'Signs in and sends the predictions the Satori Service scores.')}
-    ${aliasForm(a, 'onchain', 'Satori contract', 'Your wallet stakes with it and it sends the daily batch, paying its gas. After a change, stake with it again.')}
-  </section>`;
-}
 
 /**
  * The reward address (docs/design/central.md#the-reward-address): where the Satori Service sends this neuron's rewards
@@ -145,11 +132,11 @@ function rewardWhen(r) {
 const WHOSE = { wallet: 'your wallet', alias: 'your alias' };
 const spin = (test, hide) => html`<i class="spin" data-test="${test}" aria-hidden="true" hidden="${hide}"></i>`;
 
-function rewardCard(a) {
+export function rewardCard(a) {
   const r = () => state.reward;
   const busy = () => !!state.rewardBusy;
   return html`
-  <section class="card settings-section" id="settings-reward">
+  <section class="card settings-section" id="service-reward">
     <form class="fields reward-form" @submit="${(e) => a.saveReward(form(e), e.target)}">
       <h2>Reward address</h2>
       <p class="muted small">Where the Satori Service sends this app's rewards. Not set, they go to your wallet.</p>
@@ -173,12 +160,12 @@ function rewardCard(a) {
  * The pool this wallet stakes with for off-chain scoring (docs/design/central.md#the-pool), as Satori Lite's Stake page:
  * one of the open pools picked, or an address pasted. Read when Settings opens; signed in by the alias (no wallet, no gas).
  */
-function poolCard(a) {
+export function poolCard(a) {
   const p = () => state.pool;
   const busy = () => !!state.poolBusy;
   const fee = (x) => (x.commission == null ? '' : `${x.commission}% fee`);
   return html`
-  <section class="card settings-section" id="settings-pool" data-test="pool-card">
+  <section class="card settings-section" id="service-pool" data-test="pool-card">
     <form class="fields pool-form" @submit="${(e) => a.stakeWithPool(form(e), e.target)}">
       <h2>Pool</h2>
       <p class="muted small">Stake with a pool for the Satori Service: it counts your stake toward the pool and shares the pool's rewards with you. Nothing moves on chain.</p>
@@ -203,11 +190,11 @@ function poolCard(a) {
   </section>`;
 }
 
-function centralForm(a) {
+export function centralForm(a) {
   return html`
-  <section class="adv" id="settings-central">
+  <section class="card settings-section" id="service-central">
     <form class="fields" @submit="${(e) => a.saveCentral(form(e), e.target)}">
-      <h3>Satori Service</h3>
+      <h2>Satori Service address</h2>
       <p class="muted small">Where the app gets its streams and sends its predictions.</p>
       <label>Satori Service address
         <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="${() => state.centralDefault}">
@@ -240,8 +227,8 @@ function baseForm(a) {
   return html`
   <section class="adv" id="settings-base">
     <form class="fields base-rpc-form" @submit="${(e) => a.saveBase(form(e), e.target)}">
-      <h3>Satori contract</h3>
-      <p class="muted small">The daily batch of predictions on Base.</p>
+      <h3>Base</h3>
+      <p class="muted small">How the app reaches Base: the Satori contract's daily batch, Stake, Claim, Send and the Market's channels.</p>
       <label>Base RPC
         <input name="rpc" autocomplete="off" spellcheck="false" placeholder="the default">
       </label>
@@ -253,7 +240,7 @@ function baseForm(a) {
       <p class="muted small">The most any transaction pays per gas. Above it the daily batch waits for the next check, and Stake,
         Claim and Send say so. Base's fees are about 0.01 gwei. Empty: 2 gwei.</p>
       <p class="error" role="alert" hidden="${() => !state.baseRpcError}">${() => state.baseRpcError}</p>
-      <div class="actions"><button class="primary" type="submit">Save contract settings</button></div>
+      <div class="actions"><button class="primary" type="submit">Save Base settings</button></div>
     </form>
   </section>`;
 }
@@ -298,9 +285,9 @@ function reminder(a) {
 
 /** The settings few people change, folded at the bottom; Home's action card opens it when it points inside (go()). */
 /** Predictions to the Satori Service: on, or paused (docs/design/central.md#pausing). */
-function servicePredictions(a) {
+export function servicePredictions(a) {
   return html`
-  <section class="card settings-section" id="settings-service" data-test="service-setting">
+  <section class="card settings-section" id="service-predictions" data-test="service-setting">
     <h2>Satori Service predictions</h2>
     <p class="muted small">${() => (state.central.paused ? "Paused: the app doesn't read the Satori Service's streams, predict them or send it anything. The Satori contract and the Satori Network carry on."
       : 'The app reads the Satori Service\'s streams, predicts them and sends the predictions back.')}</p>
@@ -309,9 +296,9 @@ function servicePredictions(a) {
 }
 
 /** Who sends the Satori contract predictions (docs/design/base.md#played-by-hand): this app, or the person in the Game tab. */
-function predictions(a) {
+export function predictions(a) {
   return html`
-  <section class="card settings-section" id="settings-predictions" data-test="play-setting">
+  <section class="card settings-section" id="contract-predictions" data-test="play-setting">
     <h2>Satori contract predictions</h2>
     <div class="segmented" role="group" aria-label="Who predicts">${[['auto', 'Automatic'], ['manual', 'By hand']].map(([mode, word]) => html`<button class="small-btn" data-test="${`play-setting-${mode}`}" aria-pressed="${() => String(state.base.play === mode)}" disabled="${() => !state.base.play}" @click="${() => a.setPlay(mode)}">${word}</button>`)}</div>
     <p class="muted small">${() => (state.base.play === 'manual' ? "By hand: you play in the Game tab, and the app doesn't send its own daily predictions. Everything else carries on."
@@ -322,8 +309,7 @@ function predictions(a) {
 function advanced(a) {
   return html`
   <details class="card settings-section advanced" id="settings-advanced" data-test="settings-advanced">
-    <summary>Advanced <span class="muted small">Satori Service address, relays, Base RPC and fee</span></summary>
-    ${centralForm(a)}
+    <summary>Advanced <span class="muted small">relays, Base RPC and fee</span></summary>
     ${relaysForm(a)}
     ${baseForm(a)}
   </details>`;
@@ -336,12 +322,7 @@ export function settingsTab(a) {
     ${appearance(a)}
     ${backup(a)}
     ${restoreCard(a)}
-    ${aliasesCard(a)}
     ${keys(a)}
-    ${rewardCard(a)}
-    ${poolCard(a)}
-    ${servicePredictions(a)}
-    ${predictions(a)}
     ${advanced(a)}
   </section>`;
 }

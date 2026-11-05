@@ -517,10 +517,10 @@ function readRewardNow() {
   return reward.read();
 }
 
-/** The reward address, read from the Satori Service once Settings shows it: once per page load and central, again after a failed read. */
+/** The reward address and the pool, read once the Satori Service page shows: once per page load and central, again after a failed read. */
 function readReward() {
-  if (state.tab === 'settings' && reward && !reward.known && !reward.status.reading) void readRewardNow();
-  if (state.tab === 'settings' && pool && !pool.known && !pool.status.reading) void readPoolNow();
+  if (state.tab === 'service' && reward && !reward.known && !reward.status.reading) void readRewardNow();
+  if (state.tab === 'service' && pool && !pool.known && !pool.status.reading) void readPoolNow();
 }
 
 /** The pool this wallet stakes with and the open ones, read now (docs/design/central.md#the-pool). */
@@ -960,8 +960,8 @@ function showModel(id) {
 }
 
 /**
- * Show a tab (#home, #models, #streams, #wallet, #settings) and, given one, scroll to its section
- * (#settings-<section>); 'models/<id>' opens a model's drill-in.
+ * Show a tab (#home, #models, #streams, #wallet, #service, #contract, #settings) and, given one, scroll to its section
+ * (#<tab>-<section>); 'models/<id>' opens a model's drill-in.
  */
 function go(where, section) {
   const { tab, model } = routeOf(where);
@@ -997,12 +997,15 @@ addEventListener('popstate', () => {
   fillSettings();
 });
 
-/** Settings' forms show what is stored, each time the tab opens (typing there is kept until it closes); the reward address is read. */
+/**
+ * Settings' forms show what is stored, each time the tab opens (typing there is kept until it closes); the Satori
+ * Service page reads the reward address and the pool.
+ */
 function fillSettings() {
+  if (state.tab === 'service') readReward();
   if (state.tab !== 'settings' || !nostr || !base) return;
   actions.fillRelays(document.querySelector('form.relays-form'));
   actions.fillBase(document.querySelector('form.base-rpc-form'));
-  readReward();
 }
 
 /** Run `fn` now if the wallet is open; else open the inline Unlock prompt at `slot`, and run it after Unlock. */
@@ -1201,7 +1204,7 @@ watch(() => {
 watch(() => state.tab === 'market' && state.screen === 'home', (open) => {
   if (open && !state.catalog.length && !state.discovering) void actions.discover();
 });
-watch(lineOf(['reward'], createHold({ show: (v) => { state.rewardLine = v.line; } }))); // Settings › Reward address
+watch(lineOf(['reward'], createHold({ show: (v) => { state.rewardLine = v.line; } }))); // Service › Reward address
 /** The Models tab's status: the poll's, the Base batch's, the training pass's or a Retrain's step, in Home's hero's words at its pace (no ring). */
 const engineHold = createHold({ show: (v) => { state.engineWork = v.working ? { line: v.line, critical: v.critical } : null; } });
 watch(() => {

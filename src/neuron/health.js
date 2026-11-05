@@ -155,7 +155,7 @@ function centralReasons({ now, rows, sessions, central, work }) {
         text: `Saving or forecasting failed: ${err}. Reload Satori; your keys are safe.`, button: 'Reload', act: { do: 'reload' } }));
     } else if (d.login) {
       out.push(reason('login-refused', 'network', { line: "The Satori Service refused this app's login.", chip: 'Login refused',
-        text: "The Satori Service rejects this app's login. Check its address in Settings.", button: 'Open Settings', act: go('settings', 'central') }));
+        text: "The Satori Service rejects this app's login. Check its address on the Service page.", button: 'Open Service', act: go('service', 'central') }));
     } else if (overdue) {
       out.push(reason('central-failing', 'network', { line: `Nothing sent for ${fmtDur(ran)}: ${what[0].toLowerCase()}${what.slice(1)}.`, chip,
         text: `${err}. Nothing went out for ${fmtDur(ran)} while Satori was open. It keeps trying; try now, or check the Satori Service's address in Settings.`,

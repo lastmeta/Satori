@@ -118,7 +118,7 @@ importing the wallet brings them back with nothing else to keep.
 app by it (off-chain scoring: log in, register, predictions, the reward
 address), and the Satori contract does too (on-chain scoring: the wallet
 stakes with it, it sends the daily batch and the push's, paying their gas).
-The app's own alias does both by default. **Settings › Aliases** gives either
+The app's own alias does both by default. The **Alias** cards of the Service and Contract pages give either
 job another alias, imported by its private key or 24 words: a Docker
 install's (Lite's dashboard shows its alias key), or another app's. The same
 key may do both jobs; the app's own then does neither.

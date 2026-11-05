@@ -993,3 +993,6 @@ details[open] > summary::after, .chan[aria-expanded="true"]::before, button.snam
 /* Settings › Pool: the open pools, picked by a tap (docs/design/central.md#the-pool) */
 #settings-pool .pool-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 #settings-pool .pool-list .label { width: 100%; }
+
+/* The Service and Contract pages: their status, in Home's chip words (src/ui/pages.js) */
+.checks.plain .check p { margin: 2px 0 0; }

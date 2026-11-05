@@ -77,7 +77,7 @@ test('the Contract chip opens its card: the checks and their fixes, the mode, gr
   expect(await page.evaluate(async () => (await window.satori.status()).central.paused)).toBe(true);
   await page.reload();
   await expect(t(page, 'health-title')).toHaveText('Service paused', { timeout: LOAD_TIMEOUT }); // it stays
-  await page.evaluate(() => window.satori.go('settings'));
+  await page.evaluate(() => window.satori.go('service'));
   await t(page, 'service-pause').click();
   await expect(t(page, 'service-pause')).toHaveText('Pause predictions to the Satori Service');
   await expect(t(page, 'health-title')).not.toHaveText('Service paused');

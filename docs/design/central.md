@@ -183,7 +183,7 @@ The `'other'` text on a phone: [Home](../screenshots/wallet-mismatch-phone.png),
 (The owner, 2026-11-05.) Satori Lite's Stake page lets a neuron stake with a
 pool by its address, for off-chain scoring: the Satori Service counts its
 stake toward that pool (a **lender** in central's words) and shares the pool's
-rewards with it. The app does the same in **Settings › Pool**:
+rewards with it. The app does the same in **Service › Pool**:
 
 - **Now**: `GET /api/v1/lender/status?wallet_address=<the wallet>` →
   `{pool_address, pool_wallet_address, pool_id, is_pool}` (no token): the
@@ -211,7 +211,7 @@ With none set, rewards go to the wallet (register's `wallet_address`,
 Stake with this app gives the wallet's prediction power on the Satori
 contract; the reward address only says where the Satori Service pays.
 
-**Where: Settings › Reward address**, a card of its own after Keys and
+**Where: Service › Reward address** (on Settings until 2026-11-05), a card of its own after Keys and
 Backup (`#settings-reward`). Not the Wallet: the Wallet is the Base card,
 the wallet's balances and its transactions, each one asking for the
 passphrase and using gas. The reward address is none of that: the Satori
@@ -357,7 +357,7 @@ Nostr's part of the audit is in [nostr.md](nostr.md#the-protocol-audit).
 
 ## Pausing
 
-Settings › Satori Service predictions and the bottom of Home's Service card
+Service › Satori Service predictions and the bottom of Home's Service card
 hold one toggle (owner, 2026-10-31), `central_paused` in the database and
 `status().central.paused`. Paused, a poll does nothing: no observations, no
 models for the Satori Service's streams, nothing sent, so their `_pred`

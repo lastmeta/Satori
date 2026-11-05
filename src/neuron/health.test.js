@@ -197,8 +197,8 @@ describe('bad: predictions are failing', () => {
   test('login refused: bad at once', () => {
     const h = health({ rows: [...running(), failed(NOW - H, 'Satori Service 401: Invalid signature', { login: true })] });
     expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Service refused this app's login." });
-    expect(h.action).toEqual({ id: 'login-refused', text: "The Satori Service rejects this app's login. Check its address in Settings.",
-      button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' });
+    expect(h.action).toEqual({ id: 'login-refused', text: "The Satori Service rejects this app's login. Check its address on the Service page.",
+      button: 'Open Service', do: 'go', tab: 'service', section: 'central' });
     expect(h.channels.network).toEqual({ state: 'bad', tone: 'bad', text: 'Login refused' });
   });
 

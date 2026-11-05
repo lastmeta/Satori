@@ -31,11 +31,11 @@ function detail(r, names, a) {
   return html`<div class="detail" data-test="stream-detail"><div class="card-head"><h3>${r.name}</h3><button class="small-btn" @click="${() => a.openStream('')}">Close</button></div><svg class="spark" viewBox="0 0 70 20" preserveAspectRatio="none" aria-hidden="true"><path d="${() => sparkPath(state.sparks[r.uuid])}"></path></svg><dl class="facts">${fact('In 12 h', 't1', fmtNum(r.t1))}<div class="fact"><dt>Model</dt><dd data-test="model" title="${modelTitle(r, names)}">${modelText(r, names)}</dd></div></dl><p class="small muted">${modelTitle(r, names) || 'No model yet'}</p><ol>${() => state.streamPreds.map((p) => predRow(p).key(`${p.id}:${p.status}`))}</ol></div>`;
 }
 
-function streamsCard(a) {
+export function streamsCard(a) {
   const c = () => state.central;
   const failing = () => (c().registration && !c().registration.ok) || !!c().lastSubmit?.error || c().lastSubmit?.successful === 0;
   return html`
-  <details class="card records central" data-test="streams">
+  <details class="card records central" id="service-streams" data-test="streams">
     <summary>Service Streams</summary>
     <div class="nhead">
       <p data-test="network-line" class="${() => (failing() ? 'error' : '')}">${() => networkLine(c())}</p>
@@ -160,7 +160,6 @@ function network(a) {
 export function streamsTab(a) {
   return html`
   <section class="tab-page" data-test="streams-tab" hidden="${() => state.tab !== 'streams'}">
-    ${streamsCard(a)}
     ${network(a)}
     ${nostrCard(a)}
     ${recordsCard(a)}

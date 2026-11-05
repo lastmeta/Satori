@@ -19,10 +19,11 @@ import { rolesTabs } from './roles.js';
 import { safeTab } from './safe.js';
 import { ROLES, ROLE_IDS } from '../neuron/roles.js';
 import { settingsTab, install, RUNS_WHILE_OPEN } from './settings.js';
+import { serviceTab, contractTab } from './pages.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'devfee', 'admin', ...ROLE_IDS, 'safe', 'settings'];
+export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'service', 'contract', 'devfee', 'admin', ...ROLE_IDS, 'safe', 'settings'];
 /**
  * Tabs only some see: Dev Fee, a wallet in the dev fee's splitters (docs/design/devfee.md); Admin, the Satori contract's
  * admin (docs/design/admin.md).
@@ -33,7 +34,7 @@ export const tabShown = (t) => (t === 'devfee' ? !!state.devFee.shown : t === 'a
 const appWallet = () => walletLabel(state.wallets.wallets.find((w) => w.active) ?? (state.wallet ? { address: state.wallet } : null));
 const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
-const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', admin: 'Admin', ...Object.fromEntries(ROLES.map((r) => [r.id, r.label])), safe: 'Safe', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', settings: 'Settings' };
+const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', admin: 'Admin', ...Object.fromEntries(ROLES.map((r) => [r.id, r.label])), safe: 'Safe', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', service: 'Service', contract: 'Contract', settings: 'Settings' };
 const ICON = {
   // a game controller's outline
   game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path></svg>`,
@@ -44,6 +45,9 @@ const ICON = {
   // a shop: its awning over a counter
   market: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9h16M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0M5.5 11.5V20h13v-8.5M10 20v-5h4v5"></path></svg>`,
   wallet: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M16 12h2"></path></svg>`,
+  // a server, as Home's Service chip draws the Satori Service; a block, as its Contract chip draws the chain (each with its word)
+  service: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="7" rx="1.5"></rect><rect x="4" y="13" width="16" height="7" rx="1.5"></rect><path d="M8 7.5h.01M8 16.5h.01"></path></svg>`,
+  contract: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"></path><path d="M3.5 7.25L12 12l8.5-4.75M12 12v9.5"></path></svg>`,
   // one line splitting in two: the dev fee's splitters
   devfee: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h7c3 0 4-6 8-6h3M10 12c3 0 4 6 8 6h3M18 3l3 3-3 3M18 15l3 3-3 3"></path></svg>`,
   // a shield: the contract's admin
@@ -267,6 +271,8 @@ export function render(root, a) {
       ${streamsTab(a)}
       ${marketTab(a)}
       ${walletTab(a)}
+      ${serviceTab(a)}
+      ${contractTab(a)}
       ${devFeeTab(a)}
       ${adminTab(a)}
       ${rolesTabs(a)}

@@ -2,7 +2,7 @@
 // at a time, filling the screen: its name (with a star) and its latest value, its line, and two big buttons, down
 // (red) and up (green). A swipe left skips, a swipe right goes back; every move slides (the screen follows the finger). After the last stream, the submit screen; after
 // more than one favorite, Submit shows under the buttons. While the app plays on its own (automatic) the game is
-// greyed out under the switch to play by hand (and back: Settings › Satori contract predictions). Its flow: src/ui/gameflow.js.
+// greyed out under the switch to play by hand (and back: Contract › Satori contract predictions). Its flow: src/ui/gameflow.js.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
 import { unlockPrompt } from './parts.js';

@@ -347,7 +347,7 @@ test('a failed send: amber, named, retried in minutes; a second quick failure st
   await page.evaluate(() => window.satori.poll());
   h = await health(page);
   expect(h).toMatchObject({ status: 'bad', title: 'Not predicting', line: "The Satori Service refused this app's login.",
-    action: { id: 'login-refused', button: 'Open Settings', do: 'go', tab: 'settings', section: 'central' },
+    action: { id: 'login-refused', button: 'Open Service', do: 'go', tab: 'service', section: 'central' },
     channels: { network: { state: 'bad', text: 'Login refused' } } });
   await expect(hero(page)).toHaveAttribute('data-s', 'bad');
   await shots(page, 'bad');

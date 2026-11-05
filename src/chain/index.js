@@ -131,7 +131,7 @@ export function panicOf(err) {
 export class FeeCeilingError extends Error {
   constructor(maxFeePerGas, ceiling) {
     super(`Gas is above the max fee: ${formatGwei(maxFeePerGas)} gwei > ${formatGwei(ceiling)} gwei. `
-      + 'Try again later, or raise the max fee in Settings › Satori contract.');
+      + 'Try again later, or raise the max fee in Settings › Advanced › Base.');
     this.name = 'FeeCeilingError'; // no bigint fields: an error crossing to an agent's page.evaluate must serialize
   }
 }
