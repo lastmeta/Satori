@@ -4,6 +4,11 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-06 (leave a pool that lists this app as its worker)
+
+- New: `leaveWorkerPool()`, and `pool()` answers `workerOf`: a pool can list this app as its worker without
+  asking; this shows that pool and leaves it. Service › Worker.
+
 ## Changed 2026-11-05 (the Service and Contract pages)
 
 - Two new tabs, `go('service')` and `go('contract')` (named Satori Service and Satori Contract, first after Home): everything that is one kind of scoring only. Service (off-chain):

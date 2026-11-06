@@ -190,6 +190,20 @@ export function poolCard(a) {
   </section>`;
 }
 
+/** The pool that lists this app as its worker: a pool does that without asking, so the app can leave it. */
+export function workerPoolCard(a) {
+  const p = () => state.pool;
+  return html`
+  <section class="card settings-section" id="service-worker" data-test="worker-pool-card">
+    <h2>Worker</h2>
+    <p class="muted small">A pool can list this app as one of its workers without asking. If that pool isn't yours, leave it.</p>
+    <div class="id"><span class="label">Pool</span><span data-test="worker-pool-now">${() => (p().reading && !p().at ? 'Reading…'
+      : p().worker ? `${p().worker.name ? `${p().worker.name} · ` : ''}${shortHash(p().worker.address)}` : p().workerError ? 'Unknown' : 'None')}</span>
+      <button class="small-btn" type="button" data-test="worker-pool-leave" hidden="${() => !p().worker}" disabled="${() => !!state.poolBusy}" @click="${a.leaveWorkerPool}">${() => (state.poolBusy === 'leave' ? 'Leaving…' : 'Leave pool')}</button></div>
+    <p class="error small" role="alert" data-test="worker-pool-error" hidden="${() => !state.workerPoolError}">${() => state.workerPoolError}</p>
+  </section>`;
+}
+
 export function centralForm(a) {
   return html`
   <section class="card settings-section" id="service-central">

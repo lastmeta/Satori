@@ -196,5 +196,18 @@ test('a pool by call and on Settings: the open pools, stake with one, unstake (d
   await expect(page.locator('[data-test=pool-error]')).toContainText('Pool not found');
   await page.click('[data-test=pool-unstake]');
   await expect(page.locator('[data-test=pool-now]')).toHaveText('No pool');
-  expect(await call(page, 'pool')).toMatchObject({ address: null });
+  expect(await call(page, 'pool')).toMatchObject({ address: null, workerOf: null });
+
+  // a pool lists this app as its worker without asking: the Worker card shows it, and Leave pool takes it off
+  stub.workerOf = { address: big, pool_name: 'big pool' };
+  expect(await call(page, 'pool')).toMatchObject({ workerOf: { address: big, name: 'big pool' } });
+  await expect(page.locator('[data-test=worker-pool-now]')).toContainText('big pool');
+  await page.click('[data-test=worker-pool-leave]');
+  await expect(page.locator('[data-test=worker-pool-now]')).toHaveText('None');
+  await expect(page.locator('[data-test=worker-pool-leave]')).toBeHidden();
+  expect(stub.workerOf).toBe(null);
+  await expect(call(page, 'leaveWorkerPool')).rejects.toThrow('No pool lists this app as its worker.');
+  stub.workerOf = { address: cheap, pool_name: '' };
+  expect(await call(page, 'pool')).toMatchObject({ workerOf: { address: cheap, name: null } });
+  expect(await call(page, 'leaveWorkerPool')).toMatchObject({ workerOf: null });
 });

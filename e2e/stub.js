@@ -76,7 +76,7 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
   const held = { batch: null, register: null, submit: null };
   const stub = { batch: [], otherWallet: null, noWalletAddress: false, fail: [], failRegister: 0, refuseLogin: false, delayMs: 0, root: null, proofs: {}, history: null,
     historyDelayMs: 0, reward: null, rewardHold: null, rewardRefuse: null,
-    pools: [], lending: null, poolCalls: [], registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], rewardCalls: [], prod: [], blocked: [],
+    pools: [], lending: null, workerOf: null, poolCalls: [], registered: [], polls: [], logins: [], batches: [], merkleCalls: [], historyCalls: [], rewardCalls: [], prod: [], blocked: [],
     hold(what = 'batch') {
       let release;
       held[what] = new Promise((r) => { release = r; });
@@ -120,6 +120,14 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
       return reply(route, 200, { pool_address: stub.lending, pool_wallet_address: stub.lending, pool_id: stub.lending ? 9 : null, is_pool: false });
     }
     if (req.method() === 'GET' && pathname === '/api/v1/pool/open') return reply(route, 200, { pools: stub.pools });
+    // `workerOf`: the pool that lists this alias as its worker ({ address, pool_name }, or null)
+    if (pathname === '/api/v1/pool/membership' && ['GET', 'DELETE'].includes(req.method())) {
+      if (!signedIn(h)) return reply(route, 401, { detail: 'bad token' });
+      if (req.method() === 'GET') return reply(route, 200, { pool_address: stub.workerOf?.address ?? null, pool_name: stub.workerOf?.pool_name ?? null });
+      if (!stub.workerOf) return reply(route, 404, { detail: 'Not in a pool' });
+      stub.workerOf = null;
+      return reply(route, 200, { message: 'Left the pool' });
+    }
     if (pathname === '/api/v1/lender/lend' && ['POST', 'DELETE'].includes(req.method())) {
       const body = req.postData();
       stub.poolCalls.push({ method: req.method(), body: body ? JSON.parse(body) : null });

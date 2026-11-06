@@ -5,7 +5,7 @@
 // keys, backup, appearance, this device and Advanced (relays, Base).
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
-import { aliasForm, centralForm, poolCard, predictions, rewardCard, servicePredictions } from './settings.js';
+import { aliasForm, centralForm, poolCard, predictions, rewardCard, servicePredictions, workerPoolCard } from './settings.js';
 import { streamsCard } from './streams.js';
 import { batchCard, contractAliasRow, referralCard } from './wallet.js';
 import { contractChecks, networkChecks } from './contractflow.js';
@@ -29,6 +29,7 @@ export function serviceTab(a) {
     ${streamsCard(a)}
     ${rewardCard(a)}
     ${poolCard(a)}
+    ${workerPoolCard(a)}
     <section class="card settings-section" id="service-alias" data-test="service-alias-card">
       <h2>Alias</h2>
       <div class="alias">

@@ -1,14 +1,17 @@
 // The pool this wallet stakes with, for off-chain scoring (docs/design/central.md#the-pool), as Satori Lite's Stake page:
 // the Satori Service counts the wallet's stake toward the pool and shares its rewards. The Satori Service keeps it
 // (GET /lender/status, GET /pool/open; POST and DELETE /lender/lend, signed in by the alias: no wallet, no gas).
+// Also the pool that lists this app's alias as its worker, which a pool does without asking, and leaving it
+// (GET and DELETE /pool/membership, signed in by the alias).
 //   checkPoolAddress(input, { wallet, alias }) → checksummed, or throws in plain words (before any call)
-//   createPool({ central, wallet, alias }) → { status, known, read(), stake(address), unstake(), reset() }
+//   createPool({ central, wallet, alias }) → { status, known, read(), stake(address), unstake(), leave(), reset() }
 import { getAddress, isAddress, zeroAddress } from 'viem';
 
 export const NOT_BASE = 'A pool address is a Base address: 0x and 40 hex characters.';
 export const BAD_CHECKSUM = "That address's capital letters don't match its checksum: check it for a typo.";
 export const OWN = "That is this app's own address, not a pool.";
 export const NOT_STAKED = "This wallet doesn't stake with a pool.";
+export const NOT_WORKER = 'No pool lists this app as its worker.';
 
 const HEX40 = /^0x[0-9a-fA-F]{40}$/;
 const nowS = () => Date.now() / 1000;
@@ -26,12 +29,13 @@ export function checkPoolAddress(input, { wallet = null, alias = null } = {}) {
 
 /**
  * The pool as this page knows it: status { address (the pool's, or null: none), name, commission, isPool (this wallet
- * runs a pool, so it can't stake with one), open: [{ address, name, commission }] (lowest fee first), at, error,
- * reading }. read() never throws (the status says); stake() and unstake() throw the check's words or the Satori Service's.
+ * runs a pool, so it can't stake with one), open: [{ address, name, commission }] (lowest fee first), worker ({ address,
+ * name } of the pool that lists this app as its worker, or null), workerError (that read's, alone), at, error, reading }. read() never throws (the status says); stake() and unstake() throw the check's words or the Satori Service's.
  * @param {{central: () => object, wallet: string, alias?: string|null, now?: () => number, onChange?: (s: object) => void}} o
  */
 export function createPool({ central, wallet, alias = null, now = nowS, onChange = () => {} }) {
-  let st = { address: null, name: null, commission: null, isPool: false, open: [], at: null, error: null, reading: false };
+  let st = { address: null, name: null, commission: null, isPool: false, open: [], worker: null, workerError: null, at: null, error: null,
+    reading: false };
   let asked = 0; // the latest read wins
   const put = (patch) => {
     st = { ...st, ...patch };
@@ -45,12 +49,15 @@ export function createPool({ central, wallet, alias = null, now = nowS, onChange
     const n = ++asked;
     put({ reading: true });
     try {
-      const [s, o] = await Promise.all([central().lenderStatus(wallet), central().openPools()]);
+      // an older Satori Service has no /pool/membership: the rest still reads
+      const [s, o, m] = await Promise.all([central().lenderStatus(wallet), central().openPools(),
+        central().poolMembership().then((r) => ({ r }), (err) => ({ err: String(err?.message ?? err) }))]);
       const open = (o?.pools ?? []).filter((p) => HEX40.test(p?.address ?? ''))
         .map((p) => ({ address: getAddress(p.address), name: p.pool_name || null, commission: p.commission ?? null }))
         .sort((a, b) => (a.commission ?? 0) - (b.commission ?? 0));
       const address = HEX40.test(s?.pool_address ?? '') ? getAddress(s.pool_address) : null;
-      if (n === asked) put({ address, isPool: !!s?.is_pool, open, at: now(), error: null, reading: false });
+      const worker = HEX40.test(m.r?.pool_address ?? '') ? { address: getAddress(m.r.pool_address), name: m.r.pool_name || null } : null;
+      if (n === asked) put({ address, isPool: !!s?.is_pool, open, worker, workerError: m.err ?? null, at: now(), error: null, reading: false });
     } catch (err) {
       if (n === asked) put({ error: String(err?.message ?? err), reading: false });
     }
@@ -74,10 +81,16 @@ export function createPool({ central, wallet, alias = null, now = nowS, onChange
       await central().unstakeFromPool();
       return read();
     },
+    /** Leave the pool that lists this app as its worker → the status, read again. */
+    async leave() {
+      if (st.at != null && !st.worker) throw new Error(NOT_WORKER);
+      await central().leavePool();
+      return read();
+    },
     /** Another Satori Service: nothing is known of it yet. */
     reset() {
       asked++;
-      put({ address: null, isPool: false, open: [], at: null, error: null, reading: false });
+      put({ address: null, isPool: false, open: [], worker: null, workerError: null, at: null, error: null, reading: false });
     },
   };
 }

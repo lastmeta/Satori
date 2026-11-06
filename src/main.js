@@ -498,7 +498,7 @@ async function setCentral(raw) {
     await db.resetCentral();
     reward.reset(); // that one's reward address is not known yet, and the last one's words go with it
     pool.reset();
-    Object.assign(state, { rewardDone: '', rewardError: '', poolDone: '', poolError: '' });
+    Object.assign(state, { rewardDone: '', rewardError: '', poolDone: '', poolError: '', workerPoolError: '' });
   }
   await db.set('central_url', url);
   if (moved) await activity.setting('central', url, url ? undefined : DEFAULT_CENTRAL); // Home notes it for 24 h
@@ -540,6 +540,13 @@ const setPool = (address) => exclusive(address == null || !String(address).trim(
   if (st.error) throw new Error(st.error);
   state.poolDone = unstake ? 'Unstaked: this wallet no longer stakes with a pool.'
     : `Staked with ${st.name ? `${st.name} (${st.address})` : st.address}.`;
+  return st;
+}, 'poolBusy');
+
+/** Leave the pool that lists this app as its worker (a pool does that without asking), from Service › Worker or an agent. → its status */
+const leaveWorkerPool = () => exclusive('leave', async () => {
+  const st = await pool.leave();
+  if (st.error) throw new Error(st.error);
   return st;
 }, 'poolBusy');
 
@@ -1094,7 +1101,7 @@ const actions = createActions({
   readPoolNow, readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
   setAsideDb, setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
-  withWallet,
+  withWallet, leaveWorkerPool,
   get afterUnlock() { return afterUnlock; },
   set afterUnlock(v) { afterUnlock = v; },
   get base() { return base; },
@@ -1361,7 +1368,7 @@ window.satori = createAgent({
   backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readPoolNow, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
   setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
-  work,
+  work, leaveWorkerPool,
   get activity() { return activity; },
   get base() { return base; },
   get db() { return db; },

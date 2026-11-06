@@ -197,6 +197,10 @@ export function createCentral({ url, alias, version, fetch: fetchFn = globalThis
       JSON.stringify({ pool_address: address })), 'save'),
     /** Stop staking with the pool. */
     unstakeFromPool: () => signedIn((token) => call('DELETE', '/api/v1/lender/lend', bearer(token)), 'clear'),
+    /** The pool that lists this alias as its worker: { pool_address (null: none), pool_name }. A pool lists a worker without its yes. */
+    poolMembership: () => signedIn((token) => call('GET', '/api/v1/pool/membership', bearer(token)), 'read'),
+    /** Leave the pool that lists this alias as its worker. */
+    leavePool: () => signedIn((token) => call('DELETE', '/api/v1/pool/membership', bearer(token)), 'clear'),
 
     /** Log in, POST the batch; on a 401 log in again and retry once (server.py:210). */
     submitPredictions(predictions) {

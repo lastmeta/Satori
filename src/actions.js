@@ -28,7 +28,7 @@ export function createActions(app) {
     readPoolNow, readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
     refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, setAliasFor,
     session, setAsideDb, setBaseSettings, setCentral, setPool, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
-    walletOps, withWallet,
+    walletOps, withWallet, leaveWorkerPool,
   } = app;
 
   function wipePending() {
@@ -710,6 +710,8 @@ export function createActions(app) {
       if (input) input.value = address;
     },
     readPool: () => void readPoolNow(),
+    /** Service › Worker: Leave pool. */
+    leaveWorkerPool: shownAt('workerPoolError', () => leaveWorkerPool()),
     readReward: () => void (app.reward && readRewardNow()),
     /** The Wallets card (docs/design/wallets.md#several-wallets): Add, Switch, and Remove after it asks. */
     addWallet: shownAt('walletsError', () => addWallet()),

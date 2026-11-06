@@ -32,7 +32,7 @@ export function createAgent(app) {
     backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readPoolNow, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
     setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
-    work,
+    work, leaveWorkerPool,
   } = app;
 
   /** Central's stream meta: the object its JSON text holds, the text if it is not JSON, or null. */
@@ -222,13 +222,14 @@ export function createAgent(app) {
     async setRewardAddress(address) { ready(); const st = await setReward(address); return { address: st.address, whose: st.whose, at: st.at }; },
     /**
      * The pool this wallet stakes with for off-chain scoring (docs/design/central.md#the-pool), read from the Satori
-     * Service now: { address (null: none), name, commission, isPool (this wallet runs a pool), at }.
+     * Service now: { address (null: none), name, commission, isPool (this wallet runs a pool), workerOf ({ address, name } of
+     * the pool that lists this app as its worker, or null), at }.
      */
     async pool() {
       ready();
       const st = await readPoolNow();
       if (st.error) throw new Error(st.error);
-      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, at: st.at };
+      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, workerOf: st.worker, at: st.at };
     },
     /** The pools open to stake with, lowest fee first: [{ address, name, commission }]. */
     async openPools() {
@@ -241,13 +242,19 @@ export function createAgent(app) {
     async stakeWithPool(address) {
       ready();
       const st = await setPool(String(address ?? ''));
-      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, at: st.at };
+      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, workerOf: st.worker, at: st.at };
     },
     /** Stop staking with the pool. → pool()'s answer */
     async unstakeFromPool() {
       ready();
       const st = await setPool(null);
-      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, at: st.at };
+      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, workerOf: st.worker, at: st.at };
+    },
+    /** Leave the pool that lists this app as its worker (a pool does that without asking). → pool()'s answer */
+    async leaveWorkerPool() {
+      ready();
+      const st = await leaveWorkerPool();
+      return { address: st.address, name: st.name, commission: st.commission, isPool: st.isPool, workerOf: st.worker, at: st.at };
     },
     /** Unlock (on the 'finish' screen it also finishes an earlier version's update, then the neuron starts). */
     async unlock(passphrase) {

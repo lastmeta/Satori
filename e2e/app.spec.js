@@ -120,8 +120,8 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(btc.locator('[data-test=t1]')).toHaveText('67,000.50');
   await expect(btc.locator('[data-test=t2]')).toHaveText('67,000.50');
   await expect(btc.locator('[data-test=status]')).toHaveText('Sent');
-  // the poll's, and the reward address's read (the Service page reads it when it opens)
-  await expect.poll(() => stub.logins.length).toBe(2);
+  // the poll's, the reward address's read and the worker pool's (the Service page reads both when it opens)
+  await expect.poll(() => stub.logins.length).toBe(3);
   expect(stub.logins[0]).toMatchObject({ ok: true, message: 'c-0', 'alias-pubkey': reg['alias-pubkey'] });
   expect(stub.logins[0].signature).toMatch(/^0x[0-9a-f]{128}1[bc]$/); // EIP-191: r ‖ s ‖ v, v 27/28
   expect(await verifyMessage({ address: alias, message: 'c-0', signature: stub.logins[0].signature })).toBe(true);
