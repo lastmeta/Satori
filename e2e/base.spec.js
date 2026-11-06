@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
 import { createChain } from '../src/chain/index.js';
-import { DEFAULTS } from '../src/chain/config.js';
+import { DEFAULTS, SATORI_DAILY_URL } from '../src/chain/config.js';
 import { publicKey, evmAddress, signDigest } from '../src/keys/keys.js';
 import { keysFromWallet } from '../src/keys/derive.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
@@ -54,7 +54,7 @@ test('the Base card: stake, the batch on its own, claims, unstake, when SATORI c
   await expect(fact(page, 'staking')).toHaveText('Not staked: Stake with this app, below');
   const CHOICE = 'Stake with this app to let it predict every round, or play Satori Daily↗ by hand.'; // the link a button, ↗: a new tab
   await expect(fact(page, 'play')).toHaveText(CHOICE);
-  await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', 'https://games.satorinet.io');
+  await expect(fact(page, 'play').getByRole('link', { name: 'Satori Daily' })).toHaveAttribute('href', SATORI_DAILY_URL); // this build's (src/chain/config.js)
   await expect(fact(page, 'check')).toContainText('Waits until you stake');
 
   rpc.eth[I] = 10n ** 17n;

@@ -10,6 +10,7 @@ import { streamsCard } from './streams.js';
 import { batchCard, contractAliasRow, referralCard } from './wallet.js';
 import { contractChecks, networkChecks } from './contractflow.js';
 import { MARK } from './contract.js';
+import { idRow } from './parts.js';
 
 const nowS = () => Date.now() / 1000;
 
@@ -30,7 +31,12 @@ export function serviceTab(a) {
     ${poolCard(a)}
     <section class="card settings-section" id="service-alias" data-test="service-alias-card">
       <h2>Alias</h2>
-      ${aliasForm(a, 'offchain', '', 'Signs in and sends the predictions the Satori Service scores. Another one, such as your Docker install\'s, can do this instead of this app\'s own.')}
+      <div class="alias">
+        ${idRow('Alias', 'service-alias', () => state.serviceAlias, a)}
+        <p class="muted small">${() => (state.serviceAlias && state.serviceAlias !== state.alias ? 'An alias you gave this job (below), not this app\'s own. Its private key: Settings › Backup.'
+          : "This app's own alias. Its private key: Settings › Backup.")}</p>
+      </div>
+      ${aliasForm(a, 'offchain', '', 'Signs in and sends the predictions the Satori Service scores. Another one, such as your Docker install\'s, can do this instead of this app\'s own.', { address: false })}
     </section>
     ${centralForm(a)}
   </section>`;

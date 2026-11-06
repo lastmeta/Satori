@@ -996,3 +996,7 @@ details[open] > summary::after, .chan[aria-expanded="true"]::before, button.snam
 
 /* The Service and Contract pages: their status, in Home's chip words (src/ui/pages.js) */
 .checks.plain .check p { margin: 2px 0 0; }
+
+/* Satori Service, Satori Contract: one line each (the owner, 2026-11-06); a narrower computer screen packs the nav tighter */
+.topnav a, .tabbar .menu-list a { white-space: nowrap; }
+@media (min-width: 1024px) and (max-width: 1279px) { .topnav { gap: 0; } .topnav a { padding: 10px 9px; font-size: 0.85rem; } }

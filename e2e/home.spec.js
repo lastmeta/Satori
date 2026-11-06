@@ -131,7 +131,8 @@ test('ok, then the Stake card (advice, the risk said; the inline Unlock), then o
   await page.evaluate(() => window.satori.base());
   const how = page.locator('[data-test=how]');
   await expect(how.locator('summary')).toHaveText('How Satori Works');
-  await expect(how.locator('p').last()).toHaveText('Just open the app every day to predict automatically, or make predictions in the game.');
+  await expect(how.locator('p.how-a').last()).toHaveText('Just open the app every day to predict automatically, or make predictions in the game.');
+  await expect(how.locator('[data-test=how-more]')).toHaveText('Go on…↗'); // the last line: explain.satorinet.io in a new tab
 
   // A month in: this session's first poll runs at once, central's 8 streams with their history, each forecast
   // (bvar), sent. Predicting.

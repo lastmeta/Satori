@@ -6,7 +6,7 @@ newest first. The current reference is /llms.txt; read that first. An entry's
 
 ## Changed 2026-11-05 (the Service and Contract pages)
 
-- Two new tabs, `go('service')` and `go('contract')`: everything that is one kind of scoring only. Service (off-chain):
+- Two new tabs, `go('service')` and `go('contract')` (named Satori Service and Satori Contract, first after Home): everything that is one kind of scoring only. Service (off-chain):
   Satori Service predictions (`service-pause`), Service Streams (`streams`, moved from the Streams tab), Reward
   address, Pool, its Alias (`alias-offchain-*`) and the Satori Service address. Contract (on-chain): Satori contract
   predictions (`play-setting`), Game, Daily batch (`base-alias`, `base-last-batch`, `base-check`, moved from Wallet's

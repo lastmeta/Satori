@@ -1,4 +1,4 @@
-// The shell: the header, the tabs (Game · Home · Models · Streams · Market · Wallet · Settings: on a phone a bar of Game, Home
+// The shell: the header, the tabs (Game · Home · Satori Service · Satori Contract · Streams · Models · Market · Wallet · Settings: on a phone a bar of Game, Home
 // and Menu holding the rest; on a computer a top nav; hash routes #game … #settings, #models/<id>), and the screens before Home: Setup, "Unlock to finish the update",
 // "open in another tab", "could not start", "the database can't be opened". ArrowJS. Every screen and tab is built once and shown or hidden, so
 // typing is never lost to a re-render. Secrets typed into forms are read on submit, not kept in state.
@@ -23,7 +23,7 @@ import { serviceTab, contractTab } from './pages.js';
 
 export { state };
 export { CATALOG_SHOWN } from './streams.js';
-export const TABS = ['game', 'home', 'streams', 'models', 'market', 'wallet', 'service', 'contract', 'devfee', 'admin', ...ROLE_IDS, 'safe', 'settings'];
+export const TABS = ['game', 'home', 'service', 'contract', 'streams', 'models', 'market', 'wallet', 'devfee', 'admin', ...ROLE_IDS, 'safe', 'settings'];
 /**
  * Tabs only some see: Dev Fee, a wallet in the dev fee's splitters (docs/design/devfee.md); Admin, the Satori contract's
  * admin (docs/design/admin.md).
@@ -34,7 +34,7 @@ export const tabShown = (t) => (t === 'devfee' ? !!state.devFee.shown : t === 'a
 const appWallet = () => walletLabel(state.wallets.wallets.find((w) => w.active) ?? (state.wallet ? { address: state.wallet } : null));
 const BAR = ['game', 'home']; // the phone's bar, then Menu (☰) with the rest: Home in the middle
 const MENU = TABS.filter((t) => !BAR.includes(t));
-const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', admin: 'Admin', ...Object.fromEntries(ROLES.map((r) => [r.id, r.label])), safe: 'Safe', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', service: 'Service', contract: 'Contract', settings: 'Settings' };
+const LABEL = { game: 'Game', market: 'Market', devfee: 'Dev Fee', admin: 'Admin', ...Object.fromEntries(ROLES.map((r) => [r.id, r.label])), safe: 'Safe', home: 'Home', models: 'Models', streams: 'Streams', wallet: 'Wallet', service: 'Satori Service', contract: 'Satori Contract', settings: 'Settings' };
 const ICON = {
   // a game controller's outline
   game: () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.5 2.5 0 0 1-4.3 1.2L15 15H9l-2 2.2A2.5 2.5 0 0 1 2.7 16l-.6-3A5 5 0 0 1 7 7z"></path></svg>`,
