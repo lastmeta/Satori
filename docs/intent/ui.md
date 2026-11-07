@@ -30,7 +30,7 @@ it in walls of text.
   canvas. The Streams tab stays for now and may later become "streams I
   publish".
 - **Words people see (owner, 2026-10-18).** People don't think about servers.
-  - Central is the **Satori Service** ("Network" for short). It is free to
+  - Central is the **Satori Service** ("Service" for short). It is free to
     submit to.
   - Nostr is the **Satori Network**, named only where detail is needed.
   - Base is the **Satori contract**. It costs gas, so people need to know it

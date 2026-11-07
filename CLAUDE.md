@@ -1,7 +1,8 @@
 # The Satori app (browser neuron)
 
 Read `docs/BRIEF.md` first: where everything is, how the owner wants work done,
-what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`.
+what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`. Words people see:
+`docs/words.md`.
 
 ## Owner rulings
 - **Stair-step MVPs.** The smallest working slice per step; propose the next
