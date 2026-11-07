@@ -17,6 +17,13 @@ what's live, what's next. Satori-wide rules: `/code/Satori/CLAUDE.md`. Words peo
   change works in the dev app, deploy it right away and run the long test
   suites afterwards; fix and redeploy if they fail. The owner doesn't wait on
   suites.
+- **Live checks never use his wallet** (2026-11-07). Never import a wallet prime
+  is using (his own, or a WALLET_NN test key he is testing with) into
+  app.satorinet.io from a headless browser to check a screen: setup registers
+  with the Satori Network and signs a newer wallet link, which moves the wallet
+  off his own app ("the link is older than the one held for this wallet"). For
+  live visual checks, `satori.setup({ passphrase })` with no words (random keys);
+  for a given wallet's balances, read the chain directly.
 - **Autonomous by default; the Game tab plays by hand** (2026-10-25,
   replacing "Autonomous only"). The app plays off-chain (the Satori Service)
   and on-chain (the alias's daily batch once the wallet stakes) automatically.
