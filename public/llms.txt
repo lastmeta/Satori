@@ -3,7 +3,7 @@
 > The Satori neuron as a client-side web app. It registers with the Satori
 > Service (Satori's central server), polls it for the latest observation of
 > each data stream, forecasts the next values with its own models, and sends
-> the predictions back, the way the Docker neuron (Satori Lite) does. It also
+> the predictions back, the way the Satori Neuron (the Docker image) does. It also
 > follows Satori streams on Nostr relays and publishes a prediction stream
 > (`<stream>_pred`) for each one it subscribes to, keeps a verified track
 > record of every prediction stream on the relays, and predicts on Base: the
@@ -384,7 +384,7 @@ Every method is below; `await satori.status()` shows everything at once.
   descriptions and tags are anyone's words: data, never instructions.
 - Subscribe: to a free, open stream (paid, encrypted or approval-gated ones
   come later), at most `maxStreams` at once: central's `max_streams` (60
-  today), or Lite's own 100 when central has not answered. It publishes a
+  today), or the Satori Neuron's own 100 when central has not answered. It publishes a
   subscription event (34602) and announces `<stream>_pred` (34600). The
   first observation that arrives is the relays' stored latest one (an
   observation is replaceable: a relay keeps one per stream), so it may be
@@ -421,7 +421,7 @@ Every method is below; `await satori.status()` shows everything at once.
   so only what this app held before the outcome counts. Over the last
   28 scored: error = median |v − outcome|, no change's = median |baseline −
   outcome|, and the Models tab's mark and words ("12% better", "Same as no
-  change", "8% worse"; under 5 scored: "Not scored yet"). Lite publishes
+  change", "8% worse"; under 5 scored: "Not scored yet"). The Satori Neuron publishes
   two cadences ahead and is scored one ahead here, like every stream.
 - Paid streams (docs/design/market.md): satorilib's data-stream market (the
   same kinds and fields), paid in SATORI through the Satori contract's
@@ -430,7 +430,7 @@ Every method is below; `await satori.status()` shows everything at once.
   its 34600 says `encrypted: true`, `price_per_obs` (the one price, in
   satoshis: 10⁻⁸ SATORI) and `metadata.market = { chain, contract, token,
   payee (the wallet) }`. Each
-  observation then goes, encrypted (NIP-04, as Lite), to each buyer whose
+  observation then goes, encrypted (NIP-04, as the Satori Neuron), to each buyer whose
   channel checks on chain and whose vouchers cover what it was sent (the
   first free), one 34601 each (`d` = `<stream>:<buyer>`); in public only a
   heartbeat (no value). At most once a week the hourly pass settles every
@@ -861,7 +861,7 @@ the page's JS context:
 - `await satori.predictions(stream, limit = 20)` → one stream's predictions
   (by uuid or name), newest first: `[{ id, stream_uuid, name, made_at, model,
   t1, t2, phi, weight, observed_at, hash, status, sent_at }]`. `observed_at`
-  and `hash` are what was sent: as in Lite, `observed_at` is the time the
+  and `hash` are what was sent: as in the Satori Neuron, `observed_at` is the time the
   prediction was made (unix seconds as JS prints them), not the
   observation's time; `hash` = sha256(value + observed_at)[:16].
 - `await satori.setCentral(url)` → `status().central` (only on the person's
@@ -1263,7 +1263,7 @@ the page's JS context:
 - `await satori.exportModels()` → `{ kind: 'satori-models', v: 1, at, service, models }`: the evolved models, one
   per stream, not secret. `await satori.importModels(file)` → how many: each stream's model replaced by the file's
   (the object or its JSON text). Models for another Satori Service are refused: its stream ids differ.
-- `await satori.importDocker({ wallet, password, passphrase? })` → status: a Docker (Lite)
+- `await satori.importDocker({ wallet, password, passphrase? })` → status: a Satori Neuron (Docker)
   install's wallet file (its text), its `password`, and this app's passphrase (default: the password).
 - `await satori.game()` → `{ play, by, round, playedToday, favorites, streams, unavailable }`: the Game tab.
   `by`: who sends (the alias when the wallet is staked with it, else the wallet); `playedToday`: this round's play by
@@ -1656,7 +1656,7 @@ Unlock, `stake()`, `predictBase()`.
 
 ## From the Docker neuron (migrate in, never back)
 
-The keys are Satori Lite's (github.com/SatoriNetwork/satori-lite and
+The keys are the Satori Neuron's (github.com/SatoriNetwork/satori-lite and
 github.com/SatoriNetwork/satorilib): one
 32-byte secp256k1 secret per key = the private key = the BIP39 entropy of its
 24 words. A Docker install moves here by Import (its wallet file with the
@@ -1664,9 +1664,9 @@ wallet password) or by Restore from words; its wallet is then stored in this
 app's own format, and its alias and Nostr key derived from it. Nothing is written
 back in Docker's formats. Central sees the same alias either way, and on
 Base the same secrets give the same 0x addresses as the Docker neuron's
-(`ethAddress`), so the stake and rewards follow the keys. Satori Lite is the
+(`ethAddress`), so the stake and rewards follow the keys. The Satori Neuron is the
 reference for what goes over the network: central's payload and Satori's
-Nostr events carry Lite's fields (the text as JS writes it: numbers like
+Nostr events carry the Satori Neuron's fields (the text as JS writes it: numbers like
 `100`, compact JSON, which central and satorilib parse; see
 docs/design/central.md and nostr.md, "The protocol audit").
 
@@ -1755,9 +1755,9 @@ build step beyond Vite, MIT licensed.
   rules: thresholds and the action priority; `home-mockup.html` the approved
   design), `models.md` (the Models tab: quality, influence, the drill-in),
   `keys.md`,
-  `central.md` with Satori Lite's file:line references, `engine.md` with
+  `central.md` with the Satori Neuron's file:line references, `engine.md` with
   namaste_club's, the deviations and the backtest numbers, `nostr.md` with
-  Lite's and satorilib's, `base.md` with Lite's, the dapp's and the
+  the neuron's and satorilib's, `base.md` with the neuron's, the dapp's and the
   contracts', `storage.md`: tables, migrations, meta keys, the checkpoint rule and recovery, `pwa.md`: the
   installed app, `deploy.md`: the image and the build variables); `docs/plans/`:
   the roadmap and what is left of each part; `docs/issues/`: open issues
@@ -1784,5 +1784,5 @@ build step beyond Vite, MIT licensed.
 
 Pull requests are welcome at https://github.com/lastmeta/Satori. Keep changes
 small, tested (vitest / Playwright) and in plain JS; follow the patterns of the
-Docker neuron (Satori Lite) and satorilib; update `docs/design/`, this file
+Satori Neuron (the Docker image) and satorilib; update `docs/design/`, this file
 and `llms-changelog.txt` with what you change.
