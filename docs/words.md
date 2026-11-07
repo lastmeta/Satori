@@ -8,8 +8,8 @@ Code identifiers keep their names. The rules behind it: `/code/Satori/CLAUDE.md`
 | Satori Service ("Service") | central, Satori's server; free to submit to | central, server, Satori Network |
 | Satori Network ("Network") | the Nostr relays; one of them is "a relay" | the relay network, Satori relays |
 | Satori contract ("Contract") | the Base contracts; they cost gas. Base stays the chain's name | stake on Base, predict on Base |
-| the Satori app | the browser app, app.satorinet.io | neuron, for the product |
-| Satori Lite | the app people run in Docker (satorinet/satori-lite) | Satori Neuron, Neuron Dashboard |
+| the Satori app | the browser app, app.satorinet.io | neuron, Satori Lite |
+| Satori Neuron ("the neuron") | the Docker image and setup people download and run (prime, 2026-11-07) | Satori Lite, "this app" |
 | wallet | the person's key: holds the funds, sealed with the passphrase | vault, identity |
 | alias | the app's automated signing key, unencrypted; replaced only if the device is compromised | identity, wallet pubkey |
 | Nostr key | the key that signs on the Satori Network | Nostr identity |
