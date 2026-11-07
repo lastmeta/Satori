@@ -1,6 +1,6 @@
 // Central's API as Satori Lite uses it (docs/design/central.md):
 //   const c = createCentral({ url, alias, version })
-//   await c.register({ link, nostrPubkey })   // POST /peer/register (its wallet_address: neuron register())
+//   await c.register({ link, nostrPubkey })   // challenge → POST /peer/register with the alias's proof (its wallet_address: neuron register())
 //   await c.register({ link, nostrPubkey, alias, scoring })   // another alias (the app's own, ONCHAIN) or one job only
 //   await c.relays() / c.relayConfig()       // GET /peer/relays, /peer/relay-config (Nostr)
 //   await c.observations()                   // GET /observations/batch?limit=100
@@ -108,15 +108,16 @@ export function createCentral({ url, alias, version, fetch: fetchFn = globalThis
     return data;
   }
 
-  /** One call, resent once on a network error, a timeout or a 5xx (as satorilib's _makeAuthenticatedCall, server.py:231-268). */
-  async function call(method, path, headers = {}, body) {
+  /** `send()`, resent once on a network error, a timeout or a 5xx (as satorilib's _makeAuthenticatedCall, server.py:231-268). */
+  async function retried(send) {
     try {
-      return await once(method, path, headers, body);
+      return await send();
     } catch (err) {
-      if (err.status === 0 || err.status >= 500) return once(method, path, headers, body);
+      if (err.status === 0 || err.status >= 500) return send();
       throw err;
     }
   }
+  const call = (method, path, headers = {}, body) => retried(() => once(method, path, headers, body));
 
   /**
    * A fresh token: the alias signs central's challenge, EIP-191 (login.js; satorilib server.py:87-118).
@@ -157,16 +158,21 @@ export function createCentral({ url, alias, version, fetch: fetchFn = globalThis
 
     /**
      * POST /peer/register, headers only, no token: the alias, what this app uses it for (the Satori Service and the
-     * Satori contract both: ALIAS_REPORT), the Nostr key, this version (browser-0.1.0+3f11d8c) and the wallet's link to
-     * the alias (base64 of its text, a header being one line; docs/design/wallets.md). `as`: another alias than the one
-     * this client signs in with (the app's own, beside an alias for the Satori Service); `scoring`: OFFCHAIN or ONCHAIN
-     * for an alias with one job.
+     * Satori contract both: ALIAS_REPORT), the Nostr key, this version (browser-0.1.0+3f11d8c), the wallet's link to
+     * the alias (base64 of its text, a header being one line; docs/design/wallets.md) and the alias's proof: its
+     * signature of a fresh challenge, as for login (central's src/utils/alias_proof.py: needed to move the alias to
+     * another wallet or replace its Nostr key). A challenge is used up once sent, so a resend fetches a new one.
+     * `as`: another alias than the one this client signs in with (the app's own, beside an alias for the Satori
+     * Service), which signs its own proof; `scoring`: OFFCHAIN or ONCHAIN for an alias with one job.
      */
     async register({ link, nostrPubkey, alias: as = alias, scoring = ALIAS_REPORT['alias-scoring'] }) {
       const headers = { 'alias-pubkey': as.pubkey, ...ALIAS_REPORT, 'alias-scoring': scoring, 'neuron-version': version };
       if (nostrPubkey) headers['nostr-pubkey'] = nostrPubkey;
       if (link) Object.assign(headers, { 'wallet-link': base64.encode(utf8ToBytes(link.message)), 'wallet-signature': link.signature });
-      return call('POST', '/api/v1/peer/register', headers);
+      return retried(async () => {
+        const { challenge } = await once('GET', '/api/v1/auth/challenge');
+        return once('POST', '/api/v1/peer/register', { ...headers, message: challenge, signature: as.signCentralLogin(challenge) });
+      });
     },
 
     /** Central's relays, [{relay_url, nostr_pubkey, …}] (peer.py:123-163). */

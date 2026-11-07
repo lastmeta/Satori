@@ -127,7 +127,9 @@ test('an alias for each job by call: a Docker install\'s for the Satori Service,
   };
   const regsAfter = async (n, count) => {
     await expect.poll(() => stub.registered.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(n + count);
-    return stub.registered.slice(n, n + count).map((h) => [h['alias-pubkey'], h['alias-scoring'], h['alias-reported-by'], !!h['wallet-link']]);
+    const regs = stub.registered.slice(n, n + count);
+    expect(regs.map((h) => h.proven)).toEqual(regs.map(() => true)); // each signed by the alias it registers
+    return regs.map((h) => [h['alias-pubkey'], h['alias-scoring'], h['alias-reported-by'], !!h['wallet-link']]);
   };
   await openApp(page);
   await call(page, 'setup', { passphrase: PASS });

@@ -95,6 +95,7 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   const reg = stub.registered[0];
   expect(reg['alias-pubkey']).toMatch(/^0[23][0-9a-f]{64}$/);
   expect(evmAddress(reg['alias-pubkey'])).toBe(alias);
+  expect(reg.proven).toBe(true); // the alias's own signature of a fresh challenge (central's alias_proof)
   // the wallet's link to the alias, signed by the wallet (docs/design/wallets.md)
   const link = Buffer.from(reg['wallet-link'], 'base64').toString('utf8');
   expect(link).toMatch(new RegExp(`^Satori: link this alias to my wallet\nalias: ${alias}\nwallet: ${walletAddress}\nissued: \\d+$`));
@@ -122,9 +123,10 @@ test('create (a non-Latin passphrase), register, the first poll at once, reload 
   await expect(btc.locator('[data-test=status]')).toHaveText('Sent');
   // the poll's, the reward address's read and the worker pool's (the Service page reads both when it opens)
   await expect.poll(() => stub.logins.length).toBe(3);
-  expect(stub.logins[0]).toMatchObject({ ok: true, message: 'c-0', 'alias-pubkey': reg['alias-pubkey'] });
+  const { message } = stub.logins[0];
+  expect(stub.logins[0]).toMatchObject({ ok: true, message: expect.stringMatching(/^c-\d+$/), 'alias-pubkey': reg['alias-pubkey'] });
   expect(stub.logins[0].signature).toMatch(/^0x[0-9a-f]{128}1[bc]$/); // EIP-191: r ‖ s ‖ v, v 27/28
-  expect(await verifyMessage({ address: alias, message: 'c-0', signature: stub.logins[0].signature })).toBe(true);
+  expect(await verifyMessage({ address: alias, message, signature: stub.logins[0].signature })).toBe(true);
   const [items] = stub.batches;
   expect(items.map((i) => [i.stream_uuid, i.stream_name, i.value, i.t1_value]))
     .toEqual([['u-btc', 'bitcoin', '67000.5', '67000.5'], ['u-eth', 'eth', '2500', '2500']]);

@@ -94,33 +94,55 @@ test('traffic: each request to central and each answer', async () => {
 });
 
 describe('register', () => {
-  test('the alias, our version and the wallet\'s link as headers (the link base64, one line); no login, no token, no body', async () => {
+  /** A fresh challenge per GET (c-1, c-2, …): central's are single-use. */
+  const challenges = () => {
+    let n = 0;
+    return { 'GET /api/v1/auth/challenge': () => json(200, { challenge: `c-${++n}` }) };
+  };
+  test('the alias, our version, the wallet\'s link (base64, one line) and the alias\'s proof as headers; no token, no body', async () => {
     const res = { success: true, peer_id: 7, wallet_address: '0x3a91ecc0dde5bfea5773345D5f61c894bc84B6E7', nostr_pubkey: null,
       message: 'Peer registered successfully' };
-    const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, res) });
+    const { fetch, calls } = mockFetch({ ...challenges(), 'POST /api/v1/peer/register': json(200, res) });
     const link = { message: 'Satori: link this alias to my wallet\nalias: 0xA\nwallet: 0xW\nissued: 1', signature: '0xsig' };
     expect(await client(fetch).register({ link })).toEqual(res);
-    expect(paths(calls)).toEqual(['POST /api/v1/peer/register']);
-    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
-      'neuron-version': 'browser-0.1.0+3f11d8c', 'wallet-link': Buffer.from(link.message).toString('base64'), 'wallet-signature': '0xsig' });
-    expect(calls[0].body).toBeUndefined();
+    expect(paths(calls)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/peer/register']);
+    expect(calls[1].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
+      'neuron-version': 'browser-0.1.0+3f11d8c', 'wallet-link': Buffer.from(link.message).toString('base64'), 'wallet-signature': '0xsig',
+      message: 'c-1', signature: 'sig(c-1)' });
+    expect(calls[1].body).toBeUndefined();
   });
   test('the Nostr pubkey as nostr-pubkey, when there is one; no link headers without a link', async () => {
-    const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': json(200, {}) });
+    const { fetch, calls } = mockFetch({ ...challenges(), 'POST /api/v1/peer/register': json(200, {}) });
     await client(fetch).register({ nostrPubkey: 'ee'.repeat(32) });
-    expect(calls[0].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
-      'nostr-pubkey': 'ee'.repeat(32), 'neuron-version': 'browser-0.1.0+3f11d8c' });
+    expect(calls[1].headers).toEqual({ 'alias-pubkey': '02ab', 'alias-scoring': 'offchain,onchain', 'alias-reported-by': 'app',
+      'nostr-pubkey': 'ee'.repeat(32), 'neuron-version': 'browser-0.1.0+3f11d8c', message: 'c-1', signature: 'sig(c-1)' });
   });
-  test('two aliases: each registers for its own job (docs/design/wallets.md#an-alias-for-each-job)', async () => {
-    const { fetch, calls } = mockFetch({ 'POST /api/v1/peer/register': () => json(200, {}) });
+  test('two aliases: each registers for its own job, each with its own proof (docs/design/wallets.md#an-alias-for-each-job)', async () => {
+    const { fetch, calls } = mockFetch({ ...challenges(), 'POST /api/v1/peer/register': () => json(200, {}) });
     const c = client(fetch);
     await c.register({ scoring: OFFCHAIN });
-    await c.register({ alias: { pubkey: '03cd' }, scoring: ONCHAIN });
-    expect(calls.map((x) => [x.headers['alias-pubkey'], x.headers['alias-scoring'], x.headers['alias-reported-by']]))
-      .toEqual([['02ab', 'offchain', 'app'], ['03cd', 'onchain', 'app']]);
+    await c.register({ alias: { pubkey: '03cd', signCentralLogin: (m) => `cd(${m})` }, scoring: ONCHAIN });
+    expect(calls.filter((x) => x.method === 'POST').map((x) => [x.headers['alias-pubkey'], x.headers['alias-scoring'],
+      x.headers['alias-reported-by'], x.headers.message, x.headers.signature]))
+      .toEqual([['02ab', 'offchain', 'app', 'c-1', 'sig(c-1)'], ['03cd', 'onchain', 'app', 'c-2', 'cd(c-2)']]);
+  });
+  test('a 5xx or a network error is resent once, with a fresh challenge (a sent one is used up)', async () => {
+    const { fetch, calls } = mockFetch({ ...challenges(), 'POST /api/v1/peer/register': [json(502, {}), json(200, { peer_id: 7 })] });
+    expect(await client(fetch).register({})).toEqual({ peer_id: 7 });
+    expect(paths(calls)).toEqual(['GET /api/v1/auth/challenge', 'POST /api/v1/peer/register',
+      'GET /api/v1/auth/challenge', 'POST /api/v1/peer/register']);
+    expect(calls.filter((x) => x.method === 'POST').map((x) => x.headers.message)).toEqual(['c-1', 'c-2']);
+    const twice = mockFetch({ ...challenges(), 'POST /api/v1/peer/register': () => json(500, { detail: 'boom' }) });
+    await expect(client(twice.fetch).register({})).rejects.toMatchObject({ status: 500 });
+    expect(twice.calls).toHaveLength(4); // no third try
+  });
+  test('no challenge, no register: the failure is a CentralError', async () => {
+    const { fetch, calls } = mockFetch({ 'GET /api/v1/auth/challenge': () => json(503, { detail: 'down' }) });
+    await expect(client(fetch).register({})).rejects.toMatchObject({ status: 503, detail: 'down' });
+    expect(paths(calls)).toEqual(['GET /api/v1/auth/challenge', 'GET /api/v1/auth/challenge']);
   });
   test('a refusal is a CentralError with the status and detail', async () => {
-    const { fetch } = mockFetch({ 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });
+    const { fetch } = mockFetch({ ...challenges(), 'POST /api/v1/peer/register': json(409, { detail: 'wallet conflicts' }) });
     const err = await client(fetch).register({}).catch((e) => e);
     expect(err).toBeInstanceOf(CentralError);
     expect(err).toMatchObject({ status: 409, detail: 'wallet conflicts', message: 'Satori Service 409: wallet conflicts' });

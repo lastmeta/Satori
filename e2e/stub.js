@@ -85,6 +85,8 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
   const reply = (route, status, json) => route.fulfill({ status, json, headers: CORS });
   const issued = new Set(); // every token a login gave: good until the stub ends (central's last an hour)
   const signedIn = (h) => issued.has(String(h.authorization ?? '').replace(/^Bearer /, ''));
+  const challenges = new Set(); // given and not yet used by a register (central's are single-use)
+  let given = 0; // c-0, c-1, …
   await context.routeWebSocket((u) => ['satorian.satorinet.io', 'relay.satorinet.io'].includes(u.hostname) || u.port === '7778', (ws) => {
     stub.blocked.push(ws.url());
     ws.close();
@@ -159,7 +161,8 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
     }
     switch (`${req.method()} ${pathname}${search}`) {
       case 'POST /api/v1/peer/register': {
-        stub.registered.push(h);
+        // proven: the alias's signature of a fresh challenge, as central's alias_proof (src/utils/alias_proof.py)
+        stub.registered.push({ ...h, proven: challenges.delete(h.message) && await eip191(h) });
         await held.register;
         if (stub.failRegister > 0) { // central down for a moment: a 503 (the client resends it once)
           stub.failRegister--;
@@ -185,7 +188,8 @@ export async function stubCentral(context, { url = CENTRAL, relays = [], rpc = n
         return reply(route, 200, batch);
       }
       case 'GET /api/v1/auth/challenge':
-        return reply(route, 200, { challenge: `c-${stub.logins.length}` });
+        challenges.add(`c-${given}`);
+        return reply(route, 200, { challenge: `c-${given++}` });
       case 'POST /api/v1/auth/login': {
         const ok = !stub.refuseLogin && await eip191(h);
         stub.logins.push({ ...h, ok });
