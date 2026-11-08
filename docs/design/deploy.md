@@ -260,6 +260,13 @@ database. `S` means `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175`
    ```
 
    nginx-proxy resolves `satori-neuron` per request, so it needs no reload.
+   Then drop all but the last 8 images: each deploy adds one of about 140 MB, and
+   2026-11-08 the 249 kept had filled 30 GB of central's disk. A running
+   image is refused, so the live one always stays.
+
+   ```sh
+   $S 'docker images satori-neuron --format "{{.Repository}}:{{.Tag}}" | grep -E ":(test-)?[0-9a-f]{7}$" | tail -n +9 | xargs -r docker rmi >/dev/null 2>&1; df -h / | tail -1'   # keep the last 8 images as rollbacks
+   ```
 
 4. nginx-proxy (one-time, done 2026-10-16). Its one `nginx.conf`
    (`/root/nginx/nginx.conf`, a single-file bind mount) has three server

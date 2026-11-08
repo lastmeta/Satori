@@ -86,6 +86,7 @@ CSP=$(node --input-type=module -e "import { CSP } from './csp.js'; process.stdou
 $S 'mkdir -p /root/satori-neuron/ctx && rm -rf /root/satori-neuron/ctx/*'
 scp $K -P 2222 /tmp/ctx.tgz root@157.180.104.175:/root/satori-neuron/
 $S "cd /root/satori-neuron/ctx && tar -xzf ../ctx.tgz && docker build -q -f deploy/Dockerfile --build-arg CSP=\"$CSP\" -t satori-neuron:$SHA -t satori-neuron:latest . && docker rm -f satori-neuron && docker run -d --name satori-neuron --network central-lite_default --restart unless-stopped satori-neuron:$SHA"
+$S 'docker images satori-neuron --format "{{.Repository}}:{{.Tag}}" | grep -E ":(test-)?[0-9a-f]{7}$" | tail -n +9 | xargs -r docker rmi >/dev/null 2>&1; df -h / | tail -1'   # keep the last 8 images as rollbacks
 curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" https://network.satorinet.io/   # app up, prod untouched
 ```
 - Then run a smoke test with a fresh Playwright profile: setup → Predicting, and central2 accepts N of N.
