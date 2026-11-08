@@ -233,42 +233,41 @@ its defaults in place. Central2 and the relay are answered inside the test.
 
 ## Redeploy
 
-Central has a docker daemon and this box does not, so the image is built on
-central. The build only copies files: no npm runs next to the production
-database. `S` means `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175`
-(central; access in `../central/CLAUDE.md`).
+Commit, then from a clean checkout run `./scripts/deploy.sh`. Its header lists
+what it does: `dist/` built and checked by `deploy-image.sh`, the image built
+on central (central has a docker daemon and this box does not; the build only
+copies files, so no npm runs next to the production database), the
+`satori-neuron` container replaced, all but the last 8 images removed, and a
+check that app.satorinet.io serves this build. Its last line is the undo: the
+previous image run again. Central's access: `../central/CLAUDE.md`.
 
-1. Commit, then build `dist/` with this deployment's defaults:
-   `./scripts/deploy-image.sh`. It exits 2 at the docker step on a box without
-   docker, after `dist/` is built and checked.
-2. Ship the build context and build the image on central:
+The container publishes no port and sits on `central-lite_default`, the
+network nginx-proxy reaches; nginx-proxy resolves `satori-neuron` per request,
+so it needs no reload.
 
-   ```sh
-   tar -czf /tmp/ctx.tgz dist deploy/Dockerfile deploy/nginx.conf
-   CSP=$(node --input-type=module -e "import { CSP } from './csp.js'; process.stdout.write(CSP)")
-   SHA=$(git rev-parse --short HEAD)
-   $S 'mkdir -p /root/satori-neuron/ctx && rm -rf /root/satori-neuron/ctx/*'
-   scp -i ~/.ssh/id_ed25519 -P 2222 /tmp/ctx.tgz root@157.180.104.175:/root/satori-neuron/
-   $S "cd /root/satori-neuron/ctx && tar -xzf ../ctx.tgz && docker build -q -f deploy/Dockerfile --build-arg CSP=\"$CSP\" -t satori-neuron:$SHA -t satori-neuron:latest ."
-   ```
+Then:
 
-3. Replace the container. It publishes no port and sits on the network
-   nginx-proxy reaches:
+1. Check: `curl -sI https://app.satorinet.io/sw.js` (expect the CSP,
+   nosniff, `strict-transport-security: max-age=63072000; includeSubDomains`
+   and `no-cache`), then
+   `DEPLOY_URL=https://app.satorinet.io npm run e2e:deploy`.
 
-   ```sh
-   $S "docker rm -f satori-neuron; docker run -d --name satori-neuron --network central-lite_default --restart unless-stopped satori-neuron:$SHA"
-   ```
-
-   nginx-proxy resolves `satori-neuron` per request, so it needs no reload.
-   Then drop all but the last 8 images: each deploy adds one of about 140 MB, and
-   2026-11-08 the 249 kept had filled 30 GB of central's disk. A running
-   image is refused, so the live one always stays.
+2. The daily push's server ([push.md](push.md#the-server)), only when `push/`
+   changed. Its data (the VAPID key: losing it ends every subscription) is in
+   `/root/satori-push/data`, owned by uid 1000 (the image's `node`). Here `S` is
+   `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175` and `SHA` is
+   `$(git rev-parse --short HEAD)`:
 
    ```sh
-   $S 'docker images satori-neuron --format "{{.Repository}}:{{.Tag}}" | grep -E ":(test-)?[0-9a-f]{7}$" | tail -n +9 | xargs -r docker rmi >/dev/null 2>&1; df -h / | tail -1'   # keep the last 8 images as rollbacks
+   tar -czf /tmp/push.tgz -C push push.mjs server.mjs Dockerfile
+   scp -i ~/.ssh/id_ed25519 -P 2222 /tmp/push.tgz root@157.180.104.175:/root/satori-push/
+   $S "cd /root/satori-push && mkdir -p ctx data && chown 1000:1000 data && tar -xzf push.tgz -C ctx && docker build -q -t satori-push:$SHA -t satori-push:latest ctx && docker rm -f satori-push; docker run -d --name satori-push --network central-lite_default --restart unless-stopped -v /root/satori-push/data:/data -e RPC_URL=<VITE_BASE_RPC> -e TOKEN=<token> -e ENGINE=<engine> satori-push:$SHA"
+   curl -s https://app.satorinet.io/push/key
    ```
 
-4. nginx-proxy (one-time, done 2026-10-16). Its one `nginx.conf`
+   TOKEN and ENGINE: `src/chain/config.js` DEFAULTS.
+
+3. nginx-proxy (one-time, done 2026-10-16). Its one `nginx.conf`
    (`/root/nginx/nginx.conf`, a single-file bind mount) has three server
    blocks:
    - port 80 for `neuron.` and `satori.`: the ACME webroot, everything else to https;
@@ -291,24 +290,6 @@ database. `S` means `ssh -i ~/.ssh/id_ed25519 -p 2222 root@157.180.104.175`
    DNS: A records to `157.180.104.175` in Cloudflare, proxy off, for `app`,
    `neuron`, `satori` and `coined`. The 2026-10-23 move changed nginx only
    (backups: `nginx.conf.bak-20261023-app`, `-neuron-redirect`).
-
-5. Check: `curl -sI https://app.satorinet.io/sw.js` (expect the CSP,
-   nosniff, `strict-transport-security: max-age=63072000; includeSubDomains`
-   and `no-cache`), then
-   `DEPLOY_URL=https://app.satorinet.io npm run e2e:deploy`.
-
-6. The daily push's server ([push.md](push.md#the-server)), only when `push/`
-   changed. Its data (the VAPID key: losing it ends every subscription) is in
-   `/root/satori-push/data`, owned by uid 1000 (the image's `node`):
-
-   ```sh
-   tar -czf /tmp/push.tgz -C push push.mjs server.mjs Dockerfile
-   scp -i ~/.ssh/id_ed25519 -P 2222 /tmp/push.tgz root@157.180.104.175:/root/satori-push/
-   $S "cd /root/satori-push && mkdir -p ctx data && chown 1000:1000 data && tar -xzf push.tgz -C ctx && docker build -q -t satori-push:$SHA -t satori-push:latest ctx && docker rm -f satori-push; docker run -d --name satori-push --network central-lite_default --restart unless-stopped -v /root/satori-push/data:/data -e RPC_URL=<VITE_BASE_RPC> -e TOKEN=<token> -e ENGINE=<engine> satori-push:$SHA"
-   curl -s https://app.satorinet.io/push/key
-   ```
-
-   TOKEN and ENGINE: `src/chain/config.js` DEFAULTS.
 
 Live since 2026-10-16. The check passed then, and a real smoke test also
 passed: a fresh profile registered with central2, which accepted 83 of 83

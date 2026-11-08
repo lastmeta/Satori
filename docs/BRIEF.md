@@ -76,19 +76,7 @@ The short version; owner rulings are in `CLAUDE.md` and `/code/Satori/CLAUDE.md`
 - Note: the docker daemon is remote (`tcp://docker-daemon:2376`), and `ss`/`dig` aren't installed.
 
 ## Deploying app.satorinet.io (the container is still `satori-neuron`)
-Full detail is in `docs/design/deploy.md`. The image is built **on central's box**. That build only copies files: no npm runs there.
-```sh
-cd /code/Satori/satori && ./scripts/deploy-image.sh   # builds dist/ with deploy/build.env (exit 2 without local docker is fine)
-SHA=$(git rev-parse --short HEAD); K="-i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
-S="ssh $K -p 2222 root@157.180.104.175"
-tar -czf /tmp/ctx.tgz dist deploy/Dockerfile deploy/nginx.conf
-CSP=$(node --input-type=module -e "import { CSP } from './csp.js'; process.stdout.write(CSP)")
-$S 'mkdir -p /root/satori-neuron/ctx && rm -rf /root/satori-neuron/ctx/*'
-scp $K -P 2222 /tmp/ctx.tgz root@157.180.104.175:/root/satori-neuron/
-$S "cd /root/satori-neuron/ctx && tar -xzf ../ctx.tgz && docker build -q -f deploy/Dockerfile --build-arg CSP=\"$CSP\" -t satori-neuron:$SHA -t satori-neuron:latest . && docker rm -f satori-neuron && docker run -d --name satori-neuron --network central-lite_default --restart unless-stopped satori-neuron:$SHA"
-$S 'docker images satori-neuron --format "{{.Repository}}:{{.Tag}}" | grep -E ":(test-)?[0-9a-f]{7}$" | tail -n +9 | xargs -r docker rmi >/dev/null 2>&1; df -h / | tail -1'   # keep the last 8 images as rollbacks
-curl -sI https://app.satorinet.io/ ; curl -s -o /dev/null -w "%{http_code}\n" https://network.satorinet.io/   # app up, prod untouched
-```
+From a clean checkout of a commit: `./scripts/deploy.sh`. It builds and checks `dist/`, builds the image **on central's box** (that build only copies files: no npm runs there), swaps the container, keeps the last 8 images and checks app.satorinet.io serves the build; its last line is the undo. Detail: `docs/design/deploy.md`.
 - Then run a smoke test with a fresh Playwright profile: setup → Predicting, and central2 accepts N of N.
 - nginx: `/root/nginx/nginx.conf` on central. It's a single-file bind mount, so back it up first and run `docker exec nginx-proxy nginx -t` before any reload.
 - TLS: one certificate for both names, renewed by certbot's timer.

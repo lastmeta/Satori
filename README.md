@@ -156,6 +156,8 @@ docker run --rm -p 8090:80 satori-neuron:latest
 npm run e2e:deploy                         # in another shell: headers, CSP, DuckDB, the worker, the manifest, the defaults
 ```
 
+To app.satorinet.io: `./scripts/deploy.sh` (docs/design/deploy.md "Redeploy").
+
 ## Test
 
 ```sh
