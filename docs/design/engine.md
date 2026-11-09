@@ -92,10 +92,9 @@ For each stream that got a new observation, on all its stored observations
    **`naive`**: t1 = t2 = last. A pair needs three back-to-back buckets, each
    with an observation, so `bar1` needs **an observation every step** (12 h for
    central): 8 gapless buckets give 6 pairs, about 4 days of polls every 11 h.
-   A stream observed once a day never gets a pair and stays `naive`. That
-   covers a daily central stream such as `crypto_fear_greed`, observed at 00:01
-   (`central/src/scripts/extra_streams.py:27`). It also covers a neuron that
-   polls once a day, such as a tab open only 9:00–18:00. Gaps are not bridged
+   A stream observed once a day never gets a pair and stays `naive`, as does
+   a neuron that polls once a day, such as a tab open only 9:00–18:00 (central
+   observes every stream hourly, `crypto_fear_greed` too). Gaps are not bridged
    (see Deviations).
 5. **φ** = Σxy / (Σxx + σ²/λ1²), where σ² = max(var(y − φ_ols·x), 1e-6) and
    φ_ols = Σxy/Σxx (0 when Σxx = 0). This is namaste_club's posterior mean with

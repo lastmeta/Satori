@@ -173,8 +173,8 @@ Questions for the owner: [../inbox/QUESTIONS.md](../inbox/QUESTIONS.md).
   points per stream a day (Lite has the same limit). The engine needs an
   observation every 12 h (6 lag pairs of back-to-back 12 h buckets): with
   11 h polls a stream gets `bar1` after about 4 days and `bvar` a little
-  later. A daily stream (`crypto_fear_greed`) or a tab open only part of the
-  day (one poll a day) stays `naive`; gaps are not bridged.
+  later. A tab open only part of the day (one poll a day) stays `naive`;
+  gaps are not bridged.
 - Browsers throttle timers in background tabs: a poll can run late, never
   early. A tab closed past its poll time polls 5–30 min after the next load.
 - A relay keeps one of two replaceable events with the same `created_at`
