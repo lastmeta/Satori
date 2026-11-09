@@ -170,7 +170,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
   <span class="kicker">The pieces</span>
   <h2 id="s-map">What the ecosystem is made of</h2>
   <figure>
-    <svg viewBox="0 0 340 470" role="img" aria-label="Map of the ecosystem: the Satori Network's relays carry data streams to the Satori app and Satori Lite; they send predictions to the Satori Service and the Satori contract; both pay out SATORI on Base; the Satori Association governs.">
+    <svg viewBox="0 0 340 470" role="img" aria-label="Map of the ecosystem: the Satori Network's relays carry data streams to the Satori app and Satori Neuron; they send predictions to the Satori Service and the Satori contract; both pay out SATORI on Base; the Satori Association governs.">
       <defs>
         <marker id="m2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
         <marker id="m2a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-a" d="M0,0 L10,5 L0,10 z"/></marker>
@@ -185,7 +185,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
       <text x="90" y="118" text-anchor="middle" font-size="13" class="t-b">Satori app</text>
       <text x="90" y="136" text-anchor="middle" font-size="11.5" class="t-m">in your browser</text>
       <rect class="box" x="174" y="96" width="152" height="52" rx="12"/>
-      <text x="250" y="118" text-anchor="middle" font-size="13" class="t-b">Satori Lite</text>
+      <text x="250" y="118" text-anchor="middle" font-size="13" class="t-b">Satori Neuron</text>
       <text x="250" y="136" text-anchor="middle" font-size="11.5" class="t-m">on your own computer</text>
       <path class="ln" d="M90,148 L90,162 L250,162 L250,148"/>
       <path class="ln" d="M170,162 L100,206" marker-end="url(#m2)"/>
@@ -214,7 +214,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
   </figure>
   <dl class="facts">
     <div class="fact"><dt>Satori app</dt><dd>The easiest way in. It runs in your browser at <a href="https://app.satorinet.io">app.satorinet.io</a>, predicts for you automatically, and holds your wallet.</dd></div>
-    <div class="fact"><dt>Satori Lite</dt><dd>The same job as a Docker program you run on your own computer or server, for people who want to run Satori around the clock.</dd></div>
+    <div class="fact"><dt>Satori Neuron</dt><dd>The same job as a Docker program you run on your own computer or server, for people who want to run Satori around the clock.</dd></div>
     <div class="fact"><dt>Satori Network</dt><dd>A set of Nostr relays that carry the data streams between everyone. Anyone can run one.</dd></div>
     <div class="fact"><dt>Satori Service</dt><dd>Scores predictions off-chain, the way Satori always has, and publishes the day's rewards on Base.</dd></div>
     <div class="fact"><dt>Satori contract</dt><dd>A smart contract on Base. It issues SATORI on a fixed schedule and runs a prediction game that scores and pays without any server in the middle.</dd></div>
@@ -281,7 +281,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
   </figure>
   <div class="ways">
     <div class="way"><span class="tag">Off-chain</span><h3>Predict for the Satori Service</h3>
-      <p>The Satori app or Satori Lite predicts many data streams for you. The Satori Service scores the predictions and publishes each day's rewards on Base, and you claim them in the app.</p>
+      <p>The Satori app or Satori Neuron predicts many data streams for you. The Satori Service scores the predictions and publishes each day's rewards on Base, and you claim them in the app.</p>
       <p class="need">You need: <b>250 SATORI on Base</b> for your predictions to earn. You can also lend your stake to a pool, or run a pool yourself.</p></div>
     <div class="way"><span class="tag">Off-chain</span><h3>Run a relay</h3>
       <p>Host a Nostr relay for the Satori Network. Relays connected at least 20 hours a day share a slice of the off-chain rewards.</p>
@@ -381,18 +381,18 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
       <path class="ln-a" d="M126,172 L78,94" marker-end="url(#m3)"/>
       <text x="94" y="140" text-anchor="end" font-size="11.5" class="t-a">rewards</text>
     </svg>
-    <figcaption>"Stake with this app" lends the alias your prediction power. Your SATORI stays in your wallet the whole time, locked while it is staked.</figcaption>
+    <figcaption>"Stake with this app" lends the alias your prediction power. Your SATORI stays in your wallet the whole time, held while it is staked.</figcaption>
   </figure>
-  <p>You can unstake whenever you like. To stop the same SATORI being used twice in one day, it stays locked until the second midnight UTC after you unstake.</p>
+  <p>You can unstake whenever you like. To stop the same SATORI being used twice in one day, it stays held until the second midnight UTC after you unstake.</p>
   <figure>
-    <svg viewBox="0 0 340 104" role="img" aria-label="After you unstake, your SATORI stays locked through the next full day and can be moved after the second midnight UTC, between 24 and 48 hours later.">
+    <svg viewBox="0 0 340 104" role="img" aria-label="After you unstake, your SATORI stays held through the next full day and can be moved after the second midnight UTC, between 24 and 48 hours later.">
       <line class="lock" x1="40" y1="52" x2="250" y2="52"/>
       <line class="free" x1="250" y1="52" x2="324" y2="52"/>
       <circle class="fill-a" cx="40" cy="52" r="8"/>
       <line class="axis" x1="146" y1="40" x2="146" y2="64"/>
       <line class="axis" x1="250" y1="40" x2="250" y2="64"/>
       <text x="40" y="30" text-anchor="middle" font-size="11.5" class="t-b">you unstake</text>
-      <text x="146" y="30" text-anchor="middle" font-size="11.5" class="t-warn">still locked</text>
+      <text x="146" y="30" text-anchor="middle" font-size="11.5" class="t-warn">still held</text>
       <text x="288" y="30" text-anchor="middle" font-size="11.5" class="t-ok">free to move</text>
       <text x="146" y="84" text-anchor="middle" font-size="11" class="t-m">midnight UTC</text>
       <text x="250" y="84" text-anchor="middle" font-size="11" class="t-m">midnight UTC</text>
