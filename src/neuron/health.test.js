@@ -385,6 +385,15 @@ describe('advice: the card, nothing wrong (never the status, the tone or the lin
     expect(ids(health({ storage: { persisted: true }, backedUp: false }))).toEqual([]);
     expect(ids(health({ storage: null, backedUp: false }))).toEqual([]); // not read yet
   });
+  test('Create\'s word check skipped: the Back up card, storage kept or not, until the backup is confirmed', () => {
+    const text = 'Your wallet’s 24 words are not backed up yet. They are the only way to recover your wallet if this browser loses its data.';
+    for (const storage of [{ persisted: true }, { persisted: false }, null]) {
+      const h = health({ storage, backedUp: false, backupSkipped: true });
+      expect(h).toMatchObject(calm);
+      expect(h.action).toEqual({ id: 'backup', text, button: 'Back up', do: 'backup' });
+      expect(ids(health({ storage, backedUp: true, backupSkipped: true }))).toEqual([]);
+    }
+  });
   test('a relay down (another is up): the chip says so, calm; the card when nothing else needs one', () => {
     const n = nostr({ subscriptions: [sub], relays: [{ url: 'wss://a', state: 'open' }, { url: 'wss://b', state: 'closed', downSince: 0 }] });
     const h = health({ nostr: n });

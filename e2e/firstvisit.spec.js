@@ -59,6 +59,33 @@ test('a first visit: Setup at once while the engine downloads; the keys wait for
   expect(await page.evaluate(async () => (await window.satori.status()).wallet)).toMatch(/^0x[0-9a-fA-F]{40}$/);
 });
 
+test('Create\'s word check skipped: Home\'s Back up card, storage kept or not, until the wallet\'s words are shown in Backup', async ({ context, page }) => {
+  await stubCentral(context);
+  await page.addInitScript(() => { StorageManager.prototype.persisted = async () => true; StorageManager.prototype.persist = async () => true; });
+  await page.goto('/');
+  await expect.poll(() => screen(page), { timeout: LOAD_TIMEOUT }).toBe('setup');
+  await page.getByRole('button', { name: 'Create a wallet' }).click();
+  const words = await visible(page.locator('ol.words li')).allTextContents();
+  await page.getByRole('button', { name: 'I wrote them down' }).click();
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await visible(page.getByLabel('Passphrase', { exact: true })).fill(PASS);
+  await page.getByLabel('Repeat passphrase').fill(PASS);
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect.poll(() => screen(page), { timeout: LOAD_TIMEOUT }).toBe('home');
+  const action = page.locator('[data-test=action]');
+  await expect(action).toHaveAttribute('data-action', 'backup');
+  await expect(action).toContainText('Your wallet’s 24 words are not backed up yet.');
+  // it stays after a reload: the skip is kept with the wallet
+  await page.reload();
+  await expect(page.locator('[data-test=action]')).toHaveAttribute('data-action', 'backup', { timeout: LOAD_TIMEOUT });
+  // Back up: Settings › Backup asks the passphrase, shows the words, and the card goes
+  await page.locator('[data-test=action-button]').click();
+  await page.getByLabel('Wallet passphrase to show the backup').fill(PASS);
+  await page.locator('[data-test=backup-prompt]').getByRole('button', { name: 'Show' }).click();
+  await expect(visible(page.locator('ol.words li'))).toHaveText(words);
+  await expect.poll(() => page.evaluate(() => window.satori.health().then((h) => h.reasons.map((r) => r.id)))).not.toContain('backup');
+});
+
 test('an agent\'s setup() on the first screen waits for the engine, then runs', async ({ context, page }) => {
   await stubCentral(context);
   const engine = await holdEngine(context);

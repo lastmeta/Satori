@@ -1323,7 +1323,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
 ## Drive it from the UI
 
 - **Setup**: "Create a wallet" (shows the wallet's 24 words, asks for
-  three of them, then a passphrase), "Import" (the wallet's words or
+  three of them or "Skip for now", then a passphrase), "Import" (the wallet's words or
   private key), or "Import
   Docker files" ("Wallet file": `wallet.yaml`, or `vault.yaml` from an older
   install; the wallet password, and

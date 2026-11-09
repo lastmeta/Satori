@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-09 (Create's word check can be skipped)
+
+- Setup's "Create a wallet" offers "Skip for now" on the word check. The wallet is made with no backup confirmed, and
+  `health()` gives the `backup` reason (Home's Back up card) whatever the storage, until the wallet's words are shown
+  (`backup('wallet', passphrase)` or `exportBackup`). `setup()` is unchanged.
+
 ## Changed 2026-11-06 (leave a pool that lists this app as its worker)
 
 - New: `leaveWorkerPool()`, and `pool()` answers `workerOf`: a pool can list this app as its worker without

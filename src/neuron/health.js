@@ -544,21 +544,23 @@ export const noticesOf = (rows, now) => rows.filter((r) => r.kind === 'setting' 
  * @param {boolean} [o.installDismissed] the Install card was put away on this device (Not now, Got it)
  * @param {number|null} [o.nextStepDismissed] when the next step's card was put away (Not now), s
  * @param {boolean} o.backedUp the wallet's words confirmed (meta.backup_at)
+ * @param {boolean} [o.backupSkipped] Create's word check was skipped (meta.backup_skipped_at): the card shows, storage kept or not
  * @param {number|null} o.since when the neuron began, if earlier than the rows show: the keys' creation, the log's first session
  * @param {{central, base, network}} [o.traffic] each traffic channel's last traffic, ms (src/traffic.js): channels[x].lastTraffic
  * @param {Object<string, object>} [o.work] the work in progress, { [task]: entry } (src/neuron/work.js): the tones, `work`
  * @returns {{status, tone, title, line, action, days, channels, feed, reasons, work, notices}}
  */
-export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, installDismissed = false, nextStepDismissed = null,
+export function healthOf({ now, rows = [], central, base, nostr, storage, app, backedUp, backupSkipped = false, installDismissed = false, nextStepDismissed = null,
   since = null, traffic, work = {} }) {
   const sessions = sessionsOf(rows, now);
   const days = daysOf(rows, now, since, DAYS, base?.lastPlay?.at ?? null);
   const c = centralReasons({ now, rows, sessions, central, work });
   const reasons = [...c.out, ...baseReasons({ rows, base }), ...networkReasons({ nostr, now }), ...installReason({ app, installDismissed }),
     ...nextStepReason({ base, days, dismissed: nextStepDismissed, now })];
-  if (storage && storage.persisted === false && !backedUp) {
-    reasons.push(reason('backup', null, {
-      text: 'This browser may clear Satori’s storage, your keys with it. Back up your wallet’s 24 words.', button: 'Back up', act: { do: 'backup' } }));
+  if (!backedUp && (backupSkipped || storage?.persisted === false)) {
+    reasons.push(reason('backup', null, { button: 'Back up', act: { do: 'backup' }, text: backupSkipped
+      ? 'Your wallet’s 24 words are not backed up yet. They are the only way to recover your wallet if this browser loses its data.'
+      : 'This browser may clear Satori’s storage, your keys with it. Back up your wallet’s 24 words.' }));
   }
   reasons.sort((a, b) => PRIORITY.indexOf(a.id) - PRIORITY.indexOf(b.id));
   const told = reasons.filter((r) => r.status !== 'advice' && r.status !== 'note'); // what the hero says: advice is the card's, a note the chip's

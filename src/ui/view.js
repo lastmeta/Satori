@@ -136,6 +136,7 @@ function setup(a) {
       <div class="actions">
         <button class="primary" type="submit">Continue</button>
         <button type="button" @click="${() => a.goStep('words')}">Show the words again</button>
+        <button type="button" data-test="skip-check" @click="${(e) => a.skipCheck(e.target.form)}">Skip for now</button>
       </div>
     </form>
 

@@ -376,6 +376,7 @@ async function startNeuron() {
   state.wallets = walletsView(wallets, state.wallet);
   state.centralDefault = DEFAULT_CENTRAL;
   state.backupAt = (await db.get('backup_at')) ?? null;
+  state.backupSkipped = !!(await db.get('backup_skipped_at'));
   activity = createActivity({ db, onChange: () => { state.activityRev++; } });
   await activity.start(); // this session, and whether a poll came due while Satori was closed
   // the training pass: what the screen shows is what it trains (it waits for central's work); the list read again after it
@@ -590,10 +591,11 @@ const storeKeys = (next) => work.run('keys', async (step) => {
 });
 
 /**
- * The keys, then the neuron; backedUp: the wallet's words were confirmed, given or brought (docs/design/health.md). On a
- * first visit the database may still be loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
+ * The keys, then the neuron; backedUp: the wallet's words were confirmed, given or brought; backupSkipped: Create's word
+ * check was skipped, so Home asks for the backup (docs/design/health.md). On a first visit the database may still be
+ * loading: Setup says "Finishing setup… downloading the engine, 3.2 of 7.6 MB".
  */
-async function saveKeys(r, { backedUp = false, data = null } = {}) {
+async function saveKeys(r, { backedUp = false, backupSkipped = false, data = null } = {}) {
   const listed = wallets && withAddress(wallets, r.wallet.address ?? evmAddress(r.wallet.pubkey)); // throws: already in this app
   state.setupWaiting = true; // until Home: the engine's step, then "saving your keys…"
   try {
@@ -601,6 +603,7 @@ async function saveKeys(r, { backedUp = false, data = null } = {}) {
     await storeKeys(r);
     if (listed) await keepWallets(listed);
     if (backedUp) await markBackup();
+    if (backupSkipped) await db.set('backup_skipped_at', nowS());
     if (data) await restoreData(data, r);
     await startNeuron();
   } finally {
@@ -936,12 +939,13 @@ const connectTo = (rdns) => setup(async () => {
 
 /**
  * Setup, from the UI or an agent: one at a time, and only on the Setup screen. `makeRecord` → the keys, or null (not
- * yet). backedUp: the wallet's words were confirmed (Create), given (Restore) or brought (a Dockerized Neuron's files).
+ * yet). backedUp: the wallet's words were confirmed (Create), given (Restore) or brought (a Dockerized Neuron's files);
+ * backupSkipped: Create's word check was skipped.
  */
-const setup = (makeRecord, { backedUp = false, data = null } = {}) => exclusive('setup', async () => {
+const setup = (makeRecord, { backedUp = false, backupSkipped = false, data = null } = {}) => exclusive('setup', async () => {
   if (state.screen !== 'setup') throw new Error(`Already set up (screen: ${state.screen}).`);
   const r = await makeRecord();
-  if (r) await saveKeys(r, { backedUp, data });
+  if (r) await saveKeys(r, { backedUp, backupSkipped, data });
 });
 
 // ── tabs (hash routes) and the inline Unlock ──
@@ -1125,7 +1129,8 @@ watch(() => {
   if (state.screen !== 'home' || !activity) return;
   void state.activityRev; // the log changed
   state.health = healthOf({ now: state.now, rows: activity.rows(), central: state.central, base: state.base, nostr: state.nostr,
-    storage: state.storage, app: state.app, backedUp: !!state.backupAt, since: since(), installDismissed: state.installDismissed,
+    storage: state.storage, app: state.app, backedUp: !!state.backupAt, backupSkipped: state.backupSkipped, since: since(),
+    installDismissed: state.installDismissed,
     nextStepDismissed: state.nextStepDismissed, work: state.work });
 });
 

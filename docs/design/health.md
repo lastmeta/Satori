@@ -160,7 +160,7 @@ no warn or bad reason is present.
 | 13 | `base-unreachable` | warn | the Base batch and the wallet can't be read or sent while the chain does not answer | contract | the chain did not answer, while the contract is in use (staked with this app, or a batch sent before) | Open Settings (Base) |
 | 14 | `asleep` | idle | not a problem: it catches up on its own; a calm state the title names | network | *Was asleep* (above) | none |
 | 15 | `starting` | idle | not a problem: its first poll runs at once; a calm state the title names | network | *Starting* (above) | none |
-| 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the wallet | – | storage is not persistent and no backup is confirmed | Back up |
+| 16 | `backup` | advice | nothing is wrong: the browser may clear storage some day, and a backup protects the wallet | – | no backup is confirmed, and storage is not persistent ("This browser may clear Satori’s storage…") or Create's word check was skipped (`meta.backup_skipped_at`, any storage: "Your wallet’s 24 words are not backed up yet…"; prime, 2026-11-09) | Back up |
 | 16a | `next-step` | advice | nothing is wrong: someone who keeps opening the app may not know what's missing for it to predict on the Satori contract by itself (the owner, 2026-10-27: a helpful nudge) | contract | opened on 3 days of the strip, at least 1 SATORI, and the first step missing (`nextStep`, src/ui/contractflow.js): Base ETH in the wallet when Preload gas or Stake needs it ("To earn more, let this app predict for you each day. The first step: add a little Base ETH to your wallet."), gas preloaded (Stake needs it at the alias first), or Automatic. Not Stake: the `stake` card says it from the first day. Not now puts it away for 3 days (kept on this device), then it comes back while the step is still missing | Open Wallet (Receive: the address and its QR code) / Preload gas / Turn on Automatic; Not now |
 | 16b | `stake` | advice (warn until 2026-10-19) | nothing is wrong: the wallet's SATORI could earn on the Satori contract; the chip stays "Not staked" (off, grey) | contract | not staked, and the wallet holds SATORI: "Stake with this app to earn on the Satori contract. While staked, your SATORI can't be sent until you unstake." (until D7 it also said the token-hook risk) | Stake |
 | 16c | `staked-elsewhere` | advice | nothing is wrong: the wallet is staked with another address (often another app's alias, after a new phone or a restore), so this app sends no Satori contract batch; Stake moves it here in one step ([wallets.md](wallets.md)); the chip says "Staked elsewhere" (off, grey) | contract | staked with another address: "Your wallet is staked with another address, so this app doesn't send its predictions to the Satori contract. Stake with this app to move the stake here." | Stake here |
@@ -236,7 +236,7 @@ The card has no button here: the card is the highest reason with words for
 it (a reason with an action has a button; this one has only what to know).
 
 **Backup confirmed** (`meta.backup_at`) is set when the wallet's words are
-confirmed in Create, given at Import, as words or a private key (also `setup({ walletWords })`), brought
+confirmed in Create (its "Skip for now" leaves it unset and keeps `meta.backup_skipped_at`), given at Import, as words or a private key (also `setup({ walletWords })`), brought
 by a Dockerized Neuron import, or shown under Backup. The wallet holds the
 funds. A lost alias is replaced by a new one, and the wallet stakes with it.
 

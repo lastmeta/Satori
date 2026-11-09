@@ -187,7 +187,8 @@ migration re-encrypts the wallet with it as it is.
 
 - **Setup → Create**: a new wallet (random), its alias and Nostr key derived
   from it ([wallets.md](wallets.md#derived-keys)), the wallet's 24 words
-  shown and three of them checked (they bring back all three keys), one
+  shown and three of them checked (they bring back all three keys; "Skip for
+  now" leaves the check, and Home asks for the backup until it is done), one
   passphrase. One record is stored.
 - **Setup → Import**: the wallet's 24 words or its private key (`0x` and 64
   hex, as a Base wallet exports it), then the passphrase; the alias and the

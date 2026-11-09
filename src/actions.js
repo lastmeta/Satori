@@ -31,9 +31,11 @@ export function createActions(app) {
     walletOps, withWallet, leaveWorkerPool,
   } = app;
 
+  let checkSkipped = false; // Create's word check skipped: no backup confirmed, and Home asks for it (docs/design/health.md)
   function wipePending() {
     app.pending?.wallet?.fill(0);
     app.pending = null;
+    checkSkipped = false;
     state.words = [];
     state.passNote = '';
   }
@@ -81,6 +83,13 @@ export function createActions(app) {
       const ok = state.confirmAt.every((i) => (f[`w${i}`] ?? '').trim().toLowerCase() === state.words[i]);
       if (!ok) return void (state.error = 'Those words do not match. Check your list.');
       el.reset();
+      checkSkipped = false;
+      goStep('passphrase');
+    },
+    /** Create's word check, skipped: the wallet is made all the same, and Home's Back up card stays until its words are backed up. */
+    skipCheck(el) {
+      el.reset();
+      checkSkipped = true;
       goStep('passphrase');
     },
     /** Import's field, as typed or pasted: only what words or a key can hold. */
@@ -107,12 +116,13 @@ export function createActions(app) {
     },
     createKeys: shownAt('error', async (f, el) => {
       if (f.pass1 !== f.pass2) throw new Error('The passphrases differ.');
+      const skipped = checkSkipped;
       await setup(async () => {
         const out = await newKeys(app.pending, f.pass1);
         wipePending();
         el.reset();
         return out;
-      }, { backedUp: true }); // reached only after the words were confirmed, typed in, or brought as files
+      }, { backedUp: !skipped, backupSkipped: skipped }); // the words confirmed, typed in or brought as files; or the check skipped
     }),
     /**
      * Dockerized Neuron files: decrypted with the Docker wallet password and translated into this app's

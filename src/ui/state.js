@@ -51,6 +51,7 @@ export const state = reactive({
   backupKey: '', // alias, wallet: the private key (0x hex); nostr: the nsec
   backupHex: '', // nostr: the secret (hex)
   backupAt: null, // when the wallet's backup was confirmed (meta.backup_at), or null
+  backupSkipped: false, // Create's word check was skipped (meta.backup_skipped_at): Home asks for the backup until it is confirmed
   copied: '',
   // health (docs/design/health.md): the activity log's revision, and Home's answer
   activityRev: 0,

@@ -144,7 +144,8 @@ export function createAgent(app) {
     async health() {
       ready();
       return healthOf({ now: nowS(), rows: app.activity.rows(), central: await centralStatus(), base: await app.base.status(),
-        nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt, since: since(),
+        nostr: await nostrStatus(), storage: await storage(), app: { ...state.app }, backedUp: !!state.backupAt,
+        backupSkipped: state.backupSkipped, since: since(),
         installDismissed: state.installDismissed, nextStepDismissed: state.nextStepDismissed, traffic: lastTraffic(), work: work.all() });
     },
     /**
