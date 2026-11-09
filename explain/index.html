@@ -208,7 +208,7 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
       <text x="178" y="405" font-size="11.5" class="t-m">governs</text>
       <rect class="box" x="70" y="422" width="200" height="44" rx="12"/>
       <text x="170" y="441" text-anchor="middle" font-size="13" class="t-b">Satori Association</text>
-      <text x="170" y="457" text-anchor="middle" font-size="11" class="t-m">holds the admin keys, as a multisig</text>
+      <text x="170" y="457" text-anchor="middle" font-size="11" class="t-m">upgrades by a 3-of-6 multisig</text>
     </svg>
     <figcaption>Data flows down from the relays to your software, predictions go to the two scorers, and both pay out in SATORI.</figcaption>
   </figure>
@@ -218,30 +218,32 @@ footer { margin-top: 40px; font-size: 0.9rem; color: var(--muted); }
     <div class="fact"><dt>Satori Network</dt><dd>A set of Nostr relays that carry the data streams between everyone. Anyone can run one.</dd></div>
     <div class="fact"><dt>Satori Service</dt><dd>Scores predictions off-chain, the way Satori always has, and publishes the day's rewards on Base.</dd></div>
     <div class="fact"><dt>Satori contract</dt><dd>A smart contract on Base. It issues SATORI on a fixed schedule and runs a prediction game that scores and pays without any server in the middle.</dd></div>
-    <div class="fact"><dt>Satori Association</dt><dd>The members' association behind the project. It holds the contract's admin keys in a multisig.</dd></div>
+    <div class="fact"><dt>Satori Association</dt><dd>The members' association behind the project. Its multisignature wallet, which needs three of its six keyholders to agree, can upgrade the contracts around the token, though never the token itself. The day-to-day dials, the split among them, are held today by a single administrator key.</dd></div>
   </dl>
 </section>
 
 <section aria-labelledby="s-flow">
   <span class="kicker">The money</span>
   <h2 id="s-flow">Where each day's new SATORI goes</h2>
-  <p>The contract issues new SATORI every day. A development fee comes off the top, and the rest is split evenly between the two ways of scoring.</p>
+  <p>The contract issues new SATORI every day. A development fee comes off the top, and the rest is split between the two ways of scoring by a single dial. Since 3 November 2026 it has been 99% off chain and 1% on chain, because today nearly all predictions are numeric forecasts, and only the Satori Service can score those. As on-chain scoring grows richer, the dial can turn toward the chain.</p>
   <figure>
-    <svg viewBox="0 0 340 120" role="img" aria-label="Each day's new SATORI: 15 percent development fee, 42.5 percent off-chain through the Satori Service, 42.5 percent on-chain through the Satori contract.">
-      <rect class="fill-m" x="10" y="14" width="48" height="40" rx="6"/>
-      <rect class="fill-a" x="60" y="14" width="134" height="40" rx="6"/>
-      <rect class="fill-game" x="196" y="14" width="134" height="40" rx="6"/>
-      <text x="34" y="39" text-anchor="middle" font-size="12" class="t-b">15%</text>
-      <text x="127" y="39" text-anchor="middle" font-size="13" class="t-on">42.5%</text>
-      <text x="263" y="39" text-anchor="middle" font-size="13" class="t-on">42.5%</text>
-      <text x="34" y="78" text-anchor="middle" font-size="12" class="t-b">Dev fee</text>
-      <text x="127" y="78" text-anchor="middle" font-size="12" class="t-b">Off-chain</text>
-      <text x="263" y="78" text-anchor="middle" font-size="12" class="t-b">On-chain</text>
-      <text x="34" y="96" text-anchor="middle" font-size="11" class="t-m">developers</text>
-      <text x="127" y="96" text-anchor="middle" font-size="11" class="t-m">Satori Service</text>
-      <text x="263" y="96" text-anchor="middle" font-size="11" class="t-m">Satori contract</text>
+    <svg viewBox="0 0 340 146" role="img" aria-label="Each day's new SATORI: a 15 percent development fee, and the other 85 percent split by the dial, 99 percent of it off-chain through the Satori Service and 1 percent on-chain through the Satori contract.">
+      <rect class="fill-m" x="10" y="10" width="48" height="36" rx="6"/>
+      <rect class="box" x="60" y="10" width="270" height="36" rx="6"/>
+      <text x="34" y="33" text-anchor="middle" font-size="12" class="t-b">15%</text>
+      <text x="195" y="33" text-anchor="middle" font-size="12" class="t-b">85%, split by the dial</text>
+      <rect class="fill-a" x="60" y="54" width="244" height="36" rx="6"/>
+      <rect class="fill-game" x="306" y="54" width="24" height="36" rx="6"/>
+      <text x="182" y="77" text-anchor="middle" font-size="13" class="t-on">99%</text>
+      <text x="318" y="77" text-anchor="middle" font-size="11" class="t-on">1%</text>
+      <text x="34" y="114" text-anchor="middle" font-size="12" class="t-b">Dev fee</text>
+      <text x="182" y="114" text-anchor="middle" font-size="12" class="t-b">Off-chain</text>
+      <text x="330" y="114" text-anchor="end" font-size="12" class="t-b">On-chain</text>
+      <text x="34" y="132" text-anchor="middle" font-size="11" class="t-m">developers</text>
+      <text x="182" y="132" text-anchor="middle" font-size="11" class="t-m">Satori Service</text>
+      <text x="330" y="132" text-anchor="end" font-size="11" class="t-m">Satori contract</text>
     </svg>
-    <figcaption>Out of the off-chain half, 0.1% goes to the people running relays. Out of every on-chain reward, 5% goes to whoever invited the earner, or to Satori's marketing wallet if nobody did.</figcaption>
+    <figcaption>Out of the off-chain share, 0.1% goes to the people running relays. Out of every on-chain reward, 5% goes to whoever invited the earner, or to Satori's marketing wallet if nobody did.</figcaption>
   </figure>
   <p class="muted">The daily amount shrinks a little as more SATORI is issued. On the current setting, the total supply approaches about 4 million SATORI.</p>
 </section>
