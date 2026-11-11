@@ -306,7 +306,7 @@ import, and earlier versions' rows at migration 7; PyYAML folds long lines),
 1.63.0. Steps 3 and 4 added no dependency. Step 5 added only a dev dependency,
 `ws` 8.22.0, for the test relay and the node-side scripts (the browser has
 WebSocket); nostr-tools was not needed ([nostr.md](nostr.md#deviations-from-satori-lite-and-why)).
-Step 6 added `viem` 2.37.0 (released 2025-09-02, as the parked design
+Step 6 added `viem` 2.37.0 (released 2025-09-02, 2.57.18 since 2026-11-11 for npm audit; as the parked design
 planned): ABI encoding, multicall, transaction serialization and the RPC
 client for Base; signing stays in `src/keys` (`@noble/curves`). The
 installable app added none (no Workbox: the service worker is about 25 lines).

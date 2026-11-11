@@ -283,7 +283,7 @@ app uses viem over the wallet's EIP-1193 provider (the dapp uses ethers).
 
 **On a phone**, or any browser with no wallet in it, the dapp's other two
 paths, ported as they are (`useWallet.ts` `getOrInitMetaMask`,
-`getOrInitWalletConnect`; the same package versions):
+`getOrInitWalletConnect`; the same packages):
 
 - **MetaMask** (MetaMask Connect, `@metamask/connect-evm`): the page stays
   where it is and talks to the MetaMask app over MetaMask's own relay; the

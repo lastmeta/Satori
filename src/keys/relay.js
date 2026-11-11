@@ -1,6 +1,6 @@
 // A connected wallet on a phone, or in any browser with no wallet in it (docs/design/wallets.md#a-connected-wallet):
 // the dapp's two relay paths, ported as they are (contract/satori-ui/src/hooks/useWallet.ts getOrInitMetaMask,
-// getOrInitWalletConnect; the same package versions). Each library loads only when its path is used.
+// getOrInitWalletConnect; the same packages). Each library loads only when its path is used.
 //   const { provider, name } = await openRelay(kind, { config, projectId, connect: true })   // the person approves
 //   const { provider, name } = await openRelay(kind, { config, projectId })   // a stored session, or null
 import { isAddress } from 'viem';
