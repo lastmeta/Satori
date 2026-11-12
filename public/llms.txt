@@ -148,7 +148,7 @@ Read this before calling anything.
   their own words, for this app, now): `send`, `backup`, `unlock`,
   `stake`, `unstake`, `claim`, `playGame` (it predicts, and costs gas), `setPlay`, `setServicePaused`, `setReminder`, `remindMe`, `importDocker`,
   `setCentral`, `setBaseRpc`, `setRelays`,
-  `setRewardAddress` (it decides where the rewards go), `setServiceAlias`, `setContractAlias` (which alias the Satori Service and the contract know it by), `stakeWithPool`, `unstakeFromPool` (where its stake counts), `leaveWorkerPool`, `retrain`, and the
+  `setRewardAddress` (it decides where the rewards go), `setServiceAlias`, `setContractAlias` (which alias the Satori Service and the contract know it by), `useSubWallet` (which key the wallet is), `stakeWithPool`, `unstakeFromPool` (where its stake counts), `leaveWorkerPool`, `retrain`, and the
   paid streams: `buy` (it spends the wallet's SATORI and gas), `stop`, `sell`
   and `unsell` (they set a price on the person's predictions). The same for `setAside` (the damaged-database screen: their keys
   are in that file) and `setBaseMaxFee` (it raises what any transaction may
@@ -157,7 +157,7 @@ Read this before calling anything.
 - **Free to call** (they read, or do what the neuron does on its own
   anyway): `status`, `health`, `models`, `model`, `streams`, `predictions`,
   `nostr`, `discover`, `relayPredictions`, `records`, `record`, `base`, `quoteSend`,
-  `rewardAddress`, `go`, `poll`, `predictBase`, `stopRetrain`, `game`, `day`, `setGameFavorites`, `dismiss`,
+  `rewardAddress`, `go`, `poll`, `predictBase`, `stopRetrain`, `game`, `day`, `setGameFavorites`, `dismiss`, `subWallets`, `deriveSubWallets`,
   `exportModels`, `importModels`; and `exportBackup`, which you must call yourself (above). `subscribe` and `unsubscribe` change
   what the neuron predicts and publish under its key: ask first.
 - **A daily routine counts as asking.** A person who asked you to run this
@@ -718,7 +718,8 @@ the page's JS context:
   Creates the neuron on a fresh browser (a new wallet unless `walletWords`
   is given: 24 words, a standard wallet's 12 words (its first account, m/44'/60'/0'/0/0),
   or the private key, `0x` and 64 hex, or a WIF; the alias and
-  the Nostr key are derived from it). Passphrase: any Unicode, at least 8
+  the Nostr key are derived from it; words are kept too, sealed with the
+  passphrase, for their sub-wallets, below). Passphrase: any Unicode, at least 8
   characters (code points after NFC). The wallet starts locked. One setup runs at
   a time: a call while another (or the UI's) is running throws `Busy (setup)…`,
   and a call once set up throws `Already set up`. A wallet already in this
@@ -765,6 +766,29 @@ the page's JS context:
   back; only on the person's request, after its backup); its file is set
   aside in this browser, never deleted (keys are never lost). The one in
   use throws.
+- Sub-wallets (docs/design/wallets.md#sub-wallets): a wallet imported from
+  words (12 or 24: `setup({ walletWords })` or Import) keeps them, sealed
+  with its passphrase, for the other keys they hold. Satori's mobile app and
+  Satori GO keep SATORI on BIP-44 Evrmore receive (`m/44'/175'/0'/0/i`) and
+  change (`m/44'/175'/0'/1/i`) addresses, and the same key has a Base
+  address. `await satori.subWallets()` → `{ at, count, rows: [{ n, kind,
+  index, path, evrmore, address, inUse }] }`, or null (not imported from
+  words): row 0 is the key Import made (`kind: 'import'`, `index` null;
+  `path` `m/44'/60'/0'/0/0` for 12 words, null for 24 words' own key), then
+  Receive 0, Change 0, Receive 1, … (`kind` `'receive'` or `'change'`), `count`
+  of each (10 at first); `evrmore` is the key's Evrmore address (what those
+  apps show), `address` its Base address; `at` is the key in use (null: row
+  0, else `{ change, index }`). `await satori.deriveSubWallets()` →
+  `subWallets()` with 10 more of each, kept; no passphrase.
+  `await satori.useSubWallet(n, passphrase)` → `{ reloading: true }`: this
+  wallet becomes row n's key, as an import of that key would make it (sealed
+  with the same passphrase; its alias, Nostr key and link new, the old ones
+  kept as earlier keys; an alias given for a job is dropped), and the page
+  reloads with it; it stays one wallet in `wallets()`, with the new address.
+  A wrong passphrase throws 'Wrong passphrase', the row in use throws, and a
+  row whose address is another of this app's wallets throws `This wallet is
+  already in this app…`. Only on the person's request; export the backup
+  again after it ("Keeping the keys safe").
 - `await satori.poll()` → `{ poll, submit }`: poll central now, store, forecast
   each stream in the batch whose latest observation has no prediction yet
   (a new row, or one an interrupted poll stored), and send everything pending. `submit` is null
@@ -1608,7 +1632,10 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `wallet-row` with `data-id`, `wallet-address` (a tap copies it), `wallet-in-use` (the filled radio), `wallet-switch` (an empty radio),
   `wallet-remove`; `wallet-remove-confirm` with `wallet-remove-yes`;
   `add-wallet`; `wallets-error`), `wallet-name-card` (`wallet-name`, `wallet-name-save`, `wallet-name-said`,
-  `wallet-name-auto`), `app-wallet` (the app bar's wallet: its name, else its short address; a tap opens the Wallet tab), `base-connected` (a connected wallet's note).
+  `wallet-name-auto`), `sub-wallets` (the Sub-wallets card, only for a wallet imported from words: `sub-wallet-row`
+  with `data-n`, `sub-wallet-label`, `sub-wallet-path`, `sub-wallet-evrmore` and `sub-wallet-address` (a tap copies
+  each), `sub-wallet-in-use` (the filled radio), `sub-wallet-switch` (an empty radio); `sub-wallet-confirm` with
+  `sub-wallet-pass` and `sub-wallet-yes`; `sub-wallet-more` (Derive 20 more); `sub-wallets-error`), `app-wallet` (the app bar's wallet: its name, else its short address; a tap opens the Wallet tab), `base-connected` (a connected wallet's note).
   Setup: `other-wallets` with `wallet-back` (one per other wallet that was
   set up); `connect-wallet` (Connect a wallet), then `connect-step` with
   `connect-to` (one per wallet found, `data-rdns`) or `no-wallet`. Settings:
@@ -1688,7 +1715,7 @@ build step beyond Vite, MIT licensed.
   encryption and the passphrase rule (`wallet.js`), a key's words, public
   key, Base address and signatures (`keys.js`), Docker's files read for
   import and migration (`docker.js`), the wallet locking on its own
-  (`autolock.js`).
+  (`autolock.js`), imported words' sub-wallets (`hd.js`).
 - `src/central/`: central's API (register, observations, login, predictions
   batch); `login.js`: central's login signature, EIP-191 by the alias.
 - `src/db/`: DuckDB-WASM on OPFS, schema migrations (each marked additive

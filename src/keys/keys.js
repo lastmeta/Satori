@@ -13,7 +13,7 @@ import { entropyToMnemonic, mnemonicToEntropy, mnemonicToSeedSync, validateMnemo
 import { wordlist } from '@scure/bip39/wordlists/english';
 
 const N = secp256k1.CURVE.n;
-const STANDARD_PATH = "m/44'/60'/0'/0/0"; // MetaMask's first account
+export const STANDARD_PATH = "m/44'/60'/0'/0/0"; // MetaMask's first account
 const toBig = (b) => BigInt('0x' + (bytesToHex(b) || '0'));
 
 /** A valid secret (32 bytes, 1 ≤ k < n), or a throw. */
@@ -53,15 +53,21 @@ export function cleanKeyText(text) {
   return /\s/.test(t.trim()) ? t.toLowerCase().replace(/[^a-z\s]/g, ' ') : t;
 }
 
-/** What Import takes: 24 words (the secret itself), 12 words (a standard wallet's, secretFrom12), or the private key (64 hex, 0x optional, as a Base wallet exports it; or a WIF). → the secret */
-export function secretFromText(text) {
+/**
+ * What Import takes: 24 words (the secret itself), 12 words (a standard wallet's, secretFrom12), or the private key (64
+ * hex, 0x optional, as a Base wallet exports it; or a WIF). → { secret, words } (words: cleaned, or null for a key)
+ */
+export function keyFromText(text) {
   const t = cleanKeyText(text).trim();
   const h = /^(0x)?([0-9a-fA-F]{64})$/.exec(t);
-  if (h) return checkKey(Uint8Array.from(h[2].match(/../g), (b) => parseInt(b, 16)));
-  if (WIF.test(t)) return secretFromWif(t);
-  const words = t.toLowerCase().split(/\s+/);
-  return words.length === 12 ? secretFrom12(words.join(' ')) : secretFromWords(t);
+  if (h) return { secret: checkKey(Uint8Array.from(h[2].match(/../g), (b) => parseInt(b, 16))), words: null };
+  if (WIF.test(t)) return { secret: secretFromWif(t), words: null };
+  const words = t.toLowerCase().split(/\s+/).join(' ');
+  return { secret: words.split(' ').length === 12 ? secretFrom12(words) : secretFromWords(words), words };
 }
+
+/** keyFromText's secret alone. */
+export const secretFromText = (text) => keyFromText(text).secret;
 
 /** 12 words are too few to be a secret: the first account a standard wallet opens from them. */
 function secretFrom12(words) {

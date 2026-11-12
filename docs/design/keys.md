@@ -9,7 +9,8 @@ owner's direction (2026-10-16), **migrate in, never back**: what a user
 brings from the Dockerized Neuron is imported and translated into this app's
 own way; nothing is kept in Docker's formats, limits or files only so it
 could move back. This app is about Base: each key's address is its **Base
-(0x) address**, the only kind it shows.
+(0x) address**, the only kind it shows but for the Sub-wallets card's Evrmore
+addresses ([wallets.md](wallets.md#sub-wallets)).
 
 | Key | Stored as (meta `keys`) | Encrypted? | Used for |
 |---|---|---|---|
@@ -48,7 +49,9 @@ the standard way, BIP39 seed then `m/44'/60'/0'/0/0`: the first account
 MetaMask or any Ethereum wallet shows. The word count picks the rule, so 24
 words are untouched. The result is one 32-byte secret like any other, so
 Backup shows that secret's own 24 words, which reopen the wallet here; the
-original 12 keep working. `src/keys/keys.js`:
+original 12 keep working. Words given to Import, 12 or 24, are also kept,
+sealed with the passphrase, for the other keys they hold
+([sub-wallets](wallets.md#sub-wallets)). `src/keys/keys.js`:
 
 | Output | Rule | Evidence |
 |---|---|---|
@@ -60,8 +63,11 @@ original 12 keep working. `src/keys/keys.js`:
 | transaction signature | ECDSA over the tx hash, RFC 6979, low-S, as viem's `sign` | |
 | central's login signature | EIP-191 (`personal_sign`) of the challenge by the alias: `0x` + r ‖ s ‖ v, RFC 6979, low-S, v 27/28 | [central.md](central.md#login-signature), `src/central/login.js`; satorilib's `ethSign` (`wallet/identity.py:706-715`) |
 
-There is no Evrmore anywhere in the app: no Evrmore address, WIF, scripthash
-or message signature is made, read or shown. The wallet signs its link to the
+Evrmore only brings a key in or helps recognize it: Import reads a WIF (a
+Dockerized Neuron's private key), and the Sub-wallets card shows each key's
+Evrmore address as Satori's mobile app and Satori GO show it
+([wallets.md](wallets.md#sub-wallets)). No Evrmore transaction, scripthash or
+message signature is made. The wallet signs its link to the
 alias, sent with every register; central answers the wallet it pays
 (`wallet_address`), which the app compares with the wallet's own Base address
 ([central.md](central.md#the-wallets-link)).
@@ -111,6 +117,10 @@ nothing):
   count still opens an older wallet.
 - An earlier version's wallet, until its next Unlock: `"wallet": { "pubkey":
   "02…" | null, "yaml": "<that version's vault.yaml text>" }` ([migration](#migration)).
+- A wallet imported from words also has `hd`: the words sealed with the
+  passphrase as the wallet is, and its sub-wallets' xpub and state in clear
+  ([wallets.md](wallets.md#sub-wallets)). It stays out of the at-rest seal:
+  nothing in it is secret but its own sealed words.
 
 ## At rest
 
@@ -389,9 +399,10 @@ list's unmounted `<li>`s, their words in them, to reuse.
 - `keys.js`: the secret's words, public key, Base address, private key and
   transaction signatures.
 - `wallet.js`: the wallet encryption and the passphrase rule.
-- `index.js`: the record. `newKeys({alias?, wallet, nostr?}, passphrase)`
-  (create, restore, import), `readDockerFiles({walletText, walletText,
-  password, nostrText?})` (import: the secrets), `recordFromRows({walletYaml,
+- `index.js`: the record. `newKeys({wallet, words?}, passphrase)`
+  (create, restore, import; words: its sub-wallets too), `withSubWallet(record,
+  n, passphrase)` (the wallet switched to a sub-wallet), `readDockerFiles({walletText,
+  password})` (import: the secret), `recordFromRows({aliasYaml,
   walletYaml, nostrYaml?})` (migration 7), `loadKeys(record)` (the alias's
   signer, the Nostr key, the wallet's public key and Base address),
   `unlockWallet(record, passphrase)` (→ the wallet's signer, and the record to
@@ -404,6 +415,8 @@ list's unmounted `<li>`s, their words in them, to reuse.
   `walletPubkey`, `decryptField`, `readNostrYaml`. Used by the import and by
   the migration only.
 - `autolock.js`: [the wallet locks on its own](#the-wallet-locks-on-its-own).
+- `hd.js`: [sub-wallets](wallets.md#sub-wallets): the words sealed, the rows
+  from the xpub, the Evrmore address, a row's secret from the words.
 
 `src/central/login.js`: central's login signature (EIP-191).
 
@@ -429,6 +442,11 @@ list's unmounted `<li>`s, their words in them, to reuse.
   version's wallet re-encrypted at Unlock, its check's copy zeroed; the wallet's
   own secret zeroed at Lock. `app.spec.js`: the very `<li>`s that showed the
   words are blank after Hide.
+- `hd.test.js`: a real key's Evrmore and Base addresses; BIP-39's test words'
+  rows, paths and keys (the xpub's equal the words'); Import's words kept, a
+  private key's or a WIF's not; the record's check and at rest; a switch
+  (the row's key, its alias and Nostr key, the old ones kept, a wrong
+  passphrase refused).
 - `autolock.test.js` (fake timers): 5 minutes with no interaction, each
   interaction restarting them, never in the middle of a wallet action, a
   wake past the deadline, Lock by hand.

@@ -55,7 +55,7 @@ Each way adds a wallet to the list (the first one too):
 | Way | Wallet | Alias | Nostr key |
 |---|---|---|---|
 | **Create** | new words, sealed with a new passphrase | new | new |
-| **Import** | its 12 or 24 words or its private key, sealed with a new passphrase | its words or private key when given, else new | the nsec or hex when given, else new |
+| **Import** | its 12 or 24 words or its private key, sealed with a new passphrase; words kept too, for their [sub-wallets](#sub-wallets) | its words or private key when given, else new | the nsec or hex when given, else new |
 | **Import Docker files** | the wallet file and its password, sealed with a new passphrase | the alias file | the Nostr file when given, else new |
 | **Connect a wallet** | not in the app: the outside wallet's address | new | new |
 
@@ -272,6 +272,51 @@ else tells the forms apart.
   the max fee, the relays), in each database, as now; the theme and the
   other device choices are the device's.
 
+## Sub-wallets
+
+(prime, 2026-11-12: "allow them to use any sub wallet when they import an hd
+wallet ... It doesn't show up in the main list of wallets, it's a fix for an
+edge case.") Satori's mobile app and Satori GO are HD wallets: BIP-39 words
+(12, or 24), then BIP-44 Evrmore paths, receive `m/44'/175'/0'/0/i` and
+change `m/44'/175'/0'/1/i`, and a person's SATORI(EVR) may sit on any of
+them. The Base airdrop for SATORIEVR holders went to the Base address of the
+same key. Import makes one key from words ([keys.md](keys.md#one-key-one-secret)),
+so without this such a person could not reach the key at, say, change 3.
+
+- **The words are kept** when Import is given words (12 or 24; not a
+  private key or a WIF, Docker files, Create, a connected wallet, or an
+  encrypted backup's words, which are its key's own): the record's `hd: {
+  kdf, cipher, data, words, xpub, first, at, count }`. The words sealed with
+  the wallet's passphrase, as the wallet is; in clear, the Evrmore account's
+  xpub (`m/44'/175'/0'`), so the list shows and grows with no passphrase;
+  `first`, the public key of the key Import made (12 words:
+  `m/44'/60'/0'/0/0`; 24: the words' own key) and `words`, how many; `at`,
+  the key the wallet is now (null: `first`, else `{ change, index }`);
+  `count`, how many of each chain are listed (10 at first). `src/keys/hd.js`.
+- **The Sub-wallets card**, on the Wallet tab between Name and Wallets, only
+  for such a wallet: one list, the key Import made first, then Receive 0,
+  Change 0, Receive 1, Change 1, …; each with its Evrmore address (what those
+  apps show, to recognize it), its Base address (a tap copies either), its
+  path, and the Wallets card's radio: In use, or Switch to this key.
+  **Derive 20 more** lists 10 more of each, kept with the keys.
+- **A switch** asks first, in the card: this wallet becomes that key and the
+  app restarts with it; its alias and Nostr key change with it, and the ones
+  it has stay under Settings › Backup's Earlier keys ([keys are never
+  lost](#keys-are-never-lost)). The passphrase opens the words, they give the
+  key, and the record is what Import of that key would make (sealed with the
+  same passphrase, its alias and Nostr key derived from it, a new link),
+  keeping `created` and `hd` (`at` moved); an alias given for a job goes, its
+  link was the old wallet's. A key another wallet in the list has is refused
+  ("This wallet is already in this app"). Then as a switch of wallets: Lock,
+  the push's handoff and Home's snapshot dropped, reload.
+- **Still one wallet**: sub-wallets never show in the Wallets list. The
+  wallet keeps its entry, its name and its data; the next start writes the
+  new key's address on the entry.
+- A wallet imported before this has no list: its words were not kept.
+- **For agents**: `subWallets()` → `{ at, count, rows: [{ n, kind, index,
+  path, evrmore, address, inUse }] }` or null, `deriveSubWallets()`,
+  `useSubWallet(n, passphrase)` (reloads).
+
 ## A connected wallet
 
 As the dapp connects one (`contract/satori-ui/src/hooks/useWallet.ts`): the
@@ -358,4 +403,6 @@ works on a private address (a LAN IP, localhost): said so, as the dapp does.
 - **D. Derived keys** (2026-10-26): the alias and the Nostr key from a
   wallet in the app; the keys at rest sealed with this device's key where the browser
   keeps one ([keys.md](keys.md#at-rest)).
+- **E. [Sub-wallets](#sub-wallets)** (2026-11-12): imported words kept, their
+  receive and change keys listed, the wallet switched to one.
 - **Later**: shared preferences.

@@ -1,10 +1,16 @@
 // Several wallets in one app (docs/design/wallets.md#several-wallets), in Chrome with the stub central: one active at a
 // time, a database each. Add opens Setup on an empty database; a wallet already in the app is refused at setup, with a
 // way back; Switch reloads with the other wallet; Remove (asked first) deletes a wallet that is not in use, its file too.
+// A wallet imported from words lists its sub-wallets and switches to one (docs/design/wallets.md#sub-wallets).
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { HDKey } from '@scure/bip32';
+import { mnemonicToSeedSync } from '@scure/bip39';
+import { bytesToHex } from '@noble/hashes/utils';
 import { loaded, openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
+import { evmAddress } from '../src/keys/keys.js';
+import { evrmoreAddress } from '../src/keys/hd.js';
 
 const fx = JSON.parse(readFileSync(new URL('../test/fixtures/alias-parity.json', import.meta.url)));
 const [A, B] = fx.vectors;
@@ -150,4 +156,69 @@ test('two wallets: Add, a wallet already in the app refused with a way back, Swi
   await page.reload();
   expect(await loaded(page)).toBe('home');
   expect((await status(page)).wallet).toBe(B.ethAddress);
+});
+
+test("sub-wallets: 12 words list their keys, derive 20 more and switch to one, still one wallet; Create's has none", async ({ context, page }) => {
+  test.setTimeout(240_000);
+  await stubCentral(context);
+  const WORDS = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'; // BIP-39's test words
+  const pub = (path) => bytesToHex(HDKey.fromMasterSeed(mnemonicToSeedSync(WORDS)).derive(path).publicKey);
+  expect(await openApp(page)).toBe('setup');
+  const made = (await page.evaluate((p) => window.satori.setup({ passphrase: p }), PASS)).wallet; // Create: a new wallet
+  await page.evaluate(() => { location.hash = '#wallet'; });
+  await expect(page.locator('[data-test=wallets]')).toBeVisible();
+  await expect(page.locator('[data-test=sub-wallets]')).toBeHidden();
+
+  // Import's 12 words, on the Setup screen, as a second wallet
+  expect(await reloading(page, () => page.locator('[data-test=add-wallet]').click())).toBe('setup');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.locator('[data-test=import-wallet]').fill(WORDS);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('Passphrase', { exact: true }).filter({ visible: true }).fill(PASS);
+  await page.getByLabel('Repeat passphrase').fill(PASS);
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  expect((await status(page)).wallet).toBe(evmAddress(pub("m/44'/60'/0'/0/0")));
+  await page.evaluate(() => { location.hash = '#wallet'; });
+  const card = page.locator('[data-test=sub-wallets]');
+  const rows = card.locator('[data-test=sub-wallet-row]');
+  await expect(rows).toHaveCount(21);
+  const shows = async (n, label, path, use) => {
+    const r = rows.nth(n);
+    await expect(r.locator('[data-test=sub-wallet-label]')).toHaveText(label);
+    await expect(r.locator('[data-test=sub-wallet-path]')).toHaveText(path);
+    await expect(r.locator(`[data-test=sub-wallet-${use}]`)).toHaveCount(1);
+  };
+  await shows(0, 'The key Import made', "m/44'/60'/0'/0/0", 'in-use');
+  await shows(1, 'Receive 0', "m/44'/175'/0'/0/0", 'switch');
+  await shows(2, 'Change 0', "m/44'/175'/0'/1/0", 'switch');
+  await shows(3, 'Receive 1', "m/44'/175'/0'/0/1", 'switch');
+  const change0 = pub("m/44'/175'/0'/1/0");
+  await expect(rows.nth(2).locator('[data-test=sub-wallet-evrmore]')).toHaveAttribute('title', evrmoreAddress(change0));
+  await expect(rows.nth(2).locator('[data-test=sub-wallet-address]')).toHaveAttribute('title', evmAddress(change0));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await card.screenshot({ path: test.info().outputPath('sub-wallets-card.png') });
+
+  await card.locator('[data-test=sub-wallet-more]').click(); // Derive 20 more
+  await expect(rows).toHaveCount(41);
+  await shows(40, 'Change 19', "m/44'/175'/0'/1/19", 'switch');
+
+  // Switch to Change 0: asked first, with the passphrase; a wrong one refused
+  await rows.nth(2).locator('[data-test=sub-wallet-switch]').click();
+  const confirm = card.locator('[data-test=sub-wallet-confirm]');
+  await expect(confirm).toContainText(`Switch to Change 0, ${evmAddress(change0).slice(0, 6)}`);
+  await confirm.screenshot({ path: test.info().outputPath('sub-wallets-confirm.png') });
+  await card.locator('[data-test=sub-wallet-pass]').fill('not the passphrase');
+  await card.locator('[data-test=sub-wallet-yes]').click();
+  await expect(card.locator('[data-test=sub-wallets-error]')).toHaveText('Wrong passphrase', { timeout: 30_000 });
+  await card.locator('[data-test=sub-wallet-pass]').fill(PASS);
+  expect(await reloading(page, () => card.locator('[data-test=sub-wallet-yes]').click())).toBe('home');
+  expect((await status(page)).wallet).toBe(evmAddress(change0));
+  await page.evaluate(() => { location.hash = '#wallet'; });
+  await expect(rows).toHaveCount(41);
+  await shows(2, 'Change 0', "m/44'/175'/0'/1/0", 'in-use');
+  await shows(0, 'The key Import made', "m/44'/60'/0'/0/0", 'switch');
+  // one wallet still, its address the key's now
+  expect((await wallets(page)).wallets.map((w) => [w.id, w.address, w.active])).toEqual([[1, made, false], [2, evmAddress(change0), true]]);
+  await expect(page.locator('[data-test=wallets] [data-test=wallet-row]')).toHaveCount(2);
 });

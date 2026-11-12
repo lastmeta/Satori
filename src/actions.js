@@ -3,7 +3,7 @@
 //   const actions = createActions({ exclusive, go, …, get db() { return db; }, … })
 import { state } from './ui/view.js';
 import {
-  cleanKeyText, generateSecret, secretFromText, wordsOf, newKeys, readDockerFiles, passphraseOk, MIN_PASSPHRASE, IMPORT_MAX,
+  cleanKeyText, generateSecret, keyFromText, wordsOf, newKeys, readDockerFiles, passphraseOk, MIN_PASSPHRASE, IMPORT_MAX,
 } from './keys/index.js';
 import { findWallets } from './keys/connect.js';
 import { errorText, same } from './chain/index.js';
@@ -28,7 +28,7 @@ export function createActions(app) {
     readPoolNow, readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
     refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, setAliasFor,
     session, setAsideDb, setBaseSettings, setCentral, setPool, setReward, setSubscribed, setup, switchWallet, theSafe, unlock,
-    walletOps, withWallet, leaveWorkerPool,
+    walletOps, withWallet, leaveWorkerPool, deriveSubWallets, useSubWallet,
   } = app;
 
   let checkSkipped = false; // Create's word check skipped: no backup confirmed, and Home asks for it (docs/design/health.md)
@@ -102,14 +102,12 @@ export function createActions(app) {
     },
     restoreWords(f, el) {
       wipePending();
-      const secret = (text, which) => {
-        try { return secretFromText(text); } catch { throw new Error(`The ${which}: not 12 or 24 words or a private key.`); }
-      };
       try {
-        app.pending = { wallet: secret(f.wallet, 'wallet') }; // the alias and the Nostr key are derived from it
-      } catch (err) {
+        const { secret, words } = keyFromText(f.wallet);
+        app.pending = { wallet: secret, words }; // the alias and the Nostr key are derived from it; words: its sub-wallets too
+      } catch {
         wipePending();
-        return void (state.error = err.message);
+        return void (state.error = 'The wallet: not 12 or 24 words or a private key.');
       }
       el.reset();
       goStep('passphrase');
@@ -758,6 +756,17 @@ export function createActions(app) {
     cancelRemoveWallet() { Object.assign(state, { walletRemove: 0, walletRemoveNeeds: '', walletsError: '' }); },
     removeWallet: shownAt('walletsError', async (f, el) => {
       await removeWallet(state.walletRemove, f.pass);
+      el.reset();
+    }),
+    /** The Sub-wallets card (docs/design/wallets.md#sub-wallets): Derive 20 more, and Switch to a row after it asks. */
+    deriveSubWallets: shownAt('subWalletsError', () => deriveSubWallets()),
+    askSubSwitch(n) {
+      Object.assign(state, { subSwitch: n, subWalletsError: '' });
+      requestAnimationFrame(() => document.querySelector('[data-test=sub-wallet-pass]')?.focus());
+    },
+    cancelSubSwitch() { Object.assign(state, { subSwitch: -1, subWalletsError: '' }); },
+    useSubWallet: shownAt('subWalletsError', async (f, el) => {
+      await useSubWallet(state.subSwitch, f.pass);
       el.reset();
     }),
   };

@@ -4,6 +4,14 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-12 (sub-wallets of imported words)
+
+- New: `subWallets()`, `deriveSubWallets()`, `useSubWallet(n, passphrase)`, and the Wallet tab's Sub-wallets card
+  (`sub-wallets`). A wallet imported from 12 or 24 words (Import, or `setup({ walletWords })` with words) keeps them,
+  sealed with its passphrase, and lists the keys they hold as Satori's mobile app and Satori GO use them (BIP-44
+  Evrmore receive and change, each with its Evrmore and Base address); switching makes this wallet one of them, and
+  the page reloads. A wallet imported before this change has no list: its words were not kept.
+
 ## Changed 2026-11-09 (Create's word check can be skipped)
 
 - Setup's "Create a wallet" offers "Skip for now" on the word check. The wallet is made with no backup confirmed, and

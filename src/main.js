@@ -12,7 +12,8 @@ import { version } from '../package.json';
 import { watch } from '@arrow-js/core';
 import { state, render, TABS } from './ui/view.js';
 import { openOpfsDb, hasDatabase, setAsideOpfsDb, readStoredKeys } from './db/opfs.js';
-import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup, withAliasFor, JOBS } from './keys/index.js';
+import { checkWalletPassphrase, connectedBackup, evmAddress, connectedRecord, restoredRecord, linkMessage, sealBackup, withAliasFor, withSubWallet, JOBS, NO_SUB_WALLETS } from './keys/index.js';
+import { subWallets, MORE } from './keys/hd.js';
 import { requestAddress, signText } from './keys/connect.js';
 import { openRelay, RELAYS } from './keys/relay.js';
 import { DEFAULTS as CHAIN } from './chain/config.js';
@@ -374,6 +375,7 @@ async function startNeuron() {
   if (walletPublic.connected) await findConnected();
   if (wallets && activeOf(wallets).address !== state.wallet) await keepWallets(withAddress(wallets, state.wallet)).catch(() => {});
   state.wallets = walletsView(wallets, state.wallet);
+  showSubWallets();
   state.centralDefault = DEFAULT_CENTRAL;
   state.backupAt = (await db.get('backup_at')) ?? null;
   state.backupSkipped = !!(await db.get('backup_skipped_at'));
@@ -664,6 +666,30 @@ async function reopenWith(list) {
     location.reload();
   }, 50); // after an agent's call has its answer
 }
+
+/** The Sub-wallets card's list (docs/design/wallets.md#sub-wallets), or null: the wallet was not imported from words. */
+const showSubWallets = () => { state.subWallets = subWallets(session.record?.hd); };
+/** Derive 20 more: 10 more receive and 10 more change, kept with the keys; no passphrase. */
+const deriveSubWallets = () => exclusive('wallets', async () => {
+  const { record } = session;
+  if (!record?.hd) throw new Error(NO_SUB_WALLETS);
+  await storeKeys({ ...record, hd: { ...record.hd, count: record.hd.count + MORE } });
+  showSubWallets();
+});
+/**
+ * This wallet switched to sub-wallet row n, with its passphrase (withSubWallet): refused when another wallet in the list
+ * has that address; then the app starts again with it, as on another wallet (reopenWith). Its entry in the list stays
+ * one, and the next start writes its new address there.
+ */
+const useSubWallet = (n, passphrase) => exclusive('wallets', async () => {
+  const next = await withSubWallet(session.record, n, passphrase);
+  if (wallets) withAddress(wallets, evmAddress(next.wallet.pubkey)); // throws: already in this app
+  await storeKeys(next);
+  lock();
+  dropSnapshot();
+  await Promise.all([appPut(HANDOFF, null), appPut(SW_BATCH, null)]).catch(() => {}); // the push's wake is the old alias's
+  setTimeout(() => location.reload(), 50); // after an agent's call has its answer
+});
 
 const addWallet = () => exclusive('wallets', () => reopenWith(withAdded(wallets, state.wallet || null)));
 const switchWallet = (id) => exclusive('wallets', () => reopenWith(withActive(wallets, Number(id))));
@@ -1105,7 +1131,7 @@ const actions = createActions({
   readPoolNow, readRewardNow, reconnect, recordOf, refreshAdmin, refreshBase, refreshDevFee, refreshNostr, refreshRoles,
   refreshSafe, relinkWallet, reminderPlayer, removeNeeds, removeWallet, restoreKeys, retiredText, roleAction, safeAction, session,
   setAsideDb, setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, switchWallet, theSafe, unlock, walletOps,
-  withWallet, leaveWorkerPool,
+  withWallet, leaveWorkerPool, deriveSubWallets, useSubWallet,
   get afterUnlock() { return afterUnlock; },
   set afterUnlock(v) { afterUnlock = v; },
   get base() { return base; },
@@ -1373,7 +1399,7 @@ window.satori = createAgent({
   backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readPoolNow, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
   relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
   setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
-  work, leaveWorkerPool,
+  work, leaveWorkerPool, deriveSubWallets, useSubWallet,
   get activity() { return activity; },
   get base() { return base; },
   get db() { return db; },

@@ -1,7 +1,8 @@
 // Wallet: Base (docs/design/base.md), a card each (the owner, 2026-10-28): the wallet's balances and Send; Receive (the
 // address and its QR code); Claimable with Claim; Staking (Stake with this app or Unstake, who plays: this app, or
 // Satori Daily by hand); Preload gas; then Details, folded: the round, referral, transfers, the gas for the daily batch,
-// the last batch and check, the RPC, the alias (the only place it shows) and the invite link; then the Wallets. The
+// the last batch and check, the RPC, the alias (the only place it shows) and the invite link; then the Name, the
+// Sub-wallets (a wallet imported from words) and the Wallets. The
 // wallet's actions ask for the passphrase in place (the inline Unlock), in their card, when it is locked.
 import { html } from '@arrow-js/core';
 import { state } from './state.js';
@@ -182,6 +183,7 @@ export function walletTab(a) {
       </dl>
   </details>
   ${nameCard(a)}
+  ${subWalletsCard(a)}
   ${walletsCard(a)}
   </section>`;
 }
@@ -205,6 +207,33 @@ function nameCard(a) {
     <p class="muted small" data-test="wallet-name-auto" hidden="${() => !inUse()?.nameAuto}">Named for the special key it holds. A name you save takes its place.</p>
     <p class="small" role="status" data-test="wallet-name-said" hidden="${() => !state.walletNameSaid}">${() => state.walletNameSaid}</p>
     <p class="error small" role="alert" hidden="${() => !state.walletNameError}">${() => state.walletNameError}</p>
+  </section>`;
+}
+
+/** A sub-wallet's name: the import's own key, else its chain and index. */
+const subLabel = (r) => (r.kind === 'import' ? 'The key Import made' : `${r.kind === 'receive' ? 'Receive' : 'Change'} ${r.index}`);
+
+/**
+ * The Sub-wallets card (docs/design/wallets.md#sub-wallets), only for a wallet imported from words: the keys its words
+ * hold, the import's own first, then receive and change alternating, each its Evrmore address (as Satori's mobile app and
+ * Satori GO show it) and its Base address, a tap copying either; the radio switches this wallet to one (it asks first,
+ * with the passphrase); Derive 20 more. One row template, as the Wallets card's.
+ */
+function subWalletsCard(a) {
+  const asked = () => state.subWallets?.rows[state.subSwitch];
+  const copied = (k) => state.copied === k;
+  const row = (r) => html`<li class="wallet-row" data-test="sub-wallet-row" data-n="${r.n}"><span class="wallet-id"><span class="small"><b data-test="sub-wallet-label">${subLabel(r)}</b> <span class="muted" data-test="sub-wallet-path">${r.path ?? "these 24 words' own key"}</span></span><span class="sub-ids"><code title="${r.evrmore}" data-test="sub-wallet-evrmore" role="button" tabindex="0" @click="${() => a.copy(`sub-evr-${r.n}`, r.evrmore)}">${copied(`sub-evr-${r.n}`) ? 'Copied' : shortHash(r.evrmore)}</code><code title="${r.address}" data-test="sub-wallet-address" role="button" tabindex="0" @click="${() => a.copy(`sub-base-${r.n}`, r.address)}">${copied(`sub-base-${r.n}`) ? 'Copied' : shortHash(r.address)}</code></span></span><button class="wallet-radio" data-test="${r.inUse ? 'sub-wallet-in-use' : 'sub-wallet-switch'}" role="radio" aria-checked="${String(r.inUse)}" aria-label="${r.inUse ? 'In use' : 'Switch to this key'}" title="${r.inUse ? 'In use' : 'Switch to this key'}" @click="${() => !r.inUse && a.askSubSwitch(r.n)}"><i></i></button></li>`
+    .key(`${r.n}:${r.address}:${r.inUse}:${copied(`sub-evr-${r.n}`)}:${copied(`sub-base-${r.n}`)}`);
+  return html`<section class="card" id="wallet-sub" data-test="sub-wallets" hidden="${() => !state.subWallets}">
+    <h2>Sub-wallets</h2>
+    <p class="muted small">These words hold more keys than the one in use. Satori's mobile app and Satori GO keep SATORI on their receive and change addresses: switch to the one that holds yours, and derive more if it is not listed.</p>
+    <ul class="wallet-list" data-test="sub-wallet-list">${() => (state.subWallets?.rows ?? []).map(row)}</ul>
+    <div class="confirm" data-test="sub-wallet-confirm" hidden="${() => !asked()}">
+      <p class="small">${() => (asked() ? `Switch to ${subLabel(asked())}, ${shortHash(asked().address)}? This wallet becomes that key, and the app restarts with it. Its alias and Nostr key change with it; the ones it has now stay under Settings › Backup's Earlier keys. Enter the wallet's passphrase to switch.` : '')}</p>
+      <form class="unlock" @submit="${(e) => a.useSubWallet(form(e), e.target)}"><input name="pass" type="password" data-test="sub-wallet-pass" aria-label="The wallet's passphrase to switch" placeholder="Wallet passphrase" autocomplete="current-password" required><button class="primary" type="submit" data-test="sub-wallet-yes">${() => (state.busy === 'wallets' ? 'Switching…' : 'Switch')}</button><button type="button" @click="${a.cancelSubSwitch}">Cancel</button></form>
+    </div>
+    <div class="actions"><button data-test="sub-wallet-more" @click="${a.deriveSubWallets}">Derive 20 more</button></div>
+    <p class="error small" role="alert" data-test="sub-wallets-error" hidden="${() => !state.subWalletsError}">${() => state.subWalletsError}</p>
   </section>`;
 }
 

@@ -4,10 +4,14 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
-import { openApp, LOAD_TIMEOUT } from './load.js';
+import { openApp, loaded, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
 import { keysFromWallet } from '../src/keys/derive.js';
 import { publicKey, evmAddress } from '../src/keys/keys.js';
+import { evrmoreAddress } from '../src/keys/hd.js';
+import { HDKey } from '@scure/bip32';
+import { mnemonicToSeedSync } from '@scure/bip39';
+import { bytesToHex } from '@noble/hashes/utils';
 
 const PASS = 'correct horse battery';
 const ROUND = 20741;
@@ -212,4 +216,60 @@ test('a pool by call and on Settings: the open pools, stake with one, unstake (d
   stub.workerOf = { address: cheap, pool_name: '' };
   expect(await call(page, 'pool')).toMatchObject({ workerOf: { address: cheap, name: null } });
   expect(await call(page, 'leaveWorkerPool')).toMatchObject({ workerOf: null });
+});
+
+test("sub-wallets by call: a private key's wallet has none; 12 words list theirs, derive more and switch; another wallet's key refused", async ({ context, page }) => {
+  test.setTimeout(240_000);
+  await stubCentral(context);
+  const WORDS = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'; // BIP-39's test words
+  const key = (path) => HDKey.fromMasterSeed(mnemonicToSeedSync(WORDS)).derive(path);
+  const addressOf = (path) => evmAddress(bytesToHex(key(path).publicKey));
+  const reloading = async (fn) => {
+    const next = page.waitForEvent('load', { timeout: LOAD_TIMEOUT });
+    const out = await fn();
+    await next;
+    expect(await loaded(page)).toBe('home');
+    return out;
+  };
+  // the first wallet: Receive 1's own private key, imported by itself
+  await openApp(page);
+  const receive1 = (await call(page, 'setup', { passphrase: PASS, walletWords: `0x${bytesToHex(key("m/44'/175'/0'/0/1").privateKey)}` })).wallet;
+  expect(receive1).toBe(addressOf("m/44'/175'/0'/0/1"));
+  expect(await call(page, 'subWallets')).toBe(null);
+  await expect(call(page, 'deriveSubWallets')).rejects.toThrow('This wallet was not imported from words: it has no sub-wallets.');
+
+  // a second wallet, from the 12 words
+  const next = page.waitForEvent('load', { timeout: LOAD_TIMEOUT });
+  await call(page, 'addWallet');
+  await next;
+  expect(await loaded(page)).toBe('setup');
+  expect((await call(page, 'setup', { passphrase: PASS, walletWords: WORDS })).wallet).toBe(addressOf("m/44'/60'/0'/0/0"));
+  let sw = await call(page, 'subWallets');
+  expect([sw.at, sw.count, sw.rows.length]).toEqual([null, 10, 21]);
+  const change0 = bytesToHex(key("m/44'/175'/0'/1/0").publicKey);
+  expect(sw.rows.slice(0, 3)).toEqual([
+    { n: 0, kind: 'import', index: null, path: "m/44'/60'/0'/0/0", evrmore: evrmoreAddress(bytesToHex(key("m/44'/60'/0'/0/0").publicKey)), address: addressOf("m/44'/60'/0'/0/0"), inUse: true },
+    { n: 1, kind: 'receive', index: 0, path: "m/44'/175'/0'/0/0", evrmore: evrmoreAddress(bytesToHex(key("m/44'/175'/0'/0/0").publicKey)), address: addressOf("m/44'/175'/0'/0/0"), inUse: false },
+    { n: 2, kind: 'change', index: 0, path: "m/44'/175'/0'/1/0", evrmore: evrmoreAddress(change0), address: evmAddress(change0), inUse: false },
+  ]);
+  expect(sw.rows[3]).toMatchObject({ n: 3, kind: 'receive', index: 1, address: receive1 });
+  sw = await call(page, 'deriveSubWallets');
+  expect([sw.count, sw.rows.length, sw.rows[40].path]).toEqual([20, 41, "m/44'/175'/0'/1/19"]);
+  expect((await call(page, 'subWallets')).count).toBe(20);
+
+  // a switch: the passphrase, never the row in use, never another wallet's key
+  await expect(call(page, 'useSubWallet', 3, PASS)).rejects.toThrow('This wallet is already in this app');
+  await expect(call(page, 'useSubWallet', 2, 'not the passphrase')).rejects.toThrow('Wrong passphrase');
+  await expect(call(page, 'useSubWallet', 0, PASS)).rejects.toThrow('That key is the one in use.');
+  await expect(call(page, 'useSubWallet', 41, PASS)).rejects.toThrow('No sub-wallet 41: rows 0 to 40.');
+  const aliasBefore = (await call(page, 'status')).alias;
+  expect(await reloading(() => call(page, 'useSubWallet', 2, PASS))).toEqual({ reloading: true });
+  const st = await call(page, 'status');
+  expect([st.wallet, st.unlocked]).toEqual([evmAddress(change0), false]);
+  expect(st.alias).toBe(evmAddress(publicKey(keysFromWallet(key("m/44'/175'/0'/1/0").privateKey).alias)));
+  sw = await call(page, 'subWallets');
+  expect([sw.at, sw.count, sw.rows.filter((r) => r.inUse).map((r) => r.n)]).toEqual([{ change: 1, index: 0 }, 20, [2]]);
+  expect((await call(page, 'wallets')).wallets.map((w) => [w.id, w.address, w.active])).toEqual([[1, receive1, false], [2, evmAddress(change0), true]]);
+  const earlier = await call(page, 'backup', 'retired', PASS); // the alias it had, kept
+  expect(earlier.map((k) => k.address)).toContain(aliasBefore);
 });

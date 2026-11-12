@@ -12,9 +12,12 @@
 //          { alias: hex, link }, imported: `offchain` for the Satori Service, `onchain` for the Satori contract.
 // retired — the alias and Nostr keys this record held before, never dropped (keepRetired): [{ alias, nostr, at }].
 //          Funds sent to an earlier alias stay reachable (Backup's "Earlier keys").
+// hd     - a wallet imported from words: the words sealed with the passphrase and its sub-wallets (hd.js), absent else.
 // An earlier version's wallet, until its next Unlock: wallet: { pubkey | null, yaml } (Docker's text).
 //
-//   const record = await newKeys({ wallet }, passphrase)   // create, restore, import: the alias and Nostr key derived
+//   const record = await newKeys({ wallet, words? }, passphrase)   // create, restore, import: the alias and Nostr key derived;
+//                                                                  // words (Import's): its sub-wallets too (hd.js)
+//   const next = await withSubWallet(record, n, passphrase)   // the wallet becomes sub-wallet row n's key
 //   const { wallet } = await readDockerFiles({ walletText, password })  // import: translate
 //   const record = await recordFromRows({ aliasYaml, walletYaml, nostrYaml? })  // migration 7: earlier rows
 //   const next = await withAliasFor(record, job, text, link)   // job 'offchain' | 'onchain': another alias for it; '' → the app's own
@@ -29,7 +32,7 @@
 //   signer: pubkey, evmAddress, signDigest(hash), backup() → { words, privateKey }, lock();
 //           the alias's also signCentralLogin(challenge) (EIP-191, central's login: src/central/login.js);
 //           the wallet's also signLink(aliasAddress) → the record's link
-export { cleanKeyText, generateSecret, secretFromWords, secretFromText, wordsOf, publicKey, evmAddress } from './keys.js';
+export { cleanKeyText, generateSecret, secretFromWords, secretFromText, keyFromText, wordsOf, publicKey, evmAddress } from './keys.js';
 export { MIN_PASSPHRASE, passphraseOk } from './wallet.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { checkKey, generateSecret, secretFromText, publicKey, wordsOf, evmAddress, signDigest, privateKeyHex } from './keys.js';
@@ -38,6 +41,7 @@ import { readKeyFile, readNostrYaml, secrecy, walletPubkey } from './docker.js';
 import { loginSignature } from '../central/login.js';
 import { generateNostrSecret, nostrPubkey, nsec, npub, nostrSecretOf } from '../nostr/event.js';
 import { keysFromWallet } from './derive.js';
+import { sealWords, secretAt, hdOk, rowAt, rowOf } from './hd.js';
 
 export const RECORD_VERSION = 1;
 /** The largest Dockerized Neuron file read (bytes): satorilib's are under 2 KB; a bigger one is refused before parsing. */
@@ -103,21 +107,46 @@ function derivedFrom(wallet) {
 
 /**
  * A new record: the wallet sealed with a new passphrase, its alias and Nostr key derived from it;
- * `created`: when (unix seconds), Home's first day (docs/design/health.md#the-day-strip).
+ * `created`: when (unix seconds), Home's first day (docs/design/health.md#the-day-strip). `words`: the words Import
+ * made the wallet from (keyFromText), kept for its sub-wallets (hd.js).
  */
-export async function newKeys({ wallet }, passphrase) {
+export async function newKeys({ wallet, words = null }, passphrase) {
   checkNewPassphrase(passphrase);
   checkKey(wallet);
+  const hd = words ? await sealWords(words, passphrase) : null;
+  if (hd && hd.first !== publicKey(wallet)) throw new Error("These words are not the wallet's.");
   const { alias, nostr } = derivedFrom(wallet);
   try {
     const created = Math.floor(Date.now() / 1000);
     return { v: RECORD_VERSION, created, alias: bytesToHex(alias), nostr, from: 'wallet',
       wallet: { pubkey: publicKey(wallet), ...await sealSecret(wallet, passphrase) },
-      link: linkOf(wallet, evmAddress(publicKey(alias)), created) };
+      link: linkOf(wallet, evmAddress(publicKey(alias)), created), ...(hd && { hd }) };
   } finally {
     alias.fill(0);
   }
 }
+
+/**
+ * The record with the wallet switched to sub-wallet row n (docs/design/wallets.md#sub-wallets), from its words and the
+ * passphrase: as Import of that key would make it (sealed with the same passphrase, its alias, Nostr key and link new),
+ * keeping `created` and `hd` (at: that row). Another alias for a job goes: its link was the old wallet's. The keys it
+ * replaces are kept by the save (keepRetired).
+ */
+export async function withSubWallet(record, n, passphrase) {
+  const r = checkRecord(record);
+  if (!r.hd) throw new Error(NO_SUB_WALLETS);
+  const at = rowAt(r.hd, n);
+  if (n === rowOf(r.hd.at)) throw new Error('That key is the one in use.');
+  if (typeof passphrase !== 'string' || !passphrase) throw new Error(PASSPHRASE_NEEDED);
+  const secret = await secretAt(r.hd, n, passphrase);
+  try {
+    const { offchain: _o, onchain: _c, ...kept } = r;
+    return { ...kept, ...await newKeys({ wallet: secret }, passphrase), created: r.created, hd: { ...r.hd, at } };
+  } finally {
+    secret.fill(0);
+  }
+}
+export const NO_SUB_WALLETS = 'This wallet was not imported from words: it has no sub-wallets.';
 
 /**
  * A connected wallet's record (docs/design/wallets.md#a-connected-wallet): its alias and Nostr key, random (no secret
@@ -212,6 +241,7 @@ function checkRecord(r) {
   if (r.retired != null && !(Array.isArray(r.retired) && r.retired.every((k) => HEX64.test(k?.alias) && HEX64.test(k?.nostr)))) {
     throw new Error('The stored earlier keys are not readable.');
   }
+  if (r.hd != null && !hdOk(r.hd)) throw new Error('The stored sub-wallets are not readable.');
   return r;
 }
 

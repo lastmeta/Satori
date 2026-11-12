@@ -2,7 +2,8 @@
 // here, with its checks; the running app's parts come from src/main.js (createAgent), its changing ones read when used.
 //   window.satori = createAgent({ actions, exclusive, …, get db() { return db; }, … })
 import { state } from './ui/view.js';
-import { generateSecret, secretFromText, newKeys, readDockerFiles, recordFromBackup, openBackup, keepRetired } from './keys/index.js';
+import { generateSecret, keyFromText, newKeys, readDockerFiles, recordFromBackup, openBackup, keepRetired } from './keys/index.js';
+import { subWallets } from './keys/hd.js';
 import { findWallets } from './keys/connect.js';
 import { RELAYS } from './keys/relay.js';
 import { UP, DOWN } from './chain/index.js';
@@ -32,7 +33,7 @@ export function createAgent(app) {
     backupFile, exportModels, importModels, nowS, playCalls, pollNow, setServicePaused, readAdmin, readDevFee, readPoolNow, readRewardNow, readRoles, readSafe, refreshBase, refreshNostr,
     relinkWallet, reminderPlayer, removeWallet, restoreKeys, retrainOf, roleAction, safeAction, session, setAsideDb,
     setBaseSettings, setCentral, setAliasFor, setPool, setReward, setSubscribed, setup, since, switchWallet, theSafe, unlock, walletOps,
-    work, leaveWorkerPool,
+    work, leaveWorkerPool, deriveSubWallets, useSubWallet,
   } = app;
 
   /** Central's stream meta: the object its JSON text holds, the text if it is not JSON, or null. */
@@ -104,6 +105,15 @@ export function createAgent(app) {
     async nameWallet(name) { ready(); await nameWallet(name); return walletsView(app.wallets, state.wallet || null); },
     /** The Wallets list's order, as a person drags it: every wallet's id once, in the new order; kept for the next visit. → wallets() */
     async orderWallets(ids) { await orderWallets(ids); return walletsView(app.wallets, state.wallet || null); },
+    /**
+     * A wallet imported from words (docs/design/wallets.md#sub-wallets): its sub-wallets, the import's own key first, then
+     * receive and change alternating → { at, count, rows: [{ n, kind, index, path, evrmore, address, inUse }] }, or null.
+     */
+    async subWallets() { ready(); return subWallets(session.record?.hd); },
+    /** Derive 20 more: 10 more receive and 10 more change, kept. → subWallets() */
+    async deriveSubWallets() { ready(); await deriveSubWallets(); return subWallets(session.record.hd); },
+    /** This wallet becomes sub-wallet row n's key (subWallets()'s n), with its passphrase; the page reloads. Only on the person's request. → { reloading: true } */
+    async useSubWallet(n, passphrase) { ready(); await useSubWallet(n, passphrase); return { reloading: true }; },
     /** Chromium's install prompt, when offered (status().app.canInstall; needs a user gesture). → 'accepted' | 'dismissed' | 'unavailable' */
     install() { return install(); },
     /** When status().app.update: the new version takes over and the page reloads. → false if none is waiting */
@@ -128,7 +138,9 @@ export function createAgent(app) {
         if (record) return record;
         const keys = {};
         try {
-          keys.wallet = walletWords ? secretFromText(walletWords) : generateSecret();
+          const given = walletWords ? keyFromText(walletWords) : { secret: generateSecret(), words: null };
+          keys.wallet = given.secret;
+          keys.words = backup ? null : given.words; // words given: their sub-wallets too; a backup's are its key's own (docs/design/wallets.md#sub-wallets)
           const r = await newKeys(keys, passphrase);
           return retired.length ? keepRetired(null, { ...r, retired }) : r; // its earlier keys come back with it
         } finally {
