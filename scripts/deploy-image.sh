@@ -7,7 +7,9 @@
 #      (scripts/brotli.mjs: minutes the first time per DuckDB version, then cached);
 #   3. satori-neuron:<git short sha> (…-dirty with uncommitted changes), also :latest,
 #      with the CSP from csp.js;
-#   4. checks the image: nginx -t, its CSP line, and the defaults in its bundle.
+#   4. checks the image: nginx -t, its CSP line, and the defaults in its bundle;
+#   5. all but the last 8 <sha> and <sha>-dirty images removed, as deploy.sh does on central: each is
+#      about 100 MB, and 221 had filled 22 GB of this box's docker daemon by 2026-11-16. A used image stays.
 # Exits 2 when docker is not reachable (dist/ is then built and checked, no image).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -62,5 +64,9 @@ for s in "${expected[@]}"; do
     || { echo "$IMAGE: the bundle lacks $s" >&2; exit 1; }
   echo "$IMAGE: the bundle has $s"
 done
+
+# 5.
+docker images satori-neuron --format '{{.Repository}}:{{.Tag}}' | grep -E ':[0-9a-f]{7}(-dirty)?$' | tail -n +9 \
+  | xargs -r docker rmi > /dev/null 2>&1 || true
 echo "$IMAGE (also satori-neuron:latest): $(docker image inspect -f '{{.Size}}' "$IMAGE" | awk '{printf "%.0f MB", $1 / 1e6}')"
 echo "try it: docker run --rm -p 8090:80 $IMAGE   then   DEPLOY_URL=http://localhost:8090 npm run e2e:deploy"

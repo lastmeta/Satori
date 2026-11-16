@@ -31,7 +31,7 @@ traffic passes through this container.
 | `deploy/Dockerfile` | `nginx:1.30.5-alpine3.24`, pinned by the digest of its index (stable; the amd64 image was built 2026-09-23). Writes `/etc/nginx/csp.conf` from the `CSP` build argument (`add_header Content-Security-Policy "…" always;`) and empties the default site. Copies `deploy/nginx.conf` over `conf.d/default.conf` and `dist/` into the html root. Writes a `.gz` beside each html, js, css, wasm, txt and webmanifest file. Runs `nginx -t`. |
 | `deploy/nginx.conf` | The server ([below](#what-it-sends)). |
 | `deploy/build.env` | This deployment's [build variables](#build-variables). |
-| `scripts/deploy-image.sh` | Turns TLS verification back on for its own run (`NODE_TLS_REJECT_UNAUTHORIZED=1`, `NPM_CONFIG_STRICT_SSL=true`: this box's shell turns both off, the security review, 2026-10-19). Runs `npm ci --ignore-scripts` (the lock's one install script is fsevents', macOS only) if `node_modules` is missing or older than the lock file. Builds `dist/` with `deploy/build.env` (a variable already set in the environment wins) and checks the bundle for those values. Writes DuckDB's wasm in brotli beside it (`scripts/brotli.mjs`, [compression](#compression)). Builds `satori-neuron:<git short sha>` (`-dirty` with uncommitted changes) and tags it `:latest`, passing the CSP from `csp.js`. Then checks the image: `nginx -t`, its CSP line equal to `csp.js`'s, and the values in its bundle. Exits 2 if docker is not reachable; `dist/` is then built and checked, but there is no image. |
+| `scripts/deploy-image.sh` | Turns TLS verification back on for its own run (`NODE_TLS_REJECT_UNAUTHORIZED=1`, `NPM_CONFIG_STRICT_SSL=true`: this box's shell turns both off, the security review, 2026-10-19). Runs `npm ci --ignore-scripts` (the lock's one install script is fsevents', macOS only) if `node_modules` is missing or older than the lock file. Builds `dist/` with `deploy/build.env` (a variable already set in the environment wins) and checks the bundle for those values. Writes DuckDB's wasm in brotli beside it (`scripts/brotli.mjs`, [compression](#compression)). Builds `satori-neuron:<git short sha>` (`-dirty` with uncommitted changes) and tags it `:latest`, passing the CSP from `csp.js`. Then checks the image: `nginx -t`, its CSP line equal to `csp.js`'s, and the values in its bundle, and removes all but the last 8 of its images (`<sha>`, `<sha>-dirty`; one a container uses stays). Exits 2 if docker is not reachable; `dist/` is then built and checked, but there is no image. |
 | `.dockerignore` | The build context is the repo; only `dist/` and `deploy/nginx.conf` go in. |
 | `e2e/deploy.spec.js` | `npm run e2e:deploy`: the image (or a deployment) at `DEPLOY_URL` ([verify](#verify)). |
 
@@ -235,10 +235,9 @@ its defaults in place. Central2 and the relay are answered inside the test.
 
 Commit, then from a clean checkout run `./scripts/deploy.sh`. Its header lists
 what it does: `dist/` built and checked by `deploy-image.sh`, the image built
-on central (central has a docker daemon and this box does not; the build only
-copies files, so no npm runs next to the production database), the
-`satori-neuron` container replaced, all but the last 8 images removed, and a
-check that app.satorinet.io serves this build. Its last line is the undo: the
+on central (the build only copies files, so no npm runs next to the production
+database), the `satori-neuron` container replaced, all but the last 8 images
+removed, and a check that app.satorinet.io serves this build. Its last line is the undo: the
 previous image run again. Central's access: `../central/CLAUDE.md`.
 
 The container publishes no port and sits on `central-lite_default`, the
