@@ -47,6 +47,9 @@ const CHAIN_ID = DEFAULTS.chainId;
 export const FALLBACK_RPC = DEFAULTS.fallbackRpc;
 // Satori Daily, the dapp (contract/satori-ui), where a wallet plays by hand; the neuron plays only automatically.
 export const SATORI_DAILY_URL = DEFAULTS.dailyUrl;
+/** Uniswap's swap into SATORI on Base, where a person buys it (the owner, 2026-11-17); none off mainnet. */
+export const buyUrl = (c) => (c.chainId === MAINNET.chainId ? `https://app.uniswap.org/swap?chain=base&outputCurrency=${c.token}` : '');
+export const BUY_URL = buyUrl(DEFAULTS);
 const CONFIG_TTL_S = 3600;
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;

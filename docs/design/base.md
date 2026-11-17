@@ -645,6 +645,38 @@ daily batches of gas and warns below 7: a batch is counted at 1,500,000 gas
 gas price. Measured on the fork: 408k gas for a round's first one-game batch,
 645k–790k once it also scores the previous prediction.
 
+### Scan a QR code
+
+The owner, 2026-11-17: "there's no scan QR code ability. Can you add that into
+the wallet page?" Send's To has **Scan** at its right end (shown where the
+browser can ask for a camera: https, or localhost). It eases a panel open under
+the form with the camera, the back one on a phone, and "Point the camera at the
+QR code of a 0x address." Its frames are read by jsQR (`src/ui/scan.js`, loaded
+on the first Scan as its own chunk), a few a second. A code is taken only when
+it is an address alone or an EIP-681 link to one (`ethereum:0x…@8453`); an
+ERC-20 transfer link (`ethereum:<token>/transfer?address=<to>`) gives its
+`address`, never the token, and any other function nothing. A code with no
+address says "That QR code holds no 0x address. Try another." and reading goes
+on; a link or text that merely contains an address is not taken. The address
+read fills To, checksummed, the camera goes off and the amount is asked; the
+review then shows the recipient in full, as for a typed one. The camera also
+goes off on Cancel, on another tab, when the app is hidden and on the review. A
+camera the browser blocks says "The camera is blocked for this app: allow it in
+the browser's settings, or type the address." Agents have no call for it: they
+pass `to` (`e2e/scan.spec.js`).
+
+<img src="../screenshots/scan-open-phone.png" alt="Send with Scan in the To field, the camera open under it reading a code that holds no address" width="320">
+
+### Buy SATORI
+
+The owner, 2026-11-17: "we need a link to the uniswap so people can buy
+Satori". Under the balances, on Base mainnet only, **Buy SATORI on Uniswap**
+opens Uniswap's swap into SATORI on Base (`buyUrl`, `src/chain/config.js`) in a
+new tab. The app moves no funds for it: the person buys with a wallet app
+there, and the line beside the link says to send the SATORI to this wallet
+("Show address and QR code, above"); a connected wallet buys there itself, so
+the line is not shown for one.
+
 ### Preload gas (2026-10-27)
 
 The alias pays the daily batch's gas, so it needs Base ETH: the Wallet tab

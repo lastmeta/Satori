@@ -171,6 +171,7 @@ export const state = reactive({
   baseTxs: [], // the last action's transactions: [{ label, hash }]
   sendReview: null, // Send's review step: base.quoteSend()'s { asset, to, amount, fee: { gas, about, max } }, or null
   sendQuoting: false, // the review is being read (the fee's estimate)
+  scan: { open: false, camera: false, note: '' }, // Send's Scan (src/ui/scan.js): the panel open, its camera wanted, what it says
   baseRpcError: '',
   // the installed app (docs/design/pwa.md): status().app (addTo: how this browser adds Satori without a prompt, or
   // null), status().storage; the Install card put away on this device (Not now, Got it)

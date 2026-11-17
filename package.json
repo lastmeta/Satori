@@ -25,6 +25,7 @@
     "@scure/bip39": "1.6.0",
     "@walletconnect/ethereum-provider": "2.26.0",
     "js-yaml": "5.4.2",
+    "jsqr": "1.4.0",
     "qrcode-generator": "2.0.4",
     "viem": "2.57.18"
   },

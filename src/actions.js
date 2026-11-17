@@ -19,6 +19,7 @@ import { setTheme } from './ui/theme.js';
 import { writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, NEXT_STEP_KEY } from './ui/prefs.js';
 import { pickIndexes, shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
 import { applyUpdate, install } from './pwa/index.js';
+import { addressFromQr, cameraText, scanFor, SCAN_TEXT } from './ui/scan.js';
 import { turnReminder, remindOnce } from './pwa/push.js';
 
 export function createActions(app) {
@@ -31,6 +32,7 @@ export function createActions(app) {
     walletOps, withWallet, leaveWorkerPool, deriveSubWallets, useSubWallet,
   } = app;
 
+  let scanRun = 0; // the Scan running; Cancel, or a new Scan, ends the one before
   let checkSkipped = false; // Create's word check skipped: no backup confirmed, and Home asks for it (docs/design/health.md)
   function wipePending() {
     app.pending?.wallet?.fill(0);
@@ -570,6 +572,34 @@ export function createActions(app) {
     },
     /** Back to the form, as it was typed. */
     backSend() { Object.assign(state, { sendReview: null, baseError: '' }); },
+    /**
+     * Scan (docs/design/base.md#scan-a-qr-code): the camera reads a QR code into Send's To, then the amount is asked; it
+     * stops on Cancel, on leaving the Wallet tab or the app, and on the review.
+     */
+    async scanTo() {
+      const run = ++scanRun;
+      Object.assign(state.scan, { open: true, camera: true, note: SCAN_TEXT.point });
+      setTimeout(() => document.querySelector('[data-test=scan-panel]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 320); // once eased open
+      try {
+        const to = await scanFor(document.querySelector('[data-test=scan-video]'), {
+          read: (text) => addressFromQr(text) || void (state.scan.note = SCAN_TEXT.none),
+          alive: () => run === scanRun && state.tab === 'wallet' && !state.sendReview && !document.hidden,
+        });
+        if (run !== scanRun) return;
+        actions.stopScan();
+        const f = document.querySelector('form.send');
+        if (to && f) {
+          f.elements.to.value = to;
+          f.elements.amount.focus();
+        }
+      } catch (err) {
+        if (run === scanRun) Object.assign(state.scan, { camera: false, note: cameraText(err) });
+      }
+    },
+    stopScan() {
+      scanRun++;
+      Object.assign(state.scan, { open: false, camera: false });
+    },
     /** Step two: Send, with the wallet's passphrase (asked each time, unlocked or not). */
     confirmSend: (f, el) => baseUi('send', async () => {
       const q = state.sendReview;

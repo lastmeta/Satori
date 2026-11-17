@@ -4,6 +4,12 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-17 (Buy and Scan)
+
+- The Wallet tab's Base card: `base-buy`, "Buy SATORI on Uniswap" (Base mainnet only), a link to Uniswap's swap into
+  SATORI; and `send-scan` beside Send's To, the camera reading a QR code (an address, or an EIP-681 `ethereum:` link)
+  into it. No new call: an agent passes `to` to `quoteSend()` and `send()` as before.
+
 ## Changed 2026-11-17 (voting)
 
 - New: `votes()` and `vote({ stream, amount })`, and the Streams tab's first card, Contract Streams

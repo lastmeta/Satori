@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
-import { DEFAULTS, FALLBACK_RPC, PAYMENT_CHANNELS, loadConfig, checkRpcSetting, rpcUrls } from './config.js';
+import { DEFAULTS, FALLBACK_RPC, PAYMENT_CHANNELS, buyUrl, loadConfig, checkRpcSetting, rpcUrls } from './config.js';
+import { MAINNET } from './mainnet.js';
 
 // central2's answer on 2026-10-23: still D6's addresses (it has not moved to D7)
 const CENTRAL2_D6 = {
@@ -108,4 +109,9 @@ describe('the RPC', () => {
     expect(checkRpcSetting('/rpc')).toBe('/rpc');
     for (const bad of ['http://127.0.0.1:8545', '//evil.example', 'ws://x', 'rpc']) expect(() => checkRpcSetting(bad)).toThrow(/https/);
   });
+});
+
+test("Buy SATORI: Uniswap's swap into the mainnet token on Base; none on Base Sepolia", () => {
+  expect(buyUrl(MAINNET)).toBe('https://app.uniswap.org/swap?chain=base&outputCurrency=0xd0a5bFF2789230b0fb1Bd989fc7CE7084c947E17');
+  expect(buyUrl({ ...DEFAULTS, chainId: 84532 })).toBe('');
 });

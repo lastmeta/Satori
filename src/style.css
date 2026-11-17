@@ -850,8 +850,19 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .txs code, [data-test=base-last-batch] code { font-size: 0.85rem; word-break: normal; }
 .send { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .send input { margin: 0; flex: 1 1 140px; min-width: 0; }
-.send input[name=to] { flex: 3 1 260px; }
 .send select { margin: 0; }
+/* Buy SATORI on Uniswap, under the balances; Send's To with Scan inside its right end, and the camera eased open under the form */
+.base .buy { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.to-field { position: relative; display: flex; flex: 3 1 260px; min-width: 0; }
+.to-field input { flex: 1; padding-right: 44px; }
+.to-field .scan-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; min-height: 40px; padding: 0; }
+.scan-panel { scroll-margin-bottom: calc(12px + var(--bar) + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.25s ease; }
+.scan-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
+.scan-inner { min-height: 0; overflow: hidden; display: grid; gap: 8px; justify-items: center; }
+.scan-inner video { width: min(320px, 100%); aspect-ratio: 1; object-fit: cover; border-radius: 10px; background: #000; margin-top: 12px; }
+.scan-inner p { margin: 0; text-align: center; }
+.scan-inner button { margin-bottom: 2px; }
 .review { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .review h3 { margin: 0; }
 .review code.block { margin-top: 0; overflow-wrap: anywhere; }

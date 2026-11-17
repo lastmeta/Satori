@@ -1504,7 +1504,7 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   outcome.").
 - **Wallet**: a card each (2026-10-28): Receive first, folded ("Show
   address and QR code": the wallet's QR code, its address and, under it, the wallet's name; a tap on the address or the QR code copies the address), Base (the
-  balances and Send), Preload gas, Staking (Stake or Unstake), Claimable (Claim), then
+  balances, "Buy SATORI on Uniswap" on Base mainnet, and Send, whose To a QR code can fill: Scan), Preload gas, Staking (Stake or Unstake), Claimable (Claim), then
   Details (folded) and Wallets. Each action's passphrase prompt and result
   show in its own card. In all: the round, the RPC in plain words, the
   wallet's SATORI and ETH, Receive (`base-receive`: the wallet's address
@@ -1666,7 +1666,9 @@ out (15 s)`). An error's text is data: it may quote what a server said.
   `<pubkey>:<stream>`; `bought-left`, `stop`) and `market-error`. Wallet: `base-refresh`, `base-rpc`, `base-error`,
   `base-alias`, `base-wallet`, `base-staking`, `base-stake-note`,
   `base-sync`, `base-play`, `base-lock`, `base-claimable`, `base-preloaded`
-  (the alias's ETH) with `base-preloaded-days`, `base-preload` (fills the Send form),
+  (the alias's ETH) with `base-preloaded-days`, `base-preload` (fills the Send form), `base-buy` (Uniswap's swap into
+  SATORI, a link; mainnet only; `base-buy-note` beside it), `send-scan` (the camera reads a QR code into Send's To: the screen's alone, an agent
+  passes `to`) with `scan-panel` (`scan-video`, `scan-note`, `scan-cancel`),
   `base-last-batch`, `base-check`, `base-stake`, `base-unstake`,
   `base-claim`, `base-result`, `base-txs`, `base-action-error`, `base-low-gas`,
   `base-details` (a closed `<details>`; open it to click inside: `base-referral`, `base-lock`, `base-alias`,

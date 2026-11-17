@@ -1,4 +1,5 @@
-// Wallet: Base (docs/design/base.md), a card each (the owner, 2026-10-28): the wallet's balances and Send; Receive (the
+// Wallet: Base (docs/design/base.md), a card each (the owner, 2026-10-28): the wallet's balances, Buy SATORI on Uniswap and
+// Send (its To scanned from a QR code, or typed); Receive (the
 // address and its QR code); Claimable with Claim; Staking (Stake with this app or Unstake, who plays: this app, or
 // Satori Daily by hand); Preload gas; then Details, folded: the round, referral, transfers, the gas for the daily batch,
 // the last batch and check, the RPC, the alias (the only place it shows) and the invite link; then the Name, the
@@ -11,7 +12,7 @@ import {
   amountText, figure, claimParts, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
   referralText, referralNote, REFERRAL_PCT,
 } from './format.js';
-import { SATORI_DAILY_URL } from '../chain/config.js';
+import { BUY_URL, SATORI_DAILY_URL } from '../chain/config.js';
 import { qrDataUrl } from './contract.js';
 import { workText } from '../neuron/work.js';
 import { OUT_OF_SYNC } from '../neuron/base.js';
@@ -23,6 +24,9 @@ const claimLine = (c, i) => { const [what, x] = claimParts(c)[i]; return `${amou
 /** How long the preloaded ETH lasts, in daily batches. */
 const daysText = (n) => (!n ? '' : `about ${n >= 1000 ? '1,000+' : n} day${n === 1 ? '' : 's'}`);
 const BUSY = { stake: 'Staking…', unstake: 'Unstaking…', claim: 'Claiming…', send: 'Sending…' };
+// Scan: a QR code's corners and the line that reads it
+const SCAN = () => html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M4 12h16"></path></svg>`;
+const CAN_SCAN = !!globalThis.navigator?.mediaDevices?.getUserMedia; // a camera can be asked for (https, or localhost)
 
 /**
  * A tx hash, linked to the explorer unless the RPC is a local fork; `title` (the call) in its hover. One root
@@ -126,12 +130,18 @@ export function walletTab(a) {
       <div><div class="sub">ETH</div><div class="big" data-test="base-wallet-eth">${() => figure(b().wallet.eth)}</div></div>
       <div title="Base ETH this app holds to send predictions for you (its alias pays their gas)"><div class="sub">Preloaded</div><div class="big" data-test="base-preloaded">${() => figure(b().alias.eth)}</div><div class="muted small" data-test="base-preloaded-days" hidden="${() => !daysText(b().alias.batchesLeft)}">${() => daysText(b().alias.batchesLeft)}</div></div>
     </div>
+    ${BUY_URL ? html`<p class="buy"><a class="ext-btn" data-test="base-buy" href="${BUY_URL}" target="_blank" rel="noopener">Buy SATORI on Uniswap<span aria-hidden="true">↗</span></a><span class="muted small" data-test="base-buy-note" hidden="${() => !!state.connected}">Buy with any wallet app there, then send it to this wallet: Show address and QR code, above.</span></p>` : ''}
     <form class="send" hidden="${() => !!state.sendReview}" @submit="${(e) => a.reviewSend(form(e), e.target)}">
       <select name="asset" aria-label="Asset"><option>SATORI</option><option>ETH</option></select>
       <input name="amount" aria-label="Amount" placeholder="Amount" inputmode="decimal" autocomplete="off" required>
-      <input name="to" aria-label="To (0x address)" placeholder="To: 0x…" autocomplete="off" spellcheck="false" required>
+      <span class="to-field"><input name="to" aria-label="To (0x address)" placeholder="To: 0x…" autocomplete="off" spellcheck="false" required><button type="button" class="icon-btn bare scan-btn" data-test="send-scan" aria-label="Scan a QR code" title="Scan a QR code" hidden="${!CAN_SCAN}" @click="${a.scanTo}">${SCAN()}</button></span>
       <button type="submit" disabled="${() => busy() || state.sendQuoting}">${() => (state.sendQuoting ? 'Reading the fee…' : 'Send')}</button>
     </form>
+    <div class="scan-panel" data-test="scan-panel" data-open="${() => String(state.scan.open && !state.sendReview)}" inert="${() => !state.scan.open}"><div class="scan-inner">
+      <video data-test="scan-video" playsinline muted hidden="${() => !state.scan.camera}"></video>
+      <p class="muted small" role="status" data-test="scan-note">${() => state.scan.note}</p>
+      <button type="button" data-test="scan-cancel" @click="${a.stopScan}">Cancel</button>
+    </div></div>
     <div class="review" data-test="send-review" hidden="${() => !state.sendReview}">
       <h3>Check before sending</h3>
       <dl class="facts">
