@@ -12,12 +12,12 @@
 //   await channels.requestClose(alias, id) … its grace period … channels.withdrawTo(wallet, id, amount, to)   // the channel stays, for reuse
 //   await channels.cancelClose(wallet, id)   // resume; setGrace(wallet, id, seconds), setPayout(wallet, id, address)
 import {
-  domainSeparator, encodeAbiParameters, hashTypedData, isAddress, keccak256, parseEventLogs, parseSignature, recoverTypedDataAddress,
-  toHex, zeroAddress,
+  encodeAbiParameters, hashTypedData, isAddress, keccak256, parseEventLogs, recoverTypedDataAddress, toHex, zeroAddress,
 } from 'viem';
-import { channelsAbi, erc20PermitAbi, multicall3Abi, tokenAbi } from './abi.js';
+import { channelsAbi, tokenAbi } from './abi.js';
 import { DEFAULTS } from './config.js';
 import { FeeCeilingError, HOOK_GAS, errorText, fmtUtc, revertName, same, toAccount, transferLock } from './index.js';
+import { approveFor, signPermit } from './permit.js';
 
 export const CLOSE_GRACE_S = 7 * 86400; // CLOSE_GRACE_PERIOD: a channel's grace period until one side changes it (setGrace)
 export const MAX_GRACE_S = 2 ** 32 - 1; // setGrace takes a uint32
@@ -28,13 +28,10 @@ export const MAX_AMOUNT = 2n ** 96n - 1n; // amounts are uint96 wei
  * D6 (docs/issues/token-hook-gas-estimate.md). Unused gas is not charged.
  */
 export const PAYMENT_GAS = 100_000n;
-const PERMIT_S = 3600; // a permit's deadline: chain time + 1 h
 const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n; // secp256k1's order
 const HALF_N = N >> 1n; // OpenZeppelin's ECDSA refuses s above it (the malleable twin)
 
 const VOUCHER = { Voucher: [{ name: 'channelId', type: 'bytes32' }, { name: 'cumulativeAmount', type: 'uint96' }] };
-const PERMIT = { Permit: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' },
-  { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }] };
 
 /** An error in plain words; `reason` is the contract's error name (or the client's own), viem's error in `cause`. */
 export class ChannelError extends Error {
@@ -152,7 +149,6 @@ function unlocked(wallet) {
   if (wallet?.locked) throw new ChannelError('The wallet is locked: Unlock it first.', { reason: 'WalletLocked' });
   return toAccount(wallet);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * The channel client on a chain made by createChain (index.js), whose queue, pad and max fee its writes share.
@@ -163,7 +159,6 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
   const { client, write } = chain;
   const at = config.channels;
   const ch = (functionName, args = []) => ({ address: at, abi: channelsAbi, functionName, args });
-  const erc20 = (token) => (functionName, args = []) => ({ address: token, abi: erc20PermitAbi, functionName, args });
   const satori = (functionName, args = []) => ({ address: config.token, abi: tokenAbi, functionName, args });
   const run = (fn) => async (...args) => { try { return await fn(...args); } catch (err) { throw plain(err); } };
 
@@ -174,42 +169,6 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
       contracts: [satori('transferLockedUntil', [wallet]), satori('getCurrentRound')] });
     const err = lockError(transferLock(Number(lockedUntil), Number(round)));
     if (err) throw err;
-  }
-
-  /**
-   * An ERC-2612 permit for `value` to the channel contract, signed by `account`; null when the token has none. The
-   * domain is ERC-5267's eip712Domain(), else name() and version "1", and only if it hashes to DOMAIN_SEPARATOR().
-   */
-  async function permitFor(account, token, value) {
-    const t = erc20(token);
-    const [nonce, d, separator, name, now] = await client.multicall({ allowFailure: true, contracts: [
-      t('nonces', [account.address]), t('eip712Domain'), t('DOMAIN_SEPARATOR'), t('name'),
-      { address: config.multicall3, abi: multicall3Abi, functionName: 'getCurrentBlockTimestamp' }] });
-    if (nonce.status !== 'success' || separator.status !== 'success') return null;
-    let domain = null;
-    if (d.status === 'success') {
-      const [fields, n, version, chainId, verifyingContract, salt] = d.result;
-      const has = (bit) => (Number(fields) & bit) !== 0;
-      domain = { ...(has(1) && { name: n }), ...(has(2) && { version }), ...(has(4) && { chainId: Number(chainId) }),
-        ...(has(8) && { verifyingContract }), ...(has(16) && { salt }) };
-    } else if (name.status === 'success') {
-      domain = { name: name.result, version: '1', chainId: config.chainId, verifyingContract: token };
-    }
-    if (!domain || domainSeparator({ domain }) !== separator.result) return null;
-    const deadline = (now.status === 'success' ? now.result : BigInt(Math.floor(Date.now() / 1000))) + BigInt(PERMIT_S);
-    const signature = await account.signTypedData({ domain, types: PERMIT, primaryType: 'Permit',
-      message: { owner: account.address, spender: at, value, nonce: nonce.result, deadline } });
-    const { r, s, v, yParity } = parseSignature(signature);
-    return { deadline, v: Number(v ?? 27n + BigInt(yParity)), r, s };
-  }
-
-  /** approve(channels, value) when the allowance is short, then wait until the RPC shows it. → the approve's hash, or null */
-  async function approveFor(account, token, value, opts) {
-    const allowance = () => client.readContract(erc20(token)('allowance', [account.address, at]));
-    if (await allowance() >= value) return null;
-    const { hash } = await write(account, erc20(token)('approve', [at, value]), opts);
-    for (let i = 0; i < settle.tries && await allowance().catch(() => 0n) < value; i++) await sleep(settle.ms);
-    return hash;
   }
 
   async function readChannel(id) {
@@ -244,13 +203,13 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
       const [payer, signer] = [account.address, addressOf(alias)];
       const id = channelIdOf({ payer, payee, token, signer, salt });
       await checkLock(payer, token);
-      const permit = await permitFor(account, token, deposit);
+      const permit = await signPermit({ client, config }, account, { token, spender: at, value: deposit });
       if (permit) {
         const { hash, receipt } = await write(account, ch('openWithPermit',
           [payer, payee, token, signer, deposit, salt, permit.deadline, permit.v, permit.r, permit.s]), opts);
         return { id, hash, receipt, permit: true };
       }
-      const approve = await approveFor(account, token, deposit, opts);
+      const approve = await approveFor({ client, write, settle }, account, { token, spender: at, value: deposit }, opts);
       const { hash, receipt } = await write(account, ch('open', [payer, payee, token, signer, deposit, salt]), opts);
       return { id, hash, receipt, permit: false, ...(approve && { approve }) };
     }),
@@ -261,7 +220,7 @@ export function createChannels({ chain, config = DEFAULTS, settle = { tries: 5, 
       const account = unlocked(wallet);
       const c = await liveChannel(id);
       await checkLock(account.address, c.token);
-      const approve = await approveFor(account, c.token, amount, opts);
+      const approve = await approveFor({ client, write, settle }, account, { token: c.token, spender: at, value: amount }, opts);
       return { ...await write(account, ch('topUp', [id, amount]), opts), ...(approve && { approve }) };
     }),
 

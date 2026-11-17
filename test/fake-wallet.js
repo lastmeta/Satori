@@ -1,7 +1,8 @@
 // Test double (never imported by the app): a wallet app's EIP-1193 provider, as MetaMask exposes one, over a key of
 // its own. It signs and sends its transactions to `transport` (a fake chain's), and says no when told to.
 //   const app = fakeWallet({ key: '0x…', transport })   // app.provider: { request }
-//   app.state: { chainId, knowsChain, reject, accounts }   app.calls: every method asked, in order
+//   app.state: { chainId, knowsChain, reject, accounts, typedData }   app.calls: every method asked, in order
+//   (typedData: false, a wallet app that can't sign EIP-712 typed data: eth_signTypedData_v4 is unsupported, 4200)
 import { createWalletClient, hexToBigInt, hexToNumber } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
@@ -10,7 +11,7 @@ const rpcError = (code, message) => Object.assign(new Error(message), { code });
 
 export function fakeWallet({ key, transport, chainId = 84532, knowsChain = true }) {
   const account = privateKeyToAccount(key);
-  const state = { chainId, knowsChain, reject: false, accounts: [account.address], added: [] };
+  const state = { chainId, knowsChain, reject: false, accounts: [account.address], added: [], typedData: true };
   const calls = [];
   const sender = createWalletClient({ account, chain: baseSepolia, transport });
   const big = (h) => (h == null ? undefined : hexToBigInt(h));
@@ -35,7 +36,9 @@ export function fakeWallet({ key, transport, chainId = 84532, knowsChain = true 
         state.chainId = hexToNumber(params[0].chainId);
         return null;
       case 'personal_sign': return account.signMessage({ message: { raw: params[0] } });
-      case 'eth_signTypedData_v4': return account.signTypedData(JSON.parse(params[1]));
+      case 'eth_signTypedData_v4':
+        if (!state.typedData) throw rpcError(4200, `${method} is not supported`);
+        return account.signTypedData(JSON.parse(params[1]));
       case 'eth_sendTransaction': {
         if (state.chainId !== 84532) throw rpcError(-32000, 'wrong chain');
         const tx = params[0];

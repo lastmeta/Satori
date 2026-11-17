@@ -25,6 +25,9 @@ const ERRORS = [
   // the Safe's keys' calls (docs/design/safe.md): the token's fee and root, the upgrades, the airdrop's loading
   'error ControllerNotSet()', 'error UpgradeUnauthorized()', 'error UpgradeBadImplementation()',
   'error AirdropLoadingClosed()', 'error LengthMismatch()', 'error DuplicateRecipient()',
+  // a vote's (docs/design/base.md#vote): the voting contract's checks, and the token's burnFrom without an allowance
+  'error GameNotApproved()', 'error CannotVoteDefault()', 'error GameNotMintEligible()', 'error ZeroVote()',
+  'error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)',
 ];
 const abi = (...items) => parseAbi([...items, ...ERRORS]);
 
@@ -90,6 +93,11 @@ export const hubAbi = abi(
   'function voteLockGovernorFrozen() view returns (bool)',
   'function setVoteLockGovernor(address g)',
   'function freezeVoteLockGovernor()',
+  // a vote (docs/design/base.md#vote): SATORI burned for a game's weight, for good; with the permit signed in the wallet
+  // (SatoriHub.sol:727-760: tried, then burnFrom decides), or after an approve
+  'struct SatoriPermit { uint256 value; uint256 deadline; bytes signature; }',
+  'function vote(uint32 gameId, uint256 amount) returns (uint256 weightAdded)',
+  'function voteWithPermit(uint32 gameId, uint256 amount, SatoriPermit p) returns (uint256 weightAdded)',
 );
 
 export const rewardsAbi = abi(
@@ -205,6 +213,9 @@ export const votingAbi = abi('function weightOf(uint32 gameId) view returns (uin
   // the admin's (docs/design/admin.md): games are born unapproved and earn nothing until approved
   'function gameApproved(uint32 gameId) view returns (bool)',
   'function setGameApproved(uint32 gameId, bool approved)',
+  // the votes' totals: what all approved games were voted (burned), and the default game's derived weight, 1% of all
+  'function totalBurnedWeight() view returns (uint256)',
+  'function defaultDerivedWeight() view returns (uint256)',
 );
 
 export const airdropAbi = abi(

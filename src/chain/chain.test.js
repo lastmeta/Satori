@@ -10,7 +10,7 @@ import { fakeSatori, E18 } from '../../test/fake-satori.js';
 import { fakeWallet } from '../../test/fake-wallet.js';
 import { connectedWallet } from '../keys/connect.js';
 
-import { createChain, transferLock, payload, revertName, errorText, panicOf, UP, DOWN, HOOK_GAS, INDEFINITE, NO_FUNDS } from './index.js';
+import { createChain, transferLock, payload, revertName, errorText, panicOf, UP, DOWN, HOOK_GAS, INDEFINITE, NO_FUNDS, VOTE_TEXT } from './index.js';
 
 const signerOf = (hex) => {
   const secret = Uint8Array.from(hex.match(/../g), (b) => parseInt(b, 16));
@@ -150,14 +150,14 @@ describe('the batch\'s pieces', () => {
   test('batchState: round, chain time, the alias\'s power and this round\'s count', async () => {
     expect(await chain.batchState(alias.evmAddress)).toEqual({ round: ROUND, chainTime: ROUND * 86400 + 9 * 3600, power: 0n, predicted: 0 });
   });
-  test('streams with a game the engine pays (voting weight > 0, SatoriEngine.sol:828); named; the cadence', async () => {
+  test('streams with a game the engine pays (voting weight > 0, SatoriEngine.sol:828); named; the cadence; the latest value', async () => {
     s.streams[2] = { game: 0, named: false, cadence: 60, history: [] }; // no game
     s.streams[3] = { game: 9, named: true, cadence: 60, history: [{ hour: ROUND * 24 + 8, value: 5n }] };
     s.streams[4] = { game: 10, named: false, cadence: 60, history: [{ hour: ROUND * 24 + 8, value: 5n }] }; // anyone's stream: weight 0
     s.weights[9] = 5n * E18;
     expect(await chain.streams()).toEqual([
-      { streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440, latestHour: ROUND * 24, count: 2, weight: E18 },
-      { streamId: 3, gameId: 9, named: true, cadenceMinutes: 60, latestHour: ROUND * 24 + 8, count: 1, weight: 5n * E18 },
+      { streamId: 1, gameId: 1, named: false, cadenceMinutes: 1440, latestHour: ROUND * 24, count: 2, latest: 59058240589371161n, weight: E18 },
+      { streamId: 3, gameId: 9, named: true, cadenceMinutes: 60, latestHour: ROUND * 24 + 8, count: 1, latest: 5n, weight: 5n * E18 },
     ]);
   });
   test('a revert of isNamedStream (unknown ids) reads as not named', async () => {
@@ -425,5 +425,101 @@ describe('a connected wallet (docs/design/wallets.md#a-connected-wallet): its wa
     const err = await chain.sendEth(connected(app), '0x' + '55'.repeat(20), 1n).catch((e) => e);
     expect(errorText(err)).toBe('Declined in the wallet app.');
     expect(rpc.sent.length).toBe(before);
+  });
+});
+
+describe('votes: SATORI burned for a game\'s weight (docs/design/base.md#vote; SatoriHub.sol:727-822)', () => {
+  const connected = (app) => connectedWallet({ address: app.address, name: 'TestWallet', provider: app.provider });
+  const steps = () => {
+    const seen = [];
+    return { seen, onStep: (...a) => seen.push(a.join(' ')) };
+  };
+  beforeEach(() => {
+    s.streams[2] = { game: 2, named: false, cadence: 60, name: 'SATORI/USDC', history: [{ hour: ROUND * 24, value: 123n }] };
+    s.streams[3] = { game: 3, named: false, cadence: 60, history: [{ hour: ROUND * 24, value: 7n }] };
+    s.approved[2] = true; // game 3: not approved
+  });
+
+  test('votes(): each game approved or not, all approved games\' weight, the default game\'s own; streams() say the latest value', async () => {
+    expect(await chain.votes([1, 2, 3])).toEqual({ burned: 0n, defaultWeight: E18, approved: [false, true, false] });
+    s.weights[2] = 990n * E18;
+    expect(await chain.votes([2])).toEqual({ burned: 990n * E18, defaultWeight: 10n * E18, approved: [true] }); // the default: 1% of all
+    expect((await chain.streams({ all: true })).find((g) => g.streamId === 2)).toMatchObject({ gameId: 2, latest: 123n, weight: 990n * E18 });
+  });
+
+  test('one voteWithPermit from the wallet, its permit signed here: the SATORI burned, the weight up by it, read back', async () => {
+    const { seen, onStep } = steps();
+    const r = await chain.vote({ wallet, gameId: 2, amount: 5n * E18, onStep });
+    expect(sentBy()).toEqual([['wallet', 'voteWithPermit', [2, 5n * E18, expect.objectContaining({ value: 5n * E18 })]]]);
+    expect(seen).toEqual(['send 1 1', 'confirm 1 1', 'settle']);
+    expect(r).toEqual({ steps: [{ step: 'voteWithPermit(game, amount)', by: 'wallet', hash: rpc.sent[0].hash }], settled: true, weight: 5n * E18 });
+    expect(s.votes).toEqual([{ from: V, gameId: 2, amount: 5n * E18, permit: true }]);
+    expect(s.balance[V]).toBe(95n * E18);
+    expect(s.nonces[V]).toBe(1n); // the permit was used
+    expect(s.allowance[`${V}:${DEFAULTS.hub.toLowerCase()}`]).toBe(0n); // nothing left over
+    expect(await chain.votes([2])).toMatchObject({ burned: 5n * E18 });
+  });
+
+  test('checked first, nothing sent: an amount above 0 and within the wallet\'s SATORI, a game open for votes, voting on', async () => {
+    const no = (o) => chain.vote({ wallet, gameId: 2, amount: E18, ...o }).catch((e) => e.message);
+    expect(await no({ amount: 0n })).toBe(VOTE_TEXT.amount);
+    expect(await no({ amount: 1 })).toBe(VOTE_TEXT.amount); // wei, a bigint
+    expect(await no({ amount: 101n * E18 })).toBe("That is more than the wallet's 100 SATORI.");
+    expect(await no({ gameId: 1 })).toBe('The default game gets its own share of each round, and takes no votes.');
+    expect(await no({ gameId: 3 })).toBe('This game is not open for votes yet.');
+    s.caps &= ~(1n << 7n);
+    expect(await no({})).toBe('Voting is not switched on in the Satori contract right now.');
+    expect(rpc.sent).toHaveLength(0);
+    expect(s.balance[V]).toBe(100n * E18);
+  });
+
+  test('a contract error a simulate meets is said in plain words', async () => {
+    s.approved[3] = true;
+    const err = await chain.vote({ wallet, gameId: 3, amount: E18, onStep: () => { s.approved[3] = false; } }).catch((e) => e); // approval taken back meanwhile
+    expect(revertName(err)).toBe('GameNotApproved');
+    expect(errorText(err)).toBe('This game is not open for votes yet.');
+    expect(rpc.sent).toHaveLength(0);
+  });
+
+  test('a token without a permit: approve, then vote (two steps); an allowance already there: the vote alone', async () => {
+    s.permit = false;
+    const { seen, onStep } = steps();
+    const r = await chain.vote({ wallet, gameId: 2, amount: 2n * E18, onStep });
+    expect(sentBy()).toEqual([['wallet', 'approve', [DEFAULTS.hub, 2n * E18]], ['wallet', 'vote', [2, 2n * E18]]]);
+    expect(seen).toEqual(['send 1 2', 'confirm 1 2', 'send 2 2', 'confirm 2 2', 'settle']);
+    expect(r.steps.map((x) => x.step)).toEqual(['approve(hub, amount)', 'vote(game, amount)']);
+    expect(s.votes.at(-1)).toMatchObject({ amount: 2n * E18, permit: false });
+    s.allowance[`${V}:${DEFAULTS.hub.toLowerCase()}`] = 10n * E18;
+    rpc.sent.length = 0;
+    await chain.vote({ wallet, gameId: 2, amount: E18 });
+    expect(sentBy().map((x) => x[1])).toEqual(['vote']);
+    expect((await chain.votes([2])).burned).toBe(3n * E18);
+  });
+
+  test('a staked wallet votes: the hub unstakes it and stakes it again, so the alias\'s power drops by the burn and it stays staked', async () => {
+    await chain.delegate({ alias, wallet });
+    await chain.vote({ wallet, gameId: 2, amount: 10n * E18 });
+    const st = await chain.status({ alias: alias.evmAddress, wallet: wallet.evmAddress });
+    expect(st.wallet).toMatchObject({ satori: 90n * E18, delegate: alias.evmAddress });
+    expect(st.alias.power).toBe(90n * E18);
+  });
+
+  test('a connected wallet: its wallet app signs the permit; one that can\'t sign typed data approves, then votes; a no sends nothing', async () => {
+    const app = fakeWallet({ key: `0x${'33'.repeat(32)}`, transport: rpc.transport });
+    const W = app.address.toLowerCase();
+    rpc.eth[W] = 10n ** 16n;
+    s.balance[W] = 10n * E18;
+    await chain.vote({ wallet: connected(app), gameId: 2, amount: E18 });
+    expect(app.calls.filter((m) => m === 'eth_signTypedData_v4')).toHaveLength(1);
+    expect(rpc.sent.map((t) => t.functionName)).toEqual(['voteWithPermit']);
+    app.state.typedData = false;
+    await chain.vote({ wallet: connected(app), gameId: 2, amount: E18 });
+    expect(rpc.sent.map((t) => t.functionName)).toEqual(['voteWithPermit', 'approve', 'vote']);
+    app.state.typedData = true;
+    app.state.reject = true;
+    const err = await chain.vote({ wallet: connected(app), gameId: 2, amount: E18 }).catch((e) => e);
+    expect(errorText(err)).toBe('Declined in the wallet app.');
+    expect(rpc.sent).toHaveLength(3);
+    expect(s.balance[W]).toBe(8n * E18);
   });
 });

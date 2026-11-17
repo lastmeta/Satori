@@ -8,8 +8,8 @@ import { createWalletClient, encodeAbiParameters, http, keccak256, parseAbi, toH
 import { baseSepolia } from 'viem/chains';
 import { generateSecret, publicKey, evmAddress, signDigest } from '../keys/keys.js';
 import { DEFAULTS } from './config.js';
-import { createChain, revertName, DOWN, INDEFINITE } from './index.js';
-import { fund, airdrop, merkle, advance, clients, stream } from '../../scripts/fork.mjs';
+import { createChain, revertName, DOWN, INDEFINITE, VOTE_TEXT } from './index.js';
+import { fund, airdrop, merkle, advance, clients, stream, approveGame } from '../../scripts/fork.mjs';
 import { createBase, runBatch } from '../neuron/base.js';
 import { devFeeOf, devFeeOps } from '../neuron/devfee.js';
 import { adminOps, adminRole, adminState } from '../neuron/admin.js';
@@ -102,6 +102,45 @@ describe.skipIf(!RPC || !/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(RPC))('on
   // A batch that never mines (docs/design/base.md#a-batch-that-never-mines): anvil's mining stopped (interval mining off,
   // no automine), the batch waits in its pool; after STUCK_S (0 here) its nonce is still pending, so it is sent again at
   // that nonce with a quarter more fee, which the pool takes in its place; mining again, the replacement is mined.
+  test('a vote: SATORI burned for an approved game, by permit; approve then vote; a staked wallet stays staked', { timeout: 180_000 }, async () => {
+    const c = chain();
+    const wallet = signer();
+    const V = wallet.evmAddress;
+    await fund(RPC, [V], { eth: '0.1', satori: '10' });
+    const { gameId } = await stream(RPC, `vote-${Date.now()}`); // anyone's stream: a binary game, not approved
+    await expect(c.vote({ wallet, gameId, amount: E18 })).rejects.toThrow(VOTE_TEXT.GameNotApproved);
+    await expect(c.vote({ wallet, gameId: 1, amount: E18 })).rejects.toThrow(VOTE_TEXT.CannotVoteDefault);
+    await approveGame(RPC, gameId);
+    const before = await c.votes([1, gameId]);
+    expect(before.approved).toEqual([false, true]);
+
+    // the permit: one transaction; the SATORI burned, the weight and the total up by it, the default's 1% of all
+    const r = await c.vote({ wallet, gameId, amount: 2n * E18 });
+    expect(r).toMatchObject({ settled: true, weight: 2n * E18, steps: [{ step: 'voteWithPermit(game, amount)', by: 'wallet' }] });
+    const after = await c.votes([gameId]);
+    expect(after.burned).toBe(before.burned + 2n * E18);
+    expect(after.defaultWeight).toBe((after.burned * 100n) / 9900n > E18 ? (after.burned * 100n) / 9900n : E18);
+    expect((await c.status({ alias: V, wallet: V })).wallet.satori).toBe(8n * E18);
+    await expect(c.vote({ wallet, gameId, amount: 9n * E18 })).rejects.toThrow("That is more than the wallet's 8 SATORI.");
+
+    // a wallet that can't sign typed data: approve, then vote
+    const plain = { ...privateKeyToAccount(`0x${Buffer.from(generateSecret()).toString('hex')}`), signTypedData: async () => { throw new Error('not supported'); } };
+    await fund(RPC, [plain.address], { eth: '0.1', satori: '3' });
+    const p = await c.vote({ wallet: plain, gameId, amount: E18 });
+    expect(p.steps.map((x) => x.step)).toEqual(['approve(hub, amount)', 'vote(game, amount)']);
+    expect(p.weight).toBe(3n * E18);
+
+    // staked with an alias: the hub unstakes and stakes it again around the burn; the alias's power is the new balance
+    const alias = signer();
+    await fund(RPC, [alias.evmAddress], { eth: '0.1' });
+    await c.delegate({ alias, wallet });
+    await c.vote({ wallet, gameId, amount: E18 });
+    const st = await c.status({ alias: alias.evmAddress, wallet: V });
+    expect(st.wallet).toMatchObject({ satori: 7n * E18, delegate: alias.evmAddress });
+    expect(st.alias.power).toBe(7n * E18);
+    expect((await c.votes([gameId])).burned).toBe(before.burned + 4n * E18);
+  });
+
   test('a batch that never mines: replaced at its nonce with a higher fee, within the ceiling; past it, said and not sent', { timeout: 180_000 }, async () => {
     const { test: anvil, pub } = clients(RPC);
     const mem = () => {

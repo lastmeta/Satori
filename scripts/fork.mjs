@@ -32,6 +32,7 @@ A local anvil fork of Base Sepolia; the dev server's /rpc goes to 127.0.0.1:8545
   advance [days]                 move chain time forward (1 day by default) and mine a block
   predict [up|down]              the deployer predicts the default game (moves its next value)
   stream [name]                  anyone's new stream (a 0.001 SATORI burn) with one value: its game has no voting weight
+  approve <gameId>               the admin approves the game: open for votes (it earns once voted for)
   grief <0x…>                    the token-hook bug: 1 wei of SATORI to the address with the bare gas estimate, as any wallet
                                  sends it; a staked wallet's stake is then out of sync and it can't unstake
                                  (docs/issues/token-hook-gas-estimate.md)
@@ -60,6 +61,9 @@ const abi = parseAbi([
   'function setValues(uint32[] streamIds, int232[] values) returns (uint256)',
   'function getAllDataStreams() view returns (uint32[])',
   'function binaryGameByStream(uint32) view returns (uint32)',
+  'function admin() view returns (address)',
+  'function setGameApproved(uint32 gameId, bool approved)',
+  'error NotAdmin()', 'error UnknownGame()', 'error CannotSetDefaultApproval()',
 ]);
 
 export function clients(rpc) {
@@ -173,6 +177,12 @@ export async function stream(rpc, name) {
   return { streamId, gameId };
 }
 
+/** The admin (the rewards contract's, the deployer on Base Sepolia) approves game `gameId`: open for votes. */
+export async function approveGame(rpc, gameId) {
+  const admin = await clients(rpc).pub.readContract({ address: DEFAULTS.rewards, abi, functionName: 'admin' });
+  return asDeployer(rpc, DEFAULTS.voting, 'setGameApproved', [Number(gameId), true], admin);
+}
+
 async function answering(rpc, tries = 60) {
   for (let i = 0; i < tries; i++) {
     try {
@@ -236,6 +246,7 @@ async function main() {
     case 'predict': console.log(await predict(rpc, args[0])); break;
     case 'stream': console.log(JSON.stringify(await stream(rpc, args[0] ?? `junk-${Date.now()}`))); break;
     case 'grief': console.log(JSON.stringify(await grief(rpc, args[0]))); break;
+    case 'approve': console.log(await approveGame(rpc, args[0])); break;
     default:
       console.log(USAGE);
       process.exitCode = cmd ? 1 : 0;

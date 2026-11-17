@@ -49,7 +49,9 @@
       "function voteLockGovernor() -> (address) view",
       "function voteLockGovernorFrozen() -> (bool) view",
       "function setVoteLockGovernor(address) -> () nonpayable",
-      "function freezeVoteLockGovernor() -> () nonpayable"
+      "function freezeVoteLockGovernor() -> () nonpayable",
+      "function vote(uint32,uint256) -> (uint256) nonpayable",
+      "function voteWithPermit(uint32,uint256,(uint256,uint256,bytes)) -> (uint256) nonpayable"
     ],
     "SatoriRewards": [
       "function effectivePredictorFee(address) -> (uint16) view",
@@ -132,7 +134,9 @@
     "SatoriVoting": [
       "function weightOf(uint32) -> (uint256) view",
       "function gameApproved(uint32) -> (bool) view",
-      "function setGameApproved(uint32,bool) -> () nonpayable"
+      "function setGameApproved(uint32,bool) -> () nonpayable",
+      "function totalBurnedWeight() -> (uint256) view",
+      "function defaultDerivedWeight() -> (uint256) view"
     ]
   },
   "errors": [
@@ -144,6 +148,7 @@
     "error BadInput() -> ()",
     "error BudgetExceeded() -> ()",
     "error CannotSetDefaultApproval() -> ()",
+    "error CannotVoteDefault() -> ()",
     "error CapabilityDisabled() -> ()",
     "error ClaimDelegatedAway() -> ()",
     "error ControllerNotSet() -> ()",
@@ -152,12 +157,15 @@
     "error DelegatorNotAllowed() -> ()",
     "error DuplicatePrediction() -> ()",
     "error DuplicateRecipient() -> ()",
+    "error ERC20InsufficientAllowance(address,uint256,uint256) -> ()",
     "error ERC20InsufficientBalance(address,uint256,uint256) -> ()",
     "error ERC20InvalidReceiver(address) -> ()",
     "error EmptyBatch() -> ()",
     "error EmptyStream() -> ()",
     "error Frozen() -> ()",
     "error GameAdapterIdSpaceExhausted() -> ()",
+    "error GameNotApproved() -> ()",
+    "error GameNotMintEligible() -> ()",
     "error HookFailedWithoutReason() -> ()",
     "error InvalidAdapter() -> ()",
     "error InvalidGameAdapter() -> ()",
@@ -177,6 +185,7 @@
     "error UnknownGame() -> ()",
     "error UnknownStream() -> ()",
     "error UpgradeBadImplementation() -> ()",
-    "error UpgradeUnauthorized() -> ()"
+    "error UpgradeUnauthorized() -> ()",
+    "error ZeroVote() -> ()"
   ]
 }

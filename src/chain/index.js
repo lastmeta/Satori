@@ -9,17 +9,19 @@
 //   await chain.delegate({ alias, wallet }) / chain.undelegate({ wallet })
 //   await chain.streams() / chain.history(id) / chain.simulateGame(alias, game) / chain.sendBatch(alias, games)
 //   await chain.claimRewards(wallet) / claimMerkle(wallet, proof) / claimAirdrop(wallet) / sendEth / sendSatori
+//   await chain.votes(gameIds) / chain.vote({ wallet, gameId, amount })   // SATORI burned for a game's weight
 //   createChannels({ chain, config })              // payment channels on this chain (channels.js)
 import {
-  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, decodeFunctionData, encodeFunctionData, encodePacked, formatGwei, hashTypedData,
-  hexToBytes, keccak256, serializeSignature, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
+  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, decodeFunctionData, encodeFunctionData, encodePacked, formatEther, formatGwei,
+  hashTypedData, hexToBytes, keccak256, serializeSignature, serializeTransaction, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { privateKeyToAccount, toAccount as customAccount } from 'viem/accounts';
 import { base as baseMainnet, baseSepolia } from 'viem/chains';
 import {
-  adapterUiAbi, airdropAbi, engineAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, safeAbi, splitterAbi, tokenAbi,
-  uupsAbi, votingAbi,
+  adapterUiAbi, airdropAbi, engineAbi, erc20PermitAbi, gamesAbi, hubAbi, lensAbi, merkleAbi, multicall3Abi, registryAbi, rewardsAbi, safeAbi,
+  splitterAbi, tokenAbi, uupsAbi, votingAbi,
 } from './abi.js';
+import { approveFor, signPermit } from './permit.js';
 import { serial } from '../util.js';
 
 export const ROUND_S = 86400; // a round is a UTC day (SatoriToken.sol:329-331)
@@ -27,6 +29,8 @@ export const UP = 1; // base_predict.py:23-24
 export const DOWN = 2;
 export const INDEFINITE = 2 ** 24 - 1; // transferLockedUntil while staked (SatoriHub.sol:426-429)
 export const HISTORY = 768; // the registry's ring (SatoriRegistry.sol HISTORY_SIZE)
+export const DEFAULT_GAME = 1; // the default stream's game: its own share of each round, no votes (SatoriVoting.sol:47-59)
+const CAP_VOTE = 7; // the hub's capability bit for voting (SatoriHub.sol:144)
 /**
  * Gas over eth_estimateGas on every write. The token runs its transfer hook in
  * a try/catch (SatoriToken.sol:831-842), so the estimate is the least gas at
@@ -136,9 +140,25 @@ export class FeeCeilingError extends Error {
   }
 }
 
+/**
+ * A vote's checks and the voting contract's errors (SatoriVoting.sol:294-299), in plain words (the dapp's VotePanel).
+ * vote() says them before anything is sent; errorText says the contract's should a simulate meet one.
+ */
+export const VOTE_TEXT = {
+  amount: 'Enter how much SATORI to burn: more than 0.',
+  over: (balance) => `That is more than the wallet's ${formatEther(balance)} SATORI.`, // balance: wei
+  closed: 'Voting is not switched on in the Satori contract right now.',
+  CannotVoteDefault: 'The default game gets its own share of each round, and takes no votes.',
+  GameNotApproved: 'This game is not open for votes yet.',
+  GameNotMintEligible: 'Only a game the round pays can take votes.',
+  ZeroVote: 'Enter how much SATORI to burn: more than 0.',
+};
+const VOTE_ERRORS = ['CannotVoteDefault', 'GameNotApproved', 'GameNotMintEligible', 'ZeroVote'];
+
 /** Contract errors said in plain words. */
 const PLAIN = {
   HookFailedWithoutReason: 'The transaction ran out of gas; try again', // a starved transfer (D7)
+  ...Object.fromEntries(VOTE_ERRORS.map((k) => [k, VOTE_TEXT[k]])),
 };
 
 /** An error in a line: the contract's error name (or its plain words), a wallet app's no, else viem's short message. */
@@ -185,6 +205,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
   const merkle = c('merkle', merkleAbi);
   const airdrop = c('airdrop', airdropAbi);
   const voting = c('voting', votingAbi);
+  const satoriErc20 = c('token', erc20PermitAbi); // SATORI's allowance and permit (permit.js)
   const mc3 = c('multicall3', multicall3Abi);
   const roleCall = { rewards, hub, engine, voting, registry, games, token, merkle, airdrop,
     // the upgradeable ones' upgrade calls (docs/design/safe.md): 'uups.hub' and so on
@@ -418,6 +439,74 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       return { steps, settled: ok };
     },
 
+    /**
+     * The votes (docs/design/base.md#vote): whether each game is approved (open for votes, and paid from the round),
+     * what the approved games were voted in all (`burned`: the SATORI burned for them, their weight), and the default
+     * game's own derived weight (1% of all, at least 1 SATORI's; SatoriVoting.sol:342-345). A game's share of a round:
+     * its weight over burned + defaultWeight. One multicall. → { burned, defaultWeight, approved: [bool] in the order of `gameIds` }
+     */
+    async votes(gameIds) {
+      const [burned, defaultWeight, ...approved] = await many([voting('totalBurnedWeight'), voting('defaultDerivedWeight'),
+        ...gameIds.map((g) => voting('gameApproved', [g]))]);
+      return { burned, defaultWeight, approved };
+    },
+
+    /**
+     * A vote (docs/design/base.md#vote; the dapp's useVoting.ts): `amount` (wei) of the wallet's SATORI burned for game
+     * `gameId`'s weight, for good: the tokens never come back and the weight stays. Checked first, nothing sent
+     * otherwise (VOTE_TEXT): an amount above 0 and within the wallet's SATORI, a game open for votes (approved; not the
+     * default game, which has its own share), voting switched on. Then one hub.voteWithPermit, its permit signed in the
+     * wallet; a wallet that can't sign one (a token without a permit, a wallet app that won't sign typed data): approve
+     * (when the allowance is short), then hub.vote. Each write is simulated first: a revert names its error. A staked
+     * wallet can vote: the hub unstakes it and stakes it again around the burn (SatoriHub.sol:786-822).
+     * onStep('send' | 'confirm', k, n) for each, then onStep('settle'): the game's weight read again until it shows.
+     * → { steps: [{ step, by, hash }], settled, weight }
+     */
+    async vote({ wallet, gameId, amount, onStep = () => {} }) {
+      const V = toAccount(wallet);
+      const game = Number(gameId);
+      if (typeof amount !== 'bigint' || amount <= 0n) throw new Error(VOTE_TEXT.amount);
+      if (game === DEFAULT_GAME) throw new Error(VOTE_TEXT.CannotVoteDefault);
+      const [balance, approved, open, before, allowance] = await many([token('balanceOf', [V.address]), voting('gameApproved', [game]),
+        rewards('capabilityAllowed', [CAP_VOTE, V.address]), voting('weightOf', [game]), satoriErc20('allowance', [V.address, config.hub])]);
+      if (!approved) throw new Error(VOTE_TEXT.GameNotApproved);
+      if (!open) throw new Error(VOTE_TEXT.closed);
+      if (amount > balance) throw new Error(VOTE_TEXT.over(balance));
+      // a wallet app that won't sign typed data (not a no from the person): approve, then vote, as the dapp's signPermit → null
+      let cantSign = false;
+      const signer = { address: V.address,
+        signTypedData: async (td) => { try { return await V.signTypedData(td); } catch (err) { cantSign = !declined(err); throw err; } } };
+      let permit = null;
+      try {
+        permit = await signPermit({ client, config }, signer, { token: config.token, spender: config.hub, value: amount });
+      } catch (err) {
+        if (!cantSign) throw err;
+      }
+      const steps = [];
+      const sent = (k, n) => ({ onSent: () => onStep('confirm', k, n) });
+      if (permit) {
+        onStep('send', 1, 1);
+        const call = hub('voteWithPermit', [game, amount, { value: amount, deadline: permit.deadline, signature: permit.signature }]);
+        steps.push({ step: 'voteWithPermit(game, amount)', by: 'wallet', hash: (await write(V, call, sent(1, 1))).hash });
+      } else {
+        const n = allowance < amount ? 2 : 1;
+        if (n === 2) {
+          onStep('send', 1, 2);
+          const hash = await approveFor({ client, write, settle }, V, { token: config.token, spender: config.hub, value: amount }, sent(1, 2));
+          if (hash) steps.push({ step: 'approve(hub, amount)', by: 'wallet', hash });
+        }
+        onStep('send', n, n);
+        steps.push({ step: 'vote(game, amount)', by: 'wallet', hash: (await write(V, hub('vote', [game, amount]), sent(n, n))).hash });
+      }
+      onStep('settle');
+      let weight = null;
+      const ok = await settled(async () => {
+        weight = await read(voting('weightOf', [game]));
+        return weight >= before + amount;
+      });
+      return { steps, settled: ok, weight };
+    },
+
     /** Unstake: the wallet's delegatePredictionPower(0x0) (base_predict.py:292-301); onStep as above. → { steps, settled } */
     async undelegate({ wallet, onStep = () => {} }) {
       const V = toAccount(wallet);
@@ -439,7 +528,7 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
 
     /**
      * The registry's streams whose binary game the engine pays: [{ streamId,
-     * gameId, named, cadenceMinutes, latestHour, count, weight }]. Anyone can
+     * gameId, named, cadenceMinutes, latestHour, count, latest, weight }]. Anyone can
      * add a stream (and its game) for a small burn, so only games with voting
      * weight > 0 are kept, the engine's own eligibility test
      * (SatoriEngine.sol:828: an unweighted game earns no SATORI); `all`: those too (the Game tab's ineligible ones). isNamedStream
@@ -454,10 +543,10 @@ export function createChain({ config, transport, pollingInterval = 1000, settle 
       ]) });
       const list = ids.map((streamId, i) => {
         const [game, named, info] = res.slice(3 * i, 3 * i + 3);
-        const [count, latestHour, , cadenceMinutes] = info.status === 'success' ? info.result : [0, 0n, 0n, 0];
+        const [count, latestHour, , cadenceMinutes, , latest] = info.status === 'success' ? info.result : [0, 0n, 0n, 0, false, null];
         return {
           streamId, gameId: game.status === 'success' ? game.result : 0, named: named.status === 'success' && named.result,
-          cadenceMinutes, latestHour: Number(latestHour), count,
+          cadenceMinutes, latestHour: Number(latestHour), count, latest, // latest: its newest value, in the stream's own integer units
         };
       }).filter((g) => g.gameId !== 0);
       if (!list.length) return [];

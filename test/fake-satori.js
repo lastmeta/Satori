@@ -4,9 +4,10 @@
 // its locks (C/next/SatoriHub.sol:426-434,813-877), the set-once predictor fee
 // (C/SatoriRewards.sol:119-143,651-669), the token's transfer lock
 // (C/next/SatoriToken.sol:816-821), the registry's history page
-// (C/SatoriRegistry.sol:1375-1393), claims (hub, merkle, airdrop).
+// (C/SatoriRegistry.sol:1375-1393), claims (hub, merkle, airdrop), votes (SATORI burned for a game's weight, with
+// SATORI's ERC-2612 permit or an allowance: C/next/SatoriHub.sol:727-822, C/SatoriVoting.sol:270-299).
 // Unit tests (src/chain, src/neuron) and the e2e (/rpc) share it.
-import { encodeAbiParameters, keccak256, parseAbiParameters, zeroAddress } from 'viem';
+import { domainSeparator, encodeAbiParameters, encodeErrorResult, hashTypedData, keccak256, parseAbiParameters, zeroAddress } from 'viem';
 import * as abi from '../src/chain/abi.js';
 import { DEFAULTS } from '../src/chain/config.js';
 import { UPGRADEABLE } from '../src/chain/index.js';
@@ -25,6 +26,14 @@ import { INDEFINITE, HISTORY } from '../src/chain/index.js';
 import { fakeRpc, revert, panic } from './fake-rpc.js';
 
 export const E18 = 10n ** 18n;
+/** SATORI's EIP-712 domain here (ERC-5267's eip712Domain says it; DOMAIN_SEPARATOR is its hash). */
+export const TOKEN_DOMAIN = { name: 'Satori', version: '1', chainId: 84532, verifyingContract: DEFAULTS.token };
+const PERMIT = { Permit: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' },
+  { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }] };
+/** A revert with the error's arguments (fake-rpc.js encodes a name alone). */
+const revertWith = (errorName, args) => {
+  try { revert(errorName); } catch (e) { throw Object.assign(e, { raw: encodeErrorResult({ abi: abi.engineAbi, errorName, args }) }); }
+};
 export const SPLIT_A = '0x6c5722c65041341c16d892235ea6076f05cf4238';
 export const SPLIT_C = '0x52b7ee858379509f7bdbc239da0f1ff36bead2ed';
 export const SPLIT_B = '0xc082ccc8d827b58bc848d5918ca92eee5c06f5f7';
@@ -83,6 +92,9 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     airdropLoaded: 0n, airdropFinalized: false, airdropRows: {},
     impl: Object.fromEntries(UPGRADEABLE.map((n, i) => [n, `0x${`${i + 1}0`.repeat(20)}`])), renounced: {},
     short: {}, // delegate → SATORI its stakers received with the transfer hook skipped (the token-hook bug): power under their balance
+    // votes (C/SatoriVoting.sol): `weights` above holds each game's; the hub burns from an allowance (`owner:spender`) that
+    // a permit (nonces: owner → its next) can set in the same call; votes: [{ from, gameId, amount, permit }]
+    allowance: {}, nonces: {}, votes: [], permit: true, // permit: false = a token without one
   };
   const powerOf = (a) => Object.entries(s.delegateOf).filter(([, d]) => d === a).reduce((n, [x]) => n + (s.balance[x] ?? 0n), 0n) - (s.short[a] ?? 0n);
   /** SATORI to a staked address in a transaction whose hook ran out of gas: the balance moves, the booked power does not. */
@@ -150,6 +162,41 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     if (d !== zeroAddress) s.lock[user] = INDEFINITE;
     else if (current !== zeroAddress) s.lock[user] = ctx.round + 1; // lockUntilNextRound
   }
+
+  /** The hub's burnFrom (ERC20Burnable: the allowance, then the balance), then the voting contract's checks (C/SatoriVoting.sol:294-299). */
+  function vote([gameId, amount], ctx) {
+    const g = Number(gameId);
+    if (!((s.caps >> 7n) & 1n) && ctx.from !== s.admin) revert('CapabilityDisabled');
+    if (!Object.values(s.streams).some((st) => st.game === g)) revert('UnknownStream');
+    const key = `${ctx.from}:${lc(DEFAULTS.hub)}`;
+    const allowed = s.allowance[key] ?? 0n;
+    if (allowed < amount) revertWith('ERC20InsufficientAllowance', [DEFAULTS.hub, allowed, amount]);
+    const balance = s.balance[ctx.from] ?? 0n;
+    if (balance < amount) revertWith('ERC20InsufficientBalance', [ctx.from, balance, amount]);
+    if (g === 1) revert('CannotVoteDefault');
+    if (!s.approved[g]) revert('GameNotApproved');
+    if (amount === 0n) revert('ZeroVote');
+    if (!ctx.write) return amount;
+    s.allowance[key] = allowed - amount;
+    s.balance[ctx.from] = balance - amount; // a staked wallet's power follows its balance (powerOf), as the hub's unstake and stake again
+    s.weights[g] = (s.weights[g] ?? 0n) + amount;
+    s.votes.push({ from: ctx.from, gameId: g, amount, permit: !!ctx.permit });
+    return amount;
+  }
+  /** SATORI's permit, tried and its outcome discarded (SatoriHub.sol:745-754): a good one sets the allowance. */
+  function tryPermit([value, deadline, signature], ctx) {
+    if (deadline === 0n || !s.permit) return false;
+    const nonce = s.nonces[ctx.from] ?? 0n;
+    const digest = hashTypedData({ domain: TOKEN_DOMAIN, types: PERMIT, primaryType: 'Permit',
+      message: { owner: ctx.from, spender: DEFAULTS.hub, value, nonce, deadline } });
+    let signer = null;
+    try { signer = recoverOwner(digest, signature.slice(2)); } catch { /* no signature */ }
+    if (BigInt(ctx.now) > deadline || signer !== ctx.from) return false;
+    if (ctx.write) s.nonces[ctx.from] = nonce + 1n;
+    s.allowance[`${ctx.from}:${lc(DEFAULTS.hub)}`] = value; // a simulate's too: the burn below reads it (undone if not mined)
+    return true;
+  }
+  const burnedTotal = () => Object.entries(s.weights).filter(([g]) => g !== '1' && s.approved[g]).reduce((n, [, w]) => n + w, 0n);
 
   const fns = (a, f) => ({ abi: a, fns: f });
   const onlyAdmin = (ctx, error = 'Unauthorized') => { if (ctx.from !== s.admin) revert(error); };
@@ -268,6 +315,20 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       freezeVoteLockGovernor: (_, ctx) => { only(ctx, s.wiring); if (ctx.write) s.frozen.voteLock = true; },
       registerAdapter: ([impl, name], ctx) => register('stream', impl, name, ctx),
       registerGameAdapter: ([impl, name], ctx) => register('game', impl, name, ctx),
+      vote,
+      voteWithPermit: ([gameId, amount, p], ctx) => {
+        const key = `${ctx.from}:${lc(DEFAULTS.hub)}`;
+        const before = s.allowance[key];
+        const permit = tryPermit([p.value, p.deadline, p.signature], ctx);
+        try {
+          return vote([gameId, amount], { ...ctx, permit });
+        } catch (e) {
+          if (permit) s.allowance[key] = before; // a revert undoes the permit too
+          throw e;
+        } finally {
+          if (permit && !ctx.write) s.allowance[key] = before; // a simulate leaves nothing
+        }
+      },
     }),
     [DEFAULTS.rewards]: fns(abi.rewardsAbi, {
       admin: () => s.admin,
@@ -296,8 +357,14 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
       },
     }),
     [DEFAULTS.lens]: fns(abi.lensAbi, { getTotalClaimableRewards: ([a]) => [s.rewards[lc(a)] ?? 0n, true] }),
-    [DEFAULTS.token]: fns(abi.tokenAbi, {
+    [DEFAULTS.token]: fns([...abi.tokenAbi, ...abi.erc20PermitAbi.filter((i) => i.type === 'function' && !abi.tokenAbi.some((t) => t.name === i.name))], {
       balanceOf: ([a]) => s.balance[lc(a)] ?? 0n,
+      allowance: ([o, sp]) => s.allowance[`${lc(o)}:${lc(sp)}`] ?? 0n,
+      approve: ([sp, v], ctx) => { if (ctx.write) s.allowance[`${ctx.from}:${lc(sp)}`] = v; return true; },
+      nonces: ([o]) => (s.permit ? s.nonces[lc(o)] ?? 0n : revert()),
+      name: () => TOKEN_DOMAIN.name,
+      DOMAIN_SEPARATOR: () => (s.permit ? domainSeparator({ domain: TOKEN_DOMAIN }) : revert()),
+      eip712Domain: () => (s.permit ? ['0x0f', TOKEN_DOMAIN.name, TOKEN_DOMAIN.version, BigInt(TOKEN_DOMAIN.chainId), DEFAULTS.token, `0x${'00'.repeat(32)}`, []] : revert()),
       transferLockedUntil: ([a]) => s.lock[lc(a)] ?? 0,
       getCurrentRound: (_, ctx) => BigInt(ctx.round),
       PLATFORM_FEE_RECIPIENT: () => SPLIT_A,
@@ -342,6 +409,8 @@ export function fakeSatori({ round = 20741, hour = 9, eth = {} } = {}) {
     [DEFAULTS.voting]: fns(abi.votingAbi, {
       weightOf: ([g]) => s.weights[g] ?? 0n,
       gameApproved: ([g]) => !!s.approved[g],
+      totalBurnedWeight: burnedTotal,
+      defaultDerivedWeight: () => { const d = (burnedTotal() * 100n) / 9900n; return d < E18 ? E18 : d; }, // 1% of all, at least 1 SATORI's
       setGameApproved: ([g, on], ctx) => {
         onlyAdmin(ctx, 'NotAdmin');
         if (!Object.values(s.streams).some((st) => st.game === g)) revert('UnknownGame');
