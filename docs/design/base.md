@@ -671,8 +671,8 @@ pass `to` (`e2e/scan.spec.js`).
 
 The owner, 2026-11-17: "we need a link to the uniswap so people can buy
 Satori". Under the balances, on Base mainnet only, **Buy SATORI on Uniswap**
-opens Uniswap's swap into SATORI on Base (`buyUrl`, `src/chain/config.js`) in a
-new tab. The app moves no funds for it: the person buys with a wallet app
+opens Uniswap's swap from Base ETH into SATORI (`buyUrl`, `src/chain/config.js`)
+in a new tab, the amount the person's to type. The app moves no funds for it: the person buys with a wallet app
 there, and the line beside the link says to send the SATORI to this wallet
 ("Show address and QR code, above"); a connected wallet buys there itself, so
 the line is not shown for one.

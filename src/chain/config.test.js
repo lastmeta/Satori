@@ -112,6 +112,6 @@ describe('the RPC', () => {
 });
 
 test("Buy SATORI: Uniswap's swap into the mainnet token on Base; none on Base Sepolia", () => {
-  expect(buyUrl(MAINNET)).toBe('https://app.uniswap.org/swap?chain=base&outputCurrency=0xd0a5bFF2789230b0fb1Bd989fc7CE7084c947E17');
+  expect(buyUrl(MAINNET)).toBe('https://app.uniswap.org/swap?chain=base&inputCurrency=ETH&outputCurrency=0xd0a5bFF2789230b0fb1Bd989fc7CE7084c947E17');
   expect(buyUrl({ ...DEFAULTS, chainId: 84532 })).toBe('');
 });
