@@ -1,4 +1,5 @@
-// Streams: the Satori Service's (folded by default: central's line, its facts under Details, and Refresh, then each stream with its latest
+// Streams: the Satori contract's streams and their votes (folded; a game open for votes has Vote, its composer in place under
+// its row: docs/design/base.md#vote); the Satori Service's (folded by default: central's line, its facts under Details, and Refresh, then each stream with its latest
 // value and its forecast in 24 h; on a tap, in place, its trend, the forecast in 12 h, its model and its predictions), the subscriptions on the Satori Network (Nostr), every prediction stream on the
 // relays with its verified track record (docs/design/track-record.md#ui-streams; folded, it opens on a tap), and the relays' streams to discover.
 // Paid streams (docs/design/market.md) have their own tab (src/ui/market.js): the catalog sends a priced stream there (its streams for sale open).
@@ -6,10 +7,10 @@
 import { html } from '@arrow-js/core';
 import { formatEther } from 'viem';
 import { state } from './state.js';
-import { fact, sparkPath } from './parts.js';
+import { fact, form, sparkPath, unlockPrompt } from './parts.js';
 import {
   fmtNum, fmtWhen, networkLine, registrationText, mismatchText, pollText, submitText, modelTitle, modelText, historyText,
-  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText,
+  fmtCadence, shortKey, obsText, rawText, catalogMatch, predText, figure, valueText, votesText,
 } from './format.js';
 import { listingOf } from '../neuron/market.js';
 import { watchText, recordGroups, firstRows, recordDetail, SHOWN } from './record.js';
@@ -157,9 +158,54 @@ function network(a) {
   </details>`;
 }
 
+// ── the Satori contract's streams and their votes (docs/design/base.md#vote) ──
+
+const votes = () => state.votes;
+/** A stream's row as last read (the rows are drawn once per stream; their words follow each read). */
+const voteRowOf = (s) => () => votes().streams.find((x) => x.streamId === s.streamId) ?? s;
+const latestOf = (s) => (s.latest == null ? '–' : `${valueText(s.latest, s.display)}${s.display?.unit ? ` ${s.display.unit}` : ''}`);
+const votesHead = (v) => {
+  if (!v.loaded) return v.error ? '' : "Reading the Satori contract's streams…";
+  return `Each round's SATORI is split across these games by their votes. ${Number(v.burned) > 0 ? `${figure(v.burned)} SATORI voted in all.` : 'No votes yet.'}`;
+};
+
+/**
+ * The Vote composer, in place under its row (eased open and shut: no jump): the amount typed by the person (never a
+ * default), the wallet's SATORI, what a vote does said plainly before the button, Burn and vote; the inline Unlock;
+ * then one line, eased in, with the step (and the small turning ring), what the vote did, or why it could not.
+ */
+function voteComposer(s, a) {
+  const id = s.streamId;
+  const open = () => state.voteOpen === id;
+  const busy = () => state.baseBusy === 'vote';
+  const line = () => state.voteLine || state.voteDone || state.voteError;
+  return html`<div class="vpanel" data-test="vote-panel" data-open="${() => String(open())}" inert="${() => !open()}"><div class="vinner"><form class="vote" data-test="vote-form" data-vote-for="${id}" @submit="${(e) => a.vote(id, form(e), e.target)}"><div class="vtop"><label for="${`vote-amount-${id}`}">SATORI to burn</label><span class="muted small" data-test="vote-balance">${() => `Balance: ${figure(votes().balance)} SATORI`}</span></div><input id="${`vote-amount-${id}`}" name="amount" inputmode="decimal" autocomplete="off" required data-test="vote-amount" @input="${a.voteTyped}"><p class="small vburn" data-test="vote-burn"><b>Voting burns this SATORI for good: it is destroyed and can't be taken back.</b></p><div class="vact"><button class="primary" type="submit" data-test="vote-send" disabled="${busy}">${() => (busy() ? 'Voting…' : 'Burn and vote')}</button><button type="button" data-test="vote-cancel" disabled="${busy}" @click="${() => a.openVote(0)}">Cancel</button></div></form>${unlockPrompt(a, `vote-${id}`, 'burn and vote')}<div class="vstatus" data-open="${() => String(open() && !!line())}"><div class="vline"><p class="small" data-error="${() => String(!state.voteLine && !state.voteDone && !!state.voteError)}" role="status" data-test="vote-status"><i class="spin" aria-hidden="true" hidden="${() => !state.voteLine}"></i><span>${line}</span></p></div></div></div></div>`;
+}
+
+/** A stream: its name, its latest value and its votes (or the default's own share, or not open yet); Vote for a game open for votes. */
+function voteRow(s, a) {
+  // One root node, no whitespace around it (see streamRow); the composer opens in place under the row.
+  const r = voteRowOf(s);
+  const open = () => state.voteOpen === s.streamId;
+  const votable = s.approved && !s.isDefault;
+  return html`<div class="vitem" data-test="vote-stream" data-stream="${s.streamId}" data-game="${s.gameId}"><div class="crow vrow"><div class="cmain"><span class="sname">${s.name}</span><div class="muted small"><span data-test="vote-latest">${() => latestOf(r())}</span> · <span data-test="vote-weight">${() => votesText(r())}</span></div></div>${votable ? html`<button class="small-btn" data-test="vote-open" aria-expanded="${() => String(open())}" disabled="${() => state.baseBusy === 'vote'}" @click="${() => a.openVote(open() ? 0 : s.streamId)}">Vote</button>` : ''}</div>${votable ? voteComposer(s, a) : ''}</div>`;
+}
+
+function votesCard(a) {
+  const v = votes;
+  return html`
+  <details class="card" data-test="contract-streams" @toggle="${(e) => e.target.open && a.loadVotes()}">
+    <summary>Contract Streams</summary>
+    <p class="muted small vhead" data-test="votes-status"><i class="spin" aria-hidden="true" hidden="${() => !v().loading}"></i><span>${() => votesHead(v())}</span></p>
+    <p class="error small" role="alert" data-test="votes-error" hidden="${() => !v().error}"><span>${() => `The chain did not answer: ${v().error}`}</span> <button class="small-btn" data-test="votes-again" disabled="${() => v().loading}" @click="${a.loadVotes}">Try again</button></p>
+    <div class="crows">${() => v().streams.map((s) => voteRow(s, a).key(`${s.streamId}:${s.gameId}:${s.approved}:${s.isDefault}:${s.name}`))}</div>
+  </details>`;
+}
+
 export function streamsTab(a) {
   return html`
   <section class="tab-page" data-test="streams-tab" hidden="${() => state.tab !== 'streams'}">
+    ${votesCard(a)}
     ${network(a)}
     ${nostrCard(a)}
     ${recordsCard(a)}

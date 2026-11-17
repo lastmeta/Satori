@@ -16,24 +16,12 @@ import { DEFAULTS } from '../src/chain/config.js';
 import { channelsAbi, tokenAbi } from '../src/chain/abi.js';
 import { openApp, LOAD_TIMEOUT } from './load.js';
 import { stubCentral } from './stub.js';
+import { FORK, forkRpc, forkUp } from './fork.js';
 
 const RELAY = 'ws://localhost:7781';
-const FORK = 'http://127.0.0.1:8545';
 const PASS = 'correct horse battery';
 const CADENCE = 6;
 const chain = createPublicClient({ transport: http(FORK) });
-/** /rpc to the fork (the stub aborts it otherwise). */
-/** The local test chain answers (node scripts/fork.mjs start): this test runs only then, a dev test (the owner, 2026-11-06). */
-const forkUp = async () => {
-  try {
-    const r = await fetch(FORK, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(2000),
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }) });
-    return r.ok;
-  } catch {
-    return false;
-  }
-};
-const forkRpc = { http: async (body) => (await fetch(FORK, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() };
 
 async function reader(url) {
   const r = createRelay(url, { WebSocket });

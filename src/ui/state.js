@@ -94,6 +94,13 @@ export const state = reactive({
   gameScrub: null, // the Game chart under a finger: { streamId, i, x, y } (src/ui/game.js)
   game: { loading: false, loaded: 0, error: '', rest: false, claimAmount: 0, by: null, round: null, streams: [], queue: [], split: 0, favorites: [], favs: 0, index: 0, picks: {},
     screen: 'play', move: '', sending: false, sendError: '', sent: null },
+  // the Streams tab's Contract Streams (src/ui/streams.js; docs/design/base.md#vote): base.voteStreams()'s (loaded: when, ms),
+  // the stream whose Vote composer is open (0: none), the vote's step at a readable pace, what it did, or why it could not
+  votes: { loading: false, loaded: 0, error: '', balance: null, burned: null, streams: [] },
+  voteOpen: 0,
+  voteLine: '',
+  voteDone: '',
+  voteError: '',
   settingsError: '',
   // the reward address (src/neuron/reward.js; Settings): { address, at, error, reading } as last read, what runs ('' | 'save' |
   // 'clear'), its step at Home's pace, the last result's words and error

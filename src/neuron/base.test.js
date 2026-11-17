@@ -13,7 +13,7 @@ import { FALLBACK_RPC } from '../chain/config.js';
 import {
   PLAYED_BY_HAND,
   createBase, runBatch, stepFor, horizonFor, directionOf, directionFor, nextCheckAt, toPoints, stakeSync, proofState, dropClaimable,
-  checkSend, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS, STUCK_S,
+  checkSend, checkVoteAmount, FIRST_CHECK_S, CHECK_EVERY_S, MAX_FEE_GWEI, PROOF_TTL_S, ZERO_ADDRESS, STUCK_S, NEED_WALLET_GAS,
   streamTitle } from './base.js';
 
 const signerOf = (hex) => {
@@ -604,6 +604,52 @@ describe('createBase', () => {
     rpc.sent.length = 0;
     await expect(base.playHand([{ gameId: 1, direction: UP }])).rejects.toThrow(/Unlock/);
     expect(rpc.sent).toHaveLength(0); // nothing sent from the alias
+  });
+
+  describe('votes (docs/design/base.md#vote)', () => {
+    beforeEach(() => {
+      s.streams[1].named = true;
+      s.streams[1].display = { decimals: 18, unit: 'SATORI', label: 'Net prediction flow' };
+      s.streams[2] = { game: 2, named: false, cadence: 60, name: 'SATORI/USDC', history: [{ hour: H0, value: 1234n }] };
+      s.streams[3] = { game: 3, named: false, cadence: 60, name: 'junk', history: [{ hour: H0, value: 1n }] };
+      s.approved[2] = true;
+    });
+    test("voteStreams: each stream's latest value, its game's weight, open or not; shares once any votes exist; the wallet's SATORI", async () => {
+      let v = await base.voteStreams();
+      expect(v).toMatchObject({ balance: '100', burned: '0' });
+      expect(v.streams).toEqual([
+        { streamId: 1, gameId: 1, name: 'Satori Sentiment', latest: '59058240589371161', display: s.streams[1].display, weight: '1', share: null, approved: false, isDefault: true },
+        { streamId: 2, gameId: 2, name: 'SATORI/USDC', latest: '1234', display: null, weight: '0', share: null, approved: true, isDefault: false },
+        { streamId: 3, gameId: 3, name: 'junk', latest: '1', display: null, weight: '0', share: null, approved: false, isDefault: false },
+      ]);
+      s.weights[2] = 990n * E18; // voted: the default game's derived weight is 1% of all
+      s.weights[1] = 10n * E18;
+      v = await base.voteStreams();
+      expect(v.burned).toBe('990');
+      expect(v.streams.map((x) => [x.weight, x.share])).toEqual([['10', 0.01], ['990', 0.99], ['0', null]]);
+    });
+    test('vote: the amount checked, Unlock, gas; the stream by id or name; the steps said as work', async () => {
+      await expect(base.vote({ stream: 2, amount: '0' })).rejects.toThrow('Enter how much SATORI to burn: more than 0.');
+      await expect(base.vote({ stream: 2, amount: 'lots' })).rejects.toThrow('Enter how much SATORI to burn');
+      await expect(base.vote({ stream: 2, amount: '1' })).rejects.toThrow('Unlock the wallet first');
+      wallet = walletKey;
+      rpc.eth[V] = 0n;
+      await expect(base.vote({ stream: 2, amount: '1' })).rejects.toThrow(NEED_WALLET_GAS);
+      rpc.eth[V] = 10n ** 17n;
+      await expect(base.vote({ stream: 'nothing', amount: '1' })).rejects.toThrow('No stream "nothing" with a game on the Satori contract.');
+      await expect(base.vote({ stream: 'junk', amount: '1' })).rejects.toThrow('This game is not open for votes yet.');
+      await expect(base.vote({ stream: 'Satori Sentiment', amount: '1' })).rejects.toThrow('The default game gets its own share');
+      expect(rpc.sent).toHaveLength(0);
+      const r = await base.vote({ stream: 'satori/usdc', amount: '2.5' });
+      expect(r).toMatchObject({ streamId: 2, gameId: 2, name: 'SATORI/USDC', amount: '2.5', hash: rpc.sent[0].hash, settled: true, weight: '2.5' });
+      expect(await base.vote({ stream: 2, amount: '0.5' })).toMatchObject({ weight: '3' });
+      expect((await base.status()).wallet.satori).toBe('97');
+    });
+    test('checkVoteAmount: a positive decimal string of SATORI, in wei', () => {
+      expect(checkVoteAmount('1.5')).toBe(15n * 10n ** 17n);
+      expect(checkVoteAmount(' 2 ')).toBe(2n * E18);
+      for (const bad of ['', '0', '-1', 'x', null, undefined]) expect(() => checkVoteAmount(bad)).toThrow('Enter how much SATORI to burn');
+    });
   });
 
   test("a stream's name as shown: a Sentiment stream's capitalized and said to be one", () => {

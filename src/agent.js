@@ -22,6 +22,7 @@ import { healthOf } from './neuron/health.js';
 import { lastTraffic } from './traffic.js';
 import { setTheme } from './ui/theme.js';
 import { readFavorites, writeFavorites } from './ui/prefs.js';
+import { valueText } from './ui/format.js';
 import { walletsView } from './wallets.js';
 import { applyUpdate, install, storage } from './pwa/index.js';
 import { turnReminder, remindOnce } from './pwa/push.js';
@@ -369,6 +370,27 @@ export function createAgent(app) {
       const sent = await playCalls(calls, g);
       state.game = { ...state.game, loaded: 0 }; // the Game tab reads again when it opens
       return sent;
+    },
+    /**
+     * Streams › Contract Streams (docs/design/base.md#vote): the Satori contract's streams and their votes, read now.
+     * → { balance (the wallet's SATORI), burned (what all approved games were voted), streams: [{ streamId, gameId, name,
+     * latest, display, weight, share, approved, isDefault, votable }] }; SATORI as decimal strings.
+     */
+    async votes() {
+      ready();
+      const v = await app.base.voteStreams();
+      return { ...v, streams: v.streams.map((s) => ({ ...s, latest: s.latest == null ? null : valueText(s.latest, s.display),
+        votable: s.approved && !s.isDefault })) };
+    },
+    /**
+     * Vote (only on the person's request: it burns their SATORI for good; needs Unlock, and gas): `amount` SATORI (a decimal
+     * string) for the game of `stream` (votes()'s streamId or name). → { streamId, gameId, name, amount, hash, steps, settled, weight }
+     */
+    async vote({ stream, amount } = {}) {
+      ready();
+      const r = await baseAction('vote', () => walletOps.vote({ stream, amount }));
+      if (state.votes.loaded) void actions.loadVotes(); // the card shows it
+      return r;
     },
     /** The game's favorites (stream ids, shown first, in this order), kept on this device for this wallet. → them */
     setGameFavorites(ids = []) {

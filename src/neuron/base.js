@@ -14,7 +14,7 @@ import { playerOf } from './play.js';
 import {
   fallback, formatEther, formatGwei, getAddress, http, isAddress, parseEther, parseGwei, zeroAddress, WaitForTransactionReceiptTimeoutError,
 } from 'viem';
-import { createChain, errorText, lockText, panicOf, same, DOWN, UP, ROUND_S } from '../chain/index.js';
+import { createChain, errorText, lockText, panicOf, same, DEFAULT_GAME, DOWN, UP, ROUND_S, VOTE_TEXT } from '../chain/index.js';
 import { checkRpcSetting, loadConfig, rpcUrls } from '../chain/config.js';
 import { createChannels } from '../chain/channels.js';
 import { explainForecast as engineForecast, STEP_S } from '../engine/index.js';
@@ -148,6 +148,14 @@ export function checkSend({ asset, to, amount } = {}) {
   try { wei = parseEther(text); } catch { wei = 0n; }
   if (!(wei > 0n)) throw new Error('The amount must be a positive number.');
   return { asset: kind, to: address, amount: text, wei };
+}
+
+/** A vote's amount as typed (docs/design/base.md#vote): a positive decimal string of SATORI, asked explicitly. → wei */
+export function checkVoteAmount(amount) {
+  let wei;
+  try { wei = parseEther(String(amount ?? '').trim()); } catch { wei = 0n; }
+  if (!(wei > 0n)) throw new Error(VOTE_TEXT.amount);
+  return wei;
 }
 
 /**
@@ -693,6 +701,55 @@ export function createBase({ db, alias, walletAddress, wallet, central, defaultR
           history: history.map((h) => ({ hour: h.hour, value: String(h.value) })) };
       }));
       return { by, streams, round: view().round, played: await withCalls(chain, (await db.get('game_last_play')) ?? null, streams) };
+    },
+
+    /**
+     * The Satori contract's streams and their votes (docs/design/base.md#vote): every stream with a game, its name, its
+     * latest value (the chain's integer, a decimal string) and how its values read (`display`), its game's weight (what was
+     * voted for it, SATORI; the default game's derived), whether the game is open for votes (`approved`; the default game
+     * has its own share instead: `isDefault`) and its share of each round once any votes exist (0 to 1, else null); the
+     * wallet's SATORI and what all approved games were voted. Amounts as decimal strings.
+     * → { balance, burned, streams: [{ streamId, gameId, name, latest, display, weight, share, approved, isDefault }] }
+     */
+    async voteStreams() {
+      await refresh(); // the wallet's SATORI now
+      const { chain } = await chainNow();
+      const list = await chain.streams({ all: true });
+      const ids = list.map((g) => g.streamId);
+      const [names, displays, totals] = await Promise.all([chain.streamNames(ids), chain.streamDisplays(ids).catch(() => ids.map(() => null)),
+        chain.votes(list.map((g) => g.gameId))]);
+      const all = totals.burned + totals.defaultWeight;
+      const streams = list.map((g, i) => {
+        const isDefault = g.gameId === DEFAULT_GAME;
+        const live = isDefault || totals.approved[i];
+        return { streamId: g.streamId, gameId: g.gameId, name: names[i] ? streamTitle(names[i], g.named) : `Stream ${g.streamId}`,
+          latest: g.latest == null ? null : String(g.latest), display: displays[i], weight: formatEther(g.weight),
+          share: totals.burned > 0n && live ? Number((g.weight * 10n ** 6n) / all) / 1e6 : null, approved: totals.approved[i], isDefault };
+      });
+      return { balance: view().wallet.satori, burned: formatEther(totals.burned), streams };
+    },
+
+    /**
+     * A vote from the wallet (needs Unlock, and Base ETH for gas; docs/design/base.md#vote): `amount` SATORI (a decimal
+     * string) burned for the game of `stream` (its id, or its name as voteStreams() says it), for good. The chain checks
+     * the rest before anything is sent (chain.vote). → { streamId, gameId, name, amount, hash, steps, settled, weight }
+     */
+    async vote({ stream, amount } = {}) {
+      const wei = checkVoteAmount(amount);
+      const v = needWallet();
+      if ((await refresh()).wallet.lowEth) throw new Error(NEED_WALLET_GAS);
+      return act('vote', async (chain, step) => {
+        const list = await chain.streams({ all: true });
+        const names = await chain.streamNames(list.map((g) => g.streamId));
+        const titles = list.map((g, i) => (names[i] ? streamTitle(names[i], g.named) : `Stream ${g.streamId}`));
+        const asked = String(stream ?? '').trim().toLowerCase();
+        const i = list.findIndex((g, k) => String(g.streamId) === asked || titles[k].toLowerCase() === asked || names[k].toLowerCase() === asked);
+        if (i < 0) throw new Error(`No stream "${stream ?? ''}" with a game on the Satori contract.`);
+        const g = list[i];
+        const r = await chain.vote({ wallet: v, gameId: g.gameId, amount: wei, onStep: step });
+        return { streamId: g.streamId, gameId: g.gameId, name: titles[i], amount: formatEther(wei), hash: r.steps.at(-1).hash, steps: r.steps,
+          settled: r.settled, weight: r.weight == null ? null : formatEther(r.weight) };
+      });
     },
 
     /** Who sends the Satori contract predictions, from the database alone (no chain): what the Game tab needs first. */

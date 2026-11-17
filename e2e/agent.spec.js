@@ -1,6 +1,7 @@
 // The agent API for what the screens do (public/llms.txt): an encrypted backup restored in a fresh browser, the Game
 // tab by call (its streams, favorites, playing by hand), a day of Home's strip, a Docker (Lite) import; against the fake
-// Satori contract behind /rpc (test/fake-satori.js).
+// Satori contract behind /rpc (test/fake-satori.js). Votes by call against the real contracts on the local fork (:8545,
+// node scripts/fork.mjs start; skipped without it).
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fakeSatori, E18 } from '../test/fake-satori.js';
@@ -12,6 +13,8 @@ import { evrmoreAddress } from '../src/keys/hd.js';
 import { HDKey } from '@scure/bip32';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { bytesToHex } from '@noble/hashes/utils';
+import { approveGame, fund, stream } from '../scripts/fork.mjs';
+import { FORK, forkRpc, forkUp } from './fork.js';
 
 const PASS = 'correct horse battery';
 const ROUND = 20741;
@@ -272,4 +275,54 @@ test("sub-wallets by call: a private key's wallet has none; 12 words list theirs
   expect((await call(page, 'wallets')).wallets.map((w) => [w.id, w.address, w.active])).toEqual([[1, receive1, false], [2, evmAddress(change0), true]]);
   const earlier = await call(page, 'backup', 'retired', PASS); // the alias it had, kept
   expect(earlier.map((k) => k.address)).toContain(aliasBefore);
+});
+
+test('votes by call (docs/design/base.md#vote): the streams and their votes; a vote checked, then burned; a staked wallet votes', async ({ context, page }) => {
+  test.skip(!(await forkUp()), 'needs the local test chain on :8545: node scripts/fork.mjs start');
+  test.setTimeout(300_000);
+  await stubCentral(context, { rpc: forkRpc });
+  await openApp(page);
+  const st = await call(page, 'setup', { passphrase: PASS });
+  await expect(page.locator('body')).toHaveAttribute('data-screen', 'home', { timeout: LOAD_TIMEOUT });
+  await fund(FORK, [st.wallet], { eth: '0.1', satori: '5' });
+  await fund(FORK, [st.alias], { eth: '0.1' }); // the alias's gas for stake()
+  const name = `vote-${Date.now().toString(36)}`;
+  const { streamId, gameId } = await stream(FORK, name);
+
+  // votes(): free to call; the default game has its own share, a new game is not open for votes until the admin approves it
+  let v = await call(page, 'votes');
+  expect(v.balance).toBe('5');
+  expect(v.streams.find((x) => x.streamId === 1)).toMatchObject({ gameId: 1, isDefault: true, approved: false, votable: false });
+  expect(v.streams.find((x) => x.streamId === streamId)).toMatchObject({ gameId, name, latest: '1,000.00', approved: false, votable: false, weight: '0' });
+  await expect(call(page, 'vote', { stream: name, amount: '1' })).rejects.toThrow('Unlock the wallet first');
+  await call(page, 'unlock', PASS);
+  await expect(call(page, 'vote', { stream: name, amount: '1' })).rejects.toThrow('This game is not open for votes yet.');
+  await approveGame(FORK, gameId);
+  v = await call(page, 'votes');
+  expect(v.streams.find((x) => x.streamId === streamId)).toMatchObject({ approved: true, votable: true });
+
+  // checked before anything is sent
+  await expect(call(page, 'vote', { stream: name, amount: '0' })).rejects.toThrow('Enter how much SATORI to burn: more than 0.');
+  await expect(call(page, 'vote', { stream: name, amount: '6' })).rejects.toThrow("That is more than the wallet's 5 SATORI.");
+  await expect(call(page, 'vote', { stream: 1, amount: '1' })).rejects.toThrow('The default game gets its own share of each round, and takes no votes.');
+  await expect(call(page, 'vote', { stream: 'no such stream', amount: '1' })).rejects.toThrow('No stream "no such stream" with a game on the Satori contract.');
+  expect((await call(page, 'base')).wallet.satori).toBe('5');
+
+  // a vote: one transaction from the wallet; the weight up by it, the SATORI gone
+  const r = await call(page, 'vote', { stream: name, amount: '1.5' });
+  expect(r).toMatchObject({ streamId, gameId, name, amount: '1.5', weight: '1.5', settled: true, hash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+    steps: [{ step: 'voteWithPermit(game, amount)', by: 'wallet' }] });
+  v = await call(page, 'votes');
+  expect(v.balance).toBe('3.5');
+  const mine = v.streams.find((x) => x.streamId === streamId);
+  expect(mine.weight).toBe('1.5');
+  expect(mine.share).toBeGreaterThan(0);
+
+  // staked with this app: the vote still goes; the contract stakes the wallet again, at its smaller balance
+  await call(page, 'stake');
+  expect((await call(page, 'base')).wallet.staked).toBe('alias');
+  expect(await call(page, 'vote', { stream: String(streamId), amount: '1' })).toMatchObject({ weight: '2.5' });
+  const b = await call(page, 'base');
+  expect(b.wallet).toMatchObject({ staked: 'alias', satori: '2.5' });
+  expect(b.alias.power).toBe('2.5');
 });

@@ -601,6 +601,28 @@ button.sname { border: 0; background: none; padding: 0; min-height: 44px; min-wi
 /* paid streams (docs/design/market.md): a price or a deposit typed in the row, its button beside it */
 .crow form { display: flex; gap: 8px; align-items: center; flex: none; }
 .crow form input { margin: 0; width: 7.5em; }
+/* the Satori contract's streams and their votes (docs/design/base.md#vote): a row per stream, its button on the right (on
+   a phone too); Vote opens its composer in place under the row, eased open and shut, and its status line eases in */
+.vhead { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; }
+.vhead .spin { width: 14px; height: 14px; }
+.vrow { flex-wrap: nowrap; }
+.vrow .cmain { flex: 1; }
+.vrow .small-btn[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.vtop, .vote input { max-width: 460px; } /* a computer: the amount at a form's width, not the card's */
+.vpanel, .vstatus { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.25s ease; }
+.vpanel[data-open="true"], .vstatus[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
+.vinner, .vline { min-height: 0; overflow: hidden; }
+.vinner { padding: 0 3px; } /* the input's focus ring shows inside the clip */
+.vinner::after { content: ""; display: block; height: 12px; } /* the space under it, inside the clip: none while shut */
+.vtop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.vtop label { margin: 0; color: var(--text); }
+.vote input { margin-top: 4px; }
+.vburn { margin: 8px 0 0; }
+.vact { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.vline > p { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; }
+.vline > p[data-error="true"] { color: var(--bad); }
+.vstatus .spin { width: 14px; height: 14px; }
+@media (prefers-reduced-motion: reduce) { .vpanel, .vstatus { transition: none; } }
 /* a channel's settings in place (docs/design/market.md): its grace period, a buyer's payout address, Take back */
 .mchange { margin-top: 4px; font-size: 0.85rem; }
 .mchange summary { cursor: pointer; color: var(--muted); }
@@ -857,7 +879,7 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
   .srow [data-label]::before { content: none; }
   .srow .num { text-align: right; }
   .crow { flex-wrap: wrap; }
-  .crow.catrow { flex-wrap: nowrap; } /* a relay stream: its button stays on the right */
+  .crow.catrow, .crow.vrow { flex-wrap: nowrap; } /* a relay stream, a contract stream: its button stays on the right */
   .card { padding: 14px; }
   .hero { padding: 14px; gap: 12px; }
   .ring { width: 56px; height: 56px; }

@@ -31,6 +31,7 @@ page load ─▶ config (bundled D7 addresses, central's /api/v1/base/config ove
                       + central's merkle proof for the wallet (at most hourly)
 Unlock ─▶ Stake with this app: alias setPredictorFee(0) → alias setAllowedDelegator(wallet) → wallet delegatePredictionPower(alias)
        └─▶ Claim: hub.claim() · merkle (central's proof) · airdrop      Send: ETH, or SATORI when it can be sent
+       └─▶ Vote (Streams): the wallet's hub.voteWithPermit(game, amount): SATORI burned for the game's weight
 each round (the alias, no unlock): a batch already sent? wait for it ─▶ power > 0 and no batch yet
           ─▶ registry streams whose game has voting weight ─▶ history ─▶ engine ─▶ UP/DOWN per game
           ─▶ simulate each game alone ─▶ fees under the ceiling? ─▶ predictMultipleWithPayloads(the ones that pass)
@@ -653,6 +654,73 @@ fills the Send form, ETH to the alias, with half the wallet's ETH, up to
 0.1 ETH (`alias.preload`; the owner, 2026-10-28); the person can change the amount, then
 sends as any Send (the review, the passphrase). Agents: `preloadGas()`.
 
+## Vote
+
+A vote burns the wallet's SATORI for a Satori contract game's weight (the
+owner, 2026-11-17: "We need the ability to vote in this app, perhaps on the
+Streams tab"), as the dapp's Vote panel does (`UI/hooks/useVoting.ts`,
+`UI/components/VotePanel.tsx`), simplified. Lite has no voting.
+
+- **What it is.** `hub.vote(gameId, amount)` burns `amount` SATORI from the
+  caller (`token.burnFrom`) and adds it to the game's weight
+  (`C/next/SatoriHub.sol:727-822`, `C/SatoriVoting.sol:270-299`): the tokens
+  never come back and the weight stays (it moves only off a game that loses
+  its approval, `moveVotes`, which the app doesn't offer). Each round's SATORI
+  is split across the games predicted that round by their weight. The default
+  game (1, the Sentiment stream "satori") has its own derived weight, 1% of
+  all (`DEFAULT_SHARE_BPS`, at least 1 SATORI's), and takes no votes
+  (`CannotVoteDefault`). A game is open for votes once the admin approves it
+  (`gameApproved`, else `GameNotApproved`), binary games only
+  (`GameNotMintEligible`), while the hub's vote capability (bit 7) is on.
+- **Reads.** `chain.votes(gameIds)`, one multicall: `gameApproved` for each
+  game, `totalBurnedWeight` (all approved games' weight) and
+  `defaultDerivedWeight`; a game's share of a round is its `weightOf` over
+  the two together. `chain.streams()` also gives each stream's latest value
+  (`getLatestUpdateInfo`'s, which it read already). `base.voteStreams()` puts
+  them together with the names, the adapters' displays and the wallet's SATORI.
+- **The write**, `chain.vote({ wallet, gameId, amount, onStep })`. Checked
+  first, in one multicall, nothing sent otherwise (`VOTE_TEXT`, plain words):
+  an amount above 0, within the wallet's SATORI, not the default game, an
+  approved game, voting on. Then one `hub.voteWithPermit(gameId, amount,
+  { value, deadline, signature })`: SATORI's ERC-2612 permit for the hub,
+  signed by the wallet (`src/chain/permit.js`, shared with the payment
+  channels: the domain from ERC-5267, checked against `DOMAIN_SEPARATOR`;
+  the deadline chain time + 1 h); the hub tries it and `burnFrom` decides. A
+  wallet that can't sign typed data (a wallet app without
+  `eth_signTypedData_v4`; a person's no stops it instead) approves exactly
+  the amount, then `hub.vote`: two transactions, as the dapp. Each write is
+  simulated first, so a revert names its error. Then the game's weight is
+  read until it shows the vote. Its steps (the `vote` task): "Sending…",
+  "Waiting for Base to confirm…" ("Step 1 of 2: …" for approve, then vote),
+  "Checking it on Base…". It needs Unlock and the wallet's Base ETH (said
+  before it tries, as the Admin tab's actions).
+- **A staked wallet** can vote: the hub unstakes it, burns, and stakes it
+  again at its smaller balance in the same transaction
+  (`SatoriHub.sol:786-822`); the alias's power drops by the amount.
+- **The card**, Streams › **Contract Streams** (first, folded; read each
+  time it opens): "Each round's SATORI is split across these games by their
+  votes." and what was voted in all; each stream with a game, its name, its
+  latest value in its own units (the adapter's `valueDisplay`, as the Game
+  tab) and its votes: "Votes: 12 SATORI · 42% of each round" (the share once
+  any votes exist), "No votes yet", the default game's "Its own share of each
+  round (1%): takes no votes" (1% of all once enough is voted; under 99 SATORI
+  in all its floor of 1 SATORI's weight is more), or "Not open for votes
+  yet". A game open for votes has **Vote**, which
+  eases open a composer under its row: "SATORI to burn", typed by the person
+  (never a default), the wallet's balance beside it, "Voting burns this
+  SATORI for good: it is destroyed and can't be taken back." in bold before
+  **Burn and vote** and Cancel. Locked, the passphrase is asked in place
+  (and the wallet locks again after). Under them one line eases in: the step
+  with the small turning ring, then "Voted: 2 SATORI burned for
+  SATORI/USDC.", or why not (red only for an error); the rows' votes are
+  read again. The amount and the balance are checked before the passphrase.
+- **Agents**: `votes()` (free to call) and `vote({ stream, amount })` (only
+  on the person's request), in [/llms.txt](../../public/llms.txt).
+- Not ported from the dapp: Max, moving weight off a game that lost its
+  approval (`moveVotes`), the gasless relayer, creating streams.
+
+<img src="../screenshots/vote-open-phone.png" alt="Streams › Contract Streams on a phone: SATORI/USDC's composer open, the amount, the balance, the burn said plainly, Burn and vote" width="320">
+
 ## Deviations from Lite and the dapp, and why
 
 | Deviation | Why |
@@ -731,7 +799,8 @@ asked at once.
 
 - `npm test`: `src/chain/chain.test.js` (viem against `test/fake-rpc.js`, a small
   in-memory Satori behind a custom transport: the status multicall, the lock
-  rule, stake and unstake, streams kept by voting weight, per-game
+  rule, stake and unstake, streams kept by voting weight, votes (the checks,
+  the permit, approve then vote, a staked wallet, a connected wallet), per-game
   simulation, payload bytes, fees from `eth_maxPriorityFeePerGas` and the
   pad, the max fee on every write and on a send's quote, CCIP-read off (an
   `OffchainLookup` revert fetches nothing), receipts, claims' branches,
@@ -758,6 +827,11 @@ asked at once.
   `quoteSend()` and `send()` needing the passphrase while unlocked, Claim's
   inline Unlock locking again after, and `stake()` / `unstake()` from the
   agent API.
+- `e2e/vote.spec.js`, against the local fork on :8545 (skipped when it is
+  not running): a stream approved there, Streams › Contract Streams on a
+  phone, Vote, the amount, Burn and vote with the passphrase in place, the
+  weight read again; `e2e/agent.spec.js`'s "votes by call", on the fork too:
+  `votes()` and `vote()`, their checks, a staked wallet's vote.
 - Against a fork: `BASE_FORK=http://127.0.0.1:8546 npx vitest run
   src/chain/fork.test.js` runs the chain module against the real contracts
   on an anvil fork (written on D6; not run on D7, whose airdrop table is
@@ -843,6 +917,8 @@ The Wallet's card staked, with the batch and the Stake transactions
   stream's next value moves (and stakers' rewards can show).
 - `stream [name]`: a new stream from the deployer (a 0.001 SATORI burn) with
   one value; its game has no voting weight, so the batch leaves it out.
+- `approve <gameId>`: the admin (read from the contract, impersonated)
+  approves the game: open for votes ([Vote](#vote)).
 - `grief <address>`: the token-hook bug: 1 wei of SATORI from the deployer
   with the bare gas estimate, as any wallet sends it; it prints the hook
   events (`TransferHookFailed` on anvil). A staked wallet is then out of

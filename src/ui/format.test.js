@@ -4,7 +4,7 @@ import {
   fmtCadence, shortKey, relayText, relaysText, BLOCKED_NOTE, obsText, catalogMatch, predText,
   shortHash, amountText, fmtUtc, delegationText, claimableText, lockText, gasText, batchText, checkText, claimLine, rpcText, rpcTitle, stepText, referralText, referralNote,
   storageText, playNote, modelText, historyText, daysText, lockInText, ethFeeText, engineText, openingText,
-  saleText, boughtText, graceText, buyerText,
+  saleText, boughtText, graceText, buyerText, valueText, shareText, votesText,
 } from './format.js';
 
 test('fmtNum', () => {
@@ -311,4 +311,16 @@ test('Referral: registered, held until Stake, or none; the note says what Stake 
   expect(referralText({ wallet: { referral: null }, pendingReferrer: null })).toBe('None');
   expect(referralNote('0xabab…abab')).toBe('Invited by 0xabab…abab. Staking, or your first prediction in the Game tab, registers them as your referral, once and for good: 5% of the rewards your wallet earns goes to them instead of to the project, and you earn the same either way.');
   expect(stepText('setReferral(referrer)')).toBe('Wallet: registers who invited you');
+});
+
+test("a stream's value in its own units, a share of the round, a Contract Stream's votes (docs/design/base.md#vote)", () => {
+  expect(valueText('999999228392505300', { decimals: 18 })).toBe('0.999999');
+  expect(valueText('1234', null)).toBe('1,234.00');
+  expect([0.42371, 0.01, 0.00012, 1].map(shareText)).toEqual(['42%', '1%', '0.012%', '100%']);
+  const row = { approved: true, isDefault: false, weight: '0', share: null };
+  expect(votesText(row)).toBe('No votes yet');
+  expect(votesText({ ...row, weight: '990', share: 0.99 })).toBe('Votes: 990 SATORI · 99% of each round');
+  expect(votesText({ ...row, approved: false })).toBe('Not open for votes yet');
+  expect(votesText({ ...row, isDefault: true, approved: false, weight: '1' })).toBe('Its own share of each round: takes no votes');
+  expect(votesText({ ...row, isDefault: true, approved: false, weight: '10', share: 0.01 })).toBe('Its own share of each round (1%): takes no votes');
 });

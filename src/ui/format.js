@@ -292,6 +292,26 @@ export function batchText(b) {
 /** A balance's figure for a big number: '1,000.00', '0.002' (a decimal string; '–' while not read). */
 export const figure = (x) => (x == null ? '–' : fmtNum(Number(x)));
 
+/**
+ * A registry stream's value in its own units: the chain keeps an integer with its adapter's `decimals` after the point
+ * (`display`, valueDisplay; none: a plain number). 999999228392505300 with 18: '0.999999'.
+ */
+export const valueText = (value, display) => fmtNum(Number(value) / 10 ** (display?.decimals ?? 0));
+
+/** A share of each round, from 0 to 1: '42%', '1%', '0.012%' (two significant digits). */
+export const shareText = (share) => `${(share * 100).toLocaleString('en-US', { maximumSignificantDigits: 2 })}%`;
+
+/**
+ * A Satori contract stream's votes (Streams › Contract Streams; docs/design/base.md#vote), base.voteStreams()'s row: the
+ * default game's own share; a game not open for votes; else what was voted for it, and its share once any votes exist.
+ */
+export function votesText(s) {
+  const share = s.share == null ? '' : ` · ${shareText(s.share)} of each round`;
+  if (s.isDefault) return `Its own share of each round${s.share == null ? '' : ` (${shareText(s.share)})`}: takes no votes`;
+  if (!s.approved) return 'Not open for votes yet';
+  return Number(s.weight) > 0 ? `Votes: ${figure(s.weight)} SATORI${share}` : 'No votes yet';
+}
+
 export function checkText(c, next) {
   const when = next ? `next ${fmtWhen(next)}` : '';
   if (!c) return when || 'Not yet';

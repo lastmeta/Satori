@@ -4,6 +4,14 @@ The history of what changed for agents and for people driving the page,
 newest first. The current reference is /llms.txt; read that first. An entry's
 "below" or "above" meant /llms.txt as it was then.
 
+## Changed 2026-11-17 (voting)
+
+- New: `votes()` and `vote({ stream, amount })`, and the Streams tab's first card, Contract Streams
+  (`contract-streams`): the Satori contract's streams with their latest value and their game's votes (weight, and its
+  share of each round once any votes exist), and Vote on a game open for votes. A vote burns the wallet's SATORI for
+  that game's weight, for good (one `voteWithPermit`; approve, then vote, for a wallet app that can't sign typed data);
+  the default game has its own share and takes no votes. `vote` only on the person's request.
+
 ## Changed 2026-11-12 (sub-wallets of imported words)
 
 - New: `subWallets()`, `deriveSubWallets()`, `useSubWallet(n, passphrase)`, and the Wallet tab's Sub-wallets card

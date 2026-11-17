@@ -934,6 +934,12 @@ const walletOps = {
     if (sum > 0) activity.wallet('claim', `Claimed ${fmtNum(sum)} SATORI`);
     return r;
   },
+  /** A vote: SATORI burned for a stream's game (docs/design/base.md#vote). */
+  async vote(o) {
+    const r = await base.vote(o);
+    activity.wallet('vote', `Voted for ${r.name}: burned ${fmtNum(Number(r.amount))} SATORI`);
+    return r;
+  },
   /** { asset, to, amount, passphrase }: the inputs checked first, then the wallet opened from the passphrase for this send alone. */
   async send(o = {}) {
     const { asset, amount } = checkSend(o);
@@ -1192,6 +1198,7 @@ const lineOf = (tasks, hold) => () => {
 watch(lineOf(WALLET_TASKS, createHold({ show: (v) => { state.actionLine = v.line; } })));
 watch(lineOf(['discover', 'subscribe'], createHold({ delay: 1000, show: (v) => { state.networkLine = v.line; } })));
 watch(lineOf(['watch'], createHold({ show: (v) => { state.watchLine = v.line; } }))); // Streams › Prediction streams: the scan's step
+watch(lineOf(['vote'], createHold({ show: (v) => { state.voteLine = v.line; } }))); // Streams › Contract Streams: a vote's step
 /** Streams › Prediction streams: read when the tab shows, and when the watched set changes (nostr's status). */
 watch(() => {
   void state.nostr.watching;

@@ -12,12 +12,13 @@
  * the reward address saved or cleared (Settings, setRewardAddress()), never critical. `train`:
  * the training pass (src/neuron/train.js), after a poll and the Base batch, which it waits for; `retrain`: a model's
  * Retrain (src/neuron/retrain.js), which waits for a poll too. `watch`: the scan for prediction streams to watch (the track
- * record, src/neuron/records.js), shown on the Streams tab's Prediction streams card.
+ * record, src/neuron/records.js), shown on the Streams tab's Prediction streams card. `vote`: a vote from the wallet
+ * (docs/design/base.md#vote), shown in its composer on the Streams tab's Contract Streams card.
  */
 export const ORDER = ['central', 'base', 'train', 'retrain', 'stake', 'unstake', 'claim', 'send', 'keys', 'reward', 'discover', 'subscribe',
-  'watch', 'devfee', 'admin', 'roles', 'safe'];
+  'watch', 'devfee', 'admin', 'roles', 'safe', 'vote'];
 export const HERO = ORDER.slice(0, 10);
-const WALLET = new Set(['stake', 'unstake', 'claim', 'send', 'keys', 'devfee', 'admin', 'roles', 'safe']);
+const WALLET = new Set(['stake', 'unstake', 'claim', 'send', 'keys', 'devfee', 'admin', 'roles', 'safe', 'vote']);
 /**
  * Closing now would lose work: predictions being sent, a Base batch or a wallet transaction sent and not yet confirmed,
  * the keys being written.
@@ -62,7 +63,7 @@ const TEXT = {
   'reward:clear': () => 'Clearing the reward address…',
   'train:score': (e) => `Scoring models · ${e.done} of ${e.total}`,
   'retrain:search': (e) => (e.done ? `Retraining ${e.name} · tried ${e.done}` : `Retraining ${e.name}…`),
-  // a wallet action's steps (Stake, Unstake, Send; Claim's confirm)
+  // a wallet action's steps (Stake, Unstake, Send, a vote; Claim's confirm)
   send: (e) => tx(e, 'Sending…'),
   confirm: (e) => tx(e, 'Waiting for Base to confirm…'),
   settle: () => 'Checking it on Base…',

@@ -1,6 +1,6 @@
 // The Game tab's flow (docs/design/base.md#the-game), pure: which streams it shows and in what order, when Submit
 // shows early, the chart's line and the latest value's words. src/ui/game.js draws it; main.js keeps its state.
-import { fmtNum } from './format.js';
+import { valueText } from './format.js';
 
 const WAIT = { DuplicatePrediction: 'already predicted this round', AlreadyPredicted: 'already predicted this round' };
 
@@ -59,7 +59,7 @@ export const submitEarly = ({ index, favorites, picks, split = 0 }) => picks > 0
 export function latestText(stream, at = null) {
   const h = stream?.history ?? [];
   const x = at == null ? h.at(-1) : h[at];
-  return x ? fmtNum(Number(x.value) / 10 ** (stream.display?.decimals ?? 0)) : '';
+  return x ? valueText(x.value, stream.display) : '';
 }
 
 /**

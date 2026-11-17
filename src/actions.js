@@ -6,15 +6,15 @@ import {
   cleanKeyText, generateSecret, keyFromText, wordsOf, newKeys, readDockerFiles, passphraseOk, MIN_PASSPHRASE, IMPORT_MAX,
 } from './keys/index.js';
 import { findWallets } from './keys/connect.js';
-import { errorText, same } from './chain/index.js';
+import { errorText, same, VOTE_TEXT } from './chain/index.js';
 import { toggleDest } from './neuron/models.js';
 import { box as modelBox } from './ui/models.js';
-import { NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS } from './neuron/base.js';
+import { NEED_GAS, NEED_ALIAS_GAS, NEED_STAKE_GAS, checkVoteAmount } from './neuron/base.js';
 import { shareLink, sharedLink } from './neuron/referral.js';
 import { queueOf, stepOf, favoritesIn, played, opensAgain } from './ui/gameflow.js';
 import { playerOf } from './neuron/play.js';
 import { DEFAULT_PRICE } from './ui/market.js';
-import { formatEther, getAddress, isAddress } from 'viem';
+import { formatEther, getAddress, isAddress, parseEther } from 'viem';
 import { setTheme } from './ui/theme.js';
 import { writePref, readFavorites, writeFavorites, SORT_KEY, INSTALL_KEY, NEXT_STEP_KEY } from './ui/prefs.js';
 import { pickIndexes, shortHash, claimLine, stepText, fmtNum } from './ui/format.js';
@@ -619,6 +619,51 @@ export function createActions(app) {
       if (to) state.game = { ...g, ...to, move: dir > 0 ? 'next' : 'back', sendError: '' };
     },
     gameSubmitNow() { state.game = { ...state.game, screen: 'submit', move: 'next' }; },
+    // ── the Streams tab's Contract Streams (docs/design/base.md#vote) ──
+    /** The Satori contract's streams and their votes, read again (the rows stay meanwhile). */
+    async loadVotes() {
+      if (state.votes.loading || !app.base) return;
+      state.votes = { ...state.votes, loading: true, error: '' };
+      try {
+        state.votes = { ...state.votes, ...(await app.base.voteStreams()), loading: false, loaded: Date.now() };
+      } catch (err) {
+        state.votes = { ...state.votes, loading: false, error: errorText(err) };
+      }
+    },
+    /** A game's Vote: its composer opens under its row (another's closes); 0 closes it. */
+    openVote(streamId) {
+      if (state.baseBusy === 'vote') return;
+      if (String(state.unlockFor).startsWith('vote-')) actions.cancelUnlock();
+      Object.assign(state, { voteOpen: streamId, voteDone: '', voteError: '' });
+      if (streamId) setTimeout(() => document.querySelector(`[data-vote-for="${streamId}"] input[name=amount]`)?.focus(), 300);
+    },
+    /** The amount typed again: what the last vote did, or why it could not, goes. */
+    voteTyped() {
+      if (state.baseBusy !== 'vote') Object.assign(state, { voteDone: '', voteError: '' });
+    },
+    /**
+     * Burn and vote: the amount checked here (above 0, within the wallet's SATORI), then the wallet (Unlock in place, in the
+     * composer); the weights read again after.
+     */
+    vote(streamId, f, el) {
+      Object.assign(state, { voteDone: '', voteError: '' });
+      let wei;
+      try { wei = checkVoteAmount(f.amount); } catch (err) { state.voteError = err.message; return undefined; }
+      const balance = state.votes.balance == null ? null : parseEther(state.votes.balance);
+      if (balance != null && wei > balance) return void (state.voteError = VOTE_TEXT.over(balance));
+      return withWallet(`vote-${streamId}`, () => actions.voteNow(streamId, f.amount, el));
+    },
+    async voteNow(streamId, amount, el) {
+      Object.assign(state, { voteDone: '', voteError: '' });
+      try {
+        const r = await baseAction('vote', () => walletOps.vote({ stream: streamId, amount }));
+        el?.reset();
+        state.voteDone = `Voted: ${fmtNum(Number(r.amount))} SATORI burned for ${r.name}.`;
+      } catch (err) {
+        state.voteError = errorText(err);
+      }
+      await actions.loadVotes();
+    },
     toggleChip(key) { state.chipOpen = state.chipOpen === key ? '' : key; },
     toggleContractQr(address) { state.contractQr = state.contractQr === address ? '' : address; },
     /** The game's CLAIM: Home's Claim (Unlock in place); the amount kept to tell CLAIMED's 0 and the read still to come from a new amount. */
