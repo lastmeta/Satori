@@ -857,8 +857,10 @@ a.mrow:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparen
 .to-field input { flex: 1; padding-right: 44px; }
 .to-field .scan-btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
   min-width: 40px; min-height: 40px; padding: 0; }
-.scan-panel { scroll-margin-bottom: calc(12px + var(--bar) + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.3s ease, opacity 0.25s ease; }
-.scan-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
+/* shut, it is hidden once eased shut, so its Cancel is no button to a screen reader */
+.scan-panel { scroll-margin-bottom: calc(12px + var(--bar) + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-rows: 0fr; opacity: 0;
+  visibility: hidden; transition: grid-template-rows 0.3s ease, opacity 0.25s ease, visibility 0s 0.3s; }
+.scan-panel[data-open="true"] { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition-delay: 0s; }
 .scan-inner { min-height: 0; overflow: hidden; display: grid; gap: 8px; justify-items: center; }
 .scan-inner video { width: min(320px, 100%); aspect-ratio: 1; object-fit: cover; border-radius: 10px; background: #000; margin-top: 12px; }
 .scan-inner p { margin: 0; text-align: center; }
