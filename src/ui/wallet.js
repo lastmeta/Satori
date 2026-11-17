@@ -12,7 +12,7 @@ import {
   amountText, figure, claimParts, delegationText, lockText, gasText, batchText, checkText, shortHash, rpcText, rpcTitle, playNote, ethFeeText,
   referralText, referralNote, REFERRAL_PCT,
 } from './format.js';
-import { BUY_URL, SATORI_DAILY_URL } from '../chain/config.js';
+import { BUY_URL, DEFAULTS, SATORI_DAILY_URL } from '../chain/config.js';
 import { qrDataUrl } from './contract.js';
 import { workText } from '../neuron/work.js';
 import { OUT_OF_SYNC } from '../neuron/base.js';
@@ -186,7 +186,7 @@ export function walletTab(a) {
 
   <details class="card" data-test="base-details">
       <summary>Details</summary>
-      <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Service\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Service serves none)')}">${() => (b().config ? `Base Sepolia · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
+      <div class="muted small" title="${() => (b().config === 'central' ? 'The app\'s own Satori contract addresses (the Satori Service\'s are checked against them, never used)' : 'The app\'s own Satori contract addresses (the Satori Service serves none)')}">${() => (b().config ? `${DEFAULTS.chainName} · round ${b().round ?? '–'}` : 'Reading the chain…')}</div>
       <dl class="facts">
         ${fact('Transfers', 'base-lock', () => lockText(b().wallet.lock))}
         ${fact('RPC', 'base-rpc', html`<span title="${() => rpcTitle(b())}">${() => rpcText(b())}</span>`)}
