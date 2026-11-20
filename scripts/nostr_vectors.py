@@ -44,7 +44,7 @@ PRED_CREATED_AT = 1792000000
 
 
 def satori_nostr_package():
-    """satorilib's satori_nostr package at REF, in a temp dir (no integrations)."""
+    """satorilib's satori_nostr package at REF, in a temp dir."""
     root = tempfile.mkdtemp()
     pkg = os.path.join(root, 'satori_nostr')
     os.makedirs(pkg)
