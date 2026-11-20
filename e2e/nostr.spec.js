@@ -120,8 +120,9 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
     description: '', encrypted: false, price_per_obs: 0, created_at: expect.any(Number), cadence_seconds: 60, tags: [],
     approval_required: false, metadata: { source_stream_name: stream, source_provider_pubkey: provider.pubkey,
       alias_pubkey: aliasPubkey } });
-  const [subEv] = await user.fetch([{ kinds: [34602], authors: [me], '#d': [stream] }]);
-  expect(subEv.tags).toEqual([['d', stream], ['p', provider.pubkey], ['stream', stream], ['satori', 'subscription']]);
+  const slot = `${stream}:${provider.pubkey}`; // a subscription's d: the provider's stream
+  const [subEv] = await user.fetch([{ kinds: [34602], authors: [me], '#d': [slot] }]);
+  expect(subEv.tags).toEqual([['d', slot], ['p', provider.pubkey], ['stream', stream], ['satori', 'subscription']]);
   const [list] = await user.fetch([{ kinds: [10002], authors: [me] }]);
   expect(list.tags).toContainEqual(['r', USER_RELAY]); // NIP-65: the relays open at the time
 
@@ -143,8 +144,8 @@ test('discover, subscribe, observations in, `_pred` out on the relay we write to
   await expect(page.locator('[data-test=sub]')).toHaveCount(0);
   await expect.poll(async () => (await user.fetch([{ kinds: [34600], authors: [me], '#d': [pred] }]))[0].tags)
     .toEqual([['d', pred], ['satori', 'datastream'], ['status', 'deleted']]);
-  const [unsub] = await user.fetch([{ kinds: [34602], authors: [me], '#d': [stream] }]);
-  expect(unsub.tags).toEqual([['d', stream], ['p', provider.pubkey], ['stream', stream], ['action', 'unsubscribe'],
+  const [unsub] = await user.fetch([{ kinds: [34602], authors: [me], '#d': [slot] }]);
+  expect(unsub.tags).toEqual([['d', slot], ['p', provider.pubkey], ['stream', stream], ['action', 'unsubscribe'],
     ['satori', 'unsubscription']]);
   await page.waitForTimeout(1100); // not in seq 3's second (NIP-01's tie rule, as above)
   await provider.observe({ stream, value: '103', seq: 4, timestamp: t0 + 180 });

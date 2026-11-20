@@ -1,11 +1,12 @@
 """Generate test/fixtures/nostr-parity.json from satorilib's Nostr client and Satori Lite.
 
-The events are built by satorilib's own SatoriNostr methods (origin/base-upgrade,
-dec62db, the client Satori Lite runs) and signed by nostr-sdk 0.45, with the
+The events are built by satorilib's own SatoriNostr methods (origin/main, the
+client Satori Lite runs) and signed by nostr-sdk 0.45, with the
 metadata and observations made as neuron-lite/start.py makes them. Only the
-clock is pinned (created_at and the content timestamps), so the ids are fixed.
-Lite's `_numericObservationValue` (start.py:1364-1424) is taken from start.py's
-source and run on sample values.
+clock is pinned (created_at and the content timestamps), so the ids are fixed
+(a signature is new on each run: BIP-340's is salted). Lite's
+`_numericObservationValue` is taken from start.py's source and run on sample
+values. The commit and the lines it was made from are the fixture's `about`.
 
 Run (throwaway venv; no network, no relay):
   python3 -m venv /tmp/nvenv && /tmp/nvenv/bin/pip install nostr-sdk==0.45.0
@@ -29,7 +30,7 @@ from nostr_sdk import Keys, SecretKey, Timestamp
 HERE = os.path.dirname(os.path.abspath(__file__))
 SATORI = os.path.abspath(os.path.join(HERE, '..', '..'))
 SATORILIB = os.environ.get('SATORILIB', os.path.join(SATORI, 'satorilib'))
-REF = os.environ.get('SATORILIB_REF', 'origin/base-upgrade')
+REF = os.environ.get('SATORILIB_REF', 'origin/main')
 START = os.environ.get('START_PY', os.path.join(SATORI, 'neuron', 'neuron-lite', 'start.py'))
 
 # The fixture key (test/fixtures/alias-parity.json `nostr`) and a pinned clock.

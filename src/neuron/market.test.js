@@ -148,7 +148,7 @@ describe('selling and buying', () => {
     expect(ch).toMatchObject({ payer: B_WALLET.evmAddress, payee: S_WALLET.evmAddress, signer: B_ID.evmAddress, deposit: 5n * PRICE });
     const sub = last(KIND.SUBSCRIPTION);
     expect(verifyEvent(sub)).toBe(true);
-    expect(sub.tags).toEqual([['d', STREAM], ['p', SP], ['stream', STREAM], ['satori', 'subscription']]);
+    expect(sub.tags).toEqual([['d', `${STREAM}:${SP}`], ['p', SP], ['stream', STREAM], ['satori', 'subscription']]);
     const pc = JSON.parse(sub.content).payment_channel;
     expect(pc).toMatchObject({ chain: 84532, contract: DEFAULTS.channels, id: v.channel });
     expect(await bindingSigner(v.channel, BP, pc.binding)).toBe(B_ID.evmAddress);
@@ -172,7 +172,7 @@ describe('selling and buying', () => {
     expect(a.got).toEqual([{ stream_name: STREAM, provider: SP, timestamp: clock - 60, value: '101.5', seq: 1, id: d.id }]);
     // the payment: Lite's 34603 for seq + 1, the voucher inside, encrypted to the seller
     const [p] = a.payments;
-    expect(p.tags).toEqual([['d', STREAM], ['p', SP], ['stream', STREAM], ['seq', '2']]);
+    expect(p.tags).toEqual([['d', `${STREAM}:${SP}`], ['p', SP], ['stream', STREAM], ['seq', '2']]);
     const body = JSON.parse(await nip04Decrypt(S_NOSTR, BP, p.content));
     expect(body).toMatchObject({ from_pubkey: BP, to_pubkey: SP, stream_name: STREAM, seq_num: 2, amount_sats: 1000,
       voucher: { channel: v.channel, cumulative: String(PRICE) } });
@@ -320,7 +320,7 @@ describe('selling and buying', () => {
     const s = await buyer.stop(SP, STREAM);
     expect(s).toMatchObject({ status: 'closing', closeAt: clock + CLOSE_GRACE_S, paid: '0.00002' });
     const u = last(KIND.SUBSCRIPTION);
-    expect(u.tags).toEqual([['d', STREAM], ['p', SP], ['stream', STREAM], ['action', 'unsubscribe'], ['satori', 'unsubscription']]);
+    expect(u.tags).toEqual([['d', `${STREAM}:${SP}`], ['p', SP], ['stream', STREAM], ['action', 'unsubscribe'], ['satori', 'unsubscription']]);
     expect(buyer.pairs()).toEqual([]);
     await seller.onEvent(u);
     expect(seller.status().selling[0].buyers[0].closing).toBe(true);

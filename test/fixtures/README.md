@@ -32,7 +32,7 @@ Parity vectors for `src/keys/`, `src/central/` and `src/engine/`. Throwaway keys
   `scripts/bvar_parity.py` the same way.
 - `nostr-parity.json` (the fields, tags and signatures; our content is compact JSON, not these bytes): Satori's Nostr events (`_pred` 34601, its 34600
   announcement and tombstone, the 34602 subscribe and unsubscribe, a 10002)
-  built by satorilib's own `SatoriNostr` methods (`origin/base-upgrade`) and
+  built by satorilib's own `SatoriNostr` methods (`origin/main`) and
   signed by nostr-sdk 0.45 with the `nostr` key above, the clock pinned; Lite's
   `_numericObservationValue` on 17 values; the relay uuid Lite pins in
   `neuron/tests/test_relay_ids.py`. Made by `scripts/nostr_vectors.py`.

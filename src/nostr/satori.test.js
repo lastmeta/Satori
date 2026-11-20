@@ -93,7 +93,7 @@ describe("the paid stream's events (docs/design/market.md#selling-and-buying-ove
   });
   test("a payment (34603) as send_payment's (client.py:1216-1283): Lite's amount_sats, the voucher in place of tx_id", () => {
     const e = sign(paymentEvent({ stream: 'x_pred', provider: SUB, seq: 8, content: 'c?iv=d', now }));
-    expect(e).toMatchObject({ kind: 34603, content: 'c?iv=d', tags: [['d', 'x_pred'], ['p', SUB], ['stream', 'x_pred'], ['seq', '8']] });
+    expect(e).toMatchObject({ kind: 34603, content: 'c?iv=d', tags: [['d', `x_pred:${SUB}`], ['p', SUB], ['stream', 'x_pred'], ['seq', '8']] });
     const voucher = { channel: '0x' + '9'.repeat(64), cumulative: '2000', signature: '0x' + '1'.repeat(130) };
     expect(JSON.parse(paymentJson({ from: fx.pubkeyHex, to: SUB, stream: 'x_pred', seq: 8, amountSats: 1000, timestamp: now, voucher })))
       .toStrictEqual({ from_pubkey: fx.pubkeyHex, to_pubkey: SUB, stream_name: 'x_pred', seq_num: 8, amount_sats: 1000, timestamp: now, voucher });

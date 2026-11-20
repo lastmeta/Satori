@@ -72,10 +72,12 @@ export const predMetadata = ({ sub, pubkey, aliasPubkey, listing = null }) => ({
 
 /**
  * subscribe_datastream / unsubscribe_datastream (client.py:1102-1154, 1600-1644); a paid stream's subscription names
- * its channel in payment_channel ({ chain, contract, id, binding }).
+ * its channel in payment_channel ({ chain, contract, id, binding }). d = `<stream>:<provider>`, the unsubscribe's too
+ * (it takes its subscription's place): a relay keeps one event per d, and two providers may each have a stream of one
+ * name (every predictor of X publishes X_pred).
  */
 export function subscriptionEvent({ stream, provider, subscriber, now, unsubscribe = false, paymentChannel = null }) {
-  const tags = [['d', stream], ['p', provider], ['stream', stream]];
+  const tags = [['d', `${stream}:${provider}`], ['p', provider], ['stream', stream]];
   tags.push(...(unsubscribe ? [['action', 'unsubscribe'], ['satori', 'unsubscription']] : [['satori', 'subscription']]));
   return {
     created_at: now, kind: KIND.SUBSCRIPTION, tags,
@@ -124,9 +126,13 @@ export const heartbeatEvent = ({ stream, seq, timestamp, now }) => ({
   tags: [['d', stream], ['stream', stream], ['seq', String(seq)], ['timestamp', String(timestamp)], ['satori', 'heartbeat']],
 });
 
-/** A payment (34603) as send_payment sends it (client.py:1216-1283): `content` its JSON encrypted to the seller (NIP-04). */
+/**
+ * A payment (34603) as send_payment sends it (client.py:1216-1283): `content` its JSON encrypted to the seller (NIP-04);
+ * d as its subscription's.
+ */
 export const paymentEvent = ({ stream, provider, seq, content, now }) => ({
-  created_at: now, kind: KIND.PAYMENT, content, tags: [['d', stream], ['p', provider], ['stream', stream], ['seq', String(seq)]],
+  created_at: now, kind: KIND.PAYMENT, content,
+  tags: [['d', `${stream}:${provider}`], ['p', provider], ['stream', stream], ['seq', String(seq)]],
 });
 
 /**

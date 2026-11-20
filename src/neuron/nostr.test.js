@@ -381,9 +381,9 @@ describe('subscribe → follow → intake → `_pred`', () => {
     expect(row).toMatchObject({ uuid, stream: 'btc', provider: PROV_PUB, name: 'BTC', cadence_seconds: 900, observation: null, prediction: null });
     expect(relays.get(CENTRAL_RELAY).published).toEqual([]); // read only
     const u = relays.get(USER_RELAY);
-    expect(kinds(u)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
+    expect(kinds(u)).toEqual([[34602, `btc:${PROV_PUB}`], [34600, 'btc_pred']]);
     expect(u.published.every(verifyEvent)).toBe(true);
-    expect(u.published[0].tags).toEqual([['d', 'btc'], ['p', PROV_PUB], ['stream', 'btc'], ['satori', 'subscription']]);
+    expect(u.published[0].tags).toEqual([['d', `btc:${PROV_PUB}`], ['p', PROV_PUB], ['stream', 'btc'], ['satori', 'subscription']]);
     const meta = JSON.parse(u.published[1].content);
     expect(meta).toMatchObject({ stream_name: 'btc_pred', nostr_pubkey: ME_PUB, name: 'Predictions for BTC', cadence_seconds: 900,
       created_at: clock, metadata: { source_stream_name: 'btc', source_provider_pubkey: PROV_PUB, alias_pubkey: ALIAS } });
@@ -658,7 +658,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     const after = await nostr.unsubscribe(PROV_PUB, 'btc'); // → the status, as setRelays
     expect(after).toMatchObject({ pubkey: ME_PUB, subscriptions: [] });
     await settle();
-    expect(kinds(u)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
+    expect(kinds(u)).toEqual([[34602, `btc:${PROV_PUB}`], [34600, 'btc_pred']]);
     expect(await db.get('nostr_outbox')).toEqual([]); // answered: nothing waits
     expect(u.published[0].tags).toContainEqual(['action', 'unsubscribe']);
     expect(u.published[1].tags).toEqual([['d', 'btc_pred'], ['satori', 'datastream'], ['status', 'deleted']]);
@@ -755,11 +755,11 @@ describe('subscribe → follow → intake → `_pred`', () => {
     for (const r of relays.all.values()) r.published = [];
     expect(await nostr.subscribe(PROV_PUB, 'btc')).toMatchObject({ predict: false });
     await settle();
-    expect(kinds(relays.get(USER_RELAY))).toEqual([[34602, 'btc']]); // the subscription, no `_pred` announced
+    expect(kinds(relays.get(USER_RELAY))).toEqual([[34602, `btc:${PROV_PUB}`]]); // the subscription, no `_pred` announced
     await relays.get(CENTRAL_RELAY).deliver(observe('btc', '100', 1, clock - 10));
     await settle();
     expect((await nostr.status()).subscriptions[0]).toMatchObject({ predict: false, observations: 1, prediction: null }); // kept, not forecast
-    expect(kinds(relays.get(USER_RELAY))).toEqual([[34602, 'btc']]);
+    expect(kinds(relays.get(USER_RELAY))).toEqual([[34602, `btc:${PROV_PUB}`]]);
     expect(await nostr.setPredict(PROV_PUB, 'btc', true)).toMatchObject({ predict: true, prediction: { seq: 1 } }); // its latest, at once
     await settle();
     expect(kinds(relays.get(USER_RELAY)).slice(-2)).toEqual(expect.arrayContaining([[34600, 'btc_pred'], [34601, 'btc_pred']])); // announced, published
@@ -846,7 +846,7 @@ describe('subscribe → follow → intake → `_pred`', () => {
     await again.start();
     relays.get(USER_RELAY).open();
     await again.idle();
-    expect(kinds(relays.get(USER_RELAY)).filter(([k]) => k !== 10002)).toEqual([[34602, 'btc'], [34600, 'btc_pred']]);
+    expect(kinds(relays.get(USER_RELAY)).filter(([k]) => k !== 10002)).toEqual([[34602, `btc:${PROV_PUB}`], [34600, 'btc_pred']]);
     expect(await db.get('nostr_outbox')).toEqual([]);
   });
 
@@ -1306,7 +1306,7 @@ describe('paid streams (docs/design/market.md#selling-and-buying-over-the-relays
     await settle();
     expect((await nostr.records()).find((r) => r.pubkey === OTHER_PUB)).toMatchObject({ stream: 'btc_pred', received: 1, last: { value: 101.5 } });
     const [pay] = u.published.filter((e) => e.kind === 34603);
-    expect(pay.tags).toEqual([['d', 'btc_pred'], ['p', OTHER_PUB], ['stream', 'btc_pred'], ['seq', '2']]);
+    expect(pay.tags).toEqual([['d', `btc_pred:${OTHER_PUB}`], ['p', OTHER_PUB], ['stream', 'btc_pred'], ['seq', '2']]);
     expect(JSON.parse(await nip04Decrypt(OTHER, ME_PUB, pay.content)).voucher).toMatchObject({ channel: v.channel, cumulative: '1000000000000000' });
     expect((await nostr.status()).market.bought).toMatchObject([{ channel: v.channel, paid: '0.001', left: '0.004', received: 1 }]);
 

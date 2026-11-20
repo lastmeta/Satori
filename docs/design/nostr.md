@@ -85,7 +85,7 @@ write policy) may refuse these.
 ## Event shapes (verified)
 
 `test/fixtures/nostr-parity.json` is made by `scripts/nostr_vectors.py`:
-satorilib's own `SatoriNostr` methods (origin/base-upgrade) build the events and
+satorilib's own `SatoriNostr` methods (origin/main) build the events and
 nostr-sdk 0.45 signs them, with the metadata built as START builds it and the
 clock pinned. The unit tests rebuild every event and compare the kind, the
 tags (in order), the time and the content's fields and values (the same keys,
@@ -97,14 +97,20 @@ signatures nostr-sdk made and ours.
 | 34601 `_pred` | `d`, `stream`, `seq` (string), `satori=observation` | `{"stream_name": …, "timestamp": int, "value": "<str>", "seq_num": int}` |
 | 34600 announce | `d`, `satori=datastream`, a `t` per tag, `stream=satori:stream:<name>`, `source_stream`, `source_pubkey`, and on a `_pred` `a` = `34600:<source_pubkey>:<source_stream>` | `stream_name, nostr_pubkey, name, description, encrypted, price_per_obs, created_at, cadence_seconds, tags, approval_required, metadata` |
 | 34600 tombstone | `d`, `satori=datastream`, `status=deleted` | the same keys, empty, `created_at 0`, `cadence_seconds null`, `metadata null` |
-| 34602 subscribe | `d=S`, `p=P`, `stream=S`, `satori=subscription` | `{"subscriber_pubkey", "stream_name", "nostr_pubkey": P, "timestamp", "payment_channel": null}` |
-| 34602 unsubscribe | `d=S`, `p=P`, `stream=S`, `action=unsubscribe`, `satori=unsubscription` | same |
+| 34602 subscribe | `d=S:P`, `p=P`, `stream=S`, `satori=subscription` | `{"subscriber_pubkey", "stream_name", "nostr_pubkey": P, "timestamp", "payment_channel": null}` |
+| 34602 unsubscribe | `d=S:P`, `p=P`, `stream=S`, `action=unsubscribe`, `satori=unsubscription` | same |
 | 10002 | `["r", url]…` | `""` |
+
+A 34602's `d` is `S:P` (a payment's too, market.md): a relay keeps one event a
+(kind, author, `d`), and two providers may each have a stream named S (every
+predictor of X publishes `X_pred`), so a subscriber's event to each has its own
+slot, and an unsubscribe takes its subscription's place. No reader takes the
+stream from `d`: both clients read the content.
 
 Our content is compact JSON, so our events' ids differ from Lite's for the
 same fields (satorilib's `json.dumps` puts a space after `,` and `:`): the
-brief's ids (345fa77e…, 484c59ab…) are the compact ones, Lite's 3e82a076…
-and 13dc7e51…. An id is the hash of the content as sent, so both are valid.
+fixture's prediction is 3e82a076…, ours 345fa77e… (`src/nostr/event.test.js`).
+An id is the hash of the content as sent, so both are valid.
 The 10002 id (6077ae96…) is the same in both.
 
 ## The protocol audit
