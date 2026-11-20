@@ -49,11 +49,10 @@ Short names: `start.py` = `neuron/neuron-lite/start.py`; `engine.py` =
 | Submit | Log in (`POST /api/v1/auth/login`, headers `alias-pubkey`, `message`, `signature`: an [EIP-191 signature](#login-signature) by the **alias**, `wallet.ethSign` since satorilib 5028913; `server.py:86-118`), then `POST /api/v1/predictions/batch` with `Authorization: Bearer`, body `{"predictions": [...]}`; on a 401 log in again and retry once (`server.py:170-230`, retry at `:210`); when the call raises (a network error or a timeout), resend it once (`server.py:231-268`). Timeouts 10–15 s. | Same, with one fresh login per submission. Timeouts 15 s. Every call is resent once on a network error, a timeout or a 5xx. |
 
 Not used (dropped from Lite): the `checkinCheck` watchdog and restarts
-(`start.py:4883-4892`), `/auth/refresh` and its timer (`server.py:120-140`), the
-10-minute reconnect delay (`start.py:4902-4908`), `setMiningMode` (a route
-central no longer has), the stake and pool routes, and about 90
-other `server.py` methods for routes central-lite does not serve. The reward
-address is used ([below](#the-reward-address)).
+(`start.py`: `checkinCheck`, `restartEverythingPeriodic`), `/auth/refresh` and
+its timer (`server.py`: `_ensure_authenticated`) and the 10-minute reconnect
+delay (`start.py`: `serverConnectedRecently`). The reward address is used
+([below](#the-reward-address)).
 
 ## Endpoints
 
